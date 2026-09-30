@@ -1,0 +1,146 @@
+.file-review-page .history-path {
+  margin-bottom: 16px;
+}
+.review-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.review-toolbar .filter-count {
+  margin-left: auto;
+}
+.review-toolbar button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+}
+.graph-legend {
+  flex: 1;
+  font-size: 10px;
+}
+.diff-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  contain: strict;
+}
+.diff-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+  white-space: pre;
+  font:
+    12px/24px ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+}
+.diff-line code {
+  padding-right: 24px;
+  font: inherit;
+}
+.diff-line-number {
+  display: inline-block;
+  flex: 0 0 48px;
+  text-align: right;
+  padding-right: 14px;
+  margin-right: 12px;
+  color: var(--muted);
+  user-select: none;
+  border-right: 1px solid var(--border);
+}
+.diff-line.added {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, var(--panel));
+}
+.diff-line.removed {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+.diff-line.meta {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.graph-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
+}
+.review-graph {
+  display: block;
+}
+.review-graph line {
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+.review-graph line.merge,
+.review-graph line.copy {
+  stroke: var(--warning);
+  stroke-dasharray: 6 4;
+}
+.review-graph line.branch {
+  stroke: var(--accent);
+}
+.review-graph circle {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.review-graph g {
+  cursor: pointer;
+  outline: none;
+}
+.review-graph g.selected circle,
+.review-graph g:focus-visible circle {
+  stroke-width: 4;
+  fill: var(--selected);
+}
+.review-graph text {
+  fill: var(--text);
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.review-graph .graph-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.review-footer {
+  margin-top: auto;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font:
+    10px ui-monospace,
+    monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.review-surface > .workspace-empty {
+  flex: 1;
+}

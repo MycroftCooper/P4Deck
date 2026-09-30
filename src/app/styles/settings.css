@@ -1,0 +1,89 @@
+.settings-page {
+  overflow: auto;
+  padding: 28px;
+  container-type: inline-size;
+  background: var(--bg);
+}
+.settings-page .section-title > div {
+  display: block;
+  min-width: 0;
+}
+.settings-page .section-title h1 {
+  white-space: nowrap;
+  margin: 10px 0;
+}
+.settings-page .workspace-eyebrow {
+  display: block;
+}
+.settings-card {
+  max-width: 960px;
+  margin: 22px 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.settings-card h2 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.settings-card p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+.settings-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.settings-grid input,
+.settings-grid select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.settings-card fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.settings-actions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-note {
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-radius: 6px;
+}
+@container (max-width:520px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-card {
+    padding: 16px;
+  }
+}

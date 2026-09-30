@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+target/
+.DS_Store
+*.log
+*.tsbuildinfo
+.idea/
+.vscode/
+.env
+.tools/

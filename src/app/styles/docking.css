@@ -1,0 +1,252 @@
+/* Explicit theme on Dockview's outer shell, including popup/empty group surfaces. */
+.dockview-theme-light.dockview-theme-p4deck {
+  color-scheme: inherit;
+  --dv-group-view-background-color: var(--bg);
+  --dv-background-color: var(--bg);
+  --dv-tabs-and-actions-container-background-color: var(--panel-2);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--accent-soft);
+  --dv-activegroup-visiblepanel-tab-color: var(--accent);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel-3);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-tab-divider-color: var(--border);
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-paneview-active-outline-color: var(--accent);
+  --dv-icon-hover-background-color: var(--hover);
+  --dv-scrollbar-background-color: var(--panel-3);
+  --dv-tabs-container-scrollbar-color: var(--faint);
+  --dv-sash-color: var(--border);
+  --dv-active-sash-color: var(--accent);
+  --dv-floating-border: 1px solid var(--border);
+  --dv-floating-group-border: 1px solid var(--border);
+  --dv-floating-box-shadow: 0 8px 32px var(--shadow);
+  --dv-drag-over-background-color: color-mix(
+    in srgb,
+    var(--accent) 18%,
+    transparent
+  );
+  --dv-drag-over-border: 1px solid var(--accent);
+  --dv-edge-dock-indicator-color: var(--accent);
+}
+.dock-page {
+  background: var(--bg);
+  color: var(--text);
+}
+.dock-host,
+.dock-page {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.dock-host > .dv-dockview {
+  height: 100%;
+}
+.dock-page .submitted-page {
+  position: relative;
+  height: 100%;
+}
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 5px;
+}
+.dock-actions button {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+}
+.dock-actions button:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+.dock-actions button:disabled {
+  opacity: 0.3;
+}
+.dock-error {
+  position: absolute;
+  z-index: 200;
+  left: 15px;
+  right: 15px;
+  top: 40px;
+  padding: 12px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--danger);
+  font-size: 12px;
+}
+.dock-error button {
+  float: right;
+  background: none;
+  border: 0;
+}
+.dockview-theme-p4deck {
+  --dv-background-color: var(--bg);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tabs-and-actions-container-background-color: var(--panel-2);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--accent-soft);
+  --dv-activegroup-visiblepanel-tab-color: var(--accent);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel-3);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-tab-divider-color: var(--border);
+  --dv-separator-border: var(--border);
+  --dv-drag-over-background-color: color-mix(
+    in srgb,
+    var(--accent) 18%,
+    transparent
+  );
+  --dv-drag-over-border-color: var(--accent);
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-font-family: inherit;
+  --dv-sash-color: var(--border);
+  --dv-active-sash-color: var(--accent);
+}
+.dockview-theme-p4deck .dv-tab {
+  font-size: 12px;
+  min-width: 36px;
+  max-width: 100%;
+}
+/* The title gives up space before the close target does. Sticky also keeps
+   the action reachable when a tab is partially clipped by the tab strip. */
+.dockview-theme-p4deck .dv-tab .dv-default-tab {
+  min-width: 0;
+  background: inherit;
+}
+.dockview-theme-p4deck .dv-tab .dv-default-tab-content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dockview-theme-p4deck .dv-tab .dv-default-tab-action {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 24px;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: inherit;
+}
+.dockview-theme-p4deck .dv-tab:hover .dv-default-tab-action,
+.dockview-theme-p4deck .dv-tab:focus-within .dv-default-tab-action {
+  visibility: visible;
+}
+.dock-page .workspaces-page,
+.dock-page .main-content,
+.dock-page .pending-page {
+  padding: 18px;
+}
+.dock-page .section-title h1,
+.dock-page .page-header h1 {
+  font-size: 21px;
+}
+.dock-page .query-bar {
+  gap: 6px;
+}
+.dock-page .query-bar .search-field {
+  min-width: 120px;
+}
+.dock-page .section-title {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dock-page .workspace-heading h1 {
+  font-size: 22px;
+}
+.dock-page .workspace-layout.with-detail {
+  grid-template-columns: minmax(0, 1fr) 200px;
+}
+.dock-page .file-workbench {
+  padding: 0 14px 12px;
+}
+.detached-shell .resource-explorer,
+.detached-shell > .topbar,
+.detached-shell > .tool-drawer,
+.detached-shell > .statusbar {
+  display: none;
+}
+.app-shell.detached-shell {
+  grid-template-rows: minmax(0, 1fr);
+}
+.detached-shell .workbench {
+  grid-template-columns: minmax(0, 1fr);
+}
+.dock-page .cl-layout:has(.detail-panel.visible) {
+  grid-template-columns: minmax(0, 1fr) 200px;
+}
+.closed-pages {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  gap: 12px;
+}
+.closed-pages h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.closed-pages p {
+  font-size: 12px;
+  margin: 0;
+}
+.resource-tab {
+  display: flex;
+  min-width: 0;
+}
+.resource-tab > button:first-child {
+  flex: 1;
+}
+.browser-columns {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) 190px minmax(200px, 1fr);
+  min-width: 620px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 11px;
+  width: 100%;
+}
+.history-path {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+.history-path input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.history-path button {
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.file-details.workspace-details {
+  display: block;
+}

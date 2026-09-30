@@ -1,0 +1,139 @@
+.workbench.left-collapsed {
+  grid-template-columns: var(--activity-bar-width, 48px) 28px minmax(0, 1fr);
+}
+.main-stage {
+  grid-template-rows: minmax(0, 1fr);
+}
+.resource-explorer {
+  position: relative;
+}
+.resource-explorer .resource-tabs {
+  margin-right: 32px;
+}
+.resource-collapse {
+  position: absolute;
+  right: 2px;
+  top: 16px;
+  width: 26px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+}
+.resource-collapse:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.resource-collapse:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.left-collapsed > .resource-explorer.is-collapsed {
+  display: block;
+}
+.resource-explorer.is-collapsed > :not(.resource-collapse) {
+  display: none;
+}
+.resource-explorer.is-collapsed .resource-collapse {
+  right: 1px;
+}
+.detached-shell .left-collapsed > .resource-explorer.is-collapsed {
+  display: none;
+}
+.activity-bar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel-2);
+  border-right: 1px solid var(--border);
+}
+.activity-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.activity-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-bar button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+.activity-bar button:hover:not(:disabled),
+.activity-bar button[aria-current="page"],
+.activity-bar button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.activity-bar button[aria-current="page"] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+.activity-bar button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.activity-bar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.activity-open-mark {
+  position: absolute;
+  right: 4px;
+  bottom: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.activity-bottom {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.detached-shell .activity-bar {
+  display: none;
+}
+.detached-shell .workbench {
+  grid-template-columns: minmax(0, 1fr);
+}
+.activity-text {
+  display: none;
+}
+:root[data-activity-bar-text="true"] .activity-bar button {
+  width: calc(100% - 8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  text-align: left;
+}
+:root[data-activity-bar-text="true"] .activity-text {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.activity-bar button > svg {
+  flex-shrink: 0;
+}

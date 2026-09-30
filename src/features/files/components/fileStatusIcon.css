@@ -1,0 +1,65 @@
+.file-status-icon.file-status-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  min-width: 24px;
+  max-width: 24px;
+  overflow: visible;
+  vertical-align: middle;
+  color: var(--text-secondary, #64748b);
+}
+.file-status-icon .file-badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 11px;
+  height: 11px;
+  padding: 0 1px;
+  border-radius: 3px;
+  background: #526071;
+  color: #fff;
+  font:
+    700 9px/1 system-ui,
+    sans-serif;
+  box-shadow: 0 0 0 1px var(--bg, #fff);
+  box-sizing: border-box;
+}
+.file-status-icon .slot-0 {
+  right: -1px;
+  bottom: 0;
+}
+.file-status-icon .slot-1 {
+  left: -2px;
+  bottom: 0;
+}
+.file-status-icon .slot-2 {
+  right: -1px;
+  top: 0;
+}
+.file-status-icon .owner-self {
+  background: #b42338;
+}
+.file-status-icon .owner-other {
+  background: #185caa;
+}
+.file-status-icon .owner-shelf,
+.file-status-icon .badge-shelf {
+  background: #7542a3;
+}
+.file-status-icon .badge-latest {
+  background: #217344;
+}
+.file-status-icon .badge-resolve,
+.file-status-icon .badge-error {
+  background: #b42338;
+}
+.file-status-icon .badge-outOfDate,
+.file-status-icon .badge-modified,
+.file-status-icon .badge-stale {
+  background: #8a5100;
+}

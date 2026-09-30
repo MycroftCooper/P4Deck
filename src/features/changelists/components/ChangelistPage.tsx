@@ -1,0 +1,408 @@
+import { useCommandFocus } from "../../../app/shell/CommandContext";
+import { useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  CalendarDays,
+  ChevronDown,
+  Filter,
+  GitMerge,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+} from "lucide-react";
+import type {
+  ChangelistSummary,
+  ChangeStatus,
+  ClAction,
+} from "../../../shared/contracts/types";
+import type { messages } from "../../../shared/i18n";
+
+import { useContextMenu } from "../../../app/context-menu/ContextMenu";
+import { TableHeader } from "../../../app/context-menu/TableHeader";
+import { action, copy } from "../../../app/context-menu/bindings";
+import { useRecordSelection } from "../../../app/context-menu/useRecordSelection";
+import { useMenuEnvironment } from "../../../app/context-menu/environment";
+import { RevisionFileList } from "./RevisionFileList";
+import { ChangelistFormDialog } from "./ChangelistFormDialog";
+type Copy = (typeof messages)[keyof typeof messages];
+
+interface Props {
+  t: Copy;
+  changes: ChangelistSummary[];
+  loading: boolean;
+  keyword: string;
+  status: ChangeStatus | "all";
+  hideMerges: boolean;
+  hiddenMergeCount: number;
+  hasMore: boolean;
+  onKeywordChange(value: string): void;
+  onStatusChange(value: ChangeStatus | "all"): void;
+  onHideMergesChange(value: boolean): void;
+  onRefresh(): void;
+  onAction(action: ClAction): void;
+}
+
+export function ChangelistPage(props: Props) {
+  const { t, changes } = props;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const menu = useContextMenu();
+  const env = useMenuEnvironment();
+  const selection = useRecordSelection(
+    changes,
+    (change) => String(change.id),
+    env.connectionKey,
+  );
+  const focus = useCommandFocus();
+  const [selected, setSelected] = useState<number | null>(null);
+  const [createSource, setCreateSource] = useState<HTMLElement>();
+  const virtualizer = useVirtualizer({
+    count: changes.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  });
+  const selectedChange = useMemo(
+    () => changes.find((change) => change.id === selected),
+    [changes, selected],
+  );
+
+  const statusLabel = (status: ChangeStatus) =>
+    status === "pending"
+      ? t.pending
+      : status === "shelved"
+        ? t.shelved
+        : t.submitted;
+
+  const changeMenu = (change: ChangelistSummary) =>
+    menu(
+      selection.targets(change).length > 1
+        ? "C12"
+        : change.status === "submitted"
+          ? "C09"
+          : change.status === "shelved"
+            ? "C06"
+            : change.user === env.runtime.context.user &&
+                change.client === env.runtime.context.client
+              ? "C02"
+              : "C03",
+      () => ({
+        查看详情: action(() => setSelected(change.id)),
+        "展开/折叠": action(() =>
+          setSelected((value) => (value === change.id ? null : change.id)),
+        ),
+        "复制 CL 编号": copy(change.id),
+        "复制来源 CL 编号": copy(change.id),
+        复制描述: copy(change.description),
+        刷新: action(props.onRefresh),
+        "复制 CL 编号列表": copy(
+          selection
+            .targets(change)
+            .map((value) => value.id)
+            .join("\n"),
+        ),
+        复制摘要列表: copy(
+          selection
+            .targets(change)
+            .map((value) => `${value.id} ${value.description}`)
+            .join("\n"),
+        ),
+      }),
+      {
+        title: `CL ${change.id}`,
+        onOpen: () => {
+          selection.context(change);
+          setSelected(change.id);
+        },
+      },
+    );
+
+  return (
+    <main className="main-content">
+      {createSource && (
+        <ChangelistFormDialog
+          mode="create"
+          client={env.runtime.context.client}
+          zh={env.preferences.zh}
+          source={createSource}
+          onDismiss={() => setCreateSource(undefined)}
+        />
+      )}
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">{t.defaultScope}</p>
+          <h1>{t.title}</h1>
+          <p>{t.subtitle}</p>
+        </div>
+        <div className="header-actions">
+          <button className="secondary" onClick={props.onRefresh}>
+            <RefreshCw size={15} className={props.loading ? "spin" : ""} />
+            {t.refresh}
+          </button>
+          <button
+            className="primary"
+            onClick={(event) => setCreateSource(event.currentTarget)}
+          >
+            <Plus size={16} />
+            {t.create}
+          </button>
+        </div>
+      </header>
+
+      <section className="query-bar" aria-label={t.filters}>
+        <label className="search-field">
+          <Search size={17} />
+          <input
+            value={props.keyword}
+            onChange={(event) => props.onKeywordChange(event.target.value)}
+            placeholder={t.search}
+            aria-label={t.search}
+          />
+        </label>
+        <label className="select-field">
+          <Filter size={15} />
+          <select
+            disabled
+            title={
+              env.preferences.zh
+                ? "此页固定显示已提交 CL"
+                : "This page shows submitted changelists only"
+            }
+            value={props.status}
+            onChange={(event) =>
+              props.onStatusChange(event.target.value as ChangeStatus | "all")
+            }
+            aria-label={t.status}
+          >
+            <option value="all">{t.allStatuses}</option>
+            <option value="pending">{t.pending}</option>
+            <option value="submitted">{t.submitted}</option>
+            <option value="shelved">{t.shelved}</option>
+          </select>
+          <ChevronDown size={13} />
+        </label>
+        <button
+          className={`toggle-filter ${props.hideMerges ? "on" : ""}`}
+          aria-pressed={props.hideMerges}
+          onClick={() => props.onHideMergesChange(!props.hideMerges)}
+        >
+          <GitMerge size={15} />
+          {t.hideMerges}
+        </button>
+        <span className="date-filter">
+          <CalendarDays size={15} />
+          {t.last30}
+        </span>
+      </section>
+
+      <section className="cl-layout">
+        <div className="cl-panel">
+          <TableHeader
+            className="cl-table-head"
+            columns={[
+              { id: "change", label: "CL" },
+              { id: "status", label: t.status },
+              { id: "user", label: t.user },
+              { id: "count", label: t.files },
+              { id: "time", label: t.time },
+            ]}
+          />
+          <div
+            ref={scrollRef}
+            className="virtual-scroll"
+            data-testid="cl-virtual-list"
+            tabIndex={0}
+            {...menu("C14", () => ({
+              刷新: action(props.onRefresh),
+              全选当前筛选结果: action(selection.all),
+              清除选择: action(selection.clear),
+            }))}
+          >
+            {changes.length === 0 && !props.loading ? (
+              <div className="empty-state">{t.empty}</div>
+            ) : null}
+            <div
+              className="virtual-spacer"
+              style={{ height: `${virtualizer.getTotalSize()}px` }}
+            >
+              {virtualizer.getVirtualItems().map((row) => {
+                const change = changes[row.index];
+                return (
+                  <button
+                    key={change.id}
+                    className={`cl-row ${selection.isSelected(change) ? "selected" : ""}`}
+                    style={{
+                      transform: `translateY(${row.start}px)`,
+                      height: `${row.size}px`,
+                    }}
+                    onFocus={() => focus({ type: "submitted", id: change.id })}
+                    {...changeMenu(change)}
+                    onClick={(event) => {
+                      selection.select(change, event);
+                      setSelected(change.id);
+                      focus({ type: "submitted", id: change.id });
+                    }}
+                  >
+                    <span className="cl-description">
+                      <strong>{change.id}</strong>
+                      <span>{change.description}</span>
+                      {change.mergeClassification === "reliableMerge" ? (
+                        <em className="merge-tag">
+                          <GitMerge size={11} />
+                          {t.merge}
+                        </em>
+                      ) : null}
+                      {change.mergeClassification === "suspectedMerge" ? (
+                        <em className="merge-tag suspected">
+                          <ShieldAlert size={11} />
+                          {t.suspected}
+                        </em>
+                      ) : null}
+                    </span>
+                    <span>
+                      <i className={`status-pill ${change.status}`}>
+                        {statusLabel(change.status)}
+                      </i>
+                    </span>
+                    <span className="muted-cell">
+                      {change.user}
+                      <small>{change.client}</small>
+                    </span>
+                    <span className="count-cell">{change.fileCount}</span>
+                    <time>
+                      {new Intl.DateTimeFormat(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).format(new Date(change.time))}
+                    </time>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <footer className="list-footer">
+            <span>
+              {changes.length.toLocaleString()} {t.changesUnit}
+              {props.hasMore ? "+" : ""}
+            </span>
+            {props.hiddenMergeCount ? (
+              <span>
+                {t.hidden} {props.hiddenMergeCount} {t.changesUnit}
+              </span>
+            ) : null}
+            <span className="virtual-proof">Virtualized</span>
+          </footer>
+        </div>
+
+        <aside className={`detail-panel ${selectedChange ? "visible" : ""}`}>
+          {selectedChange ? (
+            <>
+              <header>
+                <div>
+                  <small>CHANGE</small>
+                  <h2>{selectedChange.id}</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  aria-label={t.more}
+                  onClick={(event) =>
+                    changeMenu(selectedChange).onContextMenu(event)
+                  }
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+              </header>
+              <p className="detail-description">{selectedChange.description}</p>
+              <dl>
+                <div>
+                  <dt>{t.user}</dt>
+                  <dd>{selectedChange.user}</dd>
+                </div>
+                <div>
+                  <dt>{t.workspace}</dt>
+                  <dd>{selectedChange.client}</dd>
+                </div>
+                <div>
+                  <dt>{t.status}</dt>
+                  <dd>{statusLabel(selectedChange.status)}</dd>
+                </div>
+                <div>
+                  <dt>{t.files}</dt>
+                  <dd>{selectedChange.fileCount}</dd>
+                </div>
+              </dl>
+              {selectedChange.status === "submitted" && (
+                <RevisionFileList
+                  scope={String(selectedChange.id)}
+                  demo={env.runtime.mode === "mock"}
+                  files={
+                    env.runtime.mode === "mock"
+                      ? [
+                          {
+                            depotPath: "//ui-sample/render.ts",
+                            revision: 2,
+                            changeId: selectedChange.id,
+                          },
+                          {
+                            depotPath: "//ui-sample/project.json",
+                            revision: 3,
+                            changeId: selectedChange.id,
+                          },
+                        ]
+                      : []
+                  }
+                />
+              )}
+              <div className="detail-actions">
+                <button
+                  disabled
+                  title="尚未接通文件子集与目标 CL 选择 / File and target CL selection not connected"
+                >
+                  {t.move}
+                </button>
+                <button
+                  disabled
+                  title="搁置确认流程尚未接通 / Shelve confirmation workflow not connected"
+                >
+                  {t.shelve}
+                </button>
+                {selectedChange.hasShelf ? (
+                  <button
+                    disabled
+                    title="尚未接通目标 CL 与冲突预检 / Target CL and conflict preflight not connected"
+                  >
+                    {t.unshelve}
+                  </button>
+                ) : null}
+                <button
+                  disabled={
+                    selectedChange.status !== "pending" ||
+                    selectedChange.user !== env.runtime.context.user ||
+                    selectedChange.client !== env.runtime.context.client
+                  }
+                  onClick={() =>
+                    props.onAction({
+                      type: "submitValidate",
+                      changeId: selectedChange.id,
+                    })
+                  }
+                >
+                  {t.validate}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="detail-placeholder">
+              {env.preferences.zh
+                ? "选择一个 CL 查看详情与可用操作。"
+                : "Select a changelist to inspect and act."}
+            </div>
+          )}
+        </aside>
+      </section>
+    </main>
+  );
+}

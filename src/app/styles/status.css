@@ -1,0 +1,115 @@
+.statusbar .preference-controls {
+  margin-left: auto;
+  flex-shrink: 0;
+  gap: 5px;
+}
+.connection .status-dot:not(.connection-connected) {
+  background: var(--muted);
+}
+.connection .status-dot.connection-demo {
+  background: var(--accent);
+}
+.connection
+  .status-dot:is(
+    .connection-disconnected,
+    .connection-networkError,
+    .connection-authRequired,
+    .connection-ticketExpired,
+    .connection-sslUntrusted,
+    .connection-cliMissing
+  ) {
+  background: var(--danger);
+}
+.statusbar .preference-controls .icon-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  justify-content: center;
+  border: 0;
+}
+.statusbar .preference-controls .theme-picker {
+  gap: 5px;
+}
+.statusbar .theme-picker select {
+  font-size: 10px;
+  max-width: 90px;
+}
+.statusbar .theme-picker svg {
+  width: 14px;
+  height: 14px;
+}
+.statusbar.status-meters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) auto;
+  gap: 16px;
+}
+.disk-status,
+.p4-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.disk-status > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p4-status {
+  justify-content: center;
+}
+.status-meters progress {
+  appearance: none;
+  height: 5px;
+  width: 90px;
+  min-width: 36px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border);
+  accent-color: #299568;
+}
+.status-meters progress::-webkit-progress-bar {
+  background: var(--border);
+}
+.status-meters progress::-webkit-progress-value {
+  background: #299568;
+}
+.status-meters progress::-moz-progress-bar {
+  background: #299568;
+}
+.disk-status.low-space progress {
+  accent-color: #dc4545;
+}
+.disk-status.low-space progress::-webkit-progress-value {
+  background: #dc4545;
+}
+.disk-status.low-space progress::-moz-progress-bar {
+  background: #dc4545;
+}
+.disk-status.low-space {
+  color: #dc4545;
+}
+.p4-status progress:indeterminate {
+  background: linear-gradient(
+    90deg,
+    transparent 0 30%,
+    var(--accent) 40% 60%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: status-progress 1.5s linear infinite;
+}
+.p4-status progress:indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+@keyframes status-progress {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .p4-status progress:indeterminate {
+    animation: none;
+  }
+}

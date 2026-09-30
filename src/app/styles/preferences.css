@@ -1,0 +1,13 @@
+.file-row,
+.tree-list button,
+.workspace-row,
+.cl-description > span {
+  font-size: var(--list-font-size, 12px);
+}
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

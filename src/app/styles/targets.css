@@ -1,0 +1,44 @@
+/* Settings and per-instance file targets share semantic light/dark tokens. */
+.dock-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dock-page > main,
+.dock-page > .file-workbench,
+.dock-page > .submitted-page {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.target-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.target-controls > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.target-controls button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+.target-controls button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

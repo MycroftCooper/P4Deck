@@ -1,0 +1,680 @@
+import type {
+  ChangelistSummary,
+  FileState,
+  LogEntry,
+  OperationEvent,
+  WorkspaceNode,
+} from "../../shared/contracts/types";
+import type { Backend } from "./contract";
+
+let mockContext: import("../../shared/contracts/types").P4Context = {
+  server: "ssl:p4.company.dev:1666",
+  user: "fmeng",
+  client: "atlas-main-fm",
+  cwd: "/workspace/atlas",
+  charset: "utf8",
+};
+try {
+  const saved = JSON.parse(
+    localStorage.getItem("p4deck.mockConnection") ?? "null",
+  );
+  if (saved?.server && saved?.user && saved?.client) mockContext = saved;
+} catch {
+  /* Defaults. */
+}
+const now = Date.now();
+const mockLogs: LogEntry[] = [];
+const operationSubscribers = new Set<(event: OperationEvent) => void>();
+function emitOperation(event: OperationEvent) {
+  operationSubscribers.forEach((subscriber) => subscriber(event));
+}
+const mockChanges: ChangelistSummary[] = Array.from(
+  { length: 2500 },
+  (_, index) => {
+    const id = 31842 - index;
+    const mergeClassification =
+      index % 17 === 0
+        ? "reliableMerge"
+        : index % 29 === 0
+          ? "suspectedMerge"
+          : "normal";
+    const status =
+      index % 13 === 0 ? "shelved" : index % 7 === 0 ? "pending" : "submitted";
+    return {
+      id,
+      status,
+      mergeClassification,
+      description:
+        mergeClassification === "reliableMerge"
+          ? `Merge //atlas/dev to //atlas/main (${id})`
+          : index % 9 === 0
+            ? `Fix render pipeline cache invalidation #${id}`
+            : `Update Atlas assets and source #${id}`,
+      user: ["fmeng", "alice", "bruno", "buildbot"][index % 4],
+      client: [
+        "atlas-main-fm",
+        "atlas-dev-alice",
+        "atlas-build",
+        "atlas-main-bruno",
+      ][index % 4],
+      time: new Date(now - index * 18 * 60_000).toISOString(),
+      fileCount: 1 + ((index * 7) % 84),
+      hasShelf: status === "shelved",
+      jobs: index % 11 === 0 ? [`ATLAS-${1000 + index}`] : [],
+      stream: index % 5 === 0 ? "//atlas/dev" : "//atlas/main",
+    } as ChangelistSummary;
+  },
+);
+const mockNames = [
+  "Assets",
+  "Config",
+  "Source",
+  "render.ts",
+  "viewport.cpp",
+  "atlas.json",
+  "README.md",
+  "Materials",
+  "Audio",
+  "main.scene",
+];
+const mockWorkspace: WorkspaceNode[] = Array.from(
+  { length: 160 },
+  (_, index) => {
+    const name =
+      index < 7
+        ? mockNames[index]
+        : `asset_${String(index).padStart(3, "0")}.${index % 5 === 0 ? "json" : "uasset"}`;
+    const kind = index < 3 ? "directory" : "file";
+    const state: FileState = (
+      [
+        "controlled",
+        "openedEdit",
+        "untracked",
+        "openedAdd",
+        "outOfDate",
+        "controlled",
+      ] as FileState[]
+    )[index % 6];
+    return {
+      id: `workspace-${index}`,
+      name,
+      kind,
+      absolutePath: `/workspace/atlas/${name}`,
+      relativePath: name,
+      depotPath: `//atlas/main/${name}`,
+      state,
+      revision: 3 + (index % 18),
+      headRevision: 4 + (index % 18),
+      changelistId: state.startsWith("opened") ? 31821 : undefined,
+      modifiedAt: new Date(now - index * 900_000).toISOString(),
+      hasChildren: kind === "directory",
+    };
+  },
+);
+
+function emitMockLog(
+  level: LogEntry["level"],
+  source: LogEntry["source"],
+  command: string,
+  message: string,
+  operationId: string,
+  durationMs?: number,
+) {
+  const previous = mockLogs[0];
+  if (
+    previous &&
+    previous.level === level &&
+    previous.message === message &&
+    Date.now() - Date.parse(previous.timestamp) < 10_000
+  ) {
+    previous.repeatCount += 1;
+    previous.timestamp = new Date().toISOString();
+    return;
+  }
+  mockLogs.unshift({
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    level,
+    operationId,
+    source,
+    server: mockContext.server,
+    workspace: mockContext.client,
+    command,
+    message,
+    durationMs,
+    repeatCount: 1,
+  });
+  if (mockLogs.length > 10_000) mockLogs.length = 10_000;
+}
+
+export const mockBackend: Backend = {
+  async statusCacheDiagnostics() {
+    return {
+      hits: 0,
+      misses: 0,
+      coalesced: 0,
+      evicted: 0,
+      invalidated: 0,
+      staleFallbacks: 0,
+      superseded: 0,
+      loadCount: 0,
+      totalLoadMs: 0,
+      entries: 0,
+      estimatedBytes: 0,
+      invalidationReasons: {},
+    };
+  },
+  async queryOperationJournal() {
+    return { records: [] };
+  },
+  async getOperationRecord() {
+    return null;
+  },
+  async queryLogPage(query) {
+    return { entries: await this.queryLogs(query) };
+  },
+  async getLogPolicy() {
+    return {
+      autoExpandWarning: true,
+      autoExpandError: true,
+      retentionDays: 14,
+      maxMib: 50,
+    };
+  },
+  async setLogPolicy(policy) {
+    return {
+      ...policy,
+      retentionDays: Math.max(1, Math.min(30, policy.retentionDays)),
+      maxMib: Math.max(5, Math.min(50, policy.maxMib)),
+    };
+  },
+  async exportDiagnostics() {
+    throw new Error("Diagnostic export requires the desktop app");
+  },
+  workspaceDiskUsage: async () => {
+    throw new Error("Disk information requires the desktop app");
+  },
+  async discoverP4Cli() {
+    return {
+      state: "notTested",
+      executable: "p4-mock",
+      version: "Rev. P4/MOCK/2026.1",
+      message: "Browser mock CLI is available.",
+    };
+  },
+  async testConnection(context) {
+    return {
+      state: "connected",
+      message: "Mock connection is ready.",
+      recovery: "none",
+      server: context.server,
+    };
+  },
+  async queryLoginStatus(context) {
+    return this.testConnection(context);
+  },
+  async trustServer(request) {
+    return {
+      state: request.confirmed ? "notTested" : "invalidConfig",
+      errorCode: request.confirmed ? undefined : "invalidConfig",
+      message: request.confirmed
+        ? "Mock trust accepted."
+        : "Explicit confirmation is required.",
+      recovery: request.confirmed ? "retry" : "editConfig",
+      server: request.context.server,
+    };
+  },
+  async login(request) {
+    return {
+      state:
+        request.confirmed && request.password ? "connected" : "invalidConfig",
+      errorCode:
+        request.confirmed && request.password ? undefined : "invalidConfig",
+      message: "Mock authentication result.",
+      recovery: request.confirmed && request.password ? "none" : "editConfig",
+      server: request.context.server,
+    };
+  },
+  async logout(request) {
+    return {
+      state: request.confirmed ? "authRequired" : "invalidConfig",
+      errorCode: request.confirmed ? "authRequired" : "invalidConfig",
+      message: "Mock logout result.",
+      recovery: request.confirmed ? "login" : "editConfig",
+      server: request.context.server,
+    };
+  },
+  async listStreams() {
+    return [
+      {
+        stream: "//atlas/main",
+        name: "Atlas Main",
+        owner: "fmeng",
+        parent: "none",
+        kind: "mainline",
+        description: "稳定主线",
+      },
+      {
+        stream: "//atlas/dev",
+        name: "Development",
+        owner: "fmeng",
+        parent: "//atlas/main",
+        kind: "development",
+        description: "日常开发",
+      },
+      {
+        stream: "//atlas/release",
+        name: "Release",
+        owner: "alice",
+        parent: "//atlas/main",
+        kind: "release",
+        description: "发布维护",
+      },
+    ];
+  },
+  async listUserWorkspaces() {
+    return [
+      {
+        name: mockContext.client,
+        host: "fm-mac",
+        root: "/workspace/atlas",
+        stream: "//atlas/main",
+        description: "Atlas 主线开发工作区",
+      },
+      {
+        name: "atlas-dev-fm",
+        host: "fm-mac",
+        root: "/workspace/atlas-dev",
+        stream: "//atlas/dev",
+        description: "功能开发与集成验证",
+      },
+      {
+        name: "atlas-release-win",
+        host: "FM-WIN",
+        root: "D:\\Projects\\Atlas Release",
+        stream: "//atlas/release",
+        description: "Windows 发布版本验证",
+      },
+      {
+        name: "tools-fm",
+        host: "",
+        root: "/workspace/tools",
+        stream: "",
+        description: "工具项目 · Classic Workspace",
+      },
+    ].map((item, index) => ({
+      ...item,
+      owner: mockContext.user,
+      updated: Math.floor(now / 1000) - index * 86400,
+      accessed: Math.floor(now / 1000) - index * 3600,
+    }));
+  },
+  async saveConnection(context) {
+    localStorage.setItem("p4deck.mockConnection", JSON.stringify(context));
+    mockContext = { ...context };
+    return { ...context };
+  },
+  async runtimeInfo() {
+    return {
+      mode: "mock",
+      p4Version: "P4/MOCK/2026.1",
+      context: { ...mockContext },
+      connection: {
+        state: "notTested",
+        message: "Browser mock does not contact a server.",
+        recovery: "retry",
+        server: mockContext.server,
+      },
+    };
+  },
+  async runP4(request) {
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const started = new Date().toISOString();
+    const args =
+      request.command === "p4"
+        ? request.args
+        : [request.command, ...request.args];
+    const command = `p4 ${args.join(" ")}`;
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const joined = args.join(" ").toLowerCase();
+    const isError =
+      joined.includes("fail") ||
+      joined.includes("-p") ||
+      joined.includes("-p4passwd");
+    const message = isError
+      ? "Command rejected by the controlled P4 runner."
+      : joined.startsWith("opened")
+        ? "//depot/atlas/main/src/render/viewport.cpp#4 - edit default change (text)"
+        : `Mock completed: ${command}`;
+    emitMockLog(
+      isError ? "error" : "info",
+      request.source,
+      command,
+      message,
+      operationId,
+      180,
+    );
+    return {
+      operationId,
+      exitCode: isError ? 1 : 0,
+      durationMs: 180,
+      events: [
+        { operationId, type: "started", timestamp: started },
+        {
+          operationId,
+          type: isError ? "error" : "stdout",
+          message,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          operationId,
+          type: "completed",
+          message: String(isError ? 1 : 0),
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+  },
+  async cancelOperation() {},
+  async queryChangelists(query) {
+    const keyword = query.keyword.trim().toLowerCase();
+    let filtered = mockChanges.filter((change) => {
+      if (query.statuses.length && !query.statuses.includes(change.status))
+        return false;
+      if (query.users.length && !query.users.includes(change.user))
+        return false;
+      if (query.clients.length && !query.clients.includes(change.client))
+        return false;
+      if (query.stream && change.stream !== query.stream) return false;
+      if (
+        Date.parse(change.time) < Date.parse(query.from) ||
+        Date.parse(change.time) > Date.parse(query.to)
+      )
+        return false;
+      if (query.hasShelf != null && change.hasShelf !== query.hasShelf)
+        return false;
+      if (query.hasJob != null && Boolean(change.jobs.length) !== query.hasJob)
+        return false;
+      if (
+        keyword &&
+        !`${change.id} ${change.description} ${change.user} ${change.client} ${change.jobs.join(" ")}`
+          .toLowerCase()
+          .includes(keyword)
+      )
+        return false;
+      return true;
+    });
+    const hiddenMergeCount = query.hideReliableMerges
+      ? filtered.filter(
+          (change) => change.mergeClassification === "reliableMerge",
+        ).length
+      : 0;
+    if (query.hideReliableMerges)
+      filtered = filtered.filter(
+        (change) => change.mergeClassification !== "reliableMerge",
+      );
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return {
+      requestGeneration: query.requestGeneration,
+      changes: filtered.slice(0, query.limit),
+      hiddenMergeCount,
+      hasMore: filtered.length > query.limit,
+    };
+  },
+  async performClAction(action) {
+    const operationId = crypto.randomUUID();
+    const id =
+      "changeId" in action
+        ? action.changeId
+        : "sourceChangeId" in action
+          ? action.sourceChangeId
+          : 0;
+    const command = `p4 ${action.type} ${id || ""}`.trim();
+    emitMockLog(
+      "info",
+      "gui",
+      command,
+      "Operation completed in browser mock.",
+      operationId,
+      120,
+    );
+    return {
+      operation: {
+        operationId,
+        exitCode: 0,
+        durationMs: 120,
+        events: [
+          {
+            operationId,
+            type: "completed",
+            message: "0",
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+      affectedChanges: id ? [id] : [],
+      warnings:
+        action.type === "unshelvePreview"
+          ? ["Preview only: no workspace files were changed."]
+          : [],
+    };
+  },
+  async queryLogs(query) {
+    const keyword = query.keyword?.toLowerCase();
+    return mockLogs
+      .filter(
+        (entry) =>
+          (!query.levels?.length || query.levels.includes(entry.level)) &&
+          (!keyword ||
+            `${entry.command} ${entry.message}`
+              .toLowerCase()
+              .includes(keyword)),
+      )
+      .slice(0, query.limit ?? 10_000);
+  },
+  async subscribeOperationEvents(callback) {
+    operationSubscribers.add(callback);
+    return () => operationSubscribers.delete(callback);
+  },
+  async listWorkspaceChildren(path) {
+    return mockWorkspace.map((node) =>
+      path
+        ? {
+            ...node,
+            id: `${path}-${node.id}`,
+            relativePath:
+              `${path.replace(/^\/workspace\/atlas\/?/, "")}/${node.name}`.replace(
+                /^\//,
+                "",
+              ),
+            absolutePath: `${path.startsWith("/") ? path : `/workspace/atlas/${path}`}/${node.name}`,
+          }
+        : node,
+    );
+  },
+  async listDepotChildren(path = "//atlas/main") {
+    return mockWorkspace.slice(0, 80).map((node) => ({
+      id: `depot-${node.id}`,
+      name: node.name,
+      kind: node.kind,
+      depotPath: `${path.replace(/\/$/, "")}/${node.name}`,
+      headRevision: node.headRevision,
+      headAction: node.state === "openedDelete" ? "delete" : "edit",
+      hasChildren: node.hasChildren,
+    }));
+  },
+  async resolvePath(request) {
+    const raw = request.input.trim();
+    const depot = raw.startsWith("//");
+    const absolute = raw.startsWith("/") || /^[A-Za-z]:[\\/]/.test(raw);
+    const relativePath = depot
+      ? raw.replace(/^\/\/atlas\/main\/?/, "")
+      : absolute
+        ? raw.replace(/^\/workspace\/atlas\/?/, "")
+        : raw;
+    return {
+      found:
+        Boolean(relativePath) ||
+        raw === "//atlas/main" ||
+        raw === "/workspace/atlas",
+      inputKind: depot ? "depot" : absolute ? "absolute" : "relative",
+      relativePath,
+      absolutePath: `/workspace/atlas/${relativePath}`,
+      depotPath: `//atlas/main/${relativePath}`,
+    };
+  },
+  async openLocalPath() {
+    throw new Error("系统打开功能仅在桌面应用中可用 / Use the desktop app");
+  },
+  async localPathCapabilities() {
+    return { reveal: false, openWith: false };
+  },
+  async performFileAction(request) {
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const event = (
+      type: OperationEvent["type"],
+      progress: number,
+    ): OperationEvent => ({
+      operationId,
+      type,
+      progress,
+      timestamp: new Date().toISOString(),
+    });
+    emitOperation(event("queued", 0));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    emitOperation(event("started", 2));
+    await new Promise((resolve) => setTimeout(resolve, 45));
+    emitOperation(event("progress", 55));
+    await new Promise((resolve) => setTimeout(resolve, 45));
+    emitOperation(event("completed", 100));
+    emitMockLog(
+      "info",
+      "gui",
+      `p4 ${request.action}`,
+      `${request.paths.length} path(s) updated.`,
+      operationId,
+      90,
+    );
+    return {
+      operation: {
+        operationId,
+        exitCode: 0,
+        durationMs: 120,
+        events: [event("completed", 100)],
+      },
+      affectedPaths: request.paths,
+      message: `${request.action} completed in Mock Backend.`,
+    };
+  },
+  async getFilePreview(path) {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(path))
+      return {
+        kind: "image",
+        content:
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAIAAABqhmJGAAADCElEQVR4nO3TMW0DABTFwMArm6Ao0w5dwiEY8hbnSycdAC9+/L3+gaMeeQEwMzAcZmA4zMBwmIHhMAPDYQaGwwwMhxkYDjMwHGZgOMzAcJiB4TADw2EGhsMMDIcZGA4zMBxmYDjMwHCYgeEwA8NhBobDDAyHGRgOMzAcZmA4zMBwmIHhMAPDYQaGwwwMhxkYDjMwHGZgOMzAcJiB4TADw2FfNPDP7xOuyH8xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8FwPDLv/FwLDLfzEw7PJfDAy7/BcDwy7/xcCwy38xMOzyXwwMu/wXA8Mu/8XAsMt/MTDs8l8MDLv8l68bGPiUgeEwA8NhBobDDAyHGRgOMzAcZmA4zMBwmIHhMAPDYQaGwwwMhxkYDjMwHGZgOMzAcJiB4TADw2EGhsMMDIcZGA4zMBxmYDjMwHCYgeEwA8NhBobDDAyHGRgOMzAcZmA4zMBwmIHhMAPDYQaGwwwMhxkYDnsDW/2Uv/rJ1BkAAAAASUVORK5CYII=",
+        size: 833,
+        width: 320,
+        height: 180,
+      };
+    if (
+      !/\.(txt|md|ts|tsx|js|jsx|json|cpp|h|rs|py|css|html|xml|yaml|yml|ini|log|csv|svg)$/i.test(
+        path,
+      )
+    )
+      throw new Error("Unsupported preview format (demo)");
+    const content =
+      "# Browser demo / 浏览器演示\n# " +
+      path +
+      "\n\nThis is simulated file content, not a real local file.\n这是模拟内容，不会读取你电脑上的文件。\n\nexport const quality = 'high';\nconst virtualized = true;\n";
+    return {
+      kind: "text",
+      content,
+      size: new TextEncoder().encode(content).length,
+      encoding: "UTF-8",
+    };
+  },
+  async getDiff(path) {
+    return {
+      path,
+      leftLabel: "Have #12",
+      rightLabel: "Workspace",
+      binary: false,
+      unified:
+        "@@ -1,4 +1,5 @@\n export const quality = 'high';\n-const cache = false;\n+const cache = true;\n+const virtualized = true;",
+    };
+  },
+  async getFileHistory(path) {
+    return Array.from({ length: 12 }, (_, index) => ({
+      revision: 12 - index,
+      changelistId: 31842 - index * 7,
+      user: ["fmeng", "alice", "buildbot"][index % 3],
+      action: index === 11 ? "add" : "edit",
+      time: new Date(now - index * 86_400_000).toISOString(),
+      description: `Update ${path} revision ${12 - index}`,
+    }));
+  },
+  async getRevisionGraph(path) {
+    const nodes = Array.from({ length: 8 }, (_, index) => ({
+      id: `r${index + 1}`,
+      depotPath: path,
+      revision: index + 1,
+      changelistId: 31000 + index * 31,
+      label: `#${index + 1}`,
+      x: 90 + index * 120,
+      y: index === 4 ? 140 : 70,
+    }));
+    return {
+      nodes,
+      edges: nodes.slice(1).map((node, index) => ({
+        id: `e${index}`,
+        source: nodes[index].id,
+        target: node.id,
+        kind: index === 3 ? ("merge" as const) : ("revision" as const),
+      })),
+    };
+  },
+  async queryPendingChanges() {
+    return [
+      {
+        id: 0,
+        description: "Default changelist",
+        files: mockWorkspace
+          .filter((node) => node.state === "openedEdit")
+          .slice(0, 5)
+          .map((node) => ({
+            depotPath: node.depotPath!,
+            action: "edit",
+            state: node.state,
+          })),
+        shelvedFiles: [],
+      },
+      {
+        id: 31821,
+        description: "Render pipeline cache improvements",
+        files: mockWorkspace
+          .filter((node) => node.state === "openedAdd")
+          .slice(0, 4)
+          .map((node) => ({
+            depotPath: node.depotPath!,
+            action: "add",
+            state: node.state,
+          })),
+        shelvedFiles: mockWorkspace.slice(20, 23).map((node) => ({
+          depotPath: node.depotPath!,
+          action: "edit",
+          state: "controlled" as const,
+        })),
+      },
+      {
+        id: 31798,
+        description: "Atlas material cleanup",
+        files: mockWorkspace.slice(30, 33).map((node) => ({
+          depotPath: node.depotPath!,
+          action: "edit",
+          state: "openedEdit" as const,
+        })),
+        shelvedFiles: [],
+      },
+    ];
+  },
+};

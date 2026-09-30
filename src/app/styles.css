@@ -1,0 +1,30 @@
+@import "./styles/context-menu.css";
+@import "./styles/dialogs.css";
+@import "@xterm/xterm/css/xterm.css";
+/* Ordered entry point: tokens, docking, shared workbench, then scoped features. */
+@import "./styles/tokens.css";
+@import "./styles/review.css";
+@import "./styles/docking.css";
+@import "./styles/browsers.css";
+@import "./styles/workbench.css";
+@import "./styles/targets.css";
+@import "./styles/settings.css";
+@import "./styles/preferences.css";
+@import "./styles/preview.css";
+@import "./styles/commands.css";
+@import "./styles/activity.css";
+@import "./styles/search.css";
+@import "./styles/status.css";
+.runtime-error,
+.tool-error {
+  position: fixed;
+  bottom: 32px;
+  right: 20px;
+  max-width: 600px;
+  z-index: 100;
+  padding: 12px;
+  border: 1px solid var(--danger);
+  background: var(--panel);
+  color: var(--danger);
+  border-radius: 6px;
+}

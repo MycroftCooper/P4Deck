@@ -1,0 +1,58 @@
+{
+  "name": "p4deck",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "check:web": "tsc -b --pretty false",
+    "check": "tsc -b --pretty false && cargo check --manifest-path src-tauri/Cargo.toml",
+    "test:web": "vitest run",
+    "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
+    "doctor": "bash scripts/doctor.sh",
+    "setup:mac": "bash scripts/setup-macos.sh",
+    "setup:mac:check": "bash scripts/setup-macos.sh --check",
+    "fixture:start": "bash scripts/p4d-fixture.sh start",
+    "fixture:stop": "bash scripts/p4d-fixture.sh stop",
+    "fixture:destroy": "bash scripts/p4d-fixture.sh destroy",
+    "fixture:setup:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 setup",
+    "fixture:start:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 start",
+    "fixture:status:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 status",
+    "fixture:stop:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 stop",
+    "fixture:destroy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 destroy",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.85.5",
+    "@tanstack/react-virtual": "^3.14.9",
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "dockview-react": "^8.3.1",
+    "lucide-react": "^0.542.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "jsdom": "26.1.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4"
+  }
+}
