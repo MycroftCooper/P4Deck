@@ -465,6 +465,55 @@ export const mockBackend: Backend = {
       hasMore: filtered.length > query.limit,
     };
   },
+  async getSubmittedChangeDetail(request) {
+    const change = mockChanges.find(
+      (candidate) =>
+        candidate.id === request.changeId && candidate.status === "submitted",
+    );
+    if (!change) {
+      return {
+        changeId: request.changeId,
+        description: "",
+        user: "",
+        client: "",
+        time: "",
+        jobs: [],
+        files: [],
+        integrationEvidence: [],
+        mergeClassification: "unknown",
+        inspectionStatus: "unavailable",
+        message: "Submitted changelist inspection failed.",
+      };
+    }
+    const reliable = change.mergeClassification === "reliableMerge";
+    return {
+      changeId: change.id,
+      description: change.description,
+      user: change.user,
+      client: change.client,
+      time: change.time,
+      jobs: [...change.jobs],
+      files: [
+        {
+          depotPath: `//atlas/main/mock/${change.id}.txt`,
+          action: reliable ? "integrate" : "edit",
+          revision: 3,
+          fileType: "text",
+        },
+      ],
+      integrationEvidence: reliable
+        ? [
+            {
+              source: "describeAction" as const,
+              depotPath: `//atlas/main/mock/${change.id}.txt`,
+              relationship: "integrate",
+            },
+          ]
+        : [],
+      mergeClassification: change.mergeClassification,
+      inspectionStatus: "complete",
+    };
+  },
   async performClAction(action) {
     const operationId = crypto.randomUUID();
     const id = "changeId" in action ? action.changeId : 0;

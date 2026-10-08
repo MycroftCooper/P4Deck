@@ -61,6 +61,7 @@ pub fn run() {
             let changelists = Arc::new(ChangelistService::new(
                 ChangelistRepository::new(runner.clone()),
                 status_cache.clone(),
+                contexts.clone(),
             ));
             let submit = Arc::new(SubmitService::new(
                 SubmitRepository::new(runner.clone()),
@@ -115,6 +116,7 @@ pub fn run() {
             ipc::commands::query_operation_journal,
             ipc::commands::get_operation_record,
             ipc::commands::query_changelists,
+            ipc::commands::get_submitted_change_detail,
             ipc::commands::perform_cl_action,
             ipc::commands::list_workspace_children,
             ipc::commands::list_depot_children,

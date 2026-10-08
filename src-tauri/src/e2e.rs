@@ -138,6 +138,7 @@ mod tests {
         let changelists = ChangelistService::new(
             ChangelistRepository::new(runner.clone()),
             status_cache.clone(),
+            contexts.clone(),
         );
         let submit = SubmitService::new(
             SubmitRepository::new(runner.clone()),
@@ -560,6 +561,7 @@ mod tests {
             root,
         )
         .await?;
+        exercise_submitted_change_details(runner, changelists, context).await?;
         exercise_submit_blockers(runner, changelists, submit, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
         Ok(())
@@ -1152,6 +1154,134 @@ mod tests {
         code: crate::domain::SubmitIssueCode,
     ) -> bool {
         preflight.blockers.iter().any(|issue| issue.code == code)
+    }
+
+    async fn exercise_submitted_change_details(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        context: &P4Context,
+    ) -> Result<(), String> {
+        let ordinary_id =
+            latest_change_id(runner, context, "//depot/p4deck-submit-e2e/success.txt").await?;
+        let ordinary = changelists
+            .submitted_detail(
+                crate::domain::SubmittedChangeDetailRequest {
+                    change_id: ordinary_id,
+                    operation_id: "be008-ordinary-detail".into(),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            ordinary.merge_classification == crate::domain::MergeClassification::Normal
+                && ordinary.inspection_status == crate::domain::SubmittedInspectionStatus::Complete
+                && ordinary.files.iter().any(|file| {
+                    file.depot_path == "//depot/p4deck-submit-e2e/success.txt"
+                        && file.revision.is_some()
+                }),
+            format!("ordinary submitted detail was not verified: {ordinary:?}"),
+        )?;
+
+        let branch_path = "//depot/p4deck-submit-e2e/promoted/success.txt";
+        checked_run(
+            runner,
+            context,
+            "integrate",
+            vec![
+                "//depot/p4deck-submit-e2e/success.txt".into(),
+                branch_path.into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "BE-008 promotion".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let branch_id = latest_change_id(runner, context, branch_path).await?;
+        let integrated = changelists
+            .submitted_detail(
+                crate::domain::SubmittedChangeDetailRequest {
+                    change_id: branch_id,
+                    operation_id: "be008-integrated-detail".into(),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            integrated.merge_classification == crate::domain::MergeClassification::ReliableMerge
+                && !integrated.integration_evidence.is_empty()
+                && integrated
+                    .files
+                    .iter()
+                    .any(|file| matches!(file.action.as_str(), "branch" | "integrate")),
+            format!("real branch submission lacked reliable evidence: {integrated:?}"),
+        )?;
+        let query = |hide_reliable_merges| crate::domain::ClQuery {
+            request_generation: 8,
+            keyword: String::new(),
+            statuses: vec!["submitted".into()],
+            users: Vec::new(),
+            clients: Vec::new(),
+            path: Some("//depot/p4deck-submit-e2e/...".into()),
+            stream: None,
+            from: "2000-01-01T00:00:00Z".into(),
+            to: "2100-01-01T00:00:00Z".into(),
+            has_shelf: None,
+            has_job: None,
+            hide_reliable_merges,
+            limit: 100,
+        };
+        let upgraded = changelists
+            .query(context.clone(), query(false), None)
+            .await?;
+        ensure(
+            upgraded.changes.iter().any(|change| {
+                change.id == branch_id
+                    && change.merge_classification
+                        == crate::domain::MergeClassification::ReliableMerge
+            }),
+            format!("cached detail did not upgrade the summary: {upgraded:?}"),
+        )?;
+        let hidden = changelists
+            .query(context.clone(), query(true), None)
+            .await?;
+        ensure(
+            hidden.hidden_merge_count >= 1
+                && hidden.changes.iter().all(|change| change.id != branch_id),
+            format!("reliably classified branch was not hidden: {hidden:?}"),
+        )
+    }
+
+    async fn latest_change_id(
+        runner: &P4Runner,
+        context: &P4Context,
+        depot_path: &str,
+    ) -> Result<i64, String> {
+        let result = checked_run(
+            runner,
+            context,
+            "changes",
+            vec!["-m".into(), "1".into(), depot_path.into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        json_values(&result)
+            .into_iter()
+            .find_map(|value| {
+                value
+                    .get("change")
+                    .and_then(Value::as_str)
+                    .and_then(|value| value.parse().ok())
+            })
+            .ok_or_else(|| format!("no submitted changelist found for {depot_path}"))
     }
 
     async fn exercise_submit_blockers(

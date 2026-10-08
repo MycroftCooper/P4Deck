@@ -183,6 +183,65 @@ impl ChangelistRepository {
         Ok(result)
     }
 
+    pub async fn submitted_detail(
+        &self,
+        context: &P4Context,
+        request: &SubmittedChangeDetailRequest,
+        app: Option<&AppHandle>,
+    ) -> Result<SubmittedChangeDetail, String> {
+        if request.change_id <= 0 {
+            return Err("a positive submitted changelist ID is required".into());
+        }
+        if request.operation_id.trim().is_empty() || request.operation_id.len() > 128 {
+            return Err("a valid operation ID is required".into());
+        }
+        let operation_id = Some(request.operation_id.clone());
+        let described = self
+            .run_detail(
+                context,
+                command::submitted_detail_invocation(request.change_id)?,
+                operation_id.clone(),
+                app,
+            )
+            .await?;
+        let mut detail = parser::parse_submitted_detail(&described.events, request.change_id)?;
+        if !detail.integration_evidence.is_empty() {
+            return Ok(detail);
+        }
+        const MAX_FILELOG_FILES: usize = 64;
+        const MAX_FILELOG_ARGUMENT_BYTES: usize = 24 * 1024;
+        let filelog_argument_bytes = detail
+            .files
+            .iter()
+            .map(|file| file.depot_path.len() + 32)
+            .sum::<usize>();
+        if detail.files.len() > MAX_FILELOG_FILES
+            || filelog_argument_bytes > MAX_FILELOG_ARGUMENT_BYTES
+        {
+            detail.inspection_status = SubmittedInspectionStatus::Partial;
+            detail.message = Some(format!(
+                "Integration inspection is bounded to {MAX_FILELOG_FILES} files and {MAX_FILELOG_ARGUMENT_BYTES} argument bytes; this changelist has {} files.",
+                detail.files.len()
+            ));
+            return Ok(detail);
+        }
+        let filelog = self
+            .run_detail(
+                context,
+                command::submitted_filelog_invocation(&detail.files)?,
+                operation_id,
+                app,
+            )
+            .await?;
+        let evidence = parser::parse_filelog_integration_evidence(
+            &filelog.events,
+            request.change_id,
+            &detail.files,
+        )?;
+        parser::finalize_submitted_classification(&mut detail, evidence);
+        Ok(detail)
+    }
+
     pub async fn perform_pending(
         &self,
         context: P4Context,
@@ -316,6 +375,34 @@ impl ChangelistRepository {
                     output_mode,
                     timeout_ms: Some(300_000),
                     input: invocation.input,
+                },
+                app,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure_success(&result)?;
+        Ok(result)
+    }
+
+    async fn run_detail(
+        &self,
+        context: &P4Context,
+        invocation: command::P4Invocation,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        let result = self
+            .runner
+            .run(
+                P4CommandRequest {
+                    operation_id,
+                    source: OperationSource::Gui,
+                    command: invocation.command.into(),
+                    args: invocation.args,
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(60_000),
+                    input: None,
                 },
                 app,
             )

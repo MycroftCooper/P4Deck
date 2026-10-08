@@ -27,6 +27,8 @@ export const tauriBackend: Backend = {
   runP4: (request) => invoke("run_p4", { request }),
   cancelOperation: (operationId) => invoke("cancel_operation", { operationId }),
   queryChangelists: (query) => invoke("query_changelists", { query }),
+  getSubmittedChangeDetail: (request) =>
+    invoke("get_submitted_change_detail", { request }),
   performClAction: (action) => invoke("perform_cl_action", { action }),
   queryLogs: (query) => invoke("query_logs", { query }),
   subscribeOperationEvents: (callback) =>

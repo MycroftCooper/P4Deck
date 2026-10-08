@@ -1,6 +1,7 @@
 use crate::domain::{
     ChangelistSummary, MergeClassification, OperationEvent, OperationResult, PendingChange,
-    PendingFile,
+    PendingFile, SubmittedChangeDetail, SubmittedChangeFile, SubmittedInspectionStatus,
+    SubmittedIntegrationEvidence, SubmittedIntegrationEvidenceSource,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -10,6 +11,7 @@ pub fn parse_change_events(events: &[OperationEvent]) -> Vec<ChangelistSummary> 
         .iter()
         .filter_map(|event| event.message.as_deref())
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(Value::is_object)
         .filter(|value| value.get("code").and_then(Value::as_str) != Some("error"))
         .filter_map(parse_change)
         .collect()
@@ -30,7 +32,7 @@ fn parse_change(value: Value) -> Option<ChangelistSummary> {
         .map(str::to_owned);
     Some(ChangelistSummary {
         id,
-        merge_classification: classify(&description, &user, stream.as_deref()),
+        merge_classification: classify_summary(&description),
         description,
         user,
         client,
@@ -43,16 +45,171 @@ fn parse_change(value: Value) -> Option<ChangelistSummary> {
     })
 }
 
-fn classify(description: &str, user: &str, stream: Option<&str>) -> MergeClassification {
+fn classify_summary(description: &str) -> MergeClassification {
     let description = description.to_lowercase();
-    let merge = description.contains("merge") || description.contains("integrat");
-    if merge && user.to_lowercase().contains("build") && stream.is_some() {
-        MergeClassification::ReliableMerge
-    } else if merge {
+    let merge = description.contains("merge")
+        || description.contains("integrat")
+        || description.contains("branch");
+    if merge {
         MergeClassification::SuspectedMerge
     } else {
         MergeClassification::Unknown
     }
+}
+
+pub fn parse_submitted_detail(
+    events: &[OperationEvent],
+    expected_change_id: i64,
+) -> Result<SubmittedChangeDetail, String> {
+    let value = json_values(events)
+        .into_iter()
+        .next()
+        .ok_or("p4 describe returned no structured changelist")?;
+    let change_id =
+        number_option(&value, "change").ok_or("p4 describe omitted the submitted changelist ID")?;
+    let status = text(&value, "status");
+    let user = text(&value, "user");
+    if change_id != expected_change_id || status != "submitted" || user.trim().is_empty() {
+        return Err("p4 describe returned an unexpected or malformed changelist".into());
+    }
+    let description = normalized_multiline(&text(&value, "desc"));
+    let mut files = Vec::new();
+    let mut integration_evidence = Vec::new();
+    for index in 0.. {
+        let Some(depot_path) = value
+            .get(format!("depotFile{index}"))
+            .and_then(Value::as_str)
+        else {
+            break;
+        };
+        let action = text(&value, &format!("action{index}"));
+        let file = SubmittedChangeFile {
+            depot_path: depot_path.to_owned(),
+            action: action.clone(),
+            revision: number_option(&value, &format!("rev{index}")),
+            file_type: value
+                .get(format!("type{index}"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        };
+        if is_integration_action(&action) {
+            integration_evidence.push(SubmittedIntegrationEvidence {
+                source: SubmittedIntegrationEvidenceSource::DescribeAction,
+                depot_path: file.depot_path.clone(),
+                relationship: action,
+                related_path: None,
+            });
+        }
+        files.push(file);
+    }
+    if files.is_empty() || files.iter().any(|file| file.revision.is_none()) {
+        return Err("p4 describe returned malformed submitted file data".into());
+    }
+    let merge_classification = if integration_evidence.is_empty() {
+        classify_summary(&description)
+    } else {
+        MergeClassification::ReliableMerge
+    };
+    Ok(SubmittedChangeDetail {
+        change_id,
+        description,
+        user,
+        client: text(&value, "client"),
+        time: timestamp(&value),
+        jobs: indexed_text(&value, "job"),
+        files,
+        integration_evidence,
+        merge_classification,
+        inspection_status: SubmittedInspectionStatus::Partial,
+        message: None,
+    })
+}
+
+pub fn parse_filelog_integration_evidence(
+    events: &[OperationEvent],
+    expected_change_id: i64,
+    expected_files: &[SubmittedChangeFile],
+) -> Result<Vec<SubmittedIntegrationEvidence>, String> {
+    let values = json_values(events);
+    if values.is_empty() {
+        return Err("p4 filelog returned no structured file history".into());
+    }
+    let mut evidence = Vec::new();
+    let mut inspected = std::collections::HashSet::new();
+    for value in values {
+        let depot_path = value
+            .get("depotFile")
+            .and_then(Value::as_str)
+            .ok_or("p4 filelog omitted depotFile")?;
+        let Some(expected_file) = expected_files
+            .iter()
+            .find(|file| file.depot_path == depot_path)
+        else {
+            continue;
+        };
+        if number_option(&value, "change0") != Some(expected_change_id)
+            || number_option(&value, "rev0") != expected_file.revision
+        {
+            return Err("p4 filelog did not return the requested submitted revision".into());
+        }
+        inspected.insert(depot_path.to_owned());
+        let object = value
+            .as_object()
+            .ok_or("p4 filelog returned a non-object record")?;
+        for (key, relationship) in object {
+            let Some(suffix) = key.strip_prefix("how") else {
+                continue;
+            };
+            let Some(relationship) = relationship.as_str() else {
+                return Err("p4 filelog returned malformed integration metadata".into());
+            };
+            if !is_filelog_integration(relationship) {
+                continue;
+            }
+            evidence.push(SubmittedIntegrationEvidence {
+                source: SubmittedIntegrationEvidenceSource::Filelog,
+                depot_path: depot_path.to_owned(),
+                relationship: relationship.to_owned(),
+                related_path: value
+                    .get(format!("file{suffix}"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            });
+        }
+    }
+    if inspected.len() != expected_files.len() {
+        return Err("p4 filelog omitted one or more submitted files".into());
+    }
+    Ok(evidence)
+}
+
+pub fn finalize_submitted_classification(
+    detail: &mut SubmittedChangeDetail,
+    filelog_evidence: Vec<SubmittedIntegrationEvidence>,
+) {
+    detail.integration_evidence.extend(filelog_evidence);
+    detail.inspection_status = SubmittedInspectionStatus::Complete;
+    detail.merge_classification = if !detail.integration_evidence.is_empty() {
+        MergeClassification::ReliableMerge
+    } else if classify_summary(&detail.description) == MergeClassification::SuspectedMerge {
+        MergeClassification::SuspectedMerge
+    } else {
+        MergeClassification::Normal
+    };
+}
+
+fn is_integration_action(action: &str) -> bool {
+    matches!(action.to_ascii_lowercase().as_str(), "integrate" | "branch")
+}
+
+fn is_filelog_integration(relationship: &str) -> bool {
+    let relationship = relationship.to_ascii_lowercase();
+    [
+        "merge", "branch", "copy", "add", "ignored", "delete", "edit",
+    ]
+    .iter()
+    .any(|kind| relationship.starts_with(kind))
+        && (relationship.ends_with(" from") || relationship.ends_with(" into"))
 }
 
 fn text(value: &Value, key: &str) -> String {
@@ -240,6 +397,7 @@ fn json_values(events: &[OperationEvent]) -> Vec<Value> {
         .iter()
         .filter_map(|event| event.message.as_deref())
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(Value::is_object)
         .filter(|value| value.get("code").and_then(Value::as_str) != Some("error"))
         .filter(|value| value.get("severity").and_then(Value::as_i64).unwrap_or(0) < 3)
         .collect()
@@ -305,16 +463,102 @@ fn created_id_from_text(value: &str) -> Option<i64> {
 mod tests {
     use super::*;
 
+    fn event(message: &str) -> OperationEvent {
+        OperationEvent {
+            operation_id: "op".into(),
+            kind: crate::domain::EventKind::Stdout,
+            message: Some(message.into()),
+            progress: None,
+            timestamp: "now".into(),
+        }
+    }
+
     #[test]
-    fn reliable_merge_requires_multiple_signals() {
+    fn summary_text_can_only_raise_suspicion() {
         assert_eq!(
-            classify("Merge dev", "buildbot", Some("//main")),
-            MergeClassification::ReliableMerge
-        );
-        assert_eq!(
-            classify("Merge dev", "alice", Some("//main")),
+            classify_summary("Merge dev"),
             MergeClassification::SuspectedMerge
         );
+        assert_eq!(
+            classify_summary("Branch release"),
+            MergeClassification::SuspectedMerge
+        );
+        assert_eq!(
+            classify_summary("ordinary change"),
+            MergeClassification::Unknown
+        );
+    }
+
+    #[test]
+    fn parses_submitted_detail_and_requires_explicit_integration_evidence() {
+        let events = [event(
+            r#"{"change":"42","status":"submitted","user":"buildbot","client":"ws","desc":"Merge by name only","time":"1700000000","job0":"JOB-1","depotFile0":"//depot/main/a","action0":"edit","rev0":"3","type0":"text"}"#,
+        )];
+        let mut detail = parse_submitted_detail(&events, 42).unwrap();
+        assert_eq!(
+            detail.merge_classification,
+            MergeClassification::SuspectedMerge
+        );
+        assert!(detail.integration_evidence.is_empty());
+        finalize_submitted_classification(&mut detail, Vec::new());
+        assert_eq!(
+            detail.merge_classification,
+            MergeClassification::SuspectedMerge
+        );
+
+        let events = [event(
+            r#"{"change":"41","status":"submitted","user":"alice","client":"ws","desc":"Ordinary edit","time":"1700000000","depotFile0":"//depot/main/a","action0":"edit","rev0":"2"}"#,
+        )];
+        let mut ordinary = parse_submitted_detail(&events, 41).unwrap();
+        finalize_submitted_classification(&mut ordinary, Vec::new());
+        assert_eq!(ordinary.merge_classification, MergeClassification::Normal);
+
+        let events = [event(
+            r#"{"change":"43","status":"submitted","user":"alice","client":"ws","desc":"Promote","time":"1700000000","depotFile0":"//depot/main/a","action0":"integrate","rev0":"4"}"#,
+        )];
+        let detail = parse_submitted_detail(&events, 43).unwrap();
+        assert_eq!(
+            detail.merge_classification,
+            MergeClassification::ReliableMerge
+        );
+    }
+
+    #[test]
+    fn filelog_evidence_is_parsed_and_malformed_describe_is_rejected() {
+        let files = [SubmittedChangeFile {
+            depot_path: "//depot/main/a".into(),
+            action: "edit".into(),
+            revision: Some(3),
+            file_type: None,
+        }];
+        let evidence = parse_filelog_integration_evidence(
+            &[
+                event(
+                    r#"{"depotFile":"//depot/main/a","rev0":"3","change0":"42","how0,0":"merge from","file0,0":"//depot/dev/a"}"#,
+                ),
+                event("0"),
+            ],
+            42,
+            &files,
+        )
+        .unwrap();
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].related_path.as_deref(), Some("//depot/dev/a"));
+        assert!(parse_filelog_integration_evidence(
+            &[event(
+                r#"{"depotFile":"//depot/main/a","rev0":"2","change0":"40","how0,0":"merge from"}"#
+            )],
+            42,
+            &files,
+        )
+        .is_err());
+        assert!(parse_submitted_detail(
+            &[event(
+                r#"{"change":"44","status":"submitted","user":"alice"}"#
+            )],
+            44
+        )
+        .is_err());
     }
 
     #[test]

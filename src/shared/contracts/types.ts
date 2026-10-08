@@ -234,6 +234,39 @@ export interface ChangelistSummary {
   mergeClassification: MergeClassification;
 }
 
+export interface SubmittedChangeDetailRequest {
+  changeId: number;
+  operationId: string;
+}
+
+export interface SubmittedChangeFile {
+  depotPath: string;
+  action: string;
+  revision?: number;
+  fileType?: string;
+}
+
+export interface SubmittedIntegrationEvidence {
+  source: "describeAction" | "filelog";
+  depotPath: string;
+  relationship: string;
+  relatedPath?: string;
+}
+
+export interface SubmittedChangeDetail {
+  changeId: number;
+  description: string;
+  user: string;
+  client: string;
+  time: string;
+  jobs: string[];
+  files: SubmittedChangeFile[];
+  integrationEvidence: SubmittedIntegrationEvidence[];
+  mergeClassification: MergeClassification;
+  inspectionStatus: "complete" | "partial" | "unavailable";
+  message?: string;
+}
+
 export interface ClQueryResult {
   requestGeneration: number;
   changes: ChangelistSummary[];

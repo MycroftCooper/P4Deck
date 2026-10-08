@@ -17,7 +17,7 @@ import { action, copy } from "../../app/context-menu/bindings";
 /** UI-only: no backend import and no server requests on typing or submit. */
 export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
   const menu = useContextMenu();
-  const {searchDirectory} = useMenuEnvironment();
+  const { searchDirectory } = useMenuEnvironment();
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [mode, setMode] = useState<"files" | "cl">("files");
   const tabId = useId();
@@ -28,7 +28,19 @@ export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
   const [scope, setScope] = useState("workspace");
   const [path, setPath] = useState("");
   const [notice, setNotice] = useState("");
-  useEffect(() => { if (searchDirectory) { setMode("files"); setScope("depot"); setPath(searchDirectory); setNotice(tr("已填入目录范围；搜索服务尚未接通。", "Directory scope filled; search service is not connected.")); } }, [searchDirectory]);
+  useEffect(() => {
+    if (searchDirectory) {
+      setMode("files");
+      setScope("depot");
+      setPath(searchDirectory);
+      setNotice(
+        tr(
+          "已填入目录范围；搜索服务尚未接通。",
+          "Directory scope filled; search service is not connected.",
+        ),
+      );
+    }
+  }, [searchDirectory]);
   const [demo, setDemo] = useState(false);
   const [previewMenus, setPreviewMenus] = useState(false);
   const [selection, setSelection] = useState<string>();
@@ -61,7 +73,11 @@ export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
           "#12346 · Refresh project configuration",
           "#12347 · Import preview assets",
         ];
-  const resultSelection = useRecordSelection(rows, row => row, mode + ":" + demo);
+  const resultSelection = useRecordSelection(
+    rows,
+    (row) => row,
+    mode + ":" + demo,
+  );
   return (
     <main className="search-page">
       <header className="search-heading">
@@ -259,8 +275,14 @@ export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
         tabIndex={0}
         {...menu("S05", () => ({
           复制当前查询条件: copy(JSON.stringify({ mode, query, scope, path })),
-          清除选择: action(() => {setSelection(undefined); resultSelection.clear();}),
-          全选结果: action(resultSelection.all, demo ? undefined : "当前没有结果 / No results"),
+          清除选择: action(() => {
+            setSelection(undefined);
+            resultSelection.clear();
+          }),
+          全选结果: action(
+            resultSelection.all,
+            demo ? undefined : "当前没有结果 / No results",
+          ),
         }))}
         aria-label={tr("搜索结果", "Search results")}
       >
@@ -285,15 +307,47 @@ export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
                 "Static samples, not actual search results. Unrelated to your query.",
               )}
             </p>
-            <label className="search-menu-preview"><input type="checkbox" checked={previewMenus} onChange={event => setPreviewMenus(event.target.checked)} />{tr("预览正式结果菜单（示例条目不执行真实操作）", "Preview result menus (samples do not execute real actions)")}</label>
+            <label className="search-menu-preview">
+              <input
+                type="checkbox"
+                checked={previewMenus}
+                onChange={(event) => setPreviewMenus(event.target.checked)}
+              />
+              {tr(
+                "预览正式结果菜单（示例条目不执行真实操作）",
+                "Preview result menus (samples do not execute real actions)",
+              )}
+            </label>
             <div className="search-sample-list">
               {rows.map((row) => (
                 <button
                   key={row}
                   {...menu(
-                    previewMenus ? mode === "cl" ? "S03" : resultSelection.targets(row).length > 1 ? "S02" : "S01" : "S04",
+                    previewMenus
+                      ? mode === "cl"
+                        ? "S03"
+                        : resultSelection.targets(row).length > 1
+                          ? "S02"
+                          : "S01"
+                      : "S04",
                     () => ({
-                      "复制 › 文件名": copy(row.split("/").pop()), "复制 › 相对路径": copy(row), "复制 › 文件名列表": copy(resultSelection.targets(row).map(r => r.split("/").pop()).join("\n")), "复制 › 相对路径列表": copy(resultSelection.targets(row).join("\n")), "复制 CL 编号": copy(mode === "cl" ? row.split(" · ")[0] : undefined), "复制描述": copy(mode === "cl" ? row.split(" · ")[1] : undefined),
+                      "复制 › 文件名": copy(row.split("/").pop()),
+                      "复制 › 相对路径": copy(row),
+                      "复制 › 文件名列表": copy(
+                        resultSelection
+                          .targets(row)
+                          .map((r) => r.split("/").pop())
+                          .join("\n"),
+                      ),
+                      "复制 › 相对路径列表": copy(
+                        resultSelection.targets(row).join("\n"),
+                      ),
+                      "复制 CL 编号": copy(
+                        mode === "cl" ? row.split(" · ")[0] : undefined,
+                      ),
+                      复制描述: copy(
+                        mode === "cl" ? row.split(" · ")[1] : undefined,
+                      ),
                       "复制展示的文件路径或 CL 编号": copy(
                         mode === "cl" ? row.split(" · ")[0] : row,
                       ),
@@ -306,9 +360,21 @@ export function SearchPage({ zh, client }: { zh: boolean; client: string }) {
                         ),
                       ),
                     }),
-                    {title: tr("示例 · 不执行真实操作", "Sample · No real actions"), onOpen: () => {setSelection(row); resultSelection.context(row);}},
+                    {
+                      title: tr(
+                        "示例 · 不执行真实操作",
+                        "Sample · No real actions",
+                      ),
+                      onOpen: () => {
+                        setSelection(row);
+                        resultSelection.context(row);
+                      },
+                    },
                   )}
-                  onClick={event => {setSelection(row); resultSelection.select(row, event);}}
+                  onClick={(event) => {
+                    setSelection(row);
+                    resultSelection.select(row, event);
+                  }}
                   aria-pressed={resultSelection.isSelected(row)}
                 >
                   {mode === "files" ? <File size={16} /> : <Hash size={16} />}

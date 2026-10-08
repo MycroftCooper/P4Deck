@@ -41,6 +41,38 @@ describe("controlled P4 terminal", () => {
     expect(result.changes.length).toBeLessThanOrEqual(100);
   });
 
+  it("implements the narrow submitted detail contract", async () => {
+    const listed = await backend.queryChangelists({
+      requestGeneration: 8,
+      keyword: "",
+      statuses: ["submitted"],
+      users: [],
+      clients: [],
+      from: new Date(0).toISOString(),
+      to: new Date(Date.now() + 86_400_000).toISOString(),
+      hideReliableMerges: false,
+      limit: 100,
+    });
+    const reliable = listed.changes.find(
+      (change) => change.mergeClassification === "reliableMerge",
+    );
+    expect(reliable).toBeDefined();
+    const detail = await backend.getSubmittedChangeDetail({
+      changeId: reliable!.id,
+      operationId: "detail-contract",
+    });
+    expect(detail.mergeClassification).toBe("reliableMerge");
+    expect(detail.integrationEvidence[0]?.source).toBe("describeAction");
+    expect(detail.files[0]?.revision).toBe(3);
+
+    const unavailable = await backend.getSubmittedChangeDetail({
+      changeId: -1,
+      operationId: "detail-missing",
+    });
+    expect(unavailable.mergeClassification).toBe("unknown");
+    expect(unavailable.inspectionStatus).toBe("unavailable");
+  });
+
   it("implements the object workbench contract in browser mock", async () => {
     const files = await backend.listWorkspaceChildren();
     expect(files.length).toBeGreaterThan(100);

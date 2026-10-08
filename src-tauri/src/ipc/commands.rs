@@ -258,6 +258,18 @@ pub async fn query_changelists(
 }
 
 #[tauri::command]
+pub async fn get_submitted_change_detail(
+    request: SubmittedChangeDetailRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SubmittedChangeDetail, String> {
+    Ok(state
+        .changelists
+        .submitted_detail(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
 pub async fn perform_cl_action(
     action: ClAction,
     state: State<'_, AppState>,

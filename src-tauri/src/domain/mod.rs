@@ -293,6 +293,62 @@ pub struct ChangelistSummary {
     pub merge_classification: MergeClassification,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmittedChangeDetailRequest {
+    pub change_id: i64,
+    pub operation_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmittedChangeFile {
+    pub depot_path: String,
+    pub action: String,
+    pub revision: Option<i64>,
+    pub file_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmittedIntegrationEvidenceSource {
+    DescribeAction,
+    Filelog,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmittedIntegrationEvidence {
+    pub source: SubmittedIntegrationEvidenceSource,
+    pub depot_path: String,
+    pub relationship: String,
+    pub related_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmittedInspectionStatus {
+    Complete,
+    Partial,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmittedChangeDetail {
+    pub change_id: i64,
+    pub description: String,
+    pub user: String,
+    pub client: String,
+    pub time: String,
+    pub jobs: Vec<String>,
+    pub files: Vec<SubmittedChangeFile>,
+    pub integration_evidence: Vec<SubmittedIntegrationEvidence>,
+    pub merge_classification: MergeClassification,
+    pub inspection_status: SubmittedInspectionStatus,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClQueryResult {

@@ -3,6 +3,8 @@ import type {
   ClActionResult,
   ClQuery,
   ClQueryResult,
+  SubmittedChangeDetail,
+  SubmittedChangeDetailRequest,
   AuthenticationRequest,
   CacheDiagnostics,
   CliDiscoveryRequest,
@@ -93,6 +95,9 @@ export interface Backend {
   runP4(request: P4CommandRequest): Promise<OperationResult>;
   cancelOperation(operationId: string): Promise<void>;
   queryChangelists(query: ClQuery): Promise<ClQueryResult>;
+  getSubmittedChangeDetail(
+    request: SubmittedChangeDetailRequest,
+  ): Promise<SubmittedChangeDetail>;
   performClAction(action: ClAction): Promise<ClActionResult>;
   queryLogs(query: LogQuery): Promise<LogEntry[]>;
   subscribeOperationEvents(

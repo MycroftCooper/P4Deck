@@ -202,6 +202,40 @@ pub fn describe_shelves_invocation(change_ids: &[i64]) -> Result<P4Invocation, S
     })
 }
 
+pub fn submitted_detail_invocation(change_id: i64) -> Result<P4Invocation, String> {
+    ensure_numbered_change(change_id)?;
+    Ok(P4Invocation {
+        command: "describe",
+        args: vec!["-s".into(), change_id.to_string()],
+        input: None,
+    })
+}
+
+pub fn submitted_filelog_invocation(
+    files: &[crate::domain::SubmittedChangeFile],
+) -> Result<P4Invocation, String> {
+    if files.is_empty() {
+        return Err("at least one submitted file is required".into());
+    }
+    let mut args = vec!["-m".into(), "1".into(), "-i".into()];
+    for file in files {
+        let path = validate_paths(std::slice::from_ref(&file.depot_path))?
+            .into_iter()
+            .next()
+            .expect("one path was validated");
+        let revision = file
+            .revision
+            .filter(|revision| *revision > 0)
+            .ok_or("submitted file revision is required for filelog evidence")?;
+        args.push(format!("{path}#{revision}"));
+    }
+    Ok(P4Invocation {
+        command: "filelog",
+        args,
+        input: None,
+    })
+}
+
 pub fn where_invocation(depot_paths: &[String]) -> Result<P4Invocation, String> {
     let paths = validate_paths(depot_paths)?;
     Ok(P4Invocation {
@@ -448,5 +482,20 @@ mod tests {
         }))
         .unwrap();
         assert!(matches!(legacy, ClAction::Edit { change_id: 42, .. }));
+    }
+
+    #[test]
+    fn submitted_detail_commands_are_bounded_to_explicit_revisions() {
+        let describe = submitted_detail_invocation(42).unwrap();
+        assert_eq!(describe.command, "describe");
+        assert_eq!(describe.args, ["-s", "42"]);
+        let filelog = submitted_filelog_invocation(&[crate::domain::SubmittedChangeFile {
+            depot_path: "//depot/a b.txt".into(),
+            action: "edit".into(),
+            revision: Some(3),
+            file_type: Some("text".into()),
+        }])
+        .unwrap();
+        assert_eq!(filelog.args, ["-m", "1", "-i", "//depot/a b.txt#3"]);
     }
 }

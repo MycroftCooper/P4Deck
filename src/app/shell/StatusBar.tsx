@@ -143,7 +143,14 @@ export function StatusBar({
             : ""}
         </span>
       </div>
-      {tasksOpen && <TaskList tasks={tasks} onClose={() => setTasksOpen(false)} onLogs={onOpenLogs} zh={zh} />}
+      {tasksOpen && (
+        <TaskList
+          tasks={tasks}
+          onClose={() => setTasksOpen(false)}
+          onLogs={onOpenLogs}
+          zh={zh}
+        />
+      )}
       {children}
     </footer>
   );
