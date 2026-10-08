@@ -919,6 +919,146 @@ button {
   container-type: inline-size;
   container-name: submitted-page;
 }
+.submitted-page .main-content {
+  display: flex;
+  flex-direction: column;
+}
+.submitted-filters {
+  margin: 14px 0 12px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.submitted-filters > summary {
+  min-height: 34px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.submitted-filter-body {
+  max-height: min(38vh, 310px);
+  overflow: auto;
+  padding: 0 10px 10px;
+}
+.submitted-filter-semantics,
+.submitted-mock-notice,
+.submitted-filter-error {
+  margin: 0 0 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.submitted-mock-notice {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.submitted-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 8px;
+}
+.submitted-filter-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.submitted-filter-field input,
+.submitted-filter-field select,
+.submitted-saved-filters input,
+.submitted-saved-filters select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+.submitted-filter-field input[aria-invalid="true"],
+.submitted-filter-field select[aria-invalid="true"],
+.submitted-filter-name[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.submitted-filter-field small,
+.submitted-filter-error,
+.submitted-page-error,
+.submitted-truncated {
+  color: var(--danger);
+}
+.submitted-merge-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  margin: 9px 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 10px;
+}
+.submitted-merge-filters legend {
+  color: var(--muted);
+}
+.submitted-merge-filters label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.submitted-saved-filters,
+.submitted-filter-confirmation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.submitted-saved-filters select {
+  width: min(190px, 100%);
+}
+.submitted-filter-name {
+  width: min(180px, 100%) !important;
+}
+.submitted-filter-confirmation {
+  margin-top: 7px;
+  padding: 7px;
+  border: 1px solid var(--warning);
+  border-radius: 5px;
+  font-size: 10px;
+}
+.submitted-filter-confirmation span {
+  margin-right: auto;
+}
+.submitted-query-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.submitted-page .cl-layout {
+  flex: 1 1 auto;
+  height: auto;
+}
+.submitted-page .cl-panel {
+  grid-template-rows: 37px minmax(0, 1fr) auto;
+}
+.submitted-page .list-footer {
+  min-height: 32px;
+  height: auto;
+  flex-wrap: wrap;
+  padding-block: 4px;
+}
+.submitted-query-stats {
+  margin-left: auto;
+}
+.submitted-load-more {
+  min-height: 26px;
+  padding-block: 3px;
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
@@ -1642,7 +1782,7 @@ button {
   }
   .submitted-page .cl-layout,
   .submitted-page .cl-layout:has(.detail-panel.visible) {
-    height: calc(100% - 105px);
+    height: auto;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(150px, 42%) minmax(0, 1fr);
     gap: 8px;
@@ -1677,7 +1817,7 @@ button {
   }
   .submitted-page .cl-layout,
   .submitted-page .cl-layout:has(.detail-panel.visible) {
-    height: calc(100% - 105px);
+    height: auto;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(150px, 42%) minmax(0, 1fr);
     gap: 8px;
@@ -1687,6 +1827,40 @@ button {
   }
   .submitted-page .revision-file-scroll {
     height: 180px;
+  }
+}
+
+@media (max-width: 650px) {
+  .submitted-filter-body {
+    max-height: min(40vh, 260px);
+  }
+  .submitted-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .submitted-saved-filters > input,
+  .submitted-saved-filters > select {
+    flex: 1 1 100%;
+    width: 100% !important;
+  }
+  .submitted-query-stats {
+    margin-left: 0;
+  }
+}
+
+@container submitted-page (max-width: 650px) {
+  .submitted-filter-body {
+    max-height: min(40vh, 260px);
+  }
+  .submitted-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .submitted-saved-filters > input,
+  .submitted-saved-filters > select {
+    flex: 1 1 100%;
+    width: 100% !important;
+  }
+  .submitted-query-stats {
+    margin-left: 0;
   }
 }
 

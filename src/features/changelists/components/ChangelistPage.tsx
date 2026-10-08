@@ -1,15 +1,11 @@
 import { useCommandFocus } from "../../../app/shell/CommandContext";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  CalendarDays,
-  ChevronDown,
-  Filter,
   GitMerge,
   MoreHorizontal,
   Plus,
   RefreshCw,
-  Search,
   ShieldAlert,
   ShieldQuestion,
 } from "lucide-react";
@@ -35,18 +31,19 @@ interface Props {
   t: Copy;
   changes: ChangelistSummary[];
   loading: boolean;
-  keyword: string;
-  status: ChangeStatus | "all";
-  hideMerges: boolean;
+  loadingMore: boolean;
+  queryControls: ReactNode;
   hiddenMergeCount: number;
   hasMore: boolean;
+  partial: boolean;
+  truncated: boolean;
+  stats: { scannedCount: number; matchedCount: number; pageCount: number };
+  pageError: string;
   selected: number | null;
   detail: SubmittedDetailViewState;
   mock: boolean;
-  onKeywordChange(value: string): void;
-  onStatusChange(value: ChangeStatus | "all"): void;
-  onHideMergesChange(value: boolean): void;
   onRefresh(): void;
+  onLoadMore(): void;
   onAction(action: ClAction): void;
   onSelectedChange(value: number | null): void;
   onRetryDetail(): void;
@@ -205,51 +202,7 @@ export function ChangelistPage(props: Props) {
         </div>
       </header>
 
-      <section className="query-bar" aria-label={t.filters}>
-        <label className="search-field">
-          <Search size={17} />
-          <input
-            value={props.keyword}
-            onChange={(event) => props.onKeywordChange(event.target.value)}
-            placeholder={t.search}
-            aria-label={t.search}
-          />
-        </label>
-        <label className="select-field">
-          <Filter size={15} />
-          <select
-            disabled
-            title={
-              env.preferences.zh
-                ? "此页固定显示已提交 CL"
-                : "This page shows submitted changelists only"
-            }
-            value={props.status}
-            onChange={(event) =>
-              props.onStatusChange(event.target.value as ChangeStatus | "all")
-            }
-            aria-label={t.status}
-          >
-            <option value="all">{t.allStatuses}</option>
-            <option value="pending">{t.pending}</option>
-            <option value="submitted">{t.submitted}</option>
-            <option value="shelved">{t.shelved}</option>
-          </select>
-          <ChevronDown size={13} />
-        </label>
-        <button
-          className={`toggle-filter ${props.hideMerges ? "on" : ""}`}
-          aria-pressed={props.hideMerges}
-          onClick={() => props.onHideMergesChange(!props.hideMerges)}
-        >
-          <GitMerge size={15} />
-          {t.hideMerges}
-        </button>
-        <span className="date-filter">
-          <CalendarDays size={15} />
-          {t.last30}
-        </span>
-      </section>
+      {props.queryControls}
 
       <section className="cl-layout">
         <div className="cl-panel">
@@ -274,6 +227,13 @@ export function ChangelistPage(props: Props) {
               清除选择: action(selection.clear),
             }))}
           >
+            {changes.length === 0 && props.loading ? (
+              <div className="empty-state" role="status">
+                {env.preferences.zh
+                  ? "正在查询 Submitted…"
+                  : "Loading submitted changes…"}
+              </div>
+            ) : null}
             {changes.length === 0 && !props.loading ? (
               <div className="empty-state">{t.empty}</div>
             ) : null}
@@ -360,7 +320,47 @@ export function ChangelistPage(props: Props) {
                 {t.hidden} {props.hiddenMergeCount} {t.changesUnit}
               </span>
             ) : null}
-            <span className="virtual-proof">Virtualized</span>
+            <span className="submitted-query-stats" role="status">
+              {env.preferences.zh
+                ? `${props.stats.pageCount} 页 · 扫描 ${props.stats.scannedCount.toLocaleString()} · 匹配 ${props.stats.matchedCount.toLocaleString()}`
+                : `${props.stats.pageCount} pages · ${props.stats.scannedCount.toLocaleString()} scanned · ${props.stats.matchedCount.toLocaleString()} matched`}
+            </span>
+            {props.truncated ? (
+              <strong className="submitted-truncated" role="alert">
+                {env.preferences.zh
+                  ? "达到 5,000 条扫描上限，结果可能被截断。"
+                  : "The 5,000-item scan limit was reached; results may be truncated."}
+              </strong>
+            ) : null}
+            {props.partial && !props.truncated ? (
+              <strong className="submitted-partial">
+                {env.preferences.zh ? "当前为部分结果" : "Partial results"}
+              </strong>
+            ) : null}
+            {props.pageError ? (
+              <span className="submitted-page-error" role="alert">
+                {props.pageError}
+              </span>
+            ) : null}
+            {props.hasMore || props.pageError ? (
+              <button
+                className="secondary submitted-load-more"
+                disabled={props.loadingMore || !props.hasMore}
+                onClick={props.onLoadMore}
+              >
+                {props.loadingMore
+                  ? env.preferences.zh
+                    ? "正在加载…"
+                    : "Loading…"
+                  : props.pageError
+                    ? env.preferences.zh
+                      ? "重试加载更多"
+                      : "Retry load more"
+                    : env.preferences.zh
+                      ? "加载更多"
+                      : "Load more"}
+              </button>
+            ) : null}
           </footer>
         </div>
 

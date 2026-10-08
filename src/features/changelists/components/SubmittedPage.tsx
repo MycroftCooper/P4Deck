@@ -1,15 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChangelistPage } from "./ChangelistPage";
+import { SubmittedFilterPanel } from "./SubmittedFilterPanel";
 import { backend } from "../../../infrastructure/backend";
 import type {
   ClAction,
   ChangelistSummary,
+  ClQuery,
   MergeClassification,
   RuntimeInfo,
   SubmittedChangeDetail,
 } from "../../../shared/contracts/types";
-import type { messages } from "../../../shared/i18n";
+import { messages } from "../../../shared/i18n";
 import type { SubmittedDetailViewState } from "./ChangelistPage";
+import {
+  createDefaultSubmittedFilter,
+  readSavedSubmittedFilters,
+  validateSubmittedFilter,
+  writeSavedSubmittedFilters,
+  type SavedSubmittedFilter,
+  type SubmittedFilterDraft,
+} from "../submittedFilters";
+
+interface QueryStats {
+  scannedCount: number;
+  matchedCount: number;
+  pageCount: number;
+}
+
+const emptyStats = (): QueryStats => ({
+  scannedCount: 0,
+  matchedCount: 0,
+  pageCount: 0,
+});
 
 export function conservativeDetailClassification(
   detail: SubmittedChangeDetail,
@@ -37,13 +59,24 @@ export function SubmittedPage({
   t: (typeof messages)[keyof typeof messages];
   onOperation(warnings: string[]): Promise<void>;
 }) {
+  const [draft, setDraft] = useState<SubmittedFilterDraft>(() =>
+    createDefaultSubmittedFilter(),
+  );
+  const validation = useMemo(() => validateSubmittedFilter(draft), [draft]);
+  const [savedFilters, setSavedFilters] = useState<SavedSubmittedFilter[]>(() =>
+    readSavedSubmittedFilters(),
+  );
   const [changes, setChanges] = useState<ChangelistSummary[]>([]);
-  const [keyword, setKeyword] = useState("");
-  const [hideMerges, setHideMerges] = useState(false);
   const [hiddenMergeCount, setHiddenMergeCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string>();
+  const [stats, setStats] = useState<QueryStats>(emptyStats);
+  const [truncated, setTruncated] = useState(false);
+  const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
   const [detail, setDetail] = useState<SubmittedDetailViewState>({
     phase: "idle",
@@ -51,8 +84,16 @@ export function SubmittedPage({
   const [detailRetry, setDetailRetry] = useState(0);
   const generation = useRef(0);
   const queryOperation = useRef<string | undefined>(undefined);
+  const currentQuery = useRef<
+    Omit<ClQuery, "operationId" | "requestGeneration" | "cursor"> | undefined
+  >(undefined);
+  const usedCursors = useRef(new Set<string>());
   const changesRef = useRef(changes);
   changesRef.current = changes;
+  const nextCursorRef = useRef(nextCursor);
+  nextCursorRef.current = nextCursor;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
   const detailGeneration = useRef(0);
   const detailRequest = useRef<
     | {
@@ -65,6 +106,8 @@ export function SubmittedPage({
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const mounted = useRef(true);
+  const zh = t.language === "Switch to English";
+
   const cancelDetail = useCallback(() => {
     detailGeneration.current++;
     const request = detailRequest.current;
@@ -72,88 +115,187 @@ export function SubmittedPage({
     if (request)
       void backend.cancelOperation(request.operationId).catch(() => undefined);
   }, []);
+
+  const cancelQuery = useCallback(() => {
+    generation.current++;
+    const operationId = queryOperation.current;
+    queryOperation.current = undefined;
+    if (operationId)
+      void backend.cancelOperation(operationId).catch(() => undefined);
+  }, []);
+
+  const clearResults = useCallback(() => {
+    changesRef.current = [];
+    setChanges([]);
+    setHiddenMergeCount(0);
+    setHasMore(false);
+    hasMoreRef.current = false;
+    setNextCursor(undefined);
+    nextCursorRef.current = undefined;
+    setStats(emptyStats());
+    setTruncated(false);
+    setPartial(false);
+    setLoading(false);
+    setLoadingMore(false);
+    setError("");
+    setPageError("");
+    usedCursors.current.clear();
+    if (selectedRef.current !== null) setSelected(null);
+    cancelDetail();
+    setDetail({ phase: "idle" });
+  }, [cancelDetail]);
+
+  const runQuery = useCallback(
+    async (
+      base: Omit<ClQuery, "operationId" | "requestGeneration" | "cursor">,
+      cursor: string | undefined,
+      append: boolean,
+    ) => {
+      if (runtime.p4Version === "loading") return;
+      cancelQuery();
+      const requestGeneration = generation.current;
+      const operationId = crypto.randomUUID();
+      queryOperation.current = operationId;
+      if (cursor) usedCursors.current.add(cursor);
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      setPageError("");
+      if (!append) setError("");
+      try {
+        const result = await backend.queryChangelists({
+          ...base,
+          operationId,
+          requestGeneration,
+          cursor,
+        });
+        if (
+          !mounted.current ||
+          requestGeneration !== generation.current ||
+          result.requestGeneration !== requestGeneration
+        )
+          return;
+        const prior = append ? changesRef.current : [];
+        const known = new Set(prior.map((change) => change.id));
+        const added = result.items.filter((change) => {
+          if (known.has(change.id)) return false;
+          known.add(change.id);
+          return true;
+        });
+        const combined = [...prior, ...added];
+        changesRef.current = combined;
+        setChanges(combined);
+        setHiddenMergeCount((value) =>
+          append
+            ? value + result.stats.hiddenReliableMergeCount
+            : result.stats.hiddenReliableMergeCount,
+        );
+        setStats((value) => ({
+          scannedCount:
+            (append ? value.scannedCount : 0) + result.stats.scannedCount,
+          matchedCount:
+            (append ? value.matchedCount : 0) + result.stats.matchedCount,
+          pageCount: (append ? value.pageCount : 0) + 1,
+        }));
+        setTruncated((value) =>
+          append
+            ? value || result.stats.truncatedBySafetyLimit
+            : result.stats.truncatedBySafetyLimit,
+        );
+        const invalidContinuation =
+          result.hasMore &&
+          (!result.nextCursor || usedCursors.current.has(result.nextCursor));
+        if (invalidContinuation) {
+          setHasMore(false);
+          hasMoreRef.current = false;
+          setNextCursor(undefined);
+          nextCursorRef.current = undefined;
+          setPartial(true);
+          setPageError(
+            zh
+              ? "后端返回了不可继续的游标；已保留当前部分结果。"
+              : "The backend returned a non-progressing cursor; current partial results were preserved.",
+          );
+        } else {
+          setHasMore(result.hasMore);
+          hasMoreRef.current = result.hasMore;
+          setNextCursor(result.nextCursor);
+          nextCursorRef.current = result.nextCursor;
+          setPartial(result.stats.truncatedBySafetyLimit);
+        }
+      } catch (cause) {
+        if (!mounted.current || requestGeneration !== generation.current)
+          return;
+        if (append) {
+          setPageError(String(cause));
+          setPartial(true);
+        } else {
+          setError(String(cause));
+        }
+      } finally {
+        if (queryOperation.current === operationId)
+          queryOperation.current = undefined;
+        if (requestGeneration === generation.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [cancelQuery, runtime.p4Version, zh],
+  );
+
+  const startFreshQuery = useCallback(
+    (base: Omit<ClQuery, "operationId" | "requestGeneration" | "cursor">) => {
+      cancelQuery();
+      clearResults();
+      currentQuery.current = base;
+      void runQuery(base, undefined, false);
+    },
+    [cancelQuery, clearResults, runQuery],
+  );
+
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      generation.current++;
-      if (queryOperation.current)
-        void backend
-          .cancelOperation(queryOperation.current)
-          .catch(() => undefined);
+      cancelQuery();
       cancelDetail();
     };
-  }, [cancelDetail]);
+  }, [cancelDetail, cancelQuery]);
+
   const connectionKey = JSON.stringify(runtime.context);
-  const query = useCallback(async () => {
-    if (runtime.p4Version === "loading") return;
-    if (selectedRef.current !== null) setSelected(null);
-    cancelDetail();
-    if (queryOperation.current)
-      void backend
-        .cancelOperation(queryOperation.current)
-        .catch(() => undefined);
-    const requestGeneration = ++generation.current;
-    const operationId = crypto.randomUUID();
-    queryOperation.current = operationId;
-    setLoading(true);
-    setError("");
-    try {
-      const result = await backend.queryChangelists({
-        operationId,
-        requestGeneration,
-        keyword,
-        users: [],
-        clients: [],
-        stream: runtime.mode === "mock" ? "//atlas/main" : undefined,
-        from: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-        to: new Date().toISOString(),
-        jobs: [],
-        mergeClassifications: [],
-        hideReliableMerges: hideMerges,
-        pageSize: 200,
-      });
-      if (requestGeneration === generation.current) {
-        changesRef.current = result.items;
-        setChanges(result.items);
-        setHiddenMergeCount(result.stats.hiddenReliableMergeCount);
-        setHasMore(result.hasMore);
-        if (
-          selectedRef.current !== null &&
-          !result.items.some((change) => change.id === selectedRef.current)
-        )
-          setSelected(null);
-      }
-    } catch (e) {
-      if (requestGeneration === generation.current) setError(String(e));
-    } finally {
-      if (queryOperation.current === operationId)
-        queryOperation.current = undefined;
-      if (requestGeneration === generation.current) setLoading(false);
-    }
+  useEffect(() => {
+    cancelQuery();
+    clearResults();
+    currentQuery.current = validation.query;
+    if (!validation.query || runtime.p4Version === "loading") return;
+    const timer = window.setTimeout(
+      () => startFreshQuery(validation.query!),
+      300,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      cancelQuery();
+    };
   }, [
-    keyword,
-    hideMerges,
-    runtime.mode,
+    draft,
+    validation.query,
     runtime.p4Version,
     connectionKey,
-    cancelDetail,
+    cancelQuery,
+    clearResults,
+    startFreshQuery,
   ]);
+
+  const refresh = useCallback(() => {
+    if (validation.query) startFreshQuery(validation.query);
+  }, [startFreshQuery, validation.query]);
+
   useEffect(() => {
-    changesRef.current = [];
-    setChanges([]);
-    const timer = setTimeout(() => void query(), keyword ? 250 : 0);
-    return () => {
-      clearTimeout(timer);
-      generation.current++;
-    };
-  }, [query, keyword]);
-  useEffect(() => {
-    const refresh = () => void query();
     window.addEventListener("p4deck:submitted-refresh", refresh);
     return () =>
       window.removeEventListener("p4deck:submitted-refresh", refresh);
-  }, [query]);
+  }, [refresh]);
+
   useEffect(() => {
     if (selected === null) {
       cancelDetail();
@@ -185,7 +327,7 @@ export function SubmittedPage({
           previous.mergeClassification,
         );
         const nextChanges =
-          hideMerges && effective === "reliableMerge"
+          draft.hideReliableMerges && effective === "reliableMerge"
             ? changesRef.current.filter((change) => change.id !== selected)
             : changesRef.current.map((change) =>
                 change.id === selected
@@ -195,7 +337,7 @@ export function SubmittedPage({
         changesRef.current = nextChanges;
         setChanges(nextChanges);
         const safeValue = { ...value, mergeClassification: effective };
-        if (hideMerges && effective === "reliableMerge") {
+        if (draft.hideReliableMerges && effective === "reliableMerge") {
           setHiddenMergeCount((count) => count + 1);
           setSelected(null);
           return;
@@ -232,47 +374,81 @@ export function SubmittedPage({
         }
       });
     return cancelDetail;
-  }, [selected, detailRetry, hideMerges, cancelDetail, t.detailError]);
+  }, [
+    selected,
+    detailRetry,
+    draft.hideReliableMerges,
+    cancelDetail,
+    t.detailError,
+  ]);
+
   async function perform(action: ClAction) {
     const started = generation.current;
     try {
       const result = await backend.performClAction(action);
       await onOperation(result.warnings);
-      if (mounted.current && started === generation.current) await query();
-    } catch (e) {
+      if (mounted.current && started === generation.current) refresh();
+    } catch (cause) {
       if (mounted.current && started === generation.current)
-        setError(String(e));
+        setError(String(cause));
     }
   }
+
+  function updateSavedFilters(value: SavedSubmittedFilter[]) {
+    setSavedFilters(value);
+    writeSavedSubmittedFilters(value);
+  }
+
+  function loadMore() {
+    const base = currentQuery.current;
+    const cursor = nextCursorRef.current;
+    if (!base || !cursor || !hasMoreRef.current || loadingMore) return;
+    void runQuery(base, cursor, true);
+  }
+
   return (
     <div className="submitted-page">
-      {error && (
-        <div role="alert" className="workspace-load-error">
-          {error}
-        </div>
-      )}
       <ChangelistPage
         t={t}
         changes={changes}
         loading={loading}
-        keyword={keyword}
-        status="submitted"
-        hideMerges={hideMerges}
+        loadingMore={loadingMore}
+        queryControls={
+          <>
+            <SubmittedFilterPanel
+              zh={zh}
+              mock={runtime.mode === "mock"}
+              draft={draft}
+              errors={validation.errors}
+              savedFilters={savedFilters}
+              onDraftChange={setDraft}
+              onReset={() => setDraft(createDefaultSubmittedFilter())}
+              onSavedFiltersChange={updateSavedFilters}
+            />
+            {error ? (
+              <div
+                role="alert"
+                className="workspace-load-error submitted-query-error"
+              >
+                <span>{error}</span>
+                <button className="secondary" onClick={refresh}>
+                  {t.retry}
+                </button>
+              </div>
+            ) : null}
+          </>
+        }
         hiddenMergeCount={hiddenMergeCount}
         hasMore={hasMore}
+        partial={partial}
+        truncated={truncated}
+        stats={stats}
+        pageError={pageError}
         selected={selected}
         detail={detail}
         mock={runtime.mode === "mock"}
-        onKeywordChange={(value) => {
-          setSelected(null);
-          setKeyword(value);
-        }}
-        onStatusChange={() => undefined}
-        onHideMergesChange={(value) => {
-          setSelected(null);
-          setHideMerges(value);
-        }}
-        onRefresh={() => void query()}
+        onRefresh={refresh}
+        onLoadMore={loadMore}
         onAction={(action) => void perform(action)}
         onSelectedChange={setSelected}
         onRetryDetail={() => setDetailRetry((value) => value + 1)}

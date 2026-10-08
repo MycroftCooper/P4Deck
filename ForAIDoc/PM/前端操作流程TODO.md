@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008/BE-008Q 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -26,10 +26,11 @@
 | FE-11 | 通用状态与可访问性 | 加载/空/错误/离线/过期；键盘、读屏、亮暗、中英、窄窗口 | 共享状态组件；禁用可解释；文本不截断关键风险信息；不只依赖颜色 | 浏览器键盘/布局通过；原生与真实读屏待验收 |
 | FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
 | FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
+| FE-14 | Submitted 组合查询与保存过滤器 | 全字段组合筛选、稳定 cursor 分页、stats/截断、保存/应用/覆盖/删除/重置 | 字段内 OR、条件间 AND；切换取消并淘汰旧页；多页不重不漏；敏感字段不持久化 | BE-008Q 生产接线与自动化/localhost 通过；原生点击/读屏待验收 |
 
 ## 执行顺序
 
-FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～13。
+FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
@@ -176,6 +177,16 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～13。
 - 当前 `SubmittedPage` 只迁移到新契约并为列表请求分配/取消 operation ID，仍只发送关键词、固定最近 30 天、Mock stream 与隐藏 reliable，且只显示首个 200 条页面；本批没有新增完整筛选 UI。
 - 前端下一步必须接入用户/Client/path/Stream/time/Job/四态控件、`nextCursor` 的继续加载/重试/条件切换淘汰，以及保存过滤器；不得解析或改写 opaque cursor，也不得把 `unknown`/`suspectedMerge` 当作 reliable 隐藏。
 - Browser Mock/Adapter 契约覆盖组合过滤、多页无重复、非法/错配 cursor、Unicode 透传与连接代次失效；Windows localhost 两轮后端证据不能替代原生筛选 UI 验收。
+
+### 第十六批：BE-008Q Submitted 组合查询前端生产接线
+
+- `SubmittedPage` 已接关键词、User、Client、Depot Path、Stream、起止时间、Job/hasJob、merge 四态与“仅隐藏 reliable”的完整控件；多值输入按逗号/分号/换行规范化，同字段 OR、不同条件 AND。前端镜像后端的数量、长度、空白、路径/Stream scope、日期反向及 Job 冲突校验，非法草稿不发请求。
+- 筛选变化立即取消旧 operation、清空旧 cursor/列表/选择与详情，300ms debounce 后以不可变查询快照发起首屏；generation 与响应内 `requestGeneration` 双重隔离 stale response。连接变化、刷新和卸载沿用同一失效边界。
+- `nextCursor` 保持不透明并原样回传；继续加载按 ID 防重复，保留已有行、选中项与懒加载详情。分页失败保留部分结果和 cursor 供重试；缺失/不前进 cursor 被阻断。页脚显示累计页数、扫描/匹配/隐藏统计，以及 partial、错误和达到 5,000 扫描上限的明确截断警告。
+- 保存过滤器使用 `p4deck.submitted.filters` 的 version 1 schema，只白名单写入查询草稿字段，最多 50 项；支持命名、同名覆盖确认、删除确认、应用与重置默认最近 30 天。损坏、旧版本或非法条目降级为空列表；ticket/password/fingerprint、连接 Context 与 cursor 不进入 Storage 或 URL。
+- Mock 筛选面板和详情均明确标注模拟数据；Tauri 继续只调用真实 `query_changelists` / `get_submitted_change_detail`，未增加浏览器网络旁路。中英文标签、语义分组、校验关联、按钮焦点与 390px 单列滚动布局有组件证据。
+- 2026-10-09 全量 Web 为 46 个测试文件、281 项通过；`pnpm format:check`、`pnpm build`、`pnpm check`、Rust 单测（77 通过、1 个 localhost E2E 显式 ignored）、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost E2E 默认连续两轮均通过。
+- Computer Use 返回原生 apps 空列表，且当前客户端没有 `listWindows` / 原生启动能力，无法绑定 P4Deck Tauri 窗口；因此 Windows/macOS 原生点击、390px 原生窗口、键盘焦点和真实读屏保持“未验收”，不以浏览器组件或 Mock 证据替代。
 
 ## 剩余验收与交接边界
 
