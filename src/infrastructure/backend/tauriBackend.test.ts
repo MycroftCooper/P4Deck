@@ -43,3 +43,17 @@ it("passes the typed submitted query and opaque cursor through unchanged", async
     query,
   });
 });
+
+it("passes the narrow global search query through unchanged", async () => {
+  const query = {
+    operationId: "global-search-42",
+    requestGeneration: 12,
+    text: "你好 [asset]",
+    kinds: ["workspaceFile" as const, "job" as const],
+    pageSize: 25,
+    cursor: "opaque-global-cursor",
+  };
+  invoke.mockResolvedValue({ groups: [], hasMore: false, simulated: false });
+  await tauriBackend.globalSearch(query);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("global_search", { query });
+});

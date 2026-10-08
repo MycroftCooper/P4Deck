@@ -11,6 +11,7 @@ use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
 use app::file_service::FileService;
+use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
 use app::submit_service::SubmitService;
 use app::workflow_service::WorkflowService;
@@ -34,6 +35,7 @@ pub(crate) struct AppState {
     pub status_cache: Arc<StatusCache>,
     pub journal: Arc<OperationJournal>,
     pub diagnostics: Arc<DiagnosticService>,
+    pub search: Arc<GlobalSearchService>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -70,13 +72,18 @@ pub fn run() {
             ));
             let workflows = Arc::new(WorkflowService::new(
                 WorkflowRepository::new(runner.clone()),
-                contexts,
+                contexts.clone(),
                 status_cache.clone(),
             ));
             let files = Arc::new(FileService::new(
                 runner.clone(),
                 status_cache.clone(),
                 journal.clone(),
+            ));
+            let search = Arc::new(GlobalSearchService::new(
+                runner.clone(),
+                changelists.clone(),
+                contexts,
             ));
             app.manage(AppState {
                 runner,
@@ -89,6 +96,7 @@ pub fn run() {
                 status_cache,
                 journal,
                 diagnostics,
+                search,
             });
             Ok(())
         })
@@ -107,6 +115,7 @@ pub fn run() {
             ipc::commands::logout,
             ipc::commands::run_p4,
             ipc::commands::cancel_operation,
+            ipc::commands::global_search,
             ipc::commands::query_logs,
             ipc::commands::query_log_page,
             ipc::commands::get_log_policy,

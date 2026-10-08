@@ -189,6 +189,16 @@ pub async fn run_p4(
 #[tauri::command]
 pub fn cancel_operation(operation_id: String, state: State<'_, AppState>) {
     state.runner.cancel(&operation_id);
+    state.search.cancel(&operation_id);
+}
+
+#[tauri::command]
+pub async fn global_search(
+    query: GlobalSearchQuery,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<GlobalSearchResult, GlobalSearchRequestError> {
+    state.search.query(query, Some(&app)).await
 }
 
 #[tauri::command]

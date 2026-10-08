@@ -27,6 +27,7 @@
 | FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
 | FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
 | FE-14 | Submitted 组合查询与保存过滤器 | 全字段组合筛选、稳定 cursor 分页、stats/截断、保存/应用/覆盖/删除/重置 | 字段内 OR、条件间 AND；切换取消并淘汰旧页；多页不重不漏；敏感字段不持久化 | BE-008Q 生产接线与自动化/localhost 通过；原生点击/读屏待验收 |
+| FE-15 | 全局搜索生产接线 | 将现有 UI-only `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围渲染，不自行拼 P4 参数 | BE-008G 后端与 Mock/Tauri 契约、Windows localhost 双轮已完成；页面仍明确未接线。Stream/Shelf 延后 |
 
 ## 执行顺序
 

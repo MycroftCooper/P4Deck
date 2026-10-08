@@ -1,6 +1,8 @@
 import type {
   ChangelistSummary,
   FileState,
+  GlobalSearchItem,
+  GlobalSearchKind,
   LogEntry,
   OperationEvent,
   PendingChange,
@@ -165,6 +167,81 @@ function decodeSubmittedCursor(cursor: string, signature: string) {
       "Submitted query cursor does not match this query or connection.",
     );
   }
+}
+
+function globalSearchSignature(text: string, kinds: GlobalSearchKind[]) {
+  return JSON.stringify({
+    text,
+    kinds,
+    connection: mockContext,
+    connectionGeneration: mockContextGeneration,
+  });
+}
+
+function encodeGlobalSearchCursor(offset: number, signature: string) {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({ version: 1, offset, signature }),
+  );
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+function decodeGlobalSearchCursor(cursor: string, signature: string) {
+  try {
+    if (!cursor || cursor.length > 2048) throw new Error();
+    const base64 = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const payload = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(
+          atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")),
+          (character) => character.charCodeAt(0),
+        ),
+      ),
+    );
+    if (
+      payload.version !== 1 ||
+      !Number.isSafeInteger(payload.offset) ||
+      payload.offset <= 0 ||
+      payload.signature !== signature
+    )
+      throw new Error();
+    return payload.offset as number;
+  } catch {
+    throw new Error(
+      "Global search cursor does not match this query or connection.",
+    );
+  }
+}
+
+function mockSearchItem(
+  kind: GlobalSearchKind,
+  identity: string,
+  title: string,
+  summary: string,
+  target: GlobalSearchItem["target"],
+  text: string,
+): GlobalSearchItem | undefined {
+  const titleIndex = title
+    .toLocaleLowerCase()
+    .indexOf(text.toLocaleLowerCase());
+  const summaryIndex = summary
+    .toLocaleLowerCase()
+    .indexOf(text.toLocaleLowerCase());
+  if (titleIndex < 0 && summaryIndex < 0) return undefined;
+  const field = titleIndex >= 0 ? "title" : "summary";
+  const start = titleIndex >= 0 ? titleIndex : summaryIndex;
+  return {
+    identity,
+    kind,
+    title,
+    summary,
+    target,
+    matchedFields: [field],
+    highlights: [{ field, start, end: start + text.length }],
+    rank: start === 0 ? 1 : 2,
+  };
 }
 const mockWorkspace: WorkspaceNode[] = Array.from(
   { length: 160 },
@@ -493,6 +570,163 @@ export const mockBackend: Backend = {
     };
   },
   async cancelOperation() {},
+  async globalSearch(query) {
+    if (!query.operationId.trim() || query.operationId.length > 128)
+      throw new Error("A valid global search operation ID is required.");
+    if (
+      !Number.isInteger(query.pageSize) ||
+      query.pageSize < 1 ||
+      query.pageSize > 100
+    )
+      throw new Error("Global search page size must be between 1 and 100.");
+    if (
+      [...query.text].some((character) =>
+        /[\u0000-\u001f\u007f]/u.test(character),
+      )
+    )
+      throw new Error("Global search text cannot contain control characters.");
+    const text = query.text.trim().replace(/\s+/gu, " ");
+    if (!text || [...text].length > 128)
+      throw new Error(
+        "Global search text must contain 1 to 128 Unicode characters.",
+      );
+    const kinds = [
+      ...new Set(
+        query.kinds.length
+          ? query.kinds
+          : [
+              "submittedChange",
+              "pendingChange",
+              "workspaceFile",
+              "depotFile",
+              "job",
+            ],
+      ),
+    ].sort(
+      (left, right) =>
+        [
+          "submittedChange",
+          "pendingChange",
+          "workspaceFile",
+          "depotFile",
+          "job",
+        ].indexOf(left) -
+        [
+          "submittedChange",
+          "pendingChange",
+          "workspaceFile",
+          "depotFile",
+          "job",
+        ].indexOf(right),
+    ) as GlobalSearchKind[];
+    const all: GlobalSearchItem[] = [];
+    for (const kind of kinds) {
+      if (kind === "submittedChange" || kind === "pendingChange") {
+        for (const change of mockChanges.filter((item) =>
+          kind === "submittedChange"
+            ? item.status === "submitted"
+            : item.status === "pending",
+        )) {
+          const item = mockSearchItem(
+            kind,
+            `${kind}:${change.id}`,
+            `CL ${change.id}`,
+            `${change.description} · ${change.user} · ${change.client}`,
+            kind === "submittedChange"
+              ? { type: "submittedChange", changeId: change.id }
+              : { type: "pendingChange", changeId: change.id },
+            text,
+          );
+          if (item) all.push(item);
+        }
+      } else if (kind === "workspaceFile" || kind === "depotFile") {
+        for (const file of mockWorkspace.filter(
+          (item) => item.kind === "file",
+        )) {
+          const depotPath =
+            file.depotPath ?? `//atlas/main/${file.relativePath}`;
+          const item = mockSearchItem(
+            kind,
+            `file:${depotPath}`,
+            file.name,
+            kind === "workspaceFile" ? file.absolutePath : depotPath,
+            kind === "workspaceFile"
+              ? { type: "workspaceFile", absolutePath: file.absolutePath }
+              : { type: "depotFile", depotPath },
+            text,
+          );
+          if (item) all.push(item);
+        }
+      } else {
+        for (const jobId of ["ATLAS-1000", "ATLAS-1187", "UNICODE-你好"]) {
+          const item = mockSearchItem(
+            kind,
+            `job:${jobId}`,
+            jobId,
+            `open · Simulated MockBackend job ${jobId}`,
+            { type: "job", jobId },
+            text,
+          );
+          if (item) all.push(item);
+        }
+      }
+    }
+    all.sort((left, right) =>
+      `${left.kind}:${left.rank}:${left.title}:${left.identity}`.localeCompare(
+        `${right.kind}:${right.rank}:${right.title}:${right.identity}`,
+      ),
+    );
+    const deduplicated = all.filter(
+      (item, index) =>
+        all.findIndex((candidate) => candidate.identity === item.identity) ===
+        index,
+    );
+    const signature = globalSearchSignature(text, kinds);
+    const offset = query.cursor
+      ? decodeGlobalSearchCursor(query.cursor, signature)
+      : 0;
+    if (offset >= deduplicated.length && offset !== 0)
+      throw new Error(
+        "Global search cursor points beyond the simulated snapshot.",
+      );
+    const page = deduplicated.slice(offset, offset + query.pageSize);
+    const end = offset + page.length;
+    const hasMore = end < deduplicated.length;
+    return {
+      requestGeneration: query.requestGeneration,
+      normalizedQuery: text,
+      groups: kinds
+        .map((kind) => ({
+          kind,
+          items: page.filter((item) => item.kind === kind),
+        }))
+        .filter((group) => group.items.length),
+      facets: kinds.map((kind) => ({
+        kind,
+        matchedCount: deduplicated.filter((item) => item.kind === kind).length,
+        scannedCount:
+          kind === "job"
+            ? 3
+            : kind.includes("Change")
+              ? mockChanges.length
+              : mockWorkspace.length,
+        partial: false,
+      })),
+      hasMore,
+      nextCursor: hasMore
+        ? encodeGlobalSearchCursor(end, signature)
+        : undefined,
+      partial: false,
+      simulated: true,
+      stats: {
+        scannedCount: kinds.length,
+        matchedCount: deduplicated.length,
+        returnedCount: page.length,
+        categoryFailureCount: 0,
+        safetyLimit: 1000,
+      },
+    };
+  },
   async queryChangelists(query) {
     if (!query.operationId.trim() || query.operationId.length > 128)
       throw new Error("A valid submitted query operation ID is required.");

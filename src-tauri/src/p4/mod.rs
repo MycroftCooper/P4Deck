@@ -5,6 +5,7 @@ pub mod files;
 pub mod history;
 pub mod query;
 pub mod runner;
+pub mod search;
 pub mod streams;
 pub mod submit;
 pub mod workflows;

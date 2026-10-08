@@ -4,6 +4,7 @@ pub mod connection_service;
 pub mod diagnostics;
 pub mod file_service;
 pub mod preview;
+pub mod search_service;
 pub mod status_cache;
 pub mod submit_service;
 pub mod system_open;

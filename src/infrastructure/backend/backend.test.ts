@@ -20,6 +20,72 @@ function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
 }
 
 describe("controlled P4 terminal", () => {
+  it("provides explicitly simulated, stable global search pages", async () => {
+    const query = {
+      operationId: "mock-global-1",
+      requestGeneration: 41,
+      text: "Atlas",
+      kinds: [
+        "submittedChange" as const,
+        "pendingChange" as const,
+        "workspaceFile" as const,
+        "depotFile" as const,
+        "job" as const,
+      ],
+      pageSize: 7,
+    };
+    const first = await backend.globalSearch(query);
+    expect(first.simulated).toBe(true);
+    expect(first.normalizedQuery).toBe("Atlas");
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeTruthy();
+    const second = await backend.globalSearch({
+      ...query,
+      operationId: "mock-global-2",
+      requestGeneration: 42,
+      cursor: first.nextCursor,
+    });
+    const firstIds = new Set(
+      first.groups.flatMap((group) => group.items.map((item) => item.identity)),
+    );
+    expect(
+      second.groups
+        .flatMap((group) => group.items)
+        .some((item) => firstIds.has(item.identity)),
+    ).toBe(false);
+    await expect(
+      backend.globalSearch({
+        ...query,
+        text: "changed",
+        cursor: first.nextCursor,
+      }),
+    ).rejects.toThrow("does not match");
+  });
+
+  it("validates Unicode, whitespace, control and special-character searches", async () => {
+    const unicode = await backend.globalSearch({
+      operationId: "mock-global-unicode",
+      requestGeneration: 43,
+      text: "  UNICODE-你好  ",
+      kinds: ["job"],
+      pageSize: 10,
+    });
+    expect(unicode.normalizedQuery).toBe("UNICODE-你好");
+    expect(unicode.groups[0]?.items[0]?.target).toEqual({
+      type: "job",
+      jobId: "UNICODE-你好",
+    });
+    await expect(
+      backend.globalSearch({
+        operationId: "mock-global-control",
+        requestGeneration: 44,
+        text: "bad\nquery",
+        kinds: [],
+        pageSize: 10,
+      }),
+    ).rejects.toThrow("control");
+  });
+
   it("previews mock text and images and rejects unsupported files", async () => {
     const text = await backend.getFilePreview("/workspace/atlas/render.ts");
     expect(text.kind).toBe("text");

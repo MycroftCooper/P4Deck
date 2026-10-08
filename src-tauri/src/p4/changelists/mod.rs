@@ -1,5 +1,5 @@
 mod command;
-mod parser;
+pub(crate) mod parser;
 mod repository;
 
 pub use repository::ChangelistRepository;

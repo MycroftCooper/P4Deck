@@ -3,7 +3,8 @@ mod tests {
     use crate::{
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
-            file_service::FileService, status_cache::StatusCache, submit_service::SubmitService,
+            file_service::FileService, search_service::GlobalSearchService,
+            status_cache::StatusCache, submit_service::SubmitService,
             workflow_service::WorkflowService,
         },
         domain::{
@@ -26,10 +27,12 @@ mod tests {
     };
     use serde_json::Value;
     use std::{
+        collections::HashSet,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::Arc,
     };
+    use uuid::Uuid;
 
     const FIXTURE_SERVER: &str = "127.0.0.1:16661";
     const FIXTURE_USER: &str = "p4deck-fixture-admin";
@@ -135,11 +138,13 @@ mod tests {
         )?);
         let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
         let status_cache = Arc::new(StatusCache::new(15_000, 512, 16 * 1024 * 1024));
-        let changelists = ChangelistService::new(
+        let changelists = Arc::new(ChangelistService::new(
             ChangelistRepository::new(runner.clone()),
             status_cache.clone(),
             contexts.clone(),
-        );
+        ));
+        let search =
+            GlobalSearchService::new(runner.clone(), changelists.clone(), contexts.clone());
         let submit = SubmitService::new(
             SubmitRepository::new(runner.clone()),
             contexts.clone(),
@@ -180,6 +185,7 @@ mod tests {
                     &contexts,
                     &workflows,
                     &expiring_workflows,
+                    &search,
                     &context,
                     &config.workspace_root,
                 )
@@ -343,6 +349,7 @@ mod tests {
         contexts: &ContextStore,
         workflows: &WorkflowService,
         expiring_workflows: &WorkflowService,
+        search: &GlobalSearchService,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -562,6 +569,7 @@ mod tests {
         )
         .await?;
         exercise_submitted_change_details(runner, changelists, contexts, context).await?;
+        exercise_global_search(runner, changelists, search, contexts, context, root).await?;
         exercise_submit_blockers(runner, changelists, submit, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
         Ok(())
@@ -1451,6 +1459,332 @@ mod tests {
                 .await
                 .is_err(),
             "a submitted cursor survived a connection generation change",
+        )
+    }
+
+    async fn exercise_global_search(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        search: &GlobalSearchService,
+        contexts: &ContextStore,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        use crate::domain::{GlobalSearchKind, GlobalSearchQuery};
+
+        let suffix = Uuid::new_v4().simple().to_string();
+        let file_name = format!("global-search-fixture-[x]-{}.txt", &suffix[..8]);
+        let local_dir = root.join("global-search-e2e");
+        std::fs::create_dir_all(&local_dir).map_err(|error| error.to_string())?;
+        let local = local_dir.join(&file_name);
+        std::fs::write(&local, b"global search fixture\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec![local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "global-search-fixture submitted".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+
+        let job_id = format!("P4DECK-GLOBAL-{}", &suffix[..8]);
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-i".into()],
+            Some(format!(
+                "Job: {job_id}\nStatus: open\nUser: {FIXTURE_USER}\nDescription:\n\tglobal-search-fixture job\n"
+            )),
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let pending = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("global-search-create-pending".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "global-search-fixture pending".into(),
+                        jobs: vec![job_id.clone()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        let pending_id = pending
+            .created_change_id
+            .ok_or("global search pending changelist was not created")?;
+        move_to_change(
+            changelists,
+            context,
+            pending_id,
+            &format!("//depot/global-search-e2e/{file_name}"),
+        )
+        .await?;
+
+        let kinds = vec![
+            GlobalSearchKind::SubmittedChange,
+            GlobalSearchKind::PendingChange,
+            GlobalSearchKind::WorkspaceFile,
+            GlobalSearchKind::DepotFile,
+            GlobalSearchKind::Job,
+        ];
+        let base = GlobalSearchQuery {
+            operation_id: "global-search-page-1".into(),
+            request_generation: 100,
+            text: "global-search-fixture".into(),
+            kinds: kinds.clone(),
+            page_size: 2,
+            cursor: None,
+        };
+        let first = search
+            .query(base.clone(), None)
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            first.has_more && first.next_cursor.is_some() && !first.simulated,
+            format!("global search did not return a real paged result: {first:?}"),
+        )?;
+        ensure(
+            first.facets.iter().all(|facet| facet.error.is_none())
+                && kinds.iter().all(|kind| {
+                    first
+                        .facets
+                        .iter()
+                        .any(|facet| facet.kind == *kind && facet.scanned_count > 0)
+                }),
+            format!(
+                "global search did not cover every production kind: {:?}",
+                first.facets
+            ),
+        )?;
+        let first_cursor = first.next_cursor.clone().unwrap();
+        let mut identities = HashSet::new();
+        let mut page = first;
+        loop {
+            for item in page.groups.iter().flat_map(|group| &group.items) {
+                ensure(
+                    identities.insert(item.identity.clone()),
+                    format!("global search repeated identity {}", item.identity),
+                )?;
+            }
+            let Some(cursor) = page.next_cursor.clone() else {
+                break;
+            };
+            let mut next = base.clone();
+            next.operation_id = format!("global-search-page-{}", identities.len());
+            next.request_generation += identities.len() as u64;
+            next.cursor = Some(cursor);
+            page = search
+                .query(next, None)
+                .await
+                .map_err(|error| error.message)?;
+        }
+
+        let special = search
+            .query(
+                GlobalSearchQuery {
+                    operation_id: "global-search-special".into(),
+                    request_generation: 110,
+                    text: "[x]".into(),
+                    kinds: vec![GlobalSearchKind::WorkspaceFile, GlobalSearchKind::DepotFile],
+                    page_size: 20,
+                    cursor: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            special.stats.matched_count > 0,
+            "literal special-character file search returned no results",
+        )?;
+        let unicode = search
+            .query(
+                GlobalSearchQuery {
+                    operation_id: "global-search-unicode".into(),
+                    request_generation: 111,
+                    text: "你好".into(),
+                    kinds: vec![GlobalSearchKind::Job],
+                    page_size: 20,
+                    cursor: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            unicode.facets.len() == 1 && unicode.facets[0].error.is_none(),
+            format!("Unicode search was not safely treated as a literal: {unicode:?}"),
+        )?;
+
+        let mut invalid = base.clone();
+        invalid.operation_id = "global-search-invalid-cursor".into();
+        invalid.cursor = Some("not-a-cursor".into());
+        ensure(
+            search.query(invalid, None).await.is_err(),
+            "an invalid global search cursor was accepted",
+        )?;
+        let mut mismatched = base.clone();
+        mismatched.operation_id = "global-search-mismatched-cursor".into();
+        mismatched.text = "different".into();
+        mismatched.cursor = Some(first_cursor.clone());
+        ensure(
+            search.query(mismatched, None).await.is_err(),
+            "a global search cursor was accepted for a different query",
+        )?;
+
+        let mut switched = context.clone();
+        switched.client = "p4deck-fixture-global-generation".into();
+        contexts.save(switched)?;
+        contexts.save(context.clone())?;
+        let mut stale = base.clone();
+        stale.operation_id = "global-search-old-generation".into();
+        stale.cursor = Some(first_cursor);
+        ensure(
+            search.query(stale, None).await.is_err(),
+            "a global search cursor survived a connection generation change",
+        )?;
+
+        checked_run(
+            runner,
+            context,
+            "revert",
+            vec![local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("global-search-clear-pending-job".into()),
+                    mutation: PendingChangeMutation::Edit {
+                        change_id: pending_id,
+                        description: "global-search-fixture pending cleanup".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?;
+        delete_empty_change(changelists, context, pending_id).await?;
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-d".into(), job_id],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let limit_probe = checked_run(
+            runner,
+            context,
+            "files",
+            vec![
+                "-m".into(),
+                "1".into(),
+                "//depot/global-search-limit/...".into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        if !json_values(&limit_probe)
+            .iter()
+            .any(|value| value.get("depotFile").is_some())
+        {
+            let limit_dir = root.join("global-search-limit");
+            std::fs::create_dir_all(&limit_dir).map_err(|error| error.to_string())?;
+            let mut limit_paths = Vec::new();
+            for index in 0..=1000 {
+                let path = limit_dir.join(format!("partial-limit-fixture-{index:04}.txt"));
+                std::fs::write(&path, b"bounded global search\n")
+                    .map_err(|error| error.to_string())?;
+                limit_paths.push(path.to_string_lossy().into_owned());
+            }
+            for chunk in limit_paths.chunks(100) {
+                checked_run(
+                    runner,
+                    context,
+                    "add",
+                    chunk.to_vec(),
+                    None,
+                    OutputMode::JsonLines,
+                )
+                .await?;
+            }
+            checked_run(
+                runner,
+                context,
+                "submit",
+                vec!["-d".into(), "global search partial-limit fixture".into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+        }
+        let partial = search
+            .query(
+                GlobalSearchQuery {
+                    operation_id: "global-search-partial-limit".into(),
+                    request_generation: 120,
+                    text: "partial-limit-fixture".into(),
+                    kinds: vec![GlobalSearchKind::DepotFile],
+                    page_size: 100,
+                    cursor: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            partial.partial && partial.facets[0].partial && partial.facets[0].scanned_count == 1000,
+            format!("global search did not expose the safety limit: {partial:?}"),
+        )?;
+
+        let cancellation = GlobalSearchQuery {
+            operation_id: "global-search-cancel".into(),
+            request_generation: 121,
+            text: "global".into(),
+            kinds: kinds.clone(),
+            page_size: 100,
+            cursor: None,
+        };
+        let cancel = async {
+            tokio::task::yield_now().await;
+            search.cancel("global-search-cancel");
+            runner.cancel("global-search-cancel");
+        };
+        let (cancelled, ()) = tokio::join!(search.query(cancellation, None), cancel);
+        ensure(
+            cancelled.is_err_and(|error| {
+                error.code == crate::domain::GlobalSearchRequestErrorCode::Cancelled
+            }),
+            "global search cancellation did not return a structured cancelled error",
         )
     }
 

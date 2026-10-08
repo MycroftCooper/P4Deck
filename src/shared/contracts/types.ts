@@ -282,6 +282,80 @@ export interface ClQueryResult {
   };
 }
 
+export type GlobalSearchKind =
+  "submittedChange" | "pendingChange" | "workspaceFile" | "depotFile" | "job";
+
+export interface GlobalSearchQuery {
+  operationId: string;
+  requestGeneration: number;
+  text: string;
+  /** Empty means all currently supported production kinds. */
+  kinds: GlobalSearchKind[];
+  pageSize: number;
+  cursor?: string;
+}
+
+export type GlobalSearchTarget =
+  | { type: "submittedChange"; changeId: number }
+  | { type: "pendingChange"; changeId: number }
+  | { type: "workspaceFile"; absolutePath: string }
+  | { type: "depotFile"; depotPath: string }
+  | { type: "job"; jobId: string };
+
+export interface GlobalSearchItem {
+  identity: string;
+  kind: GlobalSearchKind;
+  title: string;
+  summary: string;
+  target: GlobalSearchTarget;
+  matchedFields: string[];
+  /** UTF-16 offsets, matching JavaScript string indexing. */
+  highlights: Array<{ field: string; start: number; end: number }>;
+  rank: number;
+}
+
+export type GlobalSearchErrorCode =
+  | "cancelled"
+  | "timeout"
+  | "permissionDenied"
+  | "connectionChanged"
+  | "queryFailed";
+
+export interface GlobalSearchRequestError {
+  code:
+    | "invalidQuery"
+    | "invalidCursor"
+    | "cursorExpired"
+    | "connectionChanged"
+    | "cancelled";
+  message: string;
+}
+
+export interface GlobalSearchResult {
+  requestGeneration: number;
+  normalizedQuery: string;
+  groups: Array<{ kind: GlobalSearchKind; items: GlobalSearchItem[] }>;
+  facets: Array<{
+    kind: GlobalSearchKind;
+    matchedCount: number;
+    scannedCount: number;
+    partial: boolean;
+    error?: { code: GlobalSearchErrorCode; message: string };
+  }>;
+  hasMore: boolean;
+  nextCursor?: string;
+  partial: boolean;
+  /** True only for MockBackend responses; Tauri/P4 responses are always false. */
+  simulated: boolean;
+  stats: {
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    categoryFailureCount: number;
+    safetyLimit: number;
+  };
+}
+
 export type ClAction =
   | { type: "create"; description: string }
   | { type: "edit"; changeId: number; description: string; jobs: string[] }

@@ -17,6 +17,8 @@ import type {
   FileActionRequest,
   FileActionResult,
   FileRevision,
+  GlobalSearchQuery,
+  GlobalSearchResult,
   LogEntry,
   LogPage,
   LogPolicy,
@@ -94,6 +96,7 @@ export interface Backend {
   runtimeInfo(): Promise<RuntimeInfo>;
   runP4(request: P4CommandRequest): Promise<OperationResult>;
   cancelOperation(operationId: string): Promise<void>;
+  globalSearch(query: GlobalSearchQuery): Promise<GlobalSearchResult>;
   queryChangelists(query: ClQuery): Promise<ClQueryResult>;
   getSubmittedChangeDetail(
     request: SubmittedChangeDetailRequest,

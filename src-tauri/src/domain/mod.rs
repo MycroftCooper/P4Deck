@@ -370,6 +370,140 @@ pub struct ClQueryStats {
     pub truncated_by_safety_limit: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub enum GlobalSearchKind {
+    SubmittedChange,
+    PendingChange,
+    WorkspaceFile,
+    DepotFile,
+    Job,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    pub text: String,
+    #[serde(default)]
+    pub kinds: Vec<GlobalSearchKind>,
+    pub page_size: usize,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GlobalSearchTarget {
+    SubmittedChange { change_id: i64 },
+    PendingChange { change_id: i64 },
+    WorkspaceFile { absolute_path: String },
+    DepotFile { depot_path: String },
+    Job { job_id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchHighlight {
+    pub field: String,
+    /// UTF-16 offsets so browser consumers can apply the range directly.
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchItem {
+    pub identity: String,
+    pub kind: GlobalSearchKind,
+    pub title: String,
+    pub summary: String,
+    pub target: GlobalSearchTarget,
+    pub matched_fields: Vec<String>,
+    pub highlights: Vec<GlobalSearchHighlight>,
+    /// Internal deterministic relevance rank. Serialized for an explicit contract.
+    pub rank: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchGroup {
+    pub kind: GlobalSearchKind,
+    pub items: Vec<GlobalSearchItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchFacet {
+    pub kind: GlobalSearchKind,
+    pub matched_count: usize,
+    pub scanned_count: usize,
+    pub partial: bool,
+    pub error: Option<GlobalSearchCategoryError>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchCategoryError {
+    pub code: GlobalSearchErrorCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GlobalSearchErrorCode {
+    Cancelled,
+    Timeout,
+    PermissionDenied,
+    ConnectionChanged,
+    QueryFailed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GlobalSearchRequestErrorCode {
+    InvalidQuery,
+    InvalidCursor,
+    CursorExpired,
+    ConnectionChanged,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchRequestError {
+    pub code: GlobalSearchRequestErrorCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub returned_count: usize,
+    pub category_failure_count: usize,
+    pub safety_limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchResult {
+    pub request_generation: u64,
+    pub normalized_query: String,
+    pub groups: Vec<GlobalSearchGroup>,
+    pub facets: Vec<GlobalSearchFacet>,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub partial: bool,
+    pub simulated: bool,
+    pub stats: GlobalSearchStats,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",
