@@ -108,6 +108,8 @@ function Content({
           key={connectionKey}
           t={t}
           clientName={runtime.context.client}
+          connectionKey={connectionKey}
+          demo={runtime.mode === "mock"}
           ready={runtime.p4Version !== "loading"}
         />
       );

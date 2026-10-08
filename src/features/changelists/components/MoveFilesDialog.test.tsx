@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
@@ -27,6 +27,7 @@ async function render(
     source: null,
   },
   candidates = changes,
+  overrides: Partial<ComponentProps<typeof MoveFilesDialog>> = {},
 ) {
   await act(async () =>
     root.render(
@@ -34,8 +35,10 @@ async function render(
         request={request}
         changes={candidates}
         client="workspace"
+        connectionKey="connection-a"
         zh
         onDismiss={dismiss}
+        {...overrides}
       />,
     ),
   );
@@ -60,6 +63,72 @@ it("excludes the source CL, includes Default, and requires an explicit target", 
   expect(checkButton().disabled).toBe(false);
   await act(async () => checkButton().click());
   expect(document.body.textContent).toContain("尚未移动任何文件");
+  expect(dismiss).not.toHaveBeenCalled();
+});
+it("executes the frozen numbered-to-Default scope once after confirmation", async () => {
+  const move = vi.fn(async () => {});
+  await render(undefined, changes, { onMove: move });
+  await act(async () => {
+    const select = document.querySelector("select")!;
+    select.value = "0";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => checkButton().click());
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "确认移动")!
+      .click(),
+  );
+  expect(move).toHaveBeenCalledExactlyOnceWith(0, ["//depot/a"]);
+  expect(dismiss).toHaveBeenCalledOnce();
+});
+it("supports Default-to-numbered moves and invalidates confirmation on target or connection changes", async () => {
+  const move = vi.fn(async () => {});
+  await render({ from: 0, paths: ["//depot/a"], source: null }, changes, {
+    onMove: move,
+  });
+  await act(async () => {
+    const select = document.querySelector("select")!;
+    select.value = "10";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => checkButton().click());
+  expect(document.body.textContent).toContain("确认移动");
+  await act(async () => {
+    const select = document.querySelector("select")!;
+    select.value = "20";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(document.body.textContent).not.toContain("确认移动");
+  await act(async () => checkButton().click());
+  await render({ from: 0, paths: ["//different"], source: null }, changes, {
+    onMove: move,
+    connectionKey: "connection-b",
+  });
+  expect(document.body.textContent).toContain("连接或 Workspace 已改变");
+  expect(document.body.textContent).not.toContain("确认移动");
+  expect(move).not.toHaveBeenCalled();
+});
+it("keeps the dialog open with the real move failure and allows a fresh retry", async () => {
+  const move = vi.fn(async () => {
+    throw new Error("target changelist is outside the current scope");
+  });
+  await render(undefined, changes, { onMove: move });
+  await act(async () => {
+    const select = document.querySelector("select")!;
+    select.value = "20";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => checkButton().click());
+  await act(async () =>
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent === "确认移动")!
+      .click(),
+  );
+  expect(document.body.textContent).toContain(
+    "target changelist is outside the current scope",
+  );
+  expect(document.body.textContent).not.toContain("确认移动");
   expect(dismiss).not.toHaveBeenCalled();
 });
 it("freezes and deduplicates the exact file subset and candidate snapshot", async () => {

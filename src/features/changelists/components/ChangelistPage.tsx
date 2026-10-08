@@ -26,6 +26,7 @@ import { useRecordSelection } from "../../../app/context-menu/useRecordSelection
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import { RevisionFileList } from "./RevisionFileList";
 import { ChangelistFormDialog } from "./ChangelistFormDialog";
+import { backend } from "../../../infrastructure/backend";
 type Copy = (typeof messages)[keyof typeof messages];
 
 interface Props {
@@ -127,6 +128,28 @@ export function ChangelistPage(props: Props) {
           zh={env.preferences.zh}
           source={createSource}
           onDismiss={() => setCreateSource(undefined)}
+          onSubmit={async (draft) => {
+            try {
+              const result = await backend.mutatePendingChange({
+                type: "create",
+                description: draft.description,
+                jobs: draft.jobs,
+                operationId: crypto.randomUUID(),
+              });
+              if (result.refreshError) {
+                window.dispatchEvent(new Event("p4deck:pending-refresh"));
+                throw new Error(
+                  `${env.preferences.zh ? "CL 可能已创建，但刷新失败；请关闭并刷新后确认，不要直接重试。" : "The changelist may have been created, but refresh failed. Close and refresh before retrying."} ${result.refreshError}`,
+                );
+              }
+              window.dispatchEvent(
+                new CustomEvent("p4deck:pending-mutation", { detail: result }),
+              );
+            } catch (cause) {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              throw cause;
+            }
+          }}
         />
       )}
       <header className="page-header">

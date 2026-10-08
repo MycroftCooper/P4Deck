@@ -9,6 +9,7 @@ import { TargetList } from "../../../app/dialogs/TargetList";
 import { MoveFilesDialog } from "./MoveFilesDialog";
 import { ShelfDialog } from "./ShelfDialog";
 import { fileClScope } from "../fileClScope";
+import { workspaceCache } from "../../files/workspaceQueries";
 
 /** Read once on explicit opening; no per-row queries and no write adapter. */
 export function FileClWorkflow({
@@ -16,6 +17,7 @@ export function FileClWorkflow({
   mode,
   source,
   client,
+  connectionKey,
   zh,
   onDismiss,
 }: {
@@ -23,6 +25,7 @@ export function FileClWorkflow({
   mode: "moveFiles" | "shelve";
   source: HTMLElement | null;
   client: string;
+  connectionKey: string;
   zh: boolean;
   onDismiss(): void;
 }) {
@@ -61,8 +64,40 @@ export function FileClWorkflow({
           }}
           changes={changes}
           client={client}
+          connectionKey={connectionKey}
           zh={zh}
           onDismiss={onDismiss}
+          onMove={async (targetChangeId, depotPaths) => {
+            try {
+              const result = await backend.mutatePendingChange({
+                type: "moveFiles",
+                targetChangeId,
+                depotPaths,
+                operationId: crypto.randomUUID(),
+              });
+              if (result.refreshError) {
+                window.dispatchEvent(new Event("p4deck:pending-refresh"));
+                throw new Error(
+                  `${zh ? "移动可能已成功，但刷新失败；请关闭并刷新后确认，不要直接重试。" : "The move may have succeeded, but refresh failed. Close and refresh before retrying."} ${result.refreshError}`,
+                );
+              }
+              window.dispatchEvent(
+                new CustomEvent("p4deck:pending-mutation", { detail: result }),
+              );
+            } catch (cause) {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              throw cause;
+            } finally {
+              await Promise.all([
+                workspaceCache.invalidateQueries({
+                  queryKey: ["workspace-files", connectionKey],
+                }),
+                workspaceCache.invalidateQueries({
+                  queryKey: ["depot-files", connectionKey],
+                }),
+              ]);
+            }
+          }}
         />
       );
     const id = scope.ids.length === 1 ? scope.ids[0] : group;

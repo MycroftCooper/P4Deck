@@ -61,7 +61,7 @@ describe("controlled P4 terminal", () => {
     ).rejects.toThrow("desktop app");
   });
 
-  it("models scoped pending CL reads and the unconnected write contract", async () => {
+  it("models scoped pending CL create, edit Jobs, delete, and Default round-trip moves", async () => {
     const initial = await backend.queryPendingChanges();
     const defaultChange = initial.find((change) => change.id === 0)!;
     expect(defaultChange.user).toBeTruthy();
@@ -81,6 +81,23 @@ describe("controlled P4 terminal", () => {
     expect(created.operation.operationId).toBe(operationId);
     expect(created.createdChangeId).toBeGreaterThan(0);
     const changeId = created.createdChangeId!;
+    await backend.mutatePendingChange({
+      type: "edit",
+      changeId,
+      description: "Edited description",
+      jobs: ["ATLAS-EDITED", "ATLAS-EDITED"],
+    });
+    expect(
+      (await backend.queryPendingChanges()).find(
+        (change) => change.id === changeId,
+      ),
+    ).toMatchObject({
+      description: "Edited description",
+      jobs: ["ATLAS-EDITED"],
+    });
+    await expect(
+      backend.mutatePendingChange({ type: "delete", changeId }),
+    ).rejects.toThrow("clear Jobs");
     const path = defaultChange.files[0].depotPath;
     await backend.mutatePendingChange({
       type: "moveFiles",
@@ -96,6 +113,12 @@ describe("controlled P4 terminal", () => {
       type: "moveFiles",
       targetChangeId: 0,
       depotPaths: [path],
+    });
+    await backend.mutatePendingChange({
+      type: "edit",
+      changeId,
+      description: "Edited description",
+      jobs: [],
     });
     await backend.mutatePendingChange({ type: "delete", changeId });
     expect(

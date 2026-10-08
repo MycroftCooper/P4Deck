@@ -45,6 +45,7 @@ it("loads once and skips selected files already in the move destination", async 
       mode="moveFiles"
       source={null}
       client="workspace"
+      connectionKey="connection-a"
       zh
       onDismiss={vi.fn()}
     />,
@@ -67,6 +68,7 @@ it("makes cross-CL shelving choose an explicit group without closing the parent"
       mode="shelve"
       source={null}
       client="workspace"
+      connectionKey="connection-a"
       zh
       onDismiss={close}
     />,
@@ -89,6 +91,7 @@ it("shows query failures and does not silently discard unknown files", async () 
       mode="moveFiles"
       source={null}
       client="workspace"
+      connectionKey="connection-a"
       zh
       onDismiss={vi.fn()}
     />,

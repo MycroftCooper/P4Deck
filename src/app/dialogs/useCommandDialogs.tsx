@@ -14,6 +14,7 @@ import {
   type OperationConfirmation,
 } from "./OperationConfirmDialog";
 import { useDialogRequest } from "./useDialogRequest";
+import { workspaceCache } from "../../features/files/workspaceQueries";
 
 type Origin = { source: HTMLElement | null };
 type PreviewRequest = Origin &
@@ -69,6 +70,7 @@ export function useCommandDialogs(
             mode={request.mode}
             source={request.source}
             client={client}
+            connectionKey={connectionKey}
             zh={zh}
             onDismiss={close}
           />
@@ -109,6 +111,36 @@ export function useCommandDialogs(
               if (latest.current !== connectionKey)
                 throw new Error(zh ? "连接已改变" : "Connection changed");
               return changes.find((change) => change.id === request.id);
+            }}
+            check={(changeId) => backend.preflightSubmit({ changeId })}
+            submit={async (confirmation) => {
+              const refreshWorkspace = async () => {
+                window.dispatchEvent(new Event("p4deck:pending-refresh"));
+                await Promise.all([
+                  workspaceCache.invalidateQueries({
+                    queryKey: ["workspace-files", connectionKey],
+                  }),
+                  workspaceCache.invalidateQueries({
+                    queryKey: ["depot-files", connectionKey],
+                  }),
+                ]);
+              };
+              let result;
+              try {
+                result = await backend.confirmSubmit(confirmation);
+              } catch (cause) {
+                await refreshWorkspace();
+                throw cause;
+              }
+              if (
+                result.refresh.pendingChanges ||
+                result.refresh.workspaceStatus
+              ) {
+                await refreshWorkspace();
+              }
+              if (result.refresh.submittedChanges)
+                window.dispatchEvent(new Event("p4deck:submitted-refresh"));
+              return result;
             }}
           />
         );

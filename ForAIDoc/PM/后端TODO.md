@@ -43,8 +43,8 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
 | BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
-| BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 覆盖成功、空描述/空 CL、unresolved、out-of-date、权限拒绝、过期 token、目标/Workspace/CL 变化拒绝并清理专属数据；前端生产入口仍未接线 |
-| BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；写契约尚未接前端按钮 |
+| BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收 |
+| BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
 | BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
@@ -114,7 +114,7 @@ pnpm test:e2e:p4d:win
 - 一次性 token 绑定 Server/User/Client/Workspace、Context generation、CL Description/Jobs/Shelf、文件集合及 fstat/权限快照；确认阶段占用同 Server mutation lane，复核后只执行一条 `p4 submit -c <change>`，过期、目标不符、连接/Workspace 切换和 CL 内容变化均拒绝。
 - Submit 结果只返回结构化 outcome/failure/message/refresh；进度与取消复用 Runner，Journal 分类为 `submit`，Log 继续脱敏。失败或不确定结果要求刷新 Pending/Submitted/Workspace。
 - 已删除 `FileAction::Submit` 及 TypeScript 泛化 FileAction 的 `"submit"`，Mock 和通用 GUI `run_p4` 也拒绝 submit；终端来源仍保持用户显式 P4 会话语义。
-- Windows localhost Fixture 使用独立 writer/read-only Client、专属 `//depot/p4deck-submit-e2e/...` 路径与临时保护表，覆盖成功提交、空描述、空 CL、unresolved、out-of-date、权限拒绝、过期 token、目标/Workspace/CL 内容变化拒绝；失败路径恢复保护表并清理 Client/User/Workspace/CL/专属 depot 数据。前端 SubmitDialog 仅对齐契约，生产接线留给后续前端任务。
+- Windows localhost Fixture 使用独立 writer/read-only Client、专属 `//depot/p4deck-submit-e2e/...` 路径与临时保护表，覆盖成功提交、空描述、空 CL、unresolved、out-of-date、权限拒绝、过期 token、目标/Workspace/CL 内容变化拒绝；失败路径恢复保护表并清理 Client/User/Workspace/CL/专属 depot 数据。前端 SubmitDialog 已接统一生产入口，原生 UI 流程仍待验收。
 
 验收：`pnpm test:e2e:p4d:win` 默认连续两轮通过后方可视为本机 DONE；macOS/多版本仍属于 BE-009 兼容矩阵。
 
@@ -126,11 +126,11 @@ pnpm test:e2e:p4d:win
 
 - `query_pending_changes` 已从 IPC 临时拼装迁入 Changelist Repository/Application Service；IPC 仅转发参数和结果。
 - 查询仅返回当前 Connection 的当前 User + Client，正确区分 Default 与编号 CL，并返回 Description、Jobs、opened files、shelved files；shelved file 未知的 Workspace state 保持缺省。
-- 新增未接 UI 的 `mutate_pending_change` 强类型契约：创建、编辑 Description/Jobs、删除真正空（无 opened/shelf/Jobs）的编号 CL、Default ↔ 编号 CL 文件移动。
+- `mutate_pending_change` 强类型契约已接前端统一流程：创建、编辑 Description/Jobs、删除真正空（无 opened/shelf/Jobs）的编号 CL、Default ↔ 编号 CL 文件移动。
 - form 对每一行 Description 做缩进，Jobs 限制为单行 token 并在写入前验证存在；规避字段注入和 P4 在 Job 校验失败时“先改 Description、再报错”的部分写入行为。
 - 修改继承调用方 operation ID，复用 Runner 的单 Server 串行 mutation、日志与 Journal；移动只失效映射到的本地路径，并只返回受影响 CL 的刷新结果。
 
-验收结果（2026-10-08）：Windows localhost Fixture 覆盖 Default/编号分组、Description/Jobs、opened/shelved 查询、创建/编辑/删除空 CL、Default ↔ 编号移动、多行及特殊字段名文本、缺失 Job 预检失败恢复；默认连续两轮通过并清理 Client/Workspace/CL/Job/测试文件。前端写入口保持未连接。
+验收结果（2026-10-08）：Windows localhost Fixture 覆盖 Default/编号分组、Description/Jobs、opened/shelved 查询、创建/编辑/删除空 CL、Default ↔ 编号移动、多行及特殊字段名文本、缺失 Job 预检失败恢复；默认连续两轮通过并清理 Client/Workspace/CL/Job/测试文件。前端写入口已完成契约/组件接线，原生 UI 待验收。
 
 工程基线说明：本批改动文件均通过 Prettier/rustfmt；全库 `pnpm format:check` 仍只报告批次前已存在的 `src/app/shell/StatusBar.tsx` 与 `src/features/search/SearchPage.tsx`，未在本批顺手改动这两个无关文件。
 

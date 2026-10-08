@@ -751,8 +751,14 @@ export const mockBackend: Backend = {
       const index = changes.findIndex((item) => item.id === request.changeId);
       if (index < 0 || request.changeId === 0)
         throw new Error("a numbered pending changelist is required");
-      if (changes[index].files.length || changes[index].shelvedFiles.length)
-        throw new Error("changelist is not empty");
+      if (
+        changes[index].files.length ||
+        changes[index].shelvedFiles.length ||
+        changes[index].jobs.length
+      )
+        throw new Error(
+          "Browser Mock: changelist is not empty; clear Jobs, opened files, and shelves first. No real P4 server was accessed.",
+        );
       changes.splice(index, 1);
       affectedChanges.add(request.changeId);
     } else {
@@ -932,7 +938,7 @@ export const mockBackend: Backend = {
       outcome: "submitted",
       changeId: confirmation.target.changeId,
       submittedChangeId: confirmation.target.changeId,
-      message: `Changelist ${confirmation.target.changeId} was submitted in Mock.`,
+      message: `Browser Mock only: changelist ${confirmation.target.changeId} was simulated as submitted. No real P4 server was accessed.`,
       operationId,
       logReference: operationId,
       refresh: {

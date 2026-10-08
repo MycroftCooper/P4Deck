@@ -187,3 +187,25 @@ it("rejects editing Default instead of treating it as a numbered CL", async () =
   expect(document.body.textContent).toContain("只能编辑已编号的 CL");
   expect(adapter).not.toHaveBeenCalled();
 });
+it("preserves and submits the complete Jobs list while editing", async () => {
+  const adapter = vi.fn(async () => {});
+  await act(async () =>
+    root.render(
+      <ChangelistFormDialog
+        mode="edit"
+        changeId={42}
+        initial={{ description: "Existing", jobs: ["JOB-1", "JOB-2"] }}
+        client="workspace"
+        zh
+        onDismiss={dismiss}
+        onSubmit={adapter}
+      />,
+    ),
+  );
+  expect(document.querySelectorAll("textarea")[1].value).toBe("JOB-1\nJOB-2");
+  await submit();
+  expect(adapter).toHaveBeenCalledWith({
+    description: "Existing",
+    jobs: ["JOB-1", "JOB-2"],
+  });
+});

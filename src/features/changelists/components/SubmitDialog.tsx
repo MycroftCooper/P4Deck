@@ -45,6 +45,7 @@ export function SubmitDialog(props: Props) {
   const [phase, setPhase] = useState<Phase>("summary");
   const [summary, setSummary] = useState<PendingChange>();
   const [check, setCheck] = useState<SubmitCheck>();
+  const [submitResult, setSubmitResult] = useState<SubmitResult>();
   const [message, setMessage] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const generation = useRef(0);
@@ -111,6 +112,7 @@ export function SubmitDialog(props: Props) {
     setPhase("checking");
     setMessage("");
     setCheck(undefined);
+    setSubmitResult(undefined);
     setAcknowledged(false);
     try {
       const result = await props.check(origin.id);
@@ -120,10 +122,10 @@ export function SubmitDialog(props: Props) {
       )
         return;
       if (
-        result.change?.id !== origin.id ||
+        (result.change !== undefined && result.change.id !== origin.id) ||
         result.target.changeId !== origin.id ||
         result.target.client !== origin.client ||
-        !result.token ||
+        (result.ready && (!result.change || !result.token)) ||
         !Number.isFinite(result.expiresAt)
       )
         throw new Error(
@@ -134,11 +136,13 @@ export function SubmitDialog(props: Props) {
         );
       setCheck(result);
       setSummary(result.change);
+      const checkedChange = result.change;
       setPhase(
         !result.ready ||
           result.blockers.length ||
-          !result.change.files.length ||
-          !result.change.description.trim()
+          !checkedChange ||
+          !checkedChange.files.length ||
+          !checkedChange.description.trim()
           ? "blocked"
           : result.expiresAt <= Date.now()
             ? "stale"
@@ -171,6 +175,7 @@ export function SubmitDialog(props: Props) {
     running.current = true;
     setPhase("submitting");
     setMessage("");
+    setSubmitResult(undefined);
     try {
       const result = await props.submit({
         token: check.token!,
@@ -180,6 +185,7 @@ export function SubmitDialog(props: Props) {
         epoch === generation.current &&
         latestConnection.current === origin.connectionKey
       ) {
+        setSubmitResult(result);
         setMessage(result.message);
         setPhase(result.outcome === "submitted" ? "success" : "failed");
         if (result.outcome !== "submitted") {
@@ -313,18 +319,38 @@ export function SubmitDialog(props: Props) {
       )}
       {check?.blockers.map((item, index) => (
         <DialogNotice key={`b${item.code}-${index}`} error>
-          {tr("阻塞：", "Blocker: ")}
+          {item.certainty === "unknown"
+            ? tr("未知阻塞：", "Unknown blocker: ")
+            : tr("阻塞：", "Blocker: ")}
           {item.message}
         </DialogNotice>
       ))}
       {check?.warnings.map((item, index) => (
         <DialogNotice key={`w${item.code}-${index}`}>
-          {tr("警告：", "Warning: ")}
+          {item.certainty === "unknown"
+            ? tr("未知：", "Unknown: ")
+            : tr("警告：", "Warning: ")}
           {item.message}
         </DialogNotice>
       ))}
       {message && (
         <DialogNotice error={phase === "failed"}>{message}</DialogNotice>
+      )}
+      {submitResult && submitResult.outcome !== "submitted" && (
+        <DialogNotice error>
+          {tr("结果：", "Outcome: ")}
+          {submitResult.outcome}
+          {submitResult.failure ? ` · ${submitResult.failure}` : ""}.{" "}
+          {submitResult.refresh.reason}
+        </DialogNotice>
+      )}
+      {submitResult?.operationId && (
+        <p className="workflow-context">
+          {tr("操作记录", "Operation")} {submitResult.operationId}
+          {submitResult.logReference
+            ? ` · ${tr("日志", "Log")} ${submitResult.logReference}`
+            : ""}
+        </p>
       )}
       {phase === "ready" && !staleConnection && (
         <label className="workflow-checkbox">

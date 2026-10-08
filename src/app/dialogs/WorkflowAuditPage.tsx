@@ -105,6 +105,7 @@ export default function WorkflowAuditPage() {
             request={{ from: 10, paths, source: open.source }}
             changes={changes}
             client="UI fixture"
+            connectionKey="audit"
             zh={zh}
             onDismiss={dismiss}
           />

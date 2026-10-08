@@ -3,6 +3,7 @@ import { act, type ComponentProps } from "react";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SubmitDialog, type SubmitCheck } from "./SubmitDialog";
+import type { SubmitResult } from "../../../shared/contracts/types";
 
 const root = dialogHarness();
 const dismiss = vi.fn();
@@ -159,6 +160,62 @@ it("blocks preflight failures and requires fresh preflight after a submit failur
   expect(button("确认提交整个 CL").disabled).toBe(true);
   expect(document.querySelector('input[type="checkbox"]')).toBeNull();
 });
+it("renders blocker, warning, and unknown facts even when a blocked preflight has no token", async () => {
+  await render({
+    check: async () => ({
+      ...result(),
+      ready: false,
+      token: undefined,
+      blockers: [
+        {
+          code: "outOfDateFiles",
+          certainty: "confirmed",
+          message: "Out of date",
+        },
+      ],
+      warnings: [
+        {
+          code: "shelvedFilesPresent",
+          certainty: "confirmed",
+          message: "Shelf remains",
+        },
+        {
+          code: "permissionUnknown",
+          certainty: "unknown",
+          message: "Permission could not be verified",
+        },
+      ],
+    }),
+  });
+  await click("重新预检");
+  expect(document.body.textContent).toContain("阻塞：Out of date");
+  expect(document.body.textContent).toContain("警告：Shelf remains");
+  expect(document.body.textContent).toContain(
+    "未知：Permission could not be verified",
+  );
+  expect(document.body.textContent).not.toContain("预检结果与目标不匹配");
+  expect(button("确认提交整个 CL").disabled).toBe(true);
+});
+it("shows a change-not-found blocker instead of misreporting target mismatch", async () => {
+  await render({
+    check: async () => ({
+      ...result(),
+      ready: false,
+      change: undefined,
+      token: undefined,
+      blockers: [
+        {
+          code: "changeNotFound",
+          certainty: "confirmed",
+          message: "The changelist was not found",
+        },
+      ],
+    }),
+  });
+  await click("重新预检");
+  expect(document.body.textContent).toContain("The changelist was not found");
+  expect(document.body.textContent).not.toContain("预检结果与目标不匹配");
+});
 it("expires a checked snapshot and invalidates acknowledgement", async () => {
   vi.useFakeTimers();
   await render({
@@ -191,6 +248,63 @@ it("rejects mismatched preflight identities", async () => {
   });
   await click("重新预检");
   expect(document.body.textContent).toContain("预检结果与目标不匹配");
+});
+it("shows structured target mismatch and uncertain execution outcomes without success", async () => {
+  const submit = vi.fn(async () => ({
+    outcome: "unknown" as const,
+    changeId: 10,
+    failure: "uncertainOutcome" as const,
+    message: "Server outcome is unknown",
+    operationId: "submit-op",
+    logReference: "submit-log",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "Refresh all submit views before retrying.",
+    },
+  }));
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(document.body.textContent).toContain("unknown · uncertainOutcome");
+  expect(document.body.textContent).toContain("submit-op");
+  expect(document.body.textContent).toContain("submit-log");
+  expect(button("确认提交整个 CL").disabled).toBe(true);
+});
+it("prevents duplicate submit execution while confirmation is in flight", async () => {
+  let finish!: (value: SubmitResult) => void;
+  const submit = vi.fn(
+    () =>
+      new Promise<SubmitResult>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  const confirm = button("确认提交整个 CL");
+  await act(async () => {
+    confirm.click();
+    confirm.click();
+  });
+  expect(submit).toHaveBeenCalledOnce();
+  await act(async () =>
+    finish({
+      outcome: "submitted",
+      changeId: 10,
+      message: "Submitted",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: [],
+        reason: "refresh",
+      },
+    }),
+  );
 });
 it("locks duplicate checks and lets the user close after a connection change", async () => {
   let finish!: (value: SubmitCheck) => void;

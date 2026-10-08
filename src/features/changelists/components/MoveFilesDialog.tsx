@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
 import type { PendingChange } from "../../../shared/contracts/types";
@@ -13,14 +13,18 @@ export function MoveFilesDialog({
   request,
   changes,
   client,
+  connectionKey,
   zh,
   onDismiss,
+  onMove,
 }: {
   request: MoveFilesRequest;
   changes: PendingChange[];
   client: string;
+  connectionKey: string;
   zh: boolean;
   onDismiss(): void;
+  onMove?(targetChangeId: number, depotPaths: string[]): Promise<void>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   // Freeze both the exact file subset and candidate snapshot when the workflow opens.
@@ -28,6 +32,7 @@ export function MoveFilesDialog({
     ...request,
     origins: request.origins ? { ...request.origins } : undefined,
     paths: [...new Set(request.paths)],
+    connectionKey,
     changes: changes.map((change) => ({
       id: change.id,
       description: change.description,
@@ -36,6 +41,29 @@ export function MoveFilesDialog({
   const [filter, setFilter] = useState("");
   const [target, setTarget] = useState<number>();
   const [checked, setChecked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const running = useRef(false);
+  const generation = useRef(0);
+  const staleConnection = snapshot.connectionKey !== connectionKey;
+  useEffect(() => {
+    if (staleConnection) {
+      generation.current += 1;
+      running.current = false;
+      setBusy(false);
+      setChecked(false);
+      setError(
+        tr(
+          "连接或 Workspace 已改变，请关闭后重新选择文件。",
+          "Connection or workspace changed. Close and select the files again.",
+        ),
+      );
+    }
+    return () => {
+      generation.current += 1;
+    };
+  }, [staleConnection]);
   const originIds = [
     ...new Set(
       snapshot.paths.map((path) => snapshot.origins?.[path] ?? snapshot.from),
@@ -66,17 +94,77 @@ export function MoveFilesDialog({
       )}
       source={snapshot.source}
       zh={zh}
-      onRequestClose={onDismiss}
+      busy={busy}
+      onRequestClose={() => {
+        if (!busy) onDismiss();
+      }}
       footer={
         <>
-          <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+          <button disabled={busy} onClick={onDismiss}>
+            {tr("关闭", "Close")}
+          </button>
           <button
             className="primary"
-            disabled={target === undefined || !effectivePaths.length}
-            onClick={() => setChecked(true)}
+            disabled={
+              busy ||
+              staleConnection ||
+              target === undefined ||
+              !effectivePaths.length
+            }
+            onClick={() => {
+              setChecked(true);
+              setError("");
+              setNotice("");
+            }}
           >
             {tr("检查选择（不执行）", "Check selection (no execution)")}
           </button>
+          {checked && onMove && (
+            <button
+              className="primary"
+              disabled={busy || staleConnection}
+              onClick={() => {
+                if (
+                  running.current ||
+                  target === undefined ||
+                  !effectivePaths.length
+                )
+                  return;
+                running.current = true;
+                setBusy(true);
+                setError("");
+                setNotice("");
+                const epoch = generation.current;
+                const selectedTarget = target;
+                const selectedPaths = [...effectivePaths];
+                void onMove(selectedTarget, selectedPaths)
+                  .then(() => {
+                    if (generation.current !== epoch) return;
+                    setNotice(
+                      tr(
+                        `已移动 ${selectedPaths.length} 个文件。`,
+                        `Moved ${selectedPaths.length} file(s).`,
+                      ),
+                    );
+                    onDismiss();
+                  })
+                  .catch((cause) => {
+                    if (generation.current !== epoch) return;
+                    setError(String(cause));
+                    setChecked(false);
+                  })
+                  .finally(() => {
+                    if (generation.current !== epoch) return;
+                    running.current = false;
+                    setBusy(false);
+                  });
+              }}
+            >
+              {busy
+                ? tr("正在移动…", "Moving…")
+                : tr("确认移动", "Confirm move")}
+            </button>
+          )}
         </>
       }
     >
@@ -84,12 +172,15 @@ export function MoveFilesDialog({
         {client} · {tr("来源", "From")} {fromLabel} · {snapshot.paths.length}{" "}
         {tr("个文件", "files")}
       </div>
-      <DialogNotice>
-        {tr(
-          "界面预览：候选来自当前页面快照；尚未验证归属、锁或连接状态，不会执行移动。",
-          "UI preview: candidates are from this page snapshot. Ownership, locks and connection have not been verified. No files will be moved.",
-        )}
-      </DialogNotice>
+      {!onMove && (
+        <DialogNotice>
+          {tr(
+            "界面预览：候选来自当前页面快照；尚未验证归属、锁或连接状态，不会执行移动。",
+            "UI preview: candidates are from this page snapshot. Ownership, locks and connection have not been verified. No files will be moved.",
+          )}
+        </DialogNotice>
+      )}
+      {staleConnection && <DialogNotice error>{error}</DialogNotice>}
       <TargetList
         paths={effectivePaths}
         label={tr("将移动的文件", "Files to move")}
@@ -134,6 +225,8 @@ export function MoveFilesDialog({
                 : Number(event.target.value),
             );
             setChecked(false);
+            setError("");
+            setNotice("");
           }}
         >
           <option value="">{tr("请选择目标 CL", "Choose a target")}</option>
@@ -178,6 +271,8 @@ export function MoveFilesDialog({
           )}
         </DialogNotice>
       )}
+      {error && !staleConnection && <DialogNotice error>{error}</DialogNotice>}
+      {notice && <DialogNotice>{notice}</DialogNotice>}
     </Dialog>
   );
 }

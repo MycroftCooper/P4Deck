@@ -7,7 +7,10 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import type { PendingChange } from "../../../shared/contracts/types";
+import type {
+  PendingChange,
+  PendingChangeMutationResult,
+} from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
 import { backend } from "../../../infrastructure/backend";
 import { PendingFileList } from "./PendingFileList";
@@ -19,15 +22,40 @@ import { ChangelistFormDialog } from "./ChangelistFormDialog";
 import { ShelfDialog, type ShelfRequest } from "./ShelfDialog";
 import { UnshelveDialog } from "./UnshelveDialog";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
+import { DeleteChangelistDialog } from "./DeleteChangelistDialog";
+import { workspaceCache } from "../../files/workspaceQueries";
 type T = (typeof messages)[keyof typeof messages];
+
+export function mergePendingMutation(
+  current: PendingChange[],
+  result: PendingChangeMutationResult,
+) {
+  if (result.refreshError) return current;
+  const affected = new Set(result.affectedChanges);
+  const refreshed = new Map(
+    result.refreshedChanges.map((change) => [change.id, change]),
+  );
+  const next = current
+    .filter((change) => !affected.has(change.id) || refreshed.has(change.id))
+    .map((change) => refreshed.get(change.id) ?? change);
+  for (const change of refreshed.values())
+    if (!next.some((item) => item.id === change.id)) next.push(change);
+  return next.sort((left, right) =>
+    left.id === 0 ? -1 : right.id === 0 ? 1 : right.id - left.id,
+  );
+}
 
 export function PendingPage({
   t,
   clientName,
+  connectionKey,
+  demo,
   ready,
 }: {
   t: T;
   clientName: string;
+  connectionKey: string;
+  demo: boolean;
   ready: boolean;
 }) {
   const focus = useCommandFocus();
@@ -44,6 +72,10 @@ export function PendingPage({
     });
   const [refresh, setRefresh] = useState(0);
   const [move, setMove] = useState<MoveFilesRequest>();
+  const [deleting, setDeleting] = useState<{
+    change: PendingChange;
+    source: HTMLElement | null;
+  }>();
   const [shelfRequest, setShelfRequest] = useState<{
     request: ShelfRequest;
     unshelve: boolean;
@@ -73,11 +105,20 @@ export function PendingPage({
     });
   useEffect(() => {
     const reload = () => setRefresh((n) => n + 1);
+    const merge = (event: Event) => {
+      const result = (event as CustomEvent<PendingChangeMutationResult>).detail;
+      if (result) setChanges((value) => mergePendingMutation(value, result));
+    };
     window.addEventListener("p4deck:pending-refresh", reload);
-    return () => window.removeEventListener("p4deck:pending-refresh", reload);
+    window.addEventListener("p4deck:pending-mutation", merge);
+    return () => {
+      window.removeEventListener("p4deck:pending-refresh", reload);
+      window.removeEventListener("p4deck:pending-mutation", merge);
+    };
   }, []);
   const [changes, setChanges] = useState<PendingChange[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set([0, 31821]));
   const [collapsedShelves, setCollapsedShelves] = useState<Set<number>>(
     new Set(),
@@ -94,7 +135,10 @@ export function PendingPage({
     void backend
       .queryPendingChanges()
       .then((value) => {
-        if (live) setChanges(value);
+        if (live) {
+          setChanges(value);
+          setError("");
+        }
       })
       .catch((cause) => {
         if (live) setError(String(cause));
@@ -111,6 +155,38 @@ export function PendingPage({
     clientName,
   );
   const reload = () => setRefresh((n) => n + 1);
+  const applyMutation = (
+    result: PendingChangeMutationResult,
+    incompleteMessage: string,
+    successMessage: string,
+  ) => {
+    if (!result.refreshError)
+      setChanges((value) => mergePendingMutation(value, result));
+    setError(
+      result.refreshError ? `${incompleteMessage}: ${result.refreshError}` : "",
+    );
+    setNotice(
+      result.refreshError
+        ? ""
+        : `${successMessage} · ${t.files === "文件" ? "操作记录" : "Operation"} ${result.operation.operationId}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
+    );
+    if (result.refreshError)
+      window.dispatchEvent(new Event("p4deck:pending-refresh"));
+    else
+      window.dispatchEvent(
+        new CustomEvent("p4deck:pending-mutation", { detail: result }),
+      );
+  };
+  const refreshFileStatus = async () => {
+    await Promise.all([
+      workspaceCache.invalidateQueries({
+        queryKey: ["workspace-files", connectionKey],
+      }),
+      workspaceCache.invalidateQueries({
+        queryKey: ["depot-files", connectionKey],
+      }),
+    ]);
+  };
   const toggle = (id: number) =>
     setExpanded((value) => {
       const next = new Set(value);
@@ -133,7 +209,18 @@ export function PendingPage({
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),
         刷新: action(reload),
-        "编辑 CL…": action(() => openForm(change)),
+        "编辑 CL…": action(
+          () => openForm(change),
+          change.id > 0
+            ? undefined
+            : "Default CL 没有可编辑的编号 spec / Default has no numbered spec",
+        ),
+        "删除空 CL…": action(
+          (source) => setDeleting({ change, source: source ?? null }),
+          change.id > 0
+            ? undefined
+            : "Default CL 不可删除 / Default cannot be deleted",
+        ),
         "搁置…": action(
           () =>
             openShelf(
@@ -225,8 +312,58 @@ export function PendingPage({
           request={move}
           changes={changes}
           client={clientName}
+          connectionKey={connectionKey}
           zh={t.files === "文件"}
           onDismiss={() => setMove(undefined)}
+          onMove={async (targetChangeId, depotPaths) => {
+            try {
+              const result = await backend.mutatePendingChange({
+                type: "moveFiles",
+                targetChangeId,
+                depotPaths,
+                operationId: crypto.randomUUID(),
+              });
+              applyMutation(
+                result,
+                t.files === "文件"
+                  ? "文件移动结果不完整"
+                  : "Move refresh incomplete",
+                t.files === "文件" ? "文件已移动" : "Files moved",
+              );
+            } catch (cause) {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              throw cause;
+            } finally {
+              await refreshFileStatus();
+            }
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteChangelistDialog
+          change={deleting.change}
+          source={deleting.source}
+          zh={t.files === "文件"}
+          onDismiss={() => setDeleting(undefined)}
+          onDelete={async () => {
+            try {
+              const result = await backend.mutatePendingChange({
+                type: "delete",
+                changeId: deleting.change.id,
+                operationId: crypto.randomUUID(),
+              });
+              applyMutation(
+                result,
+                t.files === "文件"
+                  ? "删除后的刷新不完整"
+                  : "Delete refresh incomplete",
+                t.files === "文件" ? "CL 已删除" : "Changelist deleted",
+              );
+            } catch (cause) {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              throw cause;
+            }
+          }}
         />
       )}
       {form && (
@@ -235,13 +372,46 @@ export function PendingPage({
           changeId={form.change?.id}
           initial={
             form.change
-              ? { description: form.change.description, jobs: [] }
+              ? {
+                  description: form.change.description,
+                  jobs: [...form.change.jobs],
+                }
               : undefined
           }
           client={clientName}
           zh={t.files === "文件"}
           source={form.source}
           onDismiss={() => setForm(undefined)}
+          onSubmit={async (draft) => {
+            try {
+              const result = await backend.mutatePendingChange(
+                form.change
+                  ? {
+                      type: "edit",
+                      changeId: form.change.id,
+                      description: draft.description,
+                      jobs: draft.jobs,
+                      operationId: crypto.randomUUID(),
+                    }
+                  : {
+                      type: "create",
+                      description: draft.description,
+                      jobs: draft.jobs,
+                      operationId: crypto.randomUUID(),
+                    },
+              );
+              applyMutation(
+                result,
+                t.files === "文件"
+                  ? "保存后的刷新不完整"
+                  : "Save refresh incomplete",
+                t.files === "文件" ? "CL 已保存" : "Changelist saved",
+              );
+            } catch (cause) {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              throw cause;
+            }
+          }}
         />
       )}
       <header className="section-title">
@@ -261,6 +431,11 @@ export function PendingPage({
       {error && (
         <div role="alert" className="workspace-load-error">
           {error}
+        </div>
+      )}
+      {notice && (
+        <div role="status" className="workspace-load-error">
+          {notice}
         </div>
       )}
       <div
@@ -318,13 +493,19 @@ export function PendingPage({
               </button>
               {change.id ? (
                 <button
-                  disabled
                   title={
                     t.files === "文件"
-                      ? "CL 删除流程尚未接通"
-                      : "CL deletion workflow is not connected"
+                      ? "删除空的编号 CL"
+                      : "Delete an empty numbered CL"
                   }
                   aria-label={t.delete}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDeleting({
+                      change,
+                      source: event.currentTarget,
+                    });
+                  }}
                 >
                   <Trash2 size={14} />
                 </button>

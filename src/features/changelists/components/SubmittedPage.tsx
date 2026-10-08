@@ -71,6 +71,12 @@ export function SubmittedPage({
       generation.current++;
     };
   }, [query, keyword]);
+  useEffect(() => {
+    const refresh = () => void query();
+    window.addEventListener("p4deck:submitted-refresh", refresh);
+    return () =>
+      window.removeEventListener("p4deck:submitted-refresh", refresh);
+  }, [query]);
   async function perform(action: ClAction) {
     const started = generation.current;
     try {

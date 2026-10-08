@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-09-29。负责人：前端 UI。状态：等待原生双平台验收环境；整体未完成。
+日期：2026-10-08。负责人：前端 UI。状态：BE-003/BE-004a 生产接线已完成自动化验收；等待 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -13,9 +13,9 @@
 | ID | 工作项 | 范围 | 验收标准 | 状态 |
 | --- | --- | --- | --- | --- |
 | FE-01 | 统一对话框基础 | 模态层、标题/描述/正文/页脚、焦点、Escape、滚动、主题、危险态、忙碌与错误 | 键盘可操作；焦点恢复；来源窗口正确；不被停靠容器裁剪；忙碌时不重复确认 | 浏览器/跨 document 通过；原生窗口待验收 |
-| FE-02 | CL 新建/编辑 | Description、Jobs、上下文、必填校验、未保存修改保护 | Default 不冒充编号 CL；不直接发送空描述；未接通时仅检查表单 | 前端证据通过；真实写入适配器待后端 |
-| FE-03 | 目标 CL 选择与移动文件 | Default/编号 CL、过滤、文件计数、目标摘要 | 保留明确文件子集；不可选当前/不适用目标；无目标/空列表可解释 | 前端证据通过；真实移动待后端验收 |
-| FE-04 | 提交预检与确认 UI | CL 摘要、阻塞/警告、文件范围、检查中、过期、失败、结果 | 只确认整个指定 CL；检查失败/过期不能提交；无后端预检不显示“可提交” | 前端证据通过；BE-003 前保持禁用 |
+| FE-02 | CL 新建/编辑 | Description、Jobs、上下文、必填校验、未保存修改保护 | Default 不冒充编号 CL；不直接发送空描述；未接通时仅检查表单 | BE-004a 已接生产入口；浏览器契约/组件测试通过，原生待验收 |
+| FE-03 | 目标 CL 选择与移动文件 | Default/编号 CL、过滤、文件计数、目标摘要 | 保留明确文件子集；不可选当前/不适用目标；无目标/空列表可解释 | BE-004a 已接生产入口；Default 往返、失效与失败测试通过，原生待验收 |
+| FE-04 | 提交预检与确认 UI | CL 摘要、阻塞/警告、文件范围、检查中、过期、失败、结果 | 只确认整个指定 CL；检查失败/过期不能提交；无后端预检不显示“可提交” | BE-003 已接生产入口；状态机测试通过，原生待验收 |
 | FE-05 | 获取指定版本 | head/修订/CL/日期选择、范围预览、输入校验 | 文件版本与 CL 不混用；取消不执行；目录标明递归 | 前端证据通过；真实 sync 未验收 |
 | FE-06 | 重命名/移动文件 | 原目标、新路径、范围、覆盖/映射提示 | 路径不拼 Shell；未验证映射/覆盖时不能宣称安全；未接通不修改文件 | 前端证据通过；映射/覆盖后端校验待补 |
 | FE-07 | 批量与递归确认 | 共用目标清单、数量、父子去重提示、危险操作说明 | 目标不跟随外部选择变化；大列表虚拟化；不隐藏部分失败或取消边界 | 50,000 目标虚拟化证据通过；真实性能待验收 |
@@ -23,7 +23,7 @@
 | FE-09 | Unshelve UI | 来源、目标 CL、覆盖/映射/锁/Resolve 风险、预检与确认 | 无有效预检不执行；支持加载、空、阻塞、失败及过期状态 | 前端证据通过；真实预检待 BE-004 |
 | FE-10 | Resolve UI | 冲突列表、当前项、比较双方、处理方式与结果 | 不以演示内容覆盖真实文件；未知冲突/不可用工具明确说明 | 前端证据通过；真实冲突数据/执行待后端 |
 | FE-11 | 通用状态与可访问性 | 加载/空/错误/离线/过期；键盘、读屏、亮暗、中英、窄窗口 | 共享状态组件；禁用可解释；文本不截断关键风险信息；不只依赖颜色 | 浏览器键盘/布局通过；原生与真实读屏待验收 |
-| FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | 工程审计通过；原生双平台门槛未通过 |
+| FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
 
 ## 执行顺序
 
@@ -124,12 +124,23 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 - 当前全量 215 项前端测试通过（35 个文件），生产构建通过。新增的两个协调器测试覆盖重复打开互斥和连接切换取消。Pending 更多菜单、Submitted 详情更多菜单的 Enter 打开/Escape 关闭均经真实页面验证，截图 `/tmp/p4deck-submitted-menu-ui.png`。
 - 独立窗口核验现状：浏览器弹出动作后主页面出现 opened in a new window 状态，但可操作浏览器清单没有对应弹出窗口，因此尚未验证该窗口内的业务弹窗；当前未运行原生 P4Deck。不能把主窗口提示、iframe 测试或构建通过当作原生跨窗口验收通过。
 
+### 第十一批：BE-003 / BE-004a 前端生产接线
+
+- `ChangelistFormDialog` 已由 Pending 与 Submitted 的新建入口接到 `mutatePendingChange`；编号 CL 编辑完整带回并提交 Jobs。成功使用 `refreshedChanges` 只合并受影响 CL，`refreshError` 不显示全成功；失败保留草稿并显示后端原因。
+- 编号 Pending CL 的删除按钮和右键菜单共用明确确认框。Default 永不允许删除；前端展示当前 files/shelves/Jobs 快照，但最终以后端“真正为空”复核为准，拒绝原因原样展示。
+- `MoveFilesDialog` 保留打开时的来源、文件集合和候选快照，采用“检查选择 → 确认移动”两阶段；目标改变、连接/Workspace 改变会让确认失效。Pending 页面与 Files/右键统一调用强类型 `moveFiles`，成功合并来源/目标 CL 并刷新文件状态，失败按不确定/可能部分执行路径刷新。
+- `useCommandDialogs` 的统一 Submit 入口已接 `preflightSubmit` / `confirmSubmit`。被 blocker 阻断且无 token 是合法预检结果；只有 ready、目标一致、未过期且持有 token 时才可确认。confirmed warning、unknown、token 过期、连接/Workspace/CL 漂移、加载失败、结构化拒绝/失败/unknown、成功和重复点击均有独立状态。
+- Submit 结果按后端 refresh advice 刷新 Pending、Submitted 与 Workspace 查询；错误或 IPC 异常也保守刷新 Pending/Workspace。成功显示 operation/log 引用；非 `submitted` outcome 不显示成功。
+- Browser Mock 继续实现同一契约并驱动状态测试；成功提示明确是浏览器模拟、未访问真实 P4 Server。Shelf/Unshelve/Resolve 仍维持既有预览边界，本批没有扩大执行范围。
+- 自动化新增删除确认、Pending 局部合并、Default↔编号移动、Submit blocker/warning/unknown/过期/漂移/失败/防重复及统一适配器接线覆盖。2026-10-08 全量 `pnpm test:web` 为 39 个文件、240 项通过；`pnpm build`、`pnpm check`、Rust test/check/clippy/fmt、`git diff --check` 通过，Windows localhost E2E 连续两轮通过。
+- 最新 debug Tauri 已通过 `pnpm tauri build --debug --no-bundle` 重建，并以隔离 Fixture 环境启动为响应正常的 `P4Deck` 窗口。当前 Computer Use 原生应用清单连续返回空，无法绑定窗口执行可核验点击；实例与 Fixture 已清理，因此 Pending/Submit 原生 UI 冒烟记为“未验收”，不以进程存在、旧 exe、Mock 或应用层 E2E 冒充。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS 独立窗口：菜单打开业务弹窗、初始焦点、Tab 循环、Escape、回焦、关闭来源窗口与连接变更取消；需运行中的对应平台桌面实例。整体目标暂不标为完成。
 2. FE-12 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
-3. 新建/编辑 CL、移动、重命名、Shelf、Unshelve、Resolve 的真实写入和服务器预检属于后端依赖，不在本前端批次中实现。提交缺少有效预检适配器，仍保持禁用；已有版本/批量执行路径不在 QA 中确认执行。
-4. Pending 摘要缺少 Jobs、可写归属/锁等完整字段。后续接入必须保留未知状态，不能把空数组或前端路径校验当作真实服务器事实。
+3. 新建/编辑/删除空 Pending CL、Default↔编号移动与 Submit 已完成 BE-004a/BE-003 接线；仍需 Windows/macOS 原生 UI 冒烟。重命名、Shelf、Unshelve、Resolve 不在本批生产接线范围，继续保持既有预览/禁用边界。
+4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。
 
 ### 第十批：测试整理与逐项审计
 
@@ -141,9 +152,9 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 | ID | 当前权威证据（源码位于 src/） | 审计结论 |
 | --- | --- | --- |
 | FE-01 | `app/dialogs/Dialog.tsx`；`workflow.test.tsx` 的键盘循环；`ChangelistFormDialog.test.tsx` 的初始/恢复焦点和忙碌；`ContextMenu.test.tsx` 的来源 document；第八/九批浏览器记录 | 浏览器与跨 document 证据通过；原生来源窗口待实测 |
-| FE-02 | `ChangelistFormDialog.test.tsx` 9 项：必填、Default、Jobs、草稿、重复提交、错误保留、卸载、预览声明；第一/九批页面记录 | 前端证据通过；写入适配器不在本批范围 |
-| FE-03 | `MoveFilesDialog.test.tsx` 4 项；`FileClWorkflow.test.tsx` 3 项；`fileClScope.test.ts` 2 项；第一/八/九批页面记录 | 前端证据通过，混合来源不静默缩小范围 |
-| FE-04 | `SubmitDialog.test.tsx` 7 项：摘要非预检、加载失败、整 CL 勾选、失败重检、过期、身份、防重复/连接；第二/九批页面记录 | 前端证据通过；无有效适配器不执行提交 |
+| FE-02 | `ChangelistFormDialog.test.tsx` 10 项、`DeleteChangelistDialog.test.tsx` 3 项、`backend.test.ts` Pending 契约；第十一批接线记录 | 创建/编辑 Jobs/删除拒绝与成功已接 BE-004a；原生待验 |
+| FE-03 | `MoveFilesDialog.test.tsx` 7 项；`FileClWorkflow.test.tsx` 3 项；`fileClScope.test.ts` 2 项；`PendingPage.test.ts` 局部合并 | Default 往返、固定快照、目标/连接失效、失败保留与局部刷新已覆盖 |
+| FE-04 | `SubmitDialog.test.tsx` 11 项；`useCommandDialogs.test.tsx` 生产适配器接线；后端 Submit 契约测试 | BE-003 已接；blocker/warning/unknown/过期/漂移/成功/失败/防重复已覆盖，原生待验 |
 | FE-05 | `RevisionDialog.test.tsx` 3 项；`revisionSelector.test.ts` 3 项；第三/九批页面记录 | 前端证据通过；实际 sync 未在 QA 执行 |
 | FE-06 | `renamePath.test.ts` 3 项；`workflow.test.tsx` 的路径/草稿用例；第四/九批页面记录 | 前端证据通过；未声称映射或覆盖已验证 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
@@ -151,7 +162,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 | FE-09 | `ShelfDialog.test.tsx` 的 Unshelve 目标/空来源/所有预检状态；第五/九批页面记录 | UI 状态证据通过；生产入口只显示实际可知状态，不伪造预检 |
 | FE-10 | `ResolveDialog.test.tsx` 4 项：未知版本、逐文件计划、关闭保护、键盘导航、给定版本/失败；第六/九批页面记录 | 前端证据通过；没有假解决或真实文件覆盖 |
 | FE-11 | `PreflightStatus` 状态测试；第八批 Tab 实测；第九批 40 个布局组合；语义标签/错误不只靠颜色 | 已覆盖浏览器键盘与布局；原生及真实读屏未验收 |
-| FE-12 | `useCommandDialogs.test.tsx` 2 项；菜单来源集成测试；Pending/Submitted 更多页面验证；src 原生 prompt/confirm 检查无结果；生产 audit 标记检查无结果；架构文档已更新 | 入口整合和工程整理已落地；因原生门槛未通过，不宣称整体完成 |
+| FE-12 | `useCommandDialogs.test.tsx` 3 项；工具栏/右键统一 Submit；Pending 页面按钮/菜单共用写流程；生产 audit 隔离检查 | BE-003/004a 入口整合已落地；因原生门槛未通过，不宣称整体完成 |
 
 ### 原生双平台验收步骤（待执行）
 
@@ -160,7 +171,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 1. 将 Files 和 Pending 分别弹出独立窗口；确认原页签移动且内容可见。
 2. 在独立 Files 窗口右键打开重命名、指定版本、移动到 CL、Shelf、Resolve；弹窗必须出现在触发窗口，而非主窗口。
 3. 在独立 Pending 窗口打开新建/编辑 CL、移动、提交、Shelf、Unshelve；确认完整标题、固定目标、风险说明和禁用原因。
-4. 每个弹窗检查初始字段焦点，Tab/Shift+Tab 循环、Escape、草稿放弃确认、关闭后回到原触发器；预检未接入不能确认写入。
+4. 每个弹窗检查初始字段焦点，Tab/Shift+Tab 循环、Escape、草稿放弃确认、关闭后回到原触发器；Submit 只有有效未过期 token 才能确认写入。
 5. 弹窗打开时关闭来源窗口、返回主窗口或改变连接；确认主窗口仍可操作、旧请求不占用命令通道、旧结果不覆盖新连接。
 6. 在亮/暗色、中/英文和缩窄窗口下复查正文滚动、页脚可达、主题同步；记录平台、版本、结果和截图。发现问题只修前端；需要 IPC 行为变化时单独交给后端。
 
@@ -168,6 +179,6 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 
 ### 环境阻塞确认
 
-连续三轮收尾检查均缺少原生双平台验收条件。最新只读检查：主机为 Darwin，没有运行中的 P4Deck；默认 debug/release 可执行文件及 `/Applications/P4Deck.app` 不存在；当前工具没有可用的 Windows 执行环境。浏览器、单测、构建和文档整理已完成当前记录的证据，不能补足此原生门槛。
+2026-10-08 Windows 收尾检查已重建并启动最新 debug Tauri，隔离 localhost Fixture 可用；但 Computer Use 会话无法发现任何原生应用窗口，因而不能执行或留存 Pending/Submit 原生交互证据。macOS 仍没有本批实例。浏览器、单测、构建、应用层 E2E 和文档证据不能补足此原生门槛。
 
-恢复条件：提供可运行的 macOS/Windows 桌面测试实例，或由对应平台人员按上方清单返回可核验结果。恢复后继续原生验收及发现问题的前端修复；不自动扩大为后端开发，也不把目标改为只通过浏览器验证。
+恢复条件：Computer Use 能返回并绑定 P4Deck 原生窗口，或由对应平台人员按上方清单返回可核验结果。恢复后继续原生验收及发现问题的前端修复；不自动扩大为后端开发，也不把目标改为只通过浏览器验证。
