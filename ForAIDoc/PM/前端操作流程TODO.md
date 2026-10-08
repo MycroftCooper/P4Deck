@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-08。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -20,15 +20,16 @@
 | FE-05 | 获取指定版本 | head/修订/CL/日期选择、范围预览、输入校验 | 文件版本与 CL 不混用；取消不执行；目录标明递归 | 前端证据通过；真实 sync 未验收 |
 | FE-06 | 重命名/移动文件 | 原目标、新路径、范围、覆盖/映射提示 | 路径不拼 Shell；未验证映射/覆盖时不能宣称安全；未接通不修改文件 | 前端证据通过；映射/覆盖后端校验待补 |
 | FE-07 | 批量与递归确认 | 共用目标清单、数量、父子去重提示、危险操作说明 | 目标不跟随外部选择变化；大列表虚拟化；不隐藏部分失败或取消边界 | 50,000 目标虚拟化证据通过；真实性能待验收 |
-| FE-08 | Shelf UI | 明确 CL 与文件子集、创建/更新/删除确认、状态反馈 | 不把 shelf 当本地副本；删除风险明确；未接通动作不执行 | 前端证据通过；真实 Shelf 待 BE-004 |
-| FE-09 | Unshelve UI | 来源、目标 CL、覆盖/映射/锁/Resolve 风险、预检与确认 | 无有效预检不执行；支持加载、空、阻塞、失败及过期状态 | 前端证据通过；真实预检待 BE-004 |
-| FE-10 | Resolve UI | 冲突列表、当前项、比较双方、处理方式与结果 | 不以演示内容覆盖真实文件；未知冲突/不可用工具明确说明 | 前端证据通过；真实冲突数据/执行待后端 |
+| FE-08 | Shelf UI | 明确 CL 与文件子集、创建/更新/删除确认、状态反馈 | 不把 shelf 当本地副本；删除风险明确；未接通动作不执行 | BE-004b 生产契约与 localhost 通过；原生待验收 |
+| FE-09 | Unshelve UI | 来源、目标 CL、覆盖/映射/锁/Resolve 风险、预检与确认 | 无有效预检不执行；支持加载、空、阻塞、失败及过期状态 | BE-004b 生产契约与 localhost 通过；原生待验收 |
+| FE-10 | Resolve UI | 冲突列表、当前项、比较双方、处理方式与结果 | 不以演示内容覆盖真实文件；未知冲突/不可用工具明确说明 | BE-004b 生产契约与 localhost 通过；原生待验收 |
 | FE-11 | 通用状态与可访问性 | 加载/空/错误/离线/过期；键盘、读屏、亮暗、中英、窄窗口 | 共享状态组件；禁用可解释；文本不截断关键风险信息；不只依赖颜色 | 浏览器键盘/布局通过；原生与真实读屏待验收 |
 | FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
+| FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
 
 ## 执行顺序
 
-FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
+FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～13。
 
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
@@ -159,10 +160,20 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 - Windows localhost Fixture 连续两轮通过：真实普通连接、有效 ticket、Logout 后 `authRequired`、缺失 ticket 查询、使用隔离 fixture 密码 Login、恢复 ticket 后继续完整既有 E2E。Rust 的分类契约覆盖 ticketExpired、SSL 与 externalAuthRequired；本机没有 SSL/SSO 环境，因此三者未做真实服务器实机，不能宣称通过。
 - 最新 Windows debug Tauri 已由当前源码重建并在隔离 Fixture/APPDATA 下启动。Computer Use 原生应用清单仍为空，且当前会话实际没有 `listWindows` / `computer.launch_app` 能力，无法取得合法窗口 ID；因此原生向导点击、390px 原生窗口、键盘/焦点与读屏仍记为“未验收”。实例和 Fixture 已停止。
 
+### 第十四批：BE-008 Submitted 详情与可靠 merge 分类生产接线
+
+- `SubmittedPage` 选中行后才调用 `getSubmittedChangeDetail`，Tauri 与 Browser Mock 共用窄契约；Tauri 不再传空文件或展示“尚未接入”。详情完整呈现 loading、空文件、失败/重试和成功，以及真实 path/action/revision、Jobs、describe/filelog Integration 证据与检查完整性。
+- 行切换、关键词/可靠 merge 筛选、刷新、连接代次变化和卸载均取消当前 operation ID 并递增详情 generation；返回值还复核 Change ID 和当前列表，旧响应不能回写新选中项。被查询/分类过滤掉的选中项会清除。
+- 前端只消费后端四态并增加防御：无 Integration 证据的 `reliableMerge` 不升级；非 complete 的 `normal` 不当作普通提交。疑似与 unknown 均明确可见，“隐藏可靠合并”只移除有证据的 reliable，详情升级时同步隐藏计数并安全清选。
+- `RevisionFileList` 改为窗口化渲染，使用稳定 path+revision 目标，支持 ArrowUp/ArrowDown/Home/End 的 roving focus、Enter/Space 选择和既有右键菜单；10,000 文件测试只保留窗口 DOM。390px 下 Submitted 列表与详情改为上下布局，详情和文件区独立滚动。
+- Browser Mock 的普通/reliable/文字疑似/unknown 数据明确标记为模拟，不访问真实 P4 Server 或网络；Tauri Adapter 测试确认只传 `changeId + operationId`，不回退为空 files。中英文补齐四态、检查、证据、Jobs、错误与空态文案。
+- 2026-10-09 全量 Web 为 45 个测试文件、268 项通过；`pnpm format:check`、生产构建、TypeScript/Rust Check、Rust 单测（71 通过、1 个 localhost E2E 显式 ignored）、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost E2E 默认连续两轮均通过。
+- 当前会话没有可用的原生窗口枚举/绑定能力，未执行 Windows Tauri 点击、390px 原生窗口、键盘焦点或读屏验收；该项保持“未验收”，不以 Browser Mock、组件测试或 localhost 应用层 E2E 替代。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。
-2. FE-12 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
+2. FE-12/FE-13 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
 3. 新建/编辑/删除空 Pending CL、Default↔编号移动、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。重命名执行不在本批范围。
 4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。
 
@@ -187,6 +198,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 | FE-10 | `ResolveDialog.test.tsx` 的策略过滤、blocked/unknown、逐文件计划、partial/unknown/成功、防重复与关闭保护 | BE-004b Resolve 生产契约已接；仅后端允许策略可执行，原生待验 |
 | FE-11 | `PreflightStatus` 状态测试；第八批 Tab 实测；第九批 40 个布局组合；语义标签/错误不只靠颜色 | 已覆盖浏览器键盘与布局；原生及真实读屏未验收 |
 | FE-12 | `useCommandDialogs.test.tsx` 3 项；工具栏/右键/Pending 复用同一业务对话框；`workflowRefresh.test.ts` 局部合并；生产 audit 隔离检查 | BE-003/004a/004b 入口整合已落地；因原生门槛未通过，不宣称整体完成 |
+| FE-13 | `SubmittedPage.test.tsx` 的四态/无证据防升级/stale response/隐藏计数/重试/Mock/390px；`RevisionFileList.test.tsx` 的 10,000 文件窗口化与键盘；`tauriBackend.test.ts` 的窄请求 | BE-008 生产接线已落地；仅 reliable 隐藏，疑似/unknown 保持可见；原生点击与读屏待验 |
 
 ### 原生双平台验收步骤（待执行）
 

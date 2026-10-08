@@ -57,7 +57,9 @@ const mockChanges: ChangelistSummary[] = Array.from(
         ? "reliableMerge"
         : index % 29 === 0
           ? "suspectedMerge"
-          : "normal";
+          : index % 37 === 0
+            ? "unknown"
+            : "normal";
     const status =
       index % 13 === 0 ? "shelved" : index % 7 === 0 ? "pending" : "submitted";
     return {
@@ -67,9 +69,13 @@ const mockChanges: ChangelistSummary[] = Array.from(
       description:
         mergeClassification === "reliableMerge"
           ? `Merge //atlas/dev to //atlas/main (${id})`
-          : index % 9 === 0
-            ? `Fix render pipeline cache invalidation #${id}`
-            : `Update Atlas assets and source #${id}`,
+          : mergeClassification === "suspectedMerge"
+            ? `Merge-looking description without reliable evidence (${id})`
+            : mergeClassification === "unknown"
+              ? `Inspection unavailable for submitted change (${id})`
+              : index % 9 === 0
+                ? `Fix render pipeline cache invalidation #${id}`
+                : `Update Atlas assets and source #${id}`,
       user: ["fmeng", "alice", "bruno", "buildbot"][index % 4],
       client: [
         "atlas-main-fm",
@@ -486,6 +492,8 @@ export const mockBackend: Backend = {
       };
     }
     const reliable = change.mergeClassification === "reliableMerge";
+    const unavailable = change.mergeClassification === "unknown";
+    const suspected = change.mergeClassification === "suspectedMerge";
     return {
       changeId: change.id,
       description: change.description,
@@ -511,7 +519,16 @@ export const mockBackend: Backend = {
           ]
         : [],
       mergeClassification: change.mergeClassification,
-      inspectionStatus: "complete",
+      inspectionStatus: unavailable
+        ? "unavailable"
+        : suspected
+          ? "partial"
+          : "complete",
+      message: unavailable
+        ? "Mock inspection unavailable; no real P4 Server was accessed."
+        : suspected
+          ? "Mock inspection is partial; text alone is not reliable integration evidence."
+          : undefined,
     };
   },
   async performClAction(action) {

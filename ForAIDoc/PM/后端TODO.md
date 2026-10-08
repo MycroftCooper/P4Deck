@@ -31,7 +31,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类的后端实现及 Windows localhost 应用层验收。BE-008 前端页面接线另开任务。
+当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类的后端实现及 Windows localhost 应用层验收。四项前端生产接线均已完成，原生 UI 仍待验收。
 
 BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
 
@@ -45,11 +45,11 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
 | BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收 |
 | BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
-| BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 通过，前端生产接线待后续任务 |
+| BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
 | BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
-| BE-008 | Submitted 详情与可靠合并分类 | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端接线待后续任务 |
+| BE-008 | Submitted 详情与可靠合并分类 | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收 |
 
 ## P0：下一阶段必须完成
 
@@ -180,7 +180,7 @@ pnpm test:e2e:p4d:win
 - 导出带清单的脱敏诊断包；限制文件数量和总大小。
 - 增加日志保留期、容量和清理策略配置，同时保持硬上限。
 
-### BE-008 — Submitted 详情与可靠合并分类（DONE：前端接线待后续任务）
+### BE-008 — Submitted 详情与可靠合并分类（DONE：前后端已接，原生 UI 待验收）
 
 - 懒加载 `describe`、`filelog`、integration/Stream 元数据并缓存。
 - 多信号给出 normal/reliable/suspected/unknown，保守处理不确定结果。
@@ -207,14 +207,14 @@ pnpm test:e2e:p4d:win
 BE-002 localhost p4d E2E                 DONE（Windows）
 BE-003 Submit 状态机                    DONE（Windows localhost）
 BE-004a Pending 数据与基础写            DONE（Windows localhost）
-BE-004b Shelf/Unshelve/Resolve          DONE（Windows localhost；前端待接线）
+BE-004b Shelf/Unshelve/Resolve          DONE（Windows localhost；前端已接线）
 BE-005 状态聚合与缓存                  DONE
 BE-006 操作记录、离线与 ticket 状态    DONE
 BE-007 日志策略与诊断导出              DONE
-BE-008 Submitted 详情与可靠合并分类    DONE（Windows localhost；前端待接线）
+BE-008 Submitted 详情与可靠合并分类    DONE（Windows localhost；前端已接线）
 ```
 
-BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线不在本批范围内。
+BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线已在后续批次完成，原生 UI 证据仍未取得。
 
 ## 总体推荐执行顺序
 
@@ -225,7 +225,7 @@ BE-002 localhost p4d E2E
    ↓
 BE-003 Submit 状态机
    ↓
-BE-004a Pending 基础（DONE）→ BE-004b Shelf/Unshelve/Resolve（DONE，前端待接线）
+BE-004a Pending 基础（DONE）→ BE-004b Shelf/Unshelve/Resolve（DONE，前端已接线）
    ↓
 BE-005 状态聚合与缓存
    ↓

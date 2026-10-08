@@ -65,6 +65,34 @@ describe("controlled P4 terminal", () => {
     expect(detail.integrationEvidence[0]?.source).toBe("describeAction");
     expect(detail.files[0]?.revision).toBe(3);
 
+    const suspected = listed.changes.find(
+      (change) => change.mergeClassification === "suspectedMerge",
+    )!;
+    expect(
+      await backend.getSubmittedChangeDetail({
+        changeId: suspected.id,
+        operationId: "detail-suspected",
+      }),
+    ).toMatchObject({
+      mergeClassification: "suspectedMerge",
+      inspectionStatus: "partial",
+      integrationEvidence: [],
+    });
+
+    const unknown = listed.changes.find(
+      (change) => change.mergeClassification === "unknown",
+    )!;
+    expect(
+      await backend.getSubmittedChangeDetail({
+        changeId: unknown.id,
+        operationId: "detail-unknown",
+      }),
+    ).toMatchObject({
+      mergeClassification: "unknown",
+      inspectionStatus: "unavailable",
+      integrationEvidence: [],
+    });
+
     const unavailable = await backend.getSubmittedChangeDetail({
       changeId: -1,
       operationId: "detail-missing",

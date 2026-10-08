@@ -11,11 +11,13 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  ShieldQuestion,
 } from "lucide-react";
 import type {
   ChangelistSummary,
   ChangeStatus,
   ClAction,
+  SubmittedChangeDetail,
 } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
 
@@ -38,12 +40,23 @@ interface Props {
   hideMerges: boolean;
   hiddenMergeCount: number;
   hasMore: boolean;
+  selected: number | null;
+  detail: SubmittedDetailViewState;
+  mock: boolean;
   onKeywordChange(value: string): void;
   onStatusChange(value: ChangeStatus | "all"): void;
   onHideMergesChange(value: boolean): void;
   onRefresh(): void;
   onAction(action: ClAction): void;
+  onSelectedChange(value: number | null): void;
+  onRetryDetail(): void;
 }
+
+export type SubmittedDetailViewState =
+  | { phase: "idle" }
+  | { phase: "loading"; changeId: number }
+  | { phase: "error"; changeId: number; message: string }
+  | { phase: "success"; changeId: number; value: SubmittedChangeDetail };
 
 export function ChangelistPage(props: Props) {
   const { t, changes } = props;
@@ -56,18 +69,35 @@ export function ChangelistPage(props: Props) {
     env.connectionKey,
   );
   const focus = useCommandFocus();
-  const [selected, setSelected] = useState<number | null>(null);
   const [createSource, setCreateSource] = useState<HTMLElement>();
   const virtualizer = useVirtualizer({
     count: changes.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 64,
     overscan: 10,
+    initialRect: { width: 800, height: 480 },
   });
+  const measuredRows = virtualizer.getVirtualItems();
+  const visibleRows = measuredRows.length
+    ? measuredRows
+    : Array.from({ length: Math.min(changes.length, 18) }, (_, index) => ({
+        index,
+        key: changes[index].id,
+        start: index * 64,
+        size: 64,
+        end: (index + 1) * 64,
+        lane: 0,
+      }));
   const selectedChange = useMemo(
-    () => changes.find((change) => change.id === selected),
-    [changes, selected],
+    () => changes.find((change) => change.id === props.selected),
+    [changes, props.selected],
   );
+
+  const detailValue =
+    props.detail.phase === "success" &&
+    props.detail.changeId === selectedChange?.id
+      ? props.detail.value
+      : undefined;
 
   const statusLabel = (status: ChangeStatus) =>
     status === "pending"
@@ -89,9 +119,11 @@ export function ChangelistPage(props: Props) {
               ? "C02"
               : "C03",
       () => ({
-        查看详情: action(() => setSelected(change.id)),
+        查看详情: action(() => props.onSelectedChange(change.id)),
         "展开/折叠": action(() =>
-          setSelected((value) => (value === change.id ? null : change.id)),
+          props.onSelectedChange(
+            props.selected === change.id ? null : change.id,
+          ),
         ),
         "复制 CL 编号": copy(change.id),
         "复制来源 CL 编号": copy(change.id),
@@ -114,7 +146,7 @@ export function ChangelistPage(props: Props) {
         title: `CL ${change.id}`,
         onOpen: () => {
           selection.context(change);
-          setSelected(change.id);
+          props.onSelectedChange(change.id);
         },
       },
     );
@@ -247,14 +279,16 @@ export function ChangelistPage(props: Props) {
             ) : null}
             <div
               className="virtual-spacer"
-              style={{ height: `${virtualizer.getTotalSize()}px` }}
+              style={{
+                height: `${virtualizer.getTotalSize() || changes.length * 64}px`,
+              }}
             >
-              {virtualizer.getVirtualItems().map((row) => {
+              {visibleRows.map((row) => {
                 const change = changes[row.index];
                 return (
                   <button
                     key={change.id}
-                    className={`cl-row ${selection.isSelected(change) ? "selected" : ""}`}
+                    className={`cl-row ${selection.isSelected(change) || props.selected === change.id ? "selected" : ""}`}
                     style={{
                       transform: `translateY(${row.start}px)`,
                       height: `${row.size}px`,
@@ -263,9 +297,10 @@ export function ChangelistPage(props: Props) {
                     {...changeMenu(change)}
                     onClick={(event) => {
                       selection.select(change, event);
-                      setSelected(change.id);
+                      props.onSelectedChange(change.id);
                       focus({ type: "submitted", id: change.id });
                     }}
+                    aria-expanded={props.selected === change.id}
                   >
                     <span className="cl-description">
                       <strong>{change.id}</strong>
@@ -277,9 +312,18 @@ export function ChangelistPage(props: Props) {
                         </em>
                       ) : null}
                       {change.mergeClassification === "suspectedMerge" ? (
-                        <em className="merge-tag suspected">
+                        <em
+                          className="merge-tag suspected"
+                          title={t.suspectedHint}
+                        >
                           <ShieldAlert size={11} />
                           {t.suspected}
+                        </em>
+                      ) : null}
+                      {change.mergeClassification === "unknown" ? (
+                        <em className="merge-tag unknown" title={t.unknownHint}>
+                          <ShieldQuestion size={11} />
+                          {t.unknownClassification}
                         </em>
                       ) : null}
                     </span>
@@ -357,65 +401,120 @@ export function ChangelistPage(props: Props) {
                   <dd>{selectedChange.fileCount}</dd>
                 </div>
               </dl>
-              {selectedChange.status === "submitted" && (
-                <RevisionFileList
-                  scope={String(selectedChange.id)}
-                  demo={env.runtime.mode === "mock"}
-                  files={
-                    env.runtime.mode === "mock"
-                      ? [
-                          {
-                            depotPath: "//ui-sample/render.ts",
-                            revision: 2,
-                            changeId: selectedChange.id,
-                          },
-                          {
-                            depotPath: "//ui-sample/project.json",
-                            revision: 3,
-                            changeId: selectedChange.id,
-                          },
-                        ]
-                      : []
-                  }
-                />
-              )}
-              <div className="detail-actions">
-                <button
-                  disabled
-                  title="尚未接通文件子集与目标 CL 选择 / File and target CL selection not connected"
-                >
-                  {t.move}
-                </button>
-                <button
-                  disabled
-                  title="搁置确认流程尚未接通 / Shelve confirmation workflow not connected"
-                >
-                  {t.shelve}
-                </button>
-                {selectedChange.hasShelf ? (
-                  <button
-                    disabled
-                    title="尚未接通目标 CL 与冲突预检 / Target CL and conflict preflight not connected"
-                  >
-                    {t.unshelve}
+              {props.mock ? (
+                <p className="mock-detail-notice">{t.mockDetailNotice}</p>
+              ) : null}
+              {props.detail.phase === "loading" &&
+              props.detail.changeId === selectedChange.id ? (
+                <div className="submitted-detail-state" role="status">
+                  <RefreshCw className="spin" size={16} />
+                  {t.detailLoading}
+                </div>
+              ) : null}
+              {props.detail.phase === "error" &&
+              props.detail.changeId === selectedChange.id ? (
+                <div className="submitted-detail-state error" role="alert">
+                  <strong>{t.detailError}</strong>
+                  <span>{props.detail.message}</span>
+                  <button className="secondary" onClick={props.onRetryDetail}>
+                    {t.retry}
                   </button>
-                ) : null}
-                <button
-                  disabled={
-                    selectedChange.status !== "pending" ||
-                    selectedChange.user !== env.runtime.context.user ||
-                    selectedChange.client !== env.runtime.context.client
-                  }
-                  onClick={() =>
-                    props.onAction({
-                      type: "submitValidate",
-                      changeId: selectedChange.id,
-                    })
-                  }
-                >
-                  {t.validate}
-                </button>
-              </div>
+                </div>
+              ) : null}
+              {detailValue ? (
+                <div className="submitted-detail-content">
+                  <dl>
+                    <div>
+                      <dt>{t.classification}</dt>
+                      <dd
+                        className={`classification ${detailValue.mergeClassification}`}
+                      >
+                        {detailValue.mergeClassification === "reliableMerge"
+                          ? t.merge
+                          : detailValue.mergeClassification === "suspectedMerge"
+                            ? t.suspected
+                            : detailValue.mergeClassification === "normal"
+                              ? t.normalChange
+                              : t.unknownClassification}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{t.inspection}</dt>
+                      <dd>
+                        {detailValue.inspectionStatus === "complete"
+                          ? t.inspectionComplete
+                          : detailValue.inspectionStatus === "partial"
+                            ? t.inspectionPartial
+                            : t.inspectionUnavailable}
+                      </dd>
+                    </div>
+                  </dl>
+                  {detailValue.message ? (
+                    <p className="inspection-message">{detailValue.message}</p>
+                  ) : null}
+                  <p className="classification-hint">
+                    {detailValue.mergeClassification === "reliableMerge"
+                      ? t.reliableEvidenceHint
+                      : detailValue.mergeClassification === "suspectedMerge"
+                        ? t.suspectedHint
+                        : detailValue.mergeClassification === "unknown"
+                          ? t.unknownHint
+                          : t.noIntegrationEvidence}
+                  </p>
+                  <section className="submitted-detail-section">
+                    <h3>{t.jobs}</h3>
+                    {detailValue.jobs.length ? (
+                      <ul className="submitted-jobs">
+                        {detailValue.jobs.map((job) => (
+                          <li key={job}>{job}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="detail-empty">{t.noJobs}</p>
+                    )}
+                  </section>
+                  <section className="submitted-detail-section">
+                    <h3>{t.integrationEvidence}</h3>
+                    {detailValue.integrationEvidence.length ? (
+                      <ul className="integration-evidence">
+                        {detailValue.integrationEvidence.map(
+                          (evidence, index) => (
+                            <li
+                              key={`${evidence.source}:${evidence.depotPath}:${index}`}
+                            >
+                              <strong>
+                                {evidence.source === "describeAction"
+                                  ? "describe action"
+                                  : "filelog"}
+                              </strong>
+                              <span>{evidence.depotPath}</span>
+                              <code>{evidence.relationship}</code>
+                              {evidence.relatedPath ? (
+                                <span>→ {evidence.relatedPath}</span>
+                              ) : null}
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="detail-empty">{t.noIntegrationEvidence}</p>
+                    )}
+                  </section>
+                  <section className="submitted-detail-section submitted-files-section">
+                    <h3>
+                      {t.submittedFiles} · {detailValue.files.length}
+                    </h3>
+                    <RevisionFileList
+                      scope={`${selectedChange.id}:${props.mock ? "mock" : "tauri"}`}
+                      demo={props.mock}
+                      files={detailValue.files.map((file) => ({
+                        ...file,
+                        changeId: selectedChange.id,
+                      }))}
+                    />
+                  </section>
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="detail-placeholder">

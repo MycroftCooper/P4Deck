@@ -200,7 +200,9 @@
   width: 100%;
   min-width: 0;
 }
-.revision-file-list > button {
+.revision-file-spacer > button {
+  position: absolute;
+  left: 0;
   display: flex;
   width: 100%;
   gap: 8px;
@@ -210,10 +212,10 @@
   border: 1px solid var(--border);
   text-align: left;
 }
-.revision-file-list > button.selected {
+.revision-file-spacer > button.selected {
   background: var(--selected);
 }
-.revision-file-list > button span {
+.revision-file-spacer > button span {
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -592,6 +592,10 @@ button {
 .merge-tag.suspected {
   color: var(--warning);
 }
+.merge-tag.unknown {
+  color: var(--muted);
+  background: var(--panel-3);
+}
 .status-pill.submitted {
   color: var(--success);
   background: #25885a16;
@@ -620,6 +624,7 @@ button {
 }
 .detail-panel.visible {
   display: block;
+  overflow: auto;
 }
 .detail-panel header {
   display: flex;
@@ -635,6 +640,113 @@ button {
 }
 .detail-panel dd {
   margin: 0;
+}
+.mock-detail-notice,
+.classification-hint,
+.inspection-message,
+.detail-empty,
+.preview-note {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.mock-detail-notice {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.submitted-detail-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 80px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.submitted-detail-state.error {
+  align-items: stretch;
+  flex-direction: column;
+  color: var(--danger);
+}
+.submitted-detail-state.error button {
+  align-self: flex-start;
+}
+.submitted-detail-content > dl {
+  margin-top: 4px;
+}
+.classification {
+  font-weight: 600;
+}
+.classification.reliableMerge {
+  color: var(--accent);
+}
+.classification.suspectedMerge {
+  color: var(--warning);
+}
+.classification.unknown {
+  color: var(--muted);
+}
+.submitted-detail-section {
+  min-width: 0;
+  margin-top: 16px;
+}
+.submitted-detail-section h3 {
+  margin: 0 0 7px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.submitted-jobs,
+.integration-evidence {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 10px;
+}
+.submitted-jobs li,
+.integration-evidence li {
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.integration-evidence li {
+  display: grid;
+  gap: 3px;
+}
+.integration-evidence span,
+.integration-evidence code {
+  overflow-wrap: anywhere;
+}
+.revision-file-scroll {
+  position: relative;
+  height: min(280px, 35vh);
+  min-height: 80px;
+  overflow: auto;
+  contain: strict;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.revision-file-spacer {
+  position: relative;
+  width: 100%;
+}
+.revision-file-spacer > button {
+  align-items: center;
+  border-width: 0 0 1px;
+}
+.revision-file-spacer > button span {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+}
+.revision-file-spacer > button small {
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 .detail-actions {
   display: grid;
@@ -804,6 +916,8 @@ button {
   position: absolute;
   inset: 0;
   height: auto;
+  container-type: inline-size;
+  container-name: submitted-page;
 }
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -1503,6 +1617,76 @@ button {
   }
   .statusbar {
     gap: 10px;
+  }
+}
+
+@media (max-width: 650px) {
+  .submitted-page .main-content {
+    padding: 8px;
+  }
+  .submitted-page .page-header {
+    align-items: flex-start;
+  }
+  .submitted-page .page-header p:not(.eyebrow) {
+    display: none;
+  }
+  .submitted-page .query-bar {
+    margin: 10px 0;
+  }
+  .submitted-page .search-field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .submitted-page .date-filter {
+    margin-left: 0;
+  }
+  .submitted-page .cl-layout,
+  .submitted-page .cl-layout:has(.detail-panel.visible) {
+    height: calc(100% - 105px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 42%) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .submitted-page .detail-panel {
+    padding: 12px;
+  }
+  .submitted-page .revision-file-scroll {
+    height: 180px;
+  }
+}
+
+@container submitted-page (max-width: 650px) {
+  .submitted-page .main-content {
+    padding: 8px;
+  }
+  .submitted-page .page-header {
+    align-items: flex-start;
+  }
+  .submitted-page .page-header p:not(.eyebrow) {
+    display: none;
+  }
+  .submitted-page .query-bar {
+    margin: 10px 0;
+  }
+  .submitted-page .search-field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .submitted-page .date-filter {
+    margin-left: 0;
+  }
+  .submitted-page .cl-layout,
+  .submitted-page .cl-layout:has(.detail-panel.visible) {
+    height: calc(100% - 105px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 42%) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .submitted-page .detail-panel {
+    padding: 12px;
+  }
+  .submitted-page .revision-file-scroll {
+    height: 180px;
   }
 }
 
