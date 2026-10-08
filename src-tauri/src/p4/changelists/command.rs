@@ -20,41 +20,75 @@ pub struct PendingMutationInvocation {
     pub affected_paths: Vec<String>,
 }
 
-pub fn query_invocation(query: &ClQuery) -> P4Invocation {
+pub fn query_invocation(
+    query: &ClQuery,
+    max_results: usize,
+    upper_change_id: Option<i64>,
+) -> Result<P4Invocation, String> {
+    if max_results == 0 || max_results > 1_000 {
+        return Err("submitted query batch size must be between 1 and 1000".into());
+    }
     let mut args = vec![
         "-L".into(),
         "-t".into(),
+        "-s".into(),
+        "submitted".into(),
         "-m".into(),
-        query.limit.min(20_000).to_string(),
+        max_results.to_string(),
     ];
-    if query.statuses.len() == 1 {
-        args.extend(["-s".into(), query.statuses[0].clone()]);
+    if query.users.len() == 1 {
+        args.extend(["-u".into(), validate_filter_token(&query.users[0], "user")?]);
     }
-    for user in &query.users {
-        args.extend(["-u".into(), user.clone()]);
+    if query.clients.len() == 1 {
+        args.extend([
+            "-c".into(),
+            validate_filter_token(&query.clients[0], "client")?,
+        ]);
     }
-    for client in &query.clients {
-        args.extend(["-c".into(), client.clone()]);
-    }
-    let scope = query
-        .path
-        .clone()
-        .or(query
-            .stream
-            .clone()
-            .map(|stream| format!("{}/...", stream.trim_end_matches('/'))))
-        .unwrap_or_else(|| "//...".into());
-    args.push(format!(
-        "{}@{},{}",
-        scope,
-        p4_date(&query.from),
-        p4_date(&query.to)
-    ));
-    P4Invocation {
+    let scope = query_scope(query)?;
+    let from = p4_date(&query.from)?;
+    let upper = match upper_change_id {
+        Some(change_id) if change_id > 0 => format!("@{change_id}"),
+        Some(_) => return Err("cursor change boundary must be positive".into()),
+        None => p4_date(&query.to)?,
+    };
+    args.push(format!("{scope}@{from},{upper}"));
+    Ok(P4Invocation {
         command: "changes",
         args,
         input: None,
+    })
+}
+
+pub fn query_describe_invocation(change_ids: &[i64]) -> Result<P4Invocation, String> {
+    if change_ids.is_empty() || change_ids.len() > 100 {
+        return Err("submitted metadata batches must contain 1 to 100 changelists".into());
     }
+    let mut args = vec!["-s".into(), "-m".into(), "64".into()];
+    for change_id in change_ids {
+        ensure_numbered_change(*change_id)?;
+        args.push(change_id.to_string());
+    }
+    Ok(P4Invocation {
+        command: "describe",
+        args,
+        input: None,
+    })
+}
+
+pub fn job_fixes_invocation(job: &str, max_results: usize) -> Result<P4Invocation, String> {
+    if max_results == 0 || max_results > 5_001 {
+        return Err("job fix query limit must be between 1 and 5001".into());
+    }
+    let job = validate_jobs(&[job.to_owned()])?
+        .into_iter()
+        .next()
+        .ok_or("a job ID is required")?;
+    Ok(P4Invocation {
+        command: "fixes",
+        args: vec!["-j".into(), job, "-m".into(), max_results.to_string()],
+        input: None,
+    })
 }
 
 pub fn action_invocation(action: ClAction) -> Result<ActionInvocation, String> {
@@ -409,19 +443,139 @@ fn ensure_numbered_change(change_id: i64) -> Result<(), String> {
     Ok(())
 }
 
-fn p4_date(value: &str) -> String {
+fn query_scope(query: &ClQuery) -> Result<String, String> {
+    let depot_path = query
+        .depot_path
+        .as_deref()
+        .map(validate_query_path)
+        .transpose()?;
+    let stream = query.stream.as_deref().map(validate_stream).transpose()?;
+    match (depot_path, stream) {
+        (Some(path), Some(stream)) => {
+            let prefix = format!("{}/", stream.trim_end_matches('/'));
+            if path != stream && !path.starts_with(&prefix) {
+                return Err("depot path must be inside the selected stream".into());
+            }
+            Ok(path)
+        }
+        (Some(path), None) => Ok(path),
+        (None, Some(stream)) => Ok(format!("{}/...", stream.trim_end_matches('/'))),
+        (None, None) => Ok("//...".into()),
+    }
+}
+
+fn validate_query_path(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    if !value.starts_with("//")
+        || value.len() > 4096
+        || value.contains(['\r', '\n', '\0', '@', '#'])
+    {
+        return Err("invalid submitted depot path".into());
+    }
+    Ok(value.into())
+}
+
+fn validate_stream(value: &str) -> Result<String, String> {
+    let value = value.trim().trim_end_matches('/');
+    if !value.starts_with("//")
+        || value.len() > 1024
+        || value.contains(['\r', '\n', '\0', '@', '#'])
+        || value.contains('*')
+    {
+        return Err("invalid submitted stream".into());
+    }
+    Ok(value.into())
+}
+
+fn validate_filter_token(value: &str, name: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 1024
+        || value.chars().any(char::is_control)
+        || value.chars().any(char::is_whitespace)
+    {
+        return Err(format!("invalid submitted {name} filter"));
+    }
+    Ok(value.into())
+}
+
+fn p4_date(value: &str) -> Result<String, String> {
     DateTime::parse_from_rfc3339(value)
         .map(|date| date.format("%Y/%m/%d:%H:%M:%S").to_string())
-        .unwrap_or_else(|_| "1970/01/01:00:00:00".into())
+        .map_err(|_| "submitted query dates must be RFC 3339 timestamps".into())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn submitted_query() -> ClQuery {
+        ClQuery {
+            operation_id: "query-1".into(),
+            request_generation: 1,
+            keyword: String::new(),
+            users: vec!["张三".into()],
+            clients: vec!["工作区".into()],
+            depot_path: Some("//depot/项目/...".into()),
+            stream: Some("//depot/项目".into()),
+            from: "2026-10-01T00:00:00+08:00".into(),
+            to: "2026-10-09T23:59:59+08:00".into(),
+            jobs: vec!["JOB-1".into()],
+            has_job: Some(true),
+            merge_classifications: Vec::new(),
+            hide_reliable_merges: false,
+            page_size: 50,
+            cursor: None,
+        }
+    }
+
     #[test]
     fn formats_query_dates_for_p4() {
-        assert_eq!(p4_date("2026-08-03T10:11:12Z"), "2026/08/03:10:11:12");
+        assert_eq!(
+            p4_date("2026-08-03T10:11:12Z").unwrap(),
+            "2026/08/03:10:11:12"
+        );
+        assert!(p4_date("not-a-date").is_err());
+    }
+
+    #[test]
+    fn submitted_query_uses_argument_arrays_and_a_change_boundary() {
+        let invocation = query_invocation(&submitted_query(), 100, Some(42)).unwrap();
+        assert_eq!(invocation.command, "changes");
+        assert_eq!(
+            invocation.args,
+            [
+                "-L",
+                "-t",
+                "-s",
+                "submitted",
+                "-m",
+                "100",
+                "-u",
+                "张三",
+                "-c",
+                "工作区",
+                "//depot/项目/...@2026/10/01:00:00:00,@42",
+            ]
+        );
+        assert_eq!(
+            job_fixes_invocation("JOB-1", 5001).unwrap().args,
+            ["-j", "JOB-1", "-m", "5001"]
+        );
+    }
+
+    #[test]
+    fn submitted_query_rejects_path_revision_and_invalid_ranges() {
+        let mut query = submitted_query();
+        query.depot_path = Some("//depot/main/...@evil".into());
+        assert!(query_invocation(&query, 100, None).is_err());
+        query.depot_path = Some("//other/...".into());
+        assert!(query_invocation(&query, 100, None).is_err());
+        query.depot_path = Some("//depot/项目/...".into());
+        query.from = "invalid".into();
+        assert!(query_invocation(&query, 100, None).is_err());
+        assert!(query_invocation(&submitted_query(), 0, None).is_err());
+        assert!(job_fixes_invocation("JOB-1\n-m 999", 1).is_err());
     }
 
     #[test]

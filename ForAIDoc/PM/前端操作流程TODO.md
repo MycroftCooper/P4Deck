@@ -170,6 +170,13 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～13。
 - 2026-10-09 全量 Web 为 45 个测试文件、268 项通过；`pnpm format:check`、生产构建、TypeScript/Rust Check、Rust 单测（71 通过、1 个 localhost E2E 显式 ignored）、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost E2E 默认连续两轮均通过。
 - 当前会话没有可用的原生窗口枚举/绑定能力，未执行 Windows Tauri 点击、390px 原生窗口、键盘焦点或读屏验收；该项保持“未验收”，不以 Browser Mock、组件测试或 localhost 应用层 E2E 替代。
 
+### 第十五批：BE-008Q Submitted 组合查询前端待接线
+
+- Rust/TypeScript/Tauri/Browser Mock 已统一 `ClQuery`：关键词、用户、Client、depot path、Stream、起止时间、Jobs、hasJob、merge 四态、仅隐藏 reliable、1～500 page size 与 opaque cursor；结果统一为 `items/nextCursor/hasMore/stats`。
+- 当前 `SubmittedPage` 只迁移到新契约并为列表请求分配/取消 operation ID，仍只发送关键词、固定最近 30 天、Mock stream 与隐藏 reliable，且只显示首个 200 条页面；本批没有新增完整筛选 UI。
+- 前端下一步必须接入用户/Client/path/Stream/time/Job/四态控件、`nextCursor` 的继续加载/重试/条件切换淘汰，以及保存过滤器；不得解析或改写 opaque cursor，也不得把 `unknown`/`suspectedMerge` 当作 reliable 隐藏。
+- Browser Mock/Adapter 契约覆盖组合过滤、多页无重复、非法/错配 cursor、Unicode 透传与连接代次失效；Windows localhost 两轮后端证据不能替代原生筛选 UI 验收。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。

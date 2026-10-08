@@ -561,7 +561,7 @@ mod tests {
             root,
         )
         .await?;
-        exercise_submitted_change_details(runner, changelists, context).await?;
+        exercise_submitted_change_details(runner, changelists, contexts, context).await?;
         exercise_submit_blockers(runner, changelists, submit, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
         Ok(())
@@ -1159,6 +1159,7 @@ mod tests {
     async fn exercise_submitted_change_details(
         runner: &Arc<P4Runner>,
         changelists: &ChangelistService,
+        contexts: &ContextStore,
         context: &P4Context,
     ) -> Result<(), String> {
         let ordinary_id =
@@ -1224,25 +1225,27 @@ mod tests {
             format!("real branch submission lacked reliable evidence: {integrated:?}"),
         )?;
         let query = |hide_reliable_merges| crate::domain::ClQuery {
+            operation_id: format!("be008-submitted-query-{hide_reliable_merges}"),
             request_generation: 8,
             keyword: String::new(),
-            statuses: vec!["submitted".into()],
             users: Vec::new(),
             clients: Vec::new(),
-            path: Some("//depot/p4deck-submit-e2e/...".into()),
+            depot_path: Some("//depot/p4deck-submit-e2e/...".into()),
             stream: None,
             from: "2000-01-01T00:00:00Z".into(),
             to: "2100-01-01T00:00:00Z".into(),
-            has_shelf: None,
+            jobs: Vec::new(),
             has_job: None,
+            merge_classifications: Vec::new(),
             hide_reliable_merges,
-            limit: 100,
+            page_size: 100,
+            cursor: None,
         };
         let upgraded = changelists
             .query(context.clone(), query(false), None)
             .await?;
         ensure(
-            upgraded.changes.iter().any(|change| {
+            upgraded.items.iter().any(|change| {
                 change.id == branch_id
                     && change.merge_classification
                         == crate::domain::MergeClassification::ReliableMerge
@@ -1253,9 +1256,201 @@ mod tests {
             .query(context.clone(), query(true), None)
             .await?;
         ensure(
-            hidden.hidden_merge_count >= 1
-                && hidden.changes.iter().all(|change| change.id != branch_id),
+            hidden.stats.hidden_reliable_merge_count >= 1
+                && hidden.items.iter().all(|change| change.id != branch_id),
             format!("reliably classified branch was not hidden: {hidden:?}"),
+        )?;
+
+        let mut first_page_query = query(false);
+        first_page_query.operation_id = "be009-page-1".into();
+        first_page_query.request_generation = 90;
+        first_page_query.page_size = 1;
+        let first_page = changelists
+            .query(context.clone(), first_page_query.clone(), None)
+            .await?;
+        ensure(
+            first_page.items.len() == 1 && first_page.has_more && first_page.next_cursor.is_some(),
+            format!("first submitted page was not cursor-paginated: {first_page:?}"),
+        )?;
+        let first_id = first_page.items[0].id;
+
+        let local = PathBuf::from(context.cwd.as_deref().ok_or("fixture cwd is missing")?)
+            .join("p4deck-submit-e2e")
+            .join("success.txt");
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        std::fs::write(&local, b"BE-009 stable cursor insertion\n")
+            .map_err(|error| error.to_string())?;
+        let job_spec = format!(
+            "Job: {E2E_JOB}\nStatus: open\nUser: {FIXTURE_USER}\nDescription:\n\tP4Deck submitted query E2E job\n"
+        );
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-i".into()],
+            Some(job_spec),
+            OutputMode::Text,
+        )
+        .await?;
+        let created = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be009-create-job-submit".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "BE-009 indexed job combined query".into(),
+                        jobs: vec![E2E_JOB.into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        let inserted_id = created
+            .created_change_id
+            .ok_or("BE-009 job changelist was not created")?;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be009-move-job-submit".into()),
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: inserted_id,
+                        depot_paths: vec!["//depot/p4deck-submit-e2e/success.txt".into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), inserted_id.to_string()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+
+        let mut second_page_query = first_page_query.clone();
+        second_page_query.operation_id = "be009-page-2".into();
+        second_page_query.request_generation = 91;
+        second_page_query.cursor = first_page.next_cursor.clone();
+        let second_page = changelists
+            .query(context.clone(), second_page_query.clone(), None)
+            .await?;
+        ensure(
+            second_page.items.len() == 1
+                && second_page.items[0].id != first_id
+                && second_page.items[0].id != inserted_id
+                && second_page.items[0].id < first_id,
+            format!("cursor page repeated or admitted a newly inserted change: {second_page:?}"),
+        )?;
+
+        let mut combined = query(false);
+        combined.operation_id = "be009-combined".into();
+        combined.request_generation = 92;
+        combined.keyword = "indexed job combined query".into();
+        combined.users = vec![FIXTURE_USER.into()];
+        combined.clients = vec![E2E_CLIENT.into()];
+        combined.depot_path = Some("//depot/p4deck-submit-e2e/...".into());
+        combined.stream = Some("//depot/p4deck-submit-e2e".into());
+        combined.jobs = vec![E2E_JOB.into()];
+        combined.has_job = Some(true);
+        combined.merge_classifications = vec![crate::domain::MergeClassification::Unknown];
+        combined.page_size = 10;
+        let combined_result = changelists.query(context.clone(), combined, None).await?;
+        ensure(
+            combined_result.items.iter().any(|change| {
+                change.id == inserted_id
+                    && change.jobs.contains(&E2E_JOB.to_owned())
+                    && change.user == FIXTURE_USER
+                    && change.client == E2E_CLIENT
+            }),
+            format!("combined submitted filters missed the indexed job: {combined_result:?}"),
+        )?;
+        checked_run(
+            runner,
+            context,
+            "fix",
+            vec![
+                "-d".into(),
+                "-c".into(),
+                inserted_id.to_string(),
+                E2E_JOB.into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-d".into(), E2E_JOB.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let mut invalid = second_page_query.clone();
+        invalid.operation_id = "be009-invalid-cursor".into();
+        invalid.cursor = Some("not-a-cursor".into());
+        ensure(
+            changelists
+                .query(context.clone(), invalid, None)
+                .await
+                .is_err(),
+            "an invalid submitted cursor was accepted",
+        )?;
+        let mut mismatched = second_page_query.clone();
+        mismatched.operation_id = "be009-mismatched-cursor".into();
+        mismatched.keyword = "different query".into();
+        ensure(
+            changelists
+                .query(context.clone(), mismatched, None)
+                .await
+                .is_err(),
+            "a submitted cursor was accepted for different filters",
+        )?;
+
+        let mut cancellation = query(false);
+        cancellation.operation_id = "be009-cancel-query".into();
+        cancellation.request_generation = 93;
+        cancellation.has_job = Some(false);
+        cancellation.page_size = 500;
+        let cancel_id = cancellation.operation_id.clone();
+        let cancel = async {
+            tokio::task::yield_now().await;
+            runner.cancel(&cancel_id);
+        };
+        let (cancelled, ()) = tokio::join!(
+            changelists.query(context.clone(), cancellation, None),
+            cancel
+        );
+        ensure(
+            cancelled.is_err(),
+            "submitted query cancellation was ignored",
+        )?;
+
+        let mut switched = context.clone();
+        switched.client = "p4deck-fixture-cursor-generation".into();
+        contexts.save(switched)?;
+        contexts.save(context.clone())?;
+        second_page_query.operation_id = "be009-old-generation-cursor".into();
+        ensure(
+            changelists
+                .query(context.clone(), second_page_query, None)
+                .await
+                .is_err(),
+            "a submitted cursor survived a connection generation change",
         )
     }
 

@@ -253,22 +253,24 @@ pub struct DiagnosticExportResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClQuery {
+    pub operation_id: String,
     pub request_generation: u64,
     pub keyword: String,
-    pub statuses: Vec<String>,
     pub users: Vec<String>,
     pub clients: Vec<String>,
-    pub path: Option<String>,
+    pub depot_path: Option<String>,
     pub stream: Option<String>,
     pub from: String,
     pub to: String,
-    pub has_shelf: Option<bool>,
+    pub jobs: Vec<String>,
     pub has_job: Option<bool>,
+    pub merge_classifications: Vec<MergeClassification>,
     pub hide_reliable_merges: bool,
-    pub limit: usize,
+    pub page_size: usize,
+    pub cursor: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MergeClassification {
     Normal,
@@ -353,10 +355,19 @@ pub struct SubmittedChangeDetail {
 #[serde(rename_all = "camelCase")]
 pub struct ClQueryResult {
     pub request_generation: u64,
-    pub changes: Vec<ChangelistSummary>,
-    pub hidden_merge_count: usize,
+    pub items: Vec<ChangelistSummary>,
     pub has_more: bool,
     pub next_cursor: Option<String>,
+    pub stats: ClQueryStats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ClQueryStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub hidden_reliable_merge_count: usize,
+    pub truncated_by_safety_limit: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

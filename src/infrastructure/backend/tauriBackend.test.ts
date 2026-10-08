@@ -18,3 +18,28 @@ it("passes only the narrow submitted-detail request through the Tauri adapter", 
   );
   expect(JSON.stringify(invoke.mock.calls[0])).not.toContain('"files"');
 });
+
+it("passes the typed submitted query and opaque cursor through unchanged", async () => {
+  const query = {
+    operationId: "submitted-query-42",
+    requestGeneration: 9,
+    keyword: "修复",
+    users: ["alice"],
+    clients: ["unicode-client"],
+    depotPath: "//depot/项目/...",
+    stream: "//depot/项目",
+    from: "2026-10-01T00:00:00+08:00",
+    to: "2026-10-09T23:59:59+08:00",
+    jobs: ["JOB-42"],
+    hasJob: true,
+    mergeClassifications: ["unknown" as const, "suspectedMerge" as const],
+    hideReliableMerges: true,
+    pageSize: 50,
+    cursor: "opaque-v1-cursor",
+  };
+  invoke.mockResolvedValue({ items: [], hasMore: false });
+  await tauriBackend.queryChangelists(query);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("query_changelists", {
+    query,
+  });
+});

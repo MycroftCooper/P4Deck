@@ -6,6 +6,14 @@ use crate::domain::{
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
+#[derive(Debug, Clone)]
+pub struct SubmittedQueryMetadata {
+    pub jobs: Vec<String>,
+    pub file_count: usize,
+    pub merge_classification: MergeClassification,
+    pub search_text: String,
+}
+
 pub fn parse_change_events(events: &[OperationEvent]) -> Vec<ChangelistSummary> {
     events
         .iter()
@@ -14,6 +22,56 @@ pub fn parse_change_events(events: &[OperationEvent]) -> Vec<ChangelistSummary> 
         .filter(Value::is_object)
         .filter(|value| value.get("code").and_then(Value::as_str) != Some("error"))
         .filter_map(parse_change)
+        .collect()
+}
+
+pub fn parse_query_metadata(
+    events: &[OperationEvent],
+) -> std::collections::HashMap<i64, SubmittedQueryMetadata> {
+    json_values(events)
+        .into_iter()
+        .filter_map(|value| {
+            let change_id = number_option(&value, "change")?;
+            let description = text(&value, "desc");
+            let mut file_count = 0;
+            let mut has_integration_action = false;
+            let mut depot_paths = Vec::new();
+            for index in 0.. {
+                let Some(depot_path) = value
+                    .get(format!("depotFile{index}"))
+                    .and_then(Value::as_str)
+                else {
+                    break;
+                };
+                file_count += 1;
+                depot_paths.push(depot_path);
+                has_integration_action |=
+                    is_integration_action(&text(&value, &format!("action{index}")));
+            }
+            let jobs = indexed_text(&value, "job");
+            Some((
+                change_id,
+                SubmittedQueryMetadata {
+                    search_text: format!("{} {}", jobs.join(" "), depot_paths.join(" ")),
+                    jobs,
+                    file_count,
+                    merge_classification: if has_integration_action {
+                        MergeClassification::ReliableMerge
+                    } else {
+                        classify_summary(&description)
+                    },
+                },
+            ))
+        })
+        .collect()
+}
+
+pub fn parse_fix_change_ids(events: &[OperationEvent]) -> Vec<i64> {
+    json_values(events)
+        .iter()
+        .filter_map(|value| {
+            number_option(value, "Change").or_else(|| number_option(value, "change"))
+        })
         .collect()
 }
 

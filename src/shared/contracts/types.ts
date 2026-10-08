@@ -205,19 +205,21 @@ export interface LogEntry {
 }
 
 export interface ClQuery {
+  operationId: string;
   requestGeneration: number;
   keyword: string;
-  statuses: ChangeStatus[];
   users: string[];
   clients: string[];
-  path?: string;
+  depotPath?: string;
   stream?: string;
   from: string;
   to: string;
-  hasShelf?: boolean;
+  jobs: string[];
   hasJob?: boolean;
+  mergeClassifications: MergeClassification[];
   hideReliableMerges: boolean;
-  limit: number;
+  pageSize: number;
+  cursor?: string;
 }
 
 export interface ChangelistSummary {
@@ -269,10 +271,15 @@ export interface SubmittedChangeDetail {
 
 export interface ClQueryResult {
   requestGeneration: number;
-  changes: ChangelistSummary[];
-  hiddenMergeCount: number;
+  items: ChangelistSummary[];
   hasMore: boolean;
   nextCursor?: string;
+  stats: {
+    scannedCount: number;
+    matchedCount: number;
+    hiddenReliableMergeCount: number;
+    truncatedBySafetyLimit: boolean;
+  };
 }
 
 export type ClAction =

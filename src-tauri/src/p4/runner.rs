@@ -632,6 +632,7 @@ fn is_read_only(command: &str) -> bool {
             | "dirs"
             | "filelog"
             | "files"
+            | "fixes"
             | "fstat"
             | "have"
             | "help"

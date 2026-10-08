@@ -37,6 +37,92 @@ struct SubmittedDetailCache {
     max_entries: usize,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct SubmittedQueryCacheKey {
+    connection_fingerprint: String,
+    generation: u64,
+    request_generation: u64,
+    query_fingerprint: String,
+    cursor: Option<String>,
+}
+
+#[derive(Clone)]
+struct SubmittedQueryCacheEntry {
+    result: ClQueryResult,
+    inserted_ms: u64,
+    last_access: u64,
+}
+
+struct SubmittedQueryCacheState {
+    entries: HashMap<SubmittedQueryCacheKey, SubmittedQueryCacheEntry>,
+    access_clock: u64,
+}
+
+struct SubmittedQueryCache {
+    state: parking_lot::Mutex<SubmittedQueryCacheState>,
+    ttl_ms: u64,
+    max_entries: usize,
+}
+
+impl SubmittedQueryCache {
+    fn new(ttl_ms: u64, max_entries: usize) -> Self {
+        Self {
+            state: parking_lot::Mutex::new(SubmittedQueryCacheState {
+                entries: HashMap::new(),
+                access_clock: 0,
+            }),
+            ttl_ms: ttl_ms.max(1),
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    fn get(&self, key: &SubmittedQueryCacheKey, now_ms: u64) -> Option<ClQueryResult> {
+        let mut state = self.state.lock();
+        let expired = state
+            .entries
+            .get(key)
+            .is_some_and(|entry| now_ms.saturating_sub(entry.inserted_ms) > self.ttl_ms);
+        if expired {
+            state.entries.remove(key);
+            return None;
+        }
+        state.access_clock = state.access_clock.saturating_add(1);
+        let access = state.access_clock;
+        let entry = state.entries.get_mut(key)?;
+        entry.last_access = access;
+        Some(entry.result.clone())
+    }
+
+    fn insert(&self, key: SubmittedQueryCacheKey, result: ClQueryResult, now_ms: u64) {
+        let mut state = self.state.lock();
+        state.access_clock = state.access_clock.saturating_add(1);
+        let access = state.access_clock;
+        state.entries.insert(
+            key,
+            SubmittedQueryCacheEntry {
+                result,
+                inserted_ms: now_ms,
+                last_access: access,
+            },
+        );
+        while state.entries.len() > self.max_entries {
+            let Some(oldest) = state
+                .entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_access)
+                .map(|(key, _)| key.clone())
+            else {
+                break;
+            };
+            state.entries.remove(&oldest);
+        }
+    }
+
+    fn clear(&self) {
+        self.state.lock().entries.clear();
+    }
+}
+
 impl SubmittedDetailCache {
     fn new(ttl_ms: u64, max_entries: usize) -> Self {
         Self {
@@ -90,6 +176,30 @@ impl SubmittedDetailCache {
             state.entries.remove(&oldest);
         }
     }
+
+    fn snapshot_for(
+        &self,
+        context: &P4Context,
+        generation: u64,
+        now_ms: u64,
+    ) -> HashMap<i64, SubmittedChangeDetail> {
+        let identity = submitted_cache_key(context, generation, 0);
+        let mut state = self.state.lock();
+        state
+            .entries
+            .retain(|_, entry| now_ms.saturating_sub(entry.inserted_ms) <= self.ttl_ms);
+        state
+            .entries
+            .iter()
+            .filter(|(key, _)| {
+                key.server == identity.server
+                    && key.user == identity.user
+                    && key.client == identity.client
+                    && key.generation == identity.generation
+            })
+            .map(|(key, entry)| (key.change_id, entry.detail.clone()))
+            .collect()
+    }
 }
 
 pub struct ChangelistService {
@@ -97,6 +207,7 @@ pub struct ChangelistService {
     status_cache: Arc<StatusCache>,
     contexts: Arc<ContextStore>,
     submitted_details: SubmittedDetailCache,
+    submitted_queries: SubmittedQueryCache,
 }
 
 impl ChangelistService {
@@ -110,6 +221,7 @@ impl ChangelistService {
             status_cache,
             contexts,
             submitted_details: SubmittedDetailCache::new(60_000, 256),
+            submitted_queries: SubmittedQueryCache::new(15_000, 128),
         }
     }
 
@@ -119,29 +231,59 @@ impl ChangelistService {
         query: ClQuery,
         app: Option<&AppHandle>,
     ) -> Result<ClQueryResult, String> {
-        let hide_reliable_merges = query.hide_reliable_merges;
-        let mut result = self.repository.query(context.clone(), query, app).await?;
+        let query = crate::p4::changelists::normalize_query(query)?;
         let (current, generation) = self.contexts.snapshot();
-        if same_connection(&current, &context) {
-            let now = now_ms();
-            for change in &mut result.changes {
-                if let Some(detail) = self
-                    .submitted_details
-                    .get(&submitted_cache_key(&context, generation, change.id), now)
-                {
-                    change.file_count = detail.files.len();
-                    change.jobs = detail.jobs;
-                    change.merge_classification = detail.merge_classification;
-                }
-            }
-            if hide_reliable_merges {
-                let before = result.changes.len();
-                result.changes.retain(|change| {
-                    change.merge_classification != MergeClassification::ReliableMerge
-                });
-                result.hidden_merge_count += before - result.changes.len();
+        if !same_connection(&current, &context) {
+            return Err("The connection changed before the submitted query started.".into());
+        }
+        let query_fingerprint = crate::p4::changelists::semantic_query_fingerprint(&query)?;
+        let connection_fingerprint = crate::p4::query::fingerprint(&current)?;
+        let context = current;
+        let key = SubmittedQueryCacheKey {
+            connection_fingerprint,
+            generation,
+            request_generation: query.request_generation,
+            query_fingerprint,
+            cursor: query.cursor.clone(),
+        };
+        if let Some(mut cached) = self.submitted_queries.get(&key, now_ms()) {
+            cached.request_generation = query.request_generation;
+            return Ok(cached);
+        }
+        let hide_reliable_merges = query.hide_reliable_merges;
+        let request_generation = query.request_generation;
+        let known_details = self
+            .submitted_details
+            .snapshot_for(&context, generation, now_ms());
+        let mut result = self
+            .repository
+            .query(context.clone(), query, generation, &known_details, app)
+            .await?;
+        let (after, after_generation) = self.contexts.snapshot();
+        if after_generation != generation || !same_connection(&after, &context) {
+            return Err("The connection changed while the submitted query was running.".into());
+        }
+        let now = now_ms();
+        for change in &mut result.items {
+            if let Some(detail) = self
+                .submitted_details
+                .get(&submitted_cache_key(&context, generation, change.id), now)
+            {
+                change.file_count = detail.files.len();
+                change.jobs = detail.jobs;
+                change.merge_classification = detail.merge_classification;
             }
         }
+        if hide_reliable_merges {
+            let before = result.items.len();
+            result
+                .items
+                .retain(|change| change.merge_classification != MergeClassification::ReliableMerge);
+            result.stats.hidden_reliable_merge_count += before - result.items.len();
+            result.stats.matched_count = result.items.len();
+        }
+        result.request_generation = request_generation;
+        self.submitted_queries.insert(key, result.clone(), now_ms());
         Ok(result)
     }
 
@@ -184,6 +326,7 @@ impl ChangelistService {
             );
         }
         self.submitted_details.insert(key, detail.clone(), now_ms());
+        self.submitted_queries.clear();
         detail
     }
 
@@ -445,6 +588,32 @@ mod tests {
         }
     }
 
+    fn submitted_page(id: i64) -> ClQueryResult {
+        ClQueryResult {
+            request_generation: 1,
+            items: vec![ChangelistSummary {
+                id,
+                description: "cached".into(),
+                user: "u".into(),
+                client: "c".into(),
+                status: "submitted".into(),
+                time: "2026-10-08T00:00:00Z".into(),
+                file_count: 0,
+                has_shelf: false,
+                jobs: Vec::new(),
+                stream: None,
+                merge_classification: MergeClassification::Unknown,
+            }],
+            has_more: false,
+            next_cursor: None,
+            stats: ClQueryStats {
+                scanned_count: 1,
+                matched_count: 1,
+                ..Default::default()
+            },
+        }
+    }
+
     #[test]
     fn move_tracks_source_and_target_and_delete_requires_empty() {
         let changes = [change(0, &["//depot/a"], &[]), change(7, &[], &[])];
@@ -500,5 +669,29 @@ mod tests {
             failed.inspection_status,
             SubmittedInspectionStatus::Unavailable
         );
+    }
+
+    #[test]
+    fn submitted_query_cache_isolates_cursor_request_and_connection_generation() {
+        let cache = SubmittedQueryCache::new(10, 2);
+        let key = SubmittedQueryCacheKey {
+            connection_fingerprint: "connection-a".into(),
+            generation: 3,
+            request_generation: 9,
+            query_fingerprint: "query-a".into(),
+            cursor: Some("cursor-a".into()),
+        };
+        cache.insert(key.clone(), submitted_page(42), 1);
+        assert_eq!(cache.get(&key, 2).unwrap().items[0].id, 42);
+        let mut changed = key.clone();
+        changed.generation += 1;
+        assert!(cache.get(&changed, 2).is_none());
+        changed = key.clone();
+        changed.cursor = Some("cursor-b".into());
+        assert!(cache.get(&changed, 2).is_none());
+        changed = key.clone();
+        changed.request_generation += 1;
+        assert!(cache.get(&changed, 2).is_none());
+        assert!(cache.get(&key, 12).is_none());
     }
 }

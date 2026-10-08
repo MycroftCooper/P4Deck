@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { backend, tokenize } from ".";
+import type { ClQuery } from "../../shared/contracts/types";
+
+function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
+  return {
+    operationId: crypto.randomUUID(),
+    requestGeneration: 1,
+    keyword: "",
+    users: [],
+    clients: [],
+    from: new Date(0).toISOString(),
+    to: new Date(Date.now() + 86_400_000).toISOString(),
+    jobs: [],
+    mergeClassifications: [],
+    hideReliableMerges: false,
+    pageSize: 25,
+    ...overrides,
+  };
+}
 
 describe("controlled P4 terminal", () => {
   it("previews mock text and images and rejects unsupported files", async () => {
@@ -25,35 +43,94 @@ describe("controlled P4 terminal", () => {
 
   it("returns generation-tagged virtual-list data", async () => {
     const result = await backend.queryChangelists({
+      operationId: "submitted-page-1",
       requestGeneration: 7,
       keyword: "",
-      statuses: [],
       users: [],
       clients: [],
       stream: "//atlas/main",
       from: new Date(Date.now() - 31 * 86_400_000).toISOString(),
       to: new Date().toISOString(),
+      jobs: [],
+      mergeClassifications: [],
       hideReliableMerges: false,
-      limit: 100,
+      pageSize: 100,
     });
     expect(result.requestGeneration).toBe(7);
-    expect(result.changes.length).toBeGreaterThan(0);
-    expect(result.changes.length).toBeLessThanOrEqual(100);
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.length).toBeLessThanOrEqual(100);
+  });
+
+  it("paginates submitted queries with bound cursors and combined filters", async () => {
+    const base = submittedQuery({ pageSize: 7, requestGeneration: 70 });
+    const first = await backend.queryChangelists(base);
+    expect(first.items).toHaveLength(7);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeTruthy();
+    const second = await backend.queryChangelists({
+      ...base,
+      operationId: crypto.randomUUID(),
+      requestGeneration: 71,
+      cursor: first.nextCursor,
+    });
+    expect(second.items).toHaveLength(7);
+    expect(second.items[0].id).toBeLessThan(first.items.at(-1)!.id);
+    expect(
+      second.items.some((item) =>
+        first.items.some((firstItem) => firstItem.id === item.id),
+      ),
+    ).toBe(false);
+
+    const combined = await backend.queryChangelists(
+      submittedQuery({
+        keyword: "merge",
+        users: ["buildbot"],
+        clients: ["atlas-main-bruno"],
+        stream: "//atlas/main",
+        jobs: ["ATLAS-1187"],
+        hasJob: true,
+        mergeClassifications: ["reliableMerge"],
+      }),
+    );
+    expect(combined.items.map((item) => item.id)).toContain(31655);
+
+    await expect(
+      backend.queryChangelists({
+        ...base,
+        keyword: "changed",
+        cursor: first.nextCursor,
+      }),
+    ).rejects.toThrow("does not match");
+    await expect(
+      backend.queryChangelists(submittedQuery({ cursor: "not-a-cursor" })),
+    ).rejects.toThrow("does not match");
+
+    const runtime = await backend.runtimeInfo();
+    await backend.saveConnection(runtime.context);
+    await expect(
+      backend.queryChangelists({
+        ...base,
+        operationId: crypto.randomUUID(),
+        cursor: first.nextCursor,
+      }),
+    ).rejects.toThrow("does not match");
   });
 
   it("implements the narrow submitted detail contract", async () => {
     const listed = await backend.queryChangelists({
+      operationId: "submitted-detail-list",
       requestGeneration: 8,
       keyword: "",
-      statuses: ["submitted"],
       users: [],
       clients: [],
       from: new Date(0).toISOString(),
       to: new Date(Date.now() + 86_400_000).toISOString(),
+      jobs: [],
+      mergeClassifications: [],
       hideReliableMerges: false,
-      limit: 100,
+      pageSize: 100,
     });
-    const reliable = listed.changes.find(
+    const reliable = listed.items.find(
       (change) => change.mergeClassification === "reliableMerge",
     );
     expect(reliable).toBeDefined();
@@ -65,7 +142,7 @@ describe("controlled P4 terminal", () => {
     expect(detail.integrationEvidence[0]?.source).toBe("describeAction");
     expect(detail.files[0]?.revision).toBe(3);
 
-    const suspected = listed.changes.find(
+    const suspected = listed.items.find(
       (change) => change.mergeClassification === "suspectedMerge",
     )!;
     expect(
@@ -79,7 +156,7 @@ describe("controlled P4 terminal", () => {
       integrationEvidence: [],
     });
 
-    const unknown = listed.changes.find(
+    const unknown = listed.items.find(
       (change) => change.mergeClassification === "unknown",
     )!;
     expect(

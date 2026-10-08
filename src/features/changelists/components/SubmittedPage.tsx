@@ -50,6 +50,7 @@ export function SubmittedPage({
   });
   const [detailRetry, setDetailRetry] = useState(0);
   const generation = useRef(0);
+  const queryOperation = useRef<string | undefined>(undefined);
   const changesRef = useRef(changes);
   changesRef.current = changes;
   const detailGeneration = useRef(0);
@@ -76,6 +77,10 @@ export function SubmittedPage({
     return () => {
       mounted.current = false;
       generation.current++;
+      if (queryOperation.current)
+        void backend
+          .cancelOperation(queryOperation.current)
+          .catch(() => undefined);
       cancelDetail();
     };
   }, [cancelDetail]);
@@ -84,36 +89,46 @@ export function SubmittedPage({
     if (runtime.p4Version === "loading") return;
     if (selectedRef.current !== null) setSelected(null);
     cancelDetail();
+    if (queryOperation.current)
+      void backend
+        .cancelOperation(queryOperation.current)
+        .catch(() => undefined);
     const requestGeneration = ++generation.current;
+    const operationId = crypto.randomUUID();
+    queryOperation.current = operationId;
     setLoading(true);
     setError("");
     try {
       const result = await backend.queryChangelists({
+        operationId,
         requestGeneration,
         keyword,
-        statuses: ["submitted"],
         users: [],
         clients: [],
         stream: runtime.mode === "mock" ? "//atlas/main" : undefined,
         from: new Date(Date.now() - 30 * 86_400_000).toISOString(),
         to: new Date().toISOString(),
+        jobs: [],
+        mergeClassifications: [],
         hideReliableMerges: hideMerges,
-        limit: 20_000,
+        pageSize: 200,
       });
       if (requestGeneration === generation.current) {
-        changesRef.current = result.changes;
-        setChanges(result.changes);
-        setHiddenMergeCount(result.hiddenMergeCount);
+        changesRef.current = result.items;
+        setChanges(result.items);
+        setHiddenMergeCount(result.stats.hiddenReliableMergeCount);
         setHasMore(result.hasMore);
         if (
           selectedRef.current !== null &&
-          !result.changes.some((change) => change.id === selectedRef.current)
+          !result.items.some((change) => change.id === selectedRef.current)
         )
           setSelected(null);
       }
     } catch (e) {
       if (requestGeneration === generation.current) setError(String(e));
     } finally {
+      if (queryOperation.current === operationId)
+        queryOperation.current = undefined;
       if (requestGeneration === generation.current) setLoading(false);
     }
   }, [

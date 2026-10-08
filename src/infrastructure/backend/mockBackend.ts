@@ -103,6 +103,69 @@ const mockNames = [
   "Audio",
   "main.scene",
 ];
+
+function submittedQuerySignature(
+  query: import("../../shared/contracts/types").ClQuery,
+) {
+  return JSON.stringify({
+    keyword: query.keyword.trim(),
+    users: [...query.users].sort(),
+    clients: [...query.clients].sort(),
+    depotPath: query.depotPath?.trim(),
+    stream: query.stream?.trim(),
+    from: query.from,
+    to: query.to,
+    jobs: [...query.jobs].sort(),
+    hasJob: query.hasJob,
+    mergeClassifications: [...query.mergeClassifications].sort(),
+    hideReliableMerges: query.hideReliableMerges,
+    pageSize: query.pageSize,
+  });
+}
+
+function encodeSubmittedCursor(upperChangeId: number, signature: string) {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({
+      version: 1,
+      upperChangeId,
+      signature,
+      connectionGeneration: mockContextGeneration,
+      connection: `${mockContext.server}\0${mockContext.user}\0${mockContext.client}`,
+    }),
+  );
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+function decodeSubmittedCursor(cursor: string, signature: string) {
+  try {
+    if (!cursor || cursor.length > 2048) throw new Error();
+    const base64 = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const payload = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
+      ),
+    );
+    if (
+      payload.version !== 1 ||
+      !Number.isSafeInteger(payload.upperChangeId) ||
+      payload.upperChangeId <= 0 ||
+      payload.signature !== signature ||
+      payload.connectionGeneration !== mockContextGeneration ||
+      payload.connection !==
+        `${mockContext.server}\0${mockContext.user}\0${mockContext.client}`
+    )
+      throw new Error();
+    return payload.upperChangeId as number;
+  } catch {
+    throw new Error(
+      "Submitted query cursor does not match this query or connection.",
+    );
+  }
+}
 const mockWorkspace: WorkspaceNode[] = Array.from(
   { length: 160 },
   (_, index) => {
@@ -350,7 +413,11 @@ export const mockBackend: Backend = {
     }));
   },
   async saveConnection(context) {
-    localStorage.setItem("p4deck.mockConnection", JSON.stringify(context));
+    try {
+      localStorage.setItem("p4deck.mockConnection", JSON.stringify(context));
+    } catch {
+      /* Node contract tests have no browser storage. */
+    }
     mockContext = { ...context };
     mockContextGeneration += 1;
     return { ...context };
@@ -427,23 +494,60 @@ export const mockBackend: Backend = {
   },
   async cancelOperation() {},
   async queryChangelists(query) {
+    if (!query.operationId.trim() || query.operationId.length > 128)
+      throw new Error("A valid submitted query operation ID is required.");
+    if (
+      !Number.isInteger(query.pageSize) ||
+      query.pageSize < 1 ||
+      query.pageSize > 500
+    )
+      throw new Error("Submitted query page size must be between 1 and 500.");
+    if (
+      query.users.length > 16 ||
+      query.clients.length > 16 ||
+      query.jobs.length > 16
+    )
+      throw new Error("Too many submitted query filters.");
+    const from = Date.parse(query.from);
+    const to = Date.parse(query.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)
+      throw new Error("Submitted query time range is invalid.");
+    if (query.jobs.length && query.hasJob === false)
+      throw new Error("A Job filter cannot be combined with hasJob=false.");
+    const signature = submittedQuerySignature(query);
+    const upperChangeId = query.cursor
+      ? decodeSubmittedCursor(query.cursor, signature)
+      : Number.MAX_SAFE_INTEGER;
     const keyword = query.keyword.trim().toLowerCase();
+    let scannedCount = 0;
     let filtered = mockChanges.filter((change) => {
-      if (query.statuses.length && !query.statuses.includes(change.status))
+      if (change.status !== "submitted" || change.id > upperChangeId)
         return false;
+      scannedCount++;
       if (query.users.length && !query.users.includes(change.user))
         return false;
       if (query.clients.length && !query.clients.includes(change.client))
         return false;
       if (query.stream && change.stream !== query.stream) return false;
+      const depotPath = `//atlas/${change.stream?.split("/").pop() ?? "main"}/mock/${change.id}.txt`;
       if (
-        Date.parse(change.time) < Date.parse(query.from) ||
-        Date.parse(change.time) > Date.parse(query.to)
+        query.depotPath &&
+        !depotPath.startsWith(query.depotPath.replace(/\.\.\.$/, ""))
       )
         return false;
-      if (query.hasShelf != null && change.hasShelf !== query.hasShelf)
+      if (Date.parse(change.time) < from || Date.parse(change.time) > to)
         return false;
       if (query.hasJob != null && Boolean(change.jobs.length) !== query.hasJob)
+        return false;
+      if (
+        query.jobs.length &&
+        !query.jobs.some((job) => change.jobs.includes(job))
+      )
+        return false;
+      if (
+        query.mergeClassifications.length &&
+        !query.mergeClassifications.includes(change.mergeClassification)
+      )
         return false;
       if (
         keyword &&
@@ -454,7 +558,7 @@ export const mockBackend: Backend = {
         return false;
       return true;
     });
-    const hiddenMergeCount = query.hideReliableMerges
+    const hiddenReliableMergeCount = query.hideReliableMerges
       ? filtered.filter(
           (change) => change.mergeClassification === "reliableMerge",
         ).length
@@ -464,11 +568,23 @@ export const mockBackend: Backend = {
         (change) => change.mergeClassification !== "reliableMerge",
       );
     await new Promise((resolve) => setTimeout(resolve, 80));
+    const hasMore = filtered.length > query.pageSize;
+    const nextItem = filtered[query.pageSize];
+    const items = filtered.slice(0, query.pageSize);
     return {
       requestGeneration: query.requestGeneration,
-      changes: filtered.slice(0, query.limit),
-      hiddenMergeCount,
-      hasMore: filtered.length > query.limit,
+      items,
+      hasMore,
+      nextCursor:
+        hasMore && nextItem
+          ? encodeSubmittedCursor(nextItem.id, signature)
+          : undefined,
+      stats: {
+        scannedCount,
+        matchedCount: items.length,
+        hiddenReliableMergeCount,
+        truncatedBySafetyLimit: false,
+      },
     };
   },
   async getSubmittedChangeDetail(request) {

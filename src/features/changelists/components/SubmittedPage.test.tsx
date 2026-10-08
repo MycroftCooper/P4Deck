@@ -152,9 +152,14 @@ beforeEach(() => {
   backend.cancelOperation.mockClear();
   backend.queryChangelists.mockImplementation(async (query) => ({
     requestGeneration: query.requestGeneration,
-    changes: [...changes],
-    hiddenMergeCount: 0,
+    items: [...changes],
     hasMore: false,
+    stats: {
+      scannedCount: changes.length,
+      matchedCount: changes.length,
+      hiddenReliableMergeCount: 0,
+      truncatedBySafetyLimit: false,
+    },
   }));
   backend.getSubmittedChangeDetail.mockImplementation(async ({ changeId }) => {
     if (changeId === 102)
