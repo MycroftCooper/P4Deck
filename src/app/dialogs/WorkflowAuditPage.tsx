@@ -145,20 +145,45 @@ export default function WorkflowAuditPage() {
         );
         break;
       case "shelf":
-        dialog = <ShelfDialog request={shelf} zh={zh} onDismiss={dismiss} />;
+        dialog = (
+          <ShelfDialog
+            request={shelf}
+            connectionKey="audit"
+            zh={zh}
+            onDismiss={dismiss}
+            check={async () => {
+              throw new Error("Synthetic audit: no backend request");
+            }}
+          />
+        );
         break;
       case "unshelve":
         dialog = (
           <UnshelveDialog
             request={shelf}
             changes={changes}
+            currentWorkspace="UI fixture"
+            connectionKey="audit"
             zh={zh}
             onDismiss={dismiss}
+            loadWorkspaces={async () => []}
+            check={async () => {
+              throw new Error("Synthetic audit: no backend request");
+            }}
           />
         );
         break;
       case "resolve":
-        dialog = <ResolveDialog {...common} nodes={nodes} />;
+        dialog = (
+          <ResolveDialog
+            {...common}
+            nodes={nodes}
+            connectionKey="audit"
+            check={async () => {
+              throw new Error("Synthetic audit: no backend request");
+            }}
+          />
+        );
         break;
     }
   }

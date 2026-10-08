@@ -24,6 +24,10 @@ import { UnshelveDialog } from "./UnshelveDialog";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
 import { DeleteChangelistDialog } from "./DeleteChangelistDialog";
 import { workspaceCache } from "../../files/workspaceQueries";
+import {
+  mergeWorkflowPending,
+  type WorkflowRefreshDetail,
+} from "../workflowRefresh";
 type T = (typeof messages)[keyof typeof messages];
 
 export function mergePendingMutation(
@@ -84,6 +88,7 @@ export function PendingPage({
     change: PendingChange,
     mode: "shelve" | "delete" | "unshelve",
     paths: string[],
+    source?: HTMLElement,
   ) =>
     setShelfRequest({
       request: {
@@ -91,8 +96,9 @@ export function PendingPage({
         paths: [...paths],
         hasShelf: !!change.shelvedFiles.length,
         mode: mode === "delete" ? "delete" : "shelve",
-        source: surface.current?.ownerDocument
-          .activeElement as HTMLElement | null,
+        source:
+          source ??
+          (surface.current?.ownerDocument.activeElement as HTMLElement | null),
       },
       unshelve: mode === "unshelve",
     });
@@ -104,18 +110,44 @@ export function PendingPage({
         .activeElement as HTMLElement | null,
     });
   useEffect(() => {
+    let live = true;
     const reload = () => setRefresh((n) => n + 1);
     const merge = (event: Event) => {
       const result = (event as CustomEvent<PendingChangeMutationResult>).detail;
       if (result) setChanges((value) => mergePendingMutation(value, result));
     };
+    const mergeWorkflow = (event: Event) => {
+      const detail = (event as CustomEvent<WorkflowRefreshDetail>).detail;
+      if (!detail || detail.connectionKey !== connectionKey) return;
+      const operation = detail.result.operationIds.join(", ");
+      setNotice(
+        `${detail.result.message}${operation ? ` · ${t.files === "文件" ? "操作记录" : "Operations"} ${operation}` : ""}${detail.result.logReference ? ` · ${t.files === "文件" ? "日志" : "Log"} ${detail.result.logReference}` : ""}`,
+      );
+      void backend
+        .queryPendingChanges()
+        .then((latest) => {
+          if (live)
+            setChanges((current) =>
+              mergeWorkflowPending(current, latest, detail.target),
+            );
+        })
+        .catch((cause) => {
+          if (live) {
+            setError(String(cause));
+            reload();
+          }
+        });
+    };
     window.addEventListener("p4deck:pending-refresh", reload);
     window.addEventListener("p4deck:pending-mutation", merge);
+    window.addEventListener("p4deck:workflow-result", mergeWorkflow);
     return () => {
+      live = false;
       window.removeEventListener("p4deck:pending-refresh", reload);
       window.removeEventListener("p4deck:pending-mutation", merge);
+      window.removeEventListener("p4deck:workflow-result", mergeWorkflow);
     };
-  }, []);
+  }, [connectionKey, t.files]);
   const [changes, setChanges] = useState<PendingChange[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -222,20 +254,22 @@ export function PendingPage({
             : "Default CL 不可删除 / Default cannot be deleted",
         ),
         "搁置…": action(
-          () =>
+          (source) =>
             openShelf(
               change,
               "shelve",
               change.files.map((file) => file.depotPath),
+              source,
             ),
           change.files.length ? undefined : "没有已打开文件 / No opened files",
         ),
         "创建编号 CL 并搁置…": action(
-          () =>
+          (source) =>
             openShelf(
               change,
               "shelve",
               change.files.map((file) => file.depotPath),
+              source,
             ),
           change.files.length ? undefined : "没有已打开文件 / No opened files",
         ),
@@ -297,12 +331,17 @@ export function PendingPage({
           <UnshelveDialog
             request={shelfRequest.request}
             changes={changes}
+            currentWorkspace={clientName}
+            connectionKey={connectionKey}
+            demo={demo}
             zh={t.files === "文件"}
             onDismiss={() => setShelfRequest(undefined)}
           />
         ) : (
           <ShelfDialog
             request={shelfRequest.request}
+            connectionKey={connectionKey}
+            demo={demo}
             zh={t.files === "文件"}
             onDismiss={() => setShelfRequest(undefined)}
           />
@@ -519,25 +558,29 @@ export function PendingPage({
                   changeId={change.id}
                   refresh={reload}
                   onMove={(paths) => openMove(change.id, paths)}
-                  onShelf={(mode, paths) => openShelf(change, mode, paths)}
+                  onShelf={(mode, paths, source) =>
+                    openShelf(change, mode, paths, source)
+                  }
                 />
                 {change.shelvedFiles.length ? (
                   <>
                     <h4
                       tabIndex={0}
                       {...menu("C06", () => ({
-                        "Unshelve 到 CL…": action(() =>
+                        "Unshelve 到 CL…": action((source) =>
                           openShelf(
                             change,
                             "unshelve",
                             change.shelvedFiles.map((file) => file.depotPath),
+                            source,
                           ),
                         ),
-                        "删除搁置内容…": action(() =>
+                        "删除搁置内容…": action((source) =>
                           openShelf(
                             change,
                             "delete",
                             change.shelvedFiles.map((file) => file.depotPath),
+                            source,
                           ),
                         ),
                         "展开/折叠": action(() => toggleShelf(change.id)),
@@ -560,8 +603,8 @@ export function PendingPage({
                         files={change.shelvedFiles}
                         changeId={change.id}
                         shelf
-                        onShelf={(mode, paths) =>
-                          openShelf(change, mode, paths)
+                        onShelf={(mode, paths, source) =>
+                          openShelf(change, mode, paths, source)
                         }
                         refresh={reload}
                       />

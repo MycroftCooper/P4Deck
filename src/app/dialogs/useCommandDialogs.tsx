@@ -34,6 +34,7 @@ export function useCommandDialogs(
   connectionKey: string,
   client: string,
   zh: boolean,
+  demo = false,
 ) {
   const gateway = useDialogRequest<Request, string | boolean>(connectionKey);
   const latest = useRef(connectionKey);
@@ -58,6 +59,8 @@ export function useCommandDialogs(
           <ResolveDialog
             nodes={request.nodes}
             source={request.source}
+            connectionKey={connectionKey}
+            demo={demo}
             zh={zh}
             onDismiss={close}
           />
@@ -71,6 +74,7 @@ export function useCommandDialogs(
             source={request.source}
             client={client}
             connectionKey={connectionKey}
+            demo={demo}
             zh={zh}
             onDismiss={close}
           />

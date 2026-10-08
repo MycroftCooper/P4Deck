@@ -1041,7 +1041,8 @@ export const mockBackend: Backend = {
   async confirmShelf(confirmation) {
     return confirmMockWorkflow(
       confirmation,
-      "Shelf operation completed in Browser Mock.",
+      "Browser Mock only: shelf operation was simulated. No real P4 server was accessed.",
+      "shelf",
     );
   },
   async preflightUnshelve(request) {
@@ -1113,7 +1114,8 @@ export const mockBackend: Backend = {
   async confirmUnshelve(confirmation) {
     return confirmMockWorkflow(
       confirmation,
-      "Unshelve completed in Browser Mock.",
+      "Browser Mock only: unshelve was simulated. No real P4 server was accessed.",
+      "unshelve",
     );
   },
   async preflightResolve(request) {
@@ -1157,15 +1159,17 @@ export const mockBackend: Backend = {
   async confirmResolve(confirmation) {
     return confirmMockWorkflow(
       confirmation,
-      "Resolve completed in Browser Mock.",
+      "Browser Mock only: resolve was simulated. No real P4 server was accessed.",
+      "resolve",
     );
   },
 };
 
-function confirmMockWorkflow(
+async function confirmMockWorkflow(
   confirmation: import("../../shared/contracts/types").WorkflowConfirmation,
   message: string,
-): import("../../shared/contracts/types").WorkflowResult {
+  kind: "shelf" | "unshelve" | "resolve",
+): Promise<import("../../shared/contracts/types").WorkflowResult> {
   const record = mockWorkflowTokens.get(confirmation.token);
   mockWorkflowTokens.delete(confirmation.token);
   const reject = (
@@ -1189,6 +1193,76 @@ function confirmMockWorkflow(
     return reject("tokenExpired", "The preflight expired.");
   if (JSON.stringify(record.target) !== JSON.stringify(confirmation.target))
     return reject("targetMismatch", "The confirmation target changed.");
+  if (
+    record.target.server !== mockContext.server ||
+    record.target.user !== mockContext.user ||
+    record.target.contextGeneration !== mockContextGeneration ||
+    (kind !== "unshelve" && record.target.client !== mockContext.client)
+  )
+    return reject("contextChanged", "The connection or workspace changed.");
+  const changes =
+    mockPendingChanges ?? (await mockBackend.queryPendingChanges());
+  mockPendingChanges ??= changes;
+  if (kind === "shelf") {
+    const request =
+      record.request as import("../../shared/contracts/types").ShelfPreflightRequest;
+    const change = changes.find((item) => item.id === request.changeId);
+    const currentDigest = mockDigest(
+      JSON.stringify({ change, target: record.target, request }),
+    );
+    if (!change || currentDigest !== record.digest)
+      return reject(
+        "contentChanged",
+        "The changelist or shelf changed after preflight.",
+      );
+    if (request.mode === "delete") {
+      const selected = new Set(request.depotPaths);
+      change.shelvedFiles = change.shelvedFiles.filter(
+        (file) => !selected.has(file.depotPath),
+      );
+    } else {
+      for (const depotPath of request.depotPaths) {
+        const opened = change.files.find(
+          (file) => file.depotPath === depotPath,
+        )!;
+        const next = { ...opened, revision: opened.revision ?? 1 };
+        const index = change.shelvedFiles.findIndex(
+          (file) => file.depotPath === depotPath,
+        );
+        if (index >= 0) change.shelvedFiles[index] = next;
+        else change.shelvedFiles.push(next);
+      }
+    }
+  } else if (kind === "unshelve") {
+    const request =
+      record.request as import("../../shared/contracts/types").UnshelvePreflightRequest;
+    const source = changes.find((item) => item.id === request.sourceChangeId);
+    const mappings = request.depotPaths.map((depotPath) => ({
+      depotPath,
+      targetPath: `${mockContext.cwd ?? "/workspace/atlas"}/${depotPath.split("/").at(-1)}`,
+      mapped: true,
+      locallyModified: false,
+      locked: false,
+      resolveRisk: "unknown" as const,
+    }));
+    const currentDigest = mockDigest(
+      JSON.stringify({ source, target: record.target, mappings }),
+    );
+    if (!source || currentDigest !== record.digest)
+      return reject(
+        "contentChanged",
+        "The source shelf or target changed after preflight.",
+      );
+    const target = changes.find((item) => item.id === request.targetChangeId);
+    if (!target)
+      return reject(
+        "contentChanged",
+        "The target changelist changed after preflight.",
+      );
+    for (const depotPath of request.depotPaths)
+      if (!target.files.some((file) => file.depotPath === depotPath))
+        target.files.push({ depotPath, action: "edit", state: "openedEdit" });
+  }
   const operationId = confirmation.operationId ?? crypto.randomUUID();
   return {
     outcome: "succeeded",

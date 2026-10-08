@@ -135,11 +135,23 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 - 自动化新增删除确认、Pending 局部合并、Default↔编号移动、Submit blocker/warning/unknown/过期/漂移/失败/防重复及统一适配器接线覆盖。2026-10-08 全量 `pnpm test:web` 为 39 个文件、241 项通过；`pnpm build`、`pnpm check`、Rust test/check/clippy/fmt、`git diff --check` 通过，Windows localhost E2E 连续两轮通过。
 - 最新 debug Tauri 已通过 `pnpm tauri build --debug --no-bundle` 重建，并以隔离 Fixture 环境启动为响应正常的 `P4Deck` 窗口。当前 Computer Use 原生应用清单连续返回空，无法绑定窗口执行可核验点击；实例与 Fixture 已清理，因此 Pending/Submit 原生 UI 冒烟记为“未验收”，不以进程存在、旧 exe、Mock 或应用层 E2E 冒充。
 
+### 第十二批：BE-004b 前端生产接线
+
+- `ShelfDialog` 已接 `preflightShelf` / `confirmShelf`：固定编号 CL 与文件子集，分别呈现首次创建、替换和子集删除；replace/delete 必须明确勾选危险确认。ready 无 token、过期 token、目标不匹配、来源/连接漂移均不可执行，blocker/warning/unknown 保留后端语义。
+- `UnshelveDialog` 已接 `preflightUnshelve` / `confirmUnshelve`：固定来源 Shelf 子集，可选择当前或同用户其他 Workspace，并输入 Default（0）或编号 CL；逐文件显示映射、本地修改、已有打开 CL、锁和 Resolve 风险。执行只发送 token 与绑定目标，不提供强制覆盖旁路；来源、目标或连接变化使确认失效。
+- `ResolveDialog` 已接真实冲突详情与 `confirmResolve` 逐文件计划。策略下拉只包含后端返回且可执行的 `safe` / `acceptYours` / `acceptTheirs`；`mergePreview` 不冒充执行策略，blocked/unknown 或缺少策略的文件阻塞全部确认。只有 outcome 为 `succeeded` 且每个文件经后端复核为 `succeeded` 才显示成功，partial/unknown/仍 unresolved 保持失败。
+- 工具栏、文件右键、Pending 文件/CL 菜单继续复用 `useCommandDialogs`、`FileClWorkflow` 与相同三个业务对话框；右键来源元素直接传入对话框以保证关闭回焦。异步 generation、防重入、busy 关闭保护和连接变化淘汰旧结果均已覆盖。
+- `workflowRefresh` 按后端 refresh advice 失效当前连接的 Workspace/Depot 查询，并把 workflow 目标和受影响路径交给 Pending 做相关 CL 局部合并；IPC 异常按可能部分执行保守刷新。结果保留逐文件状态、operation ID 与 log reference；失败不清空目标选择。
+- Browser Mock 与 Tauri 保持同一强类型契约；Mock 现在模拟 Shelf/Unshelve 状态变化并复核一次性 token、Context 与内容 digest，所有成功文案明确“未访问真实 P4 Server”。Mock Resolve 对真实冲突事实保持 unknown/blocked，不伪造可执行成功。
+- 自动化覆盖 Shelf 首次/替换/删除子集、过期 token、来源/连接漂移；Unshelve Default/编号/跨 Workspace、映射/覆盖/锁/已有打开/Resolve 风险；Resolve 策略过滤、blocked/unknown、partial/unknown、成功、防重复与关闭保护；统一入口及 Pending 局部合并。2026-10-08 全量 Web 为 40 个测试文件、247 项通过；生产构建、TypeScript、Rust test/check/clippy/fmt 与 Windows localhost E2E 两轮通过。
+- 开发审计页复验 390×650 中文亮色 Shelf 与英文暗色 Unshelve/Resolve：对话框 `clientWidth=scrollWidth=357`，正文无横向溢出、页脚可见；Unshelve 初始焦点位于目标 Workspace。此证据只覆盖浏览器布局与焦点，不替代原生窗口或读屏器验收。
+- 最新 debug Tauri 再次重建，并以隔离 APPDATA/Fixture 环境启动为 `Responding=True` 的 `P4Deck` 窗口；Computer Use 原生应用清单仍为空，且当前客户端没有可用的原生窗口枚举入口，无法绑定执行点击，因此 BE-003/004a/004b Windows 原生 UI 仍记为“未验收”。实例与 Fixture 已停止；不以进程响应、Mock 或 localhost 应用层 E2E 替代原生证据。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS 独立窗口：菜单打开业务弹窗、初始焦点、Tab 循环、Escape、回焦、关闭来源窗口与连接变更取消；需运行中的对应平台桌面实例。整体目标暂不标为完成。
 2. FE-12 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
-3. 新建/编辑/删除空 Pending CL、Default↔编号移动与 Submit 已完成 BE-004a/BE-003 接线；仍需 Windows/macOS 原生 UI 冒烟。重命名、Shelf、Unshelve、Resolve 不在本批生产接线范围，继续保持既有预览/禁用边界。
+3. 新建/编辑/删除空 Pending CL、Default↔编号移动、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。重命名执行不在本批范围。
 4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。
 
 ### 第十批：测试整理与逐项审计
@@ -158,11 +170,11 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 | FE-05 | `RevisionDialog.test.tsx` 3 项；`revisionSelector.test.ts` 3 项；第三/九批页面记录 | 前端证据通过；实际 sync 未在 QA 执行 |
 | FE-06 | `renamePath.test.ts` 3 项；`workflow.test.tsx` 的路径/草稿用例；第四/九批页面记录 | 前端证据通过；未声称映射或覆盖已验证 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
-| FE-08 | `ShelfDialog.test.tsx` 的替换/删除勾选、Default/空范围、固定子集；`FileClWorkflow.test.tsx` 跨 CL 分组；第五/八/九批页面记录 | 前端证据通过，不产生实际 shelf |
-| FE-09 | `ShelfDialog.test.tsx` 的 Unshelve 目标/空来源/所有预检状态；第五/九批页面记录 | UI 状态证据通过；生产入口只显示实际可知状态，不伪造预检 |
-| FE-10 | `ResolveDialog.test.tsx` 4 项：未知版本、逐文件计划、关闭保护、键盘导航、给定版本/失败；第六/九批页面记录 | 前端证据通过；没有假解决或真实文件覆盖 |
+| FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约测试 | BE-004b Shelf 生产契约已接；原生待验 |
+| FE-09 | `ShelfDialog.test.tsx` 的 Unshelve Default/编号/跨 Workspace 与映射/覆盖/锁/Resolve 风险；双 Backend 契约 | BE-004b Unshelve 生产契约已接；不提供强制覆盖，原生待验 |
+| FE-10 | `ResolveDialog.test.tsx` 的策略过滤、blocked/unknown、逐文件计划、partial/unknown/成功、防重复与关闭保护 | BE-004b Resolve 生产契约已接；仅后端允许策略可执行，原生待验 |
 | FE-11 | `PreflightStatus` 状态测试；第八批 Tab 实测；第九批 40 个布局组合；语义标签/错误不只靠颜色 | 已覆盖浏览器键盘与布局；原生及真实读屏未验收 |
-| FE-12 | `useCommandDialogs.test.tsx` 3 项；工具栏/右键统一 Submit；Pending 页面按钮/菜单共用写流程；生产 audit 隔离检查 | BE-003/004a 入口整合已落地；因原生门槛未通过，不宣称整体完成 |
+| FE-12 | `useCommandDialogs.test.tsx` 3 项；工具栏/右键/Pending 复用同一业务对话框；`workflowRefresh.test.ts` 局部合并；生产 audit 隔离检查 | BE-003/004a/004b 入口整合已落地；因原生门槛未通过，不宣称整体完成 |
 
 ### 原生双平台验收步骤（待执行）
 
@@ -179,6 +191,6 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 
 ### 环境阻塞确认
 
-2026-10-08 Windows 收尾检查已重建并启动最新 debug Tauri，隔离 localhost Fixture 可用；但 Computer Use 会话无法发现任何原生应用窗口，因而不能执行或留存 Pending/Submit 原生交互证据。macOS 仍没有本批实例。浏览器、单测、构建、应用层 E2E 和文档证据不能补足此原生门槛。
+2026-10-08 Windows 收尾检查已重建并启动最新 debug Tauri，隔离 localhost Fixture 可用，系统进程显示 `P4Deck` 窗口响应正常；但 Computer Use 会话的原生应用清单为空且无可用窗口枚举入口，因而不能执行或留存 Pending/Submit/Shelf/Unshelve/Resolve 原生交互证据。macOS 仍没有本批实例。浏览器、单测、构建、应用层 E2E 和文档证据不能补足此原生门槛。
 
 恢复条件：Computer Use 能返回并绑定 P4Deck 原生窗口，或由对应平台人员按上方清单返回可核验结果。恢复后继续原生验收及发现问题的前端修复；不自动扩大为后端开发，也不把目标改为只通过浏览器验证。

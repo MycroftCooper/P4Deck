@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { dialogHarness, dialogButton } from "./testHarness";
+import { dialogHarness, dialogButton, chooseSelect } from "./testHarness";
 import { useCommandDialogs } from "./useCommandDialogs";
 import type { WorkspaceNode } from "../../shared/contracts/types";
 import { backend } from "../../infrastructure/backend";
@@ -105,4 +105,164 @@ it("connects the shared submit dialog to preflight and confirmation adapters", a
     target: expect.objectContaining({ changeId: 10 }),
   });
   expect(document.body.textContent).toContain("Submitted");
+});
+
+it("connects toolbar and context-menu resolve requests to the typed workflow", async () => {
+  const depotNode = {
+    ...node,
+    depotPath: "//depot/a",
+    state: "conflicted" as const,
+  };
+  const target = {
+    kind: "resolve" as const,
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
+    workspace: "/work",
+    contextGeneration: 1,
+    depotPaths: ["//depot/a"],
+  };
+  const preflight = vi.spyOn(backend, "preflightResolve").mockResolvedValue({
+    ready: true,
+    conflicts: [
+      {
+        depotPath: "//depot/a",
+        conflictType: "content",
+        status: "unresolved",
+        availableStrategies: ["safe"],
+        sources: [],
+        preview: [],
+      },
+    ],
+    blockers: [],
+    warnings: [],
+    target,
+    contentDigest: "digest",
+    token: "resolve-token",
+    expiresAt: Date.now() + 60_000,
+    ttlMs: 60_000,
+    operationIds: [],
+  });
+  const confirm = vi.spyOn(backend, "confirmResolve").mockResolvedValue({
+    outcome: "succeeded",
+    message: "Resolved",
+    operationIds: ["resolve-op"],
+    files: [
+      {
+        depotPath: "//depot/a",
+        state: "succeeded",
+        message: "verified",
+      },
+    ],
+    refresh: {
+      pendingChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  });
+  await harness.render(<Harness />);
+  await act(async () =>
+    api.open({ kind: "resolve", nodes: [depotNode], source: null }),
+  );
+  await act(async () => dialogButton("检查冲突").click());
+  await chooseSelect("safe");
+  await act(async () => dialogButton("执行逐文件计划").click());
+  expect(preflight).toHaveBeenCalledExactlyOnceWith({
+    depotPaths: ["//depot/a"],
+  });
+  expect(confirm).toHaveBeenCalledExactlyOnceWith({
+    token: "resolve-token",
+    target,
+    resolutions: [{ depotPath: "//depot/a", strategy: "safe" }],
+  });
+});
+
+it("connects file shelving requests through FileClWorkflow to the typed workflow", async () => {
+  const depotNode = {
+    ...node,
+    depotPath: "//depot/a",
+    state: "openedEdit" as const,
+  };
+  const change = {
+    id: 10,
+    description: "Shelf me",
+    user: "tester",
+    client: "workspace",
+    status: "pending" as const,
+    jobs: [],
+    files: [
+      { depotPath: "//depot/a", action: "edit", state: "openedEdit" as const },
+    ],
+    shelvedFiles: [],
+  };
+  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue([change]);
+  const target = {
+    kind: "shelf" as const,
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
+    workspace: "/work",
+    contextGeneration: 1,
+    sourceChangeId: 10,
+    depotPaths: ["//depot/a"],
+  };
+  const preflight = vi.spyOn(backend, "preflightShelf").mockResolvedValue({
+    ready: true,
+    change,
+    blockers: [],
+    warnings: [],
+    target,
+    scope: {
+      openedPaths: ["//depot/a"],
+      existingShelvedPaths: [],
+      createPaths: ["//depot/a"],
+      replacePaths: [],
+      deletePaths: [],
+      contentDigest: "digest",
+    },
+    token: "shelf-token",
+    expiresAt: Date.now() + 60_000,
+    ttlMs: 60_000,
+    operationIds: [],
+  });
+  const confirm = vi.spyOn(backend, "confirmShelf").mockResolvedValue({
+    outcome: "succeeded",
+    message: "Shelved",
+    operationIds: ["shelf-op"],
+    files: [
+      {
+        depotPath: "//depot/a",
+        state: "succeeded",
+        message: "verified",
+      },
+    ],
+    refresh: {
+      pendingChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  });
+  await harness.render(<Harness />);
+  await act(async () =>
+    api.open({
+      kind: "fileCl",
+      nodes: [depotNode],
+      mode: "shelve",
+      source: null,
+    }),
+  );
+  await act(async () => dialogButton("运行预检").click());
+  await act(async () => dialogButton("确认搁置所选文件").click());
+  expect(preflight).toHaveBeenCalledExactlyOnceWith({
+    changeId: 10,
+    depotPaths: ["//depot/a"],
+    mode: "createOrUpdate",
+    replace: false,
+  });
+  expect(confirm).toHaveBeenCalledExactlyOnceWith({
+    token: "shelf-token",
+    target,
+  });
 });

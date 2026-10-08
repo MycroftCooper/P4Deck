@@ -24,7 +24,11 @@ export function PendingFileList({
   shelf?: boolean;
   refresh(): void;
   onMove?(paths: string[]): void;
-  onShelf?(mode: "shelve" | "delete" | "unshelve", paths: string[]): void;
+  onShelf?(
+    mode: "shelve" | "delete" | "unshelve",
+    paths: string[],
+    source?: HTMLElement,
+  ): void;
 }) {
   const nodes = useMemo(
     () =>
@@ -76,10 +80,11 @@ export function PendingFileList({
                     ["删除此搁置文件…", "删除所选搁置文件…"].map((label) => [
                       label,
                       action(
-                        () =>
+                        (source) =>
                           onShelf?.(
                             "delete",
                             selection.targets(node).map((n) => n.depotPath!),
+                            source,
                           ),
                         onShelf ? undefined : "入口尚未接通 / Not connected",
                       ),
@@ -90,10 +95,11 @@ export function PendingFileList({
                       (label) => [
                         label,
                         action(
-                          () =>
+                          (source) =>
                             onShelf?.(
                               "unshelve",
                               selection.targets(node).map((n) => n.depotPath!),
+                              source,
                             ),
                           onShelf ? undefined : "入口尚未接通 / Not connected",
                         ),
@@ -126,10 +132,11 @@ export function PendingFileList({
                     ["搁置此文件…", "搁置所选文件…"].map((label) => [
                       label,
                       action(
-                        () =>
+                        (source) =>
                           onShelf?.(
                             "shelve",
                             selection.targets(node).map((n) => n.depotPath!),
+                            source,
                           ),
                         onShelf ? undefined : "入口尚未接通 / Not connected",
                       ),

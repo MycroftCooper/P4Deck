@@ -177,20 +177,6 @@ describe("controlled P4 terminal", () => {
     await expect(
       backend.performFileAction({ action: "shelve", paths: [shelfPath] }),
     ).rejects.toThrow("preflight");
-    const deletion = await backend.preflightShelf({
-      changeId: shelfSource.id,
-      depotPaths: [shelfPath],
-      mode: "delete",
-    });
-    expect(deletion).toMatchObject({ ready: true });
-    expect(
-      await backend.confirmShelf({
-        token: deletion.token!,
-        target: deletion.target,
-        operationId: "mock-shelf-contract",
-      }),
-    ).toMatchObject({ outcome: "succeeded" });
-
     const unshelve = await backend.preflightUnshelve({
       sourceChangeId: shelfSource.id,
       depotPaths: [shelfPath],
@@ -205,12 +191,64 @@ describe("controlled P4 terminal", () => {
       }),
     ).toMatchObject({ outcome: "succeeded" });
 
+    const deletion = await backend.preflightShelf({
+      changeId: shelfSource.id,
+      depotPaths: [shelfPath],
+      mode: "delete",
+    });
+    expect(deletion).toMatchObject({ ready: true });
+    expect(
+      await backend.confirmShelf({
+        token: deletion.token!,
+        target: deletion.target,
+        operationId: "mock-shelf-contract",
+      }),
+    ).toMatchObject({ outcome: "succeeded" });
+
     const resolve = await backend.preflightResolve({
       depotPaths: [shelfPath],
     });
     expect(resolve).toMatchObject({ ready: false });
     expect(resolve.conflicts[0]).toMatchObject({ status: "unknown" });
     expect(resolve.token).toBeUndefined();
+  });
+
+  it("rejects a mock shelf token after its source changelist drifts", async () => {
+    const changes = await backend.queryPendingChanges();
+    const source = changes.find(
+      (change) =>
+        change.id > 0 &&
+        change.files.some(
+          (file) =>
+            !change.shelvedFiles.some(
+              (shelved) => shelved.depotPath === file.depotPath,
+            ),
+        ),
+    )!;
+    const path = source.files.find(
+      (file) =>
+        !source.shelvedFiles.some(
+          (shelved) => shelved.depotPath === file.depotPath,
+        ),
+    )!.depotPath;
+    const preflight = await backend.preflightShelf({
+      changeId: source.id,
+      depotPaths: [path],
+      mode: "createOrUpdate",
+      replace: false,
+    });
+    await backend.mutatePendingChange({
+      type: "edit",
+      changeId: source.id,
+      description: `${source.description} drift`,
+      jobs: source.jobs,
+    });
+    expect(
+      await backend.confirmShelf({
+        token: preflight.token!,
+        target: preflight.target,
+      }),
+    ).toMatchObject({ outcome: "rejected", failure: "contentChanged" });
   });
 
   it("streams monotonic action progress before resolving", async () => {

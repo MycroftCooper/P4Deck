@@ -11,13 +11,14 @@ import { ShelfDialog } from "./ShelfDialog";
 import { fileClScope } from "../fileClScope";
 import { workspaceCache } from "../../files/workspaceQueries";
 
-/** Read once on explicit opening; no per-row queries and no write adapter. */
+/** Read once on explicit opening; no per-row queries; delegates writes to typed workflows. */
 export function FileClWorkflow({
   nodes,
   mode,
   source,
   client,
   connectionKey,
+  demo = false,
   zh,
   onDismiss,
 }: {
@@ -26,6 +27,7 @@ export function FileClWorkflow({
   source: HTMLElement | null;
   client: string;
   connectionKey: string;
+  demo?: boolean;
   zh: boolean;
   onDismiss(): void;
 }) {
@@ -112,6 +114,8 @@ export function FileClWorkflow({
             hasShelf: !!change.shelvedFiles.length,
             mode: "shelve",
           }}
+          connectionKey={connectionKey}
+          demo={demo}
           zh={zh}
           onDismiss={onDismiss}
           onBack={scope.ids.length > 1 ? () => setGroup(undefined) : undefined}

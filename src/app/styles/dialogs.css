@@ -176,6 +176,34 @@
   overflow: auto;
   font-size: 11px;
 }
+.workflow-mapping-scroll {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.workflow-mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.workflow-mapping-table th,
+.workflow-mapping-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.workflow-resolve-preview {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
 @media (max-width: 600px) {
   .workflow-version-grid {
     grid-template-columns: 1fr;

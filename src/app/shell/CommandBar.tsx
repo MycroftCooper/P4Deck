@@ -124,7 +124,12 @@ export function CommandBar({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [locating, setLocating] = useState(false);
-  const dialogs = useCommandDialogs(connectionKey, runtime.context.client, zh);
+  const dialogs = useCommandDialogs(
+    connectionKey,
+    runtime.context.client,
+    zh,
+    runtime.mode === "mock",
+  );
   const [operation, setOperation] = useState<{
     id: string;
     label: string;
