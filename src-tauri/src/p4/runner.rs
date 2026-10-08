@@ -51,6 +51,12 @@ struct ServerLimits {
     mutations: Arc<Semaphore>,
 }
 
+/// Holds the per-server mutation lane across a read/revalidate/write transaction.
+pub struct MutationGuard {
+    server: String,
+    _permit: OwnedSemaphorePermit,
+}
+
 impl ServerLimits {
     fn new() -> Self {
         Self {
@@ -104,7 +110,7 @@ impl P4Runner {
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         request.operation_id = Some(id.clone());
         let result = self
-            .run_inner(request, app, progress_total, argument_input)
+            .run_inner(request, app, progress_total, argument_input, false)
             .await;
         if result.is_err() {
             if let Some(token) = self.operations.lock().remove(&id) {
@@ -116,12 +122,56 @@ impl P4Runner {
         result
     }
 
+    pub async fn lock_mutations(&self, server: &str) -> MutationGuard {
+        let limits = self.limits_for(server);
+        let permit = limits
+            .mutations
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("P4 mutation semaphores are never closed");
+        MutationGuard {
+            server: server.to_owned(),
+            _permit: permit,
+        }
+    }
+
+    pub async fn run_with_mutation_guard(
+        &self,
+        mut request: P4CommandRequest,
+        app: Option<&AppHandle>,
+        progress_total: Option<usize>,
+        guard: &MutationGuard,
+    ) -> Result<OperationResult, RunnerError> {
+        if request.context.server != guard.server || is_read_only_request(&request) {
+            return Err(RunnerError::InvalidCommand(
+                "mutation guard does not match a modifying command".into(),
+            ));
+        }
+        let id = request
+            .operation_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        request.operation_id = Some(id.clone());
+        let result = self
+            .run_inner(request, app, progress_total, None, true)
+            .await;
+        if result.is_err() {
+            if let Some(token) = self.operations.lock().remove(&id) {
+                token.cancel();
+            }
+            emit(app, &event(&id, EventKind::Completed, Some("-1".into())));
+        }
+        result
+    }
+
     async fn run_inner(
         &self,
         request: P4CommandRequest,
         app: Option<&AppHandle>,
         progress_total: Option<usize>,
         argument_input: Option<Vec<String>>,
+        mutation_already_locked: bool,
     ) -> Result<OperationResult, RunnerError> {
         validate(&request)?;
         let operation_id = request
@@ -135,7 +185,8 @@ impl P4Runner {
             .map(PathBuf::from)
             .or_else(discover_p4)
             .ok_or(RunnerError::NotFound)?;
-        let category = if is_read_only(&request.command) {
+        let read_only = is_read_only_request(&request);
+        let category = if read_only {
             OperationCategory::Query
         } else if request.command == "submit" {
             OperationCategory::Submit
@@ -169,7 +220,7 @@ impl P4Runner {
         let mut events = vec![queued];
 
         let limits = self.limits_for(&request.context.server);
-        let _mutation_permit = if is_read_only(&request.command) {
+        let _mutation_permit = if read_only || mutation_already_locked {
             None
         } else {
             Some(
@@ -584,6 +635,15 @@ fn is_read_only(command: &str) -> bool {
     )
 }
 
+fn is_read_only_request(request: &P4CommandRequest) -> bool {
+    is_read_only(&request.command)
+        || (request.command == "change"
+            && request
+                .args
+                .first()
+                .is_some_and(|argument| argument == "-o"))
+}
+
 fn event(id: &str, kind: EventKind, message: Option<String>) -> OperationEvent {
     event_with_progress(id, kind, message, None)
 }
@@ -720,6 +780,23 @@ mod tests {
         assert!(is_read_only("fstat"));
         assert!(!is_read_only("sync"));
         assert!(!is_read_only("some-future-command"));
+    }
+
+    #[test]
+    fn change_spec_reads_do_not_block_the_submit_revalidation_lane() {
+        let mut request = P4CommandRequest {
+            operation_id: None,
+            source: OperationSource::Gui,
+            command: "change".into(),
+            args: vec!["-o".into(), "42".into()],
+            context: P4Context::default(),
+            output_mode: OutputMode::JsonLines,
+            timeout_ms: None,
+            input: None,
+        };
+        assert!(is_read_only_request(&request));
+        request.args[0] = "-d".into();
+        assert!(!is_read_only_request(&request));
     }
 
     #[test]

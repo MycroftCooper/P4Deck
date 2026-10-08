@@ -171,6 +171,11 @@ pub async fn run_p4(
     if request.input.is_some() {
         return Err("Generic IPC commands cannot provide stdin".into());
     }
+    if matches!(request.source, OperationSource::Gui)
+        && request.command.eq_ignore_ascii_case("submit")
+    {
+        return Err("GUI submit must use the preflight and confirmation API".into());
+    }
     state
         .runner
         .run(request, Some(&app))
@@ -397,6 +402,24 @@ pub async fn mutate_pending_change(
         .changelists
         .mutate_pending(state.connection.context(), request, Some(&app))
         .await
+}
+
+#[tauri::command]
+pub async fn preflight_submit(
+    request: SubmitPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SubmitPreflight, String> {
+    Ok(state.submit.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_submit(
+    confirmation: SubmitConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SubmitResult, String> {
+    Ok(state.submit.confirm(confirmation, Some(&app)).await)
 }
 #[tauri::command]
 pub async fn open_local_path(

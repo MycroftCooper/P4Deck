@@ -31,7 +31,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-004a 已完成 Pending CL 数据正确性与基础写操作，BE-003、BE-004b、BE-008 仍需补齐 Submit、Shelf/Unshelve、质量验收，不能仅凭 Fixture 启动成功标记完成。
+当前已具备真实 Server 验收环境；BE-003 与 BE-004a 已分别完成 Submit 状态机和 Pending CL 数据正确性/基础写操作，BE-004b、BE-008 仍需补齐 Shelf/Unshelve 与 Submitted 质量验收，不能仅凭 Fixture 启动成功标记完成。
 
 BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
 
@@ -43,6 +43,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
 | BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
+| BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 覆盖成功、空描述/空 CL、unresolved、out-of-date、权限拒绝、过期 token、目标/Workspace/CL 变化拒绝并清理专属数据；前端生产入口仍未接线 |
 | BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；写契约尚未接前端按钮 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
@@ -92,9 +93,9 @@ pnpm test:e2e:p4d:win
 
 - 默认连续执行两轮，两轮均通过；每轮创建并最终删除 `p4deck-fixture-e2e` Client 与独立 Workspace Root。
 - Runner Context 显式携带 executable/server/user/client/tickets/trust，测试内部复验 `ServerID=p4deck-fixture-local` 和 loopback 地址；启动器隔离 P4CONFIG/P4ENVIRO/P4PASSWD，缺少固定工具时输出明确 `SKIP`。
-- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；同一入口现已叠加 BE-004a Pending 验收。仍未包含 Submit、Shelf/Unshelve 写入、SSL Trust、SSO/MFA 或 macOS，分别留给 BE-003/004b、连接兼容矩阵和双平台验收。
+- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；同一入口现已叠加 BE-003 Submit 与 BE-004a Pending 验收。仍未包含 Shelf/Unshelve 写入、SSL Trust、SSO/MFA 或 macOS，分别留给 BE-004b、连接兼容矩阵和双平台验收。
 
-### BE-003 — Submit 预检与执行状态机（READY）
+### BE-003 — Submit 预检与执行状态机（DONE：Windows localhost）
 
 目标：完成安全可解释的 Submit 后端闭环。
 
@@ -106,7 +107,16 @@ pnpm test:e2e:p4d:win
 - 支持进度、取消、失败分类、部分失败后的刷新建议和 operation/log 关联。
 - Submit 必须保持单 CL 单命令；默认不擅自启用并行。
 
-验收：Fixture 覆盖成功提交、unresolved、out-of-date、空描述、无权限/模拟失败和过期预检。
+实现结果（2026-10-08）：
+
+- `SubmitPreflight` / `SubmitConfirmation` / `SubmitResult` 已作为 Rust/TypeScript 双向强类型契约落地；blocker、warning、目标快照、文件摘要、TTL、operation/log 关联与刷新建议均为结构化字段，前端不需要解析 stderr。
+- 预检检查空描述、空 CL、unresolved、out-of-date、锁/独占打开、`protects -M` 写权限、Shelf 与 Job；无法可靠得知的文件/权限/Job trigger 策略明确返回 `unknown` warning。
+- 一次性 token 绑定 Server/User/Client/Workspace、Context generation、CL Description/Jobs/Shelf、文件集合及 fstat/权限快照；确认阶段占用同 Server mutation lane，复核后只执行一条 `p4 submit -c <change>`，过期、目标不符、连接/Workspace 切换和 CL 内容变化均拒绝。
+- Submit 结果只返回结构化 outcome/failure/message/refresh；进度与取消复用 Runner，Journal 分类为 `submit`，Log 继续脱敏。失败或不确定结果要求刷新 Pending/Submitted/Workspace。
+- 已删除 `FileAction::Submit` 及 TypeScript 泛化 FileAction 的 `"submit"`，Mock 和通用 GUI `run_p4` 也拒绝 submit；终端来源仍保持用户显式 P4 会话语义。
+- Windows localhost Fixture 使用独立 writer/read-only Client、专属 `//depot/p4deck-submit-e2e/...` 路径与临时保护表，覆盖成功提交、空描述、空 CL、unresolved、out-of-date、权限拒绝、过期 token、目标/Workspace/CL 内容变化拒绝；失败路径恢复保护表并清理 Client/User/Workspace/CL/专属 depot 数据。前端 SubmitDialog 仅对齐契约，生产接线留给后续前端任务。
+
+验收：`pnpm test:e2e:p4d:win` 默认连续两轮通过后方可视为本机 DONE；macOS/多版本仍属于 BE-009 兼容矩阵。
 
 ### BE-004a — Pending CL 数据正确性与基础写操作（DONE：Windows localhost）
 
@@ -188,12 +198,14 @@ pnpm test:e2e:p4d:win
 
 ```text
 BE-002 localhost p4d E2E                 DONE（Windows）
+BE-003 Submit 状态机                    DONE（Windows localhost）
+BE-004a Pending 数据与基础写            DONE（Windows localhost）
 BE-005 状态聚合与缓存                  DONE
 BE-006 操作记录、离线与 ticket 状态    DONE
 BE-007 日志策略与诊断导出              DONE
 ```
 
-BE-002 与 BE-004a 已在 Windows localhost Fixture 上完成应用层验收；BE-003/004b 保持 READY，Submit 与 Shelf/Unshelve 写入不在本批范围内。
+BE-002、BE-003 与 BE-004a 已在 Windows localhost Fixture 上完成应用层验收；BE-004b 保持 READY，Shelf/Unshelve 写入不在本批范围内。
 
 ## 总体推荐执行顺序
 

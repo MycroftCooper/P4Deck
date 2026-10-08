@@ -42,7 +42,6 @@ export type P4FileAction =
   | "addRecursive"
   | "delete"
   | "markForDelete"
-  | "submit"
   | "revertUnchanged"
   | "revert"
   | "moveToChangelist"
@@ -489,6 +488,105 @@ export interface PendingChangeMutationResult {
   affectedPaths: string[];
   refreshedChanges: PendingChange[];
   refreshError?: string;
+}
+
+export interface SubmitPreflightRequest {
+  changeId: number;
+}
+
+export type SubmitIssueCode =
+  | "invalidTarget"
+  | "changeNotFound"
+  | "emptyDescription"
+  | "emptyChange"
+  | "unresolvedFiles"
+  | "outOfDateFiles"
+  | "lockedFiles"
+  | "exclusiveOpenConflict"
+  | "permissionDenied"
+  | "shelvedFilesPresent"
+  | "jobMissing"
+  | "jobPolicyUnknown"
+  | "fileStateUnknown"
+  | "permissionUnknown"
+  | "preflightUnavailable";
+
+export interface SubmitIssue {
+  code: SubmitIssueCode;
+  certainty: "confirmed" | "unknown";
+  message: string;
+  paths?: string[];
+}
+
+export interface SubmitTargetSnapshot {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  changeId: number;
+  contextGeneration: number;
+}
+
+export interface SubmitFileSummary {
+  fileCount: number;
+  depotPaths: string[];
+  actionCounts: Record<string, number>;
+  contentDigest: string;
+}
+
+export interface SubmitPreflight {
+  ready: boolean;
+  change?: PendingChange;
+  blockers: SubmitIssue[];
+  warnings: SubmitIssue[];
+  target: SubmitTargetSnapshot;
+  fileSummary: SubmitFileSummary;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+  refreshRecommended: boolean;
+}
+
+export interface SubmitConfirmation {
+  token: string;
+  target: SubmitTargetSnapshot;
+  operationId?: string;
+}
+
+export type SubmitFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "contextChanged"
+  | "changeChanged"
+  | "preflightBlocked"
+  | "offline"
+  | "serverUnreachable"
+  | "authExpired"
+  | "permissionDenied"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+
+export interface SubmitRefreshAdvice {
+  pendingChanges: boolean;
+  submittedChanges: boolean;
+  workspaceStatus: boolean;
+  depotPaths: string[];
+  reason: string;
+}
+
+export interface SubmitResult {
+  outcome: "submitted" | "rejected" | "failed" | "cancelled" | "unknown";
+  changeId: number;
+  submittedChangeId?: number;
+  failure?: SubmitFailureCode;
+  message: string;
+  operationId?: string;
+  logReference?: string;
+  refresh: SubmitRefreshAdvice;
 }
 
 export interface FilePreview {

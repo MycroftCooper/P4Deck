@@ -20,13 +20,7 @@ const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
 
 pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
     validate_parallel(request)?;
-    if matches!(request.action, FileAction::Submit) {
-        for path in &request.paths {
-            validate_path(path)?;
-        }
-    } else {
-        validate_paths(&request.paths)?;
-    }
+    validate_paths(&request.paths)?;
 
     if matches!(request.action, FileAction::DeleteLocal)
         || (matches!(request.action, FileAction::Delete) && only_untracked(request))
@@ -75,15 +69,6 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
             changelist_args(request.changelist_id),
             OutputMode::JsonLines,
         ),
-        FileAction::Submit => {
-            let change = required_change(request.changelist_id)?;
-            paths.clear();
-            let mut args = parallel_args(request)?;
-            if change != "default" {
-                args.extend(["-c".into(), change]);
-            }
-            ("submit", args, OutputMode::JsonLines)
-        }
         FileAction::RevertUnchanged => ("revert", vec!["-a".into()], OutputMode::JsonLines),
         FileAction::Revert => ("revert", vec![], OutputMode::JsonLines),
         FileAction::MoveToChangelist => {
@@ -191,13 +176,10 @@ fn validate_parallel(request: &FileActionRequest) -> Result<(), String> {
     if request.parallel_threads.is_some()
         && !matches!(
             request.action,
-            FileAction::GetLatest
-                | FileAction::GetRevision
-                | FileAction::Shelve
-                | FileAction::Submit
+            FileAction::GetLatest | FileAction::GetRevision | FileAction::Shelve
         )
     {
-        return Err("parallel transfer is only supported for sync, shelve, and submit".into());
+        return Err("parallel transfer is only supported for sync and shelve".into());
     }
     Ok(())
 }
@@ -215,8 +197,7 @@ fn parallel_args(request: &FileActionRequest) -> Result<Vec<String>, String> {
 fn should_stream_paths(action: FileAction, paths: &[String]) -> bool {
     if matches!(
         action,
-        FileAction::Submit
-            | FileAction::Integrate
+        FileAction::Integrate
             | FileAction::Branch
             | FileAction::Copy
             | FileAction::RenameMove
@@ -397,14 +378,6 @@ mod tests {
                 vec!["-c", "123", "//depot/main/a b.txt"]
             );
         }
-        let mut submit = request(FileAction::Submit);
-        submit.changelist_id = Some(123);
-        assert_eq!(invocation(&submit).args, vec!["-c", "123"]);
-
-        submit.paths.clear();
-        submit.changelist_id = Some(0);
-        assert!(invocation(&submit).args.is_empty());
-
         let mut move_default = request(FileAction::MoveToChangelist);
         move_default.changelist_id = Some(0);
         assert_eq!(
@@ -498,7 +471,6 @@ mod tests {
 
     #[test]
     fn rejects_missing_or_option_like_inputs() {
-        assert!(plan(&request(FileAction::Submit)).is_err());
         assert!(plan(&request(FileAction::Shelve)).is_err());
 
         let mut revision = request(FileAction::GetRevision);

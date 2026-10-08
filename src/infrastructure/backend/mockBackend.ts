@@ -4,6 +4,8 @@ import type {
   LogEntry,
   OperationEvent,
   PendingChange,
+  SubmitPreflight,
+  SubmitTargetSnapshot,
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
@@ -15,6 +17,11 @@ let mockContext: import("../../shared/contracts/types").P4Context = {
   cwd: "/workspace/atlas",
   charset: "utf8",
 };
+let mockContextGeneration = 1;
+const mockSubmitTokens = new Map<
+  string,
+  { target: SubmitTargetSnapshot; digest: string; expiresAt: number }
+>();
 try {
   const saved = JSON.parse(
     localStorage.getItem("p4deck.mockConnection") ?? "null",
@@ -314,6 +321,7 @@ export const mockBackend: Backend = {
   async saveConnection(context) {
     localStorage.setItem("p4deck.mockConnection", JSON.stringify(context));
     mockContext = { ...context };
+    mockContextGeneration += 1;
     return { ...context };
   },
   async runtimeInfo() {
@@ -330,6 +338,8 @@ export const mockBackend: Backend = {
     };
   },
   async runP4(request) {
+    if (request.source === "gui" && request.command.toLowerCase() === "submit")
+      throw new Error("GUI submit must use preflightSubmit and confirmSubmit");
     const operationId = request.operationId ?? crypto.randomUUID();
     const started = new Date().toISOString();
     const args =
@@ -532,6 +542,8 @@ export const mockBackend: Backend = {
     return { reveal: false, openWith: false };
   },
   async performFileAction(request) {
+    if ((request.action as string) === "submit")
+      throw new Error("Submit must use preflightSubmit and confirmSubmit");
     const operationId = request.operationId ?? crypto.randomUUID();
     const event = (
       type: OperationEvent["type"],
@@ -786,4 +798,159 @@ export const mockBackend: Backend = {
       ),
     };
   },
+  async preflightSubmit(request) {
+    const changes = await this.queryPendingChanges();
+    const change = changes.find((item) => item.id === request.changeId);
+    const target: SubmitTargetSnapshot = {
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      changeId: request.changeId,
+      contextGeneration: mockContextGeneration,
+    };
+    const blockers: SubmitPreflight["blockers"] = [];
+    const warnings: SubmitPreflight["warnings"] = [];
+    if (request.changeId <= 0)
+      blockers.push({
+        code: "invalidTarget",
+        certainty: "confirmed",
+        message: "Submit requires a numbered pending changelist.",
+      });
+    if (!change)
+      blockers.push({
+        code: "changeNotFound",
+        certainty: "confirmed",
+        message: "The changelist was not found in the current scope.",
+      });
+    if (change && !change.description.trim())
+      blockers.push({
+        code: "emptyDescription",
+        certainty: "confirmed",
+        message: "The changelist description is empty.",
+      });
+    if (change && !change.files.length)
+      blockers.push({
+        code: "emptyChange",
+        certainty: "confirmed",
+        message: "The changelist contains no opened files.",
+      });
+    if (change?.shelvedFiles.length)
+      warnings.push({
+        code: "shelvedFilesPresent",
+        certainty: "confirmed",
+        message: "The changelist also has shelved files.",
+        paths: change.shelvedFiles.map((file) => file.depotPath),
+      });
+    warnings.push({
+      code: "jobPolicyUnknown",
+      certainty: "unknown",
+      message:
+        "Server-side job and trigger policy cannot be predicted in Mock.",
+    });
+    const depotPaths = change?.files.map((file) => file.depotPath).sort() ?? [];
+    const actionCounts = Object.fromEntries(
+      [...new Set(change?.files.map((file) => file.action) ?? [])].map(
+        (action) => [
+          action,
+          change?.files.filter((file) => file.action === action).length ?? 0,
+        ],
+      ),
+    );
+    const digest = mockDigest(JSON.stringify({ change, target }));
+    const ready = blockers.length === 0;
+    const token = ready ? crypto.randomUUID() : undefined;
+    const expiresAt = Date.now() + 120_000;
+    if (token) mockSubmitTokens.set(token, { target, digest, expiresAt });
+    return {
+      ready,
+      change: change ? structuredClone(change) : undefined,
+      blockers,
+      warnings,
+      target,
+      fileSummary: {
+        fileCount: depotPaths.length,
+        depotPaths,
+        actionCounts,
+        contentDigest: digest,
+      },
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [],
+      refreshRecommended: !ready,
+    };
+  },
+  async confirmSubmit(confirmation) {
+    const record = mockSubmitTokens.get(confirmation.token);
+    mockSubmitTokens.delete(confirmation.token);
+    const reject = (
+      failure: import("../../shared/contracts/types").SubmitFailureCode,
+      message: string,
+    ): import("../../shared/contracts/types").SubmitResult => ({
+      outcome: "rejected",
+      changeId: confirmation.target.changeId,
+      failure,
+      message,
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: false,
+        workspaceStatus: true,
+        depotPaths: [],
+        reason: "Run preflight again.",
+      },
+    });
+    if (!record) return reject("tokenUnknown", "Unknown or consumed token.");
+    if (record.expiresAt <= Date.now())
+      return reject("tokenExpired", "The preflight expired.");
+    if (JSON.stringify(record.target) !== JSON.stringify(confirmation.target))
+      return reject("targetMismatch", "The confirmation target changed.");
+    const currentTarget = {
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      changeId: confirmation.target.changeId,
+      contextGeneration: mockContextGeneration,
+    };
+    if (JSON.stringify(currentTarget) !== JSON.stringify(record.target))
+      return reject("contextChanged", "The connection changed.");
+    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    const index = changes.findIndex(
+      (change) => change.id === confirmation.target.changeId,
+    );
+    const change = changes[index];
+    if (
+      !change ||
+      mockDigest(JSON.stringify({ change, target: record.target })) !==
+        record.digest
+    )
+      return reject("changeChanged", "The changelist changed after preflight.");
+    changes.splice(index, 1);
+    const operationId = confirmation.operationId ?? crypto.randomUUID();
+    return {
+      outcome: "submitted",
+      changeId: confirmation.target.changeId,
+      submittedChangeId: confirmation.target.changeId,
+      message: `Changelist ${confirmation.target.changeId} was submitted in Mock.`,
+      operationId,
+      logReference: operationId,
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: change.files.map((file) => file.depotPath),
+        reason: "Refresh submit-related views.",
+      },
+    };
+  },
 };
+
+function mockDigest(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `mock-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}

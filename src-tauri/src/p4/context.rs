@@ -7,9 +7,14 @@
 use crate::domain::P4Context;
 use std::{path::PathBuf, sync::RwLock};
 
+struct CurrentContext {
+    value: P4Context,
+    generation: u64,
+}
+
 pub struct ContextStore {
     path: PathBuf,
-    current: RwLock<P4Context>,
+    current: RwLock<CurrentContext>,
 }
 
 impl ContextStore {
@@ -34,7 +39,10 @@ impl ContextStore {
         }
         Self {
             path,
-            current: RwLock::new(current),
+            current: RwLock::new(CurrentContext {
+                value: current,
+                generation: 1,
+            }),
         }
     }
 
@@ -42,7 +50,18 @@ impl ContextStore {
         self.current
             .read()
             .unwrap_or_else(|error| error.into_inner())
+            .value
             .clone()
+    }
+
+    /// Returns the connection and the in-process generation under one read lock.
+    /// The generation changes on every accepted save, including switching away and back.
+    pub fn snapshot(&self) -> (P4Context, u64) {
+        let current = self
+            .current
+            .read()
+            .unwrap_or_else(|error| error.into_inner());
+        (current.value.clone(), current.generation)
     }
 
     pub fn save(&self, context: P4Context) -> Result<P4Context, String> {
@@ -52,10 +71,12 @@ impl ContextStore {
         }
         let bytes = serde_json::to_vec_pretty(&context).map_err(|error| error.to_string())?;
         std::fs::write(&self.path, bytes).map_err(|error| error.to_string())?;
-        *self
+        let mut current = self
             .current
             .write()
-            .unwrap_or_else(|error| error.into_inner()) = context.clone();
+            .unwrap_or_else(|error| error.into_inner());
+        current.value = context.clone();
+        current.generation = current.generation.saturating_add(1);
         Ok(context)
     }
 }

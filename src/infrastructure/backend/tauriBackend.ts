@@ -46,4 +46,6 @@ export const tauriBackend: Backend = {
   queryPendingChanges: () => invoke("query_pending_changes"),
   mutatePendingChange: (request) =>
     invoke("mutate_pending_change", { request }),
+  preflightSubmit: (request) => invoke("preflight_submit", { request }),
+  confirmSubmit: (confirmation) => invoke("confirm_submit", { confirmation }),
 };

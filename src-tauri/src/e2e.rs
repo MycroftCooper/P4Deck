@@ -3,15 +3,17 @@ mod tests {
     use crate::{
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
-            file_service::FileService, status_cache::StatusCache,
+            file_service::FileService, status_cache::StatusCache, submit_service::SubmitService,
         },
         domain::{
             ConnectionState, FileAction, FileActionRequest, OperationResult, OperationSource,
             OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
-            PendingChangeMutationRequest,
+            PendingChangeMutationRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
+            SubmitPreflightRequest,
         },
         p4::{
-            changelists::ChangelistRepository, context::ContextStore, runner::P4Runner, workspaces,
+            changelists::ChangelistRepository, context::ContextStore, runner::P4Runner,
+            submit::SubmitRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -28,6 +30,9 @@ mod tests {
     const FIXTURE_SERVER: &str = "127.0.0.1:16661";
     const FIXTURE_USER: &str = "p4deck-fixture-admin";
     const E2E_CLIENT: &str = "p4deck-fixture-e2e";
+    const WRITER_CLIENT: &str = "p4deck-fixture-submit-writer";
+    const READ_ONLY_CLIENT: &str = "p4deck-fixture-submit-readonly";
+    const READ_ONLY_USER: &str = "p4deck-fixture-readonly";
     const FIXTURE_SERVER_ID: &str = "p4deck-fixture-local";
     const E2E_JOB: &str = "P4DECK-E2E-JOB";
 
@@ -117,7 +122,7 @@ mod tests {
     async fn run_fixture_case(config: FixtureConfig) -> Result<(), String> {
         std::fs::create_dir_all(&config.runtime_root).map_err(|error| error.to_string())?;
         let contexts = Arc::new(ContextStore::load(&config.runtime_root));
-        let connection = Arc::new(ConnectionService::new(contexts));
+        let connection = Arc::new(ConnectionService::new(contexts.clone()));
         let context = connection.save(config.context.clone())?;
 
         let logs = Arc::new(LogStore::open(&config.runtime_root.join("logs.sqlite"))?);
@@ -129,6 +134,17 @@ mod tests {
         let changelists = ChangelistService::new(
             ChangelistRepository::new(runner.clone()),
             status_cache.clone(),
+        );
+        let submit = SubmitService::new(
+            SubmitRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+        );
+        let expiring_submit = SubmitService::with_ttl(
+            SubmitRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+            1,
         );
         let files = FileService::new(runner.clone(), status_cache, journal.clone());
 
@@ -142,6 +158,10 @@ mod tests {
                     &files,
                     &changelists,
                     &journal,
+                    &logs,
+                    &submit,
+                    &expiring_submit,
+                    &contexts,
                     &context,
                     &config.workspace_root,
                 )
@@ -168,7 +188,7 @@ mod tests {
     }
 
     async fn setup_client(
-        runner: &P4Runner,
+        runner: &Arc<P4Runner>,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -255,6 +275,15 @@ mod tests {
             OutputMode::Text,
         )
         .await;
+        let _ = checked_run(
+            runner,
+            context,
+            "obliterate",
+            vec!["-y".into(), "//depot/p4deck-submit-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
         let deletion = checked_run(
             runner,
             context,
@@ -277,10 +306,14 @@ mod tests {
 
     async fn exercise_services(
         connection: &ConnectionService,
-        runner: &P4Runner,
+        runner: &Arc<P4Runner>,
         files: &FileService,
         changelists: &ChangelistService,
         journal: &OperationJournal,
+        logs: &LogStore,
+        submit: &SubmitService,
+        expiring_submit: &SubmitService,
+        contexts: &ContextStore,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -434,6 +467,20 @@ mod tests {
             format!("E2E client still has opened files after Revert: {opened_values:?}"),
         )?;
         exercise_pending_changelists(changelists, journal, runner, files, context, root).await?;
+        exercise_submit_state_machine(
+            changelists,
+            journal,
+            logs,
+            submit,
+            expiring_submit,
+            contexts,
+            files,
+            context,
+            root,
+        )
+        .await?;
+        exercise_submit_blockers(runner, changelists, submit, files, context, root).await?;
+        exercise_submit_permission_blocker(runner, changelists, context, root).await?;
         Ok(())
     }
 
@@ -749,6 +796,917 @@ mod tests {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
+    async fn exercise_submit_state_machine(
+        changelists: &ChangelistService,
+        journal: &OperationJournal,
+        logs: &LogStore,
+        submit: &SubmitService,
+        expiring_submit: &SubmitService,
+        contexts: &ContextStore,
+        files: &FileService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let default = submit
+            .preflight(SubmitPreflightRequest { change_id: 0 }, None)
+            .await;
+        ensure(
+            has_blocker(&default, crate::domain::SubmitIssueCode::InvalidTarget)
+                && has_blocker(&default, crate::domain::SubmitIssueCode::EmptyDescription)
+                && has_blocker(&default, crate::domain::SubmitIssueCode::EmptyChange),
+            format!("Default CL did not expose empty/invalid blockers: {default:?}"),
+        )?;
+
+        let empty = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-create-empty".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "BE-003 empty CL".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?;
+        let empty_id = empty.created_change_id.ok_or("empty CL was not created")?;
+        let empty_preflight = submit
+            .preflight(
+                SubmitPreflightRequest {
+                    change_id: empty_id,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            has_blocker(
+                &empty_preflight,
+                crate::domain::SubmitIssueCode::EmptyChange,
+            ) && empty_preflight.token.is_none(),
+            format!("empty CL unexpectedly passed: {empty_preflight:?}"),
+        )?;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-delete-empty".into()),
+                    mutation: PendingChangeMutation::Delete {
+                        change_id: empty_id,
+                    },
+                },
+                None,
+            )
+            .await?;
+
+        let local = root.join("p4deck-submit-e2e").join("success.txt");
+        std::fs::create_dir_all(local.parent().expect("test file has a parent"))
+            .map_err(|error| error.to_string())?;
+        std::fs::write(&local, b"BE-003 submit state machine\n")
+            .map_err(|error| error.to_string())?;
+        action(
+            files,
+            context,
+            FileAction::Add,
+            vec![local.to_string_lossy().into_owned()],
+        )
+        .await?;
+        let created = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-create-submit".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "BE-003 safe submit".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?;
+        let change_id = created
+            .created_change_id
+            .ok_or("submit CL was not created")?;
+        let depot_path = "//depot/p4deck-submit-e2e/success.txt".to_owned();
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-move-submit".into()),
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: change_id,
+                        depot_paths: vec![depot_path.clone()],
+                    },
+                },
+                None,
+            )
+            .await?;
+
+        let expiring = expiring_submit
+            .preflight(SubmitPreflightRequest { change_id }, None)
+            .await;
+        ensure(
+            expiring.ready && expiring.token.is_some(),
+            format!("expiring preflight was not ready: {expiring:?}"),
+        )?;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let expired = expiring_submit
+            .confirm(
+                SubmitConfirmation {
+                    token: expiring.token.expect("checked above"),
+                    target: expiring.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            expired.failure == Some(SubmitFailureCode::TokenExpired),
+            format!("expired token was not rejected: {expired:?}"),
+        )?;
+
+        let switched = submit
+            .preflight(SubmitPreflightRequest { change_id }, None)
+            .await;
+        let mut other_workspace = context.clone();
+        other_workspace.client = "p4deck-fixture-other-workspace".into();
+        other_workspace.cwd = Some(root.join("other-workspace").to_string_lossy().into_owned());
+        contexts.save(other_workspace)?;
+        let switched_result = submit
+            .confirm(
+                SubmitConfirmation {
+                    token: switched.token.ok_or("workspace preflight had no token")?,
+                    target: switched.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        contexts.save(context.clone())?;
+        ensure(
+            switched_result.failure == Some(SubmitFailureCode::ContextChanged),
+            format!("workspace switch was not rejected: {switched_result:?}"),
+        )?;
+
+        let mismatched = submit
+            .preflight(SubmitPreflightRequest { change_id }, None)
+            .await;
+        let mut wrong_target = mismatched.target.clone();
+        wrong_target.workspace.push_str("-wrong");
+        let mismatch_result = submit
+            .confirm(
+                SubmitConfirmation {
+                    token: mismatched.token.ok_or("target preflight had no token")?,
+                    target: wrong_target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            mismatch_result.failure == Some(SubmitFailureCode::TargetMismatch),
+            format!("target mismatch was not rejected: {mismatch_result:?}"),
+        )?;
+
+        let changed = submit
+            .preflight(SubmitPreflightRequest { change_id }, None)
+            .await;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-change-after-check".into()),
+                    mutation: PendingChangeMutation::Edit {
+                        change_id,
+                        description: "BE-003 changed after preflight".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?;
+        let changed_result = submit
+            .confirm(
+                SubmitConfirmation {
+                    token: changed.token.ok_or("content preflight had no token")?,
+                    target: changed.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            matches!(
+                changed_result.failure,
+                Some(SubmitFailureCode::ChangeChanged | SubmitFailureCode::PreflightBlocked)
+            ),
+            format!("changed CL was not rejected: {changed_result:?}"),
+        )?;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be003-restore-file-after-change".into()),
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: change_id,
+                        depot_paths: vec![depot_path.clone()],
+                    },
+                },
+                None,
+            )
+            .await?;
+
+        let ready = submit
+            .preflight(SubmitPreflightRequest { change_id }, None)
+            .await;
+        ensure(
+            ready.ready && ready.blockers.is_empty() && ready.token.is_some(),
+            format!("valid submit preflight was blocked: {ready:?}"),
+        )?;
+        let submitted = submit
+            .confirm(
+                SubmitConfirmation {
+                    token: ready.token.expect("checked above"),
+                    target: ready.target,
+                    operation_id: Some("be003-submit-success".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            submitted.outcome == SubmitOutcome::Submitted
+                && submitted.submitted_change_id == Some(change_id)
+                && submitted.operation_id.as_deref() == Some("be003-submit-success")
+                && submitted.log_reference.as_deref() == Some("be003-submit-success"),
+            format!("submit did not return a structured success: {submitted:?}"),
+        )?;
+        ensure(
+            journal
+                .get("be003-submit-success")
+                .is_some_and(|record| record.state == JournalState::Succeeded),
+            "successful submit was not recorded in the Operation Journal",
+        )?;
+        ensure(
+            !logs
+                .query(&crate::domain::LogQuery {
+                    operation_id: Some("be003-submit-success".into()),
+                    ..Default::default()
+                })
+                .is_empty(),
+            "successful submit was not linked to a redacted log entry",
+        )?;
+        ensure(
+            changelists
+                .query_pending(context.clone(), None)
+                .await?
+                .iter()
+                .all(|change| change.id != change_id),
+            "submitted changelist remained pending",
+        )
+    }
+
+    fn has_blocker(
+        preflight: &crate::domain::SubmitPreflight,
+        code: crate::domain::SubmitIssueCode,
+    ) -> bool {
+        preflight.blockers.iter().any(|issue| issue.code == code)
+    }
+
+    async fn exercise_submit_blockers(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        submit: &SubmitService,
+        files: &FileService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let writer_root = root
+            .parent()
+            .ok_or("E2E workspace has no fixture parent")?
+            .join("submit-writer-workspace");
+        let writer = setup_named_client(runner, context, WRITER_CLIENT, &writer_root).await?;
+        let scenario = async {
+            let writer_outdated = writer_root.join("p4deck-submit-e2e").join("outdated.txt");
+            std::fs::create_dir_all(writer_outdated.parent().expect("test path has parent"))
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&writer_outdated, b"revision one\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "add",
+                vec![writer_outdated.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "BE-003 out-of-date seed".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+
+            let outdated_depot = "//depot/p4deck-submit-e2e/outdated.txt".to_owned();
+            action(
+                files,
+                context,
+                FileAction::GetLatest,
+                vec![outdated_depot.clone()],
+            )
+            .await?;
+            let local_outdated = root
+                .join("p4deck-submit-e2e")
+                .join("outdated.txt")
+                .to_string_lossy()
+                .into_owned();
+            action(
+                files,
+                context,
+                FileAction::Checkout,
+                vec![local_outdated.clone()],
+            )
+            .await?;
+            let outdate_change =
+                create_numbered_change(changelists, context, "BE-003 out-of-date").await?;
+            move_to_change(changelists, context, outdate_change, &outdated_depot).await?;
+
+            checked_run(
+                runner,
+                &writer,
+                "sync",
+                vec![outdated_depot.clone()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "edit",
+                vec![writer_outdated.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::write(&writer_outdated, b"revision two\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "BE-003 out-of-date head".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let outdate = submit
+                .preflight(
+                    SubmitPreflightRequest {
+                        change_id: outdate_change,
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                has_blocker(&outdate, crate::domain::SubmitIssueCode::OutOfDateFiles),
+                format!("out-of-date file was not blocked: {outdate:?}"),
+            )?;
+            action(files, context, FileAction::Revert, vec![local_outdated]).await?;
+            delete_empty_change(changelists, context, outdate_change).await?;
+
+            let writer_main = writer_root
+                .join("p4deck-submit-e2e")
+                .join("integration")
+                .join("main.txt");
+            std::fs::create_dir_all(writer_main.parent().expect("test path has parent"))
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&writer_main, b"base\n").map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "add",
+                vec![writer_main.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "BE-003 integration seed".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let integration_main = "//depot/p4deck-submit-e2e/integration/main.txt";
+            let integration_branch = "//depot/p4deck-submit-e2e/integration/branch.txt";
+            checked_run(
+                runner,
+                &writer,
+                "integrate",
+                vec![integration_main.into(), integration_branch.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "resolve",
+                vec!["-at".into(), integration_branch.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "BE-003 integration branch".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "edit",
+                vec![writer_main.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::write(&writer_main, b"main changed after branch\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "BE-003 integration source update".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "sync",
+                vec![format!("//depot/p4deck-submit-e2e/integration/...")],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let unresolved_change =
+                create_numbered_change(changelists, context, "BE-003 unresolved").await?;
+            checked_run(
+                runner,
+                context,
+                "integrate",
+                vec![
+                    "-c".into(),
+                    unresolved_change.to_string(),
+                    integration_main.into(),
+                    integration_branch.into(),
+                ],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let unresolved = submit
+                .preflight(
+                    SubmitPreflightRequest {
+                        change_id: unresolved_change,
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                has_blocker(&unresolved, crate::domain::SubmitIssueCode::UnresolvedFiles),
+                format!("unresolved integration was not blocked: {unresolved:?}"),
+            )?;
+            checked_run(
+                runner,
+                context,
+                "revert",
+                vec![integration_branch.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            delete_empty_change(changelists, context, unresolved_change).await
+        }
+        .await;
+        let cleanup = cleanup_named_client(runner, context, WRITER_CLIENT, &writer_root).await;
+        match (scenario, cleanup) {
+            (Err(error), Err(cleanup_error)) => Err(format!(
+                "{error}; writer cleanup also failed: {cleanup_error}"
+            )),
+            (Err(error), _) => Err(error),
+            (Ok(()), Err(error)) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
+    }
+
+    async fn create_numbered_change(
+        changelists: &ChangelistService,
+        context: &P4Context,
+        description: &str,
+    ) -> Result<i64, String> {
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: None,
+                    mutation: PendingChangeMutation::Create {
+                        description: description.into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?
+            .created_change_id
+            .ok_or_else(|| "numbered changelist creation returned no ID".into())
+    }
+
+    async fn move_to_change(
+        changelists: &ChangelistService,
+        context: &P4Context,
+        change_id: i64,
+        depot_path: &str,
+    ) -> Result<(), String> {
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: None,
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: change_id,
+                        depot_paths: vec![depot_path.into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_empty_change(
+        changelists: &ChangelistService,
+        context: &P4Context,
+        change_id: i64,
+    ) -> Result<(), String> {
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: None,
+                    mutation: PendingChangeMutation::Delete { change_id },
+                },
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn setup_named_client(
+        runner: &P4Runner,
+        base: &P4Context,
+        client: &str,
+        root: &Path,
+    ) -> Result<P4Context, String> {
+        std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
+        let mut context = base.clone();
+        context.client = client.into();
+        context.cwd = Some(root.to_string_lossy().into_owned());
+        let spec = format!(
+            "Client: {client}\nOwner: {FIXTURE_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nLineEnd: local\nView:\n\t//depot/... //{client}/...\n",
+            root.to_string_lossy().replace('\\', "/")
+        );
+        checked_run(
+            runner,
+            &context,
+            "client",
+            vec!["-i".into()],
+            Some(spec),
+            OutputMode::Text,
+        )
+        .await?;
+        Ok(context)
+    }
+
+    async fn cleanup_named_client(
+        runner: &P4Runner,
+        base: &P4Context,
+        client: &str,
+        root: &Path,
+    ) -> Result<(), String> {
+        let mut context = base.clone();
+        context.client = client.into();
+        context.cwd = Some(root.to_string_lossy().into_owned());
+        let _ = checked_run(
+            runner,
+            &context,
+            "revert",
+            vec!["-w".into(), "//...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        delete_pending_for_client(runner, base, FIXTURE_USER, client).await;
+        let deletion = checked_run(
+            runner,
+            base,
+            "client",
+            vec!["-d".into(), "-f".into(), client.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        if root.exists() {
+            std::fs::remove_dir_all(root).map_err(|error| error.to_string())?;
+        }
+        deletion.map(|_| ())
+    }
+
+    async fn delete_pending_for_client(
+        runner: &P4Runner,
+        admin: &P4Context,
+        user: &str,
+        client: &str,
+    ) {
+        let Ok(changes) = checked_run(
+            runner,
+            admin,
+            "changes",
+            vec![
+                "-s".into(),
+                "pending".into(),
+                "-u".into(),
+                user.into(),
+                "-c".into(),
+                client.into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await
+        else {
+            return;
+        };
+        for change_id in json_values(&changes).into_iter().filter_map(|value| {
+            value
+                .get("change")
+                .and_then(Value::as_str)
+                .and_then(|value| value.parse::<i64>().ok())
+        }) {
+            let _ = checked_run(
+                runner,
+                admin,
+                "change",
+                vec!["-d".into(), "-f".into(), change_id.to_string()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+    }
+
+    async fn exercise_submit_permission_blocker(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let original = checked_run(
+            runner,
+            context,
+            "protect",
+            vec!["-o".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let original = writable_protections(&stdout_text(&original))?;
+        let restricted = format!(
+            "Protections:\n\tsuper user {FIXTURE_USER} * //...\n\topen user {READ_ONLY_USER} * //depot/p4deck-submit-e2e/...\n"
+        );
+        checked_run(
+            runner,
+            context,
+            "protect",
+            vec!["-i".into()],
+            Some(restricted),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let readonly_root = root
+            .parent()
+            .ok_or("E2E workspace has no fixture parent")?
+            .join("submit-readonly-workspace");
+        let permission_context_root =
+            std::env::temp_dir().join(format!("p4deck-submit-permission-{}", uuid::Uuid::new_v4()));
+        let mut readonly = context.clone();
+        readonly.user = READ_ONLY_USER.into();
+        readonly.client = READ_ONLY_CLIENT.into();
+        readonly.cwd = Some(readonly_root.to_string_lossy().into_owned());
+        let scenario = async {
+            let user_form = format!(
+                "User: {READ_ONLY_USER}\nEmail: readonly@fixture.invalid\nFullName: P4Deck read-only fixture\n"
+            );
+            checked_run(
+                runner,
+                context,
+                "user",
+                vec!["-f".into(), "-i".into()],
+                Some(user_form),
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "passwd",
+                vec![READ_ONLY_USER.into()],
+                Some("p4deck-readonly-initial\np4deck-readonly-initial\n".into()),
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::create_dir_all(&readonly_root).map_err(|error| error.to_string())?;
+            let client_form = format!(
+                "Client: {READ_ONLY_CLIENT}\nOwner: {READ_ONLY_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nLineEnd: local\nView:\n\t//depot/... //{READ_ONLY_CLIENT}/...\n",
+                readonly_root.to_string_lossy().replace('\\', "/")
+            );
+            checked_run(
+                runner,
+                context,
+                "client",
+                vec!["-i".into()],
+                Some(client_form),
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &readonly,
+                "passwd",
+                Vec::new(),
+                Some(
+                    "p4deck-readonly-initial\np4deck-readonly-local\np4deck-readonly-local\n"
+                        .into(),
+                ),
+                OutputMode::Text,
+            )
+            .await?;
+            let login = crate::p4::connection::ConnectionAdapter::execute(
+                &readonly,
+                crate::p4::connection::ConnectionOperation::Login,
+                None,
+                Some("p4deck-readonly-local"),
+            )
+            .await;
+            ensure(
+                login.state == ConnectionState::Connected,
+                format!("read-only fixture login failed: {login:?}"),
+            )?;
+            let depot_path = "//depot/p4deck-submit-e2e/outdated.txt";
+            checked_run(
+                runner,
+                &readonly,
+                "sync",
+                vec![depot_path.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &readonly,
+                "edit",
+                vec![depot_path.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let change_id =
+                create_numbered_change(changelists, &readonly, "BE-003 permission denial").await?;
+            move_to_change(changelists, &readonly, change_id, depot_path).await?;
+
+            let contexts = Arc::new(ContextStore::load(&permission_context_root));
+            contexts.save(readonly.clone())?;
+            let cache = Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024));
+            let permission_submit = SubmitService::new(
+                SubmitRepository::new(runner.clone()),
+                contexts,
+                cache,
+            );
+            let preflight = permission_submit
+                .preflight(SubmitPreflightRequest { change_id }, None)
+                .await;
+            ensure(
+                has_blocker(
+                    &preflight,
+                    crate::domain::SubmitIssueCode::PermissionDenied,
+                ) && preflight.token.is_none(),
+                format!("write permission denial was not blocked: {preflight:?}"),
+            )?;
+            checked_run(
+                runner,
+                &readonly,
+                "revert",
+                vec![depot_path.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            delete_empty_change(changelists, &readonly, change_id).await
+        }
+        .await;
+
+        let restore = checked_run(
+            runner,
+            context,
+            "protect",
+            vec!["-i".into()],
+            Some(original),
+            OutputMode::Text,
+        )
+        .await
+        .map(|_| ());
+        let _ = checked_run(
+            runner,
+            &readonly,
+            "revert",
+            vec!["-w".into(), "//...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        delete_pending_for_client(runner, context, READ_ONLY_USER, READ_ONLY_CLIENT).await;
+        let _ = checked_run(
+            runner,
+            context,
+            "client",
+            vec!["-d".into(), "-f".into(), READ_ONLY_CLIENT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            runner,
+            context,
+            "user",
+            vec!["-d".into(), "-f".into(), READ_ONLY_USER.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        if readonly_root.exists() {
+            let _ = std::fs::remove_dir_all(&readonly_root);
+        }
+        if permission_context_root.exists() {
+            let _ = std::fs::remove_dir_all(&permission_context_root);
+        }
+        match (scenario, restore) {
+            (Err(error), Err(restore_error)) => Err(format!(
+                "{error}; protections restore also failed: {restore_error}"
+            )),
+            (Err(error), _) => Err(error),
+            (Ok(()), Err(error)) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
+    }
+
+    fn writable_protections(output: &str) -> Result<String, String> {
+        let lines = output.lines().collect::<Vec<_>>();
+        let start = lines
+            .iter()
+            .rposition(|line| line.trim() == "Protections:")
+            .ok_or("p4 protect -o returned no Protections field")?;
+        let body = lines[start + 1..]
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.trim_start())
+            .collect::<Vec<_>>();
+        if body.is_empty() {
+            return Err("p4 protect -o returned an empty Protections field".into());
+        }
+        Ok(format!(
+            "Protections:\n{}\n",
+            body.iter()
+                .map(|line| format!("\t{line}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ))
+    }
+
     fn pending_change(
         changes: &[crate::domain::PendingChange],
         id: i64,
@@ -862,6 +1820,17 @@ mod tests {
             .filter_map(|event| event.message.as_deref())
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    fn stdout_text(result: &OperationResult) -> String {
+        result
+            .events
+            .iter()
+            .filter(|event| matches!(event.kind, crate::domain::EventKind::Stdout))
+            .filter_map(|event| event.message.as_deref())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n"
     }
 
     fn ensure(condition: bool, message: impl Into<String>) -> Result<(), String> {

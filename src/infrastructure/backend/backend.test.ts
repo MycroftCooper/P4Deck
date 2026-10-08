@@ -105,6 +105,48 @@ describe("controlled P4 terminal", () => {
     ).toBe(false);
   });
 
+  it("models one-time, target-bound submit confirmation without a file-action bypass", async () => {
+    await expect(
+      backend.runP4({
+        source: "gui",
+        command: "submit",
+        args: ["-c", "31798"],
+        context: (await backend.runtimeInfo()).context,
+        outputMode: "jsonLines",
+      }),
+    ).rejects.toThrow("preflightSubmit");
+    await expect(
+      backend.performFileAction({
+        action: "submit" as import("../../shared/contracts/types").P4FileAction,
+        paths: [],
+        changelistId: 31798,
+      }),
+    ).rejects.toThrow("preflightSubmit");
+    const preflight = await backend.preflightSubmit({ changeId: 31798 });
+    expect(preflight.ready).toBe(true);
+    expect(preflight.token).toBeTruthy();
+    expect(preflight.target.changeId).toBe(31798);
+    expect(preflight.fileSummary.fileCount).toBeGreaterThan(0);
+    const submitted = await backend.confirmSubmit({
+      token: preflight.token!,
+      target: preflight.target,
+      operationId: "mock-submit-contract",
+    });
+    expect(submitted).toMatchObject({
+      outcome: "submitted",
+      changeId: 31798,
+      operationId: "mock-submit-contract",
+    });
+    const replay = await backend.confirmSubmit({
+      token: preflight.token!,
+      target: preflight.target,
+    });
+    expect(replay).toMatchObject({
+      outcome: "rejected",
+      failure: "tokenUnknown",
+    });
+  });
+
   it("streams monotonic action progress before resolving", async () => {
     const operationId = crypto.randomUUID();
     const progress: number[] = [];

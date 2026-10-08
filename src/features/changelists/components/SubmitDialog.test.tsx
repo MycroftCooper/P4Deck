@@ -14,6 +14,7 @@ afterEach(() => {
 });
 function result(): SubmitCheck {
   return {
+    ready: true,
     change: {
       id: 10,
       description: "Changes",
@@ -25,9 +26,33 @@ function result(): SubmitCheck {
       shelvedFiles: [],
     },
     blockers: [],
-    warnings: ["Review warning"],
+    warnings: [
+      {
+        code: "jobPolicyUnknown",
+        certainty: "unknown",
+        message: "Review warning",
+      },
+    ],
+    target: {
+      server: "server:1666",
+      user: "tester",
+      client: "workspace",
+      workspace: "/workspace",
+      changeId: 10,
+      contextGeneration: 1,
+    },
+    fileSummary: {
+      fileCount: 1,
+      depotPaths: ["//depot/a"],
+      actionCounts: { edit: 1 },
+      contentDigest: "digest",
+    },
     token: "snapshot-token",
     expiresAt: Date.now() + 60_000,
+    ttlMs: 60_000,
+    operationIds: ["preflight-op"],
+    logReference: "preflight-op",
+    refreshRecommended: false,
   };
 }
 async function render(
@@ -80,22 +105,44 @@ it("shows loading before a summary arrives and failure if it is missing", async 
   expect(document.body.textContent).toContain("找不到此 CL");
   expect(button("确认提交整个 CL").disabled).toBe(true);
 });
-it("requires explicit whole-CL acknowledgement and passes exact CL/token to an adapter", async () => {
-  const submit = vi.fn(async () => "Submitted CL 10");
+it("requires explicit whole-CL acknowledgement and passes the exact checked target to an adapter", async () => {
+  const submit = vi.fn(async () => ({
+    outcome: "submitted" as const,
+    changeId: 10,
+    submittedChangeId: 10,
+    message: "Submitted CL 10",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  }));
   await render({ check: async () => result(), submit });
   await click("重新预检");
   expect(document.body.textContent).toContain("Review warning");
   expect(button("确认提交整个 CL").disabled).toBe(true);
   await acknowledge();
   await click("确认提交整个 CL");
-  expect(submit).toHaveBeenCalledExactlyOnceWith(10, "snapshot-token");
+  expect(submit).toHaveBeenCalledExactlyOnceWith({
+    token: "snapshot-token",
+    target: result().target,
+  });
   expect(document.body.textContent).toContain("Submitted CL 10");
   expect(button("确认提交整个 CL").disabled).toBe(true);
 });
 it("blocks preflight failures and requires fresh preflight after a submit failure", async () => {
-  const check = vi.fn(async () => ({
+  const check = vi.fn(async (): Promise<SubmitCheck> => ({
     ...result(),
-    blockers: ["Unresolved files"],
+    ready: false,
+    blockers: [
+      {
+        code: "unresolvedFiles",
+        certainty: "confirmed",
+        message: "Unresolved files",
+      },
+    ],
   }));
   const submit = vi.fn(async () => {
     throw new Error("offline");
@@ -114,7 +161,21 @@ it("blocks preflight failures and requires fresh preflight after a submit failur
 });
 it("expires a checked snapshot and invalidates acknowledgement", async () => {
   vi.useFakeTimers();
-  await render({ check: async () => result(), submit: vi.fn() });
+  await render({
+    check: async () => result(),
+    submit: vi.fn(async () => ({
+      outcome: "submitted" as const,
+      changeId: 10,
+      message: "done",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: [],
+        reason: "refresh",
+      },
+    })),
+  });
   await click("重新预检");
   await acknowledge();
   await act(async () => vi.advanceTimersByTime(60_001));
@@ -125,7 +186,7 @@ it("rejects mismatched preflight identities", async () => {
   await render({
     check: async () => ({
       ...result(),
-      change: { ...result().change, id: 20 },
+      change: { ...result().change!, id: 20 },
     }),
   });
   await click("重新预检");

@@ -32,6 +32,10 @@ import type {
   PendingChange,
   PendingChangeMutationRequest,
   PendingChangeMutationResult,
+  SubmitConfirmation,
+  SubmitPreflight,
+  SubmitPreflightRequest,
+  SubmitResult,
   RevisionGraph,
   RuntimeInfo,
   TrustRequest,
@@ -99,4 +103,6 @@ export interface Backend {
   mutatePendingChange(
     request: PendingChangeMutationRequest,
   ): Promise<PendingChangeMutationResult>;
+  preflightSubmit(request: SubmitPreflightRequest): Promise<SubmitPreflight>;
+  confirmSubmit(confirmation: SubmitConfirmation): Promise<SubmitResult>;
 }

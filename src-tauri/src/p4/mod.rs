@@ -5,4 +5,5 @@ pub mod files;
 pub mod history;
 pub mod runner;
 pub mod streams;
+pub mod submit;
 pub mod workspaces;

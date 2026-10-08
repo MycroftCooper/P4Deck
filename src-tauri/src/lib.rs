@@ -12,8 +12,9 @@ use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
 use app::file_service::FileService;
 use app::status_cache::{shared_default, StatusCache};
+use app::submit_service::SubmitService;
 use p4::context::ContextStore;
-use p4::{changelists::ChangelistRepository, runner::P4Runner};
+use p4::{changelists::ChangelistRepository, runner::P4Runner, submit::SubmitRepository};
 use persistence::{log_store::LogStore, operation_journal::OperationJournal};
 use std::sync::Arc;
 use tauri::Manager;
@@ -22,6 +23,7 @@ pub(crate) struct AppState {
     pub runner: Arc<P4Runner>,
     pub logs: Arc<LogStore>,
     pub changelists: Arc<ChangelistService>,
+    pub submit: Arc<SubmitService>,
     pub files: Arc<FileService>,
     pub connection: Arc<ConnectionService>,
     pub status_cache: Arc<StatusCache>,
@@ -36,7 +38,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let contexts = Arc::new(ContextStore::load(&data_dir));
-            let connection = Arc::new(ConnectionService::new(contexts));
+            let connection = Arc::new(ConnectionService::new(contexts.clone()));
             let logs = Arc::new(
                 LogStore::open(&data_dir.join("p4deck.sqlite")).map_err(std::io::Error::other)?,
             );
@@ -55,6 +57,11 @@ pub fn run() {
                 ChangelistRepository::new(runner.clone()),
                 status_cache.clone(),
             ));
+            let submit = Arc::new(SubmitService::new(
+                SubmitRepository::new(runner.clone()),
+                contexts,
+                status_cache.clone(),
+            ));
             let files = Arc::new(FileService::new(
                 runner.clone(),
                 status_cache.clone(),
@@ -64,6 +71,7 @@ pub fn run() {
                 runner,
                 logs,
                 changelists,
+                submit,
                 files,
                 connection,
                 status_cache,
@@ -108,7 +116,9 @@ pub fn run() {
             ipc::commands::get_file_history,
             ipc::commands::get_revision_graph,
             ipc::commands::query_pending_changes,
-            ipc::commands::mutate_pending_change
+            ipc::commands::mutate_pending_change,
+            ipc::commands::preflight_submit,
+            ipc::commands::confirm_submit
         ])
         .run(tauri::generate_context!())
         .expect("error while running P4Deck");

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct P4Context {
     pub executable: Option<String>,
@@ -415,7 +415,6 @@ pub enum FileAction {
     /// Kept for the existing UI: untracked files are deleted locally, other files are opened for delete.
     Delete,
     MarkForDelete,
-    Submit,
     RevertUnchanged,
     Revert,
     MoveToChangelist,
@@ -582,4 +581,150 @@ pub struct PendingChangeMutationResult {
     pub refreshed_changes: Vec<PendingChange>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitPreflightRequest {
+    pub change_id: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmitIssueCode {
+    InvalidTarget,
+    ChangeNotFound,
+    EmptyDescription,
+    EmptyChange,
+    UnresolvedFiles,
+    OutOfDateFiles,
+    LockedFiles,
+    ExclusiveOpenConflict,
+    PermissionDenied,
+    ShelvedFilesPresent,
+    JobMissing,
+    JobPolicyUnknown,
+    FileStateUnknown,
+    PermissionUnknown,
+    PreflightUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmitIssueCertainty {
+    Confirmed,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitIssue {
+    pub code: SubmitIssueCode,
+    pub certainty: SubmitIssueCertainty,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitTargetSnapshot {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub change_id: i64,
+    pub context_generation: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitFileSummary {
+    pub file_count: usize,
+    pub depot_paths: Vec<String>,
+    pub action_counts: std::collections::BTreeMap<String, usize>,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitPreflight {
+    pub ready: bool,
+    pub change: Option<PendingChange>,
+    pub blockers: Vec<SubmitIssue>,
+    pub warnings: Vec<SubmitIssue>,
+    pub target: SubmitTargetSnapshot,
+    pub file_summary: SubmitFileSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub refresh_recommended: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitConfirmation {
+    pub token: String,
+    pub target: SubmitTargetSnapshot,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmitOutcome {
+    Submitted,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmitFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    ContextChanged,
+    ChangeChanged,
+    PreflightBlocked,
+    Offline,
+    ServerUnreachable,
+    AuthExpired,
+    PermissionDenied,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitRefreshAdvice {
+    pub pending_changes: bool,
+    pub submitted_changes: bool,
+    pub workspace_status: bool,
+    pub depot_paths: Vec<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitResult {
+    pub outcome: SubmitOutcome,
+    pub change_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submitted_change_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<SubmitFailureCode>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub refresh: SubmitRefreshAdvice,
 }

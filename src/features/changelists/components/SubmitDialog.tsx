@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
-import type { PendingChange } from "../../../shared/contracts/types";
+import type {
+  PendingChange,
+  SubmitConfirmation,
+  SubmitPreflight,
+  SubmitResult,
+} from "../../../shared/contracts/types";
 
-export interface SubmitCheck {
-  change: PendingChange;
-  blockers: string[];
-  warnings: string[];
-  /** Must identify the exact checked server snapshot, not just the CL number. */
-  token: string;
-  expiresAt: number;
-}
+export type SubmitCheck = SubmitPreflight;
 interface Props {
   changeId: number;
   count: number;
@@ -22,7 +20,7 @@ interface Props {
   loadSummary(): Promise<PendingChange | undefined>;
   check?(id: number): Promise<SubmitCheck>;
   /** Adapter must atomically revalidate token, connection and whole-CL scope. */
-  submit?(id: number, token: string): Promise<string>;
+  submit?(confirmation: SubmitConfirmation): Promise<SubmitResult>;
 }
 type Phase =
   | "summary"
@@ -122,7 +120,9 @@ export function SubmitDialog(props: Props) {
       )
         return;
       if (
-        result.change.id !== origin.id ||
+        result.change?.id !== origin.id ||
+        result.target.changeId !== origin.id ||
+        result.target.client !== origin.client ||
         !result.token ||
         !Number.isFinite(result.expiresAt)
       )
@@ -135,7 +135,8 @@ export function SubmitDialog(props: Props) {
       setCheck(result);
       setSummary(result.change);
       setPhase(
-        result.blockers.length ||
+        !result.ready ||
+          result.blockers.length ||
           !result.change.files.length ||
           !result.change.description.trim()
           ? "blocked"
@@ -171,13 +172,20 @@ export function SubmitDialog(props: Props) {
     setPhase("submitting");
     setMessage("");
     try {
-      const result = await props.submit(origin.id, check.token);
+      const result = await props.submit({
+        token: check.token!,
+        target: check.target,
+      });
       if (
         epoch === generation.current &&
         latestConnection.current === origin.connectionKey
       ) {
-        setMessage(result);
-        setPhase("success");
+        setMessage(result.message);
+        setPhase(result.outcome === "submitted" ? "success" : "failed");
+        if (result.outcome !== "submitted") {
+          setCheck(undefined);
+          setAcknowledged(false);
+        }
       }
     } catch (error) {
       if (epoch === generation.current) {
@@ -303,16 +311,16 @@ export function SubmitDialog(props: Props) {
           {tr("预检已过期，请重新检查。", "Preflight expired. Check again.")}
         </DialogNotice>
       )}
-      {check?.blockers.map((text, index) => (
-        <DialogNotice key={`b${index}`} error>
+      {check?.blockers.map((item, index) => (
+        <DialogNotice key={`b${item.code}-${index}`} error>
           {tr("阻塞：", "Blocker: ")}
-          {text}
+          {item.message}
         </DialogNotice>
       ))}
-      {check?.warnings.map((text, index) => (
-        <DialogNotice key={`w${index}`}>
+      {check?.warnings.map((item, index) => (
+        <DialogNotice key={`w${item.code}-${index}`}>
           {tr("警告：", "Warning: ")}
-          {text}
+          {item.message}
         </DialogNotice>
       ))}
       {message && (
