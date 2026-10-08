@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
-import { Cable, Palette, Save, Radio } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Cable,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Palette,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
+  ConnectionStatus,
   Locale,
   P4Context,
   RuntimeInfo,
@@ -9,9 +19,19 @@ import type {
 } from "../../shared/contracts/types";
 
 import { defaultUi, type UiPreferences } from "./preferences";
+import {
+  connectionPresentation,
+  contextIdentity,
+  notTestedStatus,
+  probeConnection,
+} from "./connectionWizard";
 interface Props {
   runtime: RuntimeInfo;
-  onConnection(context: P4Context): void;
+  onConnection(
+    context: P4Context,
+    connection?: ConnectionStatus,
+    p4Version?: string,
+  ): void;
   theme: ThemeMode;
   onTheme(theme: ThemeMode): void;
   locale: Locale;
@@ -19,6 +39,19 @@ interface Props {
   ui: UiPreferences;
   onUi(ui: UiPreferences): void;
 }
+
+function normalizeContext(draft: P4Context): P4Context {
+  return Object.fromEntries(
+    Object.entries(draft).map(([key, value]) => [
+      key,
+      typeof value === "string"
+        ? value.trim() ||
+          (["server", "user", "client"].includes(key) ? "" : undefined)
+        : value,
+    ]),
+  ) as unknown as P4Context;
+}
+
 export function SettingsPage({
   runtime,
   onConnection,
@@ -33,14 +66,41 @@ export function SettingsPage({
     tr = (a: string, b: string) => (zh ? a : b);
   const [draft, setDraft] = useState(runtime.context),
     [busy, setBusy] = useState(false),
-    [status, setStatus] = useState(""),
-    [error, setError] = useState("");
-  useEffect(() => setDraft(runtime.context), [runtime.context]);
+    [operation, setOperation] = useState(""),
+    [connection, setConnection] = useState(runtime.connection),
+    [cliVersion, setCliVersion] = useState(runtime.p4Version),
+    [notice, setNotice] = useState(""),
+    [error, setError] = useState(""),
+    [password, setPassword] = useState(""),
+    [trustConfirmed, setTrustConfirmed] = useState(false);
+  const generation = useRef(0);
+  const inFlight = useRef(false);
+  const expectedContext = useRef<string | undefined>(undefined);
+  const activeContext = contextIdentity(runtime.context);
+  useEffect(() => {
+    const ownSave = expectedContext.current === activeContext;
+    expectedContext.current = undefined;
+    generation.current += 1;
+    inFlight.current = false;
+    setBusy(false);
+    setOperation("");
+    setDraft(runtime.context);
+    setConnection(runtime.connection);
+    setCliVersion(runtime.p4Version);
+    if (!ownSave) setNotice("");
+    setError("");
+    setPassword("");
+    setTrustConfirmed(false);
+  }, [activeContext]);
+  useEffect(() => setConnection(runtime.connection), [runtime.connection]);
   const valid = !!(
     draft.server.trim() &&
     draft.user.trim() &&
     draft.client.trim()
   );
+  const current = normalizeContext(draft);
+  const dirty = contextIdentity(current) !== activeContext;
+  const presentation = connectionPresentation(connection, zh);
   const fields: [keyof P4Context, string, string][] = [
     ["server", "服务器 / P4PORT", "ssl:perforce:1666"],
     ["user", "用户 / P4USER", "username"],
@@ -51,62 +111,223 @@ export function SettingsPage({
     ["trustPath", "Trust 文件路径", "P4TRUST"],
     ["ticketsPath", "Tickets 文件路径", "P4TICKETS"],
   ];
-  const normalized = () =>
-    Object.fromEntries(
-      Object.entries(draft).map(([k, v]) => [
-        k,
-        typeof v === "string"
-          ? v.trim() ||
-            (["server", "user", "client"].includes(k) ? "" : undefined)
-          : v,
-      ]),
-    ) as unknown as P4Context;
-  async function save() {
+  function begin(nextOperation: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const token = ++generation.current;
     setBusy(true);
+    setOperation(nextOperation);
     setError("");
-    setStatus("");
+    setNotice("");
+    return token;
+  }
+  function isCurrent(token: number) {
+    return token === generation.current;
+  }
+  function finish(token: number) {
+    if (!isCurrent(token)) return;
+    inFlight.current = false;
+    setBusy(false);
+    setOperation("");
+  }
+  function publish(
+    context: P4Context,
+    status: ConnectionStatus,
+    version = cliVersion,
+  ) {
+    setConnection(status);
+    setTrustConfirmed(false);
+    setCliVersion(version);
+    onConnection(context, status, version);
+  }
+  async function save() {
+    const token = begin("save");
+    if (token == null) return;
     try {
-      const next = await backend.saveConnection(normalized());
-      onConnection(next);
-      setStatus(
+      const next = await backend.saveConnection(current);
+      if (!isCurrent(token)) return;
+      const status = notTestedStatus(next.server);
+      const version =
+        next.executable === runtime.context.executable
+          ? cliVersion
+          : "P4 CLI not tested";
+      setConnection(status);
+      setCliVersion(version);
+      setNotice(
         tr(
           "连接参数已保存并应用；保存不代表已连接成功。",
           "Connection saved and applied; this does not verify connectivity.",
         ),
       );
-    } catch (e) {
-      setError(String(e));
+      finish(token);
+      expectedContext.current = contextIdentity(next);
+      onConnection(next, status, version);
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "无法保存连接参数；请检查字段和本地路径。",
+            "Could not save the connection. Check the fields and local paths.",
+          ),
+        );
     } finally {
-      setBusy(false);
+      finish(token);
     }
   }
   async function test() {
-    setBusy(true);
-    setError("");
-    setStatus("");
+    const token = begin("test");
+    if (token == null) return;
     try {
-      const result = await backend.runP4({
-        operationId: crypto.randomUUID(),
-        source: "terminal",
-        command: "info",
-        args: [],
-        context: normalized(),
-        outputMode: "text",
-        timeoutMs: 15000,
+      const result = await probeConnection(backend, current, () =>
+        isCurrent(token),
+      );
+      if (result.stale || !isCurrent(token)) return;
+      const version =
+        result.discovery.version ??
+        (result.discovery.state === "notTested"
+          ? cliVersion
+          : "P4 CLI unavailable");
+      publish(current, result.status, version);
+      if (result.status.state === "connected")
+        setNotice(
+          runtime.mode === "mock"
+            ? tr(
+                "浏览器 Mock：模拟验证完成，未发起任何真实网络连接。",
+                "Browser Mock: validation was simulated; no real network connection was made.",
+              )
+            : tr(
+                "连接和登录状态已验证；相关工作区视图正在使用新的连接代次刷新。",
+                "Connection and login are verified. Dependent workspace views are refreshing with a new connection generation.",
+              ),
+        );
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "连接验证请求未完成；未将该结果视为成功，请重试。",
+            "The connection check did not complete and was not treated as success. Retry.",
+          ),
+        );
+    } finally {
+      finish(token);
+    }
+  }
+  async function trust() {
+    const snapshot = connection;
+    if (
+      dirty ||
+      snapshot.state !== "sslUntrusted" ||
+      !snapshot.fingerprint ||
+      snapshot.server !== current.server ||
+      !trustConfirmed
+    )
+      return;
+    const token = begin("trust");
+    if (token == null) return;
+    try {
+      const trusted = await backend.trustServer({
+        context: current,
+        fingerprint: snapshot.fingerprint,
+        confirmed: true,
       });
-      if (result.exitCode !== 0) throw new Error(`P4 exit ${result.exitCode}`);
-      setStatus(
+      if (!isCurrent(token)) return;
+      if (trusted.state === "notTested") {
+        const result = await probeConnection(backend, current, () =>
+          isCurrent(token),
+        );
+        if (result.stale || !isCurrent(token)) return;
+        publish(current, result.status, result.discovery.version ?? cliVersion);
+      } else publish(current, trusted);
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "Trust 请求未完成；未信任任何其他指纹。",
+            "The trust request did not complete. No other fingerprint was trusted.",
+          ),
+        );
+    } finally {
+      finish(token);
+    }
+  }
+  async function login() {
+    if (
+      dirty ||
+      !password ||
+      !["authRequired", "ticketExpired"].includes(connection.state)
+    )
+      return;
+    const token = begin("login");
+    if (token == null) return;
+    const singleUsePassword = password;
+    setPassword("");
+    try {
+      const authenticated = await backend.login({
+        context: current,
+        password: singleUsePassword,
+        confirmed: true,
+      });
+      if (!isCurrent(token)) return;
+      const status =
+        authenticated.state === "connected"
+          ? await backend.queryLoginStatus(current)
+          : authenticated;
+      if (!isCurrent(token)) return;
+      publish(current, status);
+      if (status.state === "connected")
+        setNotice(
+          runtime.mode === "mock"
+            ? tr(
+                "浏览器 Mock：模拟登录完成，未发送到真实服务器。",
+                "Browser Mock: login was simulated and was not sent to a real server.",
+              )
+            : tr(
+                "登录成功；密码已清空。",
+                "Login succeeded; the password has been cleared.",
+              ),
+        );
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "登录请求未完成；密码已清空，请确认状态后再试。",
+            "The login request did not complete. The password was cleared; check status before retrying.",
+          ),
+        );
+    } finally {
+      finish(token);
+    }
+  }
+  async function logout() {
+    if (dirty || connection.state !== "connected") return;
+    const token = begin("logout");
+    if (token == null) return;
+    setPassword("");
+    try {
+      const status = await backend.logout({
+        context: current,
+        confirmed: true,
+      });
+      if (!isCurrent(token)) return;
+      publish(current, status);
+      setNotice(
         runtime.mode === "mock"
           ? tr(
-              "演示模式：模拟测试通过，未访问真实服务器。",
-              "Demo mode: simulated success, no real server contacted.",
+              "浏览器 Mock：模拟退出登录，未访问真实服务器。",
+              "Browser Mock: logout was simulated; no real server was accessed.",
             )
-          : tr("连接测试成功。", "Connection test succeeded."),
+          : tr("已退出当前用户。", "The current user has been logged out."),
       );
-    } catch (e) {
-      setError(String(e));
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "退出登录请求未完成；请检查登录状态后再试。",
+            "The logout request did not complete. Check login status before retrying.",
+          ),
+        );
     } finally {
-      setBusy(false);
+      finish(token);
     }
   }
   return (
@@ -135,10 +356,10 @@ export function SettingsPage({
           )}
         </p>
         {runtime.mode === "mock" && (
-          <p className="settings-note">
+          <p className="settings-note settings-mock-disclosure">
             {tr(
-              "当前为浏览器演示模式。真实连接请使用桌面客户端。",
-              "Browser demo mode. Use the desktop app for real connections.",
+              "浏览器 Mock 只模拟状态，不会发起真实网络连接、写入 Trust 或创建登录票据。真实连接请使用桌面客户端。",
+              "Browser Mock simulates state only. It makes no real network connection, writes no trust entry, and creates no login ticket. Use the desktop app for real connections.",
             )}
           </p>
         )}
@@ -159,8 +380,20 @@ export function SettingsPage({
                     placeholder={placeholder}
                     required={["server", "user", "client"].includes(key)}
                     onChange={(e) => {
-                      setDraft({ ...draft, [key]: e.target.value });
-                      setStatus("");
+                      const next = { ...draft, [key]: e.target.value };
+                      generation.current += 1;
+                      setDraft(next);
+                      setConnection(
+                        notTestedStatus(
+                          key === "server"
+                            ? e.target.value.trim()
+                            : next.server.trim(),
+                        ),
+                      );
+                      setNotice("");
+                      setError("");
+                      setPassword("");
+                      setTrustConfirmed(false);
                     }}
                     spellCheck={false}
                   />
@@ -171,25 +404,38 @@ export function SettingsPage({
               <button
                 type="button"
                 className="secondary"
-                disabled={!valid}
+                disabled={!valid || dirty}
                 onClick={() => void test()}
               >
-                <Radio size={14} />
-                {tr("测试连接", "Test connection")}
+                <RefreshCw
+                  size={14}
+                  className={operation === "test" ? "spin" : ""}
+                />
+                {operation === "test"
+                  ? tr("正在验证…", "Checking…")
+                  : tr("验证连接与登录", "Check connection and login")}
               </button>
-              <button className="primary" type="submit" disabled={!valid}>
+              <button
+                className="primary"
+                type="submit"
+                disabled={!valid || !dirty}
+              >
                 <Save size={14} />
-                {busy
-                  ? tr("处理中…", "Working…")
+                {operation === "save"
+                  ? tr("正在保存…", "Saving…")
                   : tr("保存并应用", "Save and apply")}
               </button>
               <button
                 type="button"
                 className="secondary"
+                disabled={!dirty}
                 onClick={() => {
                   setDraft(runtime.context);
-                  setStatus("");
+                  setConnection(runtime.connection);
+                  setNotice("");
                   setError("");
+                  setPassword("");
+                  setTrustConfirmed(false);
                 }}
               >
                 {tr("撤销修改", "Discard edits")}
@@ -197,9 +443,177 @@ export function SettingsPage({
             </div>
           </fieldset>
         </form>
-        {status && (
+        {dirty && (
+          <p role="status" className="settings-unsaved-note">
+            {tr(
+              "连接参数有未保存修改。先保存，再验证、Trust 或登录；保存本身不会显示为已连接。",
+              "Connection settings have unsaved changes. Save before testing, trusting, or logging in. Saving alone never reports a successful connection.",
+            )}
+          </p>
+        )}
+        <section
+          className={`connection-status-card connection-status-${presentation.tone}`}
+          aria-live="polite"
+          aria-busy={busy}
+        >
+          <div className="connection-status-heading">
+            <span className="connection-status-indicator" aria-hidden="true" />
+            <div>
+              <strong>{presentation.title}</strong>
+              <span>{connection.state}</span>
+            </div>
+          </div>
+          <p>{presentation.detail}</p>
+          <dl className="connection-facts">
+            <div>
+              <dt>{tr("服务器", "Server")}</dt>
+              <dd>{connection.server || current.server || "—"}</dd>
+            </div>
+            <div>
+              <dt>P4 CLI</dt>
+              <dd>{cliVersion || tr("未知", "Unknown")}</dd>
+            </div>
+          </dl>
+          <p className="connection-recovery">
+            <strong>{tr("下一步：", "Next: ")}</strong>
+            {presentation.recovery}
+          </p>
+
+          {connection.state === "sslUntrusted" && (
+            <div className="connection-recovery-panel">
+              {connection.fingerprint ? (
+                <>
+                  <div className="connection-fingerprint">
+                    <span>{tr("服务器指纹", "Server fingerprint")}</span>
+                    <code>{connection.fingerprint}</code>
+                  </div>
+                  <label className="connection-confirmation">
+                    <input
+                      type="checkbox"
+                      checked={trustConfirmed}
+                      disabled={busy || dirty}
+                      onChange={(event) =>
+                        setTrustConfirmed(event.target.checked)
+                      }
+                    />
+                    <span>
+                      {tr(
+                        `我已通过可信渠道核对 ${connection.server} 的上述完整指纹。`,
+                        `I verified the full fingerprint above for ${connection.server} through a trusted channel.`,
+                      )}
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!trustConfirmed || busy || dirty}
+                    onClick={() => void trust()}
+                  >
+                    <ShieldCheck size={14} />
+                    {operation === "trust"
+                      ? tr("正在写入 Trust…", "Trusting…")
+                      : tr("信任此精确指纹", "Trust this exact fingerprint")}
+                  </button>
+                </>
+              ) : (
+                <p role="alert">
+                  {tr(
+                    "服务器没有返回可核对的指纹，因此不能执行 Trust。请重试或联系管理员。",
+                    "The server did not return a fingerprint that can be verified, so trust is blocked. Retry or contact an administrator.",
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          {["authRequired", "ticketExpired"].includes(connection.state) && (
+            <form
+              className="connection-recovery-panel connection-login"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void login();
+              }}
+            >
+              <label>
+                <span>
+                  {tr(
+                    "P4 密码（仅用于本次请求）",
+                    "P4 password (this request only)",
+                  )}
+                </span>
+                <span className="connection-password-field">
+                  <KeyRound size={15} aria-hidden="true" />
+                  <input
+                    type="password"
+                    aria-label={tr("P4 密码", "P4 password")}
+                    value={password}
+                    autoComplete="off"
+                    disabled={busy || dirty}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </span>
+              </label>
+              <p>
+                {tr(
+                  "密码不写入连接草稿、Storage、URL、历史或日志；点击登录后立即清空输入。",
+                  "The password is never written to connection drafts, storage, URLs, history, or logs, and the input is cleared immediately on submit.",
+                )}
+              </p>
+              <button
+                type="submit"
+                className="primary"
+                disabled={!password || busy || dirty}
+              >
+                <LogIn size={14} />
+                {operation === "login"
+                  ? tr("正在登录…", "Logging in…")
+                  : connection.state === "ticketExpired"
+                    ? tr("重新登录", "Log in again")
+                    : tr("登录", "Log in")}
+              </button>
+            </form>
+          )}
+
+          {connection.state === "externalAuthRequired" && (
+            <div className="connection-recovery-panel">
+              <p>
+                {tr(
+                  "P4Deck 不会用普通密码框伪装完成外部认证。打开组织指定的 SSO/MFA 流程并完成后，再检查状态。",
+                  "P4Deck will not pretend a normal password form can complete external authentication. Finish your organization's SSO/MFA flow, then check again.",
+                )}
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || dirty}
+                onClick={() => void test()}
+              >
+                <RefreshCw size={14} />
+                {tr(
+                  "我已完成外部认证，检查状态",
+                  "I completed external authentication; check status",
+                )}
+              </button>
+            </div>
+          )}
+
+          {connection.state === "connected" && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || dirty}
+              onClick={() => void logout()}
+            >
+              <LogOut size={14} />
+              {operation === "logout"
+                ? tr("正在退出…", "Logging out…")
+                : tr("退出登录", "Log out")}
+            </button>
+          )}
+        </section>
+        {notice && (
           <p role="status" className="settings-note">
-            {status}
+            {notice}
           </p>
         )}
         {error && (

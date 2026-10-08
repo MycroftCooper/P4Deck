@@ -2,8 +2,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { backend } from "../../infrastructure/backend";
-import type { P4Context, RuntimeInfo } from "../../shared/contracts/types";
+import type {
+  ConnectionStatus,
+  P4Context,
+  RuntimeInfo,
+} from "../../shared/contracts/types";
 import { subscribeSafely } from "../../shared/lib/subscription";
+
+function sameContext(left: P4Context, right: P4Context) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function pendingStatus(context: P4Context): ConnectionStatus {
+  return {
+    state: "notTested",
+    message: "Server connectivity has not been tested.",
+    recovery: "retry",
+    server: context.server,
+  };
+}
 
 export function useRuntime() {
   const [runtime, setRuntime] = useState<RuntimeInfo>({
@@ -18,23 +35,39 @@ export function useRuntime() {
     },
   });
   const [error, setError] = useState("");
+  const [connectionGeneration, setConnectionGeneration] = useState(0);
   const revision = useRef(0);
-  const applyConnection = useCallback((context: P4Context) => {
-    revision.current++;
-    setRuntime((current) => ({ ...current, context }));
-  }, []);
+  const currentRuntime = useRef(runtime);
+  currentRuntime.current = runtime;
+  const applyConnection = useCallback(
+    (context: P4Context, connection?: ConnectionStatus, p4Version?: string) => {
+      const current = currentRuntime.current;
+      // save_connection emits the same context that Settings already applied. Ignore that
+      // duplicate event so it cannot replace a verified status with "not tested".
+      if (!connection && sameContext(current.context, context)) return;
+      const next: RuntimeInfo = {
+        ...current,
+        context,
+        connection: connection ?? pendingStatus(context),
+        p4Version: p4Version ?? current.p4Version,
+      };
+      currentRuntime.current = next;
+      revision.current++;
+      setConnectionGeneration((value) => value + 1);
+      setRuntime(next);
+    },
+    [],
+  );
   useEffect(() => {
     let live = true;
     const initialRevision = revision.current;
     void backend
       .runtimeInfo()
       .then((value) => {
-        if (live)
-          setRuntime((current) =>
-            revision.current === initialRevision
-              ? value
-              : { ...value, context: current.context },
-          );
+        if (live && revision.current === initialRevision) {
+          currentRuntime.current = value;
+          setRuntime(value);
+        }
       })
       .catch((e) => {
         if (live) setError(String(e));
@@ -57,6 +90,6 @@ export function useRuntime() {
     runtime,
     applyConnection,
     error,
-    connectionKey: JSON.stringify(runtime.context),
+    connectionKey: `${connectionGeneration}:${JSON.stringify(runtime.context)}`,
   };
 }

@@ -275,6 +275,26 @@ describe("controlled P4 terminal", () => {
   it("exposes structured connection APIs without returning the password", async () => {
     const discovered = await backend.discoverP4Cli({});
     expect(discovered.state).toBe("notTested");
+    expect(discovered.message).toContain("no local executable or network");
+    const loggedOut = await backend.logout({
+      context: {
+        server: "localhost:1666",
+        user: "tester",
+        client: "fixture",
+      },
+      confirmed: true,
+    });
+    expect(loggedOut).toMatchObject({
+      state: "authRequired",
+      recovery: "login",
+    });
+    expect(
+      await backend.queryLoginStatus({
+        server: "localhost:1666",
+        user: "tester",
+        client: "fixture",
+      }),
+    ).toMatchObject({ state: "authRequired" });
     const result = await backend.login({
       context: {
         server: "localhost:1666",
@@ -286,6 +306,14 @@ describe("controlled P4 terminal", () => {
     });
     expect(result.state).toBe("connected");
     expect(JSON.stringify(result)).not.toContain("single-use-secret");
+    expect(result.message).toContain("no password or ticket was sent");
+    expect(
+      await backend.queryLoginStatus({
+        server: "localhost:1666",
+        user: "tester",
+        client: "fixture",
+      }),
+    ).toMatchObject({ state: "connected" });
   });
 
   it("keeps observability contracts bounded in the browser mock", async () => {

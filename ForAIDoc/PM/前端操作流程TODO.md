@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-08。负责人：前端 UI。状态：BE-003/BE-004a 生产接线已完成自动化验收；等待 Windows/macOS 原生 UI 验收，整体未完成。
+日期：2026-10-08。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -12,6 +12,7 @@
 
 | ID | 工作项 | 范围 | 验收标准 | 状态 |
 | --- | --- | --- | --- | --- |
+| FE-00 | 连接与认证向导 | CLI 发现、保存/验证分离、连接/票据状态、SSL Trust、Login/Logout、过期恢复、SSO/MFA 指引 | 不解析 stderr；密码单次使用；Trust 绑定精确 server/fingerprint；切换连接淘汰旧结果；成功刷新依赖视图 | 生产契约与浏览器测试通过；localhost Login/Logout/ticket 通过；SSL/SSO/原生待验 |
 | FE-01 | 统一对话框基础 | 模态层、标题/描述/正文/页脚、焦点、Escape、滚动、主题、危险态、忙碌与错误 | 键盘可操作；焦点恢复；来源窗口正确；不被停靠容器裁剪；忙碌时不重复确认 | 浏览器/跨 document 通过；原生窗口待验收 |
 | FE-02 | CL 新建/编辑 | Description、Jobs、上下文、必填校验、未保存修改保护 | Default 不冒充编号 CL；不直接发送空描述；未接通时仅检查表单 | BE-004a 已接生产入口；浏览器契约/组件测试通过，原生待验收 |
 | FE-03 | 目标 CL 选择与移动文件 | Default/编号 CL、过滤、文件计数、目标摘要 | 保留明确文件子集；不可选当前/不适用目标；无目标/空列表可解释 | BE-004a 已接生产入口；Default 往返、失效与失败测试通过，原生待验收 |
@@ -147,9 +148,20 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 - 开发审计页复验 390×650 中文亮色 Shelf 与英文暗色 Unshelve/Resolve：对话框 `clientWidth=scrollWidth=357`，正文无横向溢出、页脚可见；Unshelve 初始焦点位于目标 Workspace。此证据只覆盖浏览器布局与焦点，不替代原生窗口或读屏器验收。
 - 最新 debug Tauri 再次重建，并以隔离 APPDATA/Fixture 环境启动为 `Responding=True` 的 `P4Deck` 窗口；Computer Use 原生应用清单仍为空，且当前客户端没有可用的原生窗口枚举入口，无法绑定执行点击，因此 BE-003/004a/004b Windows 原生 UI 仍记为“未验收”。实例与 Fixture 已停止；不以进程响应、Mock 或 localhost 应用层 E2E 替代原生证据。
 
+### 第十三批：P0 连接与认证向导生产接线
+
+- `SettingsPage` 已移除通用 `runP4(info)` 旁路，按 `discoverP4Cli → testConnection → queryLoginStatus` 强类型顺序验证；Trust、Login、Logout 分别只调用窄契约。UI 直接消费 `ConnectionStatus.state/recovery`，不解析英文 stderr，覆盖 CLI 缺失/无效、未测试、普通连接、SSL 未信任、未登录、已登录、ticket 过期、服务器不可达/断开、权限/配置错误、externalAuthRequired/SSO/MFA、unsupported 与 unknown。
+- 保存 Context 与验证/认证明确分离：未保存修改必须先保存；保存结果固定为 `notTested`，不会显示“已连接”。`useRuntime` 增加连接代次；保存、验证、登录或退出后更新 Runtime，Workspace/Streams/Pending/Submitted/Files 等依赖页以新代次重建，旧异步结果不可回写。
+- SSL Trust 显示并绑定后端返回的完整 server/fingerprint；缺 fingerprint 时阻塞，只有勾选“已通过可信渠道核对”才发送 `confirmed: true`。切换 Context 会清除确认并淘汰旧请求，重复点击由同步 in-flight guard 拦截。
+- 密码只存在于受控 password state 和一次 `login` 请求闭包；点击登录后在等待 IPC 前立即清空输入。密码不进入 Context、Storage、URL、命令历史、日志、notice/error 或截图流程；异常使用本地结构化恢复文案，不回显异常字符串。ticket 过期复用重新登录；Logout 后进入 `authRequired`。externalAuthRequired 不显示密码框，只说明在组织 SSO/MFA 工具中完成后再检查状态。
+- Browser Mock 与 Tauri 保持同一契约；Mock 的 CLI/连接/Trust/Login/Logout 文案均明确无本地 CLI、真实网络、Trust 或 ticket 写入，并支持 Logout→Login 状态往返。Mock 不伪造真实 SSL/SSO。
+- 自动化新增 2 个测试文件、11 项测试；全量 Web 为 42 个文件、258 项通过。覆盖全部状态与 recovery 的中英文映射及组件呈现、CLI 失败短路、普通连接后的票据查询、精确 fingerprint、密码即时清理与不持久化、Logout/重登、防重复、保存分离、切换连接淘汰及 Mock 声明。生产构建、TypeScript/Rust Check、Rust 单测、Clippy `-D warnings`、rustfmt 与 `git diff --check` 均通过；全库 Prettier 仍只报告既有 `StatusBar.tsx`、`SearchPage.tsx`。
+- Windows localhost Fixture 连续两轮通过：真实普通连接、有效 ticket、Logout 后 `authRequired`、缺失 ticket 查询、使用隔离 fixture 密码 Login、恢复 ticket 后继续完整既有 E2E。Rust 的分类契约覆盖 ticketExpired、SSL 与 externalAuthRequired；本机没有 SSL/SSO 环境，因此三者未做真实服务器实机，不能宣称通过。
+- 最新 Windows debug Tauri 已由当前源码重建并在隔离 Fixture/APPDATA 下启动。Computer Use 原生应用清单仍为空，且当前会话实际没有 `listWindows` / `computer.launch_app` 能力，无法取得合法窗口 ID；因此原生向导点击、390px 原生窗口、键盘/焦点与读屏仍记为“未验收”。实例和 Fixture 已停止。
+
 ## 剩余验收与交接边界
 
-1. 原生 Windows/macOS 独立窗口：菜单打开业务弹窗、初始焦点、Tab 循环、Escape、回焦、关闭来源窗口与连接变更取消；需运行中的对应平台桌面实例。整体目标暂不标为完成。
+1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。
 2. FE-12 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
 3. 新建/编辑/删除空 Pending CL、Default↔编号移动、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。重命名执行不在本批范围。
 4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。

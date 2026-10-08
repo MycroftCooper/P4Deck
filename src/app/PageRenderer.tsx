@@ -123,11 +123,12 @@ function Content({
         />
       );
     case "workspaces":
-      return <WorkspacePage t={t} runtime={runtime} />;
+      return <WorkspacePage key={connectionKey} t={t} runtime={runtime} />;
     case "diff":
     case "revgraph":
       return (
         <FileReviewPage
+          key={connectionKey}
           kind={page}
           target={target.target}
           locked={target.locked}
@@ -140,6 +141,7 @@ function Content({
     case "streams":
       return (
         <ReadOnlyPage
+          key={connectionKey}
           kind={page}
           runtime={runtime}
           target={target.target}
@@ -151,6 +153,7 @@ function Content({
     case "preview":
       return (
         <FilePreviewPage
+          key={connectionKey}
           target={target.target}
           locked={target.locked}
           onTargetChange={changeTarget}

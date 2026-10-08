@@ -79,11 +79,165 @@
   background: var(--accent-soft);
   border-radius: 6px;
 }
+.settings-mock-disclosure {
+  border: 1px solid var(--warning);
+}
+.settings-unsaved-note {
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 9%, var(--panel));
+}
+.connection-status-card {
+  --connection-tone: var(--muted);
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid
+    color-mix(in srgb, var(--connection-tone) 50%, var(--border));
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.connection-status-card > p,
+.connection-status-card dl {
+  margin: 0;
+}
+.connection-status-success {
+  --connection-tone: var(--success);
+}
+.connection-status-warning {
+  --connection-tone: var(--warning);
+}
+.connection-status-danger {
+  --connection-tone: var(--danger);
+}
+.connection-status-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.connection-status-heading > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.connection-status-heading strong {
+  font-size: 14px;
+}
+.connection-status-heading span:not(.connection-status-indicator) {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.connection-status-indicator {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--connection-tone);
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--connection-tone) 16%, transparent);
+}
+.connection-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+.connection-facts div {
+  min-width: 0;
+}
+.connection-facts dt,
+.connection-fingerprint > span {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.connection-facts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font: 11px/1.5 var(--font-mono);
+}
+.connection-recovery-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.connection-recovery-panel > p {
+  margin: 0;
+}
+.connection-recovery-panel > button,
+.connection-status-card > button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.connection-fingerprint {
+  display: grid;
+  gap: 6px;
+}
+.connection-fingerprint code {
+  padding: 9px;
+  overflow-wrap: anywhere;
+  border-radius: 5px;
+  background: var(--panel-3);
+  color: var(--text);
+  font-size: 11px;
+  user-select: all;
+}
+.connection-confirmation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.connection-confirmation input {
+  margin-top: 3px;
+}
+.connection-login > label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+.connection-password-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.connection-password-field:focus-within {
+  border-color: var(--accent);
+}
+.connection-password-field input {
+  min-width: 0;
+  padding: 10px 10px 10px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
 @container (max-width:520px) {
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .settings-card {
     padding: 16px;
+  }
+  .connection-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .connection-status-card,
+  .connection-recovery-panel {
+    padding: 12px;
   }
 }

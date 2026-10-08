@@ -7,13 +7,13 @@ mod tests {
             workflow_service::WorkflowService,
         },
         domain::{
-            ConnectionState, FileAction, FileActionRequest, OperationResult, OperationSource,
-            OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
-            PendingChangeMutationRequest, ResolveConfirmation, ResolvePreflightRequest,
-            ResolveSelection, ResolveStrategy, ShelfMode, ShelfPreflightRequest,
-            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
-            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
-            WorkflowOutcome,
+            AuthenticationRequest, ConnectionState, FileAction, FileActionRequest, LoginRequest,
+            OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
+            PendingChangeMutation, PendingChangeMutationRequest, ResolveConfirmation,
+            ResolvePreflightRequest, ResolveSelection, ResolveStrategy, ShelfMode,
+            ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
+            SubmitPreflightRequest, UnshelvePreflightRequest, WorkflowConfirmation,
+            WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, runner::P4Runner,
@@ -349,6 +349,49 @@ mod tests {
         ensure(
             status.state == ConnectionState::Connected,
             format!("typed connection state was {:?}", status.state),
+        )?;
+
+        let ticket = connection.login_status(context.clone()).await;
+        ensure(
+            ticket.state == ConnectionState::Connected,
+            format!("fixture ticket was not valid: {:?}", ticket.state),
+        )?;
+        let logged_out = connection
+            .logout(AuthenticationRequest {
+                context: context.clone(),
+                confirmed: true,
+            })
+            .await;
+        ensure(
+            logged_out.state == ConnectionState::AuthRequired,
+            format!("typed logout state was {:?}", logged_out.state),
+        )?;
+        let missing_ticket = connection.login_status(context.clone()).await;
+        ensure(
+            missing_ticket.state == ConnectionState::AuthRequired,
+            format!(
+                "missing fixture ticket was classified as {:?}",
+                missing_ticket.state
+            ),
+        )?;
+        let logged_in = connection
+            .login(LoginRequest {
+                context: context.clone(),
+                password: "p4deck-local-only".into(),
+                confirmed: true,
+            })
+            .await;
+        ensure(
+            logged_in.state == ConnectionState::Connected,
+            format!("fixture login failed: {:?}", logged_in.state),
+        )?;
+        let restored_ticket = connection.login_status(context.clone()).await;
+        ensure(
+            restored_ticket.state == ConnectionState::Connected,
+            format!(
+                "restored fixture ticket was classified as {:?}",
+                restored_ticket.state
+            ),
         )?;
 
         let info = checked_run(

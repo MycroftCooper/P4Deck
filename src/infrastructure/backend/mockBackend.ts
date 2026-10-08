@@ -19,6 +19,7 @@ let mockContext: import("../../shared/contracts/types").P4Context = {
   charset: "utf8",
 };
 let mockContextGeneration = 1;
+let mockAuthentication: "connected" | "authRequired" = "connected";
 const mockSubmitTokens = new Map<
   string,
   { target: SubmitTargetSnapshot; digest: string; expiresAt: number }
@@ -218,47 +219,61 @@ export const mockBackend: Backend = {
       state: "notTested",
       executable: "p4-mock",
       version: "Rev. P4/MOCK/2026.1",
-      message: "Browser mock CLI is available.",
+      message:
+        "Browser Mock only; no local executable or network was accessed.",
     };
   },
   async testConnection(context) {
     return {
       state: "connected",
-      message: "Mock connection is ready.",
+      message: "Browser Mock only; no real network connection was made.",
       recovery: "none",
       server: context.server,
     };
   },
   async queryLoginStatus(context) {
-    return this.testConnection(context);
+    return {
+      state: mockAuthentication,
+      errorCode:
+        mockAuthentication === "authRequired" ? "authRequired" : undefined,
+      message:
+        mockAuthentication === "connected"
+          ? "Browser Mock authentication is simulated; no ticket was read."
+          : "Browser Mock authentication is required; no ticket was read.",
+      recovery: mockAuthentication === "connected" ? "none" : "login",
+      server: context.server,
+    };
   },
   async trustServer(request) {
     return {
       state: request.confirmed ? "notTested" : "invalidConfig",
       errorCode: request.confirmed ? undefined : "invalidConfig",
       message: request.confirmed
-        ? "Mock trust accepted."
+        ? "Browser Mock trust was simulated; no trust file was written."
         : "Explicit confirmation is required.",
       recovery: request.confirmed ? "retry" : "editConfig",
       server: request.context.server,
     };
   },
   async login(request) {
+    const accepted = request.confirmed && !!request.password;
+    if (accepted) mockAuthentication = "connected";
     return {
-      state:
-        request.confirmed && request.password ? "connected" : "invalidConfig",
-      errorCode:
-        request.confirmed && request.password ? undefined : "invalidConfig",
-      message: "Mock authentication result.",
-      recovery: request.confirmed && request.password ? "none" : "editConfig",
+      state: accepted ? "connected" : "invalidConfig",
+      errorCode: accepted ? undefined : "invalidConfig",
+      message:
+        "Browser Mock login was simulated; no password or ticket was sent to a server.",
+      recovery: accepted ? "none" : "editConfig",
       server: request.context.server,
     };
   },
   async logout(request) {
+    if (request.confirmed) mockAuthentication = "authRequired";
     return {
       state: request.confirmed ? "authRequired" : "invalidConfig",
       errorCode: request.confirmed ? "authRequired" : "invalidConfig",
-      message: "Mock logout result.",
+      message:
+        "Browser Mock logout was simulated; no real server was accessed.",
       recovery: request.confirmed ? "login" : "editConfig",
       server: request.context.server,
     };
