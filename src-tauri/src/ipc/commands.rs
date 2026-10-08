@@ -172,9 +172,12 @@ pub async fn run_p4(
         return Err("Generic IPC commands cannot provide stdin".into());
     }
     if matches!(request.source, OperationSource::Gui)
-        && request.command.eq_ignore_ascii_case("submit")
+        && matches!(
+            request.command.to_ascii_lowercase().as_str(),
+            "submit" | "shelve" | "unshelve" | "resolve"
+        )
     {
-        return Err("GUI submit must use the preflight and confirmation API".into());
+        return Err("GUI submit, shelf, unshelve and resolve must use their preflight and confirmation APIs".into());
     }
     state
         .runner
@@ -420,6 +423,72 @@ pub async fn confirm_submit(
     app: AppHandle,
 ) -> Result<SubmitResult, String> {
     Ok(state.submit.confirm(confirmation, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn preflight_shelf(
+    request: ShelfPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ShelfPreflight, String> {
+    Ok(state.workflows.preflight_shelf(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_shelf(
+    confirmation: WorkflowConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<WorkflowResult, String> {
+    Ok(state
+        .workflows
+        .confirm_shelf(confirmation, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn preflight_unshelve(
+    request: UnshelvePreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<UnshelvePreflight, String> {
+    Ok(state
+        .workflows
+        .preflight_unshelve(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn confirm_unshelve(
+    confirmation: WorkflowConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<WorkflowResult, String> {
+    Ok(state
+        .workflows
+        .confirm_unshelve(confirmation, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn preflight_resolve(
+    request: ResolvePreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ResolvePreflight, String> {
+    Ok(state.workflows.preflight_resolve(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_resolve(
+    confirmation: ResolveConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<WorkflowResult, String> {
+    Ok(state
+        .workflows
+        .confirm_resolve(confirmation, Some(&app))
+        .await)
 }
 #[tauri::command]
 pub async fn open_local_path(

@@ -247,15 +247,6 @@ export type ClAction =
   | { type: "edit"; changeId: number; description: string; jobs: string[] }
   | { type: "delete"; changeId: number }
   | { type: "moveFiles"; changeId: number; depotPaths: string[] }
-  | {
-      type: "shelve";
-      changeId: number;
-      depotPaths?: string[];
-      replace?: boolean;
-    }
-  | { type: "deleteShelf"; changeId: number; depotPaths?: string[] }
-  | { type: "unshelvePreview"; sourceChangeId: number; targetChangeId: number }
-  | { type: "unshelve"; sourceChangeId: number; targetChangeId: number }
   | { type: "submitValidate"; changeId: number };
 
 export interface ClActionResult {
@@ -587,6 +578,196 @@ export interface SubmitResult {
   operationId?: string;
   logReference?: string;
   refresh: SubmitRefreshAdvice;
+}
+
+export type WorkflowIssueCertainty = "confirmed" | "unknown";
+export type WorkflowIssueCode =
+  | "invalidTarget"
+  | "changeNotFound"
+  | "fileNotInChange"
+  | "fileNotShelved"
+  | "existingShelfRequiresReplace"
+  | "mappingFailed"
+  | "localModification"
+  | "alreadyOpened"
+  | "lockedFile"
+  | "permissionDenied"
+  | "permissionUnknown"
+  | "resolveLikely"
+  | "resolveRequired"
+  | "notResolvable"
+  | "inspectionUnknown";
+
+export interface WorkflowIssue {
+  code: WorkflowIssueCode;
+  certainty: WorkflowIssueCertainty;
+  message: string;
+  paths: string[];
+}
+
+export interface WorkflowTargetSnapshot {
+  kind: "shelf" | "unshelve" | "resolve";
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  contextGeneration: number;
+  sourceChangeId?: number;
+  targetChangeId?: number;
+  depotPaths: string[];
+}
+
+export interface WorkflowRefreshAdvice {
+  pendingChanges: boolean;
+  workspaceStatus: boolean;
+  depotPaths: string[];
+  reason: string;
+}
+
+export interface ShelfPreflightRequest {
+  changeId: number;
+  depotPaths: string[];
+  mode: "createOrUpdate" | "delete";
+  replace?: boolean;
+}
+
+export interface ShelfScopeSummary {
+  openedPaths: string[];
+  existingShelvedPaths: string[];
+  createPaths: string[];
+  replacePaths: string[];
+  deletePaths: string[];
+  contentDigest: string;
+}
+
+export interface ShelfPreflight {
+  ready: boolean;
+  change?: PendingChange;
+  blockers: WorkflowIssue[];
+  warnings: WorkflowIssue[];
+  target: WorkflowTargetSnapshot;
+  scope: ShelfScopeSummary;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+
+export interface WorkflowConfirmation {
+  token: string;
+  target: WorkflowTargetSnapshot;
+  operationId?: string;
+}
+
+export interface UnshelvePreflightRequest {
+  sourceChangeId: number;
+  depotPaths: string[];
+  targetWorkspace: string;
+  targetChangeId: number;
+}
+
+export interface UnshelveMapping {
+  depotPath: string;
+  targetPath?: string;
+  mapped: boolean;
+  locallyModified: boolean;
+  openedChangeId?: number;
+  locked: boolean;
+  resolveRisk: "none" | "likely" | "unknown";
+}
+
+export interface UnshelvePreflight {
+  ready: boolean;
+  source?: PendingChange;
+  targetChange?: PendingChange;
+  mappings: UnshelveMapping[];
+  blockers: WorkflowIssue[];
+  warnings: WorkflowIssue[];
+  target: WorkflowTargetSnapshot;
+  contentDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+
+export type ResolveStrategy =
+  "safe" | "acceptYours" | "acceptTheirs" | "mergePreview";
+
+export interface ResolvePreflightRequest {
+  depotPaths: string[];
+}
+
+export interface ResolveVersionSource {
+  role: "base" | "yours" | "theirs" | "merge";
+  depotPath?: string;
+  revision?: number;
+  description: string;
+}
+
+export interface ResolveConflictDetail {
+  depotPath: string;
+  clientPath?: string;
+  conflictType: "content" | "filetype" | "branch" | "move" | "unknown";
+  status: "unresolved" | "blocked" | "unknown";
+  availableStrategies: ResolveStrategy[];
+  sources: ResolveVersionSource[];
+  preview: string[];
+}
+
+export interface ResolvePreflight {
+  ready: boolean;
+  conflicts: ResolveConflictDetail[];
+  blockers: WorkflowIssue[];
+  warnings: WorkflowIssue[];
+  target: WorkflowTargetSnapshot;
+  contentDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+
+export interface ResolveSelection {
+  depotPath: string;
+  strategy: Exclude<ResolveStrategy, "mergePreview">;
+}
+
+export interface ResolveConfirmation extends WorkflowConfirmation {
+  resolutions: ResolveSelection[];
+}
+
+export interface WorkflowFileResult {
+  depotPath: string;
+  state: "succeeded" | "failed" | "cancelled" | "blocked" | "unknown";
+  message: string;
+  operationId?: string;
+}
+
+export type WorkflowFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "contextChanged"
+  | "contentChanged"
+  | "preflightBlocked"
+  | "permissionDenied"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+
+export interface WorkflowResult {
+  outcome:
+    "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+  failure?: WorkflowFailureCode;
+  message: string;
+  operationIds: string[];
+  logReference?: string;
+  files: WorkflowFileResult[];
+  refresh: WorkflowRefreshAdvice;
 }
 
 export interface FilePreview {

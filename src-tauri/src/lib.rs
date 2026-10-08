@@ -13,8 +13,12 @@ use app::diagnostics::DiagnosticService;
 use app::file_service::FileService;
 use app::status_cache::{shared_default, StatusCache};
 use app::submit_service::SubmitService;
+use app::workflow_service::WorkflowService;
 use p4::context::ContextStore;
-use p4::{changelists::ChangelistRepository, runner::P4Runner, submit::SubmitRepository};
+use p4::{
+    changelists::ChangelistRepository, runner::P4Runner, submit::SubmitRepository,
+    workflows::WorkflowRepository,
+};
 use persistence::{log_store::LogStore, operation_journal::OperationJournal};
 use std::sync::Arc;
 use tauri::Manager;
@@ -24,6 +28,7 @@ pub(crate) struct AppState {
     pub logs: Arc<LogStore>,
     pub changelists: Arc<ChangelistService>,
     pub submit: Arc<SubmitService>,
+    pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
     pub connection: Arc<ConnectionService>,
     pub status_cache: Arc<StatusCache>,
@@ -59,6 +64,11 @@ pub fn run() {
             ));
             let submit = Arc::new(SubmitService::new(
                 SubmitRepository::new(runner.clone()),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
+            let workflows = Arc::new(WorkflowService::new(
+                WorkflowRepository::new(runner.clone()),
                 contexts,
                 status_cache.clone(),
             ));
@@ -72,6 +82,7 @@ pub fn run() {
                 logs,
                 changelists,
                 submit,
+                workflows,
                 files,
                 connection,
                 status_cache,
@@ -118,7 +129,13 @@ pub fn run() {
             ipc::commands::query_pending_changes,
             ipc::commands::mutate_pending_change,
             ipc::commands::preflight_submit,
-            ipc::commands::confirm_submit
+            ipc::commands::confirm_submit,
+            ipc::commands::preflight_shelf,
+            ipc::commands::confirm_shelf,
+            ipc::commands::preflight_unshelve,
+            ipc::commands::confirm_unshelve,
+            ipc::commands::preflight_resolve,
+            ipc::commands::confirm_resolve
         ])
         .run(tauri::generate_context!())
         .expect("error while running P4Deck");

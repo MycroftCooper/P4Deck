@@ -36,6 +36,15 @@ import type {
   SubmitPreflight,
   SubmitPreflightRequest,
   SubmitResult,
+  ShelfPreflight,
+  ShelfPreflightRequest,
+  UnshelvePreflight,
+  UnshelvePreflightRequest,
+  ResolvePreflight,
+  ResolvePreflightRequest,
+  ResolveConfirmation,
+  WorkflowConfirmation,
+  WorkflowResult,
   RevisionGraph,
   RuntimeInfo,
   TrustRequest,
@@ -105,4 +114,12 @@ export interface Backend {
   ): Promise<PendingChangeMutationResult>;
   preflightSubmit(request: SubmitPreflightRequest): Promise<SubmitPreflight>;
   confirmSubmit(confirmation: SubmitConfirmation): Promise<SubmitResult>;
+  preflightShelf(request: ShelfPreflightRequest): Promise<ShelfPreflight>;
+  confirmShelf(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
+  preflightUnshelve(
+    request: UnshelvePreflightRequest,
+  ): Promise<UnshelvePreflight>;
+  confirmUnshelve(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
+  preflightResolve(request: ResolvePreflightRequest): Promise<ResolvePreflight>;
+  confirmResolve(confirmation: ResolveConfirmation): Promise<WorkflowResult>;
 }

@@ -137,7 +137,7 @@ describe("controlled P4 terminal", () => {
         context: (await backend.runtimeInfo()).context,
         outputMode: "jsonLines",
       }),
-    ).rejects.toThrow("preflightSubmit");
+    ).rejects.toThrow("preflight");
     await expect(
       backend.performFileAction({
         action: "submit" as import("../../shared/contracts/types").P4FileAction,
@@ -168,6 +168,49 @@ describe("controlled P4 terminal", () => {
       outcome: "rejected",
       failure: "tokenUnknown",
     });
+  });
+
+  it("models typed shelf and unshelve confirmation while keeping unknown resolve blocked", async () => {
+    const changes = await backend.queryPendingChanges();
+    const shelfSource = changes.find((change) => change.shelvedFiles.length)!;
+    const shelfPath = shelfSource.shelvedFiles[0].depotPath;
+    await expect(
+      backend.performFileAction({ action: "shelve", paths: [shelfPath] }),
+    ).rejects.toThrow("preflight");
+    const deletion = await backend.preflightShelf({
+      changeId: shelfSource.id,
+      depotPaths: [shelfPath],
+      mode: "delete",
+    });
+    expect(deletion).toMatchObject({ ready: true });
+    expect(
+      await backend.confirmShelf({
+        token: deletion.token!,
+        target: deletion.target,
+        operationId: "mock-shelf-contract",
+      }),
+    ).toMatchObject({ outcome: "succeeded" });
+
+    const unshelve = await backend.preflightUnshelve({
+      sourceChangeId: shelfSource.id,
+      depotPaths: [shelfPath],
+      targetWorkspace: (await backend.runtimeInfo()).context.client,
+      targetChangeId: 0,
+    });
+    expect(unshelve.mappings[0]).toMatchObject({ mapped: true });
+    expect(
+      await backend.confirmUnshelve({
+        token: unshelve.token!,
+        target: unshelve.target,
+      }),
+    ).toMatchObject({ outcome: "succeeded" });
+
+    const resolve = await backend.preflightResolve({
+      depotPaths: [shelfPath],
+    });
+    expect(resolve).toMatchObject({ ready: false });
+    expect(resolve.conflicts[0]).toMatchObject({ status: "unknown" });
+    expect(resolve.token).toBeUndefined();
   });
 
   it("streams monotonic action progress before resolving", async () => {

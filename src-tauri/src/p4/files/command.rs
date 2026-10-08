@@ -76,11 +76,7 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
             ("reopen", vec!["-c".into(), change], OutputMode::JsonLines)
         }
         FileAction::Resolve => {
-            let method = request.resolve_method.as_deref().unwrap_or("am");
-            if !["am", "as", "at", "ay", "af", "n"].contains(&method) {
-                return Err(format!("unsupported resolve method: {method}"));
-            }
-            ("resolve", vec![format!("-{method}")], OutputMode::JsonLines)
+            return Err("GUI resolve must use the preflight and confirmation API".into())
         }
         FileAction::Reconcile => (
             "reconcile",
@@ -88,10 +84,7 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
             OutputMode::JsonLines,
         ),
         FileAction::Shelve => {
-            let change = required_numbered_change(request.changelist_id)?;
-            let mut args = parallel_args(request)?;
-            args.extend(["-c".into(), change.to_string()]);
-            ("shelve", args, OutputMode::JsonLines)
+            return Err("GUI shelve must use the preflight and confirmation API".into())
         }
         FileAction::ChangeFiletype => {
             let file_type = required(&request.file_type, "fileType")?;
@@ -233,12 +226,6 @@ fn changelist_name(change: Option<i64>) -> Option<String> {
 
 fn required_change(change: Option<i64>) -> Result<String, String> {
     changelist_name(change).ok_or_else(|| "changelistId is required".into())
-}
-
-fn required_numbered_change(change: Option<i64>) -> Result<i64, String> {
-    change
-        .filter(|value| *value > 0)
-        .ok_or_else(|| "a numbered changelistId is required".into())
 }
 
 fn required<'a>(value: &'a Option<String>, field: &str) -> Result<&'a String, String> {
@@ -387,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn plans_reconcile_resolve_shelve_and_reopen() {
+    fn plans_reconcile_and_rejects_resolve_shelve_bypasses() {
         let add_only = invocation(&request(FileAction::AddRecursive));
         assert_eq!(add_only.command, "reconcile");
         assert_eq!(add_only.args, vec!["-a", "//depot/main/a b.txt"]);
@@ -397,19 +384,12 @@ mod tests {
             vec!["-e", "-a", "-d", "//depot/main/a b.txt"]
         );
 
-        let mut resolve = request(FileAction::Resolve);
-        resolve.resolve_method = Some("at".into());
-        assert_eq!(
-            invocation(&resolve).args,
-            vec!["-at", "//depot/main/a b.txt"]
-        );
+        let resolve = request(FileAction::Resolve);
+        assert!(plan(&resolve).is_err());
 
         let mut shelve = request(FileAction::Shelve);
         shelve.changelist_id = Some(7);
-        assert_eq!(
-            invocation(&shelve).args,
-            vec!["-c", "7", "//depot/main/a b.txt"]
-        );
+        assert!(plan(&shelve).is_err());
         shelve.changelist_id = Some(0);
         assert!(plan(&shelve).is_err());
 

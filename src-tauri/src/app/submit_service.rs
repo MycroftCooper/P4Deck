@@ -1,5 +1,8 @@
 use crate::{
-    app::status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
+    app::{
+        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
+    },
     domain::*,
     p4::{
         connection::classify_connection_error,
@@ -7,9 +10,8 @@ use crate::{
         submit::{PermissionAssessment, SubmitInspection, SubmitRepository},
     },
 };
-use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
@@ -24,6 +26,12 @@ struct TokenRecord {
     expires_at: i64,
 }
 
+impl ExpiringConfirmation for TokenRecord {
+    fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+}
+
 struct Evaluation {
     change: Option<PendingChange>,
     blockers: Vec<SubmitIssue>,
@@ -36,7 +44,7 @@ pub struct SubmitService {
     repository: SubmitRepository,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: Mutex<HashMap<String, TokenRecord>>,
+    tokens: ConfirmationStore<TokenRecord>,
     confirmation_gate: AsyncMutex<()>,
     ttl_ms: u64,
 }
@@ -60,7 +68,7 @@ impl SubmitService {
             repository,
             contexts,
             status_cache,
-            tokens: Mutex::new(HashMap::new()),
+            tokens: ConfirmationStore::default(),
             confirmation_gate: AsyncMutex::new(()),
             ttl_ms: ttl_ms.max(1),
         }
@@ -73,11 +81,6 @@ impl SubmitService {
     ) -> SubmitPreflight {
         let (context, generation) = self.contexts.snapshot();
         let target = target_snapshot(&context, generation, request.change_id);
-        let now = now_ms();
-        self.tokens
-            .lock()
-            .retain(|_, record| record.expires_at > now);
-
         let inspection = self
             .repository
             .inspect(
@@ -120,18 +123,17 @@ impl SubmitService {
         // Start the TTL after the server checks finish so a slow preflight does not hand the UI
         // an already-expired confirmation token.
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let token = ready.then(|| Uuid::new_v4().to_string());
-        if let Some(token) = &token {
-            self.tokens.lock().insert(
-                token.clone(),
+        let token = ready.then(|| {
+            self.tokens.issue(
                 TokenRecord {
                     target: target.clone(),
                     content_digest: evaluation.summary.content_digest.clone(),
                     depot_paths: evaluation.summary.depot_paths.clone(),
                     expires_at,
                 },
-            );
-        }
+                now_ms(),
+            )
+        });
         let log_reference = evaluation.operation_ids.first().cloned();
         SubmitPreflight {
             ready,
@@ -156,7 +158,7 @@ impl SubmitService {
     ) -> SubmitResult {
         let _gate = self.confirmation_gate.lock().await;
         let change_id = confirmation.target.change_id;
-        let record = self.tokens.lock().remove(&confirmation.token);
+        let record = self.tokens.consume(&confirmation.token);
         let Some(record) = record else {
             return rejected(
                 change_id,

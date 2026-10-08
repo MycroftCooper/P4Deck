@@ -325,23 +325,6 @@ pub enum ClAction {
         change_id: i64,
         depot_paths: Vec<String>,
     },
-    Shelve {
-        change_id: i64,
-        depot_paths: Option<Vec<String>>,
-        replace: Option<bool>,
-    },
-    DeleteShelf {
-        change_id: i64,
-        depot_paths: Option<Vec<String>>,
-    },
-    UnshelvePreview {
-        source_change_id: i64,
-        target_change_id: i64,
-    },
-    Unshelve {
-        source_change_id: i64,
-        target_change_id: i64,
-    },
     SubmitValidate {
         change_id: i64,
     },
@@ -727,4 +710,308 @@ pub struct SubmitResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_reference: Option<String>,
     pub refresh: SubmitRefreshAdvice,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowIssueCertainty {
+    Confirmed,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowIssueCode {
+    InvalidTarget,
+    ChangeNotFound,
+    FileNotInChange,
+    FileNotShelved,
+    ExistingShelfRequiresReplace,
+    MappingFailed,
+    LocalModification,
+    AlreadyOpened,
+    LockedFile,
+    PermissionDenied,
+    PermissionUnknown,
+    ResolveLikely,
+    ResolveRequired,
+    NotResolvable,
+    InspectionUnknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowIssue {
+    pub code: WorkflowIssueCode,
+    pub certainty: WorkflowIssueCertainty,
+    pub message: String,
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowTargetSnapshot {
+    pub kind: String,
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub context_generation: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_change_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_change_id: Option<i64>,
+    pub depot_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRefreshAdvice {
+    pub pending_changes: bool,
+    pub workspace_status: bool,
+    pub depot_paths: Vec<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfPreflightRequest {
+    pub change_id: i64,
+    pub depot_paths: Vec<String>,
+    pub mode: ShelfMode,
+    #[serde(default)]
+    pub replace: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ShelfMode {
+    CreateOrUpdate,
+    Delete,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfScopeSummary {
+    pub opened_paths: Vec<String>,
+    pub existing_shelved_paths: Vec<String>,
+    pub create_paths: Vec<String>,
+    pub replace_paths: Vec<String>,
+    pub delete_paths: Vec<String>,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfPreflight {
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change: Option<PendingChange>,
+    pub blockers: Vec<WorkflowIssue>,
+    pub warnings: Vec<WorkflowIssue>,
+    pub target: WorkflowTargetSnapshot,
+    pub scope: ShelfScopeSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowConfirmation {
+    pub token: String,
+    pub target: WorkflowTargetSnapshot,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnshelvePreflightRequest {
+    pub source_change_id: i64,
+    pub depot_paths: Vec<String>,
+    pub target_workspace: String,
+    pub target_change_id: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ResolveRisk {
+    None,
+    Likely,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UnshelveMapping {
+    pub depot_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
+    pub mapped: bool,
+    pub locally_modified: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opened_change_id: Option<i64>,
+    pub locked: bool,
+    pub resolve_risk: ResolveRisk,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnshelvePreflight {
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PendingChange>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_change: Option<PendingChange>,
+    pub mappings: Vec<UnshelveMapping>,
+    pub blockers: Vec<WorkflowIssue>,
+    pub warnings: Vec<WorkflowIssue>,
+    pub target: WorkflowTargetSnapshot,
+    pub content_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ResolveStrategy {
+    Safe,
+    AcceptYours,
+    AcceptTheirs,
+    MergePreview,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvePreflightRequest {
+    pub depot_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveVersionSource {
+    pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depot_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveConflictDetail {
+    pub depot_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_path: Option<String>,
+    pub conflict_type: String,
+    pub status: String,
+    pub available_strategies: Vec<ResolveStrategy>,
+    pub sources: Vec<ResolveVersionSource>,
+    pub preview: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvePreflight {
+    pub ready: bool,
+    pub conflicts: Vec<ResolveConflictDetail>,
+    pub blockers: Vec<WorkflowIssue>,
+    pub warnings: Vec<WorkflowIssue>,
+    pub target: WorkflowTargetSnapshot,
+    pub content_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveSelection {
+    pub depot_path: String,
+    pub strategy: ResolveStrategy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveConfirmation {
+    pub token: String,
+    pub target: WorkflowTargetSnapshot,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+    pub resolutions: Vec<ResolveSelection>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowFileState {
+    Succeeded,
+    Failed,
+    Cancelled,
+    Blocked,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowFileResult {
+    pub depot_path: String,
+    pub state: WorkflowFileState,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowOutcome {
+    Succeeded,
+    Partial,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkflowFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    ContextChanged,
+    ContentChanged,
+    PreflightBlocked,
+    PermissionDenied,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowResult {
+    pub outcome: WorkflowOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<WorkflowFailureCode>,
+    pub message: String,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub files: Vec<WorkflowFileResult>,
+    pub refresh: WorkflowRefreshAdvice,
 }

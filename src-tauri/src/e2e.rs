@@ -4,16 +4,20 @@ mod tests {
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
             file_service::FileService, status_cache::StatusCache, submit_service::SubmitService,
+            workflow_service::WorkflowService,
         },
         domain::{
             ConnectionState, FileAction, FileActionRequest, OperationResult, OperationSource,
             OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
-            PendingChangeMutationRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
-            SubmitPreflightRequest,
+            PendingChangeMutationRequest, ResolveConfirmation, ResolvePreflightRequest,
+            ResolveSelection, ResolveStrategy, ShelfMode, ShelfPreflightRequest,
+            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
+            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
+            WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, runner::P4Runner,
-            submit::SubmitRepository, workspaces,
+            submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -146,6 +150,17 @@ mod tests {
             status_cache.clone(),
             1,
         );
+        let workflows = WorkflowService::new(
+            WorkflowRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+        );
+        let expiring_workflows = WorkflowService::with_ttl(
+            WorkflowRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+            1,
+        );
         let files = FileService::new(runner.clone(), status_cache, journal.clone());
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
@@ -162,6 +177,8 @@ mod tests {
                     &submit,
                     &expiring_submit,
                     &contexts,
+                    &workflows,
+                    &expiring_workflows,
                     &context,
                     &config.workspace_root,
                 )
@@ -284,6 +301,15 @@ mod tests {
             OutputMode::Text,
         )
         .await;
+        let _ = checked_run(
+            runner,
+            context,
+            "obliterate",
+            vec!["-y".into(), "//depot/p4deck-workflow-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
         let deletion = checked_run(
             runner,
             context,
@@ -314,6 +340,8 @@ mod tests {
         submit: &SubmitService,
         expiring_submit: &SubmitService,
         contexts: &ContextStore,
+        workflows: &WorkflowService,
+        expiring_workflows: &WorkflowService,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -467,6 +495,16 @@ mod tests {
             format!("E2E client still has opened files after Revert: {opened_values:?}"),
         )?;
         exercise_pending_changelists(changelists, journal, runner, files, context, root).await?;
+        exercise_shelf_unshelve_resolve(
+            runner,
+            changelists,
+            workflows,
+            expiring_workflows,
+            contexts,
+            context,
+            root,
+        )
+        .await?;
         exercise_submit_state_machine(
             changelists,
             journal,
@@ -1313,6 +1351,669 @@ mod tests {
         }
     }
 
+    async fn exercise_shelf_unshelve_resolve(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        workflows: &WorkflowService,
+        expiring_workflows: &WorkflowService,
+        contexts: &ContextStore,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        const A: &str = "//depot/p4deck-workflow-e2e/a.txt";
+        const B: &str = "//depot/p4deck-workflow-e2e/b.txt";
+        const TARGET_CLIENT: &str = "p4deck-fixture-workflow-target";
+        const LIMITED_CLIENT: &str = "p4deck-fixture-workflow-limited";
+        const LOCK_CLIENT: &str = "p4deck-fixture-workflow-lock";
+        let local_dir = root.join("p4deck-workflow-e2e");
+        std::fs::create_dir_all(&local_dir).map_err(|error| error.to_string())?;
+        let local_a = local_dir.join("a.txt");
+        let local_b = local_dir.join("b.txt");
+        std::fs::write(&local_a, b"base a\n").map_err(|error| error.to_string())?;
+        std::fs::write(&local_b, b"base b\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec!["-t".into(), "binary".into(), A.into(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "reopen",
+            vec!["-t".into(), "binary".into(), A.into(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec![
+                "-d".into(),
+                "BE-004b workflow seed".into(),
+                "//depot/p4deck-workflow-e2e/...".into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![A.into(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        std::fs::write(&local_a, b"shelf a v1\n").map_err(|error| error.to_string())?;
+        std::fs::write(&local_b, b"shelf b v1\n").map_err(|error| error.to_string())?;
+        let source_change =
+            create_numbered_change(changelists, context, "BE-004b source shelf").await?;
+        for path in [A, B] {
+            move_to_change(changelists, context, source_change, path).await?;
+        }
+
+        let first_a = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: false,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            first_a.ready && first_a.scope.create_paths == [A],
+            format!("partial first shelf was not ready: {first_a:?}"),
+        )?;
+        let first_a_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: first_a
+                        .token
+                        .clone()
+                        .ok_or("first shelf returned no token")?,
+                    target: first_a.target.clone(),
+                    operation_id: Some("be004b-shelf-a".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            first_a_result.outcome == WorkflowOutcome::Succeeded,
+            format!("first partial shelf failed: {first_a_result:?}"),
+        )?;
+
+        let first_b = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: false,
+                },
+                None,
+            )
+            .await;
+        let first_b_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: first_b
+                        .token
+                        .clone()
+                        .ok_or("second partial shelf returned no token")?,
+                    target: first_b.target.clone(),
+                    operation_id: Some("be004b-shelf-b".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            first_b_result.outcome == WorkflowOutcome::Succeeded,
+            format!("second partial shelf failed: {first_b_result:?}"),
+        )?;
+        let after_first = changelists.query_pending(context.clone(), None).await?;
+        ensure(
+            pending_change(&after_first, source_change)?
+                .shelved_files
+                .len()
+                == 2,
+            "partial shelf did not preserve both selected shelf revisions",
+        )?;
+
+        let replace_required = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: false,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            !replace_required.ready
+                && replace_required
+                    .blockers
+                    .iter()
+                    .any(|item| item.code == WorkflowIssueCode::ExistingShelfRequiresReplace),
+            format!("existing shelf replacement was not blocked: {replace_required:?}"),
+        )?;
+
+        let drift = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: true,
+                },
+                None,
+            )
+            .await;
+        std::fs::write(&local_a, b"shelf a v2 drift\n").map_err(|error| error.to_string())?;
+        let drift_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: drift.token.ok_or("drift preflight returned no token")?,
+                    target: drift.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            drift_result.failure == Some(WorkflowFailureCode::ContentChanged),
+            format!("local content drift did not invalidate shelf token: {drift_result:?}"),
+        )?;
+
+        let expiring = expiring_workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: true,
+                },
+                None,
+            )
+            .await;
+        tokio::time::sleep(std::time::Duration::from_millis(3)).await;
+        let expired = expiring_workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: expiring.token.ok_or("expiring shelf returned no token")?,
+                    target: expiring.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            expired.failure == Some(WorkflowFailureCode::TokenExpired),
+            format!("expired shelf token was not rejected: {expired:?}"),
+        )?;
+
+        let replace = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: true,
+                },
+                None,
+            )
+            .await;
+        let replace_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: replace.token.ok_or("replacement returned no token")?,
+                    target: replace.target,
+                    operation_id: Some("be004b-replace-a".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            replace_result.outcome == WorkflowOutcome::Succeeded,
+            format!("shelf replacement failed: {replace_result:?}"),
+        )?;
+
+        let target_root = root
+            .parent()
+            .ok_or("fixture root is missing")?
+            .join("workflow-target-workspace");
+        let target_context =
+            setup_named_client(runner, context, TARGET_CLIENT, &target_root).await?;
+        let stale_source = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: TARGET_CLIENT.into(),
+                    target_change_id: 0,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            stale_source.ready,
+            format!("source drift setup preflight was not ready: {stale_source:?}"),
+        )?;
+        std::fs::write(&local_b, b"shelf b v2 source drift\n")
+            .map_err(|error| error.to_string())?;
+        let update_b = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    mode: ShelfMode::CreateOrUpdate,
+                    replace: true,
+                },
+                None,
+            )
+            .await;
+        let update_b_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: update_b
+                        .token
+                        .ok_or("source shelf update returned no token")?,
+                    target: update_b.target,
+                    operation_id: Some("be004b-source-drift".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            update_b_result.outcome == WorkflowOutcome::Succeeded,
+            format!("source shelf update failed: {update_b_result:?}"),
+        )?;
+        let stale_source_result = workflows
+            .confirm_unshelve(
+                WorkflowConfirmation {
+                    token: stale_source
+                        .token
+                        .ok_or("source drift unshelve returned no token")?,
+                    target: stale_source.target,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            stale_source_result.failure == Some(WorkflowFailureCode::ContentChanged),
+            format!("source shelf drift did not invalidate token: {stale_source_result:?}"),
+        )?;
+        let limited_root = root
+            .parent()
+            .ok_or("fixture root is missing")?
+            .join("workflow-limited-workspace");
+        if limited_root.exists() {
+            std::fs::remove_dir_all(&limited_root).map_err(|error| error.to_string())?;
+        }
+        std::fs::create_dir_all(&limited_root).map_err(|error| error.to_string())?;
+        let limited_spec = format!("Client: {LIMITED_CLIENT}\nOwner: {FIXTURE_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nLineEnd: local\nView:\n\t//depot/main/... //{LIMITED_CLIENT}/main/...\n", limited_root.to_string_lossy().replace('\\', "/"));
+        checked_run(
+            runner,
+            context,
+            "client",
+            vec!["-i".into()],
+            Some(limited_spec),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let mapping_failure = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: LIMITED_CLIENT.into(),
+                    target_change_id: 0,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            mapping_failure
+                .blockers
+                .iter()
+                .any(|item| item.code == WorkflowIssueCode::MappingFailed),
+            format!("unmapped target was not classified: {mapping_failure:?}"),
+        )?;
+
+        let lock_root = root
+            .parent()
+            .ok_or("fixture root is missing")?
+            .join("workflow-lock-workspace");
+        let lock_context = setup_named_client(runner, context, LOCK_CLIENT, &lock_root).await?;
+        checked_run(
+            runner,
+            &lock_context,
+            "sync",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &lock_context,
+            "edit",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &lock_context,
+            "lock",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let locked = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: TARGET_CLIENT.into(),
+                    target_change_id: 0,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            locked
+                .blockers
+                .iter()
+                .any(|item| item.code == WorkflowIssueCode::LockedFile),
+            format!("cross-workspace lock was not blocked: {locked:?}"),
+        )?;
+        checked_run(
+            runner,
+            &lock_context,
+            "unlock",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &lock_context,
+            "revert",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        cleanup_named_client(runner, context, LOCK_CLIENT, &lock_root).await?;
+
+        let to_default = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: TARGET_CLIENT.into(),
+                    target_change_id: 0,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            to_default.ready && to_default.mappings.iter().all(|item| item.mapped),
+            format!("cross-workspace Default unshelve was not ready: {to_default:?}"),
+        )?;
+        let default_result = workflows
+            .confirm_unshelve(
+                WorkflowConfirmation {
+                    token: to_default
+                        .token
+                        .ok_or("Default unshelve returned no token")?,
+                    target: to_default.target,
+                    operation_id: Some("be004b-unshelve-default".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            default_result.outcome == WorkflowOutcome::Succeeded,
+            format!("Default unshelve failed: {default_result:?}"),
+        )?;
+        checked_run(
+            runner,
+            &target_context,
+            "revert",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        checked_run(
+            runner,
+            &target_context,
+            "sync",
+            vec!["-f".into(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let target_change =
+            create_numbered_change(changelists, &target_context, "BE-004b target resolve").await?;
+        checked_run(
+            runner,
+            &target_context,
+            "edit",
+            vec!["-c".into(), target_change.to_string(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let target_b = target_root.join("p4deck-workflow-e2e").join("b.txt");
+        std::fs::write(&target_b, b"target workspace divergent b\n")
+            .map_err(|error| error.to_string())?;
+        let local_overlap = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: TARGET_CLIENT.into(),
+                    target_change_id: target_change,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            !local_overlap.ready
+                && local_overlap
+                    .blockers
+                    .iter()
+                    .any(|item| item.code == WorkflowIssueCode::LocalModification),
+            format!("local overwrite risk was not blocked: {local_overlap:?}"),
+        )?;
+        checked_run(
+            runner,
+            &target_context,
+            "revert",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &target_context,
+            "edit",
+            vec!["-c".into(), target_change.to_string(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let to_numbered = workflows
+            .preflight_unshelve(
+                UnshelvePreflightRequest {
+                    source_change_id: source_change,
+                    depot_paths: vec![B.into()],
+                    target_workspace: TARGET_CLIENT.into(),
+                    target_change_id: target_change,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            to_numbered.ready
+                && to_numbered.warnings.iter().any(|item| {
+                    item.code == WorkflowIssueCode::AlreadyOpened
+                        || item.code == WorkflowIssueCode::ResolveLikely
+                }),
+            format!("numbered unshelve did not report opened/resolve risk: {to_numbered:?}"),
+        )?;
+        let numbered_result = workflows
+            .confirm_unshelve(
+                WorkflowConfirmation {
+                    token: to_numbered
+                        .token
+                        .ok_or("numbered unshelve returned no token")?,
+                    target: to_numbered.target,
+                    operation_id: Some("be004b-unshelve-numbered".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            numbered_result.outcome == WorkflowOutcome::Succeeded,
+            format!("numbered unshelve failed: {numbered_result:?}"),
+        )?;
+
+        contexts.save(target_context.clone())?;
+        let resolve = workflows
+            .preflight_resolve(
+                ResolvePreflightRequest {
+                    depot_paths: vec![B.into()],
+                },
+                None,
+            )
+            .await;
+        ensure(
+            resolve.ready && resolve.conflicts[0].status == "unresolved",
+            format!("real resolve conflict was not exposed: {resolve:?}"),
+        )?;
+        let resolve_result = workflows
+            .confirm_resolve(
+                ResolveConfirmation {
+                    token: resolve.token.ok_or("resolve preflight returned no token")?,
+                    target: resolve.target,
+                    operation_id: Some("be004b-resolve".into()),
+                    resolutions: vec![ResolveSelection {
+                        depot_path: B.into(),
+                        strategy: ResolveStrategy::AcceptTheirs,
+                    }],
+                },
+                None,
+            )
+            .await;
+        ensure(
+            resolve_result.outcome == WorkflowOutcome::Succeeded,
+            format!("real resolve failed: {resolve_result:?}"),
+        )?;
+        let no_conflict = workflows
+            .preflight_resolve(
+                ResolvePreflightRequest {
+                    depot_paths: vec![A.into()],
+                },
+                None,
+            )
+            .await;
+        ensure(
+            !no_conflict.ready && no_conflict.conflicts[0].status != "unresolved",
+            format!("non-conflict was falsely advertised as resolvable: {no_conflict:?}"),
+        )?;
+        contexts.save(context.clone())?;
+
+        checked_run(
+            runner,
+            &target_context,
+            "revert",
+            vec![B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        delete_empty_change(changelists, &target_context, target_change).await?;
+        cleanup_named_client(runner, context, TARGET_CLIENT, &target_root).await?;
+        cleanup_named_client(runner, context, LIMITED_CLIENT, &limited_root).await?;
+
+        let delete_a = workflows
+            .preflight_shelf(
+                ShelfPreflightRequest {
+                    change_id: source_change,
+                    depot_paths: vec![A.into()],
+                    mode: ShelfMode::Delete,
+                    replace: false,
+                },
+                None,
+            )
+            .await;
+        let delete_a_result = workflows
+            .confirm_shelf(
+                WorkflowConfirmation {
+                    token: delete_a.token.ok_or("delete shelf returned no token")?,
+                    target: delete_a.target,
+                    operation_id: Some("be004b-delete-a".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            delete_a_result.outcome == WorkflowOutcome::Succeeded,
+            format!("shelf subset delete failed: {delete_a_result:?}"),
+        )?;
+        let remaining = changelists.query_pending(context.clone(), None).await?;
+        let remaining = &pending_change(&remaining, source_change)?.shelved_files;
+        ensure(
+            remaining.iter().any(|file| file.depot_path == B)
+                && remaining.iter().all(|file| file.depot_path != A),
+            format!("shelf subset delete changed the wrong scope: {remaining:?}"),
+        )?;
+
+        checked_run(
+            runner,
+            context,
+            "revert",
+            vec![A.into(), B.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-d".into(), "-c".into(), source_change.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        delete_empty_change(changelists, context, source_change).await?;
+        Ok(())
+    }
+
     async fn create_numbered_change(
         changelists: &ChangelistService,
         context: &P4Context,
@@ -1381,6 +2082,9 @@ mod tests {
         client: &str,
         root: &Path,
     ) -> Result<P4Context, String> {
+        if root.exists() {
+            std::fs::remove_dir_all(root).map_err(|error| error.to_string())?;
+        }
         std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
         let mut context = base.clone();
         context.client = client.into();
@@ -1466,6 +2170,15 @@ mod tests {
                 .and_then(Value::as_str)
                 .and_then(|value| value.parse::<i64>().ok())
         }) {
+            let _ = checked_run(
+                runner,
+                admin,
+                "shelve",
+                vec!["-d".into(), "-c".into(), change_id.to_string()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
             let _ = checked_run(
                 runner,
                 admin,
@@ -1604,8 +2317,8 @@ mod tests {
             let cache = Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024));
             let permission_submit = SubmitService::new(
                 SubmitRepository::new(runner.clone()),
-                contexts,
-                cache,
+                contexts.clone(),
+                cache.clone(),
             );
             let preflight = permission_submit
                 .preflight(SubmitPreflightRequest { change_id }, None)
@@ -1616,6 +2329,30 @@ mod tests {
                     crate::domain::SubmitIssueCode::PermissionDenied,
                 ) && preflight.token.is_none(),
                 format!("write permission denial was not blocked: {preflight:?}"),
+            )?;
+            let permission_workflow = WorkflowService::new(
+                WorkflowRepository::new(runner.clone()),
+                contexts,
+                cache,
+            );
+            let shelf_permission = permission_workflow
+                .preflight_shelf(
+                    ShelfPreflightRequest {
+                        change_id,
+                        depot_paths: vec![depot_path.into()],
+                        mode: ShelfMode::CreateOrUpdate,
+                        replace: false,
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                shelf_permission
+                    .blockers
+                    .iter()
+                    .any(|item| item.code == WorkflowIssueCode::PermissionDenied)
+                    && shelf_permission.token.is_none(),
+                format!("shelf permission denial was not blocked: {shelf_permission:?}"),
             )?;
             checked_run(
                 runner,

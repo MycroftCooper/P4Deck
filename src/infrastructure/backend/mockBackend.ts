@@ -6,6 +6,7 @@ import type {
   PendingChange,
   SubmitPreflight,
   SubmitTargetSnapshot,
+  WorkflowTargetSnapshot,
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
@@ -21,6 +22,15 @@ let mockContextGeneration = 1;
 const mockSubmitTokens = new Map<
   string,
   { target: SubmitTargetSnapshot; digest: string; expiresAt: number }
+>();
+const mockWorkflowTokens = new Map<
+  string,
+  {
+    target: WorkflowTargetSnapshot;
+    digest: string;
+    expiresAt: number;
+    request: unknown;
+  }
 >();
 try {
   const saved = JSON.parse(
@@ -338,8 +348,15 @@ export const mockBackend: Backend = {
     };
   },
   async runP4(request) {
-    if (request.source === "gui" && request.command.toLowerCase() === "submit")
-      throw new Error("GUI submit must use preflightSubmit and confirmSubmit");
+    if (
+      request.source === "gui" &&
+      ["submit", "shelve", "unshelve", "resolve"].includes(
+        request.command.toLowerCase(),
+      )
+    )
+      throw new Error(
+        "GUI submit, shelf, unshelve and resolve require preflight and confirmation",
+      );
     const operationId = request.operationId ?? crypto.randomUUID();
     const started = new Date().toISOString();
     const args =
@@ -435,12 +452,7 @@ export const mockBackend: Backend = {
   },
   async performClAction(action) {
     const operationId = crypto.randomUUID();
-    const id =
-      "changeId" in action
-        ? action.changeId
-        : "sourceChangeId" in action
-          ? action.sourceChangeId
-          : 0;
+    const id = "changeId" in action ? action.changeId : 0;
     const command = `p4 ${action.type} ${id || ""}`.trim();
     emitMockLog(
       "info",
@@ -465,10 +477,7 @@ export const mockBackend: Backend = {
         ],
       },
       affectedChanges: id ? [id] : [],
-      warnings:
-        action.type === "unshelvePreview"
-          ? ["Preview only: no workspace files were changed."]
-          : [],
+      warnings: [],
     };
   },
   async queryLogs(query) {
@@ -544,6 +553,10 @@ export const mockBackend: Backend = {
   async performFileAction(request) {
     if ((request.action as string) === "submit")
       throw new Error("Submit must use preflightSubmit and confirmSubmit");
+    if (["shelve", "resolve"].includes(request.action))
+      throw new Error(
+        "Shelf and resolve must use preflight and confirmation APIs",
+      );
     const operationId = request.operationId ?? crypto.randomUUID();
     const event = (
       type: OperationEvent["type"],
@@ -950,7 +963,252 @@ export const mockBackend: Backend = {
       },
     };
   },
+  async preflightShelf(request) {
+    const change = (await this.queryPendingChanges()).find(
+      (item) => item.id === request.changeId,
+    );
+    const paths = [...new Set(request.depotPaths)].sort();
+    const opened = new Set(change?.files.map((file) => file.depotPath));
+    const shelved = new Set(change?.shelvedFiles.map((file) => file.depotPath));
+    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    if (!change || request.changeId <= 0)
+      blockers.push({
+        code: "changeNotFound",
+        certainty: "confirmed",
+        message: "Numbered changelist not found.",
+        paths,
+      });
+    const missing = paths.filter((path) =>
+      request.mode === "delete" ? !shelved.has(path) : !opened.has(path),
+    );
+    if (missing.length)
+      blockers.push({
+        code: request.mode === "delete" ? "fileNotShelved" : "fileNotInChange",
+        certainty: "confirmed",
+        message: "Files are outside the requested shelf scope.",
+        paths: missing,
+      });
+    const replacements = paths.filter((path) => shelved.has(path));
+    if (
+      request.mode === "createOrUpdate" &&
+      replacements.length &&
+      !request.replace
+    )
+      blockers.push({
+        code: "existingShelfRequiresReplace",
+        certainty: "confirmed",
+        message: "Replacing existing shelf revisions requires explicit opt-in.",
+        paths: replacements,
+      });
+    const target: WorkflowTargetSnapshot = {
+      kind: "shelf",
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      contextGeneration: mockContextGeneration,
+      sourceChangeId: request.changeId,
+      depotPaths: paths,
+    };
+    const digest = mockDigest(JSON.stringify({ change, target, request }));
+    const token = blockers.length ? undefined : crypto.randomUUID();
+    const expiresAt = Date.now() + 120_000;
+    if (token)
+      mockWorkflowTokens.set(token, { target, digest, expiresAt, request });
+    return {
+      ready: !blockers.length,
+      change,
+      blockers,
+      warnings: [],
+      target,
+      scope: {
+        openedPaths: [...opened].sort(),
+        existingShelvedPaths: [...shelved].sort(),
+        createPaths:
+          request.mode === "createOrUpdate"
+            ? paths.filter((path) => !shelved.has(path))
+            : [],
+        replacePaths: request.mode === "createOrUpdate" ? replacements : [],
+        deletePaths: request.mode === "delete" ? paths : [],
+        contentDigest: digest,
+      },
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [],
+    };
+  },
+  async confirmShelf(confirmation) {
+    return confirmMockWorkflow(
+      confirmation,
+      "Shelf operation completed in Browser Mock.",
+    );
+  },
+  async preflightUnshelve(request) {
+    const source = (await this.queryPendingChanges()).find(
+      (item) => item.id === request.sourceChangeId,
+    );
+    const paths = [...new Set(request.depotPaths)].sort();
+    const sourcePaths = new Set(
+      source?.shelvedFiles.map((file) => file.depotPath),
+    );
+    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    const missing = paths.filter((path) => !sourcePaths.has(path));
+    if (!source || missing.length)
+      blockers.push({
+        code: "fileNotShelved",
+        certainty: "confirmed",
+        message: "Source shelf does not contain every selected file.",
+        paths: missing.length ? missing : paths,
+      });
+    const target: WorkflowTargetSnapshot = {
+      kind: "unshelve",
+      server: mockContext.server,
+      user: mockContext.user,
+      client: request.targetWorkspace,
+      workspace: mockContext.cwd ?? "",
+      contextGeneration: mockContextGeneration,
+      sourceChangeId: request.sourceChangeId,
+      targetChangeId: request.targetChangeId,
+      depotPaths: paths,
+    };
+    const mappings = paths.map((depotPath) => ({
+      depotPath,
+      targetPath: `${mockContext.cwd ?? "/workspace/atlas"}/${depotPath.split("/").at(-1)}`,
+      mapped: true,
+      locallyModified: false,
+      locked: false,
+      resolveRisk: "unknown" as const,
+    }));
+    const digest = mockDigest(JSON.stringify({ source, target, mappings }));
+    const token = blockers.length ? undefined : crypto.randomUUID();
+    const expiresAt = Date.now() + 120_000;
+    if (token)
+      mockWorkflowTokens.set(token, { target, digest, expiresAt, request });
+    return {
+      ready: !blockers.length,
+      source,
+      targetChange:
+        request.targetChangeId === 0
+          ? (await this.queryPendingChanges())[0]
+          : undefined,
+      mappings,
+      blockers,
+      warnings: [
+        {
+          code: "inspectionUnknown",
+          certainty: "unknown",
+          message: "Browser Mock cannot verify server-side resolve behavior.",
+          paths,
+        },
+      ],
+      target,
+      contentDigest: digest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [],
+    };
+  },
+  async confirmUnshelve(confirmation) {
+    return confirmMockWorkflow(
+      confirmation,
+      "Unshelve completed in Browser Mock.",
+    );
+  },
+  async preflightResolve(request) {
+    const paths = [...new Set(request.depotPaths)].sort();
+    const target: WorkflowTargetSnapshot = {
+      kind: "resolve",
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      contextGeneration: mockContextGeneration,
+      depotPaths: paths,
+    };
+    const conflicts = paths.map((depotPath) => ({
+      depotPath,
+      conflictType: "unknown" as const,
+      status: "unknown" as const,
+      availableStrategies: ["mergePreview" as const],
+      sources: [],
+      preview: ["Browser Mock cannot inspect a real integration record."],
+    }));
+    return {
+      ready: false,
+      conflicts,
+      blockers: [
+        {
+          code: "inspectionUnknown",
+          certainty: "unknown",
+          message: "Resolve remains blocked when conflict facts are unknown.",
+          paths,
+        },
+      ],
+      warnings: [],
+      target,
+      contentDigest: mockDigest(JSON.stringify({ target, conflicts })),
+      expiresAt: Date.now() + 120_000,
+      ttlMs: 120_000,
+      operationIds: [],
+    };
+  },
+  async confirmResolve(confirmation) {
+    return confirmMockWorkflow(
+      confirmation,
+      "Resolve completed in Browser Mock.",
+    );
+  },
 };
+
+function confirmMockWorkflow(
+  confirmation: import("../../shared/contracts/types").WorkflowConfirmation,
+  message: string,
+): import("../../shared/contracts/types").WorkflowResult {
+  const record = mockWorkflowTokens.get(confirmation.token);
+  mockWorkflowTokens.delete(confirmation.token);
+  const reject = (
+    failure: import("../../shared/contracts/types").WorkflowFailureCode,
+    reason: string,
+  ): import("../../shared/contracts/types").WorkflowResult => ({
+    outcome: "rejected",
+    failure,
+    message: reason,
+    operationIds: [],
+    files: [],
+    refresh: {
+      pendingChanges: true,
+      workspaceStatus: true,
+      depotPaths: confirmation.target.depotPaths,
+      reason: "Run preflight again.",
+    },
+  });
+  if (!record) return reject("tokenUnknown", "Unknown or consumed token.");
+  if (record.expiresAt <= Date.now())
+    return reject("tokenExpired", "The preflight expired.");
+  if (JSON.stringify(record.target) !== JSON.stringify(confirmation.target))
+    return reject("targetMismatch", "The confirmation target changed.");
+  const operationId = confirmation.operationId ?? crypto.randomUUID();
+  return {
+    outcome: "succeeded",
+    message,
+    operationIds: [operationId],
+    logReference: operationId,
+    files: confirmation.target.depotPaths.map((depotPath) => ({
+      depotPath,
+      state: "succeeded",
+      message,
+      operationId,
+    })),
+    refresh: {
+      pendingChanges: true,
+      workspaceStatus: true,
+      depotPaths: confirmation.target.depotPaths,
+      reason: "Refresh affected views.",
+    },
+  };
+}
 
 function mockDigest(value: string) {
   let hash = 2166136261;

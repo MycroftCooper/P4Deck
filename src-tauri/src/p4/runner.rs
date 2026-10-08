@@ -138,9 +138,21 @@ impl P4Runner {
 
     pub async fn run_with_mutation_guard(
         &self,
+        request: P4CommandRequest,
+        app: Option<&AppHandle>,
+        progress_total: Option<usize>,
+        guard: &MutationGuard,
+    ) -> Result<OperationResult, RunnerError> {
+        self.run_with_mutation_guard_and_input(request, app, progress_total, None, guard)
+            .await
+    }
+
+    pub async fn run_with_mutation_guard_and_input(
+        &self,
         mut request: P4CommandRequest,
         app: Option<&AppHandle>,
         progress_total: Option<usize>,
+        argument_input: Option<Vec<String>>,
         guard: &MutationGuard,
     ) -> Result<OperationResult, RunnerError> {
         if request.context.server != guard.server || is_read_only_request(&request) {
@@ -154,7 +166,7 @@ impl P4Runner {
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         request.operation_id = Some(id.clone());
         let result = self
-            .run_inner(request, app, progress_total, None, true)
+            .run_inner(request, app, progress_total, argument_input, true)
             .await;
         if result.is_err() {
             if let Some(token) = self.operations.lock().remove(&id) {
@@ -642,6 +654,14 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
                 .args
                 .first()
                 .is_some_and(|argument| argument == "-o"))
+        || (request.command == "client"
+            && request
+                .args
+                .first()
+                .is_some_and(|argument| argument == "-o"))
+        || (matches!(request.command.as_str(), "unshelve" | "resolve")
+            && request.args.iter().any(|argument| argument == "-n"))
+        || (request.command == "reconcile" && request.args.iter().any(|argument| argument == "-n"))
 }
 
 fn event(id: &str, kind: EventKind, message: Option<String>) -> OperationEvent {

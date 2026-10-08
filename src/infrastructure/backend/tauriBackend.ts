@@ -48,4 +48,11 @@ export const tauriBackend: Backend = {
     invoke("mutate_pending_change", { request }),
   preflightSubmit: (request) => invoke("preflight_submit", { request }),
   confirmSubmit: (confirmation) => invoke("confirm_submit", { confirmation }),
+  preflightShelf: (request) => invoke("preflight_shelf", { request }),
+  confirmShelf: (confirmation) => invoke("confirm_shelf", { confirmation }),
+  preflightUnshelve: (request) => invoke("preflight_unshelve", { request }),
+  confirmUnshelve: (confirmation) =>
+    invoke("confirm_unshelve", { confirmation }),
+  preflightResolve: (request) => invoke("preflight_resolve", { request }),
+  confirmResolve: (confirmation) => invoke("confirm_resolve", { confirmation }),
 };

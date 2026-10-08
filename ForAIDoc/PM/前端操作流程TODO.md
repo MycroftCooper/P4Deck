@@ -132,7 +132,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～12。
 - `useCommandDialogs` 的统一 Submit 入口已接 `preflightSubmit` / `confirmSubmit`。被 blocker 阻断且无 token 是合法预检结果；只有 ready、目标一致、未过期且持有 token 时才可确认。confirmed warning、unknown、token 过期、连接/Workspace/CL 漂移、加载失败、结构化拒绝/失败/unknown、成功和重复点击均有独立状态。
 - Submit 结果按后端 refresh advice 刷新 Pending、Submitted 与 Workspace 查询；错误或 IPC 异常也保守刷新 Pending/Workspace。成功显示 operation/log 引用；非 `submitted` outcome 不显示成功。
 - Browser Mock 继续实现同一契约并驱动状态测试；成功提示明确是浏览器模拟、未访问真实 P4 Server。Shelf/Unshelve/Resolve 仍维持既有预览边界，本批没有扩大执行范围。
-- 自动化新增删除确认、Pending 局部合并、Default↔编号移动、Submit blocker/warning/unknown/过期/漂移/失败/防重复及统一适配器接线覆盖。2026-10-08 全量 `pnpm test:web` 为 39 个文件、240 项通过；`pnpm build`、`pnpm check`、Rust test/check/clippy/fmt、`git diff --check` 通过，Windows localhost E2E 连续两轮通过。
+- 自动化新增删除确认、Pending 局部合并、Default↔编号移动、Submit blocker/warning/unknown/过期/漂移/失败/防重复及统一适配器接线覆盖。2026-10-08 全量 `pnpm test:web` 为 39 个文件、241 项通过；`pnpm build`、`pnpm check`、Rust test/check/clippy/fmt、`git diff --check` 通过，Windows localhost E2E 连续两轮通过。
 - 最新 debug Tauri 已通过 `pnpm tauri build --debug --no-bundle` 重建，并以隔离 Fixture 环境启动为响应正常的 `P4Deck` 窗口。当前 Computer Use 原生应用清单连续返回空，无法绑定窗口执行可核验点击；实例与 Fixture 已清理，因此 Pending/Submit 原生 UI 冒烟记为“未验收”，不以进程存在、旧 exe、Mock 或应用层 E2E 冒充。
 
 ## 剩余验收与交接边界

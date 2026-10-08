@@ -106,61 +106,6 @@ pub fn action_invocation(action: ClAction) -> Result<ActionInvocation, String> {
             args.extend(validate_paths(&depot_paths)?);
             ("reopen", args, None, vec![change_id], vec![])
         }
-        ClAction::Shelve {
-            change_id,
-            depot_paths,
-            replace,
-        } => {
-            let mut args = vec!["-c".into(), change_id.to_string()];
-            if replace.unwrap_or(false) {
-                args.push("-r".into());
-            }
-            if let Some(paths) = depot_paths {
-                args.extend(paths);
-            }
-            ("shelve", args, None, vec![change_id], vec![])
-        }
-        ClAction::DeleteShelf {
-            change_id,
-            depot_paths,
-        } => {
-            let mut args = vec!["-d".into(), "-c".into(), change_id.to_string()];
-            if let Some(paths) = depot_paths {
-                args.extend(paths);
-            }
-            ("shelve", args, None, vec![change_id], vec![])
-        }
-        ClAction::UnshelvePreview {
-            source_change_id,
-            target_change_id,
-        } => (
-            "unshelve",
-            vec![
-                "-n".into(),
-                "-s".into(),
-                source_change_id.to_string(),
-                "-c".into(),
-                target_change_id.to_string(),
-            ],
-            None,
-            vec![source_change_id, target_change_id],
-            vec!["Preview only: no workspace files were changed.".into()],
-        ),
-        ClAction::Unshelve {
-            source_change_id,
-            target_change_id,
-        } => (
-            "unshelve",
-            vec![
-                "-s".into(),
-                source_change_id.to_string(),
-                "-c".into(),
-                target_change_id.to_string(),
-            ],
-            None,
-            vec![source_change_id, target_change_id],
-            vec![],
-        ),
         ClAction::SubmitValidate { change_id } => (
             "opened",
             vec!["-c".into(), change_id.to_string()],
