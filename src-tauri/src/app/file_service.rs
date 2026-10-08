@@ -48,17 +48,17 @@ impl FileService {
         &self,
         context: P4Context,
         path: Option<String>,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<Vec<WorkspaceNode>, String> {
         let root = canonical_root(&context)?;
         let directory = secure_path(&root, path.as_deref().unwrap_or(""), true)?;
-        let filespec = format!("{}/...", directory.to_string_lossy().trim_end_matches('/'));
+        let filespec = format!("{}/...", display_path(&directory).trim_end_matches('/'));
         let cache_key = StatusCacheKey::new(
             &context.server,
             &context.user,
             &context.client,
             StatusQueryKind::WorkspaceStatus,
-            &directory.to_string_lossy(),
+            &display_path(&directory),
             1,
         );
         let cache_now = now_ms();
@@ -90,7 +90,7 @@ impl FileService {
                 snapshot
                     .files
                     .iter()
-                    .map(|status| (status.path.clone(), status))
+                    .map(|status| (local_path_key(&status.path), status))
                     .collect::<std::collections::HashMap<_, _>>()
             })
             .unwrap_or_default();
@@ -105,8 +105,8 @@ impl FileService {
                 continue;
             }
             let metadata = entry.metadata().map_err(|error| error.to_string())?;
-            let absolute = canonical.to_string_lossy().to_string();
-            let value = p4.get(&absolute);
+            let absolute = display_path(&canonical);
+            let value = p4.get(&local_path_key(&absolute));
             let have = value.and_then(|value| value.have_revision);
             let head = value.and_then(|value| value.head_revision);
             let state = value
@@ -147,7 +147,7 @@ impl FileService {
         &self,
         context: P4Context,
         path: Option<String>,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<Vec<DepotNode>, String> {
         let base = path.unwrap_or_else(|| "//...".into());
         let prefix = base.trim_end_matches("...").trim_end_matches('/');
@@ -200,7 +200,7 @@ impl FileService {
         &self,
         context: P4Context,
         request: PathResolveRequest,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<PathResolveResult, String> {
         let root = canonical_root(&context)?;
         let input = request.input.trim();
@@ -254,7 +254,7 @@ impl FileService {
         &self,
         context: P4Context,
         request: FileActionRequest,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<FileActionResult, String> {
         let invalidation_reason = if request.action == FileAction::Refresh {
             InvalidationReason::ManualRefresh
@@ -277,7 +277,7 @@ impl FileService {
                 .iter()
                 .map(|path| secure_path(&root, path, true))
                 .collect::<Result<Vec<_>, _>>()?;
-            let app = app.clone();
+            let app = app.cloned();
             let local_operation_id = operation_id.clone();
             let _ = self.journal.start(
                 &operation_id,
@@ -286,16 +286,26 @@ impl FileService {
                 OperationSource::Gui,
                 OperationCategory::LocalFile,
             );
-            emit_progress(&app, &local_operation_id, EventKind::Queued, 0.0);
+            emit_progress(app.as_ref(), &local_operation_id, EventKind::Queued, 0.0);
             let local_result = tokio::task::spawn_blocking(move || {
-                emit_progress(&app, &local_operation_id, EventKind::Started, 2.0);
+                emit_progress(app.as_ref(), &local_operation_id, EventKind::Started, 2.0);
                 let total = targets.len().max(1);
                 for (index, target) in targets.into_iter().enumerate() {
                     trash::delete(target).map_err(|error| error.to_string())?;
                     let percent = 2.0 + ((index + 1) as f32 / total as f32) * 93.0;
-                    emit_progress(&app, &local_operation_id, EventKind::Progress, percent);
+                    emit_progress(
+                        app.as_ref(),
+                        &local_operation_id,
+                        EventKind::Progress,
+                        percent,
+                    );
                 }
-                emit_progress(&app, &local_operation_id, EventKind::Completed, 100.0);
+                emit_progress(
+                    app.as_ref(),
+                    &local_operation_id,
+                    EventKind::Completed,
+                    100.0,
+                );
                 Ok::<_, String>(())
             })
             .await
@@ -371,7 +381,7 @@ impl FileService {
         &self,
         context: P4Context,
         path: String,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<DiffResult, String> {
         let operation = self
             .run(
@@ -394,7 +404,7 @@ impl FileService {
         &self,
         context: P4Context,
         path: String,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<Vec<FileRevision>, String> {
         let result = self
             .run(
@@ -415,7 +425,7 @@ impl FileService {
         &self,
         context: P4Context,
         path: String,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<RevisionGraph, String> {
         let revisions = self
             .history_with_integrations(context, path.clone(), app)
@@ -449,7 +459,7 @@ impl FileService {
         &self,
         context: P4Context,
         path: String,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<Vec<FileRevision>, String> {
         let result = self
             .run(
@@ -480,7 +490,7 @@ impl FileService {
         command: &str,
         args: Vec<String>,
         json: bool,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         self.run_mode(
             context,
@@ -507,7 +517,7 @@ impl FileService {
         command: &str,
         args: Vec<String>,
         options: RunOptions,
-        app: &AppHandle,
+        app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         self.runner
             .run_with_progress(
@@ -521,7 +531,7 @@ impl FileService {
                     timeout_ms: Some(300_000),
                     input: None,
                 },
-                Some(app),
+                app,
                 options.progress_total,
                 options.argument_input,
             )
@@ -530,7 +540,10 @@ impl FileService {
     }
 }
 
-fn emit_progress(app: &AppHandle, operation_id: &str, kind: EventKind, progress: f32) {
+fn emit_progress(app: Option<&AppHandle>, operation_id: &str, kind: EventKind, progress: f32) {
+    let Some(app) = app else {
+        return;
+    };
     let _ = app.emit(
         "operation-event",
         OperationEvent {
@@ -605,6 +618,22 @@ fn canonical_root(context: &P4Context) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|error| error.to_string())
 }
+fn display_path(path: &Path) -> String {
+    let value = path.to_string_lossy();
+    if let Some(value) = value.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{value}")
+    } else {
+        value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
+    }
+}
+fn local_path_key(path: &str) -> String {
+    let normalized = display_path(Path::new(path)).replace('\\', "/");
+    if cfg!(windows) {
+        normalized.to_ascii_lowercase()
+    } else {
+        normalized
+    }
+}
 fn secure_path(root: &Path, input: &str, must_exist: bool) -> Result<PathBuf, String> {
     let raw = Path::new(input);
     let joined = if raw.is_absolute() {
@@ -657,4 +686,29 @@ fn event_text(result: &OperationResult) -> String {
         .filter_map(|event| event.message.as_deref())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn normalizes_verbatim_drive_paths_for_p4_and_cache_matching() {
+        let verbatim = Path::new(r"\\?\D:\Workspace\Main\File.txt");
+        assert_eq!(display_path(verbatim), r"D:\Workspace\Main\File.txt");
+        assert_eq!(
+            local_path_key(&display_path(verbatim)),
+            local_path_key(r"d:/workspace/main/file.txt")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn normalizes_verbatim_unc_paths_without_losing_the_share_prefix() {
+        assert_eq!(
+            display_path(Path::new(r"\\?\UNC\server\share\file.txt")),
+            r"\\server\share\file.txt"
+        );
+    }
 }

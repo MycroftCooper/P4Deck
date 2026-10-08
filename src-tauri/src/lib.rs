@@ -4,6 +4,9 @@ mod ipc;
 mod p4;
 mod persistence;
 
+#[cfg(test)]
+mod e2e;
+
 use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;

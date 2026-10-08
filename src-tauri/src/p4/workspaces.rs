@@ -48,7 +48,7 @@ fn parse(value: &Value) -> Option<ClientWorkspace> {
 pub async fn list(
     runner: &P4Runner,
     context: P4Context,
-    app: &AppHandle,
+    app: Option<&AppHandle>,
 ) -> Result<Vec<ClientWorkspace>, String> {
     // --me resolves the effective P4 user, including P4CONFIG, on the server.
     let result = runner
@@ -63,7 +63,7 @@ pub async fn list(
                 timeout_ms: Some(30_000),
                 input: None,
             },
-            Some(app),
+            app,
         )
         .await
         .map_err(|error| error.to_string())?;

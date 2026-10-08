@@ -18,7 +18,7 @@
 
 ## 当前本机环境与可执行范围
 
-盘点时间：2026-09-30。
+盘点时间：2026-10-08。
 
 | 环境 | 当前状态 | 影响 |
 |---|---|---|
@@ -26,14 +26,14 @@
 | `p4d` Server | 已就绪 | Windows 原生隔离 Fixture 已安装并在 `127.0.0.1:16661` 完成 Seed/停止/重启验收 |
 | P4 连接变量 | Windows P4 注册表已有连接与凭据相关配置，仓库内无 `.p4config` | 自动化测试不得回退到用户真实 Server 上下文 |
 | Node.js / pnpm | Node 24、pnpm 11，已调整为项目基线 | 前端测试、Mock、构建和类型检查可运行 |
-| Rust | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | `cargo check`、Clippy 和 Tauri debug 应用构建通过；Windows 单测启动器仍有 manifest 问题 |
+| Rust | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | Common Controls v6 manifest 已覆盖 libtest；53 项单测可真实启动并通过 |
 | Fixture 脚本 | Windows/macOS 均已存在 | Windows 版使用项目内已校验的 P4/P4D 2026.1；Bash 版仍保持显式下载授权 |
 
-当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo check`、Clippy 和 Tauri debug 应用构建。Windows 下 `cargo test` 的编译与链接成功，但测试可执行文件没有嵌入 Common Controls v6 manifest，启动时因 `TaskDialogIndirect` 入口点无法解析而退出；这是 Windows 测试壳兼容问题，不是开发环境缺失。
+当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
 当前已具备真实 Server 验收环境；BE-003、BE-004、BE-008 仍需补齐应用层命令、状态机和可重复 E2E，不能仅凭 Fixture 启动成功标记完成。
 
-当前可推进 BE-002 的 Windows localhost 基线；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
+BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
 
 ## 已完成
 
@@ -41,7 +41,8 @@
 |---|---|---|
 | BE-000 | P4 文件 Action 与批量执行骨架 | 强类型 Action、参数校验、`-b 128 -x -`、受控并行、进度/取消及单测已落地 |
 | BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
-| BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；真实生命周期留给 BE-002 |
+| BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
+| BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
 | BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
@@ -68,7 +69,7 @@
 3. `pnpm test`、`pnpm build`、`pnpm check`、Clippy 和 `git diff --check` 全部通过。
 4. 输出给前端的状态足以直接驱动连接向导，不需要前端识别原始 P4 文本。
 
-### BE-002 — localhost p4d 集成测试基线（READY）
+### BE-002 — localhost p4d 集成测试基线（DONE：Windows）
 
 目标：把“单测可用”升级为“真实 P4 CLI/Server 可重复验证”。
 
@@ -80,6 +81,17 @@
 - 无 `p4d` 时明确 skip 并报告原因；CI/开发机有 Fixture 时必须执行。
 
 验收：测试可重复运行、可清理、失败后不污染真实环境，并生成简短验收记录。
+
+实际入口与结果（2026-10-08）：
+
+```powershell
+pnpm test:e2e:p4d:win
+# 等价：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-p4d-e2e.ps1
+```
+
+- 默认连续执行两轮，两轮均通过；每轮创建并最终删除 `p4deck-fixture-e2e` Client 与独立 Workspace Root。
+- Runner Context 显式携带 executable/server/user/client/tickets/trust，测试内部复验 `ServerID=p4deck-fixture-local` 和 loopback 地址；启动器隔离 P4CONFIG/P4ENVIRO/P4PASSWD，缺少固定工具时输出明确 `SKIP`。
+- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert。未包含 Submit、Shelf/Unshelve、SSL Trust、SSO/MFA 或 macOS，分别留给 BE-003/004、连接兼容矩阵和双平台验收。
 
 ### BE-003 — Submit 预检与执行状态机（READY）
 
@@ -109,7 +121,7 @@
 
 验收：Fixture 覆盖 Default ↔ Pending、部分 Shelf、更新 Shelf、删除 Shelf、跨 Workspace Unshelve 风险和失败恢复。
 
-### BE-005 — 文件状态聚合与缓存失效（DONE：真实组合待 BE-002/009）
+### BE-005 — 文件状态聚合与缓存失效（DONE：BE-002 组合已验，兼容矩阵待 BE-009）
 
 目标：稳定输出 Opened、Reconcile、Out-of-date、Conflicted 等日常状态，同时减少 P4 Server 请求。
 
@@ -125,7 +137,7 @@
 
 ## P1：Alpha 质量
 
-### BE-006 — 操作记录、离线与 ticket 状态（DONE：真实错误分类待 BE-002）
+### BE-006 — 操作记录、离线与 ticket 状态（DONE：真实离线/过期错误分类待兼容矩阵）
 
 - 建立有上限的操作历史，关联 operation ID、用户动作、结果和脱敏日志。
 - 区分离线、服务器不可达、认证过期和命令失败。
@@ -160,12 +172,13 @@
 ## 最近完成批次
 
 ```text
+BE-002 localhost p4d E2E                 DONE（Windows）
 BE-005 状态聚合与缓存                  DONE
 BE-006 操作记录、离线与 ticket 状态    DONE
 BE-007 日志策略与诊断导出              DONE
 ```
 
-本批已全部完成并通过全量验证。BE-002～004 保持 READY；BE-002 的本机 `p4d` 环境阻塞已解除，尚需补齐应用层真实工作流验收。
+BE-002 已在 Windows localhost Fixture 上完成应用层验收；BE-003/004 保持 READY，Submit 与 Pending/Shelf/Unshelve 不在本批范围内。
 
 ## 总体推荐执行顺序
 

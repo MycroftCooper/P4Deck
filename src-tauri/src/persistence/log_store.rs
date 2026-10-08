@@ -331,6 +331,7 @@ mod tests {
             .query(&LogQuery::default())
             .iter()
             .any(|entry| entry.id == "old"));
+        drop(store);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -353,6 +354,7 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM logs", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, HARD_MAX_ENTRIES as i64);
+        drop(store);
         std::fs::remove_file(path).unwrap();
     }
 }

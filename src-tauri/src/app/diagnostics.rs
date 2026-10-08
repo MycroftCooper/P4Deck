@@ -263,6 +263,7 @@ mod tests {
         assert!(!text.contains("secret-server"));
         assert!(!text.contains("/Users/private"));
         assert_eq!(std::fs::read_dir(base.join("exports")).unwrap().count(), 1);
+        drop(service);
         std::fs::remove_dir_all(base).unwrap();
     }
     #[test]
@@ -283,6 +284,7 @@ mod tests {
                 .count(),
             0
         );
+        drop(service);
         std::fs::remove_dir_all(base).unwrap();
     }
 
@@ -317,6 +319,7 @@ mod tests {
             .unwrap();
         assert!(result.truncated);
         assert!(result.size_bytes <= MAX_EXPORT_BYTES as u64);
+        drop(service);
         std::fs::remove_dir_all(base).unwrap();
     }
 }

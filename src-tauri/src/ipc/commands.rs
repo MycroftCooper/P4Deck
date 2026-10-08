@@ -76,7 +76,7 @@ pub async fn list_user_workspaces(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<crate::p4::workspaces::ClientWorkspace>, String> {
-    crate::p4::workspaces::list(&state.runner, state.connection.context(), &app).await
+    crate::p4::workspaces::list(&state.runner, state.connection.context(), Some(&app)).await
 }
 
 #[tauri::command]
@@ -288,7 +288,7 @@ pub async fn list_workspace_children(
 ) -> Result<Vec<WorkspaceNode>, String> {
     state
         .files
-        .workspace_children(state.connection.context(), path, &app)
+        .workspace_children(state.connection.context(), path, Some(&app))
         .await
 }
 
@@ -300,7 +300,7 @@ pub async fn list_depot_children(
 ) -> Result<Vec<DepotNode>, String> {
     state
         .files
-        .depot_children(state.connection.context(), path, &app)
+        .depot_children(state.connection.context(), path, Some(&app))
         .await
 }
 
@@ -312,7 +312,7 @@ pub async fn resolve_path(
 ) -> Result<PathResolveResult, String> {
     state
         .files
-        .resolve_path(state.connection.context(), request, &app)
+        .resolve_path(state.connection.context(), request, Some(&app))
         .await
 }
 
@@ -324,7 +324,7 @@ pub async fn perform_file_action(
 ) -> Result<FileActionResult, String> {
     state
         .files
-        .perform(state.connection.context(), request, &app)
+        .perform(state.connection.context(), request, Some(&app))
         .await
 }
 
@@ -336,7 +336,7 @@ pub async fn get_diff(
 ) -> Result<DiffResult, String> {
     state
         .files
-        .diff(state.connection.context(), path, &app)
+        .diff(state.connection.context(), path, Some(&app))
         .await
 }
 
@@ -350,7 +350,11 @@ pub async fn get_file_preview(
     let local = if path.starts_with("//") {
         state
             .files
-            .resolve_path(context.clone(), PathResolveRequest { input: path }, &app)
+            .resolve_path(
+                context.clone(),
+                PathResolveRequest { input: path },
+                Some(&app),
+            )
             .await?
             .absolute_path
             .ok_or("Depot file is not mapped to this workspace")?
@@ -375,7 +379,7 @@ pub async fn get_file_history(
 ) -> Result<Vec<FileRevision>, String> {
     state
         .files
-        .history(state.connection.context(), path, &app)
+        .history(state.connection.context(), path, Some(&app))
         .await
 }
 
@@ -387,7 +391,7 @@ pub async fn get_revision_graph(
 ) -> Result<RevisionGraph, String> {
     state
         .files
-        .graph(state.connection.context(), path, &app)
+        .graph(state.connection.context(), path, Some(&app))
         .await
 }
 

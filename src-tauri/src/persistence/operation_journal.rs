@@ -329,6 +329,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(second.records.len(), 2);
+        drop(journal);
         std::fs::remove_file(path).unwrap();
     }
     #[test]
@@ -370,6 +371,7 @@ mod tests {
         assert!(!text.contains("stdin"));
         assert!(!text.contains("ticket contents"));
         assert!(!text.contains("password"));
+        drop(journal);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -408,6 +410,7 @@ mod tests {
             journal.get("capacity-2004").unwrap().state,
             JournalState::Cancelled
         );
+        drop(journal);
         std::fs::remove_file(path).unwrap();
     }
 }
