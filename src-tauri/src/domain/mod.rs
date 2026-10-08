@@ -304,7 +304,11 @@ pub struct ClQueryResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ClAction {
     Create {
         description: String,
@@ -504,18 +508,78 @@ pub struct RevisionGraph {
     pub nodes: Vec<RevisionGraphNode>,
     pub edges: Vec<RevisionGraphEdge>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingFile {
     pub depot_path: String,
     pub action: String,
-    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingChange {
     pub id: i64,
     pub description: String,
+    pub user: String,
+    pub client: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+    pub jobs: Vec<String>,
     pub files: Vec<PendingFile>,
     pub shelved_files: Vec<PendingFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum PendingChangeMutation {
+    Create {
+        description: String,
+        #[serde(default)]
+        jobs: Vec<String>,
+    },
+    Edit {
+        change_id: i64,
+        description: String,
+        jobs: Vec<String>,
+    },
+    Delete {
+        change_id: i64,
+    },
+    MoveFiles {
+        target_change_id: i64,
+        depot_paths: Vec<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingChangeMutationRequest {
+    #[serde(default)]
+    pub operation_id: Option<String>,
+    #[serde(flatten)]
+    pub mutation: PendingChangeMutation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingChangeMutationResult {
+    pub operation: OperationResult,
+    pub created_change_id: Option<i64>,
+    pub affected_changes: Vec<i64>,
+    pub affected_paths: Vec<String>,
+    pub refreshed_changes: Vec<PendingChange>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_error: Option<String>,
 }

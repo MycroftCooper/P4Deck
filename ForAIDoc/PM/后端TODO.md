@@ -26,12 +26,12 @@
 | `p4d` Server | 已就绪 | Windows 原生隔离 Fixture 已安装并在 `127.0.0.1:16661` 完成 Seed/停止/重启验收 |
 | P4 连接变量 | Windows P4 注册表已有连接与凭据相关配置，仓库内无 `.p4config` | 自动化测试不得回退到用户真实 Server 上下文 |
 | Node.js / pnpm | Node 24、pnpm 11，已调整为项目基线 | 前端测试、Mock、构建和类型检查可运行 |
-| Rust | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | Common Controls v6 manifest 已覆盖 libtest；53 项单测可真实启动并通过 |
+| Rust | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | Common Controls v6 manifest 已覆盖 libtest；Pending CL 单测与 localhost E2E 可真实启动 |
 | Fixture 脚本 | Windows/macOS 均已存在 | Windows 版使用项目内已校验的 P4/P4D 2026.1；Bash 版仍保持显式下载授权 |
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-003、BE-004、BE-008 仍需补齐应用层命令、状态机和可重复 E2E，不能仅凭 Fixture 启动成功标记完成。
+当前已具备真实 Server 验收环境；BE-004a 已完成 Pending CL 数据正确性与基础写操作，BE-003、BE-004b、BE-008 仍需补齐 Submit、Shelf/Unshelve、质量验收，不能仅凭 Fixture 启动成功标记完成。
 
 BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
 
@@ -43,6 +43,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
 | BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
+| BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；写契约尚未接前端按钮 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
 | BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
@@ -91,7 +92,7 @@ pnpm test:e2e:p4d:win
 
 - 默认连续执行两轮，两轮均通过；每轮创建并最终删除 `p4deck-fixture-e2e` Client 与独立 Workspace Root。
 - Runner Context 显式携带 executable/server/user/client/tickets/trust，测试内部复验 `ServerID=p4deck-fixture-local` 和 loopback 地址；启动器隔离 P4CONFIG/P4ENVIRO/P4PASSWD，缺少固定工具时输出明确 `SKIP`。
-- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert。未包含 Submit、Shelf/Unshelve、SSL Trust、SSO/MFA 或 macOS，分别留给 BE-003/004、连接兼容矩阵和双平台验收。
+- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；同一入口现已叠加 BE-004a Pending 验收。仍未包含 Submit、Shelf/Unshelve 写入、SSL Trust、SSO/MFA 或 macOS，分别留给 BE-003/004b、连接兼容矩阵和双平台验收。
 
 ### BE-003 — Submit 预检与执行状态机（READY）
 
@@ -107,19 +108,33 @@ pnpm test:e2e:p4d:win
 
 验收：Fixture 覆盖成功提交、unresolved、out-of-date、空描述、无权限/模拟失败和过期预检。
 
-### BE-004 — Pending CL / Shelf / Unshelve Repository 补全（READY）
+### BE-004a — Pending CL 数据正确性与基础写操作（DONE：Windows localhost）
 
-目标：为前端提供完整且无需拼命令的 CL/Shelf API。
+目标：先让 Pending 数据可信，并提供不依赖前端拼命令的安全基础写契约。
 
 范围：
 
-- Pending CL 详情、Description/Jobs、文件与 shelved files 的结构化查询。
-- 创建、编辑、删除空 CL；文件在 Default/编号 CL 间移动；操作后局部失效。
+- `query_pending_changes` 已从 IPC 临时拼装迁入 Changelist Repository/Application Service；IPC 仅转发参数和结果。
+- 查询仅返回当前 Connection 的当前 User + Client，正确区分 Default 与编号 CL，并返回 Description、Jobs、opened files、shelved files；shelved file 未知的 Workspace state 保持缺省。
+- 新增未接 UI 的 `mutate_pending_change` 强类型契约：创建、编辑 Description/Jobs、删除真正空（无 opened/shelf/Jobs）的编号 CL、Default ↔ 编号 CL 文件移动。
+- form 对每一行 Description 做缩进，Jobs 限制为单行 token 并在写入前验证存在；规避字段注入和 P4 在 Job 校验失败时“先改 Description、再报错”的部分写入行为。
+- 修改继承调用方 operation ID，复用 Runner 的单 Server 串行 mutation、日志与 Journal；移动只失效映射到的本地路径，并只返回受影响 CL 的刷新结果。
+
+验收结果（2026-10-08）：Windows localhost Fixture 覆盖 Default/编号分组、Description/Jobs、opened/shelved 查询、创建/编辑/删除空 CL、Default ↔ 编号移动、多行及特殊字段名文本、缺失 Job 预检失败恢复；默认连续两轮通过并清理 Client/Workspace/CL/Job/测试文件。前端写入口保持未连接。
+
+工程基线说明：本批改动文件均通过 Prettier/rustfmt；全库 `pnpm format:check` 仍只报告批次前已存在的 `src/app/shell/StatusBar.tsx` 与 `src/features/search/SearchPage.tsx`，未在本批顺手改动这两个无关文件。
+
+### BE-004b — Shelf / Unshelve Repository 补全（READY）
+
+目标：在 BE-004a 可信 Pending 快照上补齐 Shelf 写入与 Unshelve 风险预检。
+
+范围：
+
 - Shelve 新建/更新/删除，支持明确文件子集。
 - Unshelve 预览返回覆盖、锁、映射、目标 Workspace 和 Resolve 风险；用户确认后再执行。
-- 所有修改操作复用 operation ID、串行策略、日志和取消边界。
+- 所有修改操作继续复用 operation ID、串行策略、日志和取消边界。
 
-验收：Fixture 覆盖 Default ↔ Pending、部分 Shelf、更新 Shelf、删除 Shelf、跨 Workspace Unshelve 风险和失败恢复。
+验收：Fixture 覆盖部分 Shelf、更新/删除 Shelf、跨 Workspace Unshelve 风险和失败恢复；本项不包含 Submit。
 
 ### BE-005 — 文件状态聚合与缓存失效（DONE：BE-002 组合已验，兼容矩阵待 BE-009）
 
@@ -178,7 +193,7 @@ BE-006 操作记录、离线与 ticket 状态    DONE
 BE-007 日志策略与诊断导出              DONE
 ```
 
-BE-002 已在 Windows localhost Fixture 上完成应用层验收；BE-003/004 保持 READY，Submit 与 Pending/Shelf/Unshelve 不在本批范围内。
+BE-002 与 BE-004a 已在 Windows localhost Fixture 上完成应用层验收；BE-003/004b 保持 READY，Submit 与 Shelf/Unshelve 写入不在本批范围内。
 
 ## 总体推荐执行顺序
 
@@ -189,7 +204,7 @@ BE-002 localhost p4d E2E
    ↓
 BE-003 Submit 状态机
    ↓
-BE-004 Pending/Shelf/Unshelve
+BE-004a Pending 基础（DONE）→ BE-004b Shelf/Unshelve
    ↓
 BE-005 状态聚合与缓存
    ↓

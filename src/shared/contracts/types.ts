@@ -456,13 +456,39 @@ export interface RevisionGraph {
 export interface PendingFile {
   depotPath: string;
   action: string;
-  state: FileState;
+  state?: FileState;
+  clientPath?: string;
+  revision?: number;
+  fileType?: string;
 }
 export interface PendingChange {
   id: number;
   description: string;
+  user: string;
+  client: string;
+  status: "pending";
+  updatedAt?: string;
+  jobs: string[];
   files: PendingFile[];
   shelvedFiles: PendingFile[];
+}
+
+export type PendingChangeMutationRequest = {
+  operationId?: string;
+} & (
+  | { type: "create"; description: string; jobs?: string[] }
+  | { type: "edit"; changeId: number; description: string; jobs: string[] }
+  | { type: "delete"; changeId: number }
+  | { type: "moveFiles"; targetChangeId: number; depotPaths: string[] }
+);
+
+export interface PendingChangeMutationResult {
+  operation: OperationResult;
+  createdChangeId?: number;
+  affectedChanges: number[];
+  affectedPaths: string[];
+  refreshedChanges: PendingChange[];
+  refreshError?: string;
 }
 
 export interface FilePreview {

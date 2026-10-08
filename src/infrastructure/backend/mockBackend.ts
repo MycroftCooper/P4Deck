@@ -3,6 +3,7 @@ import type {
   FileState,
   LogEntry,
   OperationEvent,
+  PendingChange,
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
@@ -25,6 +26,7 @@ try {
 const now = Date.now();
 const mockLogs: LogEntry[] = [];
 const operationSubscribers = new Set<(event: OperationEvent) => void>();
+let mockPendingChanges: PendingChange[] | undefined;
 function emitOperation(event: OperationEvent) {
   operationSubscribers.forEach((subscriber) => subscriber(event));
 }
@@ -634,10 +636,14 @@ export const mockBackend: Backend = {
     };
   },
   async queryPendingChanges() {
-    return [
+    mockPendingChanges ??= [
       {
         id: 0,
-        description: "Default changelist",
+        description: "",
+        user: mockContext.user,
+        client: mockContext.client,
+        status: "pending",
+        jobs: [],
         files: mockWorkspace
           .filter((node) => node.state === "openedEdit")
           .slice(0, 5)
@@ -651,6 +657,11 @@ export const mockBackend: Backend = {
       {
         id: 31821,
         description: "Render pipeline cache improvements",
+        user: mockContext.user,
+        client: mockContext.client,
+        status: "pending",
+        updatedAt: new Date(now - 3_600_000).toISOString(),
+        jobs: ["ATLAS-1042"],
         files: mockWorkspace
           .filter((node) => node.state === "openedAdd")
           .slice(0, 4)
@@ -662,12 +673,18 @@ export const mockBackend: Backend = {
         shelvedFiles: mockWorkspace.slice(20, 23).map((node) => ({
           depotPath: node.depotPath!,
           action: "edit",
-          state: "controlled" as const,
+          revision: node.revision,
+          fileType: "text",
         })),
       },
       {
         id: 31798,
         description: "Atlas material cleanup",
+        user: mockContext.user,
+        client: mockContext.client,
+        status: "pending",
+        updatedAt: new Date(now - 7_200_000).toISOString(),
+        jobs: [],
         files: mockWorkspace.slice(30, 33).map((node) => ({
           depotPath: node.depotPath!,
           action: "edit",
@@ -676,5 +693,97 @@ export const mockBackend: Backend = {
         shelvedFiles: [],
       },
     ];
+    return structuredClone(mockPendingChanges);
+  },
+  async mutatePendingChange(request) {
+    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    mockPendingChanges ??= changes;
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const affectedChanges = new Set<number>();
+    const affectedPaths: string[] = [];
+    let createdChangeId: number | undefined;
+    if (request.type === "create" || request.type === "edit") {
+      if (!request.description.trim())
+        throw new Error("changelist description is required");
+      for (const job of request.jobs ?? [])
+        if (!job || /\s/.test(job))
+          throw new Error("job IDs must be non-empty single-line tokens");
+    }
+    if (request.type === "create") {
+      createdChangeId = Math.max(...changes.map((change) => change.id)) + 1;
+      changes.splice(1, 0, {
+        id: createdChangeId,
+        description: request.description
+          .replace(/\r\n?/g, "\n")
+          .replace(/\n+$/, ""),
+        user: mockContext.user,
+        client: mockContext.client,
+        status: "pending",
+        updatedAt: new Date().toISOString(),
+        jobs: [...new Set(request.jobs ?? [])],
+        files: [],
+        shelvedFiles: [],
+      });
+      affectedChanges.add(createdChangeId);
+    } else if (request.type === "edit") {
+      const change = changes.find((item) => item.id === request.changeId);
+      if (!change || change.id === 0)
+        throw new Error("a numbered pending changelist is required");
+      change.description = request.description
+        .replace(/\r\n?/g, "\n")
+        .replace(/\n+$/, "");
+      change.jobs = [...new Set(request.jobs ?? [])];
+      change.updatedAt = new Date().toISOString();
+      affectedChanges.add(change.id);
+    } else if (request.type === "delete") {
+      const index = changes.findIndex((item) => item.id === request.changeId);
+      if (index < 0 || request.changeId === 0)
+        throw new Error("a numbered pending changelist is required");
+      if (changes[index].files.length || changes[index].shelvedFiles.length)
+        throw new Error("changelist is not empty");
+      changes.splice(index, 1);
+      affectedChanges.add(request.changeId);
+    } else {
+      const target = changes.find((item) => item.id === request.targetChangeId);
+      if (!target)
+        throw new Error("target changelist is outside the current scope");
+      for (const path of [...new Set(request.depotPaths)]) {
+        const source = changes.find((item) =>
+          item.files.some((file) => file.depotPath === path),
+        );
+        if (!source)
+          throw new Error(
+            `${path} is not opened by the current user and client`,
+          );
+        const index = source.files.findIndex((file) => file.depotPath === path);
+        const [file] = source.files.splice(index, 1);
+        target.files.push(file);
+        affectedChanges.add(source.id);
+        affectedChanges.add(target.id);
+        affectedPaths.push(path);
+      }
+    }
+    const operation = {
+      operationId,
+      exitCode: 0,
+      durationMs: 1,
+      events: [
+        {
+          operationId,
+          type: "completed" as const,
+          message: "0",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+    return {
+      operation,
+      createdChangeId,
+      affectedChanges: [...affectedChanges].sort((a, b) => a - b),
+      affectedPaths,
+      refreshedChanges: structuredClone(
+        changes.filter((change) => affectedChanges.has(change.id)),
+      ),
+    };
   },
 };

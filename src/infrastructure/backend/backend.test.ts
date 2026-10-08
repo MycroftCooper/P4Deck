@@ -61,6 +61,50 @@ describe("controlled P4 terminal", () => {
     ).rejects.toThrow("desktop app");
   });
 
+  it("models scoped pending CL reads and the unconnected write contract", async () => {
+    const initial = await backend.queryPendingChanges();
+    const defaultChange = initial.find((change) => change.id === 0)!;
+    expect(defaultChange.user).toBeTruthy();
+    expect(defaultChange.client).toBeTruthy();
+    expect(
+      initial.find((change) => change.shelvedFiles.length)?.shelvedFiles[0]
+        .state,
+    ).toBeUndefined();
+
+    const operationId = crypto.randomUUID();
+    const created = await backend.mutatePendingChange({
+      operationId,
+      type: "create",
+      description: "Line one\nJobs:\nChange: remains description",
+      jobs: ["ATLAS-TEST"],
+    });
+    expect(created.operation.operationId).toBe(operationId);
+    expect(created.createdChangeId).toBeGreaterThan(0);
+    const changeId = created.createdChangeId!;
+    const path = defaultChange.files[0].depotPath;
+    await backend.mutatePendingChange({
+      type: "moveFiles",
+      targetChangeId: changeId,
+      depotPaths: [path],
+    });
+    expect(
+      (await backend.queryPendingChanges())
+        .find((change) => change.id === changeId)
+        ?.files.map((file) => file.depotPath),
+    ).toContain(path);
+    await backend.mutatePendingChange({
+      type: "moveFiles",
+      targetChangeId: 0,
+      depotPaths: [path],
+    });
+    await backend.mutatePendingChange({ type: "delete", changeId });
+    expect(
+      (await backend.queryPendingChanges()).some(
+        (change) => change.id === changeId,
+      ),
+    ).toBe(false);
+  });
+
   it("streams monotonic action progress before resolving", async () => {
     const operationId = crypto.randomUUID();
     const progress: number[] = [];

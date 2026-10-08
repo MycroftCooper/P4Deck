@@ -51,9 +51,10 @@ pub fn run() {
                 journal.clone(),
             ));
             let status_cache = shared_default();
-            let changelists = Arc::new(ChangelistService::new(ChangelistRepository::new(
-                runner.clone(),
-            )));
+            let changelists = Arc::new(ChangelistService::new(
+                ChangelistRepository::new(runner.clone()),
+                status_cache.clone(),
+            ));
             let files = Arc::new(FileService::new(
                 runner.clone(),
                 status_cache.clone(),
@@ -106,7 +107,8 @@ pub fn run() {
             ipc::commands::get_file_preview,
             ipc::commands::get_file_history,
             ipc::commands::get_revision_graph,
-            ipc::commands::query_pending_changes
+            ipc::commands::query_pending_changes,
+            ipc::commands::mutate_pending_change
         ])
         .run(tauri::generate_context!())
         .expect("error while running P4Deck");

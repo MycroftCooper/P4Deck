@@ -13,6 +13,10 @@ beforeEach(() => {
 const changes: PendingChange[] = [0, 10, 20].map((id) => ({
   id,
   description: `Change ${id}`,
+  user: "tester",
+  client: "workspace",
+  status: "pending",
+  jobs: [],
   files: [],
   shelvedFiles: [],
 }));

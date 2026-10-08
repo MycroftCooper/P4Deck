@@ -16,6 +16,10 @@ const nodes: WorkspaceNode[] = ["a", "b"].map((name) => ({
 const changes: PendingChange[] = [0, 10].map((id, index) => ({
   id,
   description: "CL",
+  user: "tester",
+  client: "workspace",
+  status: "pending",
+  jobs: [],
   files: [
     { depotPath: nodes[index].depotPath!, action: "edit", state: "openedEdit" },
   ],

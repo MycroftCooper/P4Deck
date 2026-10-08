@@ -17,6 +17,10 @@ function result(): SubmitCheck {
     change: {
       id: 10,
       description: "Changes",
+      user: "tester",
+      client: "workspace",
+      status: "pending",
+      jobs: [],
       files: [{ depotPath: "//depot/a", action: "edit", state: "openedEdit" }],
       shelvedFiles: [],
     },

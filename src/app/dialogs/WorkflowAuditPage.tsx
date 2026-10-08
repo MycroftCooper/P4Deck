@@ -49,6 +49,10 @@ export default function WorkflowAuditPage() {
     {
       id: 10,
       description: "UI audit fixture — not server data",
+      user: "fixture",
+      client: "UI fixture",
+      status: "pending" as const,
+      jobs: [],
       files: nodes.map((node) => ({
         depotPath: node.depotPath!,
         action: "edit",
@@ -56,7 +60,16 @@ export default function WorkflowAuditPage() {
       })),
       shelvedFiles: [],
     },
-    { id: 20, description: "Target fixture", files: [], shelvedFiles: [] },
+    {
+      id: 20,
+      description: "Target fixture",
+      user: "fixture",
+      client: "UI fixture",
+      status: "pending" as const,
+      jobs: [],
+      files: [],
+      shelvedFiles: [],
+    },
   ];
   const dismiss = () => setOpen(undefined);
   const shelf = {

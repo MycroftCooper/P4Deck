@@ -245,7 +245,7 @@ pub async fn query_changelists(
 ) -> Result<ClQueryResult, String> {
     state
         .changelists
-        .query(state.connection.context(), query, &app)
+        .query(state.connection.context(), query, Some(&app))
         .await
 }
 
@@ -255,29 +255,10 @@ pub async fn perform_cl_action(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<ClActionResult, String> {
-    let context = state.connection.context();
-    let result = state
+    state
         .changelists
-        .perform(context.clone(), action.clone(), &app)
-        .await?;
-    let reason = if matches!(action, ClAction::SubmitValidate { .. }) {
-        crate::app::status_cache::InvalidationReason::Submit
-    } else {
-        crate::app::status_cache::InvalidationReason::ChangelistMutation
-    };
-    state.status_cache.invalidate(
-        &context.server,
-        &context.user,
-        &context.client,
-        &[],
-        &[
-            crate::app::status_cache::StatusQueryKind::WorkspaceStatus,
-            crate::app::status_cache::StatusQueryKind::Opened,
-            crate::app::status_cache::StatusQueryKind::Reconcile,
-        ],
-        reason,
-    );
-    Ok(result)
+        .perform(state.connection.context(), action, Some(&app))
+        .await
 }
 
 #[tauri::command]
@@ -400,52 +381,22 @@ pub async fn query_pending_changes(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<PendingChange>, String> {
-    let result = state
-        .runner
-        .run(
-            P4CommandRequest {
-                operation_id: None,
-                source: OperationSource::Gui,
-                command: "opened".into(),
-                args: vec![],
-                context: state.connection.context(),
-                output_mode: OutputMode::JsonLines,
-                timeout_ms: Some(120_000),
-                input: None,
-            },
-            Some(&app),
-        )
+    state
+        .changelists
+        .query_pending(state.connection.context(), Some(&app))
         .await
-        .map_err(|error| error.to_string())?;
-    let files = result
-        .events
-        .iter()
-        .filter_map(|event| event.message.as_deref())
-        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-        .filter_map(|value| {
-            let path = value.get("depotFile")?.as_str()?;
-            let action = value
-                .get("action")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("edit");
-            let mut characters = action.chars();
-            let title = characters
-                .next()
-                .map(|first| first.to_uppercase().collect::<String>() + characters.as_str())
-                .unwrap_or_else(|| "Edit".into());
-            Some(PendingFile {
-                depot_path: path.into(),
-                action: action.into(),
-                state: format!("opened{title}"),
-            })
-        })
-        .collect();
-    Ok(vec![PendingChange {
-        id: 0,
-        description: "Default changelist".into(),
-        files,
-        shelved_files: vec![],
-    }])
+}
+
+#[tauri::command]
+pub async fn mutate_pending_change(
+    request: PendingChangeMutationRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<PendingChangeMutationResult, String> {
+    state
+        .changelists
+        .mutate_pending(state.connection.context(), request, Some(&app))
+        .await
 }
 #[tauri::command]
 pub async fn open_local_path(

@@ -30,6 +30,8 @@ import type {
   PathResolveRequest,
   PathResolveResult,
   PendingChange,
+  PendingChangeMutationRequest,
+  PendingChangeMutationResult,
   RevisionGraph,
   RuntimeInfo,
   TrustRequest,
@@ -94,4 +96,7 @@ export interface Backend {
   getFileHistory(path: string): Promise<FileRevision[]>;
   getRevisionGraph(path: string): Promise<RevisionGraph>;
   queryPendingChanges(): Promise<PendingChange[]>;
+  mutatePendingChange(
+    request: PendingChangeMutationRequest,
+  ): Promise<PendingChangeMutationResult>;
 }

@@ -2,15 +2,21 @@
 mod tests {
     use crate::{
         app::{
-            connection_service::ConnectionService, file_service::FileService,
-            status_cache::StatusCache,
+            changelist_service::ChangelistService, connection_service::ConnectionService,
+            file_service::FileService, status_cache::StatusCache,
         },
         domain::{
             ConnectionState, FileAction, FileActionRequest, OperationResult, OperationSource,
-            OutputMode, P4CommandRequest, P4Context,
+            OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
+            PendingChangeMutationRequest,
         },
-        p4::{context::ContextStore, runner::P4Runner, workspaces},
-        persistence::{log_store::LogStore, operation_journal::OperationJournal},
+        p4::{
+            changelists::ChangelistRepository, context::ContextStore, runner::P4Runner, workspaces,
+        },
+        persistence::{
+            log_store::LogStore,
+            operation_journal::{JournalState, OperationJournal},
+        },
     };
     use serde_json::Value;
     use std::{
@@ -23,6 +29,7 @@ mod tests {
     const FIXTURE_USER: &str = "p4deck-fixture-admin";
     const E2E_CLIENT: &str = "p4deck-fixture-e2e";
     const FIXTURE_SERVER_ID: &str = "p4deck-fixture-local";
+    const E2E_JOB: &str = "P4DECK-E2E-JOB";
 
     struct FixtureConfig {
         context: P4Context,
@@ -118,11 +125,12 @@ mod tests {
             &config.runtime_root.join("operations.sqlite"),
         )?);
         let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
-        let files = FileService::new(
-            runner.clone(),
-            Arc::new(StatusCache::new(15_000, 512, 16 * 1024 * 1024)),
-            journal.clone(),
+        let status_cache = Arc::new(StatusCache::new(15_000, 512, 16 * 1024 * 1024));
+        let changelists = ChangelistService::new(
+            ChangelistRepository::new(runner.clone()),
+            status_cache.clone(),
         );
+        let files = FileService::new(runner.clone(), status_cache, journal.clone());
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
         let setup = setup_client(&runner, &context, &config.workspace_root).await;
@@ -132,6 +140,8 @@ mod tests {
                     &connection,
                     &runner,
                     &files,
+                    &changelists,
+                    &journal,
                     &context,
                     &config.workspace_root,
                 )
@@ -193,6 +203,58 @@ mod tests {
             OutputMode::Text,
         )
         .await;
+        if let Ok(changes) = checked_run(
+            runner,
+            context,
+            "changes",
+            vec![
+                "-s".into(),
+                "pending".into(),
+                "-u".into(),
+                FIXTURE_USER.into(),
+                "-c".into(),
+                E2E_CLIENT.into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await
+        {
+            for change_id in json_values(&changes).into_iter().filter_map(|value| {
+                value
+                    .get("change")
+                    .and_then(Value::as_str)
+                    .and_then(|value| value.parse::<i64>().ok())
+            }) {
+                let _ = checked_run(
+                    runner,
+                    context,
+                    "shelve",
+                    vec!["-d".into(), "-c".into(), change_id.to_string()],
+                    None,
+                    OutputMode::Text,
+                )
+                .await;
+                let _ = checked_run(
+                    runner,
+                    context,
+                    "change",
+                    vec!["-d".into(), change_id.to_string()],
+                    None,
+                    OutputMode::Text,
+                )
+                .await;
+            }
+        }
+        let _ = checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-d".into(), E2E_JOB.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
         let deletion = checked_run(
             runner,
             context,
@@ -217,6 +279,8 @@ mod tests {
         connection: &ConnectionService,
         runner: &P4Runner,
         files: &FileService,
+        changelists: &ChangelistService,
+        journal: &OperationJournal,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -369,7 +433,330 @@ mod tests {
                 .all(|value| value.get("depotFile").is_none()),
             format!("E2E client still has opened files after Revert: {opened_values:?}"),
         )?;
+        exercise_pending_changelists(changelists, journal, runner, files, context, root).await?;
         Ok(())
+    }
+
+    async fn exercise_pending_changelists(
+        changelists: &ChangelistService,
+        journal: &OperationJournal,
+        runner: &P4Runner,
+        files: &FileService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let baseline = root.join("main").join("README.txt");
+        let baseline_path = baseline.to_string_lossy().into_owned();
+        action(
+            files,
+            context,
+            FileAction::Checkout,
+            vec![baseline_path.clone()],
+        )
+        .await?;
+        let added = root.join("main").join("pending-e2e.txt");
+        std::fs::write(&added, b"P4Deck pending E2E\n").map_err(|error| error.to_string())?;
+        action(
+            files,
+            context,
+            FileAction::Add,
+            vec![added.to_string_lossy().into_owned()],
+        )
+        .await?;
+
+        let initial = changelists.query_pending(context.clone(), None).await?;
+        let default = pending_change(&initial, 0)?;
+        ensure(
+            default
+                .files
+                .iter()
+                .any(|file| file.depot_path == "//depot/main/README.txt"),
+            "Default changelist omitted the opened seed file",
+        )?;
+        ensure(
+            default
+                .files
+                .iter()
+                .any(|file| file.depot_path == "//depot/main/pending-e2e.txt"),
+            "Default changelist omitted the opened add",
+        )?;
+
+        let job_spec = format!(
+            "Job: {E2E_JOB}\nStatus: open\nUser: {FIXTURE_USER}\nDescription:\n\tP4Deck E2E job\n"
+        );
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-i".into()],
+            Some(job_spec),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let description = "Line one: [#&]\nJobs:\nChange: remains description";
+        let created = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-create".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: description.into(),
+                        jobs: vec![E2E_JOB.into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            created.operation.operation_id == "be004-create",
+            "create did not preserve the supplied operation ID",
+        )?;
+        ensure(
+            journal
+                .get("be004-create")
+                .is_some_and(|record| record.state == JournalState::Succeeded),
+            "successful mutation was not recorded in the Journal",
+        )?;
+        let change_id = created
+            .created_change_id
+            .ok_or("create did not return the numbered changelist")?;
+        let created_change = pending_change(&created.refreshed_changes, change_id)?;
+        ensure(
+            created_change.description == description,
+            format!(
+                "multiline/special description changed: {:?}",
+                created_change.description
+            ),
+        )?;
+        ensure(
+            created_change.jobs == [E2E_JOB],
+            format!("created jobs were {:?}", created_change.jobs),
+        )?;
+
+        let moved = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-move-numbered".into()),
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: change_id,
+                        depot_paths: vec!["//depot/main/README.txt".into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            pending_change(&moved.refreshed_changes, change_id)?
+                .files
+                .iter()
+                .any(|file| file.depot_path == "//depot/main/README.txt"),
+            "numbered changelist did not receive the moved file",
+        )?;
+
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec![
+                "-c".into(),
+                change_id.to_string(),
+                "//depot/main/README.txt".into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let with_shelf = changelists.query_pending(context.clone(), None).await?;
+        let numbered = pending_change(&with_shelf, change_id)?;
+        ensure(
+            numbered
+                .shelved_files
+                .iter()
+                .any(|file| file.depot_path == "//depot/main/README.txt"),
+            "shelved file was absent from the structured pending query",
+        )?;
+        ensure(
+            numbered
+                .shelved_files
+                .iter()
+                .all(|file| file.state.is_none()),
+            "shelved files must not forge a workspace state",
+        )?;
+
+        let failed_operation_id = "be004-failed-edit";
+        let failed = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some(failed_operation_id.into()),
+                    mutation: PendingChangeMutation::Edit {
+                        change_id,
+                        description: "must not persist".into(),
+                        jobs: vec!["P4DECK-NO-SUCH-JOB".into()],
+                    },
+                },
+                None,
+            )
+            .await;
+        ensure(
+            failed.is_err(),
+            "editing with a missing Job unexpectedly succeeded",
+        )?;
+        ensure(
+            journal.get(failed_operation_id).is_none(),
+            "Job preflight rejection unexpectedly entered the mutation Journal",
+        )?;
+        ensure(
+            pending_change(
+                &changelists.query_pending(context.clone(), None).await?,
+                change_id,
+            )?
+            .description
+                == description,
+            "failed edit changed the changelist description",
+        )?;
+
+        let edited_description = "Edited line one\nFiles:\n\tstill description";
+        let edited = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-edit".into()),
+                    mutation: PendingChangeMutation::Edit {
+                        change_id,
+                        description: edited_description.into(),
+                        jobs: vec![E2E_JOB.into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            pending_change(&edited.refreshed_changes, change_id)?.description == edited_description,
+            "edited multiline description was not preserved",
+        )?;
+
+        let delete_non_empty = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-delete-non-empty".into()),
+                    mutation: PendingChangeMutation::Delete { change_id },
+                },
+                None,
+            )
+            .await;
+        ensure(
+            delete_non_empty.is_err(),
+            "non-empty/shelved changelist deletion unexpectedly succeeded",
+        )?;
+
+        let moved_default = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-move-default".into()),
+                    mutation: PendingChangeMutation::MoveFiles {
+                        target_change_id: 0,
+                        depot_paths: vec!["//depot/main/README.txt".into()],
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            pending_change(&moved_default.refreshed_changes, 0)?
+                .files
+                .iter()
+                .any(|file| file.depot_path == "//depot/main/README.txt"),
+            "Default changelist did not receive the moved-back file",
+        )?;
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-d".into(), "-c".into(), change_id.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let cleared = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-clear-jobs".into()),
+                    mutation: PendingChangeMutation::Edit {
+                        change_id,
+                        description: edited_description.into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            pending_change(&cleared.refreshed_changes, change_id)?
+                .jobs
+                .is_empty(),
+            "editing the changelist did not clear Jobs",
+        )?;
+        let deleted = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-delete".into()),
+                    mutation: PendingChangeMutation::Delete { change_id },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            deleted
+                .refreshed_changes
+                .iter()
+                .all(|change| change.id != change_id),
+            "deleted changelist was returned by the targeted refresh",
+        )?;
+
+        action(files, context, FileAction::Revert, vec![baseline_path]).await?;
+        action(
+            files,
+            context,
+            FileAction::Revert,
+            vec![added.to_string_lossy().into_owned()],
+        )
+        .await?;
+        if added.exists() {
+            std::fs::remove_file(&added).map_err(|error| error.to_string())?;
+        }
+        checked_run(
+            runner,
+            context,
+            "job",
+            vec!["-d".into(), E2E_JOB.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let final_pending = changelists.query_pending(context.clone(), None).await?;
+        ensure(
+            final_pending.len() == 1
+                && final_pending[0].id == 0
+                && final_pending[0].files.is_empty(),
+            format!("pending E2E cleanup left state behind: {final_pending:?}"),
+        )
+    }
+
+    fn pending_change(
+        changes: &[crate::domain::PendingChange],
+        id: i64,
+    ) -> Result<&crate::domain::PendingChange, String> {
+        changes
+            .iter()
+            .find(|change| change.id == id)
+            .ok_or_else(|| format!("pending changelist {id} was not returned: {changes:?}"))
     }
 
     async fn ensure_state(

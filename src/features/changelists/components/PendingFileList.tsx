@@ -35,7 +35,7 @@ export function PendingFileList({
         absolutePath: "",
         relativePath: file.depotPath,
         kind: "file",
-        state: file.state,
+        state: file.state ?? "controlled",
         changelistId: changeId,
       })),
     [files, changeId],

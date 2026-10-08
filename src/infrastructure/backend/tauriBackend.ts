@@ -44,4 +44,6 @@ export const tauriBackend: Backend = {
   getFileHistory: (path) => invoke("get_file_history", { path }),
   getRevisionGraph: (path) => invoke("get_revision_graph", { path }),
   queryPendingChanges: () => invoke("query_pending_changes"),
+  mutatePendingChange: (request) =>
+    invoke("mutate_pending_change", { request }),
 };

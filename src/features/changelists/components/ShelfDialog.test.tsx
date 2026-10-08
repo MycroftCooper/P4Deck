@@ -66,7 +66,16 @@ it("deletes only the specified shelf subset and never claims workspace deletion"
 });
 it("allows source and target CL to coincide but never enables unverified unshelve", async () => {
   const changes = [
-    { id: 10, description: "Same CL", files: [], shelvedFiles: [] },
+    {
+      id: 10,
+      description: "Same CL",
+      user: "tester",
+      client: "workspace",
+      status: "pending" as const,
+      jobs: [],
+      files: [],
+      shelvedFiles: [],
+    },
   ];
   await harness.render(
     <UnshelveDialog
