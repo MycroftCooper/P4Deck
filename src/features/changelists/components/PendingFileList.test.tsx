@@ -15,6 +15,7 @@ import { PendingFileList } from "./PendingFileList";
 const runtime: RuntimeInfo = {
   mode: "tauri",
   p4Version: "P4/TEST",
+  contextGeneration: 1,
   context: { server: "fixture:1666", user: "tester", client: "workspace" },
   connection: {
     state: "connected",
@@ -57,6 +58,10 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  await act(
+    async () =>
+      new Promise<void>((resolve) => setTimeout(() => resolve(), 200)),
+  );
   await act(async () => root.unmount());
   host.remove();
 });

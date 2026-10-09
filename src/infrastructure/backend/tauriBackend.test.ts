@@ -12,6 +12,43 @@ beforeEach(() => {
   listen.mockReset();
 });
 
+it("passes profile activation and workspace switch requests unchanged", async () => {
+  invoke.mockResolvedValue({ profiles: [] });
+  await tauriBackend.listConnectionProfiles();
+  expect(invoke).toHaveBeenLastCalledWith("list_connection_profiles");
+  await tauriBackend.getActiveConnectionProfile();
+  expect(invoke).toHaveBeenLastCalledWith("get_active_connection_profile");
+  const create = {
+    expectedRevision: 4,
+    name: "Work",
+    context: { server: "p4:1666", user: "alice", client: "main" },
+  };
+  await tauriBackend.createConnectionProfile(create);
+  expect(invoke).toHaveBeenLastCalledWith("create_connection_profile", {
+    request: create,
+  });
+  const update = { ...create, expectedRevision: 5, id: "profile-id" };
+  await tauriBackend.updateConnectionProfile(update);
+  expect(invoke).toHaveBeenLastCalledWith("update_connection_profile", {
+    request: update,
+  });
+  const remove = { expectedRevision: 6, id: "old-profile" };
+  await tauriBackend.deleteConnectionProfile(remove);
+  expect(invoke).toHaveBeenLastCalledWith("delete_connection_profile", {
+    request: remove,
+  });
+  const activate = { expectedRevision: 5, id: "profile-id" };
+  await tauriBackend.setActiveConnectionProfile(activate);
+  expect(invoke).toHaveBeenLastCalledWith("set_active_connection_profile", {
+    request: activate,
+  });
+  const workspace = { expectedGeneration: 9, client: "other-client" };
+  await tauriBackend.switchWorkspace(workspace);
+  expect(invoke).toHaveBeenLastCalledWith("switch_workspace", {
+    request: workspace,
+  });
+});
+
 it("passes only the narrow submitted-detail request through the Tauri adapter", async () => {
   const request = { changeId: 42, operationId: "detail-42" };
   invoke.mockResolvedValue({ changeId: 42 });

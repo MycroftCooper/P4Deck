@@ -225,6 +225,11 @@ impl ChangelistService {
         }
     }
 
+    pub fn clear_caches(&self) {
+        self.submitted_details.state.lock().entries.clear();
+        self.submitted_queries.clear();
+    }
+
     pub async fn query(
         &self,
         context: P4Context,

@@ -20,12 +20,47 @@ impl ConnectionService {
         self.contexts.current()
     }
 
-    pub fn save(&self, context: P4Context) -> Result<P4Context, String> {
+    pub fn save(&self, context: P4Context) -> Result<P4Context, ConnectionProfileError> {
         self.contexts.save(context)
     }
 
+    pub fn profiles(&self) -> ConnectionProfiles {
+        self.contexts.profiles()
+    }
+
+    pub fn active_profile(&self) -> Option<ConnectionProfile> {
+        self.contexts.active_profile()
+    }
+
+    pub fn create_profile(
+        &self,
+        request: CreateConnectionProfileRequest,
+    ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+        self.contexts
+            .create(request.expected_revision, request.name, request.context)
+    }
+
+    pub fn update_profile(
+        &self,
+        request: UpdateConnectionProfileRequest,
+    ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+        self.contexts.update(
+            request.expected_revision,
+            &request.id,
+            request.name,
+            request.context,
+        )
+    }
+
+    pub fn delete_profile(
+        &self,
+        request: DeleteConnectionProfileRequest,
+    ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+        self.contexts.delete(request.expected_revision, &request.id)
+    }
+
     pub fn runtime_info(&self) -> RuntimeInfo {
-        let context = self.context();
+        let (context, context_generation) = self.contexts.snapshot();
         let cli = ConnectionAdapter::discover(context.executable.as_deref());
         let connection = if cli.state == ConnectionState::CliMissing {
             connection_error(
@@ -56,6 +91,54 @@ impl ConnectionService {
         RuntimeInfo {
             mode: "tauri".into(),
             p4_version: cli.version.unwrap_or_else(|| "P4 CLI not found".into()),
+            active_profile_id: self.contexts.active_profile_id(),
+            context_generation,
+            context,
+            connection,
+        }
+    }
+
+    pub async fn set_active_profile(
+        &self,
+        request: SetActiveConnectionProfileRequest,
+    ) -> Result<RuntimeInfo, ConnectionProfileError> {
+        let profile = self
+            .contexts
+            .profile_at_revision(request.expected_revision, &request.id)?;
+        let status = verify_switch(&profile.context).await?;
+        self.contexts
+            .activate_if_unchanged(request.expected_revision, &request.id)?;
+        Ok(self.runtime_info_with_status(status))
+    }
+
+    pub async fn switch_workspace(
+        &self,
+        request: SwitchWorkspaceRequest,
+        root: String,
+    ) -> Result<RuntimeInfo, ConnectionProfileError> {
+        let (mut candidate, generation) = self.contexts.snapshot();
+        if generation != request.expected_generation {
+            return Err(profile_switch_error(
+                ConnectionProfileErrorCode::ContextChanged,
+                "The active connection changed before workspace verification started.",
+            ));
+        }
+        candidate.client = request.client;
+        candidate.cwd = Some(root);
+        let status = verify_switch(&candidate).await?;
+        self.contexts
+            .switch_workspace_if_unchanged(request.expected_generation, candidate)?;
+        Ok(self.runtime_info_with_status(status))
+    }
+
+    fn runtime_info_with_status(&self, connection: ConnectionStatus) -> RuntimeInfo {
+        let (context, context_generation) = self.contexts.snapshot();
+        let cli = ConnectionAdapter::discover(context.executable.as_deref());
+        RuntimeInfo {
+            mode: "tauri".into(),
+            p4_version: cli.version.unwrap_or_else(|| "P4 CLI not found".into()),
+            active_profile_id: self.contexts.active_profile_id(),
+            context_generation,
             context,
             connection,
         }
@@ -118,6 +201,39 @@ impl ConnectionService {
             return invalid_config(&request.context.server);
         }
         ConnectionAdapter::execute(&request.context, ConnectionOperation::Logout, None, None).await
+    }
+}
+
+async fn verify_switch(context: &P4Context) -> Result<ConnectionStatus, ConnectionProfileError> {
+    validate_connection_context(context).map_err(|message| {
+        profile_switch_error(ConnectionProfileErrorCode::InvalidInput, message)
+    })?;
+    let connection =
+        ConnectionAdapter::execute(context, ConnectionOperation::Info, None, None).await;
+    if connection.state != ConnectionState::Connected {
+        return Err(profile_switch_error(
+            ConnectionProfileErrorCode::ConnectionFailed,
+            format!("Connection verification failed: {}", connection.message),
+        ));
+    }
+    let login =
+        ConnectionAdapter::execute(context, ConnectionOperation::LoginStatus, None, None).await;
+    if login.state != ConnectionState::Connected {
+        return Err(profile_switch_error(
+            ConnectionProfileErrorCode::AuthenticationRequired,
+            format!("Authentication verification failed: {}", login.message),
+        ));
+    }
+    Ok(login)
+}
+
+fn profile_switch_error(
+    code: ConnectionProfileErrorCode,
+    message: impl Into<String>,
+) -> ConnectionProfileError {
+    ConnectionProfileError {
+        code,
+        message: message.into(),
     }
 }
 

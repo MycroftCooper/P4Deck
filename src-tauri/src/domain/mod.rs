@@ -13,6 +13,87 @@ pub struct P4Context {
     pub tickets_path: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionProfile {
+    pub id: String,
+    pub name: String,
+    pub context: P4Context,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionProfiles {
+    pub schema_version: u32,
+    pub revision: u64,
+    pub active_profile_id: Option<String>,
+    pub profiles: Vec<ConnectionProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateConnectionProfileRequest {
+    pub expected_revision: u64,
+    pub name: String,
+    pub context: P4Context,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateConnectionProfileRequest {
+    pub expected_revision: u64,
+    pub id: String,
+    pub name: String,
+    pub context: P4Context,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteConnectionProfileRequest {
+    pub expected_revision: u64,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetActiveConnectionProfileRequest {
+    pub expected_revision: u64,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchWorkspaceRequest {
+    pub expected_generation: u64,
+    pub client: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionProfileErrorCode {
+    InvalidInput,
+    DuplicateName,
+    DuplicateContext,
+    NotFound,
+    RevisionConflict,
+    ActiveProfileDelete,
+    LastProfileDelete,
+    CorruptStore,
+    UnsupportedSchema,
+    PersistenceFailed,
+    ConnectionFailed,
+    AuthenticationRequired,
+    ContextChanged,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[serde(rename_all = "camelCase")]
+#[error("{message}")]
+pub struct ConnectionProfileError {
+    pub code: ConnectionProfileErrorCode,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct P4CommandRequest {
@@ -80,6 +161,8 @@ pub struct OperationResult {
 pub struct RuntimeInfo {
     pub mode: String,
     pub p4_version: String,
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
     pub context: P4Context,
     pub connection: ConnectionStatus,
 }

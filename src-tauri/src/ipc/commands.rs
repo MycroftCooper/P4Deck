@@ -88,27 +88,155 @@ pub async fn runtime_info(state: State<'_, AppState>) -> Result<RuntimeInfo, Str
 }
 
 #[tauri::command]
+pub fn list_connection_profiles(state: State<'_, AppState>) -> ConnectionProfiles {
+    state.connection.profiles()
+}
+
+#[tauri::command]
+pub fn get_active_connection_profile(state: State<'_, AppState>) -> Option<ConnectionProfile> {
+    state.connection.active_profile()
+}
+
+#[tauri::command]
+pub async fn create_connection_profile(
+    request: CreateConnectionProfileRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionProfiles, ConnectionProfileError> {
+    use tauri::Emitter;
+    let before = state.connection.context();
+    let connection = state.connection.clone();
+    let profiles = tauri::async_runtime::spawn_blocking(move || connection.create_profile(request))
+        .await
+        .map_err(|error| profile_task_error(error.to_string()))??;
+    if before != state.connection.context() {
+        invalidate_after_context_change(&state);
+        let _ = app.emit("connection-changed", state.connection.runtime_info());
+    }
+    Ok(profiles)
+}
+
+#[tauri::command]
+pub async fn update_connection_profile(
+    request: UpdateConnectionProfileRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionProfiles, ConnectionProfileError> {
+    use tauri::Emitter;
+    let before = state.connection.context();
+    let connection = state.connection.clone();
+    let profiles = tauri::async_runtime::spawn_blocking(move || connection.update_profile(request))
+        .await
+        .map_err(|error| profile_task_error(error.to_string()))??;
+    if before != state.connection.context() {
+        invalidate_after_context_change(&state);
+        let _ = app.emit("connection-changed", state.connection.runtime_info());
+    }
+    Ok(profiles)
+}
+
+#[tauri::command]
+pub async fn delete_connection_profile(
+    request: DeleteConnectionProfileRequest,
+    state: State<'_, AppState>,
+) -> Result<ConnectionProfiles, ConnectionProfileError> {
+    let connection = state.connection.clone();
+    tauri::async_runtime::spawn_blocking(move || connection.delete_profile(request))
+        .await
+        .map_err(|error| profile_task_error(error.to_string()))?
+}
+
+#[tauri::command]
+pub async fn set_active_connection_profile(
+    request: SetActiveConnectionProfileRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<RuntimeInfo, ConnectionProfileError> {
+    use tauri::Emitter;
+    let runtime = state.connection.set_active_profile(request).await?;
+    invalidate_after_context_change(&state);
+    let _ = app.emit("connection-changed", &runtime);
+    Ok(runtime)
+}
+
+#[tauri::command]
+pub async fn switch_workspace(
+    request: SwitchWorkspaceRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<RuntimeInfo, ConnectionProfileError> {
+    use tauri::Emitter;
+    let workspaces =
+        crate::p4::workspaces::list(&state.runner, state.connection.context(), Some(&app))
+            .await
+            .map_err(|message| {
+                profile_switch_error(
+                    ConnectionProfileErrorCode::ConnectionFailed,
+                    format!("Failed to list workspaces before switching: {message}"),
+                )
+            })?;
+    let workspace = workspaces
+        .into_iter()
+        .find(|workspace| workspace.name == request.client)
+        .ok_or_else(|| {
+            profile_switch_error(
+                ConnectionProfileErrorCode::NotFound,
+                "The selected workspace is not owned by the current user or no longer exists.",
+            )
+        })?;
+    if workspace.root.trim().is_empty() {
+        return Err(profile_switch_error(
+            ConnectionProfileErrorCode::InvalidInput,
+            "The selected workspace has no usable Root.",
+        ));
+    }
+    let runtime = state
+        .connection
+        .switch_workspace(request, workspace.root)
+        .await?;
+    invalidate_after_context_change(&state);
+    let _ = app.emit("connection-changed", &runtime);
+    Ok(runtime)
+}
+
+#[tauri::command]
 pub async fn save_connection(
     context: P4Context,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<P4Context, String> {
     use tauri::Emitter;
-    let previous = state.connection.context();
     let connection = state.connection.clone();
     let saved = tauri::async_runtime::spawn_blocking(move || connection.save(context))
         .await
-        .map_err(|error| error.to_string())??;
-    state.status_cache.invalidate(
-        &previous.server,
-        &previous.user,
-        &previous.client,
-        &[],
-        &[],
-        crate::app::status_cache::InvalidationReason::ConnectionChanged,
-    );
-    let _ = app.emit("connection-changed", &saved);
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    invalidate_after_context_change(&state);
+    let _ = app.emit("connection-changed", state.connection.runtime_info());
     Ok(saved)
+}
+
+fn invalidate_after_context_change(state: &AppState) {
+    state.runner.cancel_all();
+    state.changelists.clear_caches();
+    state.search.clear_for_context_switch();
+    state.submit.clear_confirmations();
+    state.workflows.clear_confirmations();
+    state.status_cache.clear_for_context_switch();
+}
+
+fn profile_task_error(message: String) -> ConnectionProfileError {
+    profile_switch_error(ConnectionProfileErrorCode::PersistenceFailed, message)
+}
+
+fn profile_switch_error(
+    code: ConnectionProfileErrorCode,
+    message: impl Into<String>,
+) -> ConnectionProfileError {
+    ConnectionProfileError {
+        code,
+        message: message.into(),
+    }
 }
 
 #[tauri::command]

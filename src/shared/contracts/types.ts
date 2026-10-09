@@ -76,9 +76,66 @@ export interface P4Context {
   ticketsPath?: string;
 }
 
+export interface ConnectionProfile {
+  id: string;
+  name: string;
+  context: P4Context;
+}
+
+export interface ConnectionProfiles {
+  schemaVersion: 2;
+  revision: number;
+  activeProfileId?: string;
+  profiles: ConnectionProfile[];
+}
+
+export interface CreateConnectionProfileRequest {
+  expectedRevision: number;
+  name: string;
+  context: P4Context;
+}
+
+export interface UpdateConnectionProfileRequest extends CreateConnectionProfileRequest {
+  id: string;
+}
+
+export interface DeleteConnectionProfileRequest {
+  expectedRevision: number;
+  id: string;
+}
+
+export interface SetActiveConnectionProfileRequest extends DeleteConnectionProfileRequest {}
+
+export interface SwitchWorkspaceRequest {
+  expectedGeneration: number;
+  client: string;
+}
+
+export type ConnectionProfileErrorCode =
+  | "invalidInput"
+  | "duplicateName"
+  | "duplicateContext"
+  | "notFound"
+  | "revisionConflict"
+  | "activeProfileDelete"
+  | "lastProfileDelete"
+  | "corruptStore"
+  | "unsupportedSchema"
+  | "persistenceFailed"
+  | "connectionFailed"
+  | "authenticationRequired"
+  | "contextChanged";
+
+export interface ConnectionProfileError {
+  code: ConnectionProfileErrorCode;
+  message: string;
+}
+
 export interface RuntimeInfo {
   mode: "mock" | "tauri";
   p4Version: string;
+  activeProfileId?: string;
+  contextGeneration: number;
   context: P4Context;
   connection: ConnectionStatus;
 }

@@ -29,6 +29,17 @@ export const tauriBackend: Backend = {
   logout: (request) => invoke("logout", { request }),
   listStreams: () => invoke("list_streams"),
   listUserWorkspaces: () => invoke("list_user_workspaces"),
+  listConnectionProfiles: () => invoke("list_connection_profiles"),
+  getActiveConnectionProfile: () => invoke("get_active_connection_profile"),
+  createConnectionProfile: (request) =>
+    invoke("create_connection_profile", { request }),
+  updateConnectionProfile: (request) =>
+    invoke("update_connection_profile", { request }),
+  deleteConnectionProfile: (request) =>
+    invoke("delete_connection_profile", { request }),
+  setActiveConnectionProfile: (request) =>
+    invoke("set_active_connection_profile", { request }),
+  switchWorkspace: (request) => invoke("switch_workspace", { request }),
   saveConnection: (context) => invoke("save_connection", { context }),
   runtimeInfo: () => invoke("runtime_info"),
   runP4: (request) => invoke("run_p4", { request }),

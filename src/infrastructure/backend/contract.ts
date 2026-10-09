@@ -10,6 +10,13 @@ import type {
   CliDiscoveryRequest,
   CliDiscoveryResult,
   ConnectionStatus,
+  ConnectionProfiles,
+  ConnectionProfile,
+  CreateConnectionProfileRequest,
+  UpdateConnectionProfileRequest,
+  DeleteConnectionProfileRequest,
+  SetActiveConnectionProfileRequest,
+  SwitchWorkspaceRequest,
   DiagnosticExportRequest,
   DiagnosticExportResult,
   DiagnosticAlert,
@@ -94,6 +101,21 @@ export interface Backend {
   listUserWorkspaces(): Promise<
     import("../../shared/contracts/types").ClientWorkspace[]
   >;
+  listConnectionProfiles(): Promise<ConnectionProfiles>;
+  getActiveConnectionProfile(): Promise<ConnectionProfile | null>;
+  createConnectionProfile(
+    request: CreateConnectionProfileRequest,
+  ): Promise<ConnectionProfiles>;
+  updateConnectionProfile(
+    request: UpdateConnectionProfileRequest,
+  ): Promise<ConnectionProfiles>;
+  deleteConnectionProfile(
+    request: DeleteConnectionProfileRequest,
+  ): Promise<ConnectionProfiles>;
+  setActiveConnectionProfile(
+    request: SetActiveConnectionProfileRequest,
+  ): Promise<RuntimeInfo>;
+  switchWorkspace(request: SwitchWorkspaceRequest): Promise<RuntimeInfo>;
   saveConnection(
     context: import("../../shared/contracts/types").P4Context,
   ): Promise<import("../../shared/contracts/types").P4Context>;

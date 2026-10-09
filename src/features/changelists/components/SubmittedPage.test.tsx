@@ -31,6 +31,7 @@ vi.mock("../../../infrastructure/backend", () => ({ backend }));
 const runtime: RuntimeInfo = {
   mode: "tauri",
   p4Version: "P4/TEST",
+  contextGeneration: 1,
   context: { server: "fixture:1666", user: "tester", client: "workspace" },
   connection: {
     state: "connected",

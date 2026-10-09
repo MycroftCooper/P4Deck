@@ -32,6 +32,7 @@ interface Props {
     connection?: ConnectionStatus,
     p4Version?: string,
   ): void;
+  onRuntime(runtime: RuntimeInfo): void;
   theme: ThemeMode;
   onTheme(theme: ThemeMode): void;
   locale: Locale;
@@ -55,6 +56,7 @@ function normalizeContext(draft: P4Context): P4Context {
 export function SettingsPage({
   runtime,
   onConnection,
+  onRuntime,
   theme,
   onTheme,
   locale,
@@ -161,7 +163,9 @@ export function SettingsPage({
       );
       finish(token);
       expectedContext.current = contextIdentity(next);
-      onConnection(next, status, version);
+      const refreshed = await backend.runtimeInfo();
+      if (!isCurrent(token)) return;
+      onRuntime({ ...refreshed, connection: status, p4Version: version });
     } catch {
       if (isCurrent(token))
         setError(

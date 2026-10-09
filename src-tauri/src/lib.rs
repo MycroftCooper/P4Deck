@@ -47,7 +47,10 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
-            let contexts = Arc::new(ContextStore::load(&data_dir));
+            let contexts = Arc::new(
+                ContextStore::load(&data_dir)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?,
+            );
             let connection = Arc::new(ConnectionService::new(contexts.clone()));
             let logs = Arc::new(
                 LogStore::open(&data_dir.join("p4deck.sqlite")).map_err(std::io::Error::other)?,
@@ -109,6 +112,13 @@ pub fn run() {
             ipc::commands::list_streams,
             ipc::commands::open_panel_window,
             ipc::commands::runtime_info,
+            ipc::commands::list_connection_profiles,
+            ipc::commands::get_active_connection_profile,
+            ipc::commands::create_connection_profile,
+            ipc::commands::update_connection_profile,
+            ipc::commands::delete_connection_profile,
+            ipc::commands::set_active_connection_profile,
+            ipc::commands::switch_workspace,
             ipc::commands::save_connection,
             ipc::commands::discover_p4_cli,
             ipc::commands::test_connection,

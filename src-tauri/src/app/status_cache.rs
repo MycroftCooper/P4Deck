@@ -294,6 +294,26 @@ impl StatusCache {
         diagnostics
     }
 
+    pub fn clear_for_context_switch(&self) {
+        let mut state = self.state.lock();
+        let keys = state
+            .entries
+            .keys()
+            .chain(state.inflight.keys())
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
+        for key in keys {
+            state.entries.remove(&key);
+            *state.generations.entry(key).or_default() += 1;
+            state.diagnostics.invalidated += 1;
+        }
+        *state
+            .diagnostics
+            .invalidation_reasons
+            .entry(format!("{:?}", InvalidationReason::ConnectionChanged))
+            .or_default() += 1;
+    }
+
     pub fn peek(&self, key: &StatusCacheKey, now_ms: u64) -> Option<StatusSnapshot> {
         let state = self.state.lock();
         let entry = state.entries.get(key)?;
@@ -511,5 +531,37 @@ mod tests {
         let json = serde_json::to_string(&cache.diagnostics()).unwrap();
         assert!(!json.contains("/b"));
         assert!(!json.to_ascii_lowercase().contains("ticket"));
+    }
+
+    #[tokio::test]
+    async fn context_switch_clears_all_connections_and_supersedes_inflight_loads() {
+        let cache = Arc::new(StatusCache::new(100, 10, 10_000));
+        cache
+            .get_or_load(key("one", "/one"), 1, false, || async {
+                Ok(snapshot("/one"))
+            })
+            .await
+            .unwrap();
+        cache
+            .get_or_load(key("two", "/two"), 1, false, || async {
+                Ok(snapshot("/two"))
+            })
+            .await
+            .unwrap();
+        let waiting = tokio::sync::oneshot::channel::<()>();
+        let pending_cache = cache.clone();
+        let pending = tokio::spawn(async move {
+            pending_cache
+                .get_or_load(key("three", "/three"), 2, false, || async move {
+                    let _ = waiting.1.await;
+                    Ok(snapshot("/three"))
+                })
+                .await
+        });
+        tokio::task::yield_now().await;
+        cache.clear_for_context_switch();
+        assert_eq!(cache.diagnostics().entries, 0);
+        let _ = waiting.0.send(());
+        assert!(pending.await.unwrap().unwrap_err().contains("superseded"));
     }
 }

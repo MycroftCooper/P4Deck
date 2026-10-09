@@ -30,4 +30,8 @@ impl<T: ExpiringConfirmation> ConfirmationStore<T> {
     pub fn consume(&self, token: &str) -> Option<T> {
         self.records.lock().remove(token)
     }
+
+    pub fn clear(&self) {
+        self.records.lock().clear();
+    }
 }

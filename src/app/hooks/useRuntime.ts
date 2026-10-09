@@ -26,6 +26,7 @@ export function useRuntime() {
   const [runtime, setRuntime] = useState<RuntimeInfo>({
     mode: "mock",
     p4Version: "loading",
+    contextGeneration: 0,
     context: { server: "…", user: "…", client: "…" },
     connection: {
       state: "notTested",
@@ -35,10 +36,16 @@ export function useRuntime() {
     },
   });
   const [error, setError] = useState("");
-  const [connectionGeneration, setConnectionGeneration] = useState(0);
+  const [viewGeneration, setViewGeneration] = useState(0);
   const revision = useRef(0);
   const currentRuntime = useRef(runtime);
   currentRuntime.current = runtime;
+  const applyRuntime = useCallback((next: RuntimeInfo) => {
+    revision.current++;
+    currentRuntime.current = next;
+    setRuntime(next);
+    setViewGeneration((value) => value + 1);
+  }, []);
   const applyConnection = useCallback(
     (context: P4Context, connection?: ConnectionStatus, p4Version?: string) => {
       const current = currentRuntime.current;
@@ -53,7 +60,7 @@ export function useRuntime() {
       };
       currentRuntime.current = next;
       revision.current++;
-      setConnectionGeneration((value) => value + 1);
+      setViewGeneration((value) => value + 1);
       setRuntime(next);
     },
     [],
@@ -75,9 +82,9 @@ export function useRuntime() {
     const stop = isTauri()
       ? subscribeSafely(
           () =>
-            listen<P4Context>("connection-changed", ({ payload }) =>
-              applyConnection(payload),
-            ),
+            listen<RuntimeInfo>("connection-changed", ({ payload }) => {
+              applyRuntime(payload);
+            }),
           (e) => setError(String(e)),
         )
       : () => undefined;
@@ -85,11 +92,12 @@ export function useRuntime() {
       live = false;
       stop();
     };
-  }, [applyConnection]);
+  }, [applyConnection, applyRuntime]);
   return {
     runtime,
+    applyRuntime,
     applyConnection,
     error,
-    connectionKey: `${connectionGeneration}:${JSON.stringify(runtime.context)}`,
+    connectionKey: `${viewGeneration}:${runtime.contextGeneration}:${runtime.activeProfileId ?? "environment"}:${JSON.stringify(runtime.context)}`,
   };
 }

@@ -20,6 +20,92 @@ function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
 }
 
 describe("controlled P4 terminal", () => {
+  it("provides revisioned profile CRUD and real mock workspace switching", async () => {
+    const initial = await backend.listConnectionProfiles();
+    const primaryId = initial.activeProfileId!;
+    const created = await backend.createConnectionProfile({
+      expectedRevision: initial.revision,
+      name: `Secondary ${initial.revision}`,
+      context: {
+        ...(await backend.runtimeInfo()).context,
+        client: `secondary-${initial.revision}`,
+        cwd: `/workspace/secondary-${initial.revision}`,
+      },
+    });
+    const secondary = created.profiles.find(
+      (profile) => profile.id !== primaryId,
+    )!;
+    await expect(
+      backend.updateConnectionProfile({
+        expectedRevision: initial.revision,
+        id: secondary.id,
+        name: secondary.name,
+        context: secondary.context,
+      }),
+    ).rejects.toThrow("revisionConflict");
+
+    const activated = await backend.setActiveConnectionProfile({
+      expectedRevision: created.revision,
+      id: secondary.id,
+    });
+    expect(activated.context.client).toBe(secondary.context.client);
+    expect(activated.contextGeneration).toBeGreaterThan(1);
+    expect((await backend.getActiveConnectionProfile())?.id).toBe(secondary.id);
+
+    const profiles = await backend.listConnectionProfiles();
+    const returned = await backend.setActiveConnectionProfile({
+      expectedRevision: profiles.revision,
+      id: primaryId,
+    });
+    const beforeFailure = await backend.listConnectionProfiles();
+    const withFailure = await backend.createConnectionProfile({
+      expectedRevision: beforeFailure.revision,
+      name: `Unavailable ${beforeFailure.revision}`,
+      context: {
+        ...returned.context,
+        server: "fail:1666",
+        client: `unavailable-${beforeFailure.revision}`,
+      },
+    });
+    const unavailable = withFailure.profiles.find(
+      (profile) => profile.name === `Unavailable ${beforeFailure.revision}`,
+    )!;
+    await expect(
+      backend.setActiveConnectionProfile({
+        expectedRevision: withFailure.revision,
+        id: unavailable.id,
+      }),
+    ).rejects.toThrow("connectionFailed");
+    expect((await backend.runtimeInfo()).activeProfileId).toBe(primaryId);
+    await backend.deleteConnectionProfile({
+      expectedRevision: withFailure.revision,
+      id: unavailable.id,
+    });
+    const switched = await backend.switchWorkspace({
+      expectedGeneration: returned.contextGeneration,
+      client: "atlas-dev-fm",
+    });
+    expect(switched.context).toMatchObject({
+      client: "atlas-dev-fm",
+      cwd: "/workspace/atlas-dev",
+    });
+    await expect(
+      backend.switchWorkspace({
+        expectedGeneration: returned.contextGeneration,
+        client: "tools-fm",
+      }),
+    ).rejects.toThrow("contextChanged");
+
+    const afterSwitch = await backend.listConnectionProfiles();
+    const cleaned = await backend.deleteConnectionProfile({
+      expectedRevision: afterSwitch.revision,
+      id: secondary.id,
+    });
+    expect(
+      cleaned.profiles.some((profile) => profile.id === secondary.id),
+    ).toBe(false);
+  });
+
   it("provides explicitly simulated, stable global search pages", async () => {
     const query = {
       operationId: "mock-global-1",

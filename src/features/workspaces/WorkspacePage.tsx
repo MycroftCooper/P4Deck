@@ -22,9 +22,11 @@ const cache = new QueryClient({
 export function WorkspacePage({
   t,
   runtime,
+  onRuntime,
 }: {
   t: (typeof messages)[keyof typeof messages];
   runtime: RuntimeInfo;
+  onRuntime(runtime: RuntimeInfo): void;
 }) {
   const zh = t.files === "文件";
   const [items, setItems] = useState<ClientWorkspace[]>([]);
@@ -33,6 +35,7 @@ export function WorkspacePage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [switching, setSwitching] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const key = useMemo(
     () => ["user-workspaces", runtime.mode, runtime.context],
@@ -95,6 +98,22 @@ export function WorkspacePage({
   const reload = async () => {
     await cache.invalidateQueries({ queryKey: key });
     setRefresh((value) => value + 1);
+  };
+  const switchToSelected = async () => {
+    if (!selected || selected.name === runtime.context.client) return;
+    setSwitching(true);
+    setError("");
+    try {
+      const next = await backend.switchWorkspace({
+        expectedGeneration: runtime.contextGeneration,
+        client: selected.name,
+      });
+      onRuntime(next);
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setSwitching(false);
+    }
   };
   return (
     <main className="workspaces-page">
@@ -294,6 +313,22 @@ export function WorkspacePage({
             <p className="workspace-description">
               {selected.description || "—"}
             </p>
+            <button
+              disabled={switching || selected.name === runtime.context.client}
+              onClick={() => void switchToSelected()}
+            >
+              {switching
+                ? zh
+                  ? "正在验证并切换…"
+                  : "Verifying and switching…"
+                : selected.name === runtime.context.client
+                  ? zh
+                    ? "当前工作区"
+                    : "Current workspace"
+                  : zh
+                    ? "切换到此工作区"
+                    : "Switch to this workspace"}
+            </button>
           </aside>
         )}
       </div>

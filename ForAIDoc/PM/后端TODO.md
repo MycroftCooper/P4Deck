@@ -42,6 +42,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-000 | P4 文件 Action 与批量执行骨架 | 强类型 Action、参数校验、`-b 128 -x -`、受控并行、进度/取消及单测已落地 |
 | BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
 | BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
+| BE-001M | 多连接配置与活动 Workspace 切换 | `connection.json` schema v2、profile CRUD/list/get/set active、revision CAS、原子 replace、旧裸 Context allowlist 备份迁移与结构化错误已完成；切换先复核 info/login 再原子提交，失败保留旧活动项；generation、Runner cancel、Submitted/Search/status cache 与确认 token 全部失效；Windows localhost 双 Client 默认两轮通过 |
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
 | BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收 |
 | BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
@@ -54,6 +55,15 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-008G | 全局搜索生产后端 | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
 
 ## P0：下一阶段必须完成
+
+### BE-001M — 多连接配置与活动 Workspace 切换（DONE：后端与 Windows localhost）
+
+- profile 只包装现有非敏感 `P4Context`，ID 使用 UUID v4；名称和完整 context 均禁止重复，空值、控制字符、过长字段、并发 revision 冲突和删除活动/最后一项返回结构化错误。
+- schema v2 使用同目录随机临时文件、flush/sync 与原子 replace；旧裸 Context 迁移前把 allowlist 非敏感字段写入 `connection.json.legacy.bak`，不会把历史未知 password/fingerprint 复制进备份。损坏、未知版本、不同旧备份或写入失败均保留原文件与内存活动状态。
+- `set_active_connection_profile` 与 `switch_workspace` 在异步验证期间不修改活动状态；`p4 info` 和 `p4 login -s` 均成功后，才以 expected revision/generation 原子提交。保存 Context 仍只产生 `notTested`，Trust/Ticket/密码继续由 P4 外部机制与既有窄接口管理。
+- 提交切换后递增 context generation，取消全部 Runner 操作，清除 Submitted detail/query、Global Search snapshot、status cache 及 Submit/Workflow token；前端 `connectionKey` 同步清理 Files/Pending/Submitted/Search/Log/Journal 视图，旧响应继续由 generation 复核拒绝。
+- Windows localhost 默认两轮创建第二 Client/Root，覆盖 profile CRUD、同 Server 不同 Client 活动切换、不可执行 CLI 失败回滚、Workspace Client+Root 真切换及 stale generation。未启动第二隔离 `p4d`，成功 Server 切换留作兼容矩阵；结构化失败回滚已有覆盖。
+- 前端边界：Workspace 详情已有最小切换入口；完整设置页 profile 管理与活动连接切换 UI 仍由前端任务接线，不能把后端 DONE 记为完整用户流程 DONE。
 
 ### BE-001 — 连接与认证服务（DONE：本机可验证范围）
 
@@ -215,6 +225,7 @@ BE-009b 实现结果（2026-10-09）：
 
 ```text
 BE-002 localhost p4d E2E                 DONE（Windows）
+BE-001M 多连接与活动 Workspace 切换      DONE（Windows localhost）
 BE-003 Submit 状态机                    DONE（Windows localhost）
 BE-004a Pending 数据与基础写            DONE（Windows localhost）
 BE-004b Shelf/Unshelve/Resolve          DONE（Windows localhost；前端已接线）

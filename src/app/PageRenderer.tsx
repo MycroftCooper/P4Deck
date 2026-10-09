@@ -58,6 +58,7 @@ export interface PageEnvironment {
   onNavigate(node: WorkspaceNode): void;
   onReview(kind: FilePageId, node: WorkspaceNode): void;
   onConnection(context: P4Context): void;
+  onRuntime(runtime: RuntimeInfo): void;
   onOperation(warnings: string[]): Promise<void>;
   searchNavigation?: {
     target: GlobalSearchTarget;
@@ -82,6 +83,7 @@ function Content({
   onNavigate,
   onReview,
   onConnection,
+  onRuntime,
   onOperation,
   searchNavigation,
   onSearchNavigate,
@@ -148,7 +150,14 @@ function Content({
         />
       );
     case "workspaces":
-      return <WorkspacePage key={connectionKey} t={t} runtime={runtime} />;
+      return (
+        <WorkspacePage
+          key={connectionKey}
+          t={t}
+          runtime={runtime}
+          onRuntime={onRuntime}
+        />
+      );
     case "diff":
     case "revgraph":
       return (
@@ -191,6 +200,7 @@ function Content({
         <SettingsPage
           runtime={runtime}
           onConnection={onConnection}
+          onRuntime={onRuntime}
           theme={theme}
           onTheme={setTheme}
           locale={locale}

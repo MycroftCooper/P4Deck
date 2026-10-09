@@ -74,6 +74,10 @@ impl SubmitService {
         }
     }
 
+    pub fn clear_confirmations(&self) {
+        self.tokens.clear();
+    }
+
     pub async fn preflight(
         &self,
         request: SubmitPreflightRequest,

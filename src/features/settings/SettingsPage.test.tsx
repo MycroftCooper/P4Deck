@@ -11,6 +11,7 @@ import { SettingsPage } from "./SettingsPage";
 
 const backend = vi.hoisted(() => ({
   saveConnection: vi.fn(),
+  runtimeInfo: vi.fn(),
   discoverP4Cli: vi.fn(),
   testConnection: vi.fn(),
   queryLoginStatus: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("../../infrastructure/backend", () => ({ backend }));
 let host: HTMLDivElement;
 let root: Root;
 const onConnection = vi.fn();
+const onRuntime = vi.fn();
 
 function status(
   state: ConnectionStatus["state"],
@@ -55,6 +57,7 @@ function runtime(
   return {
     mode,
     p4Version: "Rev. P4/TEST/2026.1",
+    contextGeneration: 1,
     context: {
       executable: "C:\\fixture\\p4.exe",
       server: connection.server,
@@ -72,6 +75,7 @@ function props(value: RuntimeInfo): ComponentProps<typeof SettingsPage> {
   return {
     runtime: value,
     onConnection,
+    onRuntime,
     theme: "light",
     onTheme: vi.fn(),
     locale: "zh-CN",
@@ -107,6 +111,7 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   localStorage.clear();
   onConnection.mockReset();
+  onRuntime.mockReset();
   for (const mock of Object.values(backend)) mock.mockReset();
   backend.discoverP4Cli.mockResolvedValue({
     state: "notTested",
@@ -285,12 +290,19 @@ it("keeps save separate from verification and marks the saved context not tested
   expect(host.textContent).toContain("保存本身不会显示为已连接");
   const saved = { ...initial.context, server: "fixture-new:1666" };
   backend.saveConnection.mockResolvedValue(saved);
+  backend.runtimeInfo.mockResolvedValue({
+    ...initial,
+    context: saved,
+    contextGeneration: initial.contextGeneration + 1,
+  });
   await act(async () => button("保存并应用").click());
   expect(backend.saveConnection).toHaveBeenCalledWith(saved);
-  expect(onConnection).toHaveBeenCalledWith(
-    saved,
-    expect.objectContaining({ state: "notTested" }),
-    "Rev. P4/TEST/2026.1",
+  expect(onRuntime).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: saved,
+      contextGeneration: 2,
+      connection: expect.objectContaining({ state: "notTested" }),
+    }),
   );
   await render({
     ...initial,

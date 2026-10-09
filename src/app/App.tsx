@@ -36,7 +36,8 @@ import { ActivityBar } from "./shell/ActivityBar";
 export function App() {
   const preferences = usePreferences();
   const { t, zh, ui } = preferences;
-  const { runtime, applyConnection, connectionKey, error } = useRuntime();
+  const { runtime, applyRuntime, applyConnection, connectionKey, error } =
+    useRuntime();
   const navigation = usePageNavigation();
   const { dockRef, route, pages, setPages, onActive, openPage } = navigation;
   const commandExecutor = useRef<
@@ -252,6 +253,7 @@ export function App() {
                             onNavigate={navigateFile}
                             onReview={openReview}
                             onConnection={applyConnection}
+                            onRuntime={applyRuntime}
                             onOperation={afterOperation}
                             searchNavigation={searchNavigation}
                             onSearchNavigate={navigateSearchTarget}

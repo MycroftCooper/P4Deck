@@ -6,10 +6,10 @@ use tauri::AppHandle;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientWorkspace {
-    name: String,
+    pub name: String,
     owner: String,
     host: String,
-    root: String,
+    pub root: String,
     stream: String,
     description: String,
     updated: Option<i64>,

@@ -66,6 +66,11 @@ impl GlobalSearchService {
         self.cancelled.lock().insert(operation_id.to_owned());
     }
 
+    pub fn clear_for_context_switch(&self) {
+        self.snapshots.lock().clear();
+        self.cancelled.lock().clear();
+    }
+
     pub async fn query(
         &self,
         query: GlobalSearchQuery,

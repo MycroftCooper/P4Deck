@@ -89,6 +89,15 @@ impl P4Runner {
         }
     }
 
+    pub fn cancel_all(&self) -> usize {
+        let operations = self.operations.lock();
+        let count = operations.len();
+        for token in operations.values() {
+            token.cancel();
+        }
+        count
+    }
+
     pub async fn run(
         &self,
         request: P4CommandRequest,
@@ -835,5 +844,31 @@ mod tests {
         assert!(budget.accept(MAX_CAPTURE_BYTES));
         assert!(!budget.accept(1));
         assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn context_switch_cancels_every_registered_operation() {
+        let directory =
+            std::env::temp_dir().join(format!("p4deck-runner-cancel-all-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("logs.sqlite")).unwrap());
+        let journal =
+            Arc::new(OperationJournal::open(&directory.join("operations.sqlite")).unwrap());
+        let runner = P4Runner::new(logs, journal);
+        let first = CancellationToken::new();
+        let second = CancellationToken::new();
+        runner
+            .operations
+            .lock()
+            .insert("first".into(), first.clone());
+        runner
+            .operations
+            .lock()
+            .insert("second".into(), second.clone());
+        assert_eq!(runner.cancel_all(), 2);
+        assert!(first.is_cancelled());
+        assert!(second.is_cancelled());
+        drop(runner);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

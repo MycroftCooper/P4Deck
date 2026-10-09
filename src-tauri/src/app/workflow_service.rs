@@ -103,6 +103,10 @@ impl WorkflowService {
         }
     }
 
+    pub fn clear_confirmations(&self) {
+        self.tokens.clear();
+    }
+
     pub async fn preflight_shelf(
         &self,
         mut request: ShelfPreflightRequest,

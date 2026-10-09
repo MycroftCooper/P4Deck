@@ -8,12 +8,14 @@ mod tests {
             workflow_service::WorkflowService,
         },
         domain::{
-            AuthenticationRequest, ConnectionState, FileAction, FileActionRequest, LoginRequest,
+            AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
+            DeleteConnectionProfileRequest, FileAction, FileActionRequest, LoginRequest,
             OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
             PendingChangeMutation, PendingChangeMutationRequest, ResolveConfirmation,
-            ResolvePreflightRequest, ResolveSelection, ResolveStrategy, ShelfMode,
-            ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
-            SubmitPreflightRequest, UnshelvePreflightRequest, WorkflowConfirmation,
+            ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
+            SetActiveConnectionProfileRequest, ShelfMode, ShelfPreflightRequest,
+            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
+            SwitchWorkspaceRequest, UnshelvePreflightRequest, WorkflowConfirmation,
             WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
@@ -128,9 +130,12 @@ mod tests {
 
     async fn run_fixture_case(config: FixtureConfig) -> Result<(), String> {
         std::fs::create_dir_all(&config.runtime_root).map_err(|error| error.to_string())?;
-        let contexts = Arc::new(ContextStore::load(&config.runtime_root));
+        let contexts =
+            Arc::new(ContextStore::load(&config.runtime_root).map_err(|error| error.to_string())?);
         let connection = Arc::new(ConnectionService::new(contexts.clone()));
-        let context = connection.save(config.context.clone())?;
+        let context = connection
+            .save(config.context.clone())
+            .map_err(|error| error.to_string())?;
 
         let logs = Arc::new(LogStore::open(&config.runtime_root.join("logs.sqlite"))?);
         let journal = Arc::new(OperationJournal::open(
@@ -171,28 +176,54 @@ mod tests {
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
         let setup = setup_client(&runner, &context, &config.workspace_root).await;
+        let profile_root = config
+            .workspace_root
+            .parent()
+            .ok_or("fixture workspace has no parent")?
+            .join("profile-switch-workspace");
+        const PROFILE_CLIENT: &str = "p4deck-fixture-profile-switch";
         let scenario = match setup {
             Ok(()) => {
-                exercise_services(
-                    &connection,
-                    &runner,
-                    &files,
-                    &changelists,
-                    &journal,
-                    &logs,
-                    &submit,
-                    &expiring_submit,
-                    &contexts,
-                    &workflows,
-                    &expiring_workflows,
-                    &search,
-                    &context,
-                    &config.workspace_root,
-                )
+                async {
+                    let profile_context =
+                        setup_named_client(&runner, &context, PROFILE_CLIENT, &profile_root)
+                            .await?;
+                    exercise_connection_profiles(
+                        &connection,
+                        &contexts,
+                        &runner,
+                        &context,
+                        &profile_context,
+                        &config.workspace_root,
+                        &profile_root,
+                    )
+                    .await?;
+                    exercise_services(
+                        ServiceExercise {
+                            connection: &connection,
+                            runner: &runner,
+                            files: &files,
+                            changelists: &changelists,
+                            journal: &journal,
+                            logs: &logs,
+                            submit: &submit,
+                            expiring_submit: &expiring_submit,
+                            contexts: &contexts,
+                            workflows: &workflows,
+                            expiring_workflows: &expiring_workflows,
+                            search: &search,
+                        },
+                        &context,
+                        &config.workspace_root,
+                    )
+                    .await
+                }
                 .await
             }
             Err(error) => Err(error),
         };
+        let profile_cleanup =
+            cleanup_named_client(&runner, &context, PROFILE_CLIENT, &profile_root).await;
         let cleanup = cleanup_client(&runner, &context, &config.workspace_root).await;
 
         drop(files);
@@ -201,7 +232,7 @@ mod tests {
         drop(journal);
         drop(connection);
 
-        match (scenario, cleanup) {
+        match (scenario, cleanup.and(profile_cleanup)) {
             (Err(error), Err(cleanup_error)) => {
                 Err(format!("{error}; cleanup also failed: {cleanup_error}"))
             }
@@ -209,6 +240,168 @@ mod tests {
             (Ok(()), Err(error)) => Err(format!("cleanup failed: {error}")),
             (Ok(()), Ok(())) => Ok(()),
         }
+    }
+
+    async fn exercise_connection_profiles(
+        connection: &ConnectionService,
+        contexts: &ContextStore,
+        runner: &P4Runner,
+        original: &P4Context,
+        alternate: &P4Context,
+        original_root: &Path,
+        alternate_root: &Path,
+    ) -> Result<(), String> {
+        let initial = connection.profiles();
+        let original_id = initial
+            .active_profile_id
+            .clone()
+            .ok_or("profile E2E has no active profile")?;
+        let created = connection
+            .create_profile(CreateConnectionProfileRequest {
+                expected_revision: initial.revision,
+                name: "Fixture alternate".into(),
+                context: alternate.clone(),
+            })
+            .map_err(|error| error.to_string())?;
+        let alternate_id = created
+            .profiles
+            .iter()
+            .find(|profile| profile.id != original_id)
+            .ok_or("alternate profile was not created")?
+            .id
+            .clone();
+        let before_generation = contexts.snapshot().1;
+        let active = connection
+            .set_active_profile(SetActiveConnectionProfileRequest {
+                expected_revision: created.revision,
+                id: alternate_id.clone(),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure(
+            active.context.client == alternate.client
+                && active.context_generation > before_generation,
+            "active profile switch did not commit the verified alternate context",
+        )?;
+
+        let current = connection.profiles();
+        let mut unavailable = original.clone();
+        unavailable.executable = Some(
+            alternate_root
+                .join("missing-p4.exe")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        unavailable.client = "unavailable-profile".into();
+        let with_bad = connection
+            .create_profile(CreateConnectionProfileRequest {
+                expected_revision: current.revision,
+                name: "Unavailable".into(),
+                context: unavailable,
+            })
+            .map_err(|error| error.to_string())?;
+        let bad_id = with_bad
+            .profiles
+            .iter()
+            .find(|profile| profile.name == "Unavailable")
+            .ok_or("unavailable profile was not created")?
+            .id
+            .clone();
+        let failed = connection
+            .set_active_profile(SetActiveConnectionProfileRequest {
+                expected_revision: with_bad.revision,
+                id: bad_id.clone(),
+            })
+            .await;
+        ensure(
+            failed.is_err(),
+            "unavailable profile switch unexpectedly succeeded",
+        )?;
+        ensure(
+            connection.profiles().active_profile_id.as_deref() == Some(&alternate_id)
+                && connection.context().client == alternate.client,
+            "failed profile switch changed the active runtime context",
+        )?;
+
+        let before_return = connection.profiles();
+        connection
+            .set_active_profile(SetActiveConnectionProfileRequest {
+                expected_revision: before_return.revision,
+                id: original_id.clone(),
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        let revision = connection.profiles().revision;
+        let cleaned = connection
+            .delete_profile(DeleteConnectionProfileRequest {
+                expected_revision: revision,
+                id: bad_id,
+            })
+            .map_err(|error| error.to_string())?;
+        let cleaned = connection
+            .delete_profile(DeleteConnectionProfileRequest {
+                expected_revision: cleaned.revision,
+                id: alternate_id,
+            })
+            .map_err(|error| error.to_string())?;
+        ensure(
+            cleaned.active_profile_id.as_deref() == Some(&original_id),
+            "profile cleanup changed the active profile",
+        )?;
+
+        let listed = workspaces::list(runner, original.clone(), None).await?;
+        ensure(
+            listed
+                .iter()
+                .any(|workspace| workspace.name == original.client)
+                && listed
+                    .iter()
+                    .any(|workspace| workspace.name == alternate.client),
+            "profile E2E did not expose both server-side clients",
+        )?;
+        let workspace_generation = contexts.snapshot().1;
+        let switched = connection
+            .switch_workspace(
+                SwitchWorkspaceRequest {
+                    expected_generation: workspace_generation,
+                    client: alternate.client.clone(),
+                },
+                alternate_root.to_string_lossy().into_owned(),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure(
+            switched.context.client == alternate.client
+                && switched.context.cwd.as_deref()
+                    == Some(alternate_root.to_string_lossy().as_ref()),
+            "workspace switch did not update both Client and Root",
+        )?;
+        let stale = connection
+            .switch_workspace(
+                SwitchWorkspaceRequest {
+                    expected_generation: workspace_generation,
+                    client: original.client.clone(),
+                },
+                original_root.to_string_lossy().into_owned(),
+            )
+            .await;
+        ensure(stale.is_err(), "stale workspace generation was accepted")?;
+
+        let returned = connection
+            .switch_workspace(
+                SwitchWorkspaceRequest {
+                    expected_generation: switched.context_generation,
+                    client: original.client.clone(),
+                },
+                original_root.to_string_lossy().into_owned(),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure(
+            returned.context.client == original.client,
+            "workspace E2E did not restore the original Client",
+        )?;
+        Ok(())
     }
 
     async fn setup_client(
@@ -337,22 +530,40 @@ mod tests {
         }
     }
 
+    struct ServiceExercise<'a> {
+        connection: &'a ConnectionService,
+        runner: &'a Arc<P4Runner>,
+        files: &'a FileService,
+        changelists: &'a ChangelistService,
+        journal: &'a OperationJournal,
+        logs: &'a LogStore,
+        submit: &'a SubmitService,
+        expiring_submit: &'a SubmitService,
+        contexts: &'a ContextStore,
+        workflows: &'a WorkflowService,
+        expiring_workflows: &'a WorkflowService,
+        search: &'a GlobalSearchService,
+    }
+
     async fn exercise_services(
-        connection: &ConnectionService,
-        runner: &Arc<P4Runner>,
-        files: &FileService,
-        changelists: &ChangelistService,
-        journal: &OperationJournal,
-        logs: &LogStore,
-        submit: &SubmitService,
-        expiring_submit: &SubmitService,
-        contexts: &ContextStore,
-        workflows: &WorkflowService,
-        expiring_workflows: &WorkflowService,
-        search: &GlobalSearchService,
+        services: ServiceExercise<'_>,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
+        let ServiceExercise {
+            connection,
+            runner,
+            files,
+            changelists,
+            journal,
+            logs,
+            submit,
+            expiring_submit,
+            contexts,
+            workflows,
+            expiring_workflows,
+            search,
+        } = services;
         let status = connection.test_connection(context.clone()).await;
         ensure(
             status.state == ConnectionState::Connected,
@@ -1023,7 +1234,9 @@ mod tests {
         let mut other_workspace = context.clone();
         other_workspace.client = "p4deck-fixture-other-workspace".into();
         other_workspace.cwd = Some(root.join("other-workspace").to_string_lossy().into_owned());
-        contexts.save(other_workspace)?;
+        contexts
+            .save(other_workspace)
+            .map_err(|error| error.to_string())?;
         let switched_result = submit
             .confirm(
                 SubmitConfirmation {
@@ -1034,7 +1247,9 @@ mod tests {
                 None,
             )
             .await;
-        contexts.save(context.clone())?;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
         ensure(
             switched_result.failure == Some(SubmitFailureCode::ContextChanged),
             format!("workspace switch was not rejected: {switched_result:?}"),
@@ -1450,8 +1665,10 @@ mod tests {
 
         let mut switched = context.clone();
         switched.client = "p4deck-fixture-cursor-generation".into();
-        contexts.save(switched)?;
-        contexts.save(context.clone())?;
+        contexts.save(switched).map_err(|error| error.to_string())?;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
         second_page_query.operation_id = "be009-old-generation-cursor".into();
         ensure(
             changelists
@@ -1656,8 +1873,10 @@ mod tests {
 
         let mut switched = context.clone();
         switched.client = "p4deck-fixture-global-generation".into();
-        contexts.save(switched)?;
-        contexts.save(context.clone())?;
+        contexts.save(switched).map_err(|error| error.to_string())?;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
         let mut stale = base.clone();
         stale.operation_id = "global-search-old-generation".into();
         stale.cursor = Some(first_cursor);
@@ -2603,7 +2822,9 @@ mod tests {
             format!("numbered unshelve failed: {numbered_result:?}"),
         )?;
 
-        contexts.save(target_context.clone())?;
+        contexts
+            .save(target_context.clone())
+            .map_err(|error| error.to_string())?;
         let resolve = workflows
             .preflight_resolve(
                 ResolvePreflightRequest {
@@ -2646,7 +2867,9 @@ mod tests {
             !no_conflict.ready && no_conflict.conflicts[0].status != "unresolved",
             format!("non-conflict was falsely advertised as resolvable: {no_conflict:?}"),
         )?;
-        contexts.save(context.clone())?;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
 
         checked_run(
             runner,
@@ -3014,8 +3237,13 @@ mod tests {
                 create_numbered_change(changelists, &readonly, "BE-003 permission denial").await?;
             move_to_change(changelists, &readonly, change_id, depot_path).await?;
 
-            let contexts = Arc::new(ContextStore::load(&permission_context_root));
-            contexts.save(readonly.clone())?;
+            let contexts = Arc::new(
+                ContextStore::load(&permission_context_root)
+                    .map_err(|error| error.to_string())?,
+            );
+            contexts
+                .save(readonly.clone())
+                .map_err(|error| error.to_string())?;
             let cache = Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024));
             let permission_submit = SubmitService::new(
                 SubmitRepository::new(runner.clone()),

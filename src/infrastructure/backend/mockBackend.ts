@@ -23,6 +23,11 @@ let mockContext: import("../../shared/contracts/types").P4Context = {
   charset: "utf8",
 };
 let mockContextGeneration = 1;
+let mockProfileRevision = 1;
+let mockActiveProfileId = "mock-primary-profile";
+let mockProfiles: import("../../shared/contracts/types").ConnectionProfile[] = [
+  { id: mockActiveProfileId, name: "Primary", context: { ...mockContext } },
+];
 let mockAuthentication: "connected" | "authRequired" = "connected";
 const mockSubmitTokens = new Map<
   string,
@@ -321,6 +326,34 @@ function emitMockLog(
   }
 }
 
+function assertMockRevision(expected: number) {
+  if (expected !== mockProfileRevision)
+    throw new Error(
+      `revisionConflict: Expected ${expected}, current ${mockProfileRevision}.`,
+    );
+}
+
+function assertMockProfile(
+  name: string,
+  context: import("../../shared/contracts/types").P4Context,
+  exceptId?: string,
+) {
+  if (!name || name.length > 128 || /[\u0000-\u001f\u007f]/u.test(name))
+    throw new Error("invalidInput: Profile name is invalid.");
+  if (!context.server.trim() || !context.user.trim() || !context.client.trim())
+    throw new Error("invalidInput: Server, user and workspace are required.");
+  for (const profile of mockProfiles) {
+    if (profile.id === exceptId) continue;
+    if (
+      profile.name.localeCompare(name, undefined, { sensitivity: "accent" }) ===
+      0
+    )
+      throw new Error("duplicateName: Profile names must be unique.");
+    if (JSON.stringify(profile.context) === JSON.stringify(context))
+      throw new Error("duplicateContext: An identical context already exists.");
+  }
+}
+
 export const mockBackend: Backend = {
   async statusCacheDiagnostics() {
     return {
@@ -552,6 +585,108 @@ export const mockBackend: Backend = {
       accessed: Math.floor(now / 1000) - index * 3600,
     }));
   },
+  async listConnectionProfiles() {
+    return {
+      schemaVersion: 2,
+      revision: mockProfileRevision,
+      activeProfileId: mockActiveProfileId,
+      profiles: structuredClone(mockProfiles),
+    };
+  },
+  async getActiveConnectionProfile() {
+    return (
+      structuredClone(
+        mockProfiles.find((profile) => profile.id === mockActiveProfileId),
+      ) ?? null
+    );
+  },
+  async createConnectionProfile(request) {
+    assertMockRevision(request.expectedRevision);
+    const name = request.name.trim();
+    assertMockProfile(name, request.context);
+    const profile = {
+      id: crypto.randomUUID(),
+      name,
+      context: { ...request.context },
+    };
+    mockProfiles = [...mockProfiles, profile];
+    mockProfileRevision += 1;
+    return this.listConnectionProfiles();
+  },
+  async updateConnectionProfile(request) {
+    assertMockRevision(request.expectedRevision);
+    const existing = mockProfiles.find((profile) => profile.id === request.id);
+    if (!existing)
+      throw new Error("notFound: Connection profile was not found.");
+    const name = request.name.trim();
+    assertMockProfile(name, request.context, request.id);
+    mockProfiles = mockProfiles.map((profile) =>
+      profile.id === request.id
+        ? { id: profile.id, name, context: { ...request.context } }
+        : profile,
+    );
+    mockProfileRevision += 1;
+    if (request.id === mockActiveProfileId) {
+      mockContext = { ...request.context };
+      mockContextGeneration += 1;
+    }
+    return this.listConnectionProfiles();
+  },
+  async deleteConnectionProfile(request) {
+    assertMockRevision(request.expectedRevision);
+    if (
+      mockProfiles.length === 1 &&
+      mockProfiles.some((profile) => profile.id === request.id)
+    )
+      throw new Error("lastProfileDelete: The last profile cannot be deleted.");
+    if (request.id === mockActiveProfileId)
+      throw new Error(
+        "activeProfileDelete: Switch profiles before deleting the active profile.",
+      );
+    if (!mockProfiles.some((profile) => profile.id === request.id))
+      throw new Error("notFound: Connection profile was not found.");
+    mockProfiles = mockProfiles.filter((profile) => profile.id !== request.id);
+    mockProfileRevision += 1;
+    return this.listConnectionProfiles();
+  },
+  async setActiveConnectionProfile(request) {
+    assertMockRevision(request.expectedRevision);
+    const profile = mockProfiles.find((item) => item.id === request.id);
+    if (!profile)
+      throw new Error("notFound: Connection profile was not found.");
+    if (profile.context.server.includes("fail"))
+      throw new Error("connectionFailed: Mock connection verification failed.");
+    if (mockAuthentication !== "connected")
+      throw new Error("authenticationRequired: Mock login is required.");
+    mockActiveProfileId = profile.id;
+    mockContext = { ...profile.context };
+    mockProfileRevision += 1;
+    mockContextGeneration += 1;
+    return this.runtimeInfo();
+  },
+  async switchWorkspace(request) {
+    if (request.expectedGeneration !== mockContextGeneration)
+      throw new Error("contextChanged: The active connection changed.");
+    const workspace = (await this.listUserWorkspaces()).find(
+      (item) => item.name === request.client,
+    );
+    if (!workspace) throw new Error("notFound: Workspace was not found.");
+    if (mockAuthentication !== "connected")
+      throw new Error("authenticationRequired: Mock login is required.");
+    mockContext = {
+      ...mockContext,
+      client: workspace.name,
+      cwd: workspace.root,
+    };
+    mockProfiles = mockProfiles.map((profile) =>
+      profile.id === mockActiveProfileId
+        ? { ...profile, context: { ...mockContext } }
+        : profile,
+    );
+    mockProfileRevision += 1;
+    mockContextGeneration += 1;
+    return this.runtimeInfo();
+  },
   async saveConnection(context) {
     try {
       localStorage.setItem("p4deck.mockConnection", JSON.stringify(context));
@@ -559,6 +694,12 @@ export const mockBackend: Backend = {
       /* Node contract tests have no browser storage. */
     }
     mockContext = { ...context };
+    mockProfiles = mockProfiles.map((profile) =>
+      profile.id === mockActiveProfileId
+        ? { ...profile, context: { ...context } }
+        : profile,
+    );
+    mockProfileRevision += 1;
     mockContextGeneration += 1;
     return { ...context };
   },
@@ -566,6 +707,8 @@ export const mockBackend: Backend = {
     return {
       mode: "mock",
       p4Version: "P4/MOCK/2026.1",
+      activeProfileId: mockActiveProfileId,
+      contextGeneration: mockContextGeneration,
       context: { ...mockContext },
       connection: {
         state: "notTested",
