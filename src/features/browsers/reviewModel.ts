@@ -1,6 +1,8 @@
 import type {
   FileReviewScope,
   FileRevision,
+  RevisionGraph,
+  RevisionGraphEdge,
   RevisionGraphNode,
   RevisionReference,
   RuntimeInfo,
@@ -18,6 +20,46 @@ export function makeReviewScope(
     activeProfileId: runtime.activeProfileId,
     contextGeneration: runtime.contextGeneration,
     fileIdentity,
+  };
+}
+
+function graphEdgeIdentity(edge: RevisionGraphEdge): string {
+  return [
+    edge.source,
+    edge.target,
+    edge.kind,
+    edge.relationship,
+    edge.startRevision ?? "",
+    edge.endRevision ?? "",
+  ].join("\0");
+}
+
+export function mergeRevisionGraphs(
+  current: RevisionGraph,
+  incoming: RevisionGraph,
+): RevisionGraph {
+  const nodes = new Map(current.nodes.map((node) => [node.id, node]));
+  for (const node of incoming.nodes) {
+    const existing = nodes.get(node.id);
+    if (!existing || (existing.missing && !node.missing))
+      nodes.set(node.id, node);
+  }
+  const edges = new Map<string, RevisionGraphEdge>();
+  for (const edge of [...current.edges, ...incoming.edges]) {
+    const identity = graphEdgeIdentity(edge);
+    if (!edges.has(identity)) edges.set(identity, { ...edge, id: identity });
+  }
+  const mergedNodes = [...nodes.values()];
+  return {
+    nodes: mergedNodes,
+    edges: [...edges.values()],
+    nextCursor: incoming.nextCursor,
+    hasMore: incoming.hasMore,
+    partial: mergedNodes.some((node) => node.missing),
+    truncated: current.truncated || incoming.truncated,
+    operationIds: [
+      ...new Set([...current.operationIds, ...incoming.operationIds]),
+    ],
   };
 }
 

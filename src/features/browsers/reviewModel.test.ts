@@ -4,6 +4,7 @@ import {
   historyDiffPair,
   makeReviewScope,
   mergeHistoryRows,
+  mergeRevisionGraphs,
 } from "./reviewModel";
 
 describe("file review model", () => {
@@ -75,5 +76,51 @@ describe("file review model", () => {
       left: { kind: "revision", revision: 3 },
       right: { kind: "revision", revision: 4 },
     });
+  });
+
+  it("merges concurrent graph pages by semantic node and edge identity", () => {
+    const node = (id: string, missing = false) => ({
+      id,
+      depotPath: `//depot/${id}.txt`,
+      revision: 1,
+      changelistId: missing ? 0 : 1,
+      action: missing ? "referenced" : "edit",
+      fileType: "text",
+      label: "#1",
+      x: 0,
+      y: 0,
+      missing,
+    });
+    const edge = {
+      id: "unstable-id",
+      source: "a",
+      target: "b",
+      kind: "merge" as const,
+      relationship: "merge from",
+    };
+    const merged = mergeRevisionGraphs(
+      {
+        nodes: [node("a"), node("b", true)],
+        edges: [edge],
+        nextCursor: "cursor-2",
+        hasMore: true,
+        partial: true,
+        truncated: false,
+        operationIds: ["first"],
+      },
+      {
+        nodes: [node("b"), node("c")],
+        edges: [{ ...edge, id: "different-id" }],
+        hasMore: false,
+        partial: false,
+        truncated: false,
+        operationIds: ["second", "first"],
+      },
+    );
+    expect(merged.nodes.map(({ id }) => id)).toEqual(["a", "b", "c"]);
+    expect(merged.nodes.find(({ id }) => id === "b")?.missing).toBe(false);
+    expect(merged.edges).toHaveLength(1);
+    expect(merged.operationIds).toEqual(["first", "second"]);
+    expect(merged.partial).toBe(false);
   });
 });

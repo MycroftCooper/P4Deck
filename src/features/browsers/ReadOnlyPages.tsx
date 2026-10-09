@@ -20,6 +20,13 @@ import {
   makeReviewScope,
   mergeHistoryRows,
 } from "./reviewModel";
+import {
+  isCancellation,
+  reviewRequestIdentity,
+  reviewRequestIdentityKey,
+  reviewSessionIdentity,
+  useReviewRequestOwner,
+} from "./reviewRequests";
 const cache = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
@@ -47,74 +54,139 @@ export function ReadOnlyPage({
     setQueryPath(target);
   }, [target]);
   const [search, setSearch] = useState("");
-  const [rows, setRows] = useState<(FileRevision | StreamSummary)[]>([]);
+  const [ownedRows, setOwnedRows] = useState<{
+    owner: string;
+    value: (FileRevision | StreamSummary)[];
+  }>();
   const [selected, setSelected] = useState<FileRevision | StreamSummary>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loadingOwner, setLoadingOwner] = useState("");
+  const [ownedError, setOwnedError] = useState<{
+    owner: string;
+    message: string;
+  }>();
   const [refresh, setRefresh] = useState(0);
   const [historyCursor, setHistoryCursor] = useState<string>();
   const [historyHasMore, setHistoryHasMore] = useState(false);
-  const [historyNotice, setHistoryNotice] = useState("");
-  const [historyDiff, setHistoryDiff] = useState<DiffResult>();
-  const [historyDiffLoading, setHistoryDiffLoading] = useState(false);
-  const [historyDiffOperationId, setHistoryDiffOperationId] =
-    useState<string>();
-  const historyPageOperation = useRef<string | undefined>(undefined);
-  const historyDiffOperation = useRef<string | undefined>(undefined);
+  const [ownedHistoryNotice, setOwnedHistoryNotice] = useState<{
+    owner: string;
+    message: string;
+  }>();
+  const [ownedHistoryDiff, setOwnedHistoryDiff] = useState<{
+    owner: string;
+    pair: string;
+    value: DiffResult;
+  }>();
+  const [historyDiffLoadingOwner, setHistoryDiffLoadingOwner] = useState("");
+  const consumedHistoryCursors = useRef(new Set<string>());
+  const pendingHistoryCursors = useRef(new Set<string>());
   const scroll = useRef<HTMLDivElement>(null);
-  const key = useMemo(
-    () => [kind, runtime.mode, runtime.context, queryPath],
-    [kind, runtime, queryPath],
+  const scope = useMemo(
+    () => makeReviewScope(runtime, queryPath),
+    [
+      queryPath,
+      runtime.activeProfileId,
+      runtime.context.client,
+      runtime.context.cwd,
+      runtime.context.server,
+      runtime.context.user,
+      runtime.contextGeneration,
+    ],
   );
+  const historySession = reviewSessionIdentity(runtime, "history", scope);
+  const historyIdentity = reviewRequestIdentity(
+    runtime,
+    scope,
+    "history",
+    "history",
+  );
+  const historyOwner = reviewRequestIdentityKey(historyIdentity);
+  const streamOwner = JSON.stringify([
+    "streams",
+    runtime.mode,
+    runtime.activeProfileId,
+    runtime.contextGeneration,
+    runtime.context,
+  ]);
+  const viewOwner = kind === "history" ? historyOwner : streamOwner;
+  const currentOwner = useRef(viewOwner);
+  currentOwner.current = viewOwner;
+  const requests = useReviewRequestOwner(historySession);
+  const displayCurrent =
+    (kind !== "history" || target === queryPath) &&
+    runtime.p4Version !== "loading";
+  const rows =
+    displayCurrent && ownedRows?.owner === viewOwner ? ownedRows.value : [];
+  const loading = displayCurrent && loadingOwner === viewOwner;
+  const error =
+    displayCurrent && ownedError?.owner === viewOwner ? ownedError.message : "";
+  const historyNotice =
+    displayCurrent && ownedHistoryNotice?.owner === viewOwner
+      ? ownedHistoryNotice.message
+      : "";
+  const historyDiff =
+    displayCurrent && ownedHistoryDiff?.owner === historyOwner
+      ? ownedHistoryDiff.value
+      : undefined;
+  const historyDiffLoading =
+    displayCurrent && historyDiffLoadingOwner === historyOwner;
+  const key = useMemo(() => ["read-only", viewOwner], [viewOwner]);
   useEffect(() => {
     if (runtime.p4Version === "loading" || (kind === "history" && !queryPath)) {
-      setRows([]);
+      requests.cancelAll();
+      setOwnedRows(undefined);
       setSelected(undefined);
       setHistoryCursor(undefined);
       setHistoryHasMore(false);
-      setHistoryNotice("");
-      setHistoryDiff(undefined);
-      setHistoryDiffLoading(false);
-      setHistoryDiffOperationId(undefined);
-      setLoading(false);
+      setOwnedHistoryNotice(undefined);
+      setOwnedHistoryDiff(undefined);
+      setHistoryDiffLoadingOwner("");
+      setLoadingOwner("");
       return;
     }
     let live = true;
-    const operationId = crypto.randomUUID();
-    setLoading(true);
-    setError("");
+    const lease =
+      kind === "history"
+        ? requests.start("primary", historyIdentity)
+        : undefined;
+    setLoadingOwner(viewOwner);
+    setOwnedError(undefined);
     setSelected(undefined);
-    setHistoryDiff(undefined);
-    setHistoryDiffLoading(false);
-    setHistoryDiffOperationId(undefined);
+    setOwnedHistoryDiff(undefined);
+    setHistoryDiffLoadingOwner("");
+    consumedHistoryCursors.current.clear();
+    pendingHistoryCursors.current.clear();
     const cached = cache.getQueryData<FileHistoryPage | StreamSummary[]>(key);
-    setRows(
+    const cachedRows =
       kind === "history"
         ? ((cached as FileHistoryPage | undefined)?.items ?? [])
-        : ((cached as StreamSummary[] | undefined) ?? []),
-    );
-    void cache
-      .fetchQuery<FileHistoryPage | StreamSummary[]>({
-        queryKey: key,
-        queryFn: () =>
-          kind === "history"
-            ? backend.getFileHistory({
-                scope: makeReviewScope(runtime, queryPath),
-                pageSize: 100,
-                refresh: refresh > 0,
-                operationId,
-              })
-            : backend.listStreams(),
-      })
+        : ((cached as StreamSummary[] | undefined) ?? []);
+    setOwnedRows({ owner: viewOwner, value: cachedRows });
+    const request =
+      kind === "history"
+        ? backend.getFileHistory({
+            scope,
+            pageSize: 100,
+            refresh: refresh > 0,
+            operationId: lease!.operationId,
+          })
+        : backend.listStreams();
+    void request
       .then((data) => {
-        if (!live) return;
+        if (
+          !live ||
+          currentOwner.current !== viewOwner ||
+          (lease && !requests.isCurrent(lease))
+        )
+          return;
+        cache.setQueryData(key, data);
         if (kind === "history") {
           const page = data as FileHistoryPage;
-          setRows(page.items);
+          setOwnedRows({ owner: viewOwner, value: page.items });
           setHistoryCursor(page.nextCursor);
           setHistoryHasMore(page.hasMore);
-          setHistoryNotice(
-            page.truncated
+          setOwnedHistoryNotice({
+            owner: viewOwner,
+            message: page.truncated
               ? zh
                 ? "历史结果达到安全上限，当前结果已截断。"
                 : "History reached its safety limit and was truncated."
@@ -123,28 +195,28 @@ export function ReadOnlyPage({
                   ? "历史结果不完整。"
                   : "History results are partial."
                 : "",
-          );
-        } else setRows(data as StreamSummary[]);
+          });
+        } else
+          setOwnedRows({ owner: viewOwner, value: data as StreamSummary[] });
       })
       .catch((cause) => {
-        if (live) setError(String(cause));
+        if (
+          live &&
+          currentOwner.current === viewOwner &&
+          (!lease || requests.isCurrent(lease)) &&
+          !isCancellation(cause)
+        )
+          setOwnedError({ owner: viewOwner, message: String(cause) });
       })
       .finally(() => {
-        if (live) setLoading(false);
+        const finished = lease ? requests.finish(lease) : live;
+        if (finished && currentOwner.current === viewOwner) setLoadingOwner("");
       });
     return () => {
       live = false;
-      if (kind === "history") void backend.cancelOperation(operationId);
-      if (historyPageOperation.current) {
-        void backend.cancelOperation(historyPageOperation.current);
-        historyPageOperation.current = undefined;
-      }
-      if (historyDiffOperation.current) {
-        void backend.cancelOperation(historyDiffOperation.current);
-        historyDiffOperation.current = undefined;
-      }
+      if (kind === "history") requests.cancelAll();
     };
-  }, [key, kind, queryPath, refresh, runtime.p4Version]);
+  }, [viewOwner, kind, queryPath, refresh, runtime.p4Version]);
   const filtered = useMemo(
     () =>
       rows.filter((row) =>
@@ -155,6 +227,10 @@ export function ReadOnlyPage({
       ),
     [rows, search],
   );
+  const visibleSelected =
+    displayCurrent && selected && rows.includes(selected)
+      ? selected
+      : undefined;
   const menu = useContextMenu();
   const selection = useRecordSelection(
     filtered,
@@ -162,33 +238,47 @@ export function ReadOnlyPage({
     JSON.stringify(key),
   );
   const compareHistory = async (items: (FileRevision | StreamSummary)[]) => {
-    if (historyDiffOperation.current) return;
     const revisions = items.filter(
       (item): item is FileRevision => "revision" in item,
     );
     const pair = historyDiffPair(revisions);
     if (!pair) return;
-    const operationId = crypto.randomUUID();
-    historyDiffOperation.current = operationId;
-    setHistoryDiffLoading(true);
-    setHistoryDiffOperationId(operationId);
-    setHistoryDiff(undefined);
-    setError("");
+    const pairIdentity = JSON.stringify(pair);
+    const diffScope = makeReviewScope(runtime, revisions[0].depotPath);
+    const identity = reviewRequestIdentity(
+      runtime,
+      diffScope,
+      "history",
+      "history-diff",
+      { ...pair },
+    );
+    const lease = requests.start("history-diff", identity);
+    const ownerAtStart = historyOwner;
+    setHistoryDiffLoadingOwner(ownerAtStart);
+    setOwnedHistoryDiff(undefined);
+    setOwnedError(undefined);
     try {
       const result = await backend.getDiff({
-        scope: makeReviewScope(runtime, revisions[0].depotPath),
+        scope: diffScope,
         ...pair,
-        operationId,
+        operationId: lease.operationId,
       });
-      if (historyDiffOperation.current === operationId) setHistoryDiff(result);
+      if (requests.isCurrent(lease) && currentOwner.current === ownerAtStart)
+        setOwnedHistoryDiff({
+          owner: ownerAtStart,
+          pair: pairIdentity,
+          value: result,
+        });
     } catch (cause) {
-      if (historyDiffOperation.current === operationId) setError(String(cause));
+      if (
+        requests.isCurrent(lease) &&
+        currentOwner.current === ownerAtStart &&
+        !isCancellation(cause)
+      )
+        setOwnedError({ owner: ownerAtStart, message: String(cause) });
     } finally {
-      if (historyDiffOperation.current === operationId) {
-        historyDiffOperation.current = undefined;
-        setHistoryDiffLoading(false);
-        setHistoryDiffOperationId(undefined);
-      }
+      if (requests.finish(lease) && currentOwner.current === ownerAtStart)
+        setHistoryDiffLoadingOwner("");
     }
   };
   const reload = async () => {
@@ -287,9 +377,12 @@ export function ReadOnlyPage({
                 : "Compare two selected revisions"}
           </button>
         )}
-        {historyDiffLoading && historyDiffOperationId && (
+        {historyDiffLoading && (
           <button
-            onClick={() => void backend.cancelOperation(historyDiffOperationId)}
+            onClick={() => {
+              requests.cancel("history-diff");
+              setHistoryDiffLoadingOwner("");
+            }}
           >
             {zh ? "取消比较" : "Cancel comparison"}
           </button>
@@ -300,34 +393,81 @@ export function ReadOnlyPage({
           className="load-more-button"
           disabled={loading || !historyCursor}
           onClick={() => {
-            if (!historyCursor) return;
-            const operationId = crypto.randomUUID();
-            historyPageOperation.current = operationId;
-            setLoading(true);
+            const cursor = historyCursor;
+            if (
+              !cursor ||
+              consumedHistoryCursors.current.has(cursor) ||
+              pendingHistoryCursors.current.has(cursor)
+            )
+              return;
+            pendingHistoryCursors.current.add(cursor);
+            const identity = reviewRequestIdentity(
+              runtime,
+              scope,
+              "history",
+              "history-page",
+              { cursor },
+            );
+            const lease = requests.start("history-page", identity);
+            const ownerAtStart = historyOwner;
+            setLoadingOwner(ownerAtStart);
+            setOwnedError(undefined);
             void backend
               .getFileHistory({
-                scope: makeReviewScope(runtime, queryPath),
+                scope,
                 pageSize: 100,
-                cursor: historyCursor,
-                operationId,
+                cursor,
+                operationId: lease.operationId,
               })
               .then((page) => {
-                if (historyPageOperation.current !== operationId) return;
-                setRows((current) =>
-                  mergeHistoryRows(current as FileRevision[], page.items),
-                );
-                setHistoryCursor(page.nextCursor);
-                setHistoryHasMore(page.hasMore);
+                if (
+                  !requests.isCurrent(lease) ||
+                  currentOwner.current !== ownerAtStart
+                )
+                  return;
+                consumedHistoryCursors.current.add(cursor);
+                const nonProgressing =
+                  page.hasMore &&
+                  (!page.nextCursor ||
+                    page.nextCursor === cursor ||
+                    consumedHistoryCursors.current.has(page.nextCursor));
+                setOwnedRows((current) => ({
+                  owner: ownerAtStart,
+                  value: mergeHistoryRows(
+                    current?.owner === ownerAtStart
+                      ? (current.value as FileRevision[])
+                      : [],
+                    page.items,
+                  ),
+                }));
+                setHistoryCursor(nonProgressing ? undefined : page.nextCursor);
+                setHistoryHasMore(nonProgressing ? false : page.hasMore);
+                if (nonProgressing)
+                  setOwnedError({
+                    owner: ownerAtStart,
+                    message: zh
+                      ? "后端返回了重复游标；已保留当前历史记录。"
+                      : "The backend returned a repeated cursor; current history was preserved.",
+                  });
               })
               .catch((cause) => {
-                if (historyPageOperation.current === operationId)
-                  setError(String(cause));
+                if (
+                  requests.isCurrent(lease) &&
+                  currentOwner.current === ownerAtStart &&
+                  !isCancellation(cause)
+                )
+                  setOwnedError({
+                    owner: ownerAtStart,
+                    message: String(cause),
+                  });
               })
               .finally(() => {
-                if (historyPageOperation.current === operationId) {
-                  historyPageOperation.current = undefined;
-                  setLoading(false);
-                }
+                pendingHistoryCursors.current.delete(cursor);
+                if (
+                  requests.finish(lease) &&
+                  currentOwner.current === ownerAtStart
+                )
+                  setLoadingOwner("");
               });
           }}
         >
@@ -344,7 +484,9 @@ export function ReadOnlyPage({
           {historyNotice}
         </div>
       )}
-      <div className={`workspace-layout ${selected ? "with-detail" : ""}`}>
+      <div
+        className={`workspace-layout ${visibleSelected ? "with-detail" : ""}`}
+      >
         <section className="workspace-panel">
           <div
             ref={scroll}
@@ -389,6 +531,11 @@ export function ReadOnlyPage({
                       transform: `translateY(${row.start}px)`,
                     }}
                     onClick={(event) => {
+                      if (kind === "history") {
+                        requests.cancel("history-diff");
+                        setHistoryDiffLoadingOwner("");
+                        setOwnedHistoryDiff(undefined);
+                      }
                       selection.select(item, event);
                       setSelected(item);
                     }}
@@ -454,6 +601,11 @@ export function ReadOnlyPage({
                             },
                       {
                         onOpen: () => {
+                          if (kind === "history") {
+                            requests.cancel("history-diff");
+                            setHistoryDiffLoadingOwner("");
+                            setOwnedHistoryDiff(undefined);
+                          }
                           selection.context(item);
                           setSelected(item);
                         },
@@ -499,7 +651,7 @@ export function ReadOnlyPage({
             {kind === "history" ? queryPath : runtime.context.server}
           </footer>
         </section>
-        {selected && (
+        {visibleSelected && (
           <aside className="file-details workspace-details">
             <div className="detail-caption">
               {zh ? "详情" : "Details"}
@@ -511,7 +663,7 @@ export function ReadOnlyPage({
               </button>
             </div>
             <dl>
-              {Object.entries(selected)
+              {Object.entries(visibleSelected)
                 .filter(([name]) => name !== "description")
                 .map(([name, value]) => (
                   <div key={name}>
@@ -520,7 +672,9 @@ export function ReadOnlyPage({
                   </div>
                 ))}
             </dl>
-            <p className="workspace-description">{selected.description}</p>
+            <p className="workspace-description">
+              {visibleSelected.description}
+            </p>
           </aside>
         )}
       </div>

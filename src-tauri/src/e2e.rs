@@ -3179,6 +3179,42 @@ mod tests {
             "submitted query cancellation was ignored",
         )?;
 
+        let review_cancel_id = "review-history-cancel".to_string();
+        let review_cancellation = files.history(
+            crate::domain::FileHistoryRequest {
+                scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                page_size: 500,
+                cursor: None,
+                refresh: true,
+                operation_id: Some(review_cancel_id.clone()),
+            },
+            None,
+        );
+        let cancel_review = async {
+            runner.cancel(&review_cancel_id);
+        };
+        let (cancelled_review, ()) = tokio::join!(review_cancellation, cancel_review);
+        ensure(
+            cancelled_review.is_err_and(|error| error.to_ascii_lowercase().contains("cancel")),
+            "file review cancellation was ignored or surfaced as a normal result",
+        )?;
+        let review_after_cancel = files
+            .history(
+                crate::domain::FileHistoryRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                    page_size: 10,
+                    cursor: None,
+                    refresh: true,
+                    operation_id: Some("review-history-after-cancel".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            !review_after_cancel.items.is_empty(),
+            "normal file review history regressed after cancellation",
+        )?;
+
         let mut switched = context.clone();
         switched.client = "p4deck-fixture-cursor-generation".into();
         contexts.save(switched).map_err(|error| error.to_string())?;

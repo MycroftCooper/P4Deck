@@ -15,6 +15,14 @@ import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
 import { useFullTextSelection } from "../../app/context-menu/FullTextSelection";
 import { graphNodeDiffPair, makeReviewScope } from "./reviewModel";
+import { mergeRevisionGraphs } from "./reviewModel";
+import {
+  isCancellation,
+  reviewRequestIdentity,
+  reviewRequestIdentityKey,
+  reviewSessionIdentity,
+  useReviewRequestOwner,
+} from "./reviewRequests";
 export type ReviewKind = "diff" | "revgraph";
 const cache = new QueryClient({
   defaultOptions: {
@@ -39,9 +47,15 @@ export function FileReviewPage({
 }) {
   const [path, setPath] = useState(() => target);
   const [queryPath, setQueryPath] = useState(path);
-  const [data, setData] = useState<DiffResult | RevisionGraph>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [ownedData, setOwnedData] = useState<{
+    owner: string;
+    value: DiffResult | RevisionGraph;
+  }>();
+  const [loadingOwner, setLoadingOwner] = useState("");
+  const [ownedError, setOwnedError] = useState<{
+    owner: string;
+    message: string;
+  }>();
   const [refresh, setRefresh] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [selectedNode, setSelectedNode] = useState("");
@@ -52,82 +66,114 @@ export function FileReviewPage({
     kind: "workspace",
   });
   const [graphCursor, setGraphCursor] = useState<string>();
-  const [nodeDiff, setNodeDiff] = useState<DiffResult>();
+  const [ownedNodeDiff, setOwnedNodeDiff] = useState<{
+    owner: string;
+    nodeId: string;
+    value: DiffResult;
+  }>();
+  const consumedGraphCursors = useRef(new Set<string>());
+  const pendingGraphCursors = useRef(new Set<string>());
   const scroll = useRef<HTMLDivElement>(null);
-  const key = useMemo(
-    () => [
-      "file-review",
-      kind,
-      runtime.mode,
-      runtime.activeProfileId,
-      runtime.contextGeneration,
-      runtime.context,
+  const scope = useMemo(
+    () => makeReviewScope(runtime, queryPath),
+    [
       queryPath,
-      leftReference,
-      rightReference,
+      runtime.activeProfileId,
+      runtime.context.client,
+      runtime.context.cwd,
+      runtime.context.server,
+      runtime.context.user,
+      runtime.contextGeneration,
     ],
-    [kind, runtime, queryPath, leftReference, rightReference],
   );
+  const tab = kind === "diff" ? "diff" : "revgraph";
+  const sessionIdentity = reviewSessionIdentity(runtime, tab, scope);
+  const primaryIdentity = reviewRequestIdentity(
+    runtime,
+    scope,
+    tab,
+    kind === "diff" ? "diff" : "graph",
+    kind === "diff"
+      ? { left: leftReference, right: rightReference }
+      : undefined,
+  );
+  const primaryOwner = reviewRequestIdentityKey(primaryIdentity);
+  const currentOwner = useRef(primaryOwner);
+  currentOwner.current = primaryOwner;
+  const requests = useReviewRequestOwner(sessionIdentity);
+  const key = useMemo(() => ["file-review", primaryOwner], [primaryOwner]);
+  const displayCurrent =
+    target === queryPath && runtime.p4Version !== "loading";
+  const data =
+    displayCurrent && ownedData?.owner === primaryOwner
+      ? ownedData.value
+      : undefined;
+  const loading = displayCurrent && loadingOwner === primaryOwner;
+  const error =
+    displayCurrent && ownedError?.owner === primaryOwner
+      ? ownedError.message
+      : "";
   useEffect(() => {
     setPath(target);
     setQueryPath(target);
   }, [target]);
   useEffect(() => {
     if (!queryPath || runtime.p4Version === "loading") {
-      setData(undefined);
+      requests.cancel("primary");
+      setOwnedData(undefined);
+      setOwnedError(undefined);
+      setLoadingOwner("");
       return;
     }
-    let active = true;
-    const operationId = crypto.randomUUID();
-    setLoading(true);
-    setError("");
+    requests.cancel("graph-page");
+    requests.cancel("graph-expand");
+    requests.cancel("node-diff");
+    const lease = requests.start("primary", primaryIdentity);
+    setLoadingOwner(primaryOwner);
+    setOwnedError(undefined);
     setSelectedNode("");
-    setData(cache.getQueryData<DiffResult | RevisionGraph>(key));
-    void cache
-      .fetchQuery<DiffResult | RevisionGraph>({
-        queryKey: key,
-        queryFn: () =>
-          kind === "diff"
-            ? backend.getDiff({
-                scope: makeReviewScope(runtime, queryPath),
-                left: leftReference,
-                right: rightReference,
-                refresh: refresh > 0,
-                operationId,
-              })
-            : backend.getRevisionGraph({
-                scope: makeReviewScope(runtime, queryPath),
-                revisionLimit: 100,
-                refresh: refresh > 0,
-                operationId,
-              }),
-      })
+    setOwnedNodeDiff(undefined);
+    consumedGraphCursors.current.clear();
+    pendingGraphCursors.current.clear();
+    const cached = cache.getQueryData<DiffResult | RevisionGraph>(key);
+    setOwnedData(cached ? { owner: primaryOwner, value: cached } : undefined);
+    const request =
+      kind === "diff"
+        ? backend.getDiff({
+            scope,
+            left: leftReference,
+            right: rightReference,
+            refresh: refresh > 0,
+            operationId: lease.operationId,
+          })
+        : backend.getRevisionGraph({
+            scope,
+            revisionLimit: 100,
+            refresh: refresh > 0,
+            operationId: lease.operationId,
+          });
+    void request
       .then((result) => {
-        if (active) {
-          setData(result);
-          if ("nodes" in result) setGraphCursor(result.nextCursor);
-        }
+        if (!requests.isCurrent(lease) || currentOwner.current !== primaryOwner)
+          return;
+        cache.setQueryData(key, result);
+        setOwnedData({ owner: primaryOwner, value: result });
+        if ("nodes" in result) setGraphCursor(result.nextCursor);
       })
       .catch((cause) => {
-        if (active) setError(String(cause));
+        if (
+          requests.isCurrent(lease) &&
+          currentOwner.current === primaryOwner &&
+          !isCancellation(cause)
+        )
+          setOwnedError({ owner: primaryOwner, message: String(cause) });
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (requests.finish(lease) && currentOwner.current === primaryOwner)
+          setLoadingOwner("");
       });
-    return () => {
-      active = false;
-      void backend.cancelOperation(operationId);
-    };
-  }, [
-    key,
-    kind,
-    queryPath,
-    runtime,
-    runtime.p4Version,
-    refresh,
-    leftReference,
-    rightReference,
-  ]);
+    return () => requests.cancel("primary");
+  }, [primaryOwner, kind, queryPath, runtime.p4Version, refresh]);
   const diff = data && "unified" in data ? data : undefined;
   const graph = data && "nodes" in data ? data : undefined;
   const lines = useMemo(
@@ -156,6 +202,11 @@ export function FileReviewPage({
     [graph],
   );
   const selected = graphIndex.get(selectedNode);
+  const nodeDiff =
+    ownedNodeDiff?.owner === primaryOwner &&
+    ownedNodeDiff.nodeId === selectedNode
+      ? ownedNodeDiff.value
+      : undefined;
   const menu = useContextMenu();
   const textSelection = useFullTextSelection();
   const selection = useRecordSelection(
@@ -167,6 +218,172 @@ export function FileReviewPage({
     void cache
       .invalidateQueries({ queryKey: key })
       .then(() => setRefresh((v) => v + 1));
+  };
+  const compareGraphNode = () => {
+    if (!selected) return;
+    const pair = graphNodeDiffPair(selected);
+    if (!pair) return;
+    const nodeScope = makeReviewScope(runtime, selected.depotPath);
+    const identity = reviewRequestIdentity(
+      runtime,
+      nodeScope,
+      "revgraph",
+      "graph-node-diff",
+      { ...pair, nodeId: selected.id },
+    );
+    const lease = requests.start("node-diff", identity);
+    const ownerAtStart = primaryOwner;
+    setOwnedNodeDiff(undefined);
+    setOwnedError(undefined);
+    void backend
+      .getDiff({ scope: nodeScope, ...pair, operationId: lease.operationId })
+      .then((result) => {
+        if (
+          requests.isCurrent(lease) &&
+          currentOwner.current === ownerAtStart &&
+          selectedNode === identity.nodeId
+        )
+          setOwnedNodeDiff({
+            owner: ownerAtStart,
+            nodeId: selected.id,
+            value: result,
+          });
+      })
+      .catch((cause) => {
+        if (
+          requests.isCurrent(lease) &&
+          currentOwner.current === ownerAtStart &&
+          !isCancellation(cause)
+        )
+          setOwnedError({ owner: ownerAtStart, message: String(cause) });
+      })
+      .finally(() => requests.finish(lease));
+  };
+  const loadMoreGraph = () => {
+    const cursor = graphCursor;
+    if (
+      !cursor ||
+      !graph ||
+      consumedGraphCursors.current.has(cursor) ||
+      pendingGraphCursors.current.has(cursor)
+    )
+      return;
+    pendingGraphCursors.current.add(cursor);
+    const identity = reviewRequestIdentity(
+      runtime,
+      scope,
+      "revgraph",
+      "graph-page",
+      { cursor },
+    );
+    const lease = requests.start("graph-page", identity);
+    const ownerAtStart = primaryOwner;
+    setLoadingOwner(ownerAtStart);
+    setOwnedError(undefined);
+    void backend
+      .getRevisionGraph({
+        scope,
+        revisionLimit: 100,
+        cursor,
+        operationId: lease.operationId,
+      })
+      .then((result) => {
+        if (!requests.isCurrent(lease) || currentOwner.current !== ownerAtStart)
+          return;
+        consumedGraphCursors.current.add(cursor);
+        const nonProgressing =
+          result.hasMore &&
+          (!result.nextCursor ||
+            result.nextCursor === cursor ||
+            consumedGraphCursors.current.has(result.nextCursor));
+        setOwnedData((current) => {
+          const base =
+            current?.owner === ownerAtStart && "nodes" in current.value
+              ? current.value
+              : graph;
+          const merged = mergeRevisionGraphs(base, result);
+          return {
+            owner: ownerAtStart,
+            value: nonProgressing
+              ? {
+                  ...merged,
+                  hasMore: false,
+                  nextCursor: undefined,
+                  partial: true,
+                }
+              : merged,
+          };
+        });
+        setGraphCursor(nonProgressing ? undefined : result.nextCursor);
+        if (nonProgressing)
+          setOwnedError({
+            owner: ownerAtStart,
+            message: zh
+              ? "后端返回了重复游标；已保留当前版本图。"
+              : "The backend returned a repeated cursor; the current graph was preserved.",
+          });
+      })
+      .catch((cause) => {
+        if (
+          requests.isCurrent(lease) &&
+          currentOwner.current === ownerAtStart &&
+          !isCancellation(cause)
+        )
+          setOwnedError({ owner: ownerAtStart, message: String(cause) });
+      })
+      .finally(() => {
+        pendingGraphCursors.current.delete(cursor);
+        if (requests.finish(lease) && currentOwner.current === ownerAtStart)
+          setLoadingOwner("");
+      });
+  };
+  const expandGraphNode = () => {
+    if (!selected?.missing || selected.revision < 1 || !graph) return;
+    const expandScope = makeReviewScope(runtime, selected.depotPath);
+    const identity = reviewRequestIdentity(
+      runtime,
+      expandScope,
+      "revgraph",
+      "graph-expand",
+      { nodeId: selected.id, expandTarget: selected.depotPath },
+    );
+    const lease = requests.start("graph-expand", identity);
+    const ownerAtStart = primaryOwner;
+    setOwnedError(undefined);
+    void backend
+      .getRevisionGraph({
+        scope: expandScope,
+        revisionLimit: 100,
+        operationId: lease.operationId,
+      })
+      .then((result) => {
+        if (!requests.isCurrent(lease) || currentOwner.current !== ownerAtStart)
+          return;
+        setOwnedData((current) => {
+          const base =
+            current?.owner === ownerAtStart && "nodes" in current.value
+              ? current.value
+              : graph;
+          const merged = mergeRevisionGraphs(base, result);
+          return {
+            owner: ownerAtStart,
+            value: {
+              ...merged,
+              nextCursor: base.nextCursor,
+              hasMore: base.hasMore,
+            },
+          };
+        });
+      })
+      .catch((cause) => {
+        if (
+          requests.isCurrent(lease) &&
+          currentOwner.current === ownerAtStart &&
+          !isCancellation(cause)
+        )
+          setOwnedError({ owner: ownerAtStart, message: String(cause) });
+      })
+      .finally(() => requests.finish(lease));
   };
   return (
     <main
@@ -447,12 +664,23 @@ export function FileReviewPage({
                   className={selection.isSelected(node) ? "selected" : ""}
                   transform={`translate(${node.x},${node.y})`}
                   onClick={(event) => {
+                    if (node.id !== selectedNode) {
+                      requests.cancel("node-diff");
+                      requests.cancel("graph-expand");
+                      setOwnedNodeDiff(undefined);
+                    }
                     selection.select(node, event);
                     setSelectedNode(node.id);
                   }}
                   onKeyDownCapture={(event) => {
-                    if (selection.keyboard(node, event))
+                    if (selection.keyboard(node, event)) {
+                      if (node.id !== selectedNode) {
+                        requests.cancel("node-diff");
+                        requests.cancel("graph-expand");
+                        setOwnedNodeDiff(undefined);
+                      }
                       setSelectedNode(node.id);
+                    }
                   }}
                   {...menu(
                     selection.targets(node).length > 2
@@ -475,6 +703,11 @@ export function FileReviewPage({
                     }),
                     {
                       onOpen: () => {
+                        if (node.id !== selectedNode) {
+                          requests.cancel("node-diff");
+                          requests.cancel("graph-expand");
+                          setOwnedNodeDiff(undefined);
+                        }
                         selection.context(node);
                         setSelectedNode(node.id);
                       },
@@ -495,44 +728,17 @@ export function FileReviewPage({
             <div className="graph-actions">
               <button
                 disabled={!selected || selected.missing}
-                onClick={() => {
-                  if (!selected) return;
-                  const pair = graphNodeDiffPair(selected);
-                  if (!pair) return;
-                  const operationId = crypto.randomUUID();
-                  void backend
-                    .getDiff({
-                      scope: makeReviewScope(runtime, selected.depotPath),
-                      ...pair,
-                      operationId,
-                    })
-                    .then(setNodeDiff)
-                    .catch((cause) => setError(String(cause)));
-                }}
+                onClick={compareGraphNode}
               >
                 {zh ? "比较所选版本与上一版" : "Diff selected against previous"}
               </button>
+              {selected?.missing && selected.revision > 0 && (
+                <button onClick={expandGraphNode}>
+                  {zh ? "展开所选引用节点" : "Expand selected reference"}
+                </button>
+              )}
               {graph.hasMore && graphCursor && (
-                <button
-                  disabled={loading}
-                  onClick={() => {
-                    const operationId = crypto.randomUUID();
-                    setLoading(true);
-                    void backend
-                      .getRevisionGraph({
-                        scope: makeReviewScope(runtime, queryPath),
-                        revisionLimit: 100,
-                        cursor: graphCursor,
-                        operationId,
-                      })
-                      .then((result) => {
-                        setData(result);
-                        setGraphCursor(result.nextCursor);
-                      })
-                      .catch((cause) => setError(String(cause)))
-                      .finally(() => setLoading(false));
-                  }}
-                >
+                <button disabled={loading} onClick={loadMoreGraph}>
                   {zh ? "展开更多版本" : "Expand more revisions"}
                 </button>
               )}

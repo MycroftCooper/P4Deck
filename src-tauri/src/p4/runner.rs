@@ -58,6 +58,40 @@ pub struct MutationGuard {
     _permit: OwnedSemaphorePermit,
 }
 
+/// Keeps a logical multi-command operation cancellable between child P4
+/// processes and until its caller has committed the final result.
+pub struct OperationGroup {
+    operation_id: String,
+    generation: usize,
+    token: CancellationToken,
+    runner: Arc<P4Runner>,
+}
+
+impl OperationGroup {
+    pub fn ensure_active(&self) -> Result<(), String> {
+        if self.token.is_cancelled() {
+            Err("operation was cancelled".into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Drop for OperationGroup {
+    fn drop(&mut self) {
+        let mut operations = self.runner.operations.lock();
+        let mut groups = self.runner.operation_groups.lock();
+        if groups.get(&self.operation_id) == Some(&self.generation) {
+            operations.remove(&self.operation_id);
+            groups.remove(&self.operation_id);
+            self.runner
+                .pending_cancellations
+                .lock()
+                .remove(&self.operation_id);
+        }
+    }
+}
+
 impl ServerLimits {
     fn new() -> Self {
         Self {
@@ -69,6 +103,9 @@ impl ServerLimits {
 
 pub struct P4Runner {
     operations: Mutex<HashMap<String, CancellationToken>>,
+    operation_groups: Mutex<HashMap<String, usize>>,
+    operation_group_sequence: AtomicUsize,
+    pending_cancellations: Mutex<HashMap<String, Instant>>,
     server_limits: Mutex<HashMap<String, Arc<ServerLimits>>>,
     logs: Arc<LogStore>,
     journal: Arc<OperationJournal>,
@@ -78,6 +115,9 @@ impl P4Runner {
     pub fn new(logs: Arc<LogStore>, journal: Arc<OperationJournal>) -> Self {
         Self {
             operations: Mutex::new(HashMap::new()),
+            operation_groups: Mutex::new(HashMap::new()),
+            operation_group_sequence: AtomicUsize::new(0),
+            pending_cancellations: Mutex::new(HashMap::new()),
             server_limits: Mutex::new(HashMap::new()),
             logs,
             journal,
@@ -92,6 +132,19 @@ impl P4Runner {
                 token.cancel();
             }
         }
+        drop(operations);
+        let mut pending = self.pending_cancellations.lock();
+        pending.retain(|_, recorded| recorded.elapsed() < Duration::from_secs(60));
+        if pending.len() >= 1_024 && !pending.contains_key(id) {
+            if let Some(oldest) = pending
+                .iter()
+                .max_by_key(|(_, recorded)| recorded.elapsed())
+                .map(|(operation_id, _)| operation_id.clone())
+            {
+                pending.remove(&oldest);
+            }
+        }
+        pending.insert(id.to_owned(), Instant::now());
     }
 
     pub fn cancel_all(&self) -> usize {
@@ -101,6 +154,44 @@ impl P4Runner {
             token.cancel();
         }
         count
+    }
+
+    pub fn begin_operation_group(self: &Arc<Self>, operation_id: String) -> OperationGroup {
+        let token = CancellationToken::new();
+        let generation = self
+            .operation_group_sequence
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        self.operations
+            .lock()
+            .insert(operation_id.clone(), token.clone());
+        if self
+            .pending_cancellations
+            .lock()
+            .remove(&operation_id)
+            .is_some()
+        {
+            token.cancel();
+        }
+        self.operation_groups
+            .lock()
+            .insert(operation_id.clone(), generation);
+        OperationGroup {
+            operation_id,
+            generation,
+            token,
+            runner: self.clone(),
+        }
+    }
+
+    fn token_for_operation(&self, operation_id: &str) -> CancellationToken {
+        let operations = self.operations.lock();
+        operations
+            .iter()
+            .filter(|(parent_id, _)| operation_id.starts_with(&format!("{parent_id}:")))
+            .max_by_key(|(parent_id, _)| parent_id.len())
+            .map(|(_, token)| token.child_token())
+            .unwrap_or_default()
     }
 
     pub async fn run(
@@ -245,7 +336,7 @@ impl P4Runner {
             request.source,
             category,
         );
-        let token = CancellationToken::new();
+        let token = self.token_for_operation(&operation_id);
         self.operations
             .lock()
             .insert(operation_id.clone(), token.clone());
@@ -1045,6 +1136,40 @@ mod tests {
         assert!(!second.is_cancelled());
         assert_eq!(runner.cancel_all(), 2);
         assert!(second.is_cancelled());
+        drop(runner);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn operation_group_cancels_current_and_future_children_until_commit() {
+        let directory = std::env::temp_dir().join(format!(
+            "p4deck-runner-operation-group-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("logs.sqlite")).unwrap());
+        let journal =
+            Arc::new(OperationJournal::open(&directory.join("operations.sqlite")).unwrap());
+        let runner = Arc::new(P4Runner::new(logs, journal));
+        let group = runner.begin_operation_group("review-request".into());
+        let first = runner.token_for_operation("review-request:fstat");
+        runner.cancel("review-request");
+        let later = runner.token_for_operation("review-request:print");
+        assert!(first.is_cancelled());
+        assert!(later.is_cancelled());
+        assert_eq!(
+            group.ensure_active().unwrap_err(),
+            "operation was cancelled"
+        );
+        drop(group);
+        assert!(!runner.operations.lock().contains_key("review-request"));
+        runner.cancel("cancel-before-registration");
+        let pre_cancelled = runner.begin_operation_group("cancel-before-registration".into());
+        assert_eq!(
+            pre_cancelled.ensure_active().unwrap_err(),
+            "operation was cancelled"
+        );
+        drop(pre_cancelled);
         drop(runner);
         std::fs::remove_dir_all(directory).unwrap();
     }

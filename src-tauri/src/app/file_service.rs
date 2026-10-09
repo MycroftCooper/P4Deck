@@ -692,6 +692,7 @@ impl FileService {
             .operation_id
             .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let operation = self.runner.begin_operation_group(root_id.clone());
         let inspection = self
             .inspect_review_file(&context, &request.scope.file_identity, &root_id, app)
             .await?;
@@ -719,6 +720,7 @@ impl FileService {
             .await?;
         operation_ids.extend(right.operation_ids.iter().cloned());
         self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
 
         let binary = left.metadata.binary || right.metadata.binary;
         let unsupported = left.unsupported || right.unsupported;
@@ -739,6 +741,8 @@ impl FileService {
                 partial: truncated,
                 operation_ids,
             };
+            self.ensure_review_scope_current(&request.scope)?;
+            operation.ensure_active()?;
             self.review_cache.lock().put(cache_key, &result)?;
             return Ok(result);
         }
@@ -763,6 +767,8 @@ impl FileService {
                 partial: true,
                 operation_ids,
             };
+            self.ensure_review_scope_current(&request.scope)?;
+            operation.ensure_active()?;
             self.review_cache.lock().put(cache_key, &result)?;
             return Ok(result);
         }
@@ -787,6 +793,8 @@ impl FileService {
             partial: truncated,
             operation_ids,
         };
+        self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         self.review_cache.lock().put(cache_key, &result)?;
         Ok(result)
     }
@@ -811,6 +819,7 @@ impl FileService {
         let operation_id = request
             .operation_id
             .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let operation = self.runner.begin_operation_group(operation_id.clone());
         let inspection = self
             .inspect_review_file(&context, &request.scope.file_identity, &operation_id, app)
             .await?;
@@ -825,6 +834,7 @@ impl FileService {
             )
             .await?;
         self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         let mut operation_ids = inspection.operation_ids;
         operation_ids.extend(loaded.operation_ids);
         let result = ShelfFilePreview {
@@ -836,6 +846,8 @@ impl FileService {
             reason: loaded.reason,
             operation_ids,
         };
+        self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         self.review_cache.lock().put(cache_key, &result)?;
         Ok(result)
     }
@@ -872,6 +884,7 @@ impl FileService {
         let operation_id = request
             .operation_id
             .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let operation = self.runner.begin_operation_group(operation_id.clone());
         let result = self
             .run_status(
                 &context,
@@ -883,7 +896,7 @@ impl FileService {
                     "-t".into(),
                     spec,
                 ],
-                Some(operation_id),
+                Some(format!("{operation_id}:history")),
                 true,
                 app,
             )
@@ -903,6 +916,7 @@ impl FileService {
             .filter(|revision| *revision > 0)
             .map(|revision| encode_review_cursor(&fingerprint, "history", revision));
         self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         let has_more = has_more && next_cursor.is_some();
         let page = FileHistoryPage {
             items,
@@ -912,6 +926,8 @@ impl FileService {
             truncated: false,
             operation_ids: vec![result.operation_id],
         };
+        self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         self.review_cache.lock().put(cache_key, &page)?;
         Ok(page)
     }
@@ -947,6 +963,7 @@ impl FileService {
         let operation_id = request
             .operation_id
             .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let operation = self.runner.begin_operation_group(operation_id.clone());
         let result = self
             .run_status(
                 &context,
@@ -959,7 +976,7 @@ impl FileService {
                     "-t".into(),
                     escape_review_filespec(&request.scope.file_identity),
                 ],
-                Some(operation_id),
+                Some(format!("{operation_id}:graph")),
                 true,
                 app,
             )
@@ -976,6 +993,7 @@ impl FileService {
         let next_cursor = (has_more && next_limit > limit)
             .then(|| encode_review_cursor(&fingerprint, "graph", next_limit as i64));
         self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         let graph = RevisionGraph {
             nodes,
             edges,
@@ -985,6 +1003,8 @@ impl FileService {
             truncated: has_more && next_limit == 2_000,
             operation_ids: vec![result.operation_id],
         };
+        self.ensure_review_scope_current(&request.scope)?;
+        operation.ensure_active()?;
         self.review_cache.lock().put(cache_key, &graph)?;
         Ok(graph)
     }
@@ -1672,7 +1692,13 @@ fn parse_filelog_result(result: &OperationResult) -> Vec<FileRevision> {
 }
 
 fn ensure_success(result: &OperationResult, command: &str) -> Result<(), String> {
-    if result.exit_code == 0 {
+    if result
+        .events
+        .iter()
+        .any(|event| matches!(event.kind, EventKind::Cancelled))
+    {
+        Err("operation was cancelled".into())
+    } else if result.exit_code == 0 {
         Ok(())
     } else {
         Err(format!("p4 {command} failed: {}", event_text(result)))
@@ -3105,6 +3131,26 @@ mod tests {
             cache.put(format!("key-{index}"), &index).unwrap();
         }
         assert_eq!(cache.entries.len(), ReviewCache::CAPACITY);
+    }
+
+    #[test]
+    fn cancelled_review_commands_are_not_reported_as_ordinary_p4_failures() {
+        let result = OperationResult {
+            operation_id: "cancelled-review".into(),
+            exit_code: -1,
+            events: vec![OperationEvent {
+                operation_id: "cancelled-review".into(),
+                kind: EventKind::Cancelled,
+                message: None,
+                progress: None,
+                timestamp: String::new(),
+            }],
+            duration_ms: 1,
+        };
+        assert_eq!(
+            ensure_success(&result, "filelog").unwrap_err(),
+            "operation was cancelled"
+        );
     }
 
     #[test]
