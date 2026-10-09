@@ -150,14 +150,7 @@ function Content({
         />
       );
     case "workspaces":
-      return (
-        <WorkspacePage
-          key={connectionKey}
-          t={t}
-          runtime={runtime}
-          onRuntime={onRuntime}
-        />
-      );
+      return <WorkspacePage t={t} runtime={runtime} onRuntime={onRuntime} />;
     case "diff":
     case "revgraph":
       return (

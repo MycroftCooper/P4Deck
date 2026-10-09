@@ -19,6 +19,40 @@ const cache = new QueryClient({
   },
 });
 
+function switchFailure(cause: unknown, zh: boolean) {
+  const value =
+    cause && typeof cause === "object"
+      ? (cause as { code?: string; message?: string })
+      : undefined;
+  const code = value?.code ?? String(cause).match(/(?:Error:\s*)?(\w+):/)?.[1];
+  const recovery: Record<string, [string, string]> = {
+    contextChanged: [
+      "活动连接已变化，请刷新 Workspace 后重试。",
+      "The active connection changed. Refresh workspaces and retry.",
+    ],
+    authenticationRequired: [
+      "当前 Profile 需要登录，请到设置中完成认证后重试。",
+      "The current profile requires login. Authenticate in Settings, then retry.",
+    ],
+    connectionFailed: [
+      "目标 Workspace 验证失败，请检查 Server、Client 与 Root。",
+      "Target workspace verification failed. Check its server, client, and root.",
+    ],
+    notFound: [
+      "目标 Workspace 已不存在或不再属于当前用户，请刷新列表。",
+      "The target workspace no longer exists or is not owned by this user. Refresh the list.",
+    ],
+  };
+  const copy = code ? recovery[code] : undefined;
+  return copy
+    ? zh
+      ? copy[0]
+      : copy[1]
+    : zh
+      ? "切换请求未完成，请刷新后重试。"
+      : "The switch request did not complete. Refresh and retry.";
+}
+
 export function WorkspacePage({
   t,
   runtime,
@@ -36,7 +70,14 @@ export function WorkspacePage({
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [switching, setSwitching] = useState(false);
+  const [switchPhase, setSwitchPhase] = useState<
+    "idle" | "verifying" | "committing" | "success" | "error"
+  >("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const switchTarget = useRef("");
+  const switchButton = useRef<HTMLButtonElement>(null);
+  const restoreSwitchFocus = useRef(false);
+  const previousGeneration = useRef(runtime.contextGeneration);
   const key = useMemo(
     () => ["user-workspaces", runtime.mode, runtime.context],
     [runtime],
@@ -85,6 +126,9 @@ export function WorkspacePage({
     JSON.stringify(key),
   );
   const selected = items.find((item) => item.name === selectedName);
+  const currentWorkspace = items.find(
+    (item) => item.name === runtime.context.client,
+  );
   const virtual = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scrollRef.current,
@@ -99,18 +143,51 @@ export function WorkspacePage({
     await cache.invalidateQueries({ queryKey: key });
     setRefresh((value) => value + 1);
   };
+  useEffect(() => {
+    if (previousGeneration.current === runtime.contextGeneration) return;
+    previousGeneration.current = runtime.contextGeneration;
+    void cache.removeQueries({ queryKey: ["user-workspaces"] });
+    setItems([]);
+    setSearch("");
+    setError("");
+    if (switchTarget.current === runtime.context.client) {
+      setSelectedName(runtime.context.client);
+      setSwitchPhase("success");
+      switchTarget.current = "";
+    } else {
+      setSelectedName("");
+      setSwitchPhase("idle");
+    }
+  }, [runtime.context.client, runtime.contextGeneration]);
+  useEffect(() => {
+    if (!switching && restoreSwitchFocus.current) {
+      switchButton.current?.focus();
+      restoreSwitchFocus.current = false;
+    }
+  }, [switching]);
   const switchToSelected = async () => {
     if (!selected || selected.name === runtime.context.client) return;
     setSwitching(true);
+    setSwitchPhase("verifying");
     setError("");
+    switchTarget.current = selected.name;
     try {
       const next = await backend.switchWorkspace({
         expectedGeneration: runtime.contextGeneration,
         client: selected.name,
       });
+      setSwitchPhase("committing");
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
       onRuntime(next);
     } catch (cause) {
-      setError(String(cause));
+      switchTarget.current = "";
+      setSwitchPhase("error");
+      setError(
+        zh
+          ? `Workspace 切换失败；仍保留 ${runtime.context.client} 与现有页面数据。${switchFailure(cause, true)}`
+          : `Workspace switch failed. ${runtime.context.client} and existing page data were preserved. ${switchFailure(cause, false)}`,
+      );
+      restoreSwitchFocus.current = true;
     } finally {
       setSwitching(false);
     }
@@ -157,6 +234,51 @@ export function WorkspacePage({
         <span className="filter-count">
           {runtime.mode === "mock" ? t.mock : runtime.context.server}
         </span>
+      </div>
+      <section
+        className="workspace-runtime-summary"
+        aria-label={zh ? "当前 Workspace" : "Current workspace"}
+      >
+        <div>
+          <span>CLIENT</span>
+          <strong>{runtime.context.client || "—"}</strong>
+        </div>
+        <div>
+          <span>ROOT</span>
+          <strong>
+            {currentWorkspace?.root || runtime.context.cwd || "—"}
+          </strong>
+        </div>
+        <div>
+          <span>STREAM</span>
+          <strong>{currentWorkspace?.stream || "—"}</strong>
+        </div>
+      </section>
+      {runtime.mode === "mock" && (
+        <p className="workspace-simulated-note">
+          {zh
+            ? "Simulated Mock：Workspace 切换只更新模拟 Context，不访问真实网络。"
+            : "Simulated Mock: workspace switching only updates the simulated context and never accesses a real network."}
+        </p>
+      )}
+      <div className="workspace-switch-status" role="status" aria-live="polite">
+        {switchPhase === "verifying"
+          ? zh
+            ? "正在验证目标 Workspace…"
+            : "Verifying target workspace…"
+          : switchPhase === "committing"
+            ? zh
+              ? "验证通过，正在提交 Workspace…"
+              : "Verified; committing workspace…"
+            : switchPhase === "success"
+              ? zh
+                ? `已切换到 ${runtime.context.client}，依赖页面已刷新。`
+                : `Switched to ${runtime.context.client}; dependent pages were refreshed.`
+              : switchPhase === "error"
+                ? zh
+                  ? "切换失败，原 Workspace 保持不变。"
+                  : "Switch failed; the previous workspace remains active."
+                : ""}
       </div>
       {error && (
         <div role="alert" className="workspace-load-error">
@@ -314,6 +436,7 @@ export function WorkspacePage({
               {selected.description || "—"}
             </p>
             <button
+              ref={switchButton}
               disabled={switching || selected.name === runtime.context.client}
               onClick={() => void switchToSelected()}
             >

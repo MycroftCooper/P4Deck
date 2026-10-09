@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G、FE-16 诊断体验及 FE-17 本机大列表基准已完成自动化验收；多连接后端契约与 Workspace 最小切换入口已落地，但完整设置页 profile 管理 UI 仍待接线；整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G、FE-16 诊断体验、FE-17 本机大列表基准及 FE-18 多连接生产 UI 已完成浏览器自动化验收；真实 SSL/SSO/MFA、Windows/macOS 原生点击/读屏与固定设备验收仍未完成，整体未完成。
 
 ## 范围与约束
 
@@ -30,7 +30,7 @@
 | FE-15 | 全局搜索生产接线 | `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围以文本节点渲染，不自行拼 P4 参数 | 已完成生产接线与 49 文件/296 项 Web 自动化；Windows localhost 默认双轮复验通过。Job 因无现有详情页明确禁用，Stream/Shelf 延后；原生点击/390px 原生窗口/读屏待验 |
 | FE-16 | 日志、操作与诊断生产闭环 | P4 Log 游标分页/筛选/策略，diagnostic-alert，Operation Journal，诊断导出，缓存指标，连接代次清理和双向 operation 导航 | 后端过滤必须作用于分页；策略失败回滚；alert 去重且不抢焦点；导出不泄露敏感字段；Mock 明示模拟；窄屏、键盘和 ARIA 基线 | 生产接线与 50 文件/302 项 Web 自动化通过；Windows localhost 默认两轮通过。原生点击、390px 原生窗口和真实读屏未验 |
 | FE-17 | 大列表窗口化与自动基准 | Pending 打开/搁置文件、Submitted 详情、Search、Log、Journal、Files/Depot；50k 生产筛选/搜索/去重和 100k 结构门禁 | 不挂全量 DOM；稳定 ID 选择；键盘焦点、窄屏、ARIA 和操作按钮不回退；50k p95 `<50 ms`；报告含环境与非跨平台声明 | 实现完成；52 文件/306 项 Web 测试与本机 `test:perf` 6 项通过。Windows/macOS 固定设备原生 FPS/内存/读屏未验 |
-| FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 后端/Mock/Tauri 契约完成，Workspace 详情已有最小真实切换按钮；完整设置页 UI、原生焦点/窄屏/读屏与 Server 切换实机仍待接线/验收 |
+| FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |
 
 ## 执行顺序
 
@@ -40,7 +40,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 ## 验收记录
 
-- FE-18 后端交接（2026-10-09）：`Backend`、Tauri 与 Mock 已提供 profile CRUD/list/get active/set active 和 `switchWorkspace`；`RuntimeInfo` 携带后端 `contextGeneration` 与活动 profile ID。Workspace 详情的显式按钮会调用真实切换接口并在失败时保留当前 Workspace。设置页仍只有既有单 Context 认证向导，尚未实现 profile 管理列表与完整切换流程；不得将最小按钮或后端 E2E 记作 FE-18 完成。
+- FE-18 多连接生产 UI（2026-10-09）：设置页已接 `ConnectionProfiles` schema v2 的列表、活动标识、搜索、新建/编辑/重命名/危险删除确认、revision CAS 与冲突重载，并复用既有 discover/test/trust/login/logout 向导。草稿、已保存 Profile、临时验证状态与活动 `RuntimeInfo` 分离；保存始终回到 `notTested`，未保存活动草稿的验证结果不会写入全局运行时，密码提交后立即清空且请求/Storage/URL/页面文本均无持久化。活动切换显示 verifying/committing/success/error，失败保留旧 runtime/页面数据/焦点，成功消费后端 generation，由既有 `connectionKey` 清理选择、详情、搜索和工具区日志状态。Workspace 页面真实调用 `switchWorkspace(expectedGeneration, client)`，显示当前 Client/Root/Stream、两阶段状态和失败回滚；Mock 明示 simulated。新增 Settings 12 项与 Workspace 4 项组件测试，全量 53 文件/317 项 Web 测试、前后端性能、build/check、Rust 86 项、Clippy、localhost `p4d` 默认两轮、rustfmt/diff check 均通过。Computer Use 枚举 `apps: []`，未执行 Windows/macOS 原生点击、390px 原生窗口、焦点或真实读屏；真实外部 Server、SSL/SSO/MFA 与过期 ticket 仍未实测。
 
 - FE-17 大列表与性能（2026-10-09）：修复 `PendingFileList` 打开/搁置文件全量 DOM，并将 Global Search、P4 Log、Operation Journal 的分页累积列表接入既有 TanStack Virtual；Submitted 详情、Files/Depot 和确认目标列表沿用既有窗口化。常规 Web 测试以 100,000 条 Pending 文件验证 `<40` 行 DOM（实际 24）、键盘焦点、稳定 ID 选择及 ARIA；全量 52 文件/306 项通过。本机 `pnpm test:perf` 使用固定 seed、7 轮 warmup/25 轮测量，50k Workspace 筛选 p95 0.651 ms、Unicode 搜索 p95 1.421 ms、50k+50k Global Search 合并去重 p95 10.511 ms，均通过项目 `<50 ms` 门禁；100k 筛选与 Pending 结构只作为信息/结构项。报告见 `ForAIDoc/Coder/前端性能基准.md`。自动化环境无法枚举原生窗口，Windows/macOS 固定设备持续滚动 FPS、真实峰值内存、原生焦点和读屏未验。
 
