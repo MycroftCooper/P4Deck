@@ -179,7 +179,12 @@ mod tests {
             status_cache.clone(),
             1,
         );
-        let files = FileService::new(runner.clone(), status_cache.clone(), journal.clone());
+        let files = FileService::new(
+            runner.clone(),
+            status_cache.clone(),
+            journal.clone(),
+            contexts.clone(),
+        );
         let rename = RenameService::new(
             RenameRepository::new(runner.clone()),
             contexts.clone(),
@@ -1424,7 +1429,7 @@ mod tests {
             root,
         )
         .await?;
-        exercise_submitted_change_details(runner, changelists, contexts, context).await?;
+        exercise_submitted_change_details(runner, files, changelists, contexts, context).await?;
         exercise_global_search(runner, changelists, search, contexts, context, root).await?;
         exercise_submit_blockers(runner, changelists, submit, sync, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
@@ -2303,6 +2308,7 @@ mod tests {
 
     async fn exercise_submitted_change_details(
         runner: &Arc<P4Runner>,
+        files: &FileService,
         changelists: &ChangelistService,
         contexts: &ContextStore,
         context: &P4Context,
@@ -2341,6 +2347,7 @@ mod tests {
             OutputMode::JsonLines,
         )
         .await?;
+
         checked_run(
             runner,
             context,
@@ -2369,6 +2376,32 @@ mod tests {
                     .any(|file| matches!(file.action.as_str(), "branch" | "integrate")),
             format!("real branch submission lacked reliable evidence: {integrated:?}"),
         )?;
+        let branch_local = PathBuf::from(context.cwd.as_deref().ok_or("fixture cwd is missing")?)
+            .join("p4deck-submit-e2e")
+            .join("promoted")
+            .join("success.txt");
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![branch_local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let branch_content = std::fs::read(&branch_local).map_err(|error| error.to_string())?;
+        let mut divergent = b"graph target divergence\n".to_vec();
+        divergent.extend(branch_content);
+        std::fs::write(&branch_local, divergent).map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "Revision graph target divergence".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
         let query = |hide_reliable_merges| crate::domain::ClQuery {
             operation_id: format!("be008-submitted-query-{hide_reliable_merges}"),
             request_generation: 8,
@@ -2431,7 +2464,12 @@ mod tests {
             OutputMode::JsonLines,
         )
         .await?;
-        std::fs::write(&local, b"BE-009 stable cursor insertion\n")
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&local)
+            .and_then(|mut file| {
+                std::io::Write::write_all(&mut file, b"BE-009 stable cursor insertion\n")
+            })
             .map_err(|error| error.to_string())?;
         let job_spec = format!(
             "Job: {E2E_JOB}\nStatus: open\nUser: {FIXTURE_USER}\nDescription:\n\tP4Deck submitted query E2E job\n"
@@ -2483,6 +2521,440 @@ mod tests {
             OutputMode::JsonLines,
         )
         .await?;
+
+        checked_run(
+            runner,
+            context,
+            "integrate",
+            vec![
+                "//depot/p4deck-submit-e2e/success.txt".into(),
+                branch_path.into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "resolve",
+            vec!["-am".into(), branch_path.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "Revision graph merge fixture".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let source_local = PathBuf::from(context.cwd.as_deref().ok_or("fixture cwd is missing")?)
+            .join("p4deck-submit-e2e")
+            .join("success.txt");
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![source_local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&source_local)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, b"graph copy source\n"))
+            .map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "Revision graph copy source".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "copy",
+            vec![
+                "-f".into(),
+                "//depot/p4deck-submit-e2e/success.txt".into(),
+                branch_path.into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "Revision graph copy fixture".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let moved_path = "//depot/p4deck-submit-e2e/promoted/success-moved.txt";
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec![branch_path.into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "move",
+            vec![branch_path.into(), moved_path.into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "Revision graph move fixture".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+
+        let review_dir = PathBuf::from(context.cwd.as_deref().ok_or("fixture cwd is missing")?)
+            .join("p4deck-submit-e2e")
+            .join("review");
+        std::fs::create_dir_all(&review_dir).map_err(|error| error.to_string())?;
+        let special_local = review_dir.join("世界 @#%.txt");
+        let special_filespec = special_local
+            .to_string_lossy()
+            .replace('%', "%25")
+            .replace('@', "%40")
+            .replace('#', "%23");
+        let empty_local = review_dir.join("empty.txt");
+        let binary_local = review_dir.join("binary.bin");
+        let large_local = review_dir.join("large.txt");
+        std::fs::write(&special_local, b"special baseline\n").map_err(|error| error.to_string())?;
+        std::fs::write(&empty_local, b"").map_err(|error| error.to_string())?;
+        std::fs::write(&binary_local, [0_u8, 1, 2, 3, 0xff]).map_err(|error| error.to_string())?;
+        std::fs::write(&large_local, vec![b'x'; 4 * 1024 * 1024 + 1])
+            .map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec!["-f".into(), special_local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec![empty_local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec![
+                "-t".into(),
+                "binary".into(),
+                binary_local.to_string_lossy().into_owned(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec![
+                "-t".into(),
+                "text".into(),
+                large_local.to_string_lossy().into_owned(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-d".into(), "File review edge-case fixtures".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+
+        let (active_context, generation) = contexts.snapshot();
+        let review_scope = |file_identity: &str| crate::domain::FileReviewScope {
+            server: active_context.server.clone(),
+            user: active_context.user.clone(),
+            client: active_context.client.clone(),
+            workspace: active_context.cwd.clone().unwrap_or_default(),
+            active_profile_id: contexts.active_profile_id(),
+            context_generation: generation,
+            file_identity: file_identity.into(),
+        };
+        let history = files
+            .history(
+                crate::domain::FileHistoryRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                    page_size: 1,
+                    cursor: None,
+                    refresh: false,
+                    operation_id: Some("review-history-page-1".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            history.items.len() == 1 && history.has_more && history.next_cursor.is_some(),
+            format!("review history was not stably paginated: {history:?}"),
+        )?;
+        let second_history = files
+            .history(
+                crate::domain::FileHistoryRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                    page_size: 1,
+                    cursor: history.next_cursor.clone(),
+                    refresh: false,
+                    operation_id: Some("review-history-page-2".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            second_history
+                .items
+                .first()
+                .is_some_and(|item| item.revision < history.items[0].revision),
+            format!("review history repeated or reordered a page: {second_history:?}"),
+        )?;
+        let depot_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                    left: crate::domain::RevisionReference::Revision { revision: 1 },
+                    right: crate::domain::RevisionReference::Head,
+                    refresh: false,
+                    operation_id: Some("review-revision-diff".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            !depot_diff.binary && !depot_diff.unsupported && !depot_diff.identical,
+            format!("revision-to-revision diff did not use real text: {depot_diff:?}"),
+        )?;
+        let special_depot = "//depot/p4deck-submit-e2e/review/世界 @#%.txt";
+        let special_history = files
+            .history(
+                crate::domain::FileHistoryRequest {
+                    scope: review_scope(special_depot),
+                    page_size: 10,
+                    cursor: None,
+                    refresh: false,
+                    operation_id: Some("review-special-history".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            special_history.items.len() == 1,
+            format!("special filespec history failed: {special_history:?}"),
+        )?;
+        let mut special_permissions = std::fs::metadata(&special_local)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        special_permissions.set_readonly(false);
+        std::fs::set_permissions(&special_local, special_permissions)
+            .map_err(|error| error.to_string())?;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&special_local)
+            .and_then(|mut file| {
+                std::io::Write::write_all(&mut file, "workspace 世界\n".as_bytes())
+            })
+            .map_err(|error| error.to_string())?;
+        let workspace_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope(special_depot),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Workspace,
+                    refresh: true,
+                    operation_id: Some("review-have-workspace".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            workspace_diff.stats.additions > 0 && !workspace_diff.identical,
+            format!("Have-to-Workspace diff missed text additions: {workspace_diff:?}"),
+        )?;
+        let have_head = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope(special_depot),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Head,
+                    refresh: true,
+                    operation_id: Some("review-have-head".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            have_head.identical,
+            format!("Have-to-Head identical state was not detected: {have_head:?}"),
+        )?;
+        checked_run(
+            runner,
+            context,
+            "sync",
+            vec!["-f".into(), special_filespec.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let empty_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/review/empty.txt"),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Workspace,
+                    refresh: true,
+                    operation_id: Some("review-empty".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            empty_diff.identical && empty_diff.unified.is_empty(),
+            "empty file diff was not identical",
+        )?;
+        let binary_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/review/binary.bin"),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Head,
+                    refresh: true,
+                    operation_id: Some("review-binary".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            binary_diff.binary && binary_diff.unified.is_empty(),
+            format!("binary diff was rendered as text: {binary_diff:?}"),
+        )?;
+        let large_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope("//depot/p4deck-submit-e2e/review/large.txt"),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Workspace,
+                    refresh: true,
+                    operation_id: Some("review-large".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            large_diff.unsupported && large_diff.truncated && large_diff.partial,
+            format!("large diff did not report its safety limit: {large_diff:?}"),
+        )?;
+        let mut special_permissions = std::fs::metadata(&special_local)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        special_permissions.set_readonly(false);
+        std::fs::set_permissions(&special_local, special_permissions)
+            .map_err(|error| error.to_string())?;
+        std::fs::remove_file(&special_local).map_err(|error| error.to_string())?;
+        let missing_diff = files
+            .diff(
+                crate::domain::DiffRequest {
+                    scope: review_scope(special_depot),
+                    left: crate::domain::RevisionReference::Have,
+                    right: crate::domain::RevisionReference::Workspace,
+                    refresh: true,
+                    operation_id: Some("review-missing-workspace".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            !missing_diff.right.exists && missing_diff.stats.deletions > 0,
+            format!(
+                "missing workspace file was not represented as an empty side: {missing_diff:?}"
+            ),
+        )?;
+        checked_run(
+            runner,
+            context,
+            "sync",
+            vec!["-f".into(), special_filespec],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        ensure(
+            files
+                .history(
+                    crate::domain::FileHistoryRequest {
+                        scope: review_scope("//depot/p4deck-submit-e2e/review/not-mapped.txt"),
+                        page_size: 10,
+                        cursor: None,
+                        refresh: true,
+                        operation_id: Some("review-missing-depot".into()),
+                    },
+                    None,
+                )
+                .await
+                .is_err(),
+            "missing depot file unexpectedly returned history",
+        )?;
+        let graph = files
+            .graph(
+                crate::domain::RevisionGraphRequest {
+                    scope: review_scope(moved_path),
+                    revision_limit: 100,
+                    cursor: None,
+                    refresh: false,
+                    operation_id: Some("review-integration-graph".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            graph.edges.iter().any(|edge| edge.kind == "branch")
+                && graph.edges.iter().any(|edge| edge.kind == "merge")
+                && graph.edges.iter().any(|edge| edge.kind == "copy")
+                && graph.edges.iter().any(|edge| edge.kind == "move")
+                && graph.nodes.iter().any(|node| node.depot_path == moved_path)
+                && graph
+                    .nodes
+                    .iter()
+                    .any(|node| node.depot_path == "//depot/p4deck-submit-e2e/success.txt"),
+            format!("revision graph omitted the real branch edge: {graph:?}"),
+        )?;
 
         let mut second_page_query = first_page_query.clone();
         second_page_query.operation_id = "be009-page-2".into();
@@ -2598,6 +3070,22 @@ mod tests {
                 .await
                 .is_err(),
             "a submitted cursor survived a connection generation change",
+        )?;
+        ensure(
+            files
+                .history(
+                    crate::domain::FileHistoryRequest {
+                        scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
+                        page_size: 10,
+                        cursor: None,
+                        refresh: true,
+                        operation_id: Some("review-generation-drift".into()),
+                    },
+                    None,
+                )
+                .await
+                .is_err(),
+            "file review accepted a stale context generation",
         )
     }
 

@@ -41,6 +41,14 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 ## 验收记录
 
+### 第十七批：Diff / History / Revision Graph 生产接线
+
+- Diff 页改为同一文件的强类型双侧 selector：Workspace、Have、Head、指定 revision；请求携带活动 profile、Server/User/Client/Workspace、Context generation 与 file identity。目标、selector 或上下文变化会取消旧 operation，React Query key 同步隔离旧结果。
+- Diff 工具栏显示解析后的两侧标签及 additions/deletions/hunks；相同、空文件、binary、symlink、超限、partial/truncated 分开呈现。binary/unsupported 只展示 type/size/digest/existence 和后端原因，不再把内容当文本。
+- History 保持虚拟列表，改用 100 条稳定 cursor 继续加载、跨页 depotPath+revision 去重、失败保留已加载行；详情含 filetype/digest/fileSize/integrations，支持多选两个同文件版本后直接比较，并可取消进行中的比较；右键继续复制 depot spec 和精确 revision。
+- Revision Graph 消费真实 nodes/edges；edge tooltip 显示 relationship，缺失引用节点与 partial/truncated 显式提示，支持 100 revision 一批展开。选中非占位且 revision>1 的节点可直接请求该版本与上一版 Diff，并显示真实 unified diff；不再把纯线性 revision 列表称为完整图。
+- `reviewModel.test.ts` 覆盖 scope 的 profile/generation/workspace/file 绑定、历史分页去重与节点→Diff reference；Browser Mock 明示模拟并实现同一强类型契约。Windows/macOS 原生缩放、键盘、焦点、读屏和大图性能仍未验收。
+
 - FE-19 / BE-005 Workspace 状态（2026-10-09）：Files 主列表与资源侧栏共享连接隔离 query，消费 `WorkspaceListing` 并显示 opened/move、modified/missing/untracked、out-of-date/not-synced、unresolved、ignored rule/source/line、symlink 与 partial/error/unknown。重复请求共享缓存；手动刷新显式失效后端目录缓存；取消使用 operation 前缀终止 `fstat/opened/resolve/reconcile/ignores` 子命令。前端 55 文件/327 项通过；Windows localhost 覆盖真实 clean、修改、缺失、Unicode/特殊字符、ignore provenance、cache hit/mutation invalidation、mapping 外 partial、move/delete/out-of-date/unresolved。Windows/macOS 原生点击、真实读屏及 macOS P4 未验。
 
 - FE-06 单文件 Rename/Move 生产闭环（2026-10-09）：`RenameDialog` 已改为 Preview → Review → Confirming → Result，工具栏和右键菜单共用 `useCommandDialogs` 单入口；展示 source/target depot+local mapping、opened action/CL、目标 CL/存在性、case-only 风险、blocker、operation/log 与刷新原因。目标路径或 CL 改动、连接 key 变化都会丢弃旧 preview/token；真实 move 执行阶段使用已知 operation ID 支持取消，成功、命令失败或 IPC 异常均按 refresh advice 刷新 Workspace/Pending。后端 BE-002R 仅允许单个当前 Workspace 本地受控且 opened 的文件，目标不得存在，Default/既有编号 CL 才有效；目录、Depot-only、跨 Workspace、覆盖、缺失父目录和 Windows 仅大小写 rename 明确阻止。全量 55 文件/325 项 Web 测试、95 项 Rust 单测、build/check、前后端性能、Clippy/Prettier/rustfmt/diff check 与 Windows localhost 默认双轮通过。未执行 Windows/macOS 原生 UI；本机无 Bash，未运行 bash fixture 语法检查；仓库无 `pnpm typecheck` 脚本，实际类型门禁为 `pnpm check:web` / `pnpm check`。

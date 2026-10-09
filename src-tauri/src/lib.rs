@@ -94,6 +94,7 @@ pub fn run() {
                 runner.clone(),
                 status_cache.clone(),
                 journal.clone(),
+                contexts.clone(),
             ));
             let rename = Arc::new(RenameService::new(
                 RenameRepository::new(runner.clone()),

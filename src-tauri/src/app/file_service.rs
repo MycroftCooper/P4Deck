@@ -4,26 +4,71 @@ use crate::{
         StatusCacheKey, StatusQueryKind, StatusSnapshot,
     },
     domain::*,
-    p4::{files::command::ActionPlan, runner::P4Runner},
+    p4::{context::ContextStore, files::command::ActionPlan, runner::P4Runner},
     persistence::operation_journal::{
         connection_id, JournalState, OperationCategory, OperationFailureKind, OperationJournal,
     },
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use similar::{ChangeTag, TextDiff};
 use std::{
-    collections::{HashMap, HashSet},
-    fs,
+    collections::{BTreeMap, HashMap, HashSet},
+    fs::{self, File},
+    io::Read,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+#[derive(Default)]
+struct ReviewCache {
+    entries: HashMap<String, (u64, Value)>,
+}
+
+impl ReviewCache {
+    const TTL_MS: u64 = 30_000;
+    const CAPACITY: usize = 128;
+
+    fn get(&mut self, key: &str) -> Option<Value> {
+        let now = now_ms();
+        self.entries
+            .retain(|_, (stored_at, _)| now.saturating_sub(*stored_at) <= Self::TTL_MS);
+        self.entries.get(key).map(|(_, value)| value.clone())
+    }
+
+    fn put<T: serde::Serialize>(&mut self, key: String, value: &T) -> Result<(), String> {
+        if self.entries.len() >= Self::CAPACITY && !self.entries.contains_key(&key) {
+            if let Some(oldest) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, (stored_at, _))| *stored_at)
+                .map(|(key, _)| key.clone())
+            {
+                self.entries.remove(&oldest);
+            }
+        }
+        self.entries.insert(
+            key,
+            (
+                now_ms(),
+                serde_json::to_value(value).map_err(|error| error.to_string())?,
+            ),
+        );
+        Ok(())
+    }
+}
+
 pub struct FileService {
     runner: Arc<P4Runner>,
     status_cache: Arc<StatusCache>,
     journal: Arc<OperationJournal>,
+    contexts: Arc<ContextStore>,
+    review_cache: Mutex<ReviewCache>,
 }
 
 struct RunOptions {
@@ -51,11 +96,14 @@ impl FileService {
         runner: Arc<P4Runner>,
         status_cache: Arc<StatusCache>,
         journal: Arc<OperationJournal>,
+        contexts: Arc<ContextStore>,
     ) -> Self {
         Self {
             runner,
             status_cache,
             journal,
+            contexts,
+            review_cache: Mutex::new(ReviewCache::default()),
         }
     }
 
@@ -597,6 +645,7 @@ impl FileService {
     }
 
     fn invalidate_status(&self, context: &P4Context, paths: &[String], reason: InvalidationReason) {
+        self.review_cache.lock().entries.clear();
         let local_paths = if paths.iter().any(|path| path.starts_with("//")) {
             Vec::new()
         } else {
@@ -618,110 +667,483 @@ impl FileService {
 
     pub async fn diff(
         &self,
-        context: P4Context,
-        path: String,
+        request: DiffRequest,
         app: Option<&AppHandle>,
     ) -> Result<DiffResult, String> {
-        let operation = self
-            .run(
+        const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
+        const MAX_TEXT_LINES: usize = 100_000;
+        const MAX_DIFF_BYTES: usize = 8 * 1024 * 1024;
+        let context = self.validate_review_scope(&request.scope)?;
+        let cache_key = format!(
+            "diff:{}:{}",
+            review_fingerprint(&request.scope),
+            serde_json::to_string(&(&request.left, &request.right)).map_err(|e| e.to_string())?
+        );
+        if !request.refresh {
+            if let Some(cached) = self.review_cache.lock().get(&cache_key) {
+                return serde_json::from_value(cached).map_err(|error| error.to_string());
+            }
+        }
+        let root_id = request
+            .operation_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let inspection = self
+            .inspect_review_file(&context, &request.scope.file_identity, &root_id, app)
+            .await?;
+        let mut operation_ids = inspection.operation_ids.clone();
+        let left = self
+            .load_diff_side(
                 &context,
-                "diff",
-                vec!["-du".into(), path.clone()],
-                false,
+                &inspection,
+                request.left,
+                MAX_TEXT_BYTES,
+                format!("{root_id}:left"),
                 app,
             )
             .await?;
-        Ok(DiffResult {
-            path,
-            left_label: "Have".into(),
-            right_label: "Workspace".into(),
-            unified: event_text(&operation),
+        operation_ids.extend(left.operation_ids.iter().cloned());
+        let right = self
+            .load_diff_side(
+                &context,
+                &inspection,
+                request.right,
+                MAX_TEXT_BYTES,
+                format!("{root_id}:right"),
+                app,
+            )
+            .await?;
+        operation_ids.extend(right.operation_ids.iter().cloned());
+        self.ensure_review_scope_current(&request.scope)?;
+
+        let binary = left.metadata.binary || right.metadata.binary;
+        let unsupported = left.unsupported || right.unsupported;
+        let reason = left.reason.clone().or(right.reason.clone());
+        if binary || unsupported {
+            let truncated = left.truncated || right.truncated;
+            let result = DiffResult {
+                path: inspection.depot_path,
+                left: left.metadata,
+                right: right.metadata,
+                unified: String::new(),
+                stats: DiffStats::default(),
+                binary,
+                unsupported,
+                reason,
+                identical: left.digest == right.digest && left.exists == right.exists,
+                truncated,
+                partial: truncated,
+                operation_ids,
+            };
+            self.review_cache.lock().put(cache_key, &result)?;
+            return Ok(result);
+        }
+        let left_text = left.text.unwrap_or_default();
+        let right_text = right.text.unwrap_or_default();
+        let left_lines = left_text.lines().count();
+        let right_lines = right_text.lines().count();
+        if left_lines > MAX_TEXT_LINES || right_lines > MAX_TEXT_LINES {
+            let result = DiffResult {
+                path: inspection.depot_path,
+                left: left.metadata,
+                right: right.metadata,
+                unified: String::new(),
+                stats: DiffStats::default(),
+                binary: false,
+                unsupported: true,
+                reason: Some(format!(
+                    "Text diff exceeds the {MAX_TEXT_LINES} line safety limit"
+                )),
+                identical: left_text == right_text,
+                truncated: true,
+                partial: true,
+                operation_ids,
+            };
+            self.review_cache.lock().put(cache_key, &result)?;
+            return Ok(result);
+        }
+        let (mut unified, stats) = build_unified_diff(
+            &left_text,
+            &right_text,
+            &left.metadata.label,
+            &right.metadata.label,
+        );
+        let truncated = truncate_utf8(&mut unified, MAX_DIFF_BYTES);
+        let result = DiffResult {
+            path: inspection.depot_path,
+            left: left.metadata,
+            right: right.metadata,
+            unified,
+            stats,
             binary: false,
-        })
+            unsupported: false,
+            reason: truncated.then(|| "Diff output reached the 8 MiB safety limit".into()),
+            identical: left_text == right_text,
+            truncated,
+            partial: truncated,
+            operation_ids,
+        };
+        self.review_cache.lock().put(cache_key, &result)?;
+        Ok(result)
     }
+
     pub async fn history(
         &self,
-        context: P4Context,
-        path: String,
+        request: FileHistoryRequest,
         app: Option<&AppHandle>,
-    ) -> Result<Vec<FileRevision>, String> {
+    ) -> Result<FileHistoryPage, String> {
+        if !(1..=500).contains(&request.page_size) {
+            return Err("History pageSize must be between 1 and 500".into());
+        }
+        let context = self.validate_review_scope(&request.scope)?;
+        let fingerprint = review_fingerprint(&request.scope);
+        let cache_key = format!(
+            "history:{fingerprint}:{}:{}",
+            request.page_size,
+            request.cursor.as_deref().unwrap_or_default()
+        );
+        if !request.refresh {
+            if let Some(cached) = self.review_cache.lock().get(&cache_key) {
+                return serde_json::from_value(cached).map_err(|error| error.to_string());
+            }
+        }
+        let upper_revision = request
+            .cursor
+            .as_deref()
+            .map(|cursor| decode_review_cursor(cursor, &fingerprint, "history"))
+            .transpose()?;
+        let path = escape_review_filespec(&request.scope.file_identity);
+        let spec = upper_revision
+            .map(|revision| format!("{path}#1,#{revision}"))
+            .unwrap_or(path);
+        let operation_id = request
+            .operation_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let result = self
-            .run(
+            .run_status(
                 &context,
                 "filelog",
-                vec!["-l".into(), "-t".into(), path],
+                vec![
+                    "-m".into(),
+                    (request.page_size + 1).to_string(),
+                    "-l".into(),
+                    "-t".into(),
+                    spec,
+                ],
+                Some(operation_id),
                 true,
                 app,
             )
             .await?;
-        Ok(json_values(&result)
-            .into_iter()
-            .flat_map(crate::p4::history::parse)
-            .collect())
+        ensure_success(&result, "filelog")?;
+        let mut items = parse_filelog_result(&result);
+        if items.is_empty() {
+            return Err("File has no visible revision history or is not mapped/accessible".into());
+        }
+        items.sort_by_key(|revision| std::cmp::Reverse(revision.revision));
+        items.dedup_by(|a, b| a.depot_path == b.depot_path && a.revision == b.revision);
+        let has_more = items.len() > request.page_size;
+        items.truncate(request.page_size);
+        let next_cursor = has_more
+            .then(|| items.last().map(|item| item.revision - 1))
+            .flatten()
+            .filter(|revision| *revision > 0)
+            .map(|revision| encode_review_cursor(&fingerprint, "history", revision));
+        self.ensure_review_scope_current(&request.scope)?;
+        let has_more = has_more && next_cursor.is_some();
+        let page = FileHistoryPage {
+            items,
+            next_cursor,
+            has_more,
+            partial: false,
+            truncated: false,
+            operation_ids: vec![result.operation_id],
+        };
+        self.review_cache.lock().put(cache_key, &page)?;
+        Ok(page)
     }
 
     pub async fn graph(
         &self,
-        context: P4Context,
-        path: String,
+        request: RevisionGraphRequest,
         app: Option<&AppHandle>,
     ) -> Result<RevisionGraph, String> {
-        let revisions = self
-            .history_with_integrations(context, path.clone(), app)
-            .await?;
-        let nodes = revisions
-            .iter()
-            .enumerate()
-            .map(|(index, revision)| RevisionGraphNode {
-                id: format!("r{}", revision.revision),
-                depot_path: path.clone(),
-                revision: revision.revision,
-                changelist_id: revision.changelist_id,
-                label: format!("#{}", revision.revision),
-                x: 70 + index as i64 * 105,
-                y: 75,
-            })
-            .collect::<Vec<_>>();
-        let edges = nodes
-            .windows(2)
-            .enumerate()
-            .map(|(index, pair)| RevisionGraphEdge {
-                id: format!("e{index}"),
-                source: pair[0].id.clone(),
-                target: pair[1].id.clone(),
-                kind: "revision".into(),
-            })
-            .collect();
-        Ok(RevisionGraph { nodes, edges })
-    }
-    async fn history_with_integrations(
-        &self,
-        context: P4Context,
-        path: String,
-        app: Option<&AppHandle>,
-    ) -> Result<Vec<FileRevision>, String> {
+        if !(10..=2_000).contains(&request.revision_limit) {
+            return Err("Revision graph revisionLimit must be between 10 and 2000".into());
+        }
+        let context = self.validate_review_scope(&request.scope)?;
+        let fingerprint = review_fingerprint(&request.scope);
+        let cache_key = format!(
+            "graph:{fingerprint}:{}:{}",
+            request.revision_limit,
+            request.cursor.as_deref().unwrap_or_default()
+        );
+        if !request.refresh {
+            if let Some(cached) = self.review_cache.lock().get(&cache_key) {
+                return serde_json::from_value(cached).map_err(|error| error.to_string());
+            }
+        }
+        let limit = request
+            .cursor
+            .as_deref()
+            .map(|cursor| decode_review_cursor(cursor, &fingerprint, "graph"))
+            .transpose()?
+            .map(|value| value as usize)
+            .unwrap_or(request.revision_limit)
+            .clamp(10, 2_000);
+        let operation_id = request
+            .operation_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let result = self
-            .run(
+            .run_status(
                 &context,
                 "filelog",
-                vec!["-i".into(), "-l".into(), "-t".into(), path],
+                vec![
+                    "-m".into(),
+                    (limit + 1).to_string(),
+                    "-i".into(),
+                    "-l".into(),
+                    "-t".into(),
+                    escape_review_filespec(&request.scope.file_identity),
+                ],
+                Some(operation_id),
                 true,
                 app,
             )
             .await?;
-        Ok(json_values(&result)
+        ensure_success(&result, "filelog")?;
+        let mut revisions = parse_filelog_result(&result);
+        if revisions.is_empty() {
+            return Err("File has no visible revision graph or is not accessible".into());
+        }
+        let has_more = revisions.len() > limit;
+        revisions.truncate(limit);
+        let (nodes, edges, partial) = build_revision_graph(revisions);
+        let next_limit = (limit + request.revision_limit).min(2_000);
+        let next_cursor = (has_more && next_limit > limit)
+            .then(|| encode_review_cursor(&fingerprint, "graph", next_limit as i64));
+        self.ensure_review_scope_current(&request.scope)?;
+        let graph = RevisionGraph {
+            nodes,
+            edges,
+            next_cursor,
+            has_more: has_more && next_limit > limit,
+            partial,
+            truncated: has_more && next_limit == 2_000,
+            operation_ids: vec![result.operation_id],
+        };
+        self.review_cache.lock().put(cache_key, &graph)?;
+        Ok(graph)
+    }
+
+    fn validate_review_scope(&self, scope: &FileReviewScope) -> Result<P4Context, String> {
+        self.ensure_review_scope_current(scope)?;
+        if scope.file_identity.trim().is_empty() || scope.file_identity.contains(['\r', '\n', '\0'])
+        {
+            return Err("File identity is empty or contains control characters".into());
+        }
+        Ok(self.contexts.current())
+    }
+
+    fn ensure_review_scope_current(&self, scope: &FileReviewScope) -> Result<(), String> {
+        let (context, generation) = self.contexts.snapshot();
+        if context.server != scope.server
+            || context.user != scope.user
+            || context.client != scope.client
+            || context.cwd.as_deref().unwrap_or_default() != scope.workspace
+            || generation != scope.context_generation
+            || self.contexts.active_profile_id() != scope.active_profile_id
+        {
+            return Err("File review context changed; discard this stale result and retry".into());
+        }
+        Ok(())
+    }
+
+    async fn inspect_review_file(
+        &self,
+        context: &P4Context,
+        identity: &str,
+        operation_root: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<ReviewInspection, String> {
+        let result = self
+            .run_status(
+                context,
+                "fstat",
+                vec![
+                    "-Ol".into(),
+                    "-Op".into(),
+                    "-Os".into(),
+                    escape_review_filespec(identity),
+                ],
+                Some(format!("{operation_root}:fstat")),
+                true,
+                app,
+            )
+            .await?;
+        ensure_success(&result, "fstat")?;
+        let value = json_values(&result)
             .into_iter()
-            .filter_map(|v| {
-                Some(FileRevision {
-                    revision: number(&v, "rev")?,
-                    changelist_id: number(&v, "change").unwrap_or(0),
-                    user: text(&v, "user"),
-                    action: text(&v, "action"),
-                    time: text(&v, "time"),
-                    description: text(&v, "desc"),
+            .find(|value| value.get("depotFile").is_some())
+            .ok_or("File is missing, unmapped, or not visible to this client")?;
+        let depot_path = crate::p4::history::decode_filespec(&text(&value, "depotFile"));
+        let where_result = self
+            .run_status(
+                context,
+                "where",
+                vec![escape_filespec_literal(&depot_path)],
+                Some(format!("{operation_root}:where")),
+                true,
+                app,
+            )
+            .await?;
+        let local_path = (where_result.exit_code == 0)
+            .then(|| {
+                json_values(&where_result).into_iter().find_map(|value| {
+                    value
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .map(crate::p4::history::decode_filespec)
                 })
             })
-            .collect())
+            .flatten();
+        Ok(ReviewInspection {
+            operation_ids: vec![result.operation_id, where_result.operation_id],
+            depot_path,
+            local_path,
+            head_type: value
+                .get("headType")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            have_revision: number(&value, "haveRev"),
+            head_revision: number(&value, "headRev"),
+            head_size: value.get("fileSize").and_then(value_u64),
+            head_digest: value
+                .get("digest")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        })
+    }
+
+    async fn load_diff_side(
+        &self,
+        context: &P4Context,
+        inspection: &ReviewInspection,
+        reference: RevisionReference,
+        max_text_bytes: u64,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<LoadedDiffSide, String> {
+        if reference == RevisionReference::Workspace {
+            return load_workspace_side(inspection, max_text_bytes, reference);
+        }
+        let revision = match reference {
+            RevisionReference::Have => inspection.have_revision,
+            RevisionReference::Head => inspection.head_revision,
+            RevisionReference::Revision { revision } if revision > 0 => Some(revision),
+            RevisionReference::Revision { .. } => return Err("Revision must be positive".into()),
+            RevisionReference::Workspace => unreachable!(),
+        };
+        let Some(revision) = revision else {
+            return Ok(missing_diff_side(reference, &inspection.depot_path));
+        };
+        let spec = format!(
+            "{}#{revision}",
+            escape_filespec_literal(&inspection.depot_path)
+        );
+        let history = self
+            .run_status(
+                context,
+                "filelog",
+                vec![
+                    "-m".into(),
+                    "1".into(),
+                    "-l".into(),
+                    "-t".into(),
+                    spec.clone(),
+                ],
+                Some(format!("{operation_id}:meta")),
+                true,
+                app,
+            )
+            .await?;
+        ensure_success(&history, "filelog")?;
+        let revision_info = parse_filelog_result(&history).into_iter().next();
+        let file_type = revision_info
+            .as_ref()
+            .map(|item| item.file_type.clone())
+            .filter(|value| !value.is_empty())
+            .or_else(|| inspection.head_type.clone());
+        let size = revision_info
+            .as_ref()
+            .and_then(|item| item.file_size)
+            .or_else(|| {
+                (reference == RevisionReference::Head)
+                    .then_some(inspection.head_size)
+                    .flatten()
+            });
+        let digest = revision_info
+            .as_ref()
+            .and_then(|item| item.digest.clone())
+            .or_else(|| {
+                (reference == RevisionReference::Head)
+                    .then(|| inspection.head_digest.clone())
+                    .flatten()
+            });
+        let binary = file_type.as_deref().is_some_and(is_binary_file_type);
+        let unsupported = file_type.as_deref().is_some_and(is_symlink_file_type);
+        let metadata = DiffSide {
+            reference: reference.clone(),
+            label: reference_label(&reference, Some(revision)),
+            depot_path: inspection.depot_path.clone(),
+            revision: Some(revision),
+            file_type,
+            size,
+            digest: digest.clone(),
+            exists: true,
+            binary,
+        };
+        if binary || unsupported || size.is_some_and(|value| value > max_text_bytes) {
+            return Ok(LoadedDiffSide {
+                metadata,
+                text: None,
+                digest,
+                exists: true,
+                unsupported: unsupported || size.is_some_and(|value| value > max_text_bytes),
+                truncated: size.is_some_and(|value| value > max_text_bytes),
+                reason: if unsupported {
+                    Some("Symlink revisions are not rendered as text".into())
+                } else if size.is_some_and(|value| value > max_text_bytes) {
+                    Some("File exceeds the 4 MiB text diff safety limit".into())
+                } else {
+                    Some("Binary file revisions are shown as metadata only".into())
+                },
+                operation_ids: vec![history.operation_id],
+            });
+        }
+        let printed = self
+            .run_status(
+                context,
+                "print",
+                vec!["-q".into(), spec],
+                Some(format!("{operation_id}:print")),
+                false,
+                app,
+            )
+            .await?;
+        ensure_success(&printed, "print")?;
+        let text = event_text(&printed);
+        let digest = digest.or_else(|| Some(sha256_hex(text.as_bytes())));
+        Ok(LoadedDiffSide {
+            metadata,
+            text: Some(text),
+            digest,
+            exists: true,
+            unsupported: false,
+            truncated: false,
+            reason: None,
+            operation_ids: vec![history.operation_id, printed.operation_id],
+        })
     }
     async fn run(
         &self,
@@ -805,6 +1227,472 @@ impl FileService {
             .await
             .map_err(|error| error.to_string())
     }
+}
+
+struct ReviewInspection {
+    operation_ids: Vec<String>,
+    depot_path: String,
+    local_path: Option<String>,
+    head_type: Option<String>,
+    have_revision: Option<i64>,
+    head_revision: Option<i64>,
+    head_size: Option<u64>,
+    head_digest: Option<String>,
+}
+
+struct LoadedDiffSide {
+    metadata: DiffSide,
+    text: Option<String>,
+    digest: Option<String>,
+    exists: bool,
+    unsupported: bool,
+    truncated: bool,
+    reason: Option<String>,
+    operation_ids: Vec<String>,
+}
+
+fn load_workspace_side(
+    inspection: &ReviewInspection,
+    max_text_bytes: u64,
+    reference: RevisionReference,
+) -> Result<LoadedDiffSide, String> {
+    let Some(local_path) = inspection.local_path.as_deref() else {
+        return Ok(missing_diff_side(reference, &inspection.depot_path));
+    };
+    let path = Path::new(local_path);
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(missing_diff_side(reference, &inspection.depot_path));
+        }
+        Err(error) => return Err(format!("Cannot inspect workspace file: {error}")),
+    };
+    let file_type = inspection.head_type.clone();
+    let symlink =
+        metadata.file_type().is_symlink() || file_type.as_deref().is_some_and(is_symlink_file_type);
+    let binary_type = file_type.as_deref().is_some_and(is_binary_file_type);
+    let size = metadata.len();
+    let digest = hash_file(path)?;
+    let mut side = DiffSide {
+        reference,
+        label: "Workspace".into(),
+        depot_path: inspection.depot_path.clone(),
+        revision: None,
+        file_type,
+        size: Some(size),
+        digest: Some(digest.clone()),
+        exists: true,
+        binary: binary_type,
+    };
+    if symlink || binary_type || size > max_text_bytes {
+        return Ok(LoadedDiffSide {
+            metadata: side,
+            text: None,
+            digest: Some(digest),
+            exists: true,
+            unsupported: symlink || size > max_text_bytes,
+            truncated: size > max_text_bytes,
+            reason: if symlink {
+                Some("Workspace symlinks are not followed or rendered as text".into())
+            } else if size > max_text_bytes {
+                Some("File exceeds the 4 MiB text diff safety limit".into())
+            } else {
+                Some("Binary workspace files are shown as metadata only".into())
+            },
+            operation_ids: Vec::new(),
+        });
+    }
+    let bytes = fs::read(path).map_err(|error| format!("Cannot read workspace file: {error}"))?;
+    if bytes.iter().take(8_192).any(|byte| *byte == 0) && !looks_like_utf16(&bytes) {
+        side.binary = true;
+        return Ok(LoadedDiffSide {
+            metadata: side,
+            text: None,
+            digest: Some(digest),
+            exists: true,
+            unsupported: false,
+            truncated: false,
+            reason: Some("Workspace content contains binary NUL bytes".into()),
+            operation_ids: Vec::new(),
+        });
+    }
+    let text = decode_text(&bytes)?;
+    Ok(LoadedDiffSide {
+        metadata: side,
+        text: Some(text),
+        digest: Some(digest),
+        exists: true,
+        unsupported: false,
+        truncated: false,
+        reason: None,
+        operation_ids: Vec::new(),
+    })
+}
+
+fn missing_diff_side(reference: RevisionReference, depot_path: &str) -> LoadedDiffSide {
+    LoadedDiffSide {
+        metadata: DiffSide {
+            label: reference_label(&reference, None),
+            reference,
+            depot_path: depot_path.into(),
+            revision: None,
+            file_type: None,
+            size: Some(0),
+            digest: None,
+            exists: false,
+            binary: false,
+        },
+        text: Some(String::new()),
+        digest: None,
+        exists: false,
+        unsupported: false,
+        truncated: false,
+        reason: None,
+        operation_ids: Vec::new(),
+    }
+}
+
+fn reference_label(reference: &RevisionReference, resolved_revision: Option<i64>) -> String {
+    match reference {
+        RevisionReference::Workspace => "Workspace".into(),
+        RevisionReference::Have => resolved_revision
+            .map(|revision| format!("Have #{revision}"))
+            .unwrap_or_else(|| "Have (missing)".into()),
+        RevisionReference::Head => resolved_revision
+            .map(|revision| format!("Head #{revision}"))
+            .unwrap_or_else(|| "Head (missing)".into()),
+        RevisionReference::Revision { revision } => format!("Revision #{revision}"),
+    }
+}
+
+fn is_binary_file_type(file_type: &str) -> bool {
+    let base = file_type
+        .split('+')
+        .next()
+        .unwrap_or(file_type)
+        .to_ascii_lowercase();
+    !matches!(
+        base.as_str(),
+        "text" | "unicode" | "utf8" | "utf16" | "utf16le" | "utf16be"
+    ) && !is_symlink_file_type(file_type)
+}
+
+fn is_symlink_file_type(file_type: &str) -> bool {
+    file_type
+        .split('+')
+        .next()
+        .is_some_and(|base| base.eq_ignore_ascii_case("symlink"))
+}
+
+fn looks_like_utf16(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff])
+}
+
+fn decode_text(bytes: &[u8]) -> Result<String, String> {
+    if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
+        let little_endian = bytes.starts_with(&[0xff, 0xfe]);
+        let mut units = Vec::with_capacity(bytes.len().saturating_sub(2) / 2);
+        for pair in bytes[2..].chunks_exact(2) {
+            units.push(if little_endian {
+                u16::from_le_bytes([pair[0], pair[1]])
+            } else {
+                u16::from_be_bytes([pair[0], pair[1]])
+            });
+        }
+        String::from_utf16(&units).map_err(|_| "Workspace UTF-16 content is invalid".into())
+    } else {
+        let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
+        String::from_utf8(bytes.to_vec())
+            .map_err(|_| "Workspace text is not valid UTF-8 or BOM-marked UTF-16".into())
+    }
+}
+
+fn hash_file(path: &Path) -> Result<String, String> {
+    let mut file =
+        File::open(path).map_err(|error| format!("Cannot hash workspace file: {error}"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|error| format!("Cannot hash workspace file: {error}"))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("sha256:{:x}", hasher.finalize()))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
+}
+
+fn build_unified_diff(
+    left: &str,
+    right: &str,
+    left_label: &str,
+    right_label: &str,
+) -> (String, DiffStats) {
+    if left == right {
+        return (String::new(), DiffStats::default());
+    }
+    let diff = TextDiff::from_lines(left, right);
+    let mut stats = DiffStats::default();
+    for change in diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Delete => stats.deletions += 1,
+            ChangeTag::Insert => stats.additions += 1,
+            ChangeTag::Equal => {}
+        }
+    }
+    let unified = diff
+        .unified_diff()
+        .context_radius(3)
+        .header(left_label, right_label)
+        .to_string();
+    stats.hunks = unified
+        .lines()
+        .filter(|line| line.starts_with("@@ "))
+        .count();
+    (unified, stats)
+}
+
+fn truncate_utf8(value: &mut String, max_bytes: usize) -> bool {
+    if value.len() <= max_bytes {
+        return false;
+    }
+    let mut boundary = max_bytes;
+    while !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    value.truncate(boundary);
+    true
+}
+
+fn parse_filelog_result(result: &OperationResult) -> Vec<FileRevision> {
+    json_values(result)
+        .into_iter()
+        .flat_map(crate::p4::history::parse)
+        .collect()
+}
+
+fn ensure_success(result: &OperationResult, command: &str) -> Result<(), String> {
+    if result.exit_code == 0 {
+        Ok(())
+    } else {
+        Err(format!("p4 {command} failed: {}", event_text(result)))
+    }
+}
+
+fn value_u64(value: &Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str()?.trim_start_matches('#').parse().ok())
+}
+
+fn review_fingerprint(scope: &FileReviewScope) -> String {
+    let mut hasher = Sha256::new();
+    for value in [
+        scope.server.as_str(),
+        scope.user.as_str(),
+        scope.client.as_str(),
+        scope.workspace.as_str(),
+        scope.active_profile_id.as_deref().unwrap_or_default(),
+        scope.file_identity.as_str(),
+    ] {
+        hasher.update(value.as_bytes());
+        hasher.update([0]);
+    }
+    hasher.update(scope.context_generation.to_le_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn encode_review_cursor(fingerprint: &str, kind: &str, value: i64) -> String {
+    URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&serde_json::json!({
+            "v": 1,
+            "fingerprint": fingerprint,
+            "kind": kind,
+            "value": value,
+        }))
+        .expect("review cursor JSON is serializable"),
+    )
+}
+
+fn decode_review_cursor(cursor: &str, fingerprint: &str, kind: &str) -> Result<i64, String> {
+    let decoded = URL_SAFE_NO_PAD
+        .decode(cursor)
+        .map_err(|_| "Invalid review cursor")?;
+    let value: Value = serde_json::from_slice(&decoded).map_err(|_| "Invalid review cursor")?;
+    if value.get("v").and_then(Value::as_i64) != Some(1)
+        || value.get("fingerprint").and_then(Value::as_str) != Some(fingerprint)
+        || value.get("kind").and_then(Value::as_str) != Some(kind)
+    {
+        return Err("Review cursor does not match this context and file".into());
+    }
+    value
+        .get("value")
+        .and_then(Value::as_i64)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| "Invalid review cursor value".into())
+}
+
+fn build_revision_graph(
+    revisions: Vec<FileRevision>,
+) -> (Vec<RevisionGraphNode>, Vec<RevisionGraphEdge>, bool) {
+    let mut lanes = BTreeMap::<String, usize>::new();
+    for revision in &revisions {
+        if !lanes.contains_key(&revision.depot_path) {
+            let next = lanes.len();
+            lanes.insert(revision.depot_path.clone(), next);
+        }
+        for integration in &revision.integrations {
+            if !lanes.contains_key(&integration.related_path) {
+                let next = lanes.len();
+                lanes.insert(integration.related_path.clone(), next);
+            }
+        }
+    }
+    let mut ordered = revisions.clone();
+    ordered.sort_by_key(|revision| (revision.changelist_id, revision.revision));
+    let layers = ordered
+        .iter()
+        .enumerate()
+        .map(|(index, revision)| (node_id(&revision.depot_path, revision.revision), index))
+        .collect::<HashMap<_, _>>();
+    let mut nodes = revisions
+        .iter()
+        .map(|revision| RevisionGraphNode {
+            id: node_id(&revision.depot_path, revision.revision),
+            depot_path: revision.depot_path.clone(),
+            revision: revision.revision,
+            changelist_id: revision.changelist_id,
+            action: revision.action.clone(),
+            file_type: revision.file_type.clone(),
+            label: format!("#{}", revision.revision),
+            x: 80
+                + layers
+                    .get(&node_id(&revision.depot_path, revision.revision))
+                    .copied()
+                    .unwrap_or_default() as i64
+                    * 120,
+            y: 70 + *lanes.get(&revision.depot_path).unwrap_or(&0) as i64 * 110,
+            missing: false,
+        })
+        .collect::<Vec<_>>();
+    let mut node_ids = nodes
+        .iter()
+        .map(|node| node.id.clone())
+        .collect::<HashSet<_>>();
+    let mut edges = Vec::new();
+    let mut edge_keys = HashSet::new();
+    let mut by_path = BTreeMap::<String, Vec<&FileRevision>>::new();
+    for revision in &revisions {
+        by_path
+            .entry(revision.depot_path.clone())
+            .or_default()
+            .push(revision);
+    }
+    for path_revisions in by_path.values_mut() {
+        path_revisions.sort_by_key(|revision| revision.revision);
+        for pair in path_revisions.windows(2) {
+            push_graph_edge(
+                &mut edges,
+                &mut edge_keys,
+                node_id(&pair[0].depot_path, pair[0].revision),
+                node_id(&pair[1].depot_path, pair[1].revision),
+                "revision".into(),
+                "revision".into(),
+                None,
+                None,
+            );
+        }
+    }
+    let mut partial = false;
+    for revision in &revisions {
+        let current = node_id(&revision.depot_path, revision.revision);
+        for integration in &revision.integrations {
+            let related_revision = integration
+                .end_revision
+                .or(integration.start_revision)
+                .unwrap_or(0);
+            let related = node_id(&integration.related_path, related_revision);
+            if node_ids.insert(related.clone()) {
+                partial = true;
+                let lane = *lanes.get(&integration.related_path).unwrap_or(&0) as i64;
+                nodes.push(RevisionGraphNode {
+                    id: related.clone(),
+                    depot_path: integration.related_path.clone(),
+                    revision: related_revision,
+                    changelist_id: 0,
+                    action: "referenced".into(),
+                    file_type: String::new(),
+                    label: if related_revision > 0 {
+                        format!("#{}", related_revision)
+                    } else {
+                        "?".into()
+                    },
+                    x: 20,
+                    y: 70 + lane * 110,
+                    missing: true,
+                });
+            }
+            let (source, target) = if integration.direction == "from" {
+                (related, current.clone())
+            } else {
+                (current.clone(), related)
+            };
+            push_graph_edge(
+                &mut edges,
+                &mut edge_keys,
+                source,
+                target,
+                normalize_edge_kind(&integration.kind),
+                integration.relationship.clone(),
+                integration.start_revision,
+                integration.end_revision,
+            );
+        }
+    }
+    nodes.sort_by_key(|node| (node.x, node.y, node.id.clone()));
+    (nodes, edges, partial)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_graph_edge(
+    edges: &mut Vec<RevisionGraphEdge>,
+    keys: &mut HashSet<String>,
+    source: String,
+    target: String,
+    kind: String,
+    relationship: String,
+    start_revision: Option<i64>,
+    end_revision: Option<i64>,
+) {
+    let key = format!("{source}\0{target}\0{kind}\0{start_revision:?}\0{end_revision:?}");
+    if keys.insert(key) {
+        edges.push(RevisionGraphEdge {
+            id: format!("e{}", edges.len()),
+            source,
+            target,
+            kind,
+            relationship,
+            start_revision,
+            end_revision,
+        });
+    }
+}
+
+fn normalize_edge_kind(kind: &str) -> String {
+    match kind {
+        "branch" | "copy" | "merge" | "move" | "add" | "delete" | "edit" => kind.into(),
+        _ => "integration".into(),
+    }
+}
+
+fn node_id(path: &str, revision: i64) -> String {
+    format!("{}#{revision}", sha256_hex(path.as_bytes()))
 }
 
 fn emit_progress(app: Option<&AppHandle>, operation_id: &str, kind: EventKind, progress: f32) {
@@ -1760,6 +2648,10 @@ fn escape_filespec_literal(value: impl AsRef<str>) -> String {
         .replace('*', "%2A")
 }
 
+fn escape_review_filespec(value: &str) -> String {
+    escape_filespec_literal(crate::p4::history::decode_filespec(value))
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1837,6 +2729,12 @@ fn event_text(result: &OperationResult) -> String {
     result
         .events
         .iter()
+        .filter(|event| {
+            matches!(
+                event.kind,
+                EventKind::Stdout | EventKind::Stderr | EventKind::Error
+            )
+        })
         .filter_map(|event| event.message.as_deref())
         .collect::<Vec<_>>()
         .join("\n")
@@ -1944,6 +2842,122 @@ mod tests {
             client_child_filespec("client", Path::new("C:/ws"), Path::new("C:/ws/目录")).unwrap(),
             "//client/目录/*"
         );
+    }
+
+    #[test]
+    fn builds_bounded_text_diff_stats_for_empty_and_changed_files() {
+        let (same, stats) = build_unified_diff("", "", "Have", "Workspace");
+        assert!(same.is_empty());
+        assert_eq!(stats.additions, 0);
+        let (diff, stats) = build_unified_diff("one\ntwo\n", "one\nthree\n", "#1", "#2");
+        assert!(diff.contains("@@"));
+        assert!(diff.contains("-two"));
+        assert!(diff.contains("+three"));
+        assert_eq!((stats.additions, stats.deletions, stats.hunks), (1, 1, 1));
+        let (_, empty_stats) = build_unified_diff("", "first\n", "missing", "#1");
+        assert_eq!(empty_stats.additions, 1);
+    }
+
+    #[test]
+    fn classifies_binary_symlink_and_text_filetypes_without_extension_guessing() {
+        assert!(!is_binary_file_type("text+k"));
+        assert!(!is_binary_file_type("utf16"));
+        assert!(is_binary_file_type("binary+l"));
+        assert!(is_symlink_file_type("symlink"));
+        assert!(!is_binary_file_type("symlink"));
+    }
+
+    #[test]
+    fn decodes_utf8_and_utf16_workspace_text() {
+        assert_eq!(decode_text("世界\r\n".as_bytes()).unwrap(), "世界\r\n");
+        let utf16 = [0xff, 0xfe, b'A', 0, b'\n', 0];
+        assert_eq!(decode_text(&utf16).unwrap(), "A\n");
+        assert!(decode_text(&[0xff, 0xff]).is_err());
+    }
+
+    #[test]
+    fn review_cursor_is_bound_to_context_file_and_query_kind() {
+        let scope = FileReviewScope {
+            server: "localhost:1666".into(),
+            user: "alice".into(),
+            client: "ws".into(),
+            workspace: "C:/ws".into(),
+            active_profile_id: Some("profile-a".into()),
+            context_generation: 7,
+            file_identity: "//depot/世界 @#%.txt".into(),
+        };
+        let fingerprint = review_fingerprint(&scope);
+        let cursor = encode_review_cursor(&fingerprint, "history", 42);
+        assert_eq!(
+            decode_review_cursor(&cursor, &fingerprint, "history").unwrap(),
+            42
+        );
+        assert!(decode_review_cursor(&cursor, &fingerprint, "graph").is_err());
+        let mut changed = scope;
+        changed.context_generation += 1;
+        assert!(decode_review_cursor(&cursor, &review_fingerprint(&changed), "history").is_err());
+    }
+
+    #[test]
+    fn review_cache_is_ttl_bounded_and_serializes_typed_results() {
+        let mut cache = ReviewCache::default();
+        cache
+            .put("one".into(), &serde_json::json!({"value": 1}))
+            .unwrap();
+        assert_eq!(cache.get("one").unwrap()["value"], 1);
+        cache.entries.get_mut("one").unwrap().0 = now_ms() - ReviewCache::TTL_MS - 1;
+        assert!(cache.get("one").is_none());
+        for index in 0..ReviewCache::CAPACITY + 10 {
+            cache.put(format!("key-{index}"), &index).unwrap();
+        }
+        assert_eq!(cache.entries.len(), ReviewCache::CAPACITY);
+    }
+
+    #[test]
+    fn revision_graph_uses_real_integration_edges_and_deduplicates_them() {
+        let integration = FileIntegration {
+            relationship: "merge from".into(),
+            kind: "merge".into(),
+            direction: "from".into(),
+            related_path: "//depot/dev/a.txt".into(),
+            start_revision: Some(1),
+            end_revision: Some(3),
+        };
+        let revision = |path: &str, rev, change, integrations: Vec<FileIntegration>| FileRevision {
+            depot_path: path.into(),
+            revision: rev,
+            changelist_id: change,
+            user: "alice".into(),
+            action: if rev == 1 {
+                "add".into()
+            } else {
+                "edit".into()
+            },
+            file_type: "text".into(),
+            time: String::new(),
+            description: String::new(),
+            digest: None,
+            file_size: None,
+            integrations,
+        };
+        let (nodes, edges, partial) = build_revision_graph(vec![
+            revision("//depot/main/a.txt", 1, 10, vec![]),
+            revision(
+                "//depot/main/a.txt",
+                2,
+                20,
+                vec![integration.clone(), integration],
+            ),
+        ]);
+        assert!(partial);
+        assert_eq!(nodes.iter().filter(|node| node.missing).count(), 1);
+        assert_eq!(
+            edges.iter().filter(|edge| edge.kind == "revision").count(),
+            1
+        );
+        assert_eq!(edges.iter().filter(|edge| edge.kind == "merge").count(), 1);
+        let merge = edges.iter().find(|edge| edge.kind == "merge").unwrap();
+        assert!(merge.target.contains("#2"));
     }
 
     #[test]

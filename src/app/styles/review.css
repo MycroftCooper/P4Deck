@@ -144,3 +144,46 @@
 .review-surface > .workspace-empty {
   flex: 1;
 }
+.review-selectors {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  padding: 0 18px 12px;
+}
+
+.review-selectors label {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.review-selectors select,
+.review-selectors input {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.graph-actions {
+  position: sticky;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  width: max-content;
+}
+
+.graph-node-diff {
+  max-width: min(900px, calc(100vw - 80px));
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}

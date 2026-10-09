@@ -58,6 +58,16 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 
 ## P0：下一阶段必须完成
 
+### BE-005R — Diff / File History / Revision Graph 生产闭环（DONE：Windows localhost，原生 UI/macOS 待验）
+
+- 只读文件审查统一使用 `FileReviewScope`，绑定 Server/User/Client/Workspace、活动 Profile、Context generation 与文件 identity；Diff 使用 `Workspace / Have / Head / Revision` 强类型引用。当前产品入口仍是同一文件的两侧比较，不包含 Shelf/Changelist 内容或两条不同 depot path 的比较，未用字符串假装支持这些范围。
+- Diff 先以结构化 `fstat` / `filelog -t` 确认 depot/local 映射、修订、filetype、size 和 digest，再以参数数组 `p4 print -q <escaped filespec#rev>` 读取允许的 depot 文本；Workspace 只读取映射到当前 Client 的受控本地路径。P4 literal filespec 对 `%/@/#/*` 进行转义；不经过 Shell。
+- 文本 Diff 限制单侧 4 MiB、100,000 行、输出 8 MiB，返回稳定 unified hunk、增删/hunk 统计及 identical/truncated/partial；UTF-8/BOM 与 BOM UTF-16 有明确解码，保留换行差异。binary/symlink 不进入文本渲染，返回两侧 type/size/digest/existence 和原因。缺少 Have/Workspace 作为空侧参与 Diff；未映射或不可见文件返回结构化可解释错误。
+- File History 使用真实 `filelog -l -t`，返回 revision/change/action/type/time/user/description/digest/fileSize/integrations；1～500 页大小、opaque cursor 绑定完整 scope 和文件，游标错配、generation 漂移会拒绝。
+- Revision Graph 使用 `filelog -i -l -t` 的 `how/file/srev/erev` 建模真实 branch/copy/merge/move/add/delete/edit 边；同路径 revision edge 与 integration edge 分离，重复边去重，缺失引用以 `missing` 节点呈现。按 100 revision 增量展开，最多 2,000 revision；`partial/truncated` 不包装成完整图。
+- 三类结果使用 30 秒、128 项有界缓存；key 包含 profile/context generation/file identity/selectors/cursor，文件写操作清空，显式 Refresh 绕过。所有 P4 子命令复用 Runner 的 operation group、取消、超时、64 MiB 进程输出保护、Log 与 Operation Journal。
+- Rust 单测覆盖空/相同/增删文本、binary/symlink/filetype、UTF-8/UTF-16、special filespec、cursor scope/generation、缓存 TTL/容量、integration edge/重复边/缺失节点；Windows localhost 连续两轮覆盖 Have↔Workspace、Have↔Head、revision→revision、空文件、binary、missing、Unicode/空格/@#%、4 MiB 上限、稳定历史分页、generation drift，以及真实 branch/merge/copy/move integration graph。取消/partial failure 继续复用 Runner 与既有 localhost 故障矩阵；macOS 与原生窗口未验收。
+
 ### BE-001M — 多连接配置与活动 Workspace 切换（DONE：后端与 Windows localhost）
 
 - profile 只包装现有非敏感 `P4Context`，ID 使用 UUID v4；名称和完整 context 均禁止重复，空值、控制字符、过长字段、并发 revision 冲突和删除活动/最后一项返回结构化错误。

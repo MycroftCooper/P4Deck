@@ -5,6 +5,7 @@ import { RefreshCw, Minus, Plus } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
   DiffResult,
+  RevisionReference,
   RevisionGraph,
   RuntimeInfo,
 } from "../../shared/contracts/types";
@@ -13,6 +14,7 @@ import { useContextMenu } from "../../app/context-menu/ContextMenu";
 import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
 import { useFullTextSelection } from "../../app/context-menu/FullTextSelection";
+import { graphNodeDiffPair, makeReviewScope } from "./reviewModel";
 export type ReviewKind = "diff" | "revgraph";
 const cache = new QueryClient({
   defaultOptions: {
@@ -43,10 +45,28 @@ export function FileReviewPage({
   const [refresh, setRefresh] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [selectedNode, setSelectedNode] = useState("");
+  const [leftReference, setLeftReference] = useState<RevisionReference>({
+    kind: "have",
+  });
+  const [rightReference, setRightReference] = useState<RevisionReference>({
+    kind: "workspace",
+  });
+  const [graphCursor, setGraphCursor] = useState<string>();
+  const [nodeDiff, setNodeDiff] = useState<DiffResult>();
   const scroll = useRef<HTMLDivElement>(null);
   const key = useMemo(
-    () => ["file-review", kind, runtime.mode, runtime.context, queryPath],
-    [kind, runtime, queryPath],
+    () => [
+      "file-review",
+      kind,
+      runtime.mode,
+      runtime.activeProfileId,
+      runtime.contextGeneration,
+      runtime.context,
+      queryPath,
+      leftReference,
+      rightReference,
+    ],
+    [kind, runtime, queryPath, leftReference, rightReference],
   );
   useEffect(() => {
     setPath(target);
@@ -58,6 +78,7 @@ export function FileReviewPage({
       return;
     }
     let active = true;
+    const operationId = crypto.randomUUID();
     setLoading(true);
     setError("");
     setSelectedNode("");
@@ -67,11 +88,25 @@ export function FileReviewPage({
         queryKey: key,
         queryFn: () =>
           kind === "diff"
-            ? backend.getDiff(queryPath)
-            : backend.getRevisionGraph(queryPath),
+            ? backend.getDiff({
+                scope: makeReviewScope(runtime, queryPath),
+                left: leftReference,
+                right: rightReference,
+                refresh: refresh > 0,
+                operationId,
+              })
+            : backend.getRevisionGraph({
+                scope: makeReviewScope(runtime, queryPath),
+                revisionLimit: 100,
+                refresh: refresh > 0,
+                operationId,
+              }),
       })
       .then((result) => {
-        if (active) setData(result);
+        if (active) {
+          setData(result);
+          if ("nodes" in result) setGraphCursor(result.nextCursor);
+        }
       })
       .catch((cause) => {
         if (active) setError(String(cause));
@@ -81,8 +116,18 @@ export function FileReviewPage({
       });
     return () => {
       active = false;
+      void backend.cancelOperation(operationId);
     };
-  }, [key, kind, queryPath, runtime.p4Version, refresh]);
+  }, [
+    key,
+    kind,
+    queryPath,
+    runtime,
+    runtime.p4Version,
+    refresh,
+    leftReference,
+    rightReference,
+  ]);
   const diff = data && "unified" in data ? data : undefined;
   const graph = data && "nodes" in data ? data : undefined;
   const lines = useMemo(
@@ -176,6 +221,24 @@ export function FileReviewPage({
           {zh ? "查看" : "Load"}
         </button>
       </form>
+      {kind === "diff" && (
+        <div
+          className="review-selectors"
+          aria-label={zh ? "差异版本选择" : "Diff references"}
+        >
+          <ReferenceSelector
+            label={zh ? "左侧" : "Left"}
+            value={leftReference}
+            onChange={setLeftReference}
+          />
+          <span aria-hidden="true">↔</span>
+          <ReferenceSelector
+            label={zh ? "右侧" : "Right"}
+            value={rightReference}
+            onChange={setRightReference}
+          />
+        </div>
+      )}
       {error && (
         <div role="alert" className="workspace-load-error">
           {error}
@@ -194,11 +257,12 @@ export function FileReviewPage({
         <div className="review-toolbar">
           {kind === "diff" ? (
             <>
-              <span>{diff?.leftLabel ?? "—"}</span>
+              <span>{diff?.left.label ?? "—"}</span>
               <span>→</span>
-              <span>{diff?.rightLabel ?? "—"}</span>
+              <span>{diff?.right.label ?? "—"}</span>
               <span className="filter-count">
-                {lines.length} {zh ? "行" : "lines"}
+                +{diff?.stats.additions ?? 0} / -{diff?.stats.deletions ?? 0} ·{" "}
+                {diff?.stats.hunks ?? 0} {zh ? "个区块" : "hunks"}
               </span>
             </>
           ) : (
@@ -211,6 +275,17 @@ export function FileReviewPage({
                   ? "实线：版本 / 分支　虚线：合并 / 复制"
                   : "Solid: revision / branch · Dashed: merge / copy"}
               </span>
+              {(graph?.partial || graph?.truncated) && (
+                <span role="status" className="filter-count">
+                  {graph.truncated
+                    ? zh
+                      ? "已达到 2,000 节点安全上限"
+                      : "2,000-node safety limit reached"
+                    : zh
+                      ? "存在尚未展开的引用节点"
+                      : "Some referenced nodes are not expanded"}
+                </span>
+              )}
               <button
                 aria-label="缩小"
                 onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
@@ -240,11 +315,21 @@ export function FileReviewPage({
             {zh ? "正在加载…" : "Loading…"}
           </div>
         ) : kind === "diff" ? (
-          diff?.binary ? (
+          diff?.binary || diff?.unsupported ? (
             <div className="workspace-empty">
-              {zh
-                ? "二进制文件无法显示文本差异。"
-                : "Binary files do not support text diff."}
+              <strong>
+                {diff.reason ??
+                  (zh ? "无法显示文本差异" : "Text diff unavailable")}
+              </strong>
+              <div>
+                {diff.left.label}: {diff.left.fileType ?? "unknown"} ·{" "}
+                {diff.left.size ?? 0} bytes · {diff.left.digest ?? "no digest"}
+              </div>
+              <div>
+                {diff.right.label}: {diff.right.fileType ?? "unknown"} ·{" "}
+                {diff.right.size ?? 0} bytes ·{" "}
+                {diff.right.digest ?? "no digest"}
+              </div>
             </div>
           ) : !lines.length ? (
             <div className="workspace-empty">
@@ -253,8 +338,12 @@ export function FileReviewPage({
                   ? "加载失败，请重试。"
                   : "Loading failed. Retry."
                 : zh
-                  ? "没有文本差异"
-                  : "No text differences"}
+                  ? diff?.identical
+                    ? "两侧内容相同"
+                    : "没有文本差异"
+                  : diff?.identical
+                    ? "Both sides are identical"
+                    : "No text differences"}
             </div>
           ) : (
             <div
@@ -272,7 +361,7 @@ export function FileReviewPage({
                     label: zh ? "全选差异文本" : "Select all diff text",
                   },
                   "复制当前侧文件/修订标识": {
-                    ...copy(`${diff?.leftLabel} ↔ ${diff?.rightLabel}`),
+                    ...copy(`${diff?.left.label} ↔ ${diff?.right.label}`),
                     label: zh
                       ? "复制两侧文件/修订标识"
                       : "Copy both file/revision identifiers",
@@ -345,7 +434,7 @@ export function FileReviewPage({
                     y2={b.y}
                     className={edge.kind}
                   >
-                    <title>{edge.kind}</title>
+                    <title>{edge.relationship}</title>
                   </line>
                 ) : null;
               })}
@@ -403,6 +492,61 @@ export function FileReviewPage({
                 </g>
               ))}
             </svg>
+            <div className="graph-actions">
+              <button
+                disabled={!selected || selected.missing}
+                onClick={() => {
+                  if (!selected) return;
+                  const pair = graphNodeDiffPair(selected);
+                  if (!pair) return;
+                  const operationId = crypto.randomUUID();
+                  void backend
+                    .getDiff({
+                      scope: makeReviewScope(runtime, selected.depotPath),
+                      ...pair,
+                      operationId,
+                    })
+                    .then(setNodeDiff)
+                    .catch((cause) => setError(String(cause)));
+                }}
+              >
+                {zh ? "比较所选版本与上一版" : "Diff selected against previous"}
+              </button>
+              {graph.hasMore && graphCursor && (
+                <button
+                  disabled={loading}
+                  onClick={() => {
+                    const operationId = crypto.randomUUID();
+                    setLoading(true);
+                    void backend
+                      .getRevisionGraph({
+                        scope: makeReviewScope(runtime, queryPath),
+                        revisionLimit: 100,
+                        cursor: graphCursor,
+                        operationId,
+                      })
+                      .then((result) => {
+                        setData(result);
+                        setGraphCursor(result.nextCursor);
+                      })
+                      .catch((cause) => setError(String(cause)))
+                      .finally(() => setLoading(false));
+                  }}
+                >
+                  {zh ? "展开更多版本" : "Expand more revisions"}
+                </button>
+              )}
+            </div>
+            {nodeDiff && (
+              <pre
+                className="graph-node-diff"
+                aria-label={zh ? "节点差异" : "Node diff"}
+              >
+                {nodeDiff.unified ||
+                  nodeDiff.reason ||
+                  (zh ? "无差异" : "No differences")}
+              </pre>
+            )}
           </div>
         )}
         {textSelection.dialog}
@@ -413,5 +557,56 @@ export function FileReviewPage({
         </footer>
       </section>
     </main>
+  );
+}
+
+function ReferenceSelector({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: RevisionReference;
+  onChange(value: RevisionReference): void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select
+        aria-label={`${label} reference`}
+        value={value.kind}
+        onChange={(event) => {
+          const kind = event.target.value as RevisionReference["kind"];
+          onChange(
+            kind === "revision"
+              ? {
+                  kind,
+                  revision: value.kind === "revision" ? value.revision : 1,
+                }
+              : { kind },
+          );
+        }}
+      >
+        <option value="workspace">Workspace</option>
+        <option value="have">Have</option>
+        <option value="head">Head</option>
+        <option value="revision">Revision</option>
+      </select>
+      {value.kind === "revision" && (
+        <input
+          aria-label={`${label} revision number`}
+          type="number"
+          min={1}
+          step={1}
+          value={value.revision}
+          onChange={(event) =>
+            onChange({
+              kind: "revision",
+              revision: Math.max(1, Number(event.target.value) || 1),
+            })
+          }
+        />
+      )}
+    </label>
   );
 }

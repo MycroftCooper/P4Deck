@@ -4,6 +4,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
+  DiffResult,
+  FileHistoryPage,
   FileRevision,
   RuntimeInfo,
   StreamSummary,
@@ -13,6 +15,11 @@ import { useContextMenu } from "../../app/context-menu/ContextMenu";
 import { TableHeader } from "../../app/context-menu/TableHeader";
 import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
+import {
+  historyDiffPair,
+  makeReviewScope,
+  mergeHistoryRows,
+} from "./reviewModel";
 const cache = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
@@ -45,6 +52,15 @@ export function ReadOnlyPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [historyCursor, setHistoryCursor] = useState<string>();
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyNotice, setHistoryNotice] = useState("");
+  const [historyDiff, setHistoryDiff] = useState<DiffResult>();
+  const [historyDiffLoading, setHistoryDiffLoading] = useState(false);
+  const [historyDiffOperationId, setHistoryDiffOperationId] =
+    useState<string>();
+  const historyPageOperation = useRef<string | undefined>(undefined);
+  const historyDiffOperation = useRef<string | undefined>(undefined);
   const scroll = useRef<HTMLDivElement>(null);
   const key = useMemo(
     () => [kind, runtime.mode, runtime.context, queryPath],
@@ -54,24 +70,61 @@ export function ReadOnlyPage({
     if (runtime.p4Version === "loading" || (kind === "history" && !queryPath)) {
       setRows([]);
       setSelected(undefined);
+      setHistoryCursor(undefined);
+      setHistoryHasMore(false);
+      setHistoryNotice("");
+      setHistoryDiff(undefined);
+      setHistoryDiffLoading(false);
+      setHistoryDiffOperationId(undefined);
       setLoading(false);
       return;
     }
     let live = true;
+    const operationId = crypto.randomUUID();
     setLoading(true);
     setError("");
     setSelected(undefined);
-    setRows(cache.getQueryData<(FileRevision | StreamSummary)[]>(key) ?? []);
+    setHistoryDiff(undefined);
+    setHistoryDiffLoading(false);
+    setHistoryDiffOperationId(undefined);
+    const cached = cache.getQueryData<FileHistoryPage | StreamSummary[]>(key);
+    setRows(
+      kind === "history"
+        ? ((cached as FileHistoryPage | undefined)?.items ?? [])
+        : ((cached as StreamSummary[] | undefined) ?? []),
+    );
     void cache
-      .fetchQuery<(FileRevision | StreamSummary)[]>({
+      .fetchQuery<FileHistoryPage | StreamSummary[]>({
         queryKey: key,
         queryFn: () =>
           kind === "history"
-            ? backend.getFileHistory(queryPath)
+            ? backend.getFileHistory({
+                scope: makeReviewScope(runtime, queryPath),
+                pageSize: 100,
+                refresh: refresh > 0,
+                operationId,
+              })
             : backend.listStreams(),
       })
       .then((data) => {
-        if (live) setRows(data);
+        if (!live) return;
+        if (kind === "history") {
+          const page = data as FileHistoryPage;
+          setRows(page.items);
+          setHistoryCursor(page.nextCursor);
+          setHistoryHasMore(page.hasMore);
+          setHistoryNotice(
+            page.truncated
+              ? zh
+                ? "历史结果达到安全上限，当前结果已截断。"
+                : "History reached its safety limit and was truncated."
+              : page.partial
+                ? zh
+                  ? "历史结果不完整。"
+                  : "History results are partial."
+                : "",
+          );
+        } else setRows(data as StreamSummary[]);
       })
       .catch((cause) => {
         if (live) setError(String(cause));
@@ -81,6 +134,15 @@ export function ReadOnlyPage({
       });
     return () => {
       live = false;
+      if (kind === "history") void backend.cancelOperation(operationId);
+      if (historyPageOperation.current) {
+        void backend.cancelOperation(historyPageOperation.current);
+        historyPageOperation.current = undefined;
+      }
+      if (historyDiffOperation.current) {
+        void backend.cancelOperation(historyDiffOperation.current);
+        historyDiffOperation.current = undefined;
+      }
     };
   }, [key, kind, queryPath, refresh, runtime.p4Version]);
   const filtered = useMemo(
@@ -99,6 +161,36 @@ export function ReadOnlyPage({
     (item) => ("stream" in item ? item.stream : String(item.revision)),
     JSON.stringify(key),
   );
+  const compareHistory = async (items: (FileRevision | StreamSummary)[]) => {
+    if (historyDiffOperation.current) return;
+    const revisions = items.filter(
+      (item): item is FileRevision => "revision" in item,
+    );
+    const pair = historyDiffPair(revisions);
+    if (!pair) return;
+    const operationId = crypto.randomUUID();
+    historyDiffOperation.current = operationId;
+    setHistoryDiffLoading(true);
+    setHistoryDiffOperationId(operationId);
+    setHistoryDiff(undefined);
+    setError("");
+    try {
+      const result = await backend.getDiff({
+        scope: makeReviewScope(runtime, revisions[0].depotPath),
+        ...pair,
+        operationId,
+      });
+      if (historyDiffOperation.current === operationId) setHistoryDiff(result);
+    } catch (cause) {
+      if (historyDiffOperation.current === operationId) setError(String(cause));
+    } finally {
+      if (historyDiffOperation.current === operationId) {
+        historyDiffOperation.current = undefined;
+        setHistoryDiffLoading(false);
+        setHistoryDiffOperationId(undefined);
+      }
+    }
+  };
   const reload = async () => {
     await cache.invalidateQueries({ queryKey: key });
     setRefresh((v) => v + 1);
@@ -178,10 +270,78 @@ export function ReadOnlyPage({
         <span className="filter-count">
           {filtered.length} {zh ? "条记录" : "records"}
         </span>
+        {kind === "history" && (
+          <button
+            disabled={
+              historyDiffLoading ||
+              !historyDiffPair(selection.selected as FileRevision[])
+            }
+            onClick={() => void compareHistory(selection.selected)}
+          >
+            {historyDiffLoading
+              ? zh
+                ? "比较中…"
+                : "Comparing…"
+              : zh
+                ? "比较所选两个版本"
+                : "Compare two selected revisions"}
+          </button>
+        )}
+        {historyDiffLoading && historyDiffOperationId && (
+          <button
+            onClick={() => void backend.cancelOperation(historyDiffOperationId)}
+          >
+            {zh ? "取消比较" : "Cancel comparison"}
+          </button>
+        )}
       </div>
+      {kind === "history" && historyHasMore && (
+        <button
+          className="load-more-button"
+          disabled={loading || !historyCursor}
+          onClick={() => {
+            if (!historyCursor) return;
+            const operationId = crypto.randomUUID();
+            historyPageOperation.current = operationId;
+            setLoading(true);
+            void backend
+              .getFileHistory({
+                scope: makeReviewScope(runtime, queryPath),
+                pageSize: 100,
+                cursor: historyCursor,
+                operationId,
+              })
+              .then((page) => {
+                if (historyPageOperation.current !== operationId) return;
+                setRows((current) =>
+                  mergeHistoryRows(current as FileRevision[], page.items),
+                );
+                setHistoryCursor(page.nextCursor);
+                setHistoryHasMore(page.hasMore);
+              })
+              .catch((cause) => {
+                if (historyPageOperation.current === operationId)
+                  setError(String(cause));
+              })
+              .finally(() => {
+                if (historyPageOperation.current === operationId) {
+                  historyPageOperation.current = undefined;
+                  setLoading(false);
+                }
+              });
+          }}
+        >
+          {zh ? "加载更多历史" : "Load more history"}
+        </button>
+      )}
       {error && (
         <div role="alert" className="workspace-load-error">
           {error}
+        </div>
+      )}
+      {historyNotice && (
+        <div role="status" className="workspace-load-error">
+          {historyNotice}
         </div>
       )}
       <div className={`workspace-layout ${selected ? "with-detail" : ""}`}>
@@ -264,6 +424,18 @@ export function ReadOnlyPage({
                               ),
                             }
                           : {
+                              ...(historyDiffPair(
+                                selection.targets(item) as FileRevision[],
+                              )
+                                ? {
+                                    比较所选两个版本: action(
+                                      () =>
+                                        void compareHistory(
+                                          selection.targets(item),
+                                        ),
+                                    ),
+                                  }
+                                : {}),
                               "复制 Depot 路径": copy(queryPath),
                               复制精确修订标识: copy(
                                 `${queryPath}#${item.revision}`,
@@ -352,6 +524,16 @@ export function ReadOnlyPage({
           </aside>
         )}
       </div>
+      {historyDiff && (
+        <pre
+          className="graph-node-diff"
+          aria-label={zh ? "历史版本差异" : "History revision diff"}
+        >
+          {historyDiff.unified ||
+            historyDiff.reason ||
+            (zh ? "无差异" : "No differences")}
+        </pre>
+      )}
     </main>
   );
 }

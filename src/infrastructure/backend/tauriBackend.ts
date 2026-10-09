@@ -68,9 +68,9 @@ export const tauriBackend: Backend = {
   previewSync: (request) => invoke("preview_sync", { request }),
   confirmSync: (confirmation) => invoke("confirm_sync", { confirmation }),
   getFilePreview: (path) => invoke("get_file_preview", { path }),
-  getDiff: (path) => invoke("get_diff", { path }),
-  getFileHistory: (path) => invoke("get_file_history", { path }),
-  getRevisionGraph: (path) => invoke("get_revision_graph", { path }),
+  getDiff: (request) => invoke("get_diff", { request }),
+  getFileHistory: (request) => invoke("get_file_history", { request }),
+  getRevisionGraph: (request) => invoke("get_revision_graph", { request }),
   queryPendingChanges: () => invoke("query_pending_changes"),
   mutatePendingChange: (request) =>
     invoke("mutate_pending_change", { request }),

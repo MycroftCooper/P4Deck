@@ -1629,35 +1629,98 @@ export const mockBackend: Backend = {
       encoding: "UTF-8",
     };
   },
-  async getDiff(path) {
+  async getDiff(request) {
+    const path = request.scope.fileIdentity;
+    const label = (reference: typeof request.left) =>
+      reference.kind === "revision"
+        ? `Revision #${reference.revision}`
+        : reference.kind === "workspace"
+          ? "Workspace"
+          : reference.kind === "head"
+            ? "Head #12"
+            : "Have #11";
     return {
       path,
-      leftLabel: "Have #12",
-      rightLabel: "Workspace",
+      left: {
+        reference: request.left,
+        label: label(request.left),
+        depotPath: path,
+        revision: request.left.kind === "workspace" ? undefined : 11,
+        fileType: "text",
+        size: 54,
+        digest: "mock-left",
+        exists: true,
+        binary: false,
+      },
+      right: {
+        reference: request.right,
+        label: label(request.right),
+        depotPath: path,
+        revision: request.right.kind === "workspace" ? undefined : 12,
+        fileType: "text",
+        size: 78,
+        digest: "mock-right",
+        exists: true,
+        binary: false,
+      },
       binary: false,
+      unsupported: false,
+      identical: false,
+      truncated: false,
+      partial: false,
+      stats: { additions: 2, deletions: 1, hunks: 1 },
+      operationIds: [request.operationId ?? "mock-diff"],
       unified:
         "@@ -1,4 +1,5 @@\n export const quality = 'high';\n-const cache = false;\n+const cache = true;\n+const virtualized = true;",
     };
   },
-  async getFileHistory(path) {
-    return Array.from({ length: 12 }, (_, index) => ({
-      revision: 12 - index,
-      changelistId: 31842 - index * 7,
-      user: ["fmeng", "alice", "buildbot"][index % 3],
-      action: index === 11 ? "add" : "edit",
-      time: new Date(now - index * 86_400_000).toISOString(),
-      description: `Update ${path} revision ${12 - index}`,
-    }));
+  async getFileHistory(request) {
+    const path = request.scope.fileIdentity;
+    return {
+      items: Array.from({ length: 12 }, (_, index) => ({
+        depotPath: path,
+        revision: 12 - index,
+        changelistId: 31842 - index * 7,
+        user: ["fmeng", "alice", "buildbot"][index % 3],
+        action: index === 11 ? "add" : "edit",
+        fileType: "text",
+        time: new Date(now - index * 86_400_000).toISOString(),
+        description: `Update ${path} revision ${12 - index}`,
+        digest: `mock-${12 - index}`,
+        fileSize: 128 + index,
+        integrations:
+          index === 3
+            ? [
+                {
+                  relationship: "merge from",
+                  kind: "merge",
+                  direction: "from",
+                  relatedPath: "//depot/dev/demo.txt",
+                  startRevision: 1,
+                  endRevision: 4,
+                },
+              ]
+            : [],
+      })),
+      hasMore: false,
+      partial: false,
+      truncated: false,
+      operationIds: [request.operationId ?? "mock-history"],
+    };
   },
-  async getRevisionGraph(path) {
+  async getRevisionGraph(request) {
+    const path = request.scope.fileIdentity;
     const nodes = Array.from({ length: 8 }, (_, index) => ({
       id: `r${index + 1}`,
       depotPath: path,
       revision: index + 1,
       changelistId: 31000 + index * 31,
+      action: index === 0 ? "add" : "edit",
+      fileType: "text",
       label: `#${index + 1}`,
       x: 90 + index * 120,
       y: index === 4 ? 140 : 70,
+      missing: false,
     }));
     return {
       nodes,
@@ -1666,7 +1729,12 @@ export const mockBackend: Backend = {
         source: nodes[index].id,
         target: node.id,
         kind: index === 3 ? ("merge" as const) : ("revision" as const),
+        relationship: index === 3 ? "merge from" : "revision",
       })),
+      hasMore: false,
+      partial: false,
+      truncated: false,
+      operationIds: [request.operationId ?? "mock-graph"],
     };
   },
   async queryPendingChanges() {

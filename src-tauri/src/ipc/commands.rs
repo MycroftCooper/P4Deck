@@ -523,14 +523,11 @@ pub async fn confirm_sync(
 
 #[tauri::command]
 pub async fn get_diff(
-    path: String,
+    request: DiffRequest,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<DiffResult, String> {
-    state
-        .files
-        .diff(state.connection.context(), path, Some(&app))
-        .await
+    state.files.diff(request, Some(&app)).await
 }
 
 #[tauri::command]
@@ -566,26 +563,20 @@ pub async fn get_file_preview(
 
 #[tauri::command]
 pub async fn get_file_history(
-    path: String,
+    request: FileHistoryRequest,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<Vec<FileRevision>, String> {
-    state
-        .files
-        .history(state.connection.context(), path, Some(&app))
-        .await
+) -> Result<FileHistoryPage, String> {
+    state.files.history(request, Some(&app)).await
 }
 
 #[tauri::command]
 pub async fn get_revision_graph(
-    path: String,
+    request: RevisionGraphRequest,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<RevisionGraph, String> {
-    state
-        .files
-        .graph(state.connection.context(), path, Some(&app))
-        .await
+    state.files.graph(request, Some(&app)).await
 }
 
 #[tauri::command]

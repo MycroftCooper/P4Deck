@@ -22,6 +22,7 @@ import type {
   DiagnosticAlert,
   DepotNode,
   DiffResult,
+  DiffRequest,
   FileActionRequest,
   FileActionResult,
   RenameMovePreflightRequest,
@@ -32,7 +33,8 @@ import type {
   SyncPreviewPlan,
   SyncConfirmRequest,
   SyncResult,
-  FileRevision,
+  FileHistoryPage,
+  FileHistoryRequest,
   GlobalSearchQuery,
   GlobalSearchResult,
   LogEntry,
@@ -66,6 +68,7 @@ import type {
   WorkflowConfirmation,
   WorkflowResult,
   RevisionGraph,
+  RevisionGraphRequest,
   RuntimeInfo,
   TrustRequest,
   WorkspaceListing,
@@ -159,9 +162,9 @@ export interface Backend {
   getFilePreview(
     path: string,
   ): Promise<import("../../shared/contracts/types").FilePreview>;
-  getDiff(path: string): Promise<DiffResult>;
-  getFileHistory(path: string): Promise<FileRevision[]>;
-  getRevisionGraph(path: string): Promise<RevisionGraph>;
+  getDiff(request: DiffRequest): Promise<DiffResult>;
+  getFileHistory(request: FileHistoryRequest): Promise<FileHistoryPage>;
+  getRevisionGraph(request: RevisionGraphRequest): Promise<RevisionGraph>;
   queryPendingChanges(): Promise<PendingChange[]>;
   mutatePendingChange(
     request: PendingChangeMutationRequest,

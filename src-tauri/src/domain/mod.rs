@@ -1216,25 +1216,153 @@ pub struct SyncResult {
     pub refresh_workspace: bool,
     pub refresh_depot: bool,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum RevisionReference {
+    Workspace,
+    Have,
+    Head,
+    Revision { revision: i64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileReviewScope {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub file_identity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DiffRequest {
+    pub scope: FileReviewScope,
+    pub left: RevisionReference,
+    pub right: RevisionReference,
+    #[serde(default)]
+    pub refresh: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffSide {
+    pub reference: RevisionReference,
+    pub label: String,
+    pub depot_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
+    pub exists: bool,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffStats {
+    pub additions: usize,
+    pub deletions: usize,
+    pub hunks: usize,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffResult {
     pub path: String,
-    pub left_label: String,
-    pub right_label: String,
+    pub left: DiffSide,
+    pub right: DiffSide,
     pub unified: String,
+    pub stats: DiffStats,
     pub binary: bool,
+    pub unsupported: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub identical: bool,
+    pub truncated: bool,
+    pub partial: bool,
+    pub operation_ids: Vec<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileIntegration {
+    pub relationship: String,
+    pub kind: String,
+    pub direction: String,
+    pub related_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_revision: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileRevision {
+    pub depot_path: String,
     pub revision: i64,
     pub changelist_id: i64,
     pub user: String,
     pub action: String,
+    pub file_type: String,
     pub time: String,
     pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size: Option<u64>,
+    pub integrations: Vec<FileIntegration>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileHistoryRequest {
+    pub scope: FileReviewScope,
+    pub page_size: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub refresh: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistoryPage {
+    pub items: Vec<FileRevision>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    pub partial: bool,
+    pub truncated: bool,
+    pub operation_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RevisionGraphRequest {
+    pub scope: FileReviewScope,
+    pub revision_limit: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub refresh: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RevisionGraphNode {
@@ -1242,10 +1370,14 @@ pub struct RevisionGraphNode {
     pub depot_path: String,
     pub revision: i64,
     pub changelist_id: i64,
+    pub action: String,
+    pub file_type: String,
     pub label: String,
     pub x: i64,
     pub y: i64,
+    pub missing: bool,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RevisionGraphEdge {
@@ -1253,12 +1385,24 @@ pub struct RevisionGraphEdge {
     pub source: String,
     pub target: String,
     pub kind: String,
+    pub relationship: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_revision: Option<i64>,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RevisionGraph {
     pub nodes: Vec<RevisionGraphNode>,
     pub edges: Vec<RevisionGraphEdge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    pub partial: bool,
+    pub truncated: bool,
+    pub operation_ids: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

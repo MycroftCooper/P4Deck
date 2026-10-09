@@ -898,39 +898,133 @@ export interface SyncResult {
   refreshWorkspace: boolean;
   refreshDepot: boolean;
 }
-export interface DiffResult {
-  path: string;
-  leftLabel: string;
-  rightLabel: string;
-  unified: string;
+export type RevisionReference =
+  | { kind: "workspace" }
+  | { kind: "have" }
+  | { kind: "head" }
+  | { kind: "revision"; revision: number };
+export interface FileReviewScope {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  activeProfileId?: string;
+  contextGeneration: number;
+  fileIdentity: string;
+}
+export interface DiffRequest {
+  scope: FileReviewScope;
+  left: RevisionReference;
+  right: RevisionReference;
+  refresh?: boolean;
+  operationId?: string;
+}
+export interface DiffSide {
+  reference: RevisionReference;
+  label: string;
+  depotPath: string;
+  revision?: number;
+  fileType?: string;
+  size?: number;
+  digest?: string;
+  exists: boolean;
   binary: boolean;
 }
+export interface DiffResult {
+  path: string;
+  left: DiffSide;
+  right: DiffSide;
+  unified: string;
+  stats: { additions: number; deletions: number; hunks: number };
+  binary: boolean;
+  unsupported: boolean;
+  reason?: string;
+  identical: boolean;
+  truncated: boolean;
+  partial: boolean;
+  operationIds: string[];
+}
+export interface FileIntegration {
+  relationship: string;
+  kind: string;
+  direction: string;
+  relatedPath: string;
+  startRevision?: number;
+  endRevision?: number;
+}
 export interface FileRevision {
+  depotPath: string;
   revision: number;
   changelistId: number;
   user: string;
   action: string;
+  fileType: string;
   time: string;
   description: string;
+  digest?: string;
+  fileSize?: number;
+  integrations: FileIntegration[];
+}
+export interface FileHistoryRequest {
+  scope: FileReviewScope;
+  pageSize: number;
+  cursor?: string;
+  refresh?: boolean;
+  operationId?: string;
+}
+export interface FileHistoryPage {
+  items: FileRevision[];
+  nextCursor?: string;
+  hasMore: boolean;
+  partial: boolean;
+  truncated: boolean;
+  operationIds: string[];
+}
+export interface RevisionGraphRequest {
+  scope: FileReviewScope;
+  revisionLimit: number;
+  cursor?: string;
+  refresh?: boolean;
+  operationId?: string;
 }
 export interface RevisionGraphNode {
   id: string;
   depotPath: string;
   revision: number;
   changelistId: number;
+  action: string;
+  fileType: string;
   label: string;
   x: number;
   y: number;
+  missing: boolean;
 }
 export interface RevisionGraphEdge {
   id: string;
   source: string;
   target: string;
-  kind: "revision" | "branch" | "merge" | "copy";
+  kind:
+    | "revision"
+    | "branch"
+    | "merge"
+    | "copy"
+    | "move"
+    | "add"
+    | "delete"
+    | "edit"
+    | "integration";
+  relationship: string;
+  startRevision?: number;
+  endRevision?: number;
 }
 export interface RevisionGraph {
   nodes: RevisionGraphNode[];
   edges: RevisionGraphEdge[];
+  nextCursor?: string;
+  hasMore: boolean;
+  partial: boolean;
+  truncated: boolean;
+  operationIds: string[];
 }
 
 export interface PendingFile {

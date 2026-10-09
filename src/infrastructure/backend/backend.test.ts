@@ -346,11 +346,22 @@ describe("controlled P4 terminal", () => {
       input: files.items[3].relativePath,
     });
     expect(located.found).toBe(true);
+    const runtime = await backend.runtimeInfo();
+    const scope = {
+      server: runtime.context.server,
+      user: runtime.context.user,
+      client: runtime.context.client,
+      workspace: runtime.context.cwd ?? "",
+      activeProfileId: runtime.activeProfileId,
+      contextGeneration: runtime.contextGeneration,
+      fileIdentity: files.items[3].depotPath!,
+    };
     expect(
-      (await backend.getFileHistory(files.items[3].depotPath!)).length,
+      (await backend.getFileHistory({ scope, pageSize: 100 })).items.length,
     ).toBeGreaterThan(0);
     expect(
-      (await backend.getRevisionGraph(files.items[3].depotPath!)).nodes.length,
+      (await backend.getRevisionGraph({ scope, revisionLimit: 100 })).nodes
+        .length,
     ).toBeGreaterThan(1);
     expect((await backend.queryPendingChanges()).length).toBeGreaterThan(1);
     await expect(
