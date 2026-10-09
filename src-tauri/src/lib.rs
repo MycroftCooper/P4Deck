@@ -17,6 +17,7 @@ use app::file_service::FileService;
 use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
 use app::submit_service::SubmitService;
+use app::sync_service::SyncService;
 use app::workflow_service::WorkflowService;
 use p4::context::ContextStore;
 use p4::{
@@ -32,6 +33,7 @@ pub(crate) struct AppState {
     pub logs: Arc<LogStore>,
     pub changelists: Arc<ChangelistService>,
     pub submit: Arc<SubmitService>,
+    pub sync: Arc<SyncService>,
     pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
     pub connection: Arc<ConnectionService>,
@@ -76,6 +78,11 @@ pub fn run() {
                 contexts.clone(),
                 status_cache.clone(),
             ));
+            let sync = Arc::new(SyncService::new(
+                runner.clone(),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
             let workflows = Arc::new(WorkflowService::new(
                 WorkflowRepository::new(runner.clone()),
                 contexts.clone(),
@@ -96,6 +103,7 @@ pub fn run() {
                 logs,
                 changelists,
                 submit,
+                sync,
                 workflows,
                 files,
                 connection,
@@ -146,6 +154,8 @@ pub fn run() {
             ipc::commands::open_local_path,
             ipc::commands::local_path_capabilities,
             ipc::commands::perform_file_action,
+            ipc::commands::preview_sync,
+            ipc::commands::confirm_sync,
             ipc::commands::get_diff,
             ipc::commands::get_file_preview,
             ipc::commands::get_file_history,

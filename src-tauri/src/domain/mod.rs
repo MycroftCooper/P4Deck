@@ -731,6 +731,195 @@ pub struct FileActionResult {
     pub affected_paths: Vec<String>,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncRevisionKind {
+    Head,
+    Revision,
+    Change,
+    Date,
+    Label,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRevisionSpec {
+    pub kind: SyncRevisionKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPreviewRequest {
+    pub paths: Vec<String>,
+    pub revision: SyncRevisionSpec,
+    #[serde(default)]
+    pub force: bool,
+    #[serde(default)]
+    pub parallel_threads: Option<u8>,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncChangeKind {
+    Added,
+    Updated,
+    Deleted,
+    UpToDate,
+    Warning,
+    Conflict,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPlanEntry {
+    pub kind: SyncChangeKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depot_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncIssueCode {
+    InvalidTarget,
+    NotInClient,
+    WritableClobber,
+    OpenedFile,
+    UnresolvedFile,
+    PermissionDenied,
+    DiskSpace,
+    Offline,
+    ServerUnreachable,
+    AuthExpired,
+    ForceOverwrite,
+    PreviewFailed,
+    InspectionUnknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncIssue {
+    pub code: SyncIssueCode,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTargetSnapshot {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub context_generation: u64,
+    pub paths: Vec<String>,
+    pub revision: SyncRevisionSpec,
+    pub force: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parallel_threads: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPlanCounts {
+    pub added: usize,
+    pub updated: usize,
+    pub deleted: usize,
+    pub up_to_date: usize,
+    pub warnings: usize,
+    pub conflicts: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPreviewPlan {
+    pub ready: bool,
+    pub target: SyncTargetSnapshot,
+    pub counts: SyncPlanCounts,
+    pub entries: Vec<SyncPlanEntry>,
+    pub total_entries: usize,
+    pub truncated: bool,
+    pub partial: bool,
+    pub blockers: Vec<SyncIssue>,
+    pub warnings: Vec<SyncIssue>,
+    pub content_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncConfirmRequest {
+    pub token: String,
+    pub target: SyncTargetSnapshot,
+    #[serde(default)]
+    pub acknowledge_force: bool,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncOutcome {
+    Succeeded,
+    Partial,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SyncFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    ContextChanged,
+    PreviewChanged,
+    PreflightBlocked,
+    ForceAcknowledgementRequired,
+    PermissionDenied,
+    DiskSpace,
+    Offline,
+    ServerUnreachable,
+    AuthExpired,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResult {
+    pub outcome: SyncOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<SyncFailureCode>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub affected_paths: Vec<String>,
+    pub counts: SyncPlanCounts,
+    pub refresh_workspace: bool,
+    pub refresh_depot: bool,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffResult {

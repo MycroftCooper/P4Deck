@@ -44,6 +44,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
 | BE-001M | 多连接配置与活动 Workspace 切换 | `connection.json` schema v2、profile CRUD/list/get/set active、revision CAS、原子 replace、旧裸 Context allowlist 备份迁移与结构化错误已完成；切换先复核 info/login 再原子提交，失败保留旧活动项；generation、Runner cancel、Submitted/Search/status cache 与确认 token 全部失效；Windows localhost 双 Client 默认两轮通过 |
 | BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
+| BE-002S | Sync 安全生产闭环 | 强类型 preview/confirm/result、真实 `p4 sync -n` 分类、一次性短期 token、连接 generation/规范范围/typed revision/force/options/preview digest 绑定、mutation lane 内复核、取消/超时、Journal/Log 与局部缓存失效已完成；GUI 直接 Sync 旁路已封死；Windows localhost 双轮通过，原生 UI/macOS 待验 |
 | BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收 |
 | BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
 | BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收 |
@@ -107,7 +108,7 @@ pnpm test:e2e:p4d:win
 
 - 默认连续执行两轮，两轮均通过；每轮创建并最终删除 `p4deck-fixture-e2e` Client 与独立 Workspace Root。
 - Runner Context 显式携带 executable/server/user/client/tickets/trust，测试内部复验 `ServerID=p4deck-fixture-local` 和 loopback 地址；启动器隔离 P4CONFIG/P4ENVIRO/P4PASSWD，缺少固定工具时输出明确 `SKIP`。
-- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；同一入口已叠加 BE-003 Submit、BE-004a Pending 与 BE-004b Shelf/Unshelve/Resolve 验收。仍未包含 SSL Trust、SSO/MFA 或 macOS，留给连接兼容矩阵和双平台验收。
+- 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；Sync 已覆盖新增/更新/删除/指定 revision、已最新、writable/clobber blocker、force 二次确认、非法 spec、token 重放/过期/篡改、generation 漂移、Journal 与缓存刷新；同一入口已叠加 BE-003 Submit、BE-004a Pending 与 BE-004b Shelf/Unshelve/Resolve 验收。仍未包含 SSL Trust、SSO/MFA 或 macOS，留给连接兼容矩阵和双平台验收。
 
 ### BE-003 — Submit 预检与执行状态机（DONE：Windows localhost）
 

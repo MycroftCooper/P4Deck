@@ -256,6 +256,12 @@ impl FileService {
         request: FileActionRequest,
         app: Option<&AppHandle>,
     ) -> Result<FileActionResult, String> {
+        if matches!(
+            request.action,
+            FileAction::GetLatest | FileAction::GetRevision | FileAction::RemoveFromWorkspace
+        ) {
+            return Err("Sync mutations must use the preview_sync and confirm_sync APIs".into());
+        }
         let invalidation_reason = if request.action == FileAction::Refresh {
             InvalidationReason::ManualRefresh
         } else {

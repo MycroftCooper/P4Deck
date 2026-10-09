@@ -6,6 +6,10 @@ import { FileClWorkflow } from "../../features/changelists/components/FileClWork
 import { RenameDialog } from "../../features/files/components/RenameDialog";
 import { ResolveDialog } from "../../features/files/components/ResolveDialog";
 import {
+  SyncDialog,
+  type SyncDialogRequest,
+} from "../../features/files/components/SyncDialog";
+import {
   RevisionDialog,
   type RevisionRequest,
 } from "../../features/files/components/RevisionDialog";
@@ -23,6 +27,7 @@ type PreviewRequest = Origin &
     | { kind: "resolve"; nodes: WorkspaceNode[] }
     | { kind: "fileCl"; nodes: WorkspaceNode[]; mode: "moveFiles" | "shelve" }
     | { kind: "submit"; id: number; count: number }
+    | ({ kind: "sync" } & SyncDialogRequest)
   );
 type Request =
   | PreviewRequest
@@ -35,8 +40,11 @@ export function useCommandDialogs(
   client: string,
   zh: boolean,
   demo = false,
+  targetKey = "",
 ) {
-  const gateway = useDialogRequest<Request, string | boolean>(connectionKey);
+  const gateway = useDialogRequest<Request, string | boolean>(
+    `${connectionKey}:${targetKey}`,
+  );
   const latest = useRef(connectionKey);
   latest.current = connectionKey;
   const close = () => gateway.answer(null);
@@ -44,6 +52,28 @@ export function useCommandDialogs(
   let element = null;
   if (request)
     switch (request.kind) {
+      case "sync":
+        element = (
+          <SyncDialog
+            request={request}
+            connectionKey={connectionKey}
+            demo={demo}
+            zh={zh}
+            onDismiss={close}
+            onRefresh={async () => {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              await Promise.all([
+                workspaceCache.invalidateQueries({
+                  queryKey: ["workspace-files", connectionKey],
+                }),
+                workspaceCache.invalidateQueries({
+                  queryKey: ["depot-files", connectionKey],
+                }),
+              ]);
+            }}
+          />
+        );
+        break;
       case "rename":
         element = (
           <RenameDialog

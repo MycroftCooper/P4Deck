@@ -591,6 +591,127 @@ export interface FileActionResult {
   affectedPaths: string[];
   message: string;
 }
+
+export interface SyncRevisionSpec {
+  kind: "head" | "revision" | "change" | "date" | "label";
+  value?: string;
+}
+
+export interface SyncPreviewRequest {
+  paths: string[];
+  revision: SyncRevisionSpec;
+  force?: boolean;
+  parallelThreads?: number;
+  operationId?: string;
+}
+
+export type SyncChangeKind =
+  "added" | "updated" | "deleted" | "upToDate" | "warning" | "conflict";
+
+export interface SyncPlanEntry {
+  kind: SyncChangeKind;
+  depotPath?: string;
+  clientPath?: string;
+  revision?: number;
+  message: string;
+}
+
+export type SyncIssueCode =
+  | "invalidTarget"
+  | "notInClient"
+  | "writableClobber"
+  | "openedFile"
+  | "unresolvedFile"
+  | "permissionDenied"
+  | "diskSpace"
+  | "offline"
+  | "serverUnreachable"
+  | "authExpired"
+  | "forceOverwrite"
+  | "previewFailed"
+  | "inspectionUnknown";
+
+export interface SyncIssue {
+  code: SyncIssueCode;
+  message: string;
+  paths?: string[];
+}
+
+export interface SyncTargetSnapshot {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  contextGeneration: number;
+  paths: string[];
+  revision: SyncRevisionSpec;
+  force: boolean;
+  parallelThreads?: number;
+}
+
+export interface SyncPlanCounts {
+  added: number;
+  updated: number;
+  deleted: number;
+  upToDate: number;
+  warnings: number;
+  conflicts: number;
+}
+
+export interface SyncPreviewPlan {
+  ready: boolean;
+  target: SyncTargetSnapshot;
+  counts: SyncPlanCounts;
+  entries: SyncPlanEntry[];
+  totalEntries: number;
+  truncated: boolean;
+  partial: boolean;
+  blockers: SyncIssue[];
+  warnings: SyncIssue[];
+  contentDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+
+export interface SyncConfirmRequest {
+  token: string;
+  target: SyncTargetSnapshot;
+  acknowledgeForce: boolean;
+  operationId?: string;
+}
+
+export type SyncFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "contextChanged"
+  | "previewChanged"
+  | "preflightBlocked"
+  | "forceAcknowledgementRequired"
+  | "permissionDenied"
+  | "diskSpace"
+  | "offline"
+  | "serverUnreachable"
+  | "authExpired"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+
+export interface SyncResult {
+  outcome:
+    "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+  failure?: SyncFailureCode;
+  message: string;
+  operationId?: string;
+  logReference?: string;
+  affectedPaths: string[];
+  counts: SyncPlanCounts;
+  refreshWorkspace: boolean;
+  refreshDepot: boolean;
+}
 export interface DiffResult {
   path: string;
   leftLabel: string;

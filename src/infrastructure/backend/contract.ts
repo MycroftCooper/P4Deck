@@ -24,6 +24,10 @@ import type {
   DiffResult,
   FileActionRequest,
   FileActionResult,
+  SyncPreviewRequest,
+  SyncPreviewPlan,
+  SyncConfirmRequest,
+  SyncResult,
   FileRevision,
   GlobalSearchQuery,
   GlobalSearchResult,
@@ -136,6 +140,8 @@ export interface Backend {
   listDepotChildren(path?: string): Promise<DepotNode[]>;
   resolvePath(request: PathResolveRequest): Promise<PathResolveResult>;
   performFileAction(request: FileActionRequest): Promise<FileActionResult>;
+  previewSync(request: SyncPreviewRequest): Promise<SyncPreviewPlan>;
+  confirmSync(confirmation: SyncConfirmRequest): Promise<SyncResult>;
   getFilePreview(
     path: string,
   ): Promise<import("../../shared/contracts/types").FilePreview>;

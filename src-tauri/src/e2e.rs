@@ -4,7 +4,7 @@ mod tests {
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
             file_service::FileService, search_service::GlobalSearchService,
-            status_cache::StatusCache, submit_service::SubmitService,
+            status_cache::StatusCache, submit_service::SubmitService, sync_service::SyncService,
             workflow_service::WorkflowService,
         },
         domain::{
@@ -15,8 +15,9 @@ mod tests {
             ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
             SetActiveConnectionProfileRequest, ShelfMode, ShelfPreflightRequest,
             SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
-            SwitchWorkspaceRequest, UnshelvePreflightRequest, WorkflowConfirmation,
-            WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
+            SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
+            SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
+            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, runner::P4Runner,
@@ -161,6 +162,9 @@ mod tests {
             status_cache.clone(),
             1,
         );
+        let sync = SyncService::new(runner.clone(), contexts.clone(), status_cache.clone());
+        let expiring_sync =
+            SyncService::with_ttl(runner.clone(), contexts.clone(), status_cache.clone(), 1);
         let workflows = WorkflowService::new(
             WorkflowRepository::new(runner.clone()),
             contexts.clone(),
@@ -172,7 +176,7 @@ mod tests {
             status_cache.clone(),
             1,
         );
-        let files = FileService::new(runner.clone(), status_cache, journal.clone());
+        let files = FileService::new(runner.clone(), status_cache.clone(), journal.clone());
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
         let setup = setup_client(&runner, &context, &config.workspace_root).await;
@@ -208,6 +212,8 @@ mod tests {
                             logs: &logs,
                             submit: &submit,
                             expiring_submit: &expiring_submit,
+                            sync: &sync,
+                            expiring_sync: &expiring_sync,
                             contexts: &contexts,
                             workflows: &workflows,
                             expiring_workflows: &expiring_workflows,
@@ -404,6 +410,362 @@ mod tests {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    async fn exercise_sync_state_machine(
+        runner: &Arc<P4Runner>,
+        sync: &SyncService,
+        expiring_sync: &SyncService,
+        contexts: &ContextStore,
+        journal: &OperationJournal,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let readme = vec!["//depot/main/README.txt".to_owned()];
+        let replay = sync
+            .preview(sync_request(readme.clone(), None, false), None)
+            .await;
+        ensure(
+            replay.ready && replay.token.is_some(),
+            format!("up-to-date sync preview was not ready: {replay:?}"),
+        )?;
+        let confirmation = SyncConfirmRequest {
+            token: replay.token.clone().expect("checked above"),
+            target: replay.target.clone(),
+            acknowledge_force: false,
+            operation_id: Some("sync-e2e-replay".into()),
+        };
+        let first = sync.confirm(confirmation.clone(), None).await;
+        ensure(
+            first.outcome == SyncOutcome::Succeeded,
+            format!("up-to-date confirmed sync failed: {first:?}"),
+        )?;
+        let replayed = sync.confirm(confirmation, None).await;
+        ensure(
+            replayed.failure == Some(SyncFailureCode::TokenUnknown),
+            format!("sync token replay was not rejected: {replayed:?}"),
+        )?;
+
+        let tampered = sync
+            .preview(sync_request(readme.clone(), None, false), None)
+            .await;
+        let mut wrong_target = tampered.target.clone();
+        wrong_target.force = true;
+        let tampered_result = sync
+            .confirm(
+                SyncConfirmRequest {
+                    token: tampered.token.ok_or("tamper preview had no token")?,
+                    target: wrong_target,
+                    acknowledge_force: true,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            tampered_result.failure == Some(SyncFailureCode::TargetMismatch),
+            format!("tampered sync target was not rejected: {tampered_result:?}"),
+        )?;
+
+        let expiring = expiring_sync
+            .preview(sync_request(readme.clone(), None, false), None)
+            .await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let expired = expiring_sync
+            .confirm(
+                SyncConfirmRequest {
+                    token: expiring.token.ok_or("expiring sync preview had no token")?,
+                    target: expiring.target,
+                    acknowledge_force: false,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            expired.failure == Some(SyncFailureCode::TokenExpired),
+            format!("expired sync token was not rejected: {expired:?}"),
+        )?;
+
+        let switched = sync
+            .preview(sync_request(readme.clone(), None, false), None)
+            .await;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
+        let switched_result = sync
+            .confirm(
+                SyncConfirmRequest {
+                    token: switched.token.ok_or("generation preview had no token")?,
+                    target: switched.target,
+                    acknowledge_force: false,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            switched_result.failure == Some(SyncFailureCode::ContextChanged),
+            format!("sync generation drift was not rejected: {switched_result:?}"),
+        )?;
+
+        let invalid = sync
+            .preview(
+                SyncPreviewRequest {
+                    paths: readme,
+                    revision: SyncRevisionSpec {
+                        kind: SyncRevisionKind::Change,
+                        value: Some("42 --force".into()),
+                    },
+                    force: false,
+                    parallel_threads: None,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            !invalid.ready
+                && invalid.token.is_none()
+                && invalid
+                    .blockers
+                    .iter()
+                    .any(|item| item.code == crate::domain::SyncIssueCode::InvalidTarget),
+            format!("invalid sync revision was not blocked: {invalid:?}"),
+        )?;
+
+        const SYNC_WRITER: &str = "p4deck-fixture-sync-writer";
+        let writer_root = root
+            .parent()
+            .ok_or("E2E workspace has no fixture parent")?
+            .join("sync-writer-workspace");
+        let writer = setup_named_client(runner, context, SYNC_WRITER, &writer_root).await?;
+        let scenario = async {
+            let writer_file = writer_root.join("p4deck-sync-e2e").join("state.txt");
+            std::fs::create_dir_all(writer_file.parent().expect("sync file has a parent"))
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&writer_file, b"revision one\n").map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "add",
+                vec![writer_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "P4Deck sync E2E revision one".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let depot_path = "//depot/p4deck-sync-e2e/state.txt".to_owned();
+            let local_file = root.join("p4deck-sync-e2e").join("state.txt");
+            let added = sync
+                .preview(sync_request(vec![depot_path.clone()], None, false), None)
+                .await;
+            ensure(
+                added.ready && added.counts.added == 1,
+                format!("new-file sync preview was not classified as add: {added:?}"),
+            )?;
+            confirmed_sync(sync, vec![depot_path.clone()], None).await?;
+            ensure(
+                std::fs::read_to_string(&local_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "revision one",
+                "sync did not materialize revision one",
+            )?;
+
+            checked_run(
+                runner,
+                &writer,
+                "edit",
+                vec![writer_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::write(&writer_file, b"revision two\n").map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "P4Deck sync E2E revision two".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let updated = sync
+                .preview(sync_request(vec![depot_path.clone()], None, false), None)
+                .await;
+            ensure(
+                updated.ready && updated.counts.updated == 1,
+                format!("outdated sync preview was not classified as update: {updated:?}"),
+            )?;
+            confirmed_sync(sync, vec![depot_path.clone()], None).await?;
+            ensure(
+                std::fs::read_to_string(&local_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "revision two",
+                "sync did not update workspace content to revision two",
+            )?;
+
+            confirmed_sync(
+                sync,
+                vec![depot_path.clone()],
+                Some(SyncRevisionSpec {
+                    kind: SyncRevisionKind::Revision,
+                    value: Some("1".into()),
+                }),
+            )
+            .await?;
+            ensure(
+                std::fs::read_to_string(&local_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "revision one",
+                "revision-targeted sync did not restore revision one",
+            )?;
+            confirmed_sync(sync, vec![depot_path.clone()], None).await?;
+
+            let mut permissions = std::fs::metadata(&local_file)
+                .map_err(|error| error.to_string())?
+                .permissions();
+            permissions.set_readonly(false);
+            std::fs::set_permissions(&local_file, permissions)
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&local_file, b"local writable change\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "edit",
+                vec![writer_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::write(&writer_file, b"revision three\n").map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "P4Deck sync E2E revision three".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let writable = sync
+                .preview(sync_request(vec![depot_path.clone()], None, false), None)
+                .await;
+            ensure(
+                !writable.ready
+                    && writable
+                        .blockers
+                        .iter()
+                        .any(|item| item.code == crate::domain::SyncIssueCode::WritableClobber),
+                format!("writable/clobber risk was not blocked: {writable:?}"),
+            )?;
+            std::fs::remove_file(&local_file).map_err(|error| error.to_string())?;
+            confirmed_sync(sync, vec![depot_path.clone()], None).await?;
+
+            std::fs::remove_file(&local_file).map_err(|error| error.to_string())?;
+            let force = sync
+                .preview(sync_request(vec![depot_path.clone()], None, true), None)
+                .await;
+            let force_rejected = sync
+                .confirm(
+                    SyncConfirmRequest {
+                        token: force.token.ok_or("force preview had no token")?,
+                        target: force.target,
+                        acknowledge_force: false,
+                        operation_id: None,
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                force_rejected.failure == Some(SyncFailureCode::ForceAcknowledgementRequired),
+                format!("force sync did not require second confirmation: {force_rejected:?}"),
+            )?;
+            let force = sync
+                .preview(sync_request(vec![depot_path.clone()], None, true), None)
+                .await;
+            let forced = sync
+                .confirm(
+                    SyncConfirmRequest {
+                        token: force.token.ok_or("second force preview had no token")?,
+                        target: force.target,
+                        acknowledge_force: true,
+                        operation_id: Some("sync-e2e-journal".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                forced.outcome == SyncOutcome::Succeeded
+                    && journal
+                        .get("sync-e2e-journal")
+                        .is_some_and(|record| record.state == JournalState::Succeeded),
+                format!("confirmed force sync or Journal record failed: {forced:?}"),
+            )?;
+
+            checked_run(
+                runner,
+                &writer,
+                "sync",
+                vec![depot_path.clone()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "delete",
+                vec![writer_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &writer,
+                "submit",
+                vec!["-d".into(), "P4Deck sync E2E delete".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let deleted = sync
+                .preview(sync_request(vec![depot_path.clone()], None, false), None)
+                .await;
+            ensure(
+                deleted.ready && deleted.counts.deleted == 1,
+                format!("delete sync preview was not classified: {deleted:?}"),
+            )?;
+            confirmed_sync(sync, vec![depot_path], None).await?;
+            ensure(!local_file.exists(), "sync did not remove the deleted file")
+        }
+        .await;
+        let _ = cleanup_named_client(runner, context, SYNC_WRITER, &writer_root).await;
+        let _ = checked_run(
+            runner,
+            context,
+            "obliterate",
+            vec!["-y".into(), "//depot/p4deck-sync-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        scenario
+    }
+
     async fn setup_client(
         runner: &Arc<P4Runner>,
         context: &P4Context,
@@ -510,6 +872,15 @@ mod tests {
             OutputMode::Text,
         )
         .await;
+        let _ = checked_run(
+            runner,
+            context,
+            "obliterate",
+            vec!["-y".into(), "//depot/p4deck-sync-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
         let deletion = checked_run(
             runner,
             context,
@@ -539,6 +910,8 @@ mod tests {
         logs: &'a LogStore,
         submit: &'a SubmitService,
         expiring_submit: &'a SubmitService,
+        sync: &'a SyncService,
+        expiring_sync: &'a SyncService,
         contexts: &'a ContextStore,
         workflows: &'a WorkflowService,
         expiring_workflows: &'a WorkflowService,
@@ -559,6 +932,8 @@ mod tests {
             logs,
             submit,
             expiring_submit,
+            sync,
+            expiring_sync,
             contexts,
             workflows,
             expiring_workflows,
@@ -662,13 +1037,7 @@ mod tests {
         )?;
 
         let baseline = root.join("main").join("README.txt");
-        action(
-            files,
-            context,
-            FileAction::GetLatest,
-            vec!["//depot/main/README.txt".into()],
-        )
-        .await?;
+        confirmed_sync(sync, vec!["//depot/main/README.txt".into()], None).await?;
         ensure(
             baseline.is_file(),
             "Sync did not materialize the seed README",
@@ -705,6 +1074,17 @@ mod tests {
         )
         .await?;
         ensure_state(files, context, root, "README.txt", "controlled").await?;
+
+        exercise_sync_state_machine(
+            runner,
+            sync,
+            expiring_sync,
+            contexts,
+            journal,
+            context,
+            root,
+        )
+        .await?;
 
         let added = root.join("main").join("e2e-add.txt");
         std::fs::write(&added, b"P4Deck E2E add\n").map_err(|error| error.to_string())?;
@@ -781,7 +1161,7 @@ mod tests {
         .await?;
         exercise_submitted_change_details(runner, changelists, contexts, context).await?;
         exercise_global_search(runner, changelists, search, contexts, context, root).await?;
-        exercise_submit_blockers(runner, changelists, submit, files, context, root).await?;
+        exercise_submit_blockers(runner, changelists, submit, sync, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
         Ok(())
     }
@@ -2036,6 +2416,7 @@ mod tests {
         runner: &Arc<P4Runner>,
         changelists: &ChangelistService,
         submit: &SubmitService,
+        sync: &SyncService,
         files: &FileService,
         context: &P4Context,
         root: &Path,
@@ -2071,13 +2452,7 @@ mod tests {
             .await?;
 
             let outdated_depot = "//depot/p4deck-submit-e2e/outdated.txt".to_owned();
-            action(
-                files,
-                context,
-                FileAction::GetLatest,
-                vec![outdated_depot.clone()],
-            )
-            .await?;
+            confirmed_sync(sync, vec![outdated_depot.clone()], None).await?;
             let local_outdated = root
                 .join("p4deck-submit-e2e")
                 .join("outdated.txt")
@@ -3434,6 +3809,53 @@ mod tests {
             )
             .await?;
         Ok(())
+    }
+
+    fn sync_request(
+        paths: Vec<String>,
+        revision: Option<SyncRevisionSpec>,
+        force: bool,
+    ) -> SyncPreviewRequest {
+        SyncPreviewRequest {
+            paths,
+            revision: revision.unwrap_or(SyncRevisionSpec {
+                kind: SyncRevisionKind::Head,
+                value: None,
+            }),
+            force,
+            parallel_threads: None,
+            operation_id: None,
+        }
+    }
+
+    async fn confirmed_sync(
+        sync: &SyncService,
+        paths: Vec<String>,
+        revision: Option<SyncRevisionSpec>,
+    ) -> Result<crate::domain::SyncResult, String> {
+        let preview = sync
+            .preview(sync_request(paths, revision, false), None)
+            .await;
+        ensure(
+            preview.ready && preview.token.is_some(),
+            format!("sync preview was blocked: {preview:?}"),
+        )?;
+        let result = sync
+            .confirm(
+                SyncConfirmRequest {
+                    token: preview.token.expect("checked above"),
+                    target: preview.target,
+                    acknowledge_force: false,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            result.outcome == SyncOutcome::Succeeded,
+            format!("confirmed sync failed: {result:?}"),
+        )?;
+        Ok(result)
     }
 
     async fn checked_run(

@@ -42,6 +42,15 @@ const mockWorkflowTokens = new Map<
     request: unknown;
   }
 >();
+const mockSyncTokens = new Map<
+  string,
+  {
+    target: import("../../shared/contracts/types").SyncTargetSnapshot;
+    digest: string;
+    expiresAt: number;
+    counts: import("../../shared/contracts/types").SyncPlanCounts;
+  }
+>();
 try {
   const saved = JSON.parse(
     localStorage.getItem("p4deck.mockConnection") ?? "null",
@@ -629,6 +638,7 @@ export const mockBackend: Backend = {
     if (request.id === mockActiveProfileId) {
       mockContext = { ...request.context };
       mockContextGeneration += 1;
+      mockSyncTokens.clear();
     }
     return this.listConnectionProfiles();
   },
@@ -662,6 +672,7 @@ export const mockBackend: Backend = {
     mockContext = { ...profile.context };
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockSyncTokens.clear();
     return this.runtimeInfo();
   },
   async switchWorkspace(request) {
@@ -685,6 +696,7 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockSyncTokens.clear();
     return this.runtimeInfo();
   },
   async saveConnection(context) {
@@ -701,6 +713,7 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockSyncTokens.clear();
     return { ...context };
   },
   async runtimeInfo() {
@@ -1199,6 +1212,12 @@ export const mockBackend: Backend = {
       throw new Error(
         "Shelf and resolve must use preflight and confirmation APIs",
       );
+    if (
+      ["getLatest", "getRevision", "removeFromWorkspace"].includes(
+        request.action,
+      )
+    )
+      throw new Error("Sync must use previewSync and confirmSync");
     const operationId = request.operationId ?? crypto.randomUUID();
     const event = (
       type: OperationEvent["type"],
@@ -1233,6 +1252,128 @@ export const mockBackend: Backend = {
       },
       affectedPaths: request.paths,
       message: `${request.action} completed in Mock Backend.`,
+    };
+  },
+  async previewSync(request) {
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const target: import("../../shared/contracts/types").SyncTargetSnapshot = {
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      contextGeneration: mockContextGeneration,
+      paths: [...new Set(request.paths)].sort(),
+      revision: request.revision,
+      force: request.force ?? false,
+      parallelThreads: request.parallelThreads,
+    };
+    const entries = target.paths.map((path, index) => ({
+      kind: index % 3 === 2 ? ("added" as const) : ("updated" as const),
+      depotPath: path.startsWith("//") ? path : undefined,
+      clientPath: path.startsWith("//") ? undefined : path,
+      revision: 2,
+      message:
+        "Browser Mock only: simulated sync preview; no real P4 server was accessed.",
+    }));
+    const counts = {
+      added: entries.filter((entry) => entry.kind === "added").length,
+      updated: entries.filter((entry) => entry.kind === "updated").length,
+      deleted: 0,
+      upToDate: 0,
+      warnings: target.force ? 1 : 0,
+      conflicts: 0,
+    };
+    const warnings: import("../../shared/contracts/types").SyncIssue[] =
+      target.force
+        ? [
+            {
+              code: "forceOverwrite",
+              message:
+                "Browser Mock only: force risk is simulated and requires explicit acknowledgement.",
+              paths: target.paths,
+            },
+          ]
+        : [];
+    const digest = mockDigest(JSON.stringify({ target, entries, warnings }));
+    const token = crypto.randomUUID();
+    const expiresAt = Date.now() + 120_000;
+    mockSyncTokens.set(token, { target, digest, expiresAt, counts });
+    emitMockLog(
+      "info",
+      "gui",
+      "p4 sync -n (simulated)",
+      `${entries.length} simulated path(s).`,
+      operationId,
+      1,
+    );
+    return {
+      ready: true,
+      target,
+      counts,
+      entries,
+      totalEntries: entries.length,
+      truncated: false,
+      partial: false,
+      blockers: [],
+      warnings,
+      contentDigest: digest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [operationId],
+      logReference: operationId,
+    };
+  },
+  async confirmSync(confirmation) {
+    const record = mockSyncTokens.get(confirmation.token);
+    mockSyncTokens.delete(confirmation.token);
+    const reject = (
+      failure: import("../../shared/contracts/types").SyncFailureCode,
+      message: string,
+    ): import("../../shared/contracts/types").SyncResult => ({
+      outcome: "rejected",
+      failure,
+      message,
+      affectedPaths: confirmation.target.paths,
+      counts: record?.counts ?? {
+        added: 0,
+        updated: 0,
+        deleted: 0,
+        upToDate: 0,
+        warnings: 0,
+        conflicts: 0,
+      },
+      refreshWorkspace: true,
+      refreshDepot: true,
+    });
+    if (!record) return reject("tokenUnknown", "Unknown or consumed token.");
+    if (record.expiresAt <= Date.now())
+      return reject("tokenExpired", "The simulated preview expired.");
+    if (JSON.stringify(record.target) !== JSON.stringify(confirmation.target))
+      return reject("targetMismatch", "The sync target or options changed.");
+    if (
+      record.target.contextGeneration !== mockContextGeneration ||
+      record.target.server !== mockContext.server ||
+      record.target.user !== mockContext.user ||
+      record.target.client !== mockContext.client
+    )
+      return reject("contextChanged", "The connection changed.");
+    if (record.target.force && !confirmation.acknowledgeForce)
+      return reject(
+        "forceAcknowledgementRequired",
+        "Forced sync requires explicit acknowledgement.",
+      );
+    const operationId = confirmation.operationId ?? crypto.randomUUID();
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: sync was simulated. No real files or P4 server were changed.",
+      operationId,
+      logReference: operationId,
+      affectedPaths: record.target.paths,
+      counts: record.counts,
+      refreshWorkspace: true,
+      refreshDepot: true,
     };
   },
   async getFilePreview(path) {

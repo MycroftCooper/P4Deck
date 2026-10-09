@@ -7,5 +7,6 @@ pub mod preview;
 pub mod search_service;
 pub mod status_cache;
 pub mod submit_service;
+pub mod sync_service;
 pub mod system_open;
 pub mod workflow_service;

@@ -672,6 +672,7 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
         || (matches!(request.command.as_str(), "unshelve" | "resolve")
             && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "reconcile" && request.args.iter().any(|argument| argument == "-n"))
+        || (request.command == "sync" && request.args.iter().any(|argument| argument == "-n"))
 }
 
 fn event(id: &str, kind: EventKind, message: Option<String>) -> OperationEvent {
@@ -826,6 +827,11 @@ mod tests {
         };
         assert!(is_read_only_request(&request));
         request.args[0] = "-d".into();
+        assert!(!is_read_only_request(&request));
+        request.command = "sync".into();
+        request.args = vec!["-n".into(), "//depot/main/...#head".into()];
+        assert!(is_read_only_request(&request));
+        request.args.remove(0);
         assert!(!is_read_only_request(&request));
     }
 

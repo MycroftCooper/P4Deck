@@ -17,7 +17,7 @@
 | FE-02 | CL 新建/编辑 | Description、Jobs、上下文、必填校验、未保存修改保护 | Default 不冒充编号 CL；不直接发送空描述；未接通时仅检查表单 | BE-004a 已接生产入口；浏览器契约/组件测试通过，原生待验收 |
 | FE-03 | 目标 CL 选择与移动文件 | Default/编号 CL、过滤、文件计数、目标摘要 | 保留明确文件子集；不可选当前/不适用目标；无目标/空列表可解释 | BE-004a 已接生产入口；Default 往返、失效与失败测试通过，原生待验收 |
 | FE-04 | 提交预检与确认 UI | CL 摘要、阻塞/警告、文件范围、检查中、过期、失败、结果 | 只确认整个指定 CL；检查失败/过期不能提交；无后端预检不显示“可提交” | BE-003 已接生产入口；状态机测试通过，原生待验收 |
-| FE-05 | 获取指定版本 | head/修订/CL/日期选择、范围预览、输入校验 | 文件版本与 CL 不混用；取消不执行；目录标明递归 | 前端证据通过；真实 sync 未验收 |
+| FE-05 | 安全 Sync / 获取指定版本 | head/修订/CL/日期/label、真实变更预览、范围与风险、执行结果 | 真实 preview token 后才能执行；force 二次确认；连接/目标变化拒绝 stale；取消不冒充回滚 | 生产接线、浏览器状态机与 Windows localhost 双轮真实 E2E 已通过；原生 UI/macOS 待验 |
 | FE-06 | 重命名/移动文件 | 原目标、新路径、范围、覆盖/映射提示 | 路径不拼 Shell；未验证映射/覆盖时不能宣称安全；未接通不修改文件 | 前端证据通过；映射/覆盖后端校验待补 |
 | FE-07 | 批量与递归确认 | 共用目标清单、数量、父子去重提示、危险操作说明 | 目标不跟随外部选择变化；大列表虚拟化；不隐藏部分失败或取消边界 | 50,000 目标虚拟化证据通过；真实性能待验收 |
 | FE-08 | Shelf UI | 明确 CL 与文件子集、创建/更新/删除确认、状态反馈 | 不把 shelf 当本地副本；删除风险明确；未接通动作不执行 | BE-004b 生产契约与 localhost 通过；原生待验收 |
@@ -74,8 +74,8 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 ### 第三批落地：获取指定版本
 
-- `RevisionDialog` 替换 CommandBar 的原生版本 prompt；选择 head / 文件修订 / 截至 CL / 截至日期。严格正整数/真实日历日期校验，拒绝原始命令字符串、前缀、范围和零修订（避免把清除本地文件混入普通版本选择）。
-- 固定目标快照，显示递归范围和父子去重提示，取消返回 null；切换连接或卸载也取消待确认请求，异步确认后检查连接代次及并发操作。保留既有获取版本执行路径，未新增后端逻辑。此项不像新建 CL 等预览弹窗：用户点击“确认获取”会调用已有获取动作，界面明确说明会更新工作区。
+- `SyncDialog` 已接管 Files/Workspace/Depot 的“获取最新/指定版本”：选择 head / 文件修订 / 截至 CL / 截至日期 / label，严格构造 typed spec，拒绝原始命令字符串、前缀、范围和零修订。
+- 固定目标快照，显示递归范围、真实变更计数、代表性文件、blocker/warning、partial/truncated；返回可修改目标版本与 force 后重新预览。切换连接、关闭或卸载会取消旧 operation 并丢弃 stale 响应；执行只接受后端一次性 token。
 - 语义依据：[Perforce 修订选择说明](https://help.perforce.com/helix-core/server-apps/p4guide/2024.2/Content/P4Guide/syntax.syntax.revisions.html)；日期按服务器时区午夜解释，不自动转换为客户端时区；CL 表示截至该 CL，不是只取该 CL 文件。
 - 新增解析测试 3 项和弹窗测试 3 项。全量前端 186 项通过，生产构建通过（计数包括其他已有测试）。页面验证目录递归入口直接打开新表单；QA 仅输入与取消，不执行 sync。
 - FE-06～12 继续实施，整体目标未完成。
@@ -220,7 +220,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 | FE-02 | `ChangelistFormDialog.test.tsx` 10 项、`DeleteChangelistDialog.test.tsx` 3 项、`backend.test.ts` Pending 契约；第十一批接线记录 | 创建/编辑 Jobs/删除拒绝与成功已接 BE-004a；原生待验 |
 | FE-03 | `MoveFilesDialog.test.tsx` 7 项；`FileClWorkflow.test.tsx` 3 项；`fileClScope.test.ts` 2 项；`PendingPage.test.ts` 局部合并 | Default 往返、固定快照、目标/连接失效、失败保留与局部刷新已覆盖 |
 | FE-04 | `SubmitDialog.test.tsx` 11 项；`useCommandDialogs.test.tsx` 生产适配器接线；后端 Submit 契约测试 | BE-003 已接；blocker/warning/unknown/过期/漂移/成功/失败/防重复已覆盖，原生待验 |
-| FE-05 | `RevisionDialog.test.tsx` 3 项；`revisionSelector.test.ts` 3 项；第三/九批页面记录 | 前端证据通过；实际 sync 未在 QA 执行 |
+| FE-05 | `SyncDialog.test.tsx` 2 项、Tauri 窄契约与后端 parser/token/E2E；保留 `RevisionDialog`/selector 回归 | Preview → Review → Confirming → Result、Mock simulated、force 二次确认与真实 localhost sync 已覆盖；原生点击/读屏待验 |
 | FE-06 | `renamePath.test.ts` 3 项；`workflow.test.tsx` 的路径/草稿用例；第四/九批页面记录 | 前端证据通过；未声称映射或覆盖已验证 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
 | FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约测试 | BE-004b Shelf 生产契约已接；原生待验 |

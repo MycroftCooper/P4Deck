@@ -60,6 +60,35 @@ it("passes only the narrow submitted-detail request through the Tauri adapter", 
   expect(JSON.stringify(invoke.mock.calls[0])).not.toContain('"files"');
 });
 
+it("passes typed sync preview and confirmation requests through narrow commands", async () => {
+  const request = {
+    paths: ["//depot/main/..."],
+    revision: { kind: "change" as const, value: "42" },
+    force: false,
+    operationId: "sync-preview-42",
+  };
+  invoke.mockResolvedValue({ ready: true });
+  await tauriBackend.previewSync(request);
+  expect(invoke).toHaveBeenLastCalledWith("preview_sync", { request });
+  const confirmation = {
+    token: "one-use-token",
+    target: {
+      server: "server:1666",
+      user: "alice",
+      client: "main",
+      workspace: "C:/work",
+      contextGeneration: 7,
+      paths: request.paths,
+      revision: request.revision,
+      force: false,
+    },
+    acknowledgeForce: false,
+    operationId: "sync-42",
+  };
+  await tauriBackend.confirmSync(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_sync", { confirmation });
+});
+
 it("passes the typed submitted query and opaque cursor through unchanged", async () => {
   const query = {
     operationId: "submitted-query-42",

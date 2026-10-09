@@ -239,6 +239,17 @@
   width: auto;
   flex: 0 0 auto;
 }
+.sync-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sync-counts span {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--hover);
+}
 .workflow-field-hint {
   color: var(--muted);
 }
@@ -265,6 +276,9 @@
   margin: 0 8px 4px 0;
 }
 @media (max-width: 480px) {
+  .sync-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .workflow-dialog-heading,
   .workflow-dialog-body,
   .workflow-dialog-footer {

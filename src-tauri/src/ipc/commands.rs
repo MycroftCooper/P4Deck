@@ -221,6 +221,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.submit.clear_confirmations();
+    state.sync.clear_confirmations();
     state.workflows.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
@@ -302,10 +303,10 @@ pub async fn run_p4(
     if matches!(request.source, OperationSource::Gui)
         && matches!(
             request.command.to_ascii_lowercase().as_str(),
-            "submit" | "shelve" | "unshelve" | "resolve"
+            "submit" | "shelve" | "unshelve" | "resolve" | "sync"
         )
     {
-        return Err("GUI submit, shelf, unshelve and resolve must use their preflight and confirmation APIs".into());
+        return Err("GUI submit, shelf, unshelve, resolve and sync must use their preview/preflight and confirmation APIs".into());
     }
     state
         .runner
@@ -473,6 +474,24 @@ pub async fn perform_file_action(
         .files
         .perform(state.connection.context(), request, Some(&app))
         .await
+}
+
+#[tauri::command]
+pub async fn preview_sync(
+    request: SyncPreviewRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SyncPreviewPlan, String> {
+    Ok(state.sync.preview(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_sync(
+    confirmation: SyncConfirmRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SyncResult, String> {
+    Ok(state.sync.confirm(confirmation, Some(&app)).await)
 }
 
 #[tauri::command]

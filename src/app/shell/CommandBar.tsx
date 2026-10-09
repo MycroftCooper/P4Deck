@@ -129,6 +129,7 @@ export function CommandBar({
     runtime.context.client,
     zh,
     runtime.mode === "mock",
+    targetKey,
   );
   const [operation, setOperation] = useState<{
     id: string;
@@ -274,6 +275,19 @@ export function CommandBar({
       });
       return;
     }
+    if (
+      (id === "getLatest" || id === "getRevision") &&
+      target.type === "file"
+    ) {
+      dialogs.open({
+        kind: "sync",
+        nodes: nodes.map((node) => ({ ...node })),
+        revisionMode: id === "getRevision" ? "choose" : "head",
+        scopeLabel: target.scopeLabel,
+        source: source ?? (document.activeElement as HTMLElement | null),
+      });
+      return;
+    }
     if (id === "rename" && target.type === "file") {
       dialogs.open({
         kind: "rename",
@@ -325,19 +339,12 @@ export function CommandBar({
       }
       return;
     }
-    const revisionEpoch = generation.current;
+    const actionEpoch = generation.current;
     const folders = nodes.some((n) => n.kind === "directory");
-    const mutation = [
-      "getLatest",
-      "getRevision",
-      "checkout",
-      "add",
-      "delete",
-      "revert",
-    ].includes(id);
+    const mutation = ["checkout", "add", "delete", "revert"].includes(id);
     if (
       ["delete", "revert"].includes(id) ||
-      (mutation && id !== "getRevision" && (folders || nodes.length > 1))
+      (mutation && (folders || nodes.length > 1))
     ) {
       const confirmed = await dialogs.confirm({
         operation: id as OperationConfirmation["operation"],
@@ -347,17 +354,8 @@ export function CommandBar({
       });
       if (!confirmed) return;
     }
-    const revision =
-      id === "getRevision"
-        ? await dialogs.getRevision({
-            nodes: nodes.map((node) => ({ ...node })),
-            scopeLabel: target.type === "file" ? target.scopeLabel : undefined,
-            source: source ?? (document.activeElement as HTMLElement | null),
-          })
-        : undefined;
-    if (id === "getRevision" && !revision) return;
     if (
-      revisionEpoch !== generation.current ||
+      actionEpoch !== generation.current ||
       latest.current.connectionKey !== connectionKey
     )
       return;
@@ -384,28 +382,14 @@ export function CommandBar({
       if (id !== "refresh") {
         if (
           target.type === "file" &&
-          [
-            "getLatest",
-            "getRevision",
-            "checkout",
-            "add",
-            "delete",
-            "revert",
-          ].includes(id)
+          ["checkout", "add", "delete", "revert"].includes(id)
         ) {
           const result = await backend.performFileAction({
             ...selectionRequest(
-              id as
-                | "getLatest"
-                | "getRevision"
-                | "checkout"
-                | "add"
-                | "delete"
-                | "revert",
+              id as "checkout" | "add" | "delete" | "revert",
               nodes,
               operationId,
             ),
-            revision: revision ?? undefined,
           });
           const feedback = fileActionFeedback(result, zh);
           if (feedback.failed) throw new Error(feedback.message);
