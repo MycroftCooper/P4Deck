@@ -184,6 +184,42 @@ impl P4Runner {
         }
     }
 
+    /// Records a local filesystem mutation without putting file content in the
+    /// command log. Callers must finish the same id on every path.
+    pub fn start_local_file_operation(
+        &self,
+        operation_id: &str,
+        context: &P4Context,
+    ) -> Result<(), String> {
+        self.journal.start(
+            operation_id,
+            &crate::persistence::operation_journal::connection_id(
+                &context.server,
+                &context.user,
+                &context.client,
+            ),
+            context.cwd.as_deref().unwrap_or_default(),
+            OperationSource::Gui,
+            OperationCategory::LocalFile,
+        )
+    }
+
+    pub fn finish_local_file_operation(
+        &self,
+        operation_id: &str,
+        succeeded: bool,
+    ) -> Result<(), String> {
+        self.journal.finish(
+            operation_id,
+            if succeeded {
+                JournalState::Succeeded
+            } else {
+                JournalState::Failed
+            },
+            (!succeeded).then_some(OperationFailureKind::CommandFailure),
+        )
+    }
+
     fn token_for_operation(&self, operation_id: &str) -> CancellationToken {
         let operations = self.operations.lock();
         operations

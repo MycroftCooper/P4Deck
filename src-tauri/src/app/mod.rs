@@ -4,6 +4,7 @@ pub mod connection_service;
 pub mod diagnostics;
 pub mod file_lock_service;
 pub mod file_service;
+pub mod manual_merge;
 pub mod preview;
 pub mod rename_service;
 pub mod search_service;

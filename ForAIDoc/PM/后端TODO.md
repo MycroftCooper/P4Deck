@@ -33,6 +33,14 @@
 
 当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环和 Windows localhost 双用户/双 Client 验收；原生 UI 仍待验收。
 
+### BE-012 — 文本三方手工合并（DONE：Windows localhost；原生 UI/macOS 待验）
+
+- `open/validate/confirm save/confirm resolve` 窄协议绑定 active profile、完整 Context/generation、Workspace/depot/local path、官方 resolve base/source revision、resolve record、size/mtime/SHA-256、encoding/BOM 与结果 digest。`resolve -n -o` tagged 字段和 `p4 print -o` 是权威来源，不猜 have/head。
+- binary/symlink/delete/move/缺基线/不可识别编码/4 MiB 或 100,000 行超限/Workspace 越界明确阻断并降级既有 Resolve 选择。正文只在 IPC 与短期内存存在，不写 Log/Journal/通知/本地持久化。
+- save token 一次消费；mutation lane 内完整 TOCTOU 复核后，以同目录临时文件 + fsync + 平台原子 replace 写入，留下唯一可恢复 backup。LocalFile Journal 只记录 operation 元数据。保存不自动 resolve；独立一次性 token + 明确确认后执行 `resolve -ay` 并复核 unresolved。
+- 成功或未知结果精确触发 Workspace/Pending/Search/Review/Resolve 失效；连接切换清除会话/token，operation group 取消覆盖所有 P4 子命令与最终提交边界。generic GUI `run_p4 resolve` 仍被危险命令策略阻断，未增加 Terminal/外部工具旁路。
+- Rust/Web/Windows localhost 覆盖矩阵与未验范围见《手工文本三方合并工作流》；不包含图形/二进制 merge 插件、外部 mergetool 配置、Stream Graph 或管理员能力。
+
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
 
 ## 已完成

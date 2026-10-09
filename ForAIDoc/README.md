@@ -22,6 +22,8 @@ Terminal / P4 Log 的入口、快捷键、dock/浮窗恢复、连接代次与安
 
 Profile 级 Swarm 设置、支持 URL 矩阵、安全打开边界与限制见 [Swarm 基础链接](Coder/Swarm基础链接.md)。
 
+Resolve 内的 Base/Theirs/Yours/Result 编辑、CAS 保存、原子备份与显式 resolve 复核见 [手工文本三方合并工作流](Designer/手工文本合并工作流.md)。
+
 逐项实施与验收入口：[右键菜单对象与菜单项总表](Designer/右键菜单对象与菜单项总表.md)，按对象列明全部候选菜单项及实现批次。
 
 菜单 UI 逐项记录：[500 项 UI 验收台账](Coder/右键菜单UI逐项验收台账.md)。UI 通过不等于后端流程已接通。

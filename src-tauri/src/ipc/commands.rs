@@ -951,6 +951,65 @@ pub async fn confirm_resolve(
         .confirm_resolve(confirmation, Some(&app))
         .await)
 }
+
+#[tauri::command]
+pub async fn open_manual_merge(
+    request: ManualMergeOpenRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ManualMergeSession, String> {
+    state.workflows.open_manual_merge(request, Some(&app)).await
+}
+
+#[tauri::command]
+pub fn validate_manual_merge(
+    request: ManualMergeValidateRequest,
+    state: State<'_, AppState>,
+) -> Result<ManualMergeValidation, String> {
+    state.workflows.validate_manual_merge(request)
+}
+
+#[tauri::command]
+pub async fn confirm_manual_merge_save(
+    confirmation: ManualMergeSaveConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ManualMergeSaveResult, String> {
+    let result = state
+        .workflows
+        .confirm_manual_merge_save(confirmation, Some(&app))
+        .await?;
+    if matches!(
+        result.outcome,
+        WorkflowOutcome::Succeeded | WorkflowOutcome::Partial | WorkflowOutcome::Unknown
+    ) {
+        state.changelists.invalidate_pending_pages();
+        state.search.clear_for_context_switch();
+        state.files.clear_review_cache();
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn confirm_manual_merge_resolve(
+    confirmation: ManualMergeResolveConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<WorkflowResult, String> {
+    let result = state
+        .workflows
+        .confirm_manual_merge_resolve(confirmation, Some(&app))
+        .await;
+    if matches!(
+        result.outcome,
+        WorkflowOutcome::Succeeded | WorkflowOutcome::Partial | WorkflowOutcome::Unknown
+    ) {
+        state.changelists.invalidate_pending_pages();
+        state.search.clear_for_context_switch();
+        state.files.clear_review_cache();
+    }
+    Ok(result)
+}
 #[tauri::command]
 pub async fn open_local_path(
     request: crate::app::system_open::OpenLocalPathRequest,

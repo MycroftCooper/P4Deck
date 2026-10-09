@@ -234,6 +234,62 @@
   border-radius: 6px;
   padding: 8px;
 }
+
+.manual-merge {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.manual-merge-toolbar,
+.manual-merge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-merge-toolbar label,
+.manual-merge-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-merge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.manual-merge-grid label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.manual-merge-grid textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  tab-size: 2;
+  font: 12px/1.45 var(--font-mono);
+  white-space: pre;
+  overflow: auto;
+}
+
+@media (max-width: 720px) {
+  .manual-merge-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manual-merge-grid textarea {
+    min-height: 160px;
+  }
+}
 @media (max-width: 600px) {
   .workflow-version-grid {
     grid-template-columns: 1fr;

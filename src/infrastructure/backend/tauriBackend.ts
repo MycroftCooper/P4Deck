@@ -97,4 +97,11 @@ export const tauriBackend: Backend = {
     invoke("confirm_unshelve", { confirmation }),
   preflightResolve: (request) => invoke("preflight_resolve", { request }),
   confirmResolve: (confirmation) => invoke("confirm_resolve", { confirmation }),
+  openManualMerge: (request) => invoke("open_manual_merge", { request }),
+  validateManualMerge: (request) =>
+    invoke("validate_manual_merge", { request }),
+  confirmManualMergeSave: (confirmation) =>
+    invoke("confirm_manual_merge_save", { confirmation }),
+  confirmManualMergeResolve: (confirmation) =>
+    invoke("confirm_manual_merge_resolve", { confirmation }),
 };

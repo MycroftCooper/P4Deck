@@ -2485,6 +2485,111 @@ pub struct ResolveConfirmation {
     pub resolutions: Vec<ResolveSelection>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeOpenRequest {
+    pub depot_path: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeFileSnapshot {
+    pub size: u64,
+    pub modified_ms: i64,
+    pub content_digest: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeSource {
+    pub depot_path: String,
+    pub revision: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeSession {
+    pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile_id: Option<String>,
+    pub target: WorkflowTargetSnapshot,
+    pub depot_path: String,
+    pub local_path: String,
+    pub base_source: ManualMergeSource,
+    pub theirs_source: ManualMergeSource,
+    pub file_snapshot: ManualMergeFileSnapshot,
+    pub resolve_digest: String,
+    pub base: String,
+    pub theirs: String,
+    pub yours: String,
+    pub result: String,
+    pub encoding: String,
+    pub line_ending: String,
+    pub had_bom: bool,
+    pub unresolved_blocks: usize,
+    pub expires_at: i64,
+    pub operation_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeValidateRequest {
+    pub session_id: String,
+    pub result: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeValidation {
+    pub valid: bool,
+    pub unresolved_blocks: usize,
+    pub result_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeSaveConfirmation {
+    pub token: String,
+    pub session_id: String,
+    pub result_digest: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeSaveResult {
+    pub outcome: WorkflowOutcome,
+    pub message: String,
+    pub result_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolve_token: Option<String>,
+    pub resolve_expires_at: i64,
+    pub operation_id: String,
+    pub refresh: WorkflowRefreshAdvice,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualMergeResolveConfirmation {
+    pub token: String,
+    pub session_id: String,
+    pub result_digest: String,
+    pub acknowledge: bool,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkflowFileState {

@@ -41,6 +41,7 @@ pub struct UnshelveInspection {
 
 pub struct ResolveInspection {
     pub facts: Vec<parser::WorkflowFileFact>,
+    pub records: Vec<parser::ResolveRecord>,
     pub preview: Vec<String>,
     pub preview_succeeded: bool,
     pub operation_ids: Vec<String>,
@@ -76,6 +77,24 @@ impl WorkflowRepository {
 
     pub fn begin_operation_group(&self, operation_id: String) -> crate::p4::runner::OperationGroup {
         self.runner.begin_operation_group(operation_id)
+    }
+
+    pub fn start_local_file_operation(
+        &self,
+        operation_id: &str,
+        context: &P4Context,
+    ) -> Result<(), String> {
+        self.runner
+            .start_local_file_operation(operation_id, context)
+    }
+
+    pub fn finish_local_file_operation(
+        &self,
+        operation_id: &str,
+        succeeded: bool,
+    ) -> Result<(), String> {
+        self.runner
+            .finish_local_file_operation(operation_id, succeeded)
     }
 
     pub async fn shelf_detail(
@@ -407,6 +426,7 @@ impl WorkflowRepository {
         operation_ids.push(preview_result.operation_id.clone());
         Ok(ResolveInspection {
             facts,
+            records: parser::resolve_records(&preview_result.events),
             preview: parser::preview_lines(&preview_result.events),
             preview_succeeded: preview_result.exit_code == 0,
             operation_ids,
@@ -478,6 +498,21 @@ impl WorkflowRepository {
             app,
         )
         .await
+    }
+
+    pub async fn print_revision_to(
+        &self,
+        context: &P4Context,
+        spec: &str,
+        output: &std::path::Path,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        let output = output
+            .to_str()
+            .ok_or("manual merge temporary path is not valid Unicode")?;
+        self.checked_named(context, command::print_to(spec, output)?, operation_id, app)
+            .await
     }
 
     async fn workspace_context(

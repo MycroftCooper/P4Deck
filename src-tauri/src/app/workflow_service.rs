@@ -1,6 +1,7 @@
 use crate::{
     app::{
         confirmation::{ConfirmationStore, ExpiringConfirmation},
+        manual_merge,
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -74,6 +75,41 @@ struct ResolveEvaluation {
 }
 
 #[derive(Clone)]
+struct ManualMergeSessionRecord {
+    session: ManualMergeSession,
+    active_profile_id: Option<String>,
+}
+
+#[derive(Clone)]
+struct ManualMergeSaveRecord {
+    session_id: String,
+    result_digest: String,
+    bytes: Vec<u8>,
+    expires_at: i64,
+}
+
+impl ExpiringConfirmation for ManualMergeSaveRecord {
+    fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+}
+
+#[derive(Clone)]
+struct ManualMergeResolveRecord {
+    session_id: String,
+    result_digest: String,
+    file_snapshot: ManualMergeFileSnapshot,
+    resolve_digest: String,
+    expires_at: i64,
+}
+
+impl ExpiringConfirmation for ManualMergeResolveRecord {
+    fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+}
+
+#[derive(Clone)]
 struct ShelfDetailSnapshot {
     query_fingerprint: String,
     connection_fingerprint: String,
@@ -99,6 +135,9 @@ pub struct WorkflowService {
     ttl_ms: u64,
     shelf_details: parking_lot::Mutex<ShelfDetailSnapshotState>,
     shelf_generation: AtomicU64,
+    manual_merge_sessions: parking_lot::Mutex<HashMap<String, ManualMergeSessionRecord>>,
+    manual_merge_saves: ConfirmationStore<ManualMergeSaveRecord>,
+    manual_merge_resolves: ConfirmationStore<ManualMergeResolveRecord>,
 }
 
 impl WorkflowService {
@@ -128,11 +167,17 @@ impl WorkflowService {
                 access_clock: 0,
             }),
             shelf_generation: AtomicU64::new(1),
+            manual_merge_sessions: parking_lot::Mutex::new(HashMap::new()),
+            manual_merge_saves: ConfirmationStore::default(),
+            manual_merge_resolves: ConfirmationStore::default(),
         }
     }
 
     pub fn clear_confirmations(&self) {
         self.tokens.clear();
+        self.manual_merge_sessions.lock().clear();
+        self.manual_merge_saves.clear();
+        self.manual_merge_resolves.clear();
     }
 
     pub fn clear_shelf_details(&self) {
@@ -1073,6 +1118,601 @@ impl WorkflowService {
         }
     }
 
+    pub async fn open_manual_merge(
+        &self,
+        request: ManualMergeOpenRequest,
+        app: Option<&AppHandle>,
+    ) -> Result<ManualMergeSession, String> {
+        let paths = normalized_paths(vec![request.depot_path]);
+        if paths.len() != 1 {
+            return Err("Manual merge opens exactly one explicit depot file".into());
+        }
+        let operation_id = valid_operation_id(request.operation_id);
+        let operation = self.repository.begin_operation_group(operation_id.clone());
+        let (context, generation) = self.contexts.snapshot();
+        let active_profile_id = self.contexts.active_profile_id();
+        let inspection = self
+            .repository
+            .inspect_resolve(&context, &paths, &format!("{operation_id}:inspect"), app)
+            .await?;
+        operation.ensure_active()?;
+        let resolve_record_digest = content_digest(&(
+            &inspection.facts,
+            &inspection.records,
+            &inspection.preview,
+            &paths,
+        ));
+        let fact = inspection
+            .facts
+            .iter()
+            .find(|fact| fact.depot_path == paths[0])
+            .cloned()
+            .ok_or("Perforce did not return the target file metadata")?;
+        let evaluation = evaluate_resolve(&paths, inspection);
+        if !evaluation.blockers.is_empty()
+            || evaluation.conflicts.len() != 1
+            || evaluation.conflicts[0].status != "unresolved"
+            || evaluation.conflicts[0].conflict_type != "content"
+        {
+            return Err(format!(
+                "This resolve record is not a supported unresolved text-content conflict (status={}, type={}, sources={}); use the existing resolve choices",
+                evaluation
+                    .conflicts
+                    .first()
+                    .map(|value| value.status.as_str())
+                    .unwrap_or("missing"),
+                evaluation
+                    .conflicts
+                    .first()
+                    .map(|value| value.conflict_type.as_str())
+                    .unwrap_or("missing"),
+                evaluation.conflicts.first().map(|value| value.sources.len()).unwrap_or(0)
+            ));
+        }
+        let conflict = &evaluation.conflicts[0];
+        let base = conflict
+            .sources
+            .iter()
+            .find(|source| source.role == "base")
+            .and_then(|source| Some((source.depot_path.clone()?, source.revision?)))
+            .filter(|(_, revision)| *revision > 0)
+            .ok_or("Perforce did not provide an authoritative base revision")?;
+        let theirs = conflict
+            .sources
+            .iter()
+            .find(|source| source.role == "theirs")
+            .and_then(|source| Some((source.depot_path.clone()?, source.revision?)))
+            .filter(|(_, revision)| *revision > 0)
+            .ok_or("Perforce did not provide an authoritative incoming revision")?;
+        let file_type = fact.file_type.to_ascii_lowercase();
+        let action = fact.action.to_ascii_lowercase();
+        if file_type.contains("binary")
+            || file_type.contains("symlink")
+            || action.contains("delete")
+            || action.contains("move")
+        {
+            return Err(
+                "Binary, symlink, delete, and move resolves stay on the existing resolve choices"
+                    .into(),
+            );
+        }
+        let root = context
+            .cwd
+            .as_deref()
+            .ok_or("Workspace root is not configured")?;
+        let local = fact
+            .client_path
+            .as_deref()
+            .ok_or("Perforce did not return a local target path")?;
+        let local_path = manual_merge::secure_workspace_file(root, local)?;
+        let (file_snapshot, yours_bytes) = manual_merge::snapshot(&local_path)?;
+        let yours = manual_merge::decode(&yours_bytes)?;
+        let temp_root = std::env::temp_dir().join(format!("p4deck-merge-{}", Uuid::new_v4()));
+        std::fs::create_dir(&temp_root)
+            .map_err(|error| format!("Cannot create protected merge staging directory: {error}"))?;
+        let base_path = temp_root.join("base");
+        let theirs_path = temp_root.join("theirs");
+        let load_result = async {
+            let base_spec = format!("{}#{}", base.0, base.1);
+            let theirs_spec = format!("{}#{}", theirs.0, theirs.1);
+            self.repository
+                .print_revision_to(
+                    &context,
+                    &base_spec,
+                    &base_path,
+                    format!("{operation_id}:base"),
+                    app,
+                )
+                .await?;
+            operation.ensure_active()?;
+            self.repository
+                .print_revision_to(
+                    &context,
+                    &theirs_spec,
+                    &theirs_path,
+                    format!("{operation_id}:theirs"),
+                    app,
+                )
+                .await?;
+            operation.ensure_active()?;
+            let base_bytes = std::fs::read(&base_path)
+                .map_err(|error| format!("Cannot read staged base revision: {error}"))?;
+            let theirs_bytes = std::fs::read(&theirs_path)
+                .map_err(|error| format!("Cannot read staged incoming revision: {error}"))?;
+            if base_bytes.len() as u64 > manual_merge::MAX_MANUAL_MERGE_BYTES
+                || theirs_bytes.len() as u64 > manual_merge::MAX_MANUAL_MERGE_BYTES
+            {
+                return Err("A merge input exceeds the 4 MiB text safety limit".into());
+            }
+            Ok::<_, String>((
+                manual_merge::decode(&base_bytes)?,
+                manual_merge::decode(&theirs_bytes)?,
+            ))
+        }
+        .await;
+        let _ = std::fs::remove_dir_all(&temp_root);
+        let (base_doc, theirs_doc) = load_result?;
+        let final_record = self
+            .repository
+            .inspect_resolve(
+                &context,
+                &paths,
+                &format!("{operation_id}:final-record"),
+                app,
+            )
+            .await?;
+        if content_digest(&(
+            &final_record.facts,
+            &final_record.records,
+            &final_record.preview,
+            &paths,
+        )) != resolve_record_digest
+        {
+            return Err(
+                "The Perforce resolve record changed while the merge inputs were loading".into(),
+            );
+        }
+        let mut operation_ids = evaluation.operation_ids.clone();
+        operation_ids.extend([
+            format!("{operation_id}:base"),
+            format!("{operation_id}:theirs"),
+        ]);
+        operation_ids.extend(final_record.operation_ids);
+        self.ensure_manual_context(&context, generation, active_profile_id.as_deref())?;
+        operation.ensure_active()?;
+        let (result, unresolved_blocks) = manual_merge::merge_text(
+            &base_doc.text,
+            &yours.text,
+            &theirs_doc.text,
+            &yours.line_ending,
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let target = target("resolve", &context, generation, None, None, paths.clone());
+        let session = ManualMergeSession {
+            session_id: session_id.clone(),
+            active_profile_id: active_profile_id.clone(),
+            target,
+            depot_path: paths[0].clone(),
+            local_path: local_path.to_string_lossy().into_owned(),
+            base_source: ManualMergeSource {
+                depot_path: base.0,
+                revision: base.1,
+            },
+            theirs_source: ManualMergeSource {
+                depot_path: theirs.0,
+                revision: theirs.1,
+            },
+            file_snapshot,
+            resolve_digest: resolve_record_digest,
+            base: base_doc.text,
+            theirs: theirs_doc.text,
+            yours: yours.text,
+            result,
+            encoding: yours.encoding,
+            line_ending: yours.line_ending,
+            had_bom: yours.had_bom,
+            unresolved_blocks,
+            expires_at: now_ms().saturating_add(20 * 60 * 1000),
+            operation_ids,
+        };
+        self.manual_merge_sessions.lock().insert(
+            session_id,
+            ManualMergeSessionRecord {
+                session: session.clone(),
+                active_profile_id,
+            },
+        );
+        Ok(session)
+    }
+
+    pub fn validate_manual_merge(
+        &self,
+        request: ManualMergeValidateRequest,
+    ) -> Result<ManualMergeValidation, String> {
+        let record = self.manual_session(&request.session_id)?;
+        self.ensure_manual_target_current(&record)?;
+        let unresolved_blocks = manual_merge::unresolved_blocks(&request.result);
+        let bytes = manual_merge::encode(
+            &request.result,
+            &record.session.encoding,
+            record.session.had_bom,
+        )?;
+        if bytes.len() as u64 > manual_merge::MAX_MANUAL_MERGE_BYTES {
+            return Err("Edited result exceeds the 4 MiB text safety limit".into());
+        }
+        if request.result.lines().count() > manual_merge::MAX_MANUAL_MERGE_LINES {
+            return Err("Edited result exceeds the 100,000-line text safety limit".into());
+        }
+        let result_digest = manual_merge::sha256(&bytes);
+        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
+        let valid = unresolved_blocks == 0 && !manual_merge::has_conflict_marker(&request.result);
+        let token = valid.then(|| {
+            self.manual_merge_saves.issue(
+                ManualMergeSaveRecord {
+                    session_id: request.session_id,
+                    result_digest: result_digest.clone(),
+                    bytes,
+                    expires_at,
+                },
+                now_ms(),
+            )
+        });
+        Ok(ManualMergeValidation {
+            valid,
+            unresolved_blocks,
+            result_digest,
+            token,
+            expires_at,
+            message: if valid {
+                "Result has no P4Deck conflict blocks and is ready for a CAS-protected save.".into()
+            } else if unresolved_blocks > 0 {
+                format!("Resolve {unresolved_blocks} conflict block(s) before saving.")
+            } else {
+                "Remove the incomplete P4Deck conflict marker before saving.".into()
+            },
+        })
+    }
+
+    pub async fn confirm_manual_merge_save(
+        &self,
+        confirmation: ManualMergeSaveConfirmation,
+        app: Option<&AppHandle>,
+    ) -> Result<ManualMergeSaveResult, String> {
+        let _gate = self.confirmation_gate.lock().await;
+        let record = self
+            .manual_merge_saves
+            .consume(&confirmation.token)
+            .ok_or("The manual merge save token is unknown or was already used")?;
+        if record.expires_at <= now_ms() {
+            return Err("The manual merge save token expired".into());
+        }
+        if record.session_id != confirmation.session_id
+            || record.result_digest != confirmation.result_digest
+        {
+            return Err("The manual merge save token is bound to another result".into());
+        }
+        let mut session_record = self.manual_session(&record.session_id)?;
+        self.ensure_manual_target_current(&session_record)?;
+        let operation_id = valid_operation_id(confirmation.operation_id);
+        let operation = self.repository.begin_operation_group(operation_id.clone());
+        let (context, _) = self.contexts.snapshot();
+        let _guard = self.repository.lock_mutations(&context.server).await;
+        self.ensure_manual_target_current(&session_record)?;
+        operation.ensure_active()?;
+        let recheck = self
+            .repository
+            .inspect_resolve(
+                &context,
+                &[session_record.session.depot_path.clone()],
+                &format!("{operation_id}:recheck"),
+                app,
+            )
+            .await?;
+        let resolve_record_digest = content_digest(&(
+            &recheck.facts,
+            &recheck.records,
+            &recheck.preview,
+            &[session_record.session.depot_path.clone()],
+        ));
+        let evaluation = evaluate_resolve(&[session_record.session.depot_path.clone()], recheck);
+        if !evaluation.blockers.is_empty()
+            || resolve_record_digest != session_record.session.resolve_digest
+        {
+            return Err("The Perforce resolve record changed after the editor was opened".into());
+        }
+        let root = context
+            .cwd
+            .as_deref()
+            .ok_or("Workspace root is not configured")?;
+        let path = manual_merge::secure_workspace_file(root, &session_record.session.local_path)?;
+        let (current, _) = manual_merge::snapshot(&path)?;
+        if current != session_record.session.file_snapshot {
+            return Err("The workspace file changed outside this merge session".into());
+        }
+        operation.ensure_active()?;
+        self.repository
+            .start_local_file_operation(&operation_id, &context)?;
+        let saved = manual_merge::atomic_replace_with_backup(&path, &record.bytes);
+        let _ = self
+            .repository
+            .finish_local_file_operation(&operation_id, saved.is_ok());
+        let saved = saved?;
+        let (saved_snapshot, _) = manual_merge::snapshot(&path)?;
+        if saved_snapshot.content_digest != record.result_digest {
+            return Err("Atomic save completed but the result digest could not be verified".into());
+        }
+        session_record.session.file_snapshot = saved_snapshot.clone();
+        self.manual_merge_sessions
+            .lock()
+            .insert(record.session_id.clone(), session_record.clone());
+        let resolve_expires_at = now_ms().saturating_add(self.ttl_ms as i64);
+        let resolve_token = self.manual_merge_resolves.issue(
+            ManualMergeResolveRecord {
+                session_id: record.session_id,
+                result_digest: record.result_digest.clone(),
+                file_snapshot: saved_snapshot,
+                resolve_digest: session_record.session.resolve_digest.clone(),
+                expires_at: resolve_expires_at,
+            },
+            now_ms(),
+        );
+        self.invalidate(
+            &context,
+            &[session_record.session.depot_path.clone()],
+            InvalidationReason::FileMutation,
+        );
+        Ok(ManualMergeSaveResult {
+            outcome: if saved.durability_confirmed {
+                WorkflowOutcome::Succeeded
+            } else {
+                WorkflowOutcome::Unknown
+            },
+            message: if saved.durability_confirmed {
+                "Edited merge result was atomically saved and verified. It is not marked resolved yet."
+                    .into()
+            } else {
+                "Edited merge result and backup were verified, but directory durability could not be confirmed. Review the backup before explicitly marking resolved."
+                    .into()
+            },
+            result_digest: record.result_digest,
+            backup_path: Some(saved.backup_path.to_string_lossy().into_owned()),
+            resolve_token: Some(resolve_token),
+            resolve_expires_at,
+            operation_id,
+            refresh: refresh(
+                vec![session_record.session.depot_path],
+                "Manual merge content changed; dependent views must refresh.",
+            ),
+        })
+    }
+
+    pub async fn confirm_manual_merge_resolve(
+        &self,
+        confirmation: ManualMergeResolveConfirmation,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        let _gate = self.confirmation_gate.lock().await;
+        let Some(record) = self.manual_merge_resolves.consume(&confirmation.token) else {
+            return rejected_manual(
+                WorkflowFailureCode::TokenUnknown,
+                "The manual resolve token is unknown or was already used.",
+            );
+        };
+        if !confirmation.acknowledge {
+            return rejected_manual(
+                WorkflowFailureCode::PreflightBlocked,
+                "Explicit acknowledgement is required before marking the edited file resolved.",
+            );
+        }
+        if record.expires_at <= now_ms() {
+            return rejected_manual(
+                WorkflowFailureCode::TokenExpired,
+                "The manual resolve confirmation expired.",
+            );
+        }
+        if record.session_id != confirmation.session_id
+            || record.result_digest != confirmation.result_digest
+        {
+            return rejected_manual(
+                WorkflowFailureCode::TargetMismatch,
+                "The manual resolve confirmation is bound to another result.",
+            );
+        }
+        let Ok(session) = self.manual_session(&record.session_id) else {
+            return rejected_manual(
+                WorkflowFailureCode::TokenExpired,
+                "The manual merge session expired.",
+            );
+        };
+        if self.ensure_manual_target_current(&session).is_err() {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContextChanged,
+                "The connection, profile, or workspace changed after save.",
+            );
+        }
+        let operation_id = valid_operation_id(confirmation.operation_id);
+        let operation = self.repository.begin_operation_group(operation_id.clone());
+        let (context, _) = self.contexts.snapshot();
+        let guard = self.repository.lock_mutations(&context.server).await;
+        if self.ensure_manual_target_current(&session).is_err() {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContextChanged,
+                "The connection, profile, or workspace changed before resolve.",
+            );
+        }
+        if operation.ensure_active().is_err() {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::Cancelled,
+                "The manual resolve operation was cancelled.",
+            );
+        }
+        let Ok(path) = manual_merge::secure_workspace_file(
+            context.cwd.as_deref().unwrap_or_default(),
+            &session.session.local_path,
+        ) else {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContentChanged,
+                "The saved workspace path is no longer safe.",
+            );
+        };
+        let Ok((snapshot, _)) = manual_merge::snapshot(&path) else {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContentChanged,
+                "The saved result can no longer be verified.",
+            );
+        };
+        if snapshot != record.file_snapshot || snapshot.content_digest != record.result_digest {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContentChanged,
+                "The saved result changed before resolve confirmation.",
+            );
+        }
+        let recheck = self
+            .repository
+            .inspect_resolve(
+                &context,
+                std::slice::from_ref(&session.session.depot_path),
+                &format!("{operation_id}:recheck"),
+                app,
+            )
+            .await;
+        let Ok(recheck) = recheck else {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::PreflightBlocked,
+                "The resolve record could not be revalidated.",
+            );
+        };
+        let resolve_record_digest = content_digest(&(
+            &recheck.facts,
+            &recheck.records,
+            &recheck.preview,
+            std::slice::from_ref(&session.session.depot_path),
+        ));
+        let evaluation =
+            evaluate_resolve(std::slice::from_ref(&session.session.depot_path), recheck);
+        if !evaluation.blockers.is_empty() || resolve_record_digest != record.resolve_digest {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::ContentChanged,
+                "The resolve record changed after the edited result was saved.",
+            );
+        }
+        if operation.ensure_active().is_err() {
+            return rejected(
+                &session.session.target,
+                WorkflowFailureCode::Cancelled,
+                "The manual resolve operation was cancelled before execution.",
+            );
+        }
+        let selection = ResolveSelection {
+            depot_path: session.session.depot_path.clone(),
+            strategy: ResolveStrategy::AcceptYours,
+        };
+        let execution = self
+            .repository
+            .execute_resolve(&context, &selection, operation_id.clone(), &guard, app)
+            .await;
+        let mut file = file_result(
+            selection.depot_path.clone(),
+            execution,
+            operation_id.clone(),
+        );
+        if operation.ensure_active().is_err() && file.state != WorkflowFileState::Succeeded {
+            file.state = WorkflowFileState::Unknown;
+            file.message = "Resolve execution was cancelled; refresh before retrying.".into();
+        }
+        let verified = self
+            .repository
+            .inspect_resolve(
+                &context,
+                std::slice::from_ref(&selection.depot_path),
+                &format!("{operation_id}:verify"),
+                app,
+            )
+            .await;
+        match verified {
+            Ok(value)
+                if value.facts.iter().any(|fact| {
+                    fact.depot_path == selection.depot_path && fact.unresolved == 0
+                }) => {}
+            Ok(_) => {
+                file.state = WorkflowFileState::Blocked;
+                file.message = "Perforce still reports this file as unresolved.".into();
+            }
+            Err(_) => {
+                file.state = WorkflowFileState::Unknown;
+                file.message = "Resolve ran, but final state verification was unavailable.".into();
+            }
+        }
+        self.invalidate(
+            &context,
+            &[selection.depot_path],
+            InvalidationReason::ChangelistMutation,
+        );
+        result_from_files(
+            vec![file],
+            vec![
+                format!("{operation_id}:recheck"),
+                operation_id.clone(),
+                format!("{operation_id}:verify"),
+            ],
+            &session.session.target,
+            "Edited result resolve completed with verification.",
+        )
+    }
+
+    fn manual_session(&self, session_id: &str) -> Result<ManualMergeSessionRecord, String> {
+        let mut sessions = self.manual_merge_sessions.lock();
+        sessions.retain(|_, record| record.session.expires_at > now_ms());
+        sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| "The manual merge session is unknown or expired".into())
+    }
+
+    fn ensure_manual_target_current(
+        &self,
+        record: &ManualMergeSessionRecord,
+    ) -> Result<(), String> {
+        let (context, generation) = self.contexts.snapshot();
+        self.ensure_manual_context(&context, generation, record.active_profile_id.as_deref())?;
+        if target(
+            "resolve",
+            &context,
+            generation,
+            None,
+            None,
+            vec![record.session.depot_path.clone()],
+        ) != record.session.target
+        {
+            return Err("The manual merge target no longer matches the active workspace".into());
+        }
+        Ok(())
+    }
+
+    fn ensure_manual_context(
+        &self,
+        context: &P4Context,
+        generation: u64,
+        profile: Option<&str>,
+    ) -> Result<(), String> {
+        let (current, current_generation) = self.contexts.snapshot();
+        if current != *context
+            || current_generation != generation
+            || self.contexts.active_profile_id().as_deref() != profile
+        {
+            return Err("The connection profile or context generation changed".into());
+        }
+        Ok(())
+    }
+
     pub async fn confirm_resolve(
         &self,
         confirmation: ResolveConfirmation,
@@ -1741,7 +2381,7 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
         .iter()
         .map(|fact| (fact.depot_path.clone(), fact))
         .collect::<BTreeMap<_, _>>();
-    let sources = parser::resolve_sources(&inspection.preview);
+    let fallback_sources = parser::resolve_sources(&inspection.preview);
     let preview_lower = inspection.preview.join(" ").to_ascii_lowercase();
     let conflict_type = if preview_lower.contains("filetype") {
         "filetype"
@@ -1756,12 +2396,68 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
     };
     let mut conflicts = Vec::new();
     for path in paths {
+        let record = inspection
+            .records
+            .iter()
+            .find(|record| record.target_file.as_deref() == Some(path.as_str()))
+            .or_else(|| (inspection.records.len() == 1).then(|| &inspection.records[0]));
+        let sources = record
+            .and_then(|record| {
+                Some(vec![
+                    ResolveVersionSource {
+                        role: "base".into(),
+                        depot_path: Some(record.base_file.clone()?),
+                        revision: Some(record.base_revision?),
+                        description: "base revision reported by p4 resolve -n -o".into(),
+                    },
+                    ResolveVersionSource {
+                        role: "theirs".into(),
+                        depot_path: Some(record.from_file.clone()?),
+                        revision: Some(record.end_from_revision?),
+                        description: "incoming revision reported by p4 resolve -n -o".into(),
+                    },
+                ])
+            })
+            .unwrap_or_else(|| fallback_sources.clone());
+        let structured_type = record
+            .and_then(|record| record.resolve_type.as_deref())
+            .map(str::to_ascii_lowercase);
+        let conflict_type = structured_type
+            .as_deref()
+            .map(|value| {
+                if value.contains("content") || value.contains("text") {
+                    "content"
+                } else if value.contains("filetype") || value.contains("type") {
+                    "filetype"
+                } else if value.contains("branch") || value.contains("delete") {
+                    "branch"
+                } else if value.contains("move") {
+                    "move"
+                } else {
+                    conflict_type
+                }
+            })
+            .unwrap_or(conflict_type);
         match facts.get(path).copied() {
             Some(fact) if fact.unresolved > 0 && inspection.preview_succeeded => {
+                let typed_conflict = if conflict_type == "unknown"
+                    && sources.iter().any(|source| source.role == "base")
+                    && sources.iter().any(|source| source.role == "theirs")
+                    && !fact.file_type.to_ascii_lowercase().contains("binary")
+                    && !fact.file_type.to_ascii_lowercase().contains("symlink")
+                    && !fact.action.to_ascii_lowercase().contains("delete")
+                    && !fact.action.to_ascii_lowercase().contains("move")
+                {
+                    // `resolve -n -o` supplied the authoritative three-way record;
+                    // this is stronger than classifying localized preview prose.
+                    "content"
+                } else {
+                    conflict_type
+                };
                 conflicts.push(ResolveConflictDetail {
                     depot_path: path.clone(),
                     client_path: fact.client_path.clone(),
-                    conflict_type: conflict_type.into(),
+                    conflict_type: typed_conflict.into(),
                     status: "unresolved".into(),
                     available_strategies: vec![
                         ResolveStrategy::Safe,
@@ -1769,7 +2465,7 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
                         ResolveStrategy::AcceptTheirs,
                         ResolveStrategy::MergePreview,
                     ],
-                    sources: sources.clone(),
+                    sources,
                     preview: inspection
                         .preview
                         .iter()
@@ -1834,6 +2530,7 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
     let digest = content_digest(&(
         &inspection.facts,
         local_content_facts(&inspection.facts),
+        &inspection.records,
         &inspection.preview,
         paths,
     ));
@@ -2032,6 +2729,21 @@ fn rejected(
         refresh: refresh(
             target.depot_paths.clone(),
             "Refresh related changelist and workspace state before retrying.",
+        ),
+    }
+}
+
+fn rejected_manual(failure: WorkflowFailureCode, message: impl Into<String>) -> WorkflowResult {
+    WorkflowResult {
+        outcome: WorkflowOutcome::Rejected,
+        failure: Some(failure),
+        message: message.into(),
+        operation_ids: Vec::new(),
+        log_reference: None,
+        files: Vec::new(),
+        refresh: refresh(
+            Vec::new(),
+            "Reload the manual merge session and current resolve state before retrying.",
         ),
     }
 }
@@ -2583,6 +3295,7 @@ mod tests {
             &["//depot/a".into()],
             ResolveInspection {
                 facts: Vec::new(),
+                records: Vec::new(),
                 preview: Vec::new(),
                 preview_succeeded: false,
                 operation_ids: Vec::new(),

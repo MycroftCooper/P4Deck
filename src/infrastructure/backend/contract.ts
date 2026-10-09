@@ -82,6 +82,13 @@ import type {
   ResolvePreflight,
   ResolvePreflightRequest,
   ResolveConfirmation,
+  ManualMergeOpenRequest,
+  ManualMergeSession,
+  ManualMergeValidateRequest,
+  ManualMergeValidation,
+  ManualMergeSaveConfirmation,
+  ManualMergeSaveResult,
+  ManualMergeResolveConfirmation,
   WorkflowConfirmation,
   WorkflowResult,
   RevisionGraph,
@@ -217,4 +224,14 @@ export interface Backend {
   confirmUnshelve(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
   preflightResolve(request: ResolvePreflightRequest): Promise<ResolvePreflight>;
   confirmResolve(confirmation: ResolveConfirmation): Promise<WorkflowResult>;
+  openManualMerge(request: ManualMergeOpenRequest): Promise<ManualMergeSession>;
+  validateManualMerge(
+    request: ManualMergeValidateRequest,
+  ): Promise<ManualMergeValidation>;
+  confirmManualMergeSave(
+    confirmation: ManualMergeSaveConfirmation,
+  ): Promise<ManualMergeSaveResult>;
+  confirmManualMergeResolve(
+    confirmation: ManualMergeResolveConfirmation,
+  ): Promise<WorkflowResult>;
 }

@@ -125,7 +125,30 @@ pub fn unshelve(
 }
 
 pub fn resolve_preview(paths: &[String]) -> Result<Invocation, String> {
-    scoped("resolve", vec!["-n".into()], paths)
+    // `-o` asks the server for the authoritative base revision used by this
+    // resolve record. Manual merge must never infer that revision from have/head.
+    scoped("resolve", vec!["-n".into(), "-o".into()], paths)
+}
+
+pub fn print_to(spec: &str, output: &str) -> Result<Invocation, String> {
+    let valid_revision = spec
+        .rsplit_once('#')
+        .filter(|(path, _)| {
+            path.starts_with("//") && !path.contains(['#', '@', '\r', '\n']) && !path.ends_with('/')
+        })
+        .and_then(|(_, revision)| revision.parse::<i64>().ok())
+        .is_some_and(|revision| revision > 0);
+    if !valid_revision {
+        return Err("manual merge source must be an explicit depot revision".into());
+    }
+    if output.trim().is_empty() || output.contains(['\r', '\n']) {
+        return Err("manual merge output path is invalid".into());
+    }
+    Ok(Invocation {
+        command: "print",
+        args: vec!["-q".into(), "-o".into(), output.into(), spec.into()],
+        argument_input: None,
+    })
 }
 
 pub fn resolve(path: &str, strategy: ResolveStrategy) -> Result<Invocation, String> {
@@ -212,5 +235,20 @@ mod tests {
             ["-c", "default", "//depot/a b#@%.txt"]
         );
         assert_eq!(describe_shelf(7).unwrap().args, ["-s", "-S", "7"]);
+        assert_eq!(
+            print_to("//depot/a b.txt#3", "C:\\merge\\base")
+                .unwrap()
+                .args,
+            ["-q", "-o", "C:\\merge\\base", "//depot/a b.txt#3"]
+        );
+        for invalid in [
+            "//depot/a",
+            "//depot/a#0",
+            "//depot/a#head",
+            "//depot/a#3#4",
+            "//depot/a@7#3",
+        ] {
+            assert!(print_to(invalid, "out").is_err(), "accepted {invalid}");
+        }
     }
 }

@@ -1,5 +1,12 @@
 # 前端操作流程 TODO
 
+## 最近完成：深文本冲突 / 手工合并（2026-10-09）
+
+- `ResolveDialog` 内新增 Base / Theirs / Yours / Result 四栏编辑器，提供当前冲突块 Accept Yours/Theirs/Both、前后导航、未解决计数、搜索、撤销/重做、编码/BOM/换行提示与窄窗单栏布局。
+- UI 按 `Open/Load → Edit → Validate → Confirm atomic save → Explicit Resolve/Verify` 执行；正文不进通知、日志或持久化。连接 key 变化取消 operation group 并隔离迟到响应；Browser Mock 明确拒绝伪造三方内容。
+- 保存与 Resolve 是两个独立确认点：保存成功展示可恢复 backup，用户再次勾选确认后才接受已编辑 Workspace 结果。partial/unknown/验证失败保留提示并要求刷新，不自动重试 mutation。
+- 浏览器自动化覆盖重复块定点替换、CRLF/Both 和既有 Resolve 状态机；Windows/macOS 原生焦点、IME、读屏与窄窗实机仍待外部验收。完整安全边界见《手工文本三方合并工作流》。
+
 ## 最近完成：文件 Lock/Unlock 与独占状态（2026-10-09）
 
 - 工具栏、原生 Changes 菜单以及 F01/F02/F07/C04/C05 右键菜单统一打开 `FileLockDialog`，按 `Preflight → Review → Execute → Verify` 展示完整文件集合、opened action、Default/编号 CL、filetype/`+l`、我方/他方锁 owner、other-open、权限、blocker/warning 和逐文件结果。

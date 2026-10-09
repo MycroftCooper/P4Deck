@@ -316,7 +316,11 @@ pub fn run() {
             ipc::commands::preflight_unshelve,
             ipc::commands::confirm_unshelve,
             ipc::commands::preflight_resolve,
-            ipc::commands::confirm_resolve
+            ipc::commands::confirm_resolve,
+            ipc::commands::open_manual_merge,
+            ipc::commands::validate_manual_merge,
+            ipc::commands::confirm_manual_merge_save,
+            ipc::commands::confirm_manual_merge_resolve
         ])
         .run(tauri::generate_context!())
         .expect("error while running P4Deck");

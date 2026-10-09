@@ -23,6 +23,17 @@ pub struct WorkflowFileFact {
     pub our_lock: usize,
 }
 
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveRecord {
+    pub target_file: Option<String>,
+    pub base_file: Option<String>,
+    pub base_revision: Option<i64>,
+    pub from_file: Option<String>,
+    pub end_from_revision: Option<i64>,
+    pub resolve_type: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionFact {
     pub depot_path: Option<String>,
@@ -280,6 +291,41 @@ pub fn resolve_sources(lines: &[String]) -> Vec<ResolveVersionSource> {
     sources
 }
 
+pub fn resolve_records(events: &[OperationEvent]) -> Vec<ResolveRecord> {
+    json_values(events)
+        .into_iter()
+        .filter_map(|value| {
+            let pick = |keys: &[&str]| {
+                keys.iter()
+                    .find_map(|key| value.get(*key).and_then(Value::as_str))
+                    .map(str::to_owned)
+            };
+            let revision = |keys: &[&str]| {
+                keys.iter().find_map(|key| {
+                    value.get(*key).and_then(|item| {
+                        item.as_i64().or_else(|| {
+                            item.as_str()
+                                .and_then(|text| text.trim_start_matches('#').parse().ok())
+                        })
+                    })
+                })
+            };
+            let record = ResolveRecord {
+                target_file: pick(&["clientFile", "toFile", "depotFile"]),
+                base_file: pick(&["resolveBaseFile", "baseFile"]),
+                base_revision: revision(&["resolveBaseRev", "baseRev"]),
+                from_file: pick(&["resolveFromFile", "fromFile"]),
+                end_from_revision: revision(&["resolveEndFromRev", "endFromRev"]),
+                resolve_type: pick(&["resolveType"]),
+            };
+            (record.base_file.is_some()
+                || record.from_file.is_some()
+                || record.resolve_type.is_some())
+            .then_some(record)
+        })
+        .collect()
+}
+
 fn split_revision(value: &str) -> (Option<String>, Option<i64>) {
     match value.rsplit_once('#') {
         Some((path, revision)) if path.starts_with("//") => {
@@ -389,6 +435,12 @@ mod tests {
         let sources =
             resolve_sources(&["//client/a - merging //depot/a#3 using base //depot/a#2".into()]);
         assert_eq!(sources.len(), 2);
+        let records = resolve_records(&[event(
+            r##"{"clientFile":"//client/a","resolveBaseFile":"//depot/a","resolveBaseRev":"#2","resolveFromFile":"//depot/a","resolveEndFromRev":"3","resolveType":"content"}"##,
+        )]);
+        assert_eq!(records[0].base_revision, Some(2));
+        assert_eq!(records[0].end_from_revision, Some(3));
+        assert_eq!(records[0].resolve_type.as_deref(), Some("content"));
     }
 
     #[test]

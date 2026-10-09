@@ -1716,6 +1716,77 @@ export interface ResolveConfirmation extends WorkflowConfirmation {
   resolutions: ResolveSelection[];
 }
 
+export interface ManualMergeOpenRequest {
+  depotPath: string;
+  operationId?: string;
+}
+export interface ManualMergeFileSnapshot {
+  size: number;
+  modifiedMs: number;
+  contentDigest: string;
+}
+export interface ManualMergeSource {
+  depotPath: string;
+  revision: number;
+}
+export interface ManualMergeSession {
+  sessionId: string;
+  activeProfileId?: string;
+  target: WorkflowTargetSnapshot;
+  depotPath: string;
+  localPath: string;
+  baseSource: ManualMergeSource;
+  theirsSource: ManualMergeSource;
+  fileSnapshot: ManualMergeFileSnapshot;
+  resolveDigest: string;
+  base: string;
+  theirs: string;
+  yours: string;
+  result: string;
+  encoding: string;
+  lineEnding: "LF" | "CRLF" | "mixed" | "none";
+  hadBom: boolean;
+  unresolvedBlocks: number;
+  expiresAt: number;
+  operationIds: string[];
+}
+export interface ManualMergeValidateRequest {
+  sessionId: string;
+  result: string;
+  operationId?: string;
+}
+export interface ManualMergeValidation {
+  valid: boolean;
+  unresolvedBlocks: number;
+  resultDigest: string;
+  token?: string;
+  expiresAt: number;
+  message: string;
+}
+export interface ManualMergeSaveConfirmation {
+  token: string;
+  sessionId: string;
+  resultDigest: string;
+  operationId?: string;
+}
+export interface ManualMergeSaveResult {
+  outcome: WorkflowOutcome;
+  message: string;
+  resultDigest: string;
+  backupPath?: string;
+  resolveToken?: string;
+  resolveExpiresAt: number;
+  operationId: string;
+  refresh: WorkflowRefreshAdvice;
+}
+export interface ManualMergeResolveConfirmation {
+  token: string;
+  sessionId: string;
+  resultDigest: string;
+  acknowledge: boolean;
+  operationId?: string;
+}
+
 export interface WorkflowFileResult {
   depotPath: string;
   state: "succeeded" | "failed" | "cancelled" | "blocked" | "unknown";

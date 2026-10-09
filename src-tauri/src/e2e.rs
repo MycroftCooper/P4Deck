@@ -13,20 +13,21 @@ mod tests {
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, FileLockConfirmation,
             FileLockFailureCode, FileLockIssueCode, FileLockOperation, FileLockOutcome,
-            FileLockOwnership, FileLockPreflightRequest, LoginRequest, MoveFilesPreflightRequest,
-            OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
-            PendingChangeMutation, PendingChangeMutationRequest, PendingChangeQuery,
-            PendingChangeSort, RenameMoveConfirmation, RenameMoveFailureCode, RenameMoveIssueCode,
-            RenameMoveOutcome, RenameMovePreflightRequest, ResolveConfirmation,
-            ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
-            SetActiveConnectionProfileRequest, ShelfDetailRequest, ShelfFilePreviewRequest,
-            ShelfMode, ShelfPreflightRequest, StreamSwitchConfirmation, StreamSwitchFailureCode,
-            StreamSwitchIssueCode, StreamSwitchMode, StreamSwitchOutcome,
-            StreamSwitchPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
-            SubmitPreflightRequest, SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode,
-            SyncOutcome, SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec,
-            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
-            WorkflowOutcome,
+            FileLockOwnership, FileLockPreflightRequest, LoginRequest, ManualMergeOpenRequest,
+            ManualMergeResolveConfirmation, ManualMergeSaveConfirmation,
+            ManualMergeValidateRequest, MoveFilesPreflightRequest, OperationResult,
+            OperationSource, OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
+            PendingChangeMutationRequest, PendingChangeQuery, PendingChangeSort,
+            RenameMoveConfirmation, RenameMoveFailureCode, RenameMoveIssueCode, RenameMoveOutcome,
+            RenameMovePreflightRequest, ResolveConfirmation, ResolvePreflightRequest,
+            ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest,
+            ShelfDetailRequest, ShelfFilePreviewRequest, ShelfMode, ShelfPreflightRequest,
+            StreamSwitchConfirmation, StreamSwitchFailureCode, StreamSwitchIssueCode,
+            StreamSwitchMode, StreamSwitchOutcome, StreamSwitchPreflightRequest,
+            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
+            SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
+            SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
+            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, locks::LockRepository,
@@ -5771,6 +5772,290 @@ mod tests {
         )
         .await?;
         delete_empty_change(changelists, context, source_change).await?;
+        exercise_manual_text_merge(runner, changelists, workflows, context, root).await?;
+        Ok(())
+    }
+
+    async fn exercise_manual_text_merge(
+        runner: &Arc<P4Runner>,
+        changelists: &ChangelistService,
+        workflows: &WorkflowService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let suffix = uuid::Uuid::new_v4().simple().to_string();
+        let directory = format!("p4deck-manual-merge-e2e/{}", &suffix[..12]);
+        let main = format!("//depot/{directory}/main.txt");
+        let feature = format!("//depot/{directory}/feature.txt");
+        let local_dir = root.join(&directory);
+        std::fs::create_dir_all(&local_dir).map_err(|error| error.to_string())?;
+        let local_main = local_dir.join("main.txt");
+        let local_feature = local_dir.join("feature.txt");
+
+        let seed = create_numbered_change(changelists, context, "manual merge seed").await?;
+        std::fs::write(&local_main, b"shared base\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "add",
+            vec!["-c".into(), seed.to_string(), main.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), seed.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let branch = create_numbered_change(changelists, context, "manual merge branch").await?;
+        checked_run(
+            runner,
+            context,
+            "integrate",
+            vec![
+                "-c".into(),
+                branch.to_string(),
+                main.clone(),
+                feature.clone(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "resolve",
+            vec!["-at".into(), feature.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), branch.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let yours_change =
+            create_numbered_change(changelists, context, "manual merge yours").await?;
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec!["-c".into(), yours_change.to_string(), main.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        std::fs::write(&local_main, b"workspace side\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), yours_change.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let theirs_change =
+            create_numbered_change(changelists, context, "manual merge theirs").await?;
+        checked_run(
+            runner,
+            context,
+            "edit",
+            vec!["-c".into(), theirs_change.to_string(), feature.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        std::fs::write(&local_feature, b"incoming side\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), theirs_change.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let merge_change =
+            create_numbered_change(changelists, context, "manual merge target").await?;
+        checked_run(
+            runner,
+            context,
+            "integrate",
+            vec![
+                "-c".into(),
+                merge_change.to_string(),
+                feature.clone(),
+                main.clone(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let manual = workflows
+            .open_manual_merge(
+                ManualMergeOpenRequest {
+                    depot_path: main.clone(),
+                    operation_id: Some("manual-merge-e2e-open".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            manual.base_source.revision > 0
+                && manual.theirs_source.revision > 0
+                && manual.base.contains("shared base")
+                && manual.yours.contains("workspace side")
+                && manual.theirs.contains("incoming side")
+                && manual.unresolved_blocks == 1,
+            format!("manual merge inputs were not authoritative: {manual:?}"),
+        )?;
+        let edited = "resolved by P4Deck manual merge\n".to_owned();
+        let stale_validation = workflows.validate_manual_merge(ManualMergeValidateRequest {
+            session_id: manual.session_id.clone(),
+            result: edited.clone(),
+            operation_id: Some("manual-merge-e2e-stale-validation".into()),
+        })?;
+        let original = std::fs::read(&local_main).map_err(|error| error.to_string())?;
+        let original_permissions = std::fs::metadata(&local_main)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        std::fs::set_permissions(
+            &local_main,
+            crate::app::manual_merge::writable_permissions(&original_permissions),
+        )
+        .map_err(|error| error.to_string())?;
+        std::fs::write(&local_main, b"external change\n").map_err(|error| error.to_string())?;
+        let stale = workflows
+            .confirm_manual_merge_save(
+                ManualMergeSaveConfirmation {
+                    token: stale_validation
+                        .token
+                        .ok_or("stale validation returned no token")?,
+                    session_id: manual.session_id.clone(),
+                    result_digest: stale_validation.result_digest,
+                    operation_id: Some("manual-merge-e2e-stale-save".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            stale.is_err(),
+            "external file change bypassed manual merge CAS",
+        )?;
+        std::fs::write(&local_main, original).map_err(|error| error.to_string())?;
+        std::fs::set_permissions(&local_main, original_permissions)
+            .map_err(|error| error.to_string())?;
+
+        let manual = workflows
+            .open_manual_merge(
+                ManualMergeOpenRequest {
+                    depot_path: main.clone(),
+                    operation_id: Some("manual-merge-e2e-reopen".into()),
+                },
+                None,
+            )
+            .await?;
+
+        let validation = workflows.validate_manual_merge(ManualMergeValidateRequest {
+            session_id: manual.session_id.clone(),
+            result: edited,
+            operation_id: Some("manual-merge-e2e-validation".into()),
+        })?;
+        let confirmation = ManualMergeSaveConfirmation {
+            token: validation
+                .token
+                .ok_or("manual validation returned no token")?,
+            session_id: manual.session_id.clone(),
+            result_digest: validation.result_digest,
+            operation_id: Some("manual-merge-e2e-save".into()),
+        };
+        let saved = workflows
+            .confirm_manual_merge_save(confirmation.clone(), None)
+            .await?;
+        ensure(
+            saved.outcome == WorkflowOutcome::Succeeded
+                && saved
+                    .backup_path
+                    .as_deref()
+                    .is_some_and(|path| Path::new(path).exists())
+                && std::fs::read_to_string(&local_main).map_err(|error| error.to_string())?
+                    == "resolved by P4Deck manual merge\n",
+            format!("manual merge save did not verify: {saved:?}"),
+        )?;
+        ensure(
+            workflows
+                .confirm_manual_merge_save(confirmation, None)
+                .await
+                .is_err(),
+            "manual merge save token replay was accepted",
+        )?;
+        let resolved = workflows
+            .confirm_manual_merge_resolve(
+                ManualMergeResolveConfirmation {
+                    token: saved
+                        .resolve_token
+                        .ok_or("manual save returned no resolve token")?,
+                    session_id: manual.session_id,
+                    result_digest: saved.result_digest,
+                    acknowledge: true,
+                    operation_id: Some("manual-merge-e2e-resolve".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            resolved.outcome == WorkflowOutcome::Succeeded,
+            format!("edited result was not marked resolved: {resolved:?}"),
+        )?;
+        if let Some(backup) = saved.backup_path {
+            let _ = std::fs::remove_file(backup);
+        }
+        checked_run(
+            runner,
+            context,
+            "revert",
+            vec![main.clone()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        delete_empty_change(changelists, context, merge_change).await?;
+        let cleanup = create_numbered_change(changelists, context, "manual merge cleanup").await?;
+        checked_run(
+            runner,
+            context,
+            "delete",
+            vec!["-c".into(), cleanup.to_string(), main, feature],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "submit",
+            vec!["-c".into(), cleanup.to_string()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        let _ = std::fs::remove_dir_all(local_dir);
         Ok(())
     }
 

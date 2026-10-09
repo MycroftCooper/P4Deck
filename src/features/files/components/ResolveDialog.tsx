@@ -20,6 +20,7 @@ import {
   publishWorkflowFailure,
   publishWorkflowResult,
 } from "../../changelists/workflowRefresh";
+import { ManualMergeEditor } from "./ManualMergeEditor";
 
 type ExecutableStrategy = Exclude<ResolveStrategy, "mergePreview">;
 type Phase =
@@ -85,6 +86,7 @@ export function ResolveDialog({
   const [result, setResult] = useState<WorkflowResult>();
   const [message, setMessage] = useState("");
   const [discard, setDiscard] = useState(false);
+  const [manualPath, setManualPath] = useState<string>();
   const generation = useRef(0);
   const running = useRef(false);
   const staleConnection = snapshot.connectionKey !== connectionKey;
@@ -113,6 +115,7 @@ export function ResolveDialog({
     running.current = false;
     setPreflight(undefined);
     setPlans({});
+    setManualPath(undefined);
     setPhase("stale");
   }, [invalidated]);
   useEffect(() => {
@@ -251,6 +254,7 @@ export function ResolveDialog({
 
   const select = (next: number) => {
     setIndex(next);
+    setManualPath(undefined);
     setMessage("");
   };
   const dismiss = () =>
@@ -328,7 +332,12 @@ export function ResolveDialog({
           </button>
           <button
             className="primary"
-            disabled={phase !== "ready" || !preflight?.token || !allExecutable}
+            disabled={
+              phase !== "ready" ||
+              !preflight?.token ||
+              !allExecutable ||
+              !!manualPath
+            }
             onClick={() => void confirm()}
           >
             {tr("执行逐文件计划", "Run per-file plan")}
@@ -419,47 +428,86 @@ export function ResolveDialog({
             </pre>
           )}
           {current.status === "unresolved" &&
-          executableStrategies(current).length ? (
-            <label>
-              {tr("当前文件的允许策略", "Allowed strategy for current file")}
-              <select
-                data-dialog-autofocus
-                value={currentPlan ?? ""}
-                onChange={(event) =>
-                  setPlans((old) => ({
-                    ...old,
-                    [current.depotPath]: event.target.value
-                      ? (event.target.value as ExecutableStrategy)
-                      : undefined,
-                  }))
+            current.conflictType === "content" &&
+            !demo && (
+              <button
+                disabled={busy || invalidated}
+                onClick={() =>
+                  setManualPath((value) =>
+                    value === current.depotPath ? undefined : current.depotPath,
+                  )
                 }
               >
-                <option value="">
-                  {tr("请选择策略", "Choose a strategy")}
-                </option>
-                {executableStrategies(current).map((strategy) => (
-                  <option key={strategy} value={strategy}>
-                    {strategyLabel(strategy, zh)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {manualPath === current.depotPath
+                  ? tr("返回策略选择", "Back to strategy choices")
+                  : tr("打开安全手工合并", "Open safe manual merge")}
+              </button>
+            )}
+          {manualPath === current.depotPath ? (
+            <ManualMergeEditor
+              depotPath={current.depotPath}
+              connectionKey={connectionKey}
+              zh={zh}
+              onFinished={async (value) => {
+                setResult(value);
+                setMessage(value.message);
+                setPhase(value.outcome === "succeeded" ? "success" : "failed");
+                await publishWorkflowResult(
+                  value,
+                  preflight.target,
+                  connectionKey,
+                );
+              }}
+            />
           ) : (
-            <DialogNotice error>
-              {tr(
-                "此文件没有后端允许的可执行策略，不能执行。",
-                "No executable backend-approved strategy is available for this file.",
+            <>
+              {current.status === "unresolved" &&
+              executableStrategies(current).length ? (
+                <label>
+                  {tr(
+                    "当前文件的允许策略",
+                    "Allowed strategy for current file",
+                  )}
+                  <select
+                    data-dialog-autofocus
+                    value={currentPlan ?? ""}
+                    onChange={(event) =>
+                      setPlans((old) => ({
+                        ...old,
+                        [current.depotPath]: event.target.value
+                          ? (event.target.value as ExecutableStrategy)
+                          : undefined,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      {tr("请选择策略", "Choose a strategy")}
+                    </option>
+                    {executableStrategies(current).map((strategy) => (
+                      <option key={strategy} value={strategy}>
+                        {strategyLabel(strategy, zh)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <DialogNotice error>
+                  {tr(
+                    "此文件没有后端允许的可执行策略，不能执行。",
+                    "No executable backend-approved strategy is available for this file.",
+                  )}
+                </DialogNotice>
               )}
-            </DialogNotice>
-          )}
-          {(currentPlan === "acceptYours" ||
-            currentPlan === "acceptTheirs") && (
-            <DialogNotice error>
-              {tr(
-                "选择一侧会丢弃另一侧修改，请逐文件核对来源。",
-                "Choosing one side discards the other side's changes. Review the sources for this file.",
+              {(currentPlan === "acceptYours" ||
+                currentPlan === "acceptTheirs") && (
+                <DialogNotice error>
+                  {tr(
+                    "选择一侧会丢弃另一侧修改，请逐文件核对来源。",
+                    "Choosing one side discards the other side's changes. Review the sources for this file.",
+                  )}
+                </DialogNotice>
               )}
-            </DialogNotice>
+            </>
           )}
         </>
       )}

@@ -3064,6 +3064,20 @@ export const mockBackend: Backend = {
       "resolve",
     );
   },
+  async openManualMerge() {
+    throw new Error(
+      "Browser Mock cannot open a manual merge session because it has no authoritative Perforce resolve record.",
+    );
+  },
+  async validateManualMerge() {
+    throw new Error("Browser Mock does not persist manual merge content.");
+  },
+  async confirmManualMergeSave() {
+    throw new Error("Browser Mock does not write workspace files.");
+  },
+  async confirmManualMergeResolve() {
+    throw new Error("Browser Mock does not resolve Perforce records.");
+  },
 };
 
 async function confirmMockWorkflow(
