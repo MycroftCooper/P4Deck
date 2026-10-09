@@ -9,6 +9,14 @@ edition = "2021"
 name = "p4deck_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+backend-perf = ["tokio/rt"]
+
+[[bin]]
+name = "backend-perf"
+path = "src/bin/backend_perf.rs"
+required-features = ["backend-perf"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -556,7 +556,7 @@ fn emit_progress(app: Option<&AppHandle>, operation_id: &str, kind: EventKind, p
     );
 }
 
-fn status_snapshot(result: &OperationResult) -> StatusSnapshot {
+pub(crate) fn status_snapshot(result: &OperationResult) -> StatusSnapshot {
     let files = json_values(result)
         .into_iter()
         .filter_map(|value| {

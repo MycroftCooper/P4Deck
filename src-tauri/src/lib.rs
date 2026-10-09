@@ -4,6 +4,9 @@ mod ipc;
 mod p4;
 mod persistence;
 
+#[cfg(feature = "backend-perf")]
+pub mod backend_perf;
+
 #[cfg(test)]
 mod e2e;
 

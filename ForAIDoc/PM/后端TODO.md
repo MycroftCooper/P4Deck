@@ -33,7 +33,7 @@
 
 当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线，原生 UI 仍待验收。
 
-BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
+BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
 
 ## 已完成
 
@@ -190,12 +190,20 @@ pnpm test:e2e:p4d:win
 
 实现结果：摘要层只能给出 suspected/unknown；详情层仅在 describe action 或对应 revision 的 filelog integration 关系提供明确证据时升级 reliable，完整检查无证据才归 normal，失败/截断保持 unknown 或 suspected。详情缓存绑定 Server/User/Client、Context generation 与 Change ID，采用 60 秒 TTL、256 条 LRU 上限，复用 Runner 的 60 秒超时和 operation ID 取消，并在返回前复核连接代次。Windows localhost 连续两轮验证普通提交、真实 branch 提交、摘要升级与可靠 merge 隐藏。
 
-### BE-009 — 性能与兼容性基准（BLOCKED：需要固定设备/CI）
+### BE-009 — 性能与兼容性基准（PARTIAL：BE-009b 本机基准完成；矩阵仍 BLOCKED）
 
 - 100,000 条 CL/文件/日志数据的解析、传输、缓存和内存基准。
 - 验证输出上限、批量 filespec、并发限制和取消后的进程回收。
 - 建立 Windows/macOS、Unicode/非 Unicode、代表性 P4 CLI 版本矩阵。
 - 评估 `p4 -I` 与 JSON Lines 的兼容性；未通过矩阵前不默认启用。
+
+BE-009b 实现结果（2026-10-09）：
+
+- 新增独立 `pnpm test:perf:backend` release 入口，不进入普通 `cargo test`；固定 seed、7 轮 warmup、25 轮测量，产出 `artifacts/performance/backend-latest.json` 与 `.md`。
+- 直接复用生产 Submitted/Pending/File JSON parser、domain serde/IPC、StatusCache、cursor/fingerprint 与 Global Search Unicode 过滤/identity 去重；10k/50k/100k serde、100k parser、100k cache hit/cursor/search 及 10k LRU 路径均输出 p50/p95。
+- 5 项确定性门禁覆盖条目数/顺序/分类、serde round-trip、TTL/LRU/并发合并/失效、cursor 绑定和 Unicode 去重；项目没有后端数值阈值，时延全部保持信息项。
+- 本机实际记录 Windows x64、Rust 1.97.1、P4 2023.1、Fixture P4D 2026.1 与本地 `P4CHARSET=utf8`。未连接 server，不能据此声明 Unicode Server、non-Unicode、macOS、多版本、Proxy/Broker、SSL 或 `p4 -I` 通过。
+- RSS 为 case 边界采样，Windows peak working set 为进程级累计近似；本机进程峰值约 164.80 MiB，不是固定设备或单 case 精确峰值。详见《后端性能基准》。
 
 ## P2：后置范围
 

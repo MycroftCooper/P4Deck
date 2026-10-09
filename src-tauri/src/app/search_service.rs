@@ -301,8 +301,7 @@ impl GlobalSearchService {
                 }
             }
         }
-        let mut identities = HashSet::new();
-        items.retain(|item| identities.insert(item.identity.clone()));
+        deduplicate_items(&mut items);
         for facet in &mut facets {
             facet.matched_count = items.iter().filter(|item| item.kind == facet.kind).count();
         }
@@ -366,6 +365,11 @@ impl GlobalSearchService {
         }
         snapshots.insert(snapshot_id, snapshot);
     }
+}
+
+pub(crate) fn deduplicate_items(items: &mut Vec<GlobalSearchItem>) {
+    let mut identities = HashSet::new();
+    items.retain(|item| identities.insert(item.identity.clone()));
 }
 
 fn normalize_query(
