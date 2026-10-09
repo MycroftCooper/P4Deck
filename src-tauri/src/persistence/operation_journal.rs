@@ -1,4 +1,4 @@
-use crate::domain::OperationSource;
+use crate::{domain::OperationSource, security};
 use chrono::Utc;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
@@ -113,7 +113,7 @@ impl OperationJournal {
         source: OperationSource,
         category: OperationCategory,
     ) -> Result<(), String> {
-        let safe_workspace = sanitize(workspace, 128);
+        let safe_workspace = sanitize_redacted(workspace, 128);
         self.connection.lock().execute(
             "INSERT OR REPLACE INTO operation_journal(operation_id,connection_id,workspace,source,category,state,started_at) VALUES(?1,?2,?3,?4,?5,'running',?6)",
             params![sanitize(operation_id, 128), sanitize(connection_id, 32), safe_workspace, source_name(source), category_name(category), Utc::now().to_rfc3339()]
@@ -215,6 +215,9 @@ fn sanitize(value: &str, max: usize) -> String {
         .take(max)
         .collect()
 }
+fn sanitize_redacted(value: &str, max: usize) -> String {
+    sanitize(&security::redact_text(value), max)
+}
 fn source_name(v: OperationSource) -> &'static str {
     match v {
         OperationSource::Gui => "gui",
@@ -256,7 +259,7 @@ fn row_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<OperationRecord> {
     Ok(OperationRecord {
         operation_id: row.get(0)?,
         connection_id: row.get(1)?,
-        workspace: row.get(2)?,
+        workspace: sanitize_redacted(&row.get::<_, String>(2)?, 128),
         source: if row.get::<_, String>(3)? == "terminal" {
             OperationSource::Terminal
         } else {
@@ -471,6 +474,37 @@ mod tests {
             journal.get("capacity-2004").unwrap().state,
             JournalState::Cancelled
         );
+        drop(journal);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn redacts_workspace_fields_before_storage_and_serialization() {
+        const SENTINEL: &str = "P4DECK_SECRET_00a72d19";
+        let path = path();
+        let journal = OperationJournal::open(&path).unwrap();
+        journal
+            .start(
+                "safe-op",
+                "connection",
+                &format!("password={SENTINEL}"),
+                OperationSource::Terminal,
+                OperationCategory::Query,
+            )
+            .unwrap();
+        let record = journal.get("safe-op").unwrap();
+        let serialized = serde_json::to_string(&record).unwrap();
+        assert!(!serialized.contains(SENTINEL));
+        let stored: String = journal
+            .connection
+            .lock()
+            .query_row(
+                "SELECT workspace FROM operation_journal WHERE operation_id='safe-op'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!stored.contains(SENTINEL));
         drop(journal);
         std::fs::remove_file(path).unwrap();
     }

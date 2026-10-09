@@ -853,7 +853,7 @@ button {
 .terminal-view {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 38px;
+  grid-template-rows: minmax(0, 1fr) 38px auto;
   background: var(--terminal);
 }
 .terminal-output {
@@ -889,6 +889,20 @@ button {
   border-radius: 4px;
   background: #1c2024;
   color: #ddd;
+}
+.terminal-security-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--terminal));
+  font-size: 11px;
+}
+.terminal-security-notice button {
+  flex: none;
 }
 .log-scroll {
   min-height: 0;

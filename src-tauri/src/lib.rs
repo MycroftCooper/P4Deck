@@ -3,6 +3,7 @@ mod domain;
 mod ipc;
 mod p4;
 mod persistence;
+mod security;
 
 #[cfg(feature = "backend-perf")]
 pub mod backend_perf;

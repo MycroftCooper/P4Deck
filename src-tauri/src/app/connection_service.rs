@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use std::sync::Arc;
+use zeroize::Zeroize;
 
 pub struct ConnectionService {
     contexts: Arc<ContextStore>,
@@ -179,21 +180,25 @@ impl ConnectionService {
     }
 
     pub async fn login(&self, request: LoginRequest) -> ConnectionStatus {
-        if !request.confirmed
-            || validate_connection_context(&request.context).is_err()
-            || request.password.is_empty()
-            || request.password.len() > 4096
-            || request.password.chars().any(char::is_control)
+        let LoginRequest {
+            context,
+            mut password,
+            confirmed,
+        } = request;
+        if !confirmed
+            || validate_connection_context(&context).is_err()
+            || password.is_empty()
+            || password.len() > 4096
+            || password.chars().any(char::is_control)
         {
-            return invalid_config(&request.context.server);
+            password.zeroize();
+            return invalid_config(&context.server);
         }
-        ConnectionAdapter::execute(
-            &request.context,
-            ConnectionOperation::Login,
-            None,
-            Some(&request.password),
-        )
-        .await
+        let status =
+            ConnectionAdapter::execute(&context, ConnectionOperation::Login, None, Some(&password))
+                .await;
+        password.zeroize();
+        status
     }
 
     pub async fn logout(&self, request: AuthenticationRequest) -> ConnectionStatus {

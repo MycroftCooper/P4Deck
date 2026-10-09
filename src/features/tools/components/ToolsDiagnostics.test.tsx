@@ -253,6 +253,7 @@ it("auto-expands once per diagnostic alert without moving focus", async () => {
           connectionKey="a"
           context={{ server: "fixture", user: "u", client: "c" }}
           onOpenChange={vi.fn()}
+          onOpenSettings={vi.fn()}
         />
       </ContextMenuProvider>,
     ),
@@ -278,6 +279,91 @@ it("auto-expands once per diagnostic alert without moving focus", async () => {
     expect.objectContaining({ keyword: "op-alert" }),
   );
   focused.remove();
+});
+
+it("blocks credential commands before backend execution and offers Settings recovery", async () => {
+  localStorage.setItem("p4deck.toolOpen", "true");
+  const openSettings = vi.fn();
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="terminal-security-test" zh>
+        <ToolArea
+          t={messages["zh-CN"]}
+          zh
+          native
+          connectionKey="terminal-security"
+          context={{ server: "fixture", user: "u", client: "c" }}
+          onOpenChange={vi.fn()}
+          onOpenSettings={openSettings}
+        />
+      </ContextMenuProvider>,
+    ),
+  );
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  const sentinel = "P4DECK_SECRET_frontend_91b7";
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, `info P4PASSWD=${sentinel}`);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("运行").click());
+  expect(backend.runP4).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain(sentinel);
+  expect(localStorage.getItem("p4deck.terminalHistory")).toBe("[]");
+  expect(host.textContent).toContain("打开连接设置");
+  await act(async () => button("打开连接设置").click());
+  expect(openSettings).toHaveBeenCalledOnce();
+});
+
+it("keeps normal terminal execution and history after backend validation", async () => {
+  localStorage.setItem("p4deck.toolOpen", "true");
+  backend.runP4.mockResolvedValue({
+    operationId: "normal-info",
+    exitCode: 0,
+    durationMs: 2,
+    events: [
+      {
+        operationId: "normal-info",
+        type: "stdout",
+        message: "safe info",
+        timestamp: "2026-10-09T01:02:03Z",
+      },
+    ],
+  });
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="terminal-normal-test" zh>
+        <ToolArea
+          t={messages["zh-CN"]}
+          zh
+          native
+          connectionKey="terminal-normal"
+          context={{ server: "fixture", user: "u", client: "c" }}
+          onOpenChange={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </ContextMenuProvider>,
+    ),
+  );
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "info");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("运行").click());
+  await flush();
+  expect(backend.runP4).toHaveBeenCalledWith(
+    expect.objectContaining({ command: "info", args: [] }),
+  );
+  expect(localStorage.getItem("p4deck.terminalHistory")).toBe('["info"]');
+  expect(host.textContent).toContain("safe info");
 });
 
 it("filters and paginates the journal and jumps back to related logs", async () => {

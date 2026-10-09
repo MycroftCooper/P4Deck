@@ -6,6 +6,7 @@ use crate::{
             connection_id, JournalState, OperationCategory, OperationFailureKind, OperationJournal,
         },
     },
+    security::{self, CredentialRedactor, RedactionState},
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -35,7 +36,7 @@ pub enum RunnerError {
     NotFound,
     #[error("invalid P4 command: {0}")]
     InvalidCommand(String),
-    #[error("failed to launch p4: {0}")]
+    #[error("failed to launch p4")]
     Launch(#[from] std::io::Error),
     #[error("operation timed out")]
     Timeout,
@@ -198,7 +199,16 @@ impl P4Runner {
         argument_input: Option<Vec<String>>,
         mutation_already_locked: bool,
     ) -> Result<OperationResult, RunnerError> {
-        validate(&request)?;
+        validate(&request, argument_input.as_deref())?;
+        let input_for_redaction = argument_input
+            .as_ref()
+            .map(|values| values.join("\n"))
+            .or_else(|| request.input.clone());
+        let redactor = Arc::new(CredentialRedactor::for_command(
+            &request.command,
+            &request.args,
+            input_for_redaction.as_deref(),
+        ));
         let operation_id = request
             .operation_id
             .clone()
@@ -310,12 +320,7 @@ impl P4Runner {
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
             .kill_on_drop(true);
-        if let Some(path) = &request.context.trust_path {
-            command.env("P4TRUST", path);
-        }
-        if let Some(path) = &request.context.tickets_path {
-            command.env("P4TICKETS", path);
-        }
+        apply_credential_environment(&mut command, &request.context);
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error) => {
@@ -344,6 +349,7 @@ impl P4Runner {
         let stdout_id = operation_id.clone();
         let stdout_app = app.cloned();
         let stdout_budget = output_budget.clone();
+        let stdout_redactor = redactor.clone();
         let stdout_task = tokio::spawn(async move {
             read_stream(
                 stdout,
@@ -352,11 +358,13 @@ impl P4Runner {
                 stdout_app,
                 progress,
                 stdout_budget,
+                stdout_redactor,
             )
             .await
         });
         let stderr_id = operation_id.clone();
         let stderr_app = app.cloned();
+        let stderr_redactor = redactor.clone();
         let stderr_task = tokio::spawn(async move {
             read_stream(
                 stderr,
@@ -365,6 +373,7 @@ impl P4Runner {
                 stderr_app,
                 None,
                 output_budget,
+                stderr_redactor,
             )
             .await
         });
@@ -416,8 +425,8 @@ impl P4Runner {
             source: request.source,
             server: request.context.server.clone(),
             workspace: request.context.client.clone(),
-            command: redact_command(&request),
-            message: redact(message.trim()),
+            command: security::redact_command(&request.command, &request.args),
+            message: redactor.redact(message.trim()),
             duration_ms: Some(duration_ms),
             repeat_count: 1,
         });
@@ -471,6 +480,20 @@ fn journal_failure(stderr: &str) -> OperationFailureKind {
         }
         ConnectionErrorCode::PermissionDenied => OperationFailureKind::PermissionDenied,
         _ => OperationFailureKind::CommandFailure,
+    }
+}
+
+fn apply_credential_environment(command: &mut Command, context: &P4Context) {
+    // Never inherit ambient credential material. Explicit path-only context is
+    // restored below, while passwords are reserved for ConnectionAdapter.
+    command.env_remove("P4PASSWD");
+    command.env_remove("P4TICKETS");
+    command.env_remove("P4TRUST");
+    if let Some(path) = &context.trust_path {
+        command.env("P4TRUST", path);
+    }
+    if let Some(path) = &context.tickets_path {
+        command.env("P4TICKETS", path);
     }
 }
 
@@ -565,12 +588,14 @@ async fn read_stream<R>(
     app: Option<AppHandle>,
     progress: Option<ProgressReporter>,
     output_budget: OutputBudget,
+    redactor: Arc<CredentialRedactor>,
 ) -> std::io::Result<Vec<OperationEvent>>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
     let mut lines = BufReader::new(reader).lines();
     let mut events: Vec<OperationEvent> = Vec::new();
+    let mut redaction_state = RedactionState::default();
     while let Some(line) = lines.next_line().await? {
         if !output_budget.accept(line.len()) {
             if !events
@@ -587,7 +612,11 @@ where
             }
             break;
         }
-        let value = event(&operation_id, kind, Some(line));
+        let value = event(
+            &operation_id,
+            kind,
+            Some(redactor.redact_line(&line, &mut redaction_state)),
+        );
         if let Some(app) = &app {
             let _ = app.emit("operation-event", &value);
         }
@@ -607,7 +636,17 @@ fn event_text(events: &[OperationEvent]) -> String {
         .join("\n")
 }
 
-fn validate(request: &P4CommandRequest) -> Result<(), RunnerError> {
+fn validate(
+    request: &P4CommandRequest,
+    argument_input: Option<&[String]>,
+) -> Result<(), RunnerError> {
+    security::validate_generic_command(
+        &request.command,
+        &request.args,
+        request.input.as_deref(),
+        argument_input,
+    )
+    .map_err(|error| RunnerError::InvalidCommand(error.to_string()))?;
     if request.command.is_empty()
         || request.command.starts_with('-')
         || !request
@@ -616,20 +655,6 @@ fn validate(request: &P4CommandRequest) -> Result<(), RunnerError> {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
         return Err(RunnerError::InvalidCommand(request.command.clone()));
-    }
-    if matches!(request.command.as_str(), "login" | "logout" | "trust") {
-        return Err(RunnerError::InvalidCommand(
-            "authentication commands require the controlled connection API".into(),
-        ));
-    }
-    if request
-        .args
-        .iter()
-        .any(|value| value == "-P" || value.starts_with("P4PASSWD="))
-    {
-        return Err(RunnerError::InvalidCommand(
-            "password arguments are forbidden".into(),
-        ));
     }
     Ok(())
 }
@@ -692,7 +717,7 @@ fn event_with_progress(
     OperationEvent {
         operation_id: id.into(),
         kind,
-        message,
+        message: message.map(|value| security::redact_text(&value)),
         progress,
         timestamp: Utc::now().to_rfc3339(),
     }
@@ -709,57 +734,12 @@ fn discover_p4() -> Option<PathBuf> {
         .map(|dir| dir.join(name))
         .find(|path| path.is_file())
 }
-fn redact(value: &str) -> String {
-    value
-        .split_inclusive('\n')
-        .map(redact_line)
-        .collect::<String>()
-}
-
-fn redact_line(line: &str) -> String {
-    let mut result = line.to_owned();
-    let mut search_from = 0;
-    loop {
-        let lower = result.to_ascii_lowercase();
-        let found = ["p4passwd=", "password:", "ticket:"]
-            .iter()
-            .filter_map(|marker| {
-                lower[search_from..]
-                    .find(marker)
-                    .map(|offset| (search_from + offset, marker.len()))
-            })
-            .min_by_key(|(index, _)| *index);
-        let Some((index, marker_len)) = found else {
-            return result;
-        };
-        let value_start = index + marker_len;
-        let value_end = result[value_start..]
-            .find(char::is_whitespace)
-            .map(|offset| value_start + offset)
-            .unwrap_or(result.len());
-        result.replace_range(value_start..value_end, "[REDACTED]");
-        search_from = value_start + "[REDACTED]".len();
-    }
-}
-fn redact_command(request: &P4CommandRequest) -> String {
-    let args = request
-        .args
-        .iter()
-        .map(|value| {
-            if value == "-P" {
-                "[REDACTED]".to_owned()
-            } else {
-                value.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    format!("p4 {} {}", request.command, args).trim().to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        app::diagnostics::DiagnosticService, persistence::operation_journal::OperationJournalQuery,
+    };
     #[test]
     fn rejects_password_arguments() {
         let request = P4CommandRequest {
@@ -772,12 +752,12 @@ mod tests {
             timeout_ms: None,
             input: None,
         };
-        assert!(validate(&request).is_err());
+        assert!(validate(&request, None).is_err());
     }
     #[test]
     fn redacts_sensitive_output() {
         assert_eq!(
-            redact("Ticket:abc123 P4PASSWD=next\npassword:second line"),
+            security::redact_text("Ticket:abc123 P4PASSWD=next\npassword:second line"),
             "Ticket:[REDACTED] P4PASSWD=[REDACTED]\npassword:[REDACTED] line"
         );
     }
@@ -794,7 +774,192 @@ mod tests {
             timeout_ms: None,
             input: None,
         };
-        assert!(validate(&request).is_err());
+        assert!(validate(&request, None).is_err());
+    }
+
+    #[test]
+    fn strips_ambient_password_and_only_restores_explicit_credential_paths() {
+        let mut command = Command::new("p4");
+        apply_credential_environment(
+            &mut command,
+            &P4Context {
+                tickets_path: Some("C:\\isolated\\tickets".into()),
+                trust_path: Some("C:\\isolated\\trust".into()),
+                ..Default::default()
+            },
+        );
+        let environment = command
+            .as_std()
+            .get_envs()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.map(|value| value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(environment.get("P4PASSWD"), Some(&None));
+        assert_eq!(
+            environment.get("P4TICKETS"),
+            Some(&Some("C:\\isolated\\tickets".into()))
+        );
+        assert_eq!(
+            environment.get("P4TRUST"),
+            Some(&Some("C:\\isolated\\trust".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_sentinel_never_crosses_events_results_or_persistence_boundaries() {
+        const SENTINEL: &str = "P4DECK_SECRET_runner_e2e_50d3";
+        let base = std::env::temp_dir().join(format!(
+            "p4deck-credential-boundary-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        let logs = Arc::new(LogStore::open(&base.join("logs.sqlite")).unwrap());
+        let journal = Arc::new(OperationJournal::open(&base.join("journal.sqlite")).unwrap());
+        let redactor = Arc::new(CredentialRedactor::for_command(
+            "info",
+            &["-P".into(), SENTINEL.into()],
+            None,
+        ));
+
+        let (mut stdout_writer, stdout_reader) = tokio::io::duplex(4096);
+        let stdout = format!(
+            "Ticket: {SENTINEL}\n{{\"password\":\"{SENTINEL}\",\"digest\":\"0123456789abcdef0123456789abcdef\"}}\nAuthorization: Bearer {SENTINEL}\n"
+        );
+        stdout_writer.write_all(stdout.as_bytes()).await.unwrap();
+        drop(stdout_writer);
+        let token = CancellationToken::new();
+        let stdout_events = read_stream(
+            stdout_reader,
+            "sentinel-op".into(),
+            EventKind::Stdout,
+            None,
+            None,
+            OutputBudget::new(token.clone()),
+            redactor.clone(),
+        )
+        .await
+        .unwrap();
+
+        let (mut stderr_writer, stderr_reader) = tokio::io::duplex(4096);
+        stderr_writer
+            .write_all(format!("Password:\n{SENTINEL}\nP4TICKETS={SENTINEL}\n").as_bytes())
+            .await
+            .unwrap();
+        drop(stderr_writer);
+        let stderr_events = read_stream(
+            stderr_reader,
+            "sentinel-op".into(),
+            EventKind::Stderr,
+            None,
+            None,
+            OutputBudget::new(token),
+            redactor.clone(),
+        )
+        .await
+        .unwrap();
+
+        let mut events = stdout_events;
+        events.extend(stderr_events);
+        let result = OperationResult {
+            operation_id: "sentinel-op".into(),
+            exit_code: 1,
+            events,
+            duration_ms: 1,
+        };
+        let result_json = serde_json::to_string(&result).unwrap();
+        assert!(!result_json.contains(SENTINEL));
+        assert!(result_json.contains("0123456789abcdef0123456789abcdef"));
+
+        logs.push(LogEntry {
+            id: "sentinel-log".into(),
+            timestamp: Utc::now().to_rfc3339(),
+            level: LogLevel::Error,
+            operation_id: result.operation_id.clone(),
+            source: OperationSource::Terminal,
+            server: "fixture".into(),
+            workspace: "workspace".into(),
+            command: format!("p4 info -P{SENTINEL}"),
+            message: format!("ticket={SENTINEL}"),
+            duration_ms: Some(1),
+            repeat_count: 1,
+        })
+        .unwrap();
+        assert!(!serde_json::to_string(&logs.query(&LogQuery::default()))
+            .unwrap()
+            .contains(SENTINEL));
+        let sqlite_text: String = rusqlite::Connection::open(base.join("logs.sqlite"))
+            .unwrap()
+            .query_row(
+                "SELECT command || message FROM logs WHERE id='sentinel-log'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!sqlite_text.contains(SENTINEL));
+
+        journal
+            .start(
+                "sentinel-op",
+                "connection",
+                &format!("password={SENTINEL}"),
+                OperationSource::Terminal,
+                OperationCategory::Query,
+            )
+            .unwrap();
+        let page = journal.query(&OperationJournalQuery::default()).unwrap();
+        assert!(!serde_json::to_string(&page).unwrap().contains(SENTINEL));
+
+        let diagnostics = DiagnosticService::new(base.join("exports"), logs, journal);
+        let export = diagnostics
+            .export(DiagnosticExportRequest::default())
+            .unwrap();
+        let exported = std::fs::read_to_string(export.path).unwrap();
+        assert!(!exported.contains(SENTINEL));
+        drop(diagnostics);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[tokio::test]
+    async fn blocked_commands_fail_before_executable_resolution_or_process_start() {
+        let base = std::env::temp_dir().join(format!(
+            "p4deck-block-before-spawn-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        let logs = Arc::new(LogStore::open(&base.join("logs.sqlite")).unwrap());
+        let journal = Arc::new(OperationJournal::open(&base.join("journal.sqlite")).unwrap());
+        let runner = P4Runner::new(logs.clone(), journal.clone());
+        let request = P4CommandRequest {
+            operation_id: Some("blocked-op".into()),
+            source: OperationSource::Terminal,
+            command: "TiCkEtS".into(),
+            args: vec![],
+            context: P4Context {
+                executable: Some(
+                    base.join("does-not-exist.exe")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+                ..Default::default()
+            },
+            output_mode: OutputMode::Text,
+            timeout_ms: Some(10),
+            input: None,
+        };
+        let error = runner.run(request, None).await.unwrap_err().to_string();
+        assert!(error.contains("blocked in Terminal"));
+        assert!(logs.query(&LogQuery::default()).is_empty());
+        assert!(journal
+            .query(&OperationJournalQuery::default())
+            .unwrap()
+            .records
+            .is_empty());
+        drop((runner, logs, journal));
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

@@ -30,6 +30,7 @@ interface Props {
   connectionKey: string;
   context: P4Context;
   onOpenChange(open: boolean): void;
+  onOpenSettings(): void;
 }
 
 const defaultPolicy: LogPolicy = {
@@ -40,7 +41,7 @@ const defaultPolicy: LogPolicy = {
 };
 
 export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
-  { t, zh, native, connectionKey, context, onOpenChange },
+  { t, zh, native, connectionKey, context, onOpenChange, onOpenSettings },
   ref,
 ) {
   const [open, setOpen] = useState(
@@ -196,6 +197,7 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
             .cancelOperation(id)
             .catch((cause) => setError(String(cause)));
         }}
+        onOpenSettings={onOpenSettings}
       />
       {error && (
         <div className="tool-error" role="alert">

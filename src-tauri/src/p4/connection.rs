@@ -523,4 +523,27 @@ mod tests {
         assert_eq!(missing.state, ConnectionState::CliMissing);
         assert_eq!(missing.error_code, Some(ConnectionErrorCode::CliMissing));
     }
+
+    #[test]
+    fn controlled_authentication_operations_keep_their_narrow_cli_shapes() {
+        let cases = [
+            (
+                ConnectionOperation::Trust,
+                Some("AA:BB"),
+                vec!["trust", "-i", "AA:BB"],
+            ),
+            (ConnectionOperation::Login, None, vec!["login"]),
+            (ConnectionOperation::Logout, None, vec!["logout"]),
+        ];
+        for (operation, value, expected) in cases {
+            let mut command = Command::new("p4");
+            append_operation(&mut command, operation, value);
+            let args = command
+                .as_std()
+                .get_args()
+                .map(|value| value.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            assert_eq!(args, expected);
+        }
+    }
 }

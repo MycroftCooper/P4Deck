@@ -4,6 +4,7 @@ use crate::{
         log_store::LogStore,
         operation_journal::{OperationJournal, OperationJournalQuery, OperationRecord},
     },
+    security,
 };
 use chrono::Utc;
 use serde::Serialize;
@@ -119,7 +120,7 @@ impl DiagnosticService {
             logs,
             operations,
         };
-        let mut bytes = serde_json::to_vec_pretty(&bundle).map_err(|e| e.to_string())?;
+        let mut bytes = safe_bundle_bytes(&bundle)?;
         while bytes.len() > MAX_EXPORT_BYTES
             && (!bundle.logs.is_empty() || !bundle.operations.is_empty())
         {
@@ -129,7 +130,7 @@ impl DiagnosticService {
             } else {
                 bundle.operations.pop();
             }
-            bytes = serde_json::to_vec_pretty(&bundle).map_err(|e| e.to_string())?;
+            bytes = safe_bundle_bytes(&bundle)?;
         }
         if bytes.len() > MAX_EXPORT_BYTES {
             return Err("diagnostic manifest exceeds size limit".into());
@@ -178,6 +179,10 @@ fn safe_log(entry: LogEntry) -> SafeLog {
         repeat_count: entry.repeat_count,
     }
 }
+fn safe_bundle_bytes(bundle: &Bundle) -> Result<Vec<u8>, String> {
+    let serialized = serde_json::to_string_pretty(bundle).map_err(|error| error.to_string())?;
+    Ok(security::redact_text(&serialized).into_bytes())
+}
 fn scrub(value: &str, max: usize) -> String {
     value
         .chars()
@@ -194,7 +199,7 @@ fn scrub_endpoint(value: &str) -> String {
 }
 fn scrub_text(value: &str) -> String {
     let mut redact_next = false;
-    value
+    security::redact_text(value)
         .split_whitespace()
         .take(64)
         .map(|token| {
@@ -240,7 +245,7 @@ mod tests {
             server: "ssl:secret-server".into(),
             workspace: "ws".into(),
             command: "p4 sync /Users/private/secret.txt".into(),
-            message: "Password: hunter2 Ticket:abc prefix=/Users/private/file".into(),
+            message: "Password: hunter2 Ticket:abc Authorization: Bearer auth-token P4TICKETS=C:\\secret\\tickets prefix=/Users/private/file".into(),
             duration_ms: None,
             repeat_count: 1,
         })
@@ -261,6 +266,8 @@ mod tests {
         assert!(text.contains("p4deck-diagnostic-json-v1"));
         assert!(text.contains("workspaceFiles"));
         assert!(!text.contains("hunter2"));
+        assert!(!text.contains("auth-token"));
+        assert!(!text.contains("C:\\secret"));
         assert!(!text.contains("secret-server"));
         assert!(!text.contains("/Users/private"));
         assert_eq!(std::fs::read_dir(base.join("exports")).unwrap().count(), 1);

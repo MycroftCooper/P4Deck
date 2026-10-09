@@ -202,6 +202,32 @@ describe("controlled P4 terminal", () => {
     ]);
   });
 
+  it("rejects credential commands before the mock runner and never returns their sentinel", async () => {
+    const sentinel = "P4DECK_SECRET_mock_4b81";
+    for (const request of [
+      { command: "tickets", args: [] },
+      { command: "-p", args: ["ssl:test:1666", "passwd"] },
+      { command: "info", args: ["-P", sentinel] },
+      { command: "info", args: [`P4PASSWD=${sentinel}`] },
+      { command: "info", args: ["Authorization:", "Bearer", sentinel] },
+    ]) {
+      let message = "";
+      try {
+        await backend.runP4({
+          operationId: crypto.randomUUID(),
+          source: "terminal",
+          ...request,
+          context: (await backend.runtimeInfo()).context,
+          outputMode: "text",
+        });
+      } catch (error) {
+        message = String(error);
+      }
+      expect(message).toContain("blocked in Terminal");
+      expect(message).not.toContain(sentinel);
+    }
+  });
+
   it("returns generation-tagged virtual-list data", async () => {
     const result = await backend.queryChangelists({
       operationId: "submitted-page-1",

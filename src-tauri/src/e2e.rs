@@ -39,6 +39,7 @@ mod tests {
         sync::Arc,
     };
     use uuid::Uuid;
+    use zeroize::Zeroize;
 
     const FIXTURE_SERVER: &str = "127.0.0.1:16661";
     const FIXTURE_USER: &str = "p4deck-fixture-admin";
@@ -4696,13 +4697,10 @@ mod tests {
                 OutputMode::Text,
             )
             .await?;
-            checked_run(
-                runner,
+            fixture_passwd(
                 context,
-                "passwd",
-                vec![READ_ONLY_USER.into()],
-                Some("p4deck-readonly-initial\np4deck-readonly-initial\n".into()),
-                OutputMode::Text,
+                Some(READ_ONLY_USER),
+                "p4deck-readonly-initial\np4deck-readonly-initial\n".into(),
             )
             .await?;
             std::fs::create_dir_all(&readonly_root).map_err(|error| error.to_string())?;
@@ -4719,16 +4717,11 @@ mod tests {
                 OutputMode::Text,
             )
             .await?;
-            checked_run(
-                runner,
+            fixture_passwd(
                 &readonly,
-                "passwd",
-                Vec::new(),
-                Some(
-                    "p4deck-readonly-initial\np4deck-readonly-local\np4deck-readonly-local\n"
-                        .into(),
-                ),
-                OutputMode::Text,
+                None,
+                "p4deck-readonly-initial\np4deck-readonly-local\np4deck-readonly-local\n"
+                    .into(),
             )
             .await?;
             let login = crate::p4::connection::ConnectionAdapter::execute(
@@ -5045,6 +5038,72 @@ mod tests {
                 result.exit_code,
                 event_text(&result)
             ))
+        }
+    }
+
+    /// Test-only secret setup channel. Production authentication continues to use
+    /// ConnectionAdapter; the generic runner must remain unable to execute passwd.
+    async fn fixture_passwd(
+        context: &P4Context,
+        user: Option<&str>,
+        mut secret_input: String,
+    ) -> Result<(), String> {
+        use std::process::Stdio;
+        use tokio::{io::AsyncWriteExt, process::Command};
+
+        let executable = context
+            .executable
+            .as_deref()
+            .ok_or("fixture p4 executable is missing")?;
+        let mut command = Command::new(executable);
+        command.args(["-p", &context.server, "-u", &context.user]);
+        if !context.client.is_empty() {
+            command.args(["-c", &context.client]);
+        }
+        if let Some(cwd) = context.cwd.as_deref() {
+            command.args(["-d", cwd]);
+        }
+        command
+            .env_remove("P4PASSWD")
+            .env_remove("P4TICKETS")
+            .env_remove("P4TRUST");
+        if let Some(path) = &context.tickets_path {
+            command.env("P4TICKETS", path);
+        }
+        if let Some(path) = &context.trust_path {
+            command.env("P4TRUST", path);
+        }
+        command
+            .arg("passwd")
+            .args(user)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let mut child = command
+            .spawn()
+            .map_err(|_| "fixture password setup could not start")?;
+        if let Some(mut stdin) = child.stdin.take() {
+            if stdin.write_all(secret_input.as_bytes()).await.is_err()
+                || stdin.shutdown().await.is_err()
+            {
+                secret_input.zeroize();
+                return Err("fixture password setup input failed".into());
+            }
+        }
+        secret_input.zeroize();
+        let mut output =
+            tokio::time::timeout(std::time::Duration::from_secs(20), child.wait_with_output())
+                .await
+                .map_err(|_| "fixture password setup timed out")?
+                .map_err(|_| "fixture password setup failed")?;
+        let success = output.status.success();
+        output.stdout.zeroize();
+        output.stderr.zeroize();
+        if success {
+            Ok(())
+        } else {
+            Err("fixture password setup was rejected".into())
         }
     }
 

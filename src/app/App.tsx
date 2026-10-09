@@ -271,6 +271,7 @@ export function App() {
                   connectionKey={connectionKey}
                   context={runtime.context}
                   onOpenChange={setToolOpen}
+                  onOpenSettings={() => openPage("settings")}
                 />
                 <StatusBar
                   onOpenLogs={(id) => toolsRef.current?.open("logs", id)}

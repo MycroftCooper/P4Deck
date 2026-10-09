@@ -15,6 +15,7 @@ import type {
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
+import { inspectTerminalCommand } from "../../features/tools/terminalSecurity";
 
 let mockContext: import("../../shared/contracts/types").P4Context = {
   server: "ssl:p4.company.dev:1666",
@@ -745,6 +746,15 @@ export const mockBackend: Backend = {
     };
   },
   async runP4(request) {
+    const terminalDecision = inspectTerminalCommand(
+      [request.command, ...request.args].join(" "),
+      [request.command, ...request.args],
+    );
+    if (terminalDecision.blocked) {
+      throw new Error(
+        "Credential-sensitive P4 commands are blocked in Terminal; use Settings > Connection authentication.",
+      );
+    }
     if (
       request.source === "gui" &&
       ["submit", "shelve", "unshelve", "resolve", "move"].includes(

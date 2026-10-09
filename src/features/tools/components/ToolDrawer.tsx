@@ -29,6 +29,7 @@ import { useDialogRequest } from "../../../app/dialogs/useDialogRequest";
 import { LogView } from "./LogView";
 import { OperationJournalView } from "./OperationJournalView";
 import { DiagnosticsView } from "./DiagnosticsView";
+import { inspectTerminalCommand } from "../terminalSecurity";
 
 export type ToolTab = "terminal" | "logs" | "journal" | "diagnostics";
 type CopyText = (typeof messages)[keyof typeof messages];
@@ -53,6 +54,7 @@ interface Props {
   onPolicy(policy: LogPolicy): void;
   onRun(input: string, operationId: string): Promise<OperationResult>;
   onCancel(operationId: string): void;
+  onOpenSettings(): void;
 }
 
 export function ToolDrawer(props: Props) {
@@ -67,6 +69,7 @@ export function ToolDrawer(props: Props) {
     "P4Deck controlled terminal — only p4 commands are allowed.",
   ]);
   const [running, setRunning] = useState<string | null>(null);
+  const [credentialBlocked, setCredentialBlocked] = useState(false);
   const [height, setHeight] = useState(() =>
     readToolHeight(storage.getItem("p4deck.toolHeight")),
   );
@@ -80,6 +83,14 @@ export function ToolDrawer(props: Props) {
     () => storage.setItem("p4deck.toolHeight", String(height)),
     [height],
   );
+  useEffect(() => {
+    // Rewrite legacy history after read-time filtering so older sensitive entries
+    // do not remain in browser storage.
+    storage.setItem(
+      "p4deck.terminalHistory",
+      JSON.stringify(historyRef.current),
+    );
+  }, []);
   useEffect(() => {
     if (!running) return;
     const matching = props.operationEvents.filter(
@@ -98,32 +109,27 @@ export function ToolDrawer(props: Props) {
     const raw = input.trim();
     if (!raw || running) return;
     const parts = tokenize(raw);
-    if (parts[0]?.toLowerCase() === "p4") parts.shift();
+    const decision = inspectTerminalCommand(raw, parts);
     if (!parts.length) return;
-    const sensitive = parts.some(
-      (part) =>
-        ["login", "passwd"].includes(part.toLowerCase()) || part === "-P",
-    );
-    if (!sensitive) {
-      historyRef.current = [
-        raw,
-        ...historyRef.current.filter((item) => item !== raw),
-      ].slice(0, 500);
-      storage.setItem(
-        "p4deck.terminalHistory",
-        JSON.stringify(historyRef.current),
-      );
-    }
-    setLines((value) => [
-      ...value,
-      `p4> ${sensitive ? "[sensitive command hidden]" : raw}`,
-    ]);
+    setLines((value) => [...value, `p4> ${decision.display}`]);
     setInput("");
+    if (decision.blocked) {
+      setCredentialBlocked(true);
+      setLines((value) => [
+        ...value,
+        props.zh
+          ? "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。"
+          : "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
+      ]);
+      return;
+    }
+    setCredentialBlocked(false);
     const temporaryId = crypto.randomUUID();
     streamedCount.current = 0;
     setRunning(temporaryId);
     try {
       const result = await props.onRun(raw, temporaryId);
+      if (!decision.sensitive) rememberHistory(raw);
       setRunning(result.operationId);
       const output = streamedCount.current
         ? []
@@ -138,10 +144,36 @@ export function ToolDrawer(props: Props) {
         `[exit ${result.exitCode} · ${result.durationMs}ms]`,
       ]);
     } catch (error) {
-      setLines((value) => [...value, `error: ${String(error)}`]);
+      const message = String(error);
+      const controlled = message.includes(
+        "use Settings > Connection authentication",
+      );
+      if (controlled) setCredentialBlocked(true);
+      if (!decision.sensitive && !controlled) rememberHistory(raw);
+      setLines((value) => [
+        ...value,
+        controlled
+          ? props.zh
+            ? "安全策略已阻止该命令。请在设置 > 连接中使用受控认证流程。"
+            : "Security policy blocked this command. Use controlled authentication in Settings > Connections."
+          : props.zh
+            ? "error: 命令未返回安全结果；请查看已脱敏的 P4 Log。"
+            : "error: The command returned no safe result; inspect the redacted P4 Log.",
+      ]);
     } finally {
       setRunning(null);
     }
+  }
+
+  function rememberHistory(raw: string) {
+    historyRef.current = [
+      raw,
+      ...historyRef.current.filter((item) => item !== raw),
+    ].slice(0, 500);
+    storage.setItem(
+      "p4deck.terminalHistory",
+      JSON.stringify(historyRef.current),
+    );
   }
 
   function history(direction: number) {
@@ -325,6 +357,18 @@ export function ToolDrawer(props: Props) {
               {props.t.clear}
             </button>
           </div>
+          {credentialBlocked && (
+            <div className="terminal-security-notice" role="alert">
+              <span>
+                {props.zh
+                  ? "认证秘密不能通过通用 Terminal 读取或修改。"
+                  : "Authentication secrets cannot be read or changed through the generic Terminal."}
+              </span>
+              <button onClick={props.onOpenSettings}>
+                {props.zh ? "打开连接设置" : "Open connection settings"}
+              </button>
+            </div>
+          )}
         </div>
       )}
       {props.open && props.active === "logs" && (

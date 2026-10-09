@@ -1,4 +1,7 @@
-use crate::domain::{LogEntry, LogLevel, LogPage, LogPolicy, LogQuery, OperationSource};
+use crate::{
+    domain::{LogEntry, LogLevel, LogPage, LogPolicy, LogQuery, OperationSource},
+    security,
+};
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
@@ -20,12 +23,13 @@ impl LogStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        let connection = Connection::open(path).map_err(|e| e.to_string())?;
+        let mut connection = Connection::open(path).map_err(|e| e.to_string())?;
         connection.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS logs (id TEXT PRIMARY KEY,timestamp TEXT NOT NULL,level TEXT NOT NULL,operation_id TEXT NOT NULL,source TEXT NOT NULL,server TEXT NOT NULL DEFAULT '',workspace TEXT NOT NULL,command TEXT NOT NULL,message TEXT NOT NULL,duration_ms INTEGER,repeat_count INTEGER NOT NULL DEFAULT 1); CREATE INDEX IF NOT EXISTS logs_time ON logs(timestamp DESC,id DESC); CREATE TABLE IF NOT EXISTS log_policy(id INTEGER PRIMARY KEY CHECK(id=1),auto_warning INTEGER NOT NULL,auto_error INTEGER NOT NULL,retention_days INTEGER NOT NULL,max_mib INTEGER NOT NULL);").map_err(|e|e.to_string())?;
         let _ = connection.execute(
             "ALTER TABLE logs ADD COLUMN server TEXT NOT NULL DEFAULT ''",
             [],
         );
+        redact_legacy_rows(&mut connection)?;
         let policy = connection
             .query_row(
                 "SELECT auto_warning,auto_error,retention_days,max_mib FROM log_policy WHERE id=1",
@@ -55,10 +59,10 @@ impl LogStore {
     }
 
     pub fn push(&self, mut entry: LogEntry) -> Result<(), String> {
-        entry.command = sanitize(&entry.command, 512);
-        entry.message = sanitize(&entry.message, 4096);
-        entry.server = sanitize(&entry.server, 256);
-        entry.workspace = sanitize(&entry.workspace, 128);
+        entry.command = sanitize_redacted(&entry.command, 512);
+        entry.message = sanitize_redacted(&entry.message, 4096);
+        entry.server = sanitize_redacted(&entry.server, 256);
+        entry.workspace = sanitize_redacted(&entry.workspace, 128);
         let mut memory = self.memory.lock();
         if let Some(previous) = memory.front_mut() {
             if previous.level == entry.level
@@ -204,6 +208,67 @@ fn sanitize(value: &str, max: usize) -> String {
         .take(max)
         .collect()
 }
+fn sanitize_redacted(value: &str, max: usize) -> String {
+    sanitize(&security::redact_text(value), max)
+}
+
+/// Idempotent startup migration for logs written by older releases. The
+/// transaction leaves the database readable on failure; read-side redaction in
+/// `row_entry` remains a final boundary even if compaction cannot run.
+fn redact_legacy_rows(connection: &mut Connection) -> Result<(), String> {
+    let rows = {
+        let mut statement = connection
+            .prepare("SELECT id,server,workspace,command,message FROM logs")
+            .map_err(|error| error.to_string())?;
+        let collected = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
+        collected
+    };
+    let mut changed = false;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
+    for (id, server, workspace, command, message) in rows {
+        let safe = (
+            sanitize_redacted(&server, 256),
+            sanitize_redacted(&workspace, 128),
+            sanitize_redacted(&command, 512),
+            sanitize_redacted(&message, 4096),
+        );
+        if safe
+            != (
+                server.clone(),
+                workspace.clone(),
+                command.clone(),
+                message.clone(),
+            )
+        {
+            changed = true;
+            transaction
+                .execute(
+                    "UPDATE logs SET server=?2,workspace=?3,command=?4,message=?5 WHERE id=?1",
+                    params![id, safe.0, safe.1, safe.2, safe.3],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    transaction.commit().map_err(|error| error.to_string())?;
+    if changed {
+        let _ = connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
+    }
+    Ok(())
+}
 fn level_name(v: &LogLevel) -> &'static str {
     match v {
         LogLevel::Info => "info",
@@ -238,10 +303,10 @@ fn row_entry(row: &rusqlite::Row<'_>) -> rusqlite::Result<LogEntry> {
         level: parse_level(&row.get::<_, String>(2)?),
         operation_id: row.get(3)?,
         source: parse_source(&row.get::<_, String>(4)?),
-        server: row.get(5)?,
-        workspace: row.get(6)?,
-        command: row.get(7)?,
-        message: row.get(8)?,
+        server: sanitize_redacted(&row.get::<_, String>(5)?, 256),
+        workspace: sanitize_redacted(&row.get::<_, String>(6)?, 128),
+        command: sanitize_redacted(&row.get::<_, String>(7)?, 512),
+        message: sanitize_redacted(&row.get::<_, String>(8)?, 4096),
         duration_ms: row.get(9)?,
         repeat_count: row.get(10)?,
     })
@@ -367,6 +432,53 @@ mod tests {
             .unwrap();
         assert_eq!(count, HARD_MAX_ENTRIES as i64);
         drop(store);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn redacts_before_memory_and_sqlite_and_scrubs_legacy_rows_on_open() {
+        const SENTINEL: &str = "P4DECK_SECRET_33e65bf1";
+        let path = path();
+        {
+            let store = LogStore::open(&path).unwrap();
+            let mut value = entry("secret", LogLevel::Error, "server");
+            value.command = format!("p4 info -P{SENTINEL}");
+            value.message = format!("Ticket: {SENTINEL}");
+            store.push(value).unwrap();
+            let serialized = serde_json::to_string(&store.query(&LogQuery::default())).unwrap();
+            assert!(!serialized.contains(SENTINEL));
+            let stored: String = store
+                .connection
+                .lock()
+                .query_row(
+                    "SELECT command || message FROM logs WHERE id='secret'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(!stored.contains(SENTINEL));
+        }
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute(
+                    "UPDATE logs SET message=?1 WHERE id='secret'",
+                    [format!("password={SENTINEL}")],
+                )
+                .unwrap();
+        }
+        let reopened = LogStore::open(&path).unwrap();
+        let serialized = serde_json::to_string(&reopened.query(&LogQuery::default())).unwrap();
+        assert!(!serialized.contains(SENTINEL));
+        let stored: String = reopened
+            .connection
+            .lock()
+            .query_row("SELECT message FROM logs WHERE id='secret'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert!(!stored.contains(SENTINEL));
+        drop(reopened);
         std::fs::remove_file(path).unwrap();
     }
 }
