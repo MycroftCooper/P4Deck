@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G 及 FE-16 诊断体验生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -28,6 +28,7 @@
 | FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
 | FE-14 | Submitted 组合查询与保存过滤器 | 全字段组合筛选、稳定 cursor 分页、stats/截断、保存/应用/覆盖/删除/重置 | 字段内 OR、条件间 AND；切换取消并淘汰旧页；多页不重不漏；敏感字段不持久化 | BE-008Q 生产接线与自动化/localhost 通过；原生点击/读屏待验收 |
 | FE-15 | 全局搜索生产接线 | `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围以文本节点渲染，不自行拼 P4 参数 | 已完成生产接线与 49 文件/296 项 Web 自动化；Windows localhost 默认双轮复验通过。Job 因无现有详情页明确禁用，Stream/Shelf 延后；原生点击/390px 原生窗口/读屏待验 |
+| FE-16 | 日志、操作与诊断生产闭环 | P4 Log 游标分页/筛选/策略，diagnostic-alert，Operation Journal，诊断导出，缓存指标，连接代次清理和双向 operation 导航 | 后端过滤必须作用于分页；策略失败回滚；alert 去重且不抢焦点；导出不泄露敏感字段；Mock 明示模拟；窄屏、键盘和 ARIA 基线 | 生产接线与 50 文件/302 项 Web 自动化通过；Windows localhost 默认两轮通过。原生点击、390px 原生窗口和真实读屏未验 |
 
 ## 执行顺序
 
@@ -36,6 +37,8 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
 ## 验收记录
+
+- FE-16 诊断体验（2026-10-09）：P4 Log 使用 `queryLogPage` 的真实级别/来源/命令/operation 筛选与游标追加，保留分页失败结果并可重试；日志策略真实接 `get/setLogPolicy`，覆盖校验、保存反馈和失败回滚。`diagnostic-alert` 按 Warning/Error 策略自动展开、按 operation+level 去重且不调用焦点 API。Operation Journal 使用当前连接隔离和服务端状态/类型/时间/文本筛选，展示开始/结束/耗时/摘要/结构化错误，并与日志双向跳转。诊断视图真实接导出与缓存指标刷新；浏览器 Mock 明示不写文件，因现有安全打开能力仅允许 Workspace 内路径，导出仅提供复制路径。全量 `pnpm format:check`、50 文件/302 项 `pnpm test:web`、`pnpm build`、`pnpm check`、Rust 81 项通过/1 项 ignored、Clippy `-D warnings`、rustfmt 与 Windows localhost `p4d` 默认两轮均通过；原生窗口无法枚举，未执行原生点击、390px 原生窗口或真实读屏验收。
 
 - FE-15 Global Search（2026-10-09）：五类结果分组、facet/count、后端 target 导航、Unicode/特殊字符与 UTF-16 安全高亮、300ms debounce/取消/stale 隔离、稳定 cursor 追加去重、分页失败保留与重试、partial/单类别失败/扫描上限、空结果/整体错误、类别切换重置、Mock/Tauri 契约、390px、键盘焦点和 ARIA live/status 自动化通过。全量 `pnpm format:check`、49 文件/296 项 `pnpm test:web`、`pnpm build`、`pnpm check`、Rust 81 项通过/1 项 ignored、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost `p4d` 默认两轮均通过。当前自动化环境不提供原生窗口枚举，因此未用浏览器或 Mock 冒充 Windows/macOS 原生点击、390px 原生窗口和真实读屏验收。
 

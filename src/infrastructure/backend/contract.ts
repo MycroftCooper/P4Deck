@@ -12,6 +12,7 @@ import type {
   ConnectionStatus,
   DiagnosticExportRequest,
   DiagnosticExportResult,
+  DiagnosticAlert,
   DepotNode,
   DiffResult,
   FileActionRequest,
@@ -67,6 +68,9 @@ export interface Backend {
   exportDiagnostics(
     request: DiagnosticExportRequest,
   ): Promise<DiagnosticExportResult>;
+  subscribeDiagnosticAlerts(
+    callback: (alert: DiagnosticAlert) => void,
+  ): Promise<() => void>;
   workspaceDiskUsage(): Promise<
     import("../../shared/contracts/types").DiskUsage
   >;

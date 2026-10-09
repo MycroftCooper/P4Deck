@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { OperationEvent } from "../../shared/contracts/types";
+import type {
+  DiagnosticAlert,
+  OperationEvent,
+} from "../../shared/contracts/types";
 import type { Backend } from "./contract";
 
 export const tauriBackend: Backend = {
@@ -13,6 +16,10 @@ export const tauriBackend: Backend = {
   getLogPolicy: () => invoke("get_log_policy"),
   setLogPolicy: (policy) => invoke("set_log_policy", { policy }),
   exportDiagnostics: (request) => invoke("export_diagnostics", { request }),
+  subscribeDiagnosticAlerts: (callback) =>
+    listen<DiagnosticAlert>("diagnostic-alert", (event) =>
+      callback(event.payload),
+    ),
   workspaceDiskUsage: () => invoke("workspace_disk_usage"),
   discoverP4Cli: (request) => invoke("discover_p4_cli", { request }),
   testConnection: (context) => invoke("test_connection", { context }),

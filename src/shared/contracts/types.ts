@@ -372,6 +372,7 @@ export interface ClActionResult {
 export interface LogQuery {
   keyword?: string;
   levels?: LogLevel[];
+  sources?: OperationSource[];
   server?: string;
   workspace?: string;
   command?: string;
@@ -399,6 +400,12 @@ export interface DiagnosticExportResult {
   sizeBytes: number;
   truncated: boolean;
   format: "json";
+  simulated?: boolean;
+}
+
+export interface DiagnosticAlert {
+  operationId: string;
+  level: "warning" | "error";
 }
 
 export interface CacheDiagnostics {
@@ -446,6 +453,11 @@ export interface OperationRecord {
 }
 export interface OperationJournalQuery {
   connectionId?: string;
+  state?: JournalState;
+  category?: OperationCategory;
+  from?: string;
+  to?: string;
+  keyword?: string;
   cursor?: string;
   limit?: number;
 }

@@ -3,7 +3,9 @@ import type {
   FileState,
   GlobalSearchItem,
   GlobalSearchKind,
+  DiagnosticAlert,
   LogEntry,
+  OperationRecord,
   OperationEvent,
   PendingChange,
   SubmitPreflight,
@@ -46,6 +48,7 @@ try {
 const now = Date.now();
 const mockLogs: LogEntry[] = [];
 const operationSubscribers = new Set<(event: OperationEvent) => void>();
+const diagnosticSubscribers = new Set<(event: DiagnosticAlert) => void>();
 let mockPendingChanges: PendingChange[] | undefined;
 function emitOperation(event: OperationEvent) {
   operationSubscribers.forEach((subscriber) => subscriber(event));
@@ -311,6 +314,11 @@ function emitMockLog(
     repeatCount: 1,
   });
   if (mockLogs.length > 10_000) mockLogs.length = 10_000;
+  if (level === "warning" || level === "error") {
+    diagnosticSubscribers.forEach((subscriber) =>
+      subscriber({ operationId, level }),
+    );
+  }
 }
 
 export const mockBackend: Backend = {
@@ -330,14 +338,59 @@ export const mockBackend: Backend = {
       invalidationReasons: {},
     };
   },
-  async queryOperationJournal() {
-    return { records: [] };
+  async queryOperationJournal(query) {
+    const keyword = query.keyword?.trim().toLowerCase();
+    const records: OperationRecord[] = mockLogs.map((entry) => ({
+      operationId: entry.operationId,
+      connectionId: "mock-connection",
+      workspace: entry.workspace,
+      source: entry.source,
+      category: entry.source === "terminal" ? "query" : "fileMutation",
+      state: entry.level === "error" ? "failed" : "succeeded",
+      failure: entry.level === "error" ? "commandFailure" : undefined,
+      startedAt: entry.timestamp,
+      finishedAt: new Date(
+        Date.parse(entry.timestamp) + (entry.durationMs ?? 0),
+      ).toISOString(),
+      logReference: entry.operationId,
+    }));
+    const filtered = records.filter(
+      (record) =>
+        (!query.state || record.state === query.state) &&
+        (!query.category || record.category === query.category) &&
+        (!query.from || record.startedAt >= query.from) &&
+        (!query.to || record.startedAt <= query.to) &&
+        (!keyword ||
+          `${record.operationId} ${record.workspace} ${record.category} ${record.state} ${record.failure ?? ""}`
+            .toLowerCase()
+            .includes(keyword)),
+    );
+    const offset = query.cursor
+      ? Number(query.cursor.replace("mock-journal:", ""))
+      : 0;
+    const limit = Math.max(1, Math.min(100, query.limit ?? 50));
+    const page = filtered.slice(offset, offset + limit);
+    const next = offset + page.length;
+    return {
+      records: page,
+      nextCursor: next < filtered.length ? `mock-journal:${next}` : undefined,
+    };
   },
   async getOperationRecord() {
     return null;
   },
   async queryLogPage(query) {
-    return { entries: await this.queryLogs(query) };
+    const entries = await this.queryLogs({ ...query, limit: 10_000 });
+    const offset = query.cursor
+      ? Number(query.cursor.replace("mock-log:", ""))
+      : 0;
+    const limit = Math.max(1, Math.min(500, query.limit ?? 100));
+    const page = entries.slice(offset, offset + limit);
+    const next = offset + page.length;
+    return {
+      entries: page,
+      nextCursor: next < entries.length ? `mock-log:${next}` : undefined,
+    };
   },
   async getLogPolicy() {
     return {
@@ -355,7 +408,17 @@ export const mockBackend: Backend = {
     };
   },
   async exportDiagnostics() {
-    throw new Error("Diagnostic export requires the desktop app");
+    return {
+      path: "Mock simulation — no diagnostic file was written",
+      sizeBytes: 0,
+      truncated: false,
+      format: "json",
+      simulated: true,
+    };
+  },
+  async subscribeDiagnosticAlerts(callback) {
+    diagnosticSubscribers.add(callback);
+    return () => diagnosticSubscribers.delete(callback);
   },
   workspaceDiskUsage: async () => {
     throw new Error("Disk information requires the desktop app");
@@ -917,6 +980,11 @@ export const mockBackend: Backend = {
       .filter(
         (entry) =>
           (!query.levels?.length || query.levels.includes(entry.level)) &&
+          (!query.sources?.length || query.sources.includes(entry.source)) &&
+          (!query.server || query.server === entry.server) &&
+          (!query.workspace || query.workspace === entry.workspace) &&
+          (!query.command || entry.command.includes(query.command)) &&
+          (!query.operationId || query.operationId === entry.operationId) &&
           (!keyword ||
             `${entry.command} ${entry.message}`
               .toLowerCase()

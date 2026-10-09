@@ -87,6 +87,7 @@ impl DiagnosticService {
                 connection_id: None,
                 cursor,
                 limit: Some((operation_limit - operations.len()).min(100)),
+                ..Default::default()
             })?;
             operations.extend(page.records);
             let Some(next) = page.next_cursor else { break };

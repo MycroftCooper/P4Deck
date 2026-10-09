@@ -1,12 +1,16 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 const invoke = vi.hoisted(() => vi.fn());
+const listen = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen }));
 
 import { tauriBackend } from "./tauriBackend";
 
-beforeEach(() => invoke.mockReset());
+beforeEach(() => {
+  invoke.mockReset();
+  listen.mockReset();
+});
 
 it("passes only the narrow submitted-detail request through the Tauri adapter", async () => {
   const request = { changeId: 42, operationId: "detail-42" };
@@ -56,4 +60,31 @@ it("passes the narrow global search query through unchanged", async () => {
   invoke.mockResolvedValue({ groups: [], hasMore: false, simulated: false });
   await tauriBackend.globalSearch(query);
   expect(invoke).toHaveBeenCalledExactlyOnceWith("global_search", { query });
+});
+
+it("passes diagnostic filters unchanged and listens to the narrow alert event", async () => {
+  const query = {
+    state: "failed" as const,
+    category: "submit" as const,
+    from: "2026-10-01T00:00:00Z",
+    to: "2026-10-09T00:00:00Z",
+    keyword: "op-safe",
+    cursor: "opaque-journal-cursor",
+    limit: 50,
+  };
+  invoke.mockResolvedValue({ records: [] });
+  await tauriBackend.queryOperationJournal(query);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("query_operation_journal", {
+    query,
+  });
+  const callback = vi.fn();
+  listen.mockResolvedValue(() => undefined);
+  await tauriBackend.subscribeDiagnosticAlerts(callback);
+  expect(listen).toHaveBeenCalledWith("diagnostic-alert", expect.any(Function));
+  const handler = listen.mock.calls[0][1];
+  handler({ payload: { operationId: "op-safe", level: "error" } });
+  expect(callback).toHaveBeenCalledWith({
+    operationId: "op-safe",
+    level: "error",
+  });
 });

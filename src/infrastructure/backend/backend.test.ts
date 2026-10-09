@@ -532,9 +532,10 @@ describe("controlled P4 terminal", () => {
     const cache = await backend.statusCacheDiagnostics();
     expect(cache.entries).toBe(0);
     expect(JSON.stringify(cache)).not.toContain("/workspace");
-    expect(
-      (await backend.queryOperationJournal({ limit: 500 })).records,
-    ).toEqual([]);
+    const journal = (await backend.queryOperationJournal({ limit: 500 }))
+      .records;
+    expect(journal.length).toBeLessThanOrEqual(100);
+    expect(JSON.stringify(journal)).not.toContain("single-use-secret");
     const policy = await backend.setLogPolicy({
       autoExpandWarning: false,
       autoExpandError: true,
@@ -543,6 +544,9 @@ describe("controlled P4 terminal", () => {
     });
     expect(policy.retentionDays).toBe(30);
     expect(policy.maxMib).toBe(50);
-    await expect(backend.exportDiagnostics({})).rejects.toThrow("desktop app");
+    await expect(backend.exportDiagnostics({})).resolves.toMatchObject({
+      simulated: true,
+      sizeBytes: 0,
+    });
   });
 });

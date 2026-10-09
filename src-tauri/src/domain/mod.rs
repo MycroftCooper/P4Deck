@@ -27,7 +27,7 @@ pub struct P4CommandRequest {
     pub input: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OperationSource {
     Gui,
@@ -210,6 +210,7 @@ pub struct LogEntry {
 pub struct LogQuery {
     pub keyword: Option<String>,
     pub levels: Option<Vec<LogLevel>>,
+    pub sources: Option<Vec<OperationSource>>,
     pub server: Option<String>,
     pub workspace: Option<String>,
     pub command: Option<String>,

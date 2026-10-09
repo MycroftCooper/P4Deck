@@ -241,9 +241,17 @@ pub fn status_cache_diagnostics(
 
 #[tauri::command]
 pub fn query_operation_journal(
-    query: crate::persistence::operation_journal::OperationJournalQuery,
+    mut query: crate::persistence::operation_journal::OperationJournalQuery,
     state: State<'_, AppState>,
 ) -> Result<crate::persistence::operation_journal::OperationJournalPage, String> {
+    if query.connection_id.is_none() {
+        let context = state.connection.context();
+        query.connection_id = Some(crate::persistence::operation_journal::connection_id(
+            &context.server,
+            &context.user,
+            &context.client,
+        ));
+    }
     state.journal.query(&query)
 }
 

@@ -1,50 +1,58 @@
-import { storage } from "../../../shared/lib/storage";
-import { readTerminalHistory, readToolHeight } from "../terminalPreferences";
-import { useEffect, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Ban,
   ChevronDown,
   ChevronUp,
   CircleAlert,
-  Copy,
   Eraser,
   Play,
   TerminalSquare,
+  Wrench,
+  ListChecks,
 } from "lucide-react";
 import type {
-  LogEntry,
+  LogPolicy,
   OperationEvent,
   OperationResult,
   P4Context,
 } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
+import { storage } from "../../../shared/lib/storage";
 import { tokenize } from "../../../shared/lib/tokenize";
-
+import { readTerminalHistory, readToolHeight } from "../terminalPreferences";
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
 import { action, copy } from "../../../app/context-menu/bindings";
-import { readClipboardText } from "../../../infrastructure/clipboard";
 import { useFullTextSelection } from "../../../app/context-menu/FullTextSelection";
-import { useRecordSelection } from "../../../app/context-menu/useRecordSelection";
+import { readClipboardText } from "../../../infrastructure/clipboard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { useDialogRequest } from "../../../app/dialogs/useDialogRequest";
+import { LogView } from "./LogView";
+import { OperationJournalView } from "./OperationJournalView";
+import { DiagnosticsView } from "./DiagnosticsView";
+
+export type ToolTab = "terminal" | "logs" | "journal" | "diagnostics";
 type CopyText = (typeof messages)[keyof typeof messages];
 
 interface Props {
   t: CopyText;
+  zh: boolean;
+  native: boolean;
+  connectionKey: string;
+  logRefreshKey: number;
   open: boolean;
-  active: "terminal" | "logs";
-  logs: LogEntry[];
+  active: ToolTab;
   operationFilter?: string;
-  onOperationFilter(id?: string): void;
+  journalOperation?: string;
   unread: number;
   context: P4Context;
   operationEvents: OperationEvent[];
   onOpenChange(open: boolean): void;
-  onActiveChange(tab: "terminal" | "logs"): void;
+  onActiveChange(tab: ToolTab, operationId?: string): void;
+  onOperationFilter(id?: string): void;
+  onJournalOperation(id?: string): void;
+  onPolicy(policy: LogPolicy): void;
   onRun(input: string, operationId: string): Promise<OperationResult>;
   onCancel(operationId: string): void;
-  onRefreshLogs(): Promise<unknown>;
 }
 
 export function ToolDrawer(props: Props) {
@@ -52,7 +60,8 @@ export function ToolDrawer(props: Props) {
     { text: string; source: HTMLElement | null },
     string
   >(JSON.stringify(props.context));
-  const zh = props.t.files === "文件";
+  const menu = useContextMenu();
+  const textSelection = useFullTextSelection();
   const [input, setInput] = useState("");
   const [lines, setLines] = useState<string[]>([
     "P4Deck controlled terminal — only p4 commands are allowed.",
@@ -65,28 +74,12 @@ export function ToolDrawer(props: Props) {
     readTerminalHistory(storage.getItem("p4deck.terminalHistory")),
   );
   const historyIndex = useRef(-1);
-  const logScrollRef = useRef<HTMLDivElement>(null);
-  const menu = useContextMenu();
-  const textSelection = useFullTextSelection();
-  const [hiddenLogs, setHiddenLogs] = useState<Set<string>>(new Set());
-  const displayedLogs = props.logs.filter((log) => !hiddenLogs.has(log.id));
-  const selection = useRecordSelection(
-    displayedLogs,
-    (log) => log.id,
-    JSON.stringify(props.context),
-  );
-  const logVirtualizer = useVirtualizer({
-    count: displayedLogs.length,
-    getScrollElement: () => logScrollRef.current,
-    estimateSize: () => 45,
-    overscan: 8,
-  });
+  const streamedCount = useRef(0);
 
   useEffect(
     () => storage.setItem("p4deck.toolHeight", String(height)),
     [height],
   );
-  const streamedCount = useRef(0);
   useEffect(() => {
     if (!running) return;
     const matching = props.operationEvents.filter(
@@ -121,7 +114,10 @@ export function ToolDrawer(props: Props) {
         JSON.stringify(historyRef.current),
       );
     }
-    setLines((value) => [...value, `p4> ${raw}`]);
+    setLines((value) => [
+      ...value,
+      `p4> ${sensitive ? "[sensitive command hidden]" : raw}`,
+    ]);
     setInput("");
     const temporaryId = crypto.randomUUID();
     streamedCount.current = 0;
@@ -157,18 +153,38 @@ export function ToolDrawer(props: Props) {
     setInput(next < 0 ? "" : historyRef.current[next]);
   }
 
+  const tabs: Array<{ id: ToolTab; label: string; icon: ReactNode }> = [
+    {
+      id: "terminal",
+      label: props.t.terminal,
+      icon: <TerminalSquare size={14} />,
+    },
+    { id: "logs", label: props.t.logs, icon: <CircleAlert size={14} /> },
+    {
+      id: "journal",
+      label: props.zh ? "操作" : "Operations",
+      icon: <ListChecks size={14} />,
+    },
+    {
+      id: "diagnostics",
+      label: props.zh ? "诊断" : "Diagnostics",
+      icon: <Wrench size={14} />,
+    },
+  ];
+
   return (
     <section
       className={`tool-drawer ${props.open ? "expanded" : "collapsed"}`}
       style={props.open ? { height } : undefined}
-      aria-label="P4 tools"
+      aria-label={props.zh ? "P4 工具与诊断" : "P4 tools and diagnostics"}
     >
-      {props.open ? (
+      {props.open && (
         <div
           className="resize-handle"
+          aria-hidden="true"
           onPointerDown={(event) => {
-            const startY = event.clientY,
-              startHeight = height;
+            const startY = event.clientY;
+            const startHeight = height;
             const move = (moveEvent: PointerEvent) =>
               setHeight(
                 Math.max(
@@ -184,15 +200,11 @@ export function ToolDrawer(props: Props) {
             window.addEventListener("pointerup", up);
           }}
         />
-      ) : null}
+      )}
       <header
         className="tool-tabs"
-        tabIndex={0}
-        {...menu("T06", () => ({
-          "折叠/展开工具栏": action(() => props.onOpenChange(!props.open)),
-          切到命令行: action(() => props.onActiveChange("terminal")),
-          切到日志: action(() => props.onActiveChange("logs")),
-        }))}
+        role="tablist"
+        aria-label={props.zh ? "工具视图" : "Tool views"}
       >
         <button
           className="drawer-toggle"
@@ -201,33 +213,31 @@ export function ToolDrawer(props: Props) {
         >
           {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
         </button>
-        <button
-          className={props.active === "terminal" ? "active" : ""}
-          onClick={() => props.onActiveChange("terminal")}
-        >
-          <TerminalSquare size={14} />
-          {props.t.terminal}
-        </button>
-        <button
-          className={props.active === "logs" ? "active" : ""}
-          onClick={() => props.onActiveChange("logs")}
-        >
-          <CircleAlert size={14} />
-          {props.t.logs}
-          {props.unread ? <b>{props.unread}</b> : null}
-        </button>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={props.active === tab.id}
+            className={props.active === tab.id ? "active" : ""}
+            onClick={() => props.onActiveChange(tab.id)}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.id === "logs" && props.unread ? <b>{props.unread}</b> : null}
+          </button>
+        ))}
       </header>
       {textSelection.dialog}
       {pasteDialog.request && (
         <Dialog
-          title={zh ? "粘贴多行文本" : "Paste multiline text"}
+          title={props.zh ? "粘贴多行文本" : "Paste multiline text"}
           description={
-            zh
+            props.zh
               ? "只填入命令输入框，不自动执行。确认后会替换当前输入。"
               : "Fills the command input only; does not execute. Replaces the current input after confirmation."
           }
           source={pasteDialog.request.source}
-          zh={zh}
+          zh={props.zh}
           onRequestClose={() => pasteDialog.answer(null)}
           footer={
             <>
@@ -235,12 +245,12 @@ export function ToolDrawer(props: Props) {
                 data-dialog-autofocus
                 onClick={() => pasteDialog.answer(null)}
               >
-                {zh ? "取消" : "Cancel"}
+                {props.zh ? "取消" : "Cancel"}
               </button>
               <button
                 onClick={() => pasteDialog.answer(pasteDialog.request!.text)}
               >
-                {zh ? "仅填入输入框" : "Fill input only"}
+                {props.zh ? "仅填入输入框" : "Fill input only"}
               </button>
             </>
           }
@@ -250,19 +260,20 @@ export function ToolDrawer(props: Props) {
           </pre>
           {pasteDialog.request.text.length > 5000 && (
             <DialogNotice>
-              {zh
+              {props.zh
                 ? "此处仅预览前 5,000 字符，确认将填入完整文本。"
                 : "Only the first 5,000 characters are previewed; confirmation fills the full text."}
             </DialogNotice>
           )}
         </Dialog>
       )}
-      {props.open && props.active === "terminal" ? (
-        <div className="terminal-view">
+      {props.open && props.active === "terminal" && (
+        <div className="terminal-view" role="tabpanel">
           <div
             className="terminal-output"
             ref={textSelection.surfaceRef}
             tabIndex={0}
+            aria-label={props.zh ? "终端输出" : "Terminal output"}
             {...menu("U01", () => ({
               复制所选文本: copy(textSelection.selectedText()),
               全选: action(() => textSelection.selectAll(lines.join("\n"))),
@@ -303,107 +314,51 @@ export function ToolDrawer(props: Props) {
               <Play size={14} />
               {props.t.run}
             </button>
-            {running ? (
+            {running && (
               <button onClick={() => props.onCancel(running)}>
                 <Ban size={14} />
                 {props.t.cancel}
               </button>
-            ) : null}
+            )}
             <button onClick={() => setLines([])}>
               <Eraser size={14} />
               {props.t.clear}
             </button>
           </div>
         </div>
-      ) : props.open ? (
-        <div
-          ref={logScrollRef}
-          className="log-scroll"
-          tabIndex={0}
-          {...menu("U04", () => ({
-            刷新: action(async () => {
-              setHiddenLogs(new Set());
-              await props.onRefreshLogs();
-            }),
-            全选当前筛选结果: action(selection.all),
-            清除选择: action(selection.clear),
-            清空显示: action(() =>
-              setHiddenLogs(new Set(props.logs.map((log) => log.id))),
-            ),
-          }))}
-        >
-          {props.operationFilter && (
-            <div className="log-filter">
-              {props.operationFilter}
-              <button onClick={() => props.onOperationFilter(undefined)}>
-                清除筛选 / Clear filter
-              </button>
-            </div>
-          )}
-          {!displayedLogs.length ? (
-            <div className="empty-state">{props.t.noLogs}</div>
-          ) : null}
-          <div
-            className="virtual-spacer"
-            style={{ height: logVirtualizer.getTotalSize() }}
-          >
-            {logVirtualizer.getVirtualItems().map((row) => {
-              const log = displayedLogs[row.index];
-              return (
-                <div
-                  key={log.id}
-                  className={`log-row ${log.level} ${selection.isSelected(log) ? "selected" : ""}`}
-                  tabIndex={0}
-                  onKeyDownCapture={(event) => selection.keyboard(log, event)}
-                  onClick={(event) => selection.select(log, event)}
-                  {...menu(
-                    selection.targets(log).length > 1 ? "U03" : "U02",
-                    () => ({
-                      按此操作筛选: action(() =>
-                        props.onOperationFilter(log.operationId),
-                      ),
-                      复制消息: copy(log.message),
-                      复制详细信息: copy(
-                        `${log.timestamp}\n${log.command}\n${log.message}`,
-                      ),
-                      复制所选日志: copy(
-                        selection
-                          .targets(log)
-                          .map(
-                            (value) =>
-                              `${value.timestamp}\n${value.command}\n${value.message}`,
-                          )
-                          .join("\n\n"),
-                      ),
-                    }),
-                    { onOpen: () => selection.context(log) },
-                  )}
-                  style={{
-                    transform: `translateY(${row.start}px)`,
-                    height: row.size,
-                  }}
-                >
-                  <time>{new Date(log.timestamp).toLocaleTimeString()}</time>
-                  <strong>{log.level.toUpperCase()}</strong>
-                  <code>{log.command}</code>
-                  <span>{log.message}</span>
-                  {log.repeatCount > 1 ? <b>×{log.repeatCount}</b> : null}
-                  <button
-                    aria-label="Copy"
-                    onClick={() =>
-                      navigator.clipboard.writeText(
-                        `${log.command}\n${log.message}`,
-                      )
-                    }
-                  >
-                    <Copy size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+      )}
+      {props.open && props.active === "logs" && (
+        <LogView
+          zh={props.zh}
+          connectionKey={props.connectionKey}
+          refreshKey={props.logRefreshKey}
+          operationFilter={props.operationFilter}
+          onOperationFilter={props.onOperationFilter}
+          onOpenJournal={(id) => {
+            props.onJournalOperation(id);
+            props.onActiveChange("journal", id);
+          }}
+          onPolicy={props.onPolicy}
+        />
+      )}
+      {props.open && props.active === "journal" && (
+        <OperationJournalView
+          zh={props.zh}
+          connectionKey={props.connectionKey}
+          focusOperationId={props.journalOperation}
+          onOpenLogs={(id) => {
+            props.onOperationFilter(id);
+            props.onActiveChange("logs", id);
+          }}
+        />
+      )}
+      {props.open && props.active === "diagnostics" && (
+        <DiagnosticsView
+          zh={props.zh}
+          connectionKey={props.connectionKey}
+          native={props.native}
+        />
+      )}
     </section>
   );
 }

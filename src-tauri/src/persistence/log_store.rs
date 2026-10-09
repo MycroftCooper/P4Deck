@@ -102,6 +102,11 @@ impl LogStore {
                     .map(|v| v.contains(&entry.level))
                     .unwrap_or(true)
                     && query
+                        .sources
+                        .as_ref()
+                        .map(|v| v.contains(&entry.source))
+                        .unwrap_or(true)
+                    && query
                         .server
                         .as_ref()
                         .map(|v| v == &entry.server)
@@ -313,6 +318,13 @@ mod tests {
                 .len(),
             1
         );
+        assert!(store
+            .query_page(&LogQuery {
+                sources: Some(vec![OperationSource::Terminal]),
+                ..Default::default()
+            })
+            .entries
+            .is_empty());
         let mut old = entry("old", LogLevel::Info, "a");
         old.message = "old".into();
         old.timestamp = (Utc::now() - chrono::Duration::days(5)).to_rfc3339();

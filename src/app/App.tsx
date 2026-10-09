@@ -264,6 +264,9 @@ export function App() {
                 <ToolArea
                   ref={toolsRef}
                   t={t}
+                  zh={zh}
+                  native={runtime.mode === "tauri"}
+                  connectionKey={connectionKey}
                   context={runtime.context}
                   onOpenChange={setToolOpen}
                 />

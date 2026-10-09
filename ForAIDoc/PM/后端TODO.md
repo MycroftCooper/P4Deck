@@ -47,8 +47,8 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
 | BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收 |
 | BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
-| BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
-| BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
+| BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、当前连接隔离、游标分页及状态/类型/时间/文本服务端筛选、结构化终态、崩溃恢复和不可重放边界已完成；前端已接入 |
+| BE-007 | 日志策略与诊断导出 | 稳定分页及级别/来源/Server/Workspace/命令/operation/关键词过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成；前端已接入 |
 | BE-008 | Submitted 详情与可靠合并分类 | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收 |
 | BE-008Q | Submitted 组合查询与稳定游标 | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收 |
 | BE-008G | 全局搜索生产后端 | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
@@ -175,7 +175,7 @@ pnpm test:e2e:p4d:win
 - 区分离线、服务器不可达、认证过期和命令失败。
 - 应用重启后可识别未正常结束的操作，但不得自动重放修改命令。
 
-### BE-007 — 日志策略与诊断导出（DONE：前端入口待接入）
+### BE-007 — 日志策略与诊断导出（DONE：前端入口已接入，真实故障与原生 UI 待验）
 
 - Warning/Error 自动展开所需事件与偏好接口。
 - 按 Server/Workspace/命令/操作 ID 查询，支持分页或游标。

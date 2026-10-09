@@ -6,10 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { ToolDrawer } from "./components/ToolDrawer";
 import { backend, tokenize } from "../../infrastructure/backend";
 import type {
-  LogEntry,
+  LogPolicy,
   OperationEvent,
   OperationResult,
   P4Context,
@@ -17,90 +16,141 @@ import type {
 import type { messages } from "../../shared/i18n";
 import { storage } from "../../shared/lib/storage";
 import { subscribeSafely } from "../../shared/lib/subscription";
+import { ToolDrawer, type ToolTab } from "./components/ToolDrawer";
 
-export type ToolTab = "terminal" | "logs";
+export type { ToolTab } from "./components/ToolDrawer";
 export interface ToolHandle {
   open(tab: ToolTab, operationId?: string): void;
   afterOperation(warnings: string[]): Promise<void>;
 }
 interface Props {
   t: (typeof messages)[keyof typeof messages];
+  zh: boolean;
+  native: boolean;
+  connectionKey: string;
   context: P4Context;
   onOpenChange(open: boolean): void;
 }
+
+const defaultPolicy: LogPolicy = {
+  autoExpandWarning: false,
+  autoExpandError: true,
+  retentionDays: 14,
+  maxMib: 50,
+};
+
 export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
-  { t, context, onOpenChange },
+  { t, zh, native, connectionKey, context, onOpenChange },
   ref,
 ) {
   const [open, setOpen] = useState(
     () => storage.getItem("p4deck.toolOpen") === "true",
   );
   const [active, setActive] = useState<ToolTab>("terminal");
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [operationFilter, setOperationFilter] = useState<string>();
+  const [journalOperation, setJournalOperation] = useState<string>();
   const [unread, setUnread] = useState(0);
   const [events, setEvents] = useState<OperationEvent[]>([]);
   const [error, setError] = useState("");
-  const generation = useRef(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const policy = useRef(defaultPolicy);
+  const openRef = useRef(open);
+  const activeRef = useRef(active);
+  const seenAlerts = useRef(new Set<string>());
+  openRef.current = open;
+  activeRef.current = active;
+
   useEffect(() => {
     storage.setItem("p4deck.toolOpen", String(open));
     onOpenChange(open);
   }, [open, onOpenChange]);
+
   useEffect(() => {
     let live = true;
-    const stop = subscribeSafely(
+    seenAlerts.current.clear();
+    setOperationFilter(undefined);
+    setJournalOperation(undefined);
+    setUnread(0);
+    setEvents([]);
+    setError("");
+    setRefreshKey((value) => value + 1);
+    void backend
+      .getLogPolicy()
+      .then((value) => {
+        if (live) policy.current = value;
+      })
+      .catch((cause) => {
+        if (live) setError(String(cause));
+      });
+    return () => {
+      live = false;
+    };
+  }, [connectionKey]);
+
+  useEffect(() => {
+    let live = true;
+    const stopOperations = subscribeSafely(
       () =>
         backend.subscribeOperationEvents((event) => {
           if (live) setEvents((current) => [...current.slice(-999), event]);
         }),
-      (e) => setError(String(e)),
+      (cause) => setError(String(cause)),
+    );
+    const stopAlerts = subscribeSafely(
+      () =>
+        backend.subscribeDiagnosticAlerts((alert) => {
+          if (!live) return;
+          const key = `${alert.operationId}:${alert.level}`;
+          if (seenAlerts.current.has(key)) return;
+          seenAlerts.current.add(key);
+          if (seenAlerts.current.size > 256) {
+            const oldest = seenAlerts.current.values().next().value;
+            if (oldest) seenAlerts.current.delete(oldest);
+          }
+          const enabled =
+            alert.level === "error"
+              ? policy.current.autoExpandError
+              : policy.current.autoExpandWarning;
+          if (!enabled) return;
+          setRefreshKey((value) => value + 1);
+          if (!openRef.current || activeRef.current !== "logs") {
+            setOpen(true);
+            setActive("logs");
+          }
+          setOperationFilter(alert.operationId);
+          setUnread(0);
+        }),
+      (cause) => setError(String(cause)),
     );
     return () => {
       live = false;
-      generation.current++;
-      stop();
+      stopOperations();
+      stopAlerts();
     };
   }, []);
-  const refresh = useCallback(
-    async (openOnProblem = true) => {
-      const request = ++generation.current;
-      try {
-        const next = await backend.queryLogs({ limit: 10_000 });
-        if (request !== generation.current) return;
-        setLogs(next);
-        setError("");
-        if (
-          openOnProblem &&
-          next[0] &&
-          ["warning", "error"].includes(next[0].level)
-        ) {
-          if (!open) {
-            setOpen(true);
-            setActive("logs");
-          } else if (active !== "logs") setUnread((n) => n + 1);
-        }
-      } catch (e) {
-        if (request === generation.current) setError(String(e));
-      }
-    },
-    [open, active],
-  );
-  const show = (tab: ToolTab, operationId?: string) => {
-    setOperationFilter(operationId);
+
+  const show = useCallback((tab: ToolTab, operationId?: string) => {
+    if (tab === "logs") {
+      setOperationFilter(operationId);
+      setUnread(0);
+      setRefreshKey((value) => value + 1);
+    }
+    if (tab === "journal") setJournalOperation(operationId);
     setActive(tab);
     setOpen(true);
-    if (tab === "logs") {
-      setUnread(0);
-      void refresh(false);
-    }
-  };
+  }, []);
+  const handlePolicy = useCallback((value: LogPolicy) => {
+    policy.current = value;
+  }, []);
+
   useImperativeHandle(ref, () => ({
     open: show,
     async afterOperation(warnings) {
-      await refresh();
+      setRefreshKey((value) => value + 1);
       if (warnings.length) show("logs");
     },
   }));
+
   async function run(
     input: string,
     operationId: string,
@@ -116,27 +166,35 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
       outputMode: "text",
       timeoutMs: 120_000,
     });
-    await refresh();
+    setRefreshKey((value) => value + 1);
     return result;
   }
+
   return (
     <>
       <ToolDrawer
         t={t}
+        zh={zh}
+        native={native}
+        connectionKey={connectionKey}
+        logRefreshKey={refreshKey}
         open={open}
         active={active}
-        logs={logs}
         operationFilter={operationFilter}
+        journalOperation={journalOperation}
         onOperationFilter={setOperationFilter}
+        onJournalOperation={setJournalOperation}
+        onPolicy={handlePolicy}
         unread={unread}
         context={context}
         operationEvents={events}
         onOpenChange={setOpen}
         onActiveChange={show}
         onRun={run}
-        onRefreshLogs={() => refresh(false)}
         onCancel={(id) => {
-          void backend.cancelOperation(id).catch((e) => setError(String(e)));
+          void backend
+            .cancelOperation(id)
+            .catch((cause) => setError(String(cause)));
         }}
       />
       {error && (

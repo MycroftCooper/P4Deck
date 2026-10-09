@@ -65,6 +65,11 @@ pub struct OperationRecord {
 #[serde(rename_all = "camelCase")]
 pub struct OperationJournalQuery {
     pub connection_id: Option<String>,
+    pub state: Option<JournalState>,
+    pub category: Option<OperationCategory>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub keyword: Option<String>,
     pub cursor: Option<String>,
     pub limit: Option<usize>,
 }
@@ -142,12 +147,32 @@ impl OperationJournal {
         let connection = self.connection.lock();
         let mut statement = connection.prepare(
             "SELECT operation_id,connection_id,workspace,source,category,state,failure,started_at,finished_at,log_reference
-             FROM operation_journal WHERE (?1 IS NULL OR connection_id=?1) AND (?2 IS NULL OR (started_at || '|' || operation_id) < ?2)
-             ORDER BY started_at DESC, operation_id DESC LIMIT ?3"
+             FROM operation_journal
+             WHERE (?1 IS NULL OR connection_id=?1)
+               AND (?2 IS NULL OR state=?2)
+               AND (?3 IS NULL OR category=?3)
+               AND (?4 IS NULL OR started_at>=?4)
+               AND (?5 IS NULL OR started_at<=?5)
+               AND (?6 IS NULL OR instr(lower(operation_id || ' ' || workspace || ' ' || category || ' ' || state || ' ' || coalesce(failure,'')), lower(?6)) > 0)
+               AND (?7 IS NULL OR (started_at || '|' || operation_id) < ?7)
+             ORDER BY started_at DESC, operation_id DESC LIMIT ?8"
         ).map_err(|e| e.to_string())?;
         let rows = statement
             .query_map(
-                params![query.connection_id, query.cursor, limit + 1],
+                params![
+                    query.connection_id,
+                    query.state.map(state_name),
+                    query.category.map(category_name),
+                    query.from,
+                    query.to,
+                    query
+                        .keyword
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty()),
+                    query.cursor,
+                    limit + 1
+                ],
                 row_record,
             )
             .map_err(|e| e.to_string())?;
@@ -317,6 +342,7 @@ mod tests {
                 connection_id: None,
                 cursor: None,
                 limit: Some(2),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(first.records.len(), 2);
@@ -326,6 +352,7 @@ mod tests {
                 connection_id: None,
                 cursor: first.next_cursor,
                 limit: Some(2),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(second.records.len(), 2);
@@ -358,6 +385,7 @@ mod tests {
                 connection_id: Some(id),
                 cursor: None,
                 limit: Some(500),
+                ..Default::default()
             })
             .unwrap();
         assert_eq!(page.records.len(), 1);
@@ -366,6 +394,39 @@ mod tests {
             Some(OperationFailureKind::AuthExpired)
         );
         assert_eq!(page.records[0].log_reference.as_deref(), Some("safe-id"));
+        let filtered = journal
+            .query(&OperationJournalQuery {
+                state: Some(JournalState::Failed),
+                category: Some(OperationCategory::Authentication),
+                keyword: Some("SAFE-ID".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(filtered.records.len(), 1);
+        assert!(journal
+            .query(&OperationJournalQuery {
+                state: Some(JournalState::Succeeded),
+                ..Default::default()
+            })
+            .unwrap()
+            .records
+            .is_empty());
+        assert!(journal
+            .query(&OperationJournalQuery {
+                from: Some("2999-01-01T00:00:00Z".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .records
+            .is_empty());
+        assert!(journal
+            .query(&OperationJournalQuery {
+                keyword: Some("%".into()),
+                ..Default::default()
+            })
+            .unwrap()
+            .records
+            .is_empty());
         let bytes = std::fs::read(&path).unwrap();
         let text = String::from_utf8_lossy(&bytes);
         assert!(!text.contains("stdin"));
