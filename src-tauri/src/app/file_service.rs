@@ -208,6 +208,14 @@ impl FileService {
                     mapped: None,
                     moved_file: None,
                     ignore: None,
+                    file_type: None,
+                    exclusive_open: None,
+                    lock_ownership: None,
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    can_lock: None,
+                    can_unlock: None,
+                    lock_reason: None,
                     completeness: WorkspaceStatusCompleteness::Complete,
                     evidence: vec![WorkspaceStatusEvidence {
                         source: WorkspaceStatusSource::Filesystem,
@@ -234,6 +242,16 @@ impl FileService {
                 mapped: None,
                 moved_file: None,
                 ignore: None,
+                file_type: None,
+                exclusive_open: None,
+                lock_ownership: Some(FileLockOwnership::Unknown),
+                lock_owner: None,
+                other_open: Vec::new(),
+                can_lock: Some(false),
+                can_unlock: Some(false),
+                lock_reason: Some(
+                    "Lock state is unavailable until authoritative P4 status is loaded".into(),
+                ),
                 completeness: WorkspaceStatusCompleteness::Partial,
                 evidence: vec![WorkspaceStatusEvidence {
                     source: WorkspaceStatusSource::Filesystem,
@@ -296,7 +314,10 @@ impl FileService {
                     "-m".into(),
                     (Self::WORKSPACE_LIST_SAFETY_LIMIT + 1).to_string(),
                     "-T".into(),
-                    "path,clientFile,depotFile,isMapped,haveRev,headRev,headAction,action,change,movedFile,unresolved,resolved".into(),
+                    format!(
+                        "path,isMapped,haveRev,headRev,headAction,movedFile,unresolved,resolved,{}",
+                        crate::p4::locks::command::fstat_fields()
+                    ),
                     filespec.into(),
                 ],
                 status_operation_id(operation_prefix, "fstat"),
@@ -403,6 +424,14 @@ impl FileService {
                         mapped: None,
                         moved_file: None,
                         ignore: Some(ignore.clone()),
+                        file_type: None,
+                        exclusive_open: None,
+                        lock_ownership: None,
+                        lock_owner: None,
+                        other_open: Vec::new(),
+                        can_lock: None,
+                        can_unlock: None,
+                        lock_reason: None,
                         evidence: vec![WorkspaceStatusEvidence {
                             source: WorkspaceStatusSource::Ignore,
                             summary: format!(
@@ -2015,6 +2044,21 @@ fn status_snapshot(
                 summary: "Path is absent from the workspace directory".into(),
             });
         }
+        let file_type = value
+            .get("type")
+            .or_else(|| value.get("headType"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let ownership = if value.get("ourLock").is_some() {
+            FileLockOwnership::Ours
+        } else if has_indexed_field(&value, "otherLock") {
+            FileLockOwnership::Other
+        } else {
+            FileLockOwnership::Unlocked
+        };
+        let lock_owner = crate::p4::locks::parser::other_lock_owner(&value);
+        let other_open = crate::p4::locks::parser::other_open_owners(&value);
+        let lock_capability = lock_capability(opened_action, ownership);
         let mut cached = CachedFileStatus {
             path,
             depot_path,
@@ -2033,6 +2077,14 @@ fn status_snapshot(
                 .and_then(Value::as_str)
                 .map(str::to_owned),
             ignore: None,
+            exclusive_open: file_type.as_deref().map(is_exclusive_file_type),
+            file_type,
+            lock_ownership: Some(ownership),
+            lock_owner,
+            other_open,
+            can_lock: Some(lock_capability.0),
+            can_unlock: Some(lock_capability.1),
+            lock_reason: lock_capability.2,
             evidence,
             errors: Vec::new(),
         };
@@ -2119,6 +2171,14 @@ fn status_snapshot(
                     mapped: Some(true),
                     moved_file: None,
                     ignore: None,
+                    file_type: None,
+                    exclusive_open: None,
+                    lock_ownership: Some(FileLockOwnership::Unknown),
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    can_lock: Some(false),
+                    can_unlock: Some(false),
+                    lock_reason: Some("Lock state was not returned by fstat".into()),
                     evidence: Vec::new(),
                     errors: Vec::new(),
                 },
@@ -2168,6 +2228,14 @@ fn status_snapshot(
             mapped: Some(true),
             moved_file: candidate.moved_file.clone(),
             ignore: None,
+            file_type: None,
+            exclusive_open: None,
+            lock_ownership: Some(FileLockOwnership::Unknown),
+            lock_owner: None,
+            other_open: Vec::new(),
+            can_lock: Some(false),
+            can_unlock: Some(false),
+            lock_reason: Some("The file is not opened in the current workspace".into()),
             evidence: Vec::new(),
             errors: Vec::new(),
         });
@@ -2398,6 +2466,67 @@ fn opened_action_name(value: WorkspaceOpenedAction) -> &'static str {
         WorkspaceOpenedAction::Archive => "archive",
         WorkspaceOpenedAction::Unknown => "unknown",
     }
+}
+
+fn is_exclusive_file_type(file_type: &str) -> bool {
+    file_type
+        .split_once('+')
+        .is_some_and(|(_, modifiers)| modifiers.contains('l'))
+}
+
+fn lock_capability(
+    action: Option<WorkspaceOpenedAction>,
+    ownership: FileLockOwnership,
+) -> (bool, bool, Option<String>) {
+    let opened = action.is_some_and(|value| {
+        matches!(
+            value,
+            WorkspaceOpenedAction::Add
+                | WorkspaceOpenedAction::Edit
+                | WorkspaceOpenedAction::Delete
+                | WorkspaceOpenedAction::MoveAdd
+                | WorkspaceOpenedAction::MoveDelete
+                | WorkspaceOpenedAction::Branch
+                | WorkspaceOpenedAction::Integrate
+                | WorkspaceOpenedAction::Import
+        )
+    });
+    if !opened {
+        return (
+            false,
+            false,
+            Some("The file must be opened in the current workspace before it can be locked or unlocked".into()),
+        );
+    }
+    match ownership {
+        FileLockOwnership::Unlocked => (
+            true,
+            false,
+            Some("The file is not locked by this workspace".into()),
+        ),
+        FileLockOwnership::Ours => (
+            false,
+            true,
+            Some("The file is already locked by this workspace".into()),
+        ),
+        FileLockOwnership::Other => (
+            false,
+            false,
+            Some("Another user or workspace owns the lock; force unlock is not available".into()),
+        ),
+        FileLockOwnership::Unknown => (false, false, Some("Lock ownership is unknown".into())),
+    }
+}
+
+fn has_indexed_field(value: &Value, prefix: &str) -> bool {
+    value.as_object().is_some_and(|object| {
+        object.keys().any(|key| {
+            key == prefix
+                || key
+                    .strip_prefix(prefix)
+                    .is_some_and(|suffix| suffix.chars().all(|c| c.is_ascii_digit()))
+        })
+    })
 }
 
 fn reconcile_action_name(value: WorkspaceReconcileAction) -> &'static str {
@@ -2764,6 +2893,14 @@ fn public_status(
         mapped: cached.mapped,
         moved_file: cached.moved_file.clone(),
         ignore: cached.ignore.clone(),
+        file_type: cached.file_type.clone(),
+        exclusive_open: cached.exclusive_open,
+        lock_ownership: cached.lock_ownership,
+        lock_owner: cached.lock_owner.clone(),
+        other_open: cached.other_open.clone(),
+        can_lock: cached.can_lock,
+        can_unlock: cached.can_unlock,
+        lock_reason: cached.lock_reason.clone(),
         completeness,
         evidence,
         errors: cached.errors.clone(),

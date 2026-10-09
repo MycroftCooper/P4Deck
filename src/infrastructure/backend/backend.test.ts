@@ -504,6 +504,52 @@ describe("controlled P4 terminal", () => {
     });
   });
 
+  it("models one-time target-bound file lock confirmation and explicit simulation", async () => {
+    const files = (await backend.listWorkspaceChildren()).items;
+    const node = files.find((item) =>
+      ["openedEdit", "openedAdd", "openedDelete"].includes(item.state),
+    )!;
+    await expect(
+      backend.performFileAction({ action: "lock", paths: [node.depotPath!] }),
+    ).rejects.toThrow("dedicated preflight");
+    await expect(
+      backend.runP4({
+        source: "terminal",
+        command: "lock",
+        args: [node.depotPath!],
+        context: (await backend.runtimeInfo()).context,
+        outputMode: "jsonLines",
+      }),
+    ).rejects.toThrow("dedicated lock workflow");
+    const preflight = await backend.preflightFileLock({
+      operation: "lock",
+      paths: [node.depotPath!],
+      operationId: "mock-lock-preflight",
+    });
+    expect(preflight).toMatchObject({ ready: true, operation: "lock" });
+    const confirmation = {
+      token: preflight.token!,
+      target: preflight.targetSnapshot!,
+      stateDigest: preflight.stateDigest,
+      operationId: "mock-lock-confirm",
+    };
+    const locked = await backend.confirmFileLock(confirmation);
+    expect(locked).toMatchObject({
+      outcome: "succeeded",
+      operationId: "mock-lock-confirm",
+    });
+    expect(locked.message).toContain("Mock");
+    expect(
+      (await backend.listWorkspaceChildren()).items.find(
+        (item) => item.depotPath === node.depotPath,
+      )?.status?.lockOwnership,
+    ).toBe("ours");
+    expect(await backend.confirmFileLock(confirmation)).toMatchObject({
+      outcome: "rejected",
+      failure: "tokenUnknown",
+    });
+  });
+
   it("models typed shelf and unshelve confirmation while keeping unknown resolve blocked", async () => {
     const changes = await queryAllPendingChanges();
     const shelfSource = changes.find((change) => change.shelvedFiles.length)!;

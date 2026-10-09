@@ -96,6 +96,14 @@ export interface WorkspaceFileStatus {
   mapped?: boolean;
   movedFile?: string;
   ignore?: WorkspaceIgnoreMatch;
+  fileType?: string;
+  exclusiveOpen?: boolean;
+  lockOwnership?: FileLockOwnership;
+  lockOwner?: string;
+  otherOpen?: string[];
+  canLock?: boolean;
+  canUnlock?: boolean;
+  lockReason?: string;
   completeness: WorkspaceStatusCompleteness;
   evidence: WorkspaceStatusEvidence[];
   errors: WorkspaceStatusError[];
@@ -732,6 +740,127 @@ export interface FileActionResult {
   message: string;
 }
 
+export type FileLockOperation = "lock" | "unlock";
+export type FileLockOwnership = "unlocked" | "ours" | "other" | "unknown";
+export type FileLockPermission = "allowed" | "denied" | "unknown";
+export interface FileLockPreflightRequest {
+  operation: FileLockOperation;
+  paths: string[];
+  operationId?: string;
+}
+export interface FileLockFileSnapshot {
+  inputPath: string;
+  depotPath: string;
+  clientPath: string;
+  localPath?: string;
+  openedAction: string;
+  changelistId: number;
+  fileType: string;
+  exclusive: boolean;
+  ownership: FileLockOwnership;
+  lockOwner?: string;
+  otherOpen: string[];
+  permission: FileLockPermission;
+  applicable: boolean;
+  reason?: string;
+}
+export interface FileLockTargetSnapshot {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  activeProfileId?: string;
+  contextGeneration: number;
+  operation: FileLockOperation;
+  files: FileLockFileSnapshot[];
+}
+export type FileLockIssueCode =
+  | "invalidTarget"
+  | "connectionUnavailable"
+  | "authenticationRequired"
+  | "outsideClientView"
+  | "notOpened"
+  | "unsupportedAction"
+  | "alreadyLocked"
+  | "notLocked"
+  | "lockedByOther"
+  | "permissionDenied"
+  | "permissionUnknown"
+  | "stateUnknown";
+export interface FileLockIssue {
+  code: FileLockIssueCode;
+  certainty: "confirmed" | "unknown";
+  message: string;
+  paths: string[];
+}
+export interface FileLockCounts {
+  requested: number;
+  applicable: number;
+  alreadySatisfied: number;
+  blocked: number;
+  exclusive: number;
+}
+export interface FileLockPreflight {
+  ready: boolean;
+  operation: FileLockOperation;
+  files: FileLockFileSnapshot[];
+  counts: FileLockCounts;
+  blockers: FileLockIssue[];
+  warnings: FileLockIssue[];
+  targetSnapshot?: FileLockTargetSnapshot;
+  stateDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+export interface FileLockConfirmation {
+  token: string;
+  target: FileLockTargetSnapshot;
+  stateDigest: string;
+  operationId?: string;
+}
+export type FileLockFileOutcome =
+  "succeeded" | "alreadySatisfied" | "failed" | "cancelled" | "unknown";
+export interface FileLockFileResult {
+  depotPath: string;
+  outcome: FileLockFileOutcome;
+  message: string;
+  ownership: FileLockOwnership;
+  lockOwner?: string;
+  operationId?: string;
+}
+export type FileLockOutcome =
+  "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+export type FileLockFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "contextChanged"
+  | "stateChanged"
+  | "preflightBlocked"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+export interface FileLockResult {
+  outcome: FileLockOutcome;
+  failure?: FileLockFailureCode;
+  message: string;
+  files: FileLockFileResult[];
+  operationId?: string;
+  logReference?: string;
+  refresh: {
+    workspaceStatus: boolean;
+    pendingChanges: boolean;
+    search: boolean;
+    review: boolean;
+    depotPaths: string[];
+    localPaths: string[];
+    reason: string;
+  };
+}
+
 export interface RenameMovePreflightRequest {
   sourcePath: string;
   targetPath: string;
@@ -1221,6 +1350,10 @@ export interface PendingFile {
   clientPath?: string;
   revision?: number;
   fileType?: string;
+  lockOwnership?: FileLockOwnership;
+  lockOwner?: string;
+  otherOpen?: string[];
+  exclusiveOpen?: boolean;
 }
 export interface PendingChange {
   id: number;

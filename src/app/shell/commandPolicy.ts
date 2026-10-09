@@ -9,6 +9,8 @@ export type CommandId =
   | "getLatest"
   | "getRevision"
   | "rename"
+  | "lock"
+  | "unlock"
   | "resolve"
   | "moveFiles"
   | "shelve"
@@ -106,6 +108,38 @@ export function commandReason(
     return node.absolutePath || node.depotPath
       ? undefined
       : msg("目标路径尚未确定", "Target path is unknown");
+  if (id === "lock" || id === "unlock") {
+    if (node.kind !== "file")
+      return msg(
+        "锁操作仅支持显式文件，不递归目录",
+        "Lock operations require explicit files and never recurse folders",
+      );
+    if (!node.absolutePath && !node.depotPath)
+      return msg("目标路径尚未确定", "Target path is unknown");
+    const capability =
+      id === "lock" ? node.status?.canLock : node.status?.canUnlock;
+    if (capability === false)
+      return (
+        node.status?.lockReason ??
+        msg(
+          "当前锁状态不支持此操作",
+          "Current lock state does not allow this operation",
+        )
+      );
+    return [
+      "openedEdit",
+      "openedAdd",
+      "openedDelete",
+      "openedMoveAdd",
+      "openedMoveDelete",
+      "conflicted",
+    ].includes(node.state)
+      ? undefined
+      : msg(
+          "文件必须先在当前工作区打开",
+          "The file must be opened in the current workspace first",
+        );
+  }
   if (id === "reveal" || id === "openWith") {
     if (!native)
       return msg(

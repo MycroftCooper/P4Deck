@@ -1,5 +1,13 @@
 # 前端操作流程 TODO
 
+## 最近完成：文件 Lock/Unlock 与独占状态（2026-10-09）
+
+- 工具栏、原生 Changes 菜单以及 F01/F02/F07/C04/C05 右键菜单统一打开 `FileLockDialog`，按 `Preflight → Review → Execute → Verify` 展示完整文件集合、opened action、Default/编号 CL、filetype/`+l`、我方/他方锁 owner、other-open、权限、blocker/warning 和逐文件结果。
+- 对话框固定打开时选择和连接 key；只有 ready、未过期、带一次性 token 且 snapshot/digest 完整匹配时可确认。连接变化丢弃迟到响应；执行支持 operation group 取消，partial/failed/cancelled/unknown 不冒充全成功，不自动回滚，并提供人工重试和刷新原因。
+- Workspace/Depot/Pending 复用强类型状态显示 locked/global lock/exclusive 角标。Browser Mock 明示未连接 P4 Server，仍执行一次性 token、目标绑定和重放拒绝；Tauri 只透传窄契约。Terminal 与 generic FileAction 的 lock/unlock 旁路已关闭。
+- 自动化覆盖完整文件集绑定、blocker、迟到隔离、partial 逐项结果、命令策略、角标、Mock token 重放和安全边界；Windows localhost 覆盖双用户/双 Client、普通锁冲突、解锁、`binary+l`、generation/TOCTOU。Windows/macOS 原生点击、焦点、窄窗口和读屏仍待验收。
+- 最终门禁：Web 73 文件/417 项、Rust 144 项通过（另 1 项 localhost E2E 默认 ignored）；build/check/format、Clippy `--all-targets -D warnings`、rustfmt、前端 8 项与后端 5 项性能正确性门禁通过；Windows localhost 连续两轮分别 135.59 秒、134.97 秒通过。
+
 ## 最近完成：基础 Stream 安全切换（2026-10-09）
 
 - Streams 页右键菜单与详情区按钮统一打开 `StreamSwitchDialog`，按 `Preflight → Review → Execute → Verify/Recover` 展示当前/目标 Stream、类型/父级、opened/unresolved/reconcile 数量、目标规模、blocker/warning、operation 和最终验证结果。
@@ -48,10 +56,11 @@
 | FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |
 | FE-19 | Workspace 文件状态聚合呈现 | 消费 `WorkspaceListing` 与强类型正交状态；组合角标、证据/ignore 来源、partial/error、刷新与取消 | 未知不冒充 untracked；目录不推断子项；手动刷新穿透前后端缓存；AbortSignal 取消聚合子命令；大列表保持窗口化 | BE-005 生产契约、Mock/Tauri、55 文件/327 项 Web 测试与 Windows localhost 场景通过；原生 UI/macOS 待验 |
 | FE-20 | 基础 Stream 安全切换 | Streams 右键/详情入口、仅切视图默认项、可选同步、预检风险、确认、执行、验证和恢复 | 无 ready token 不执行；目标/连接/代次漂移拒绝；opened/unresolved 阻断；同步需确认且本地变化阻断；取消不冒充回滚；最终验证后统一刷新 | 生产契约、Mock/Tauri、组件状态机与 Windows localhost 双 Stream E2E 已完成；Windows/macOS 原生点击/焦点/读屏待验 |
+| FE-21 | 文件 Lock/Unlock 与独占状态 | 工具栏/原生菜单/右键统一入口；文件集、action/CL、filetype/`+l`、owner/other-open、权限与逐项结果 | 只接受后端 token；连接变化丢弃迟到结果；partial/取消/未知不回滚不冒充成功；不提供 force unlock | BE-011 生产接线、浏览器状态机与 Windows localhost 双用户/双 Client 已通过；原生 UI/macOS 待验 |
 
 ## 执行顺序
 
-FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～20。
+FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～21。
 
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 

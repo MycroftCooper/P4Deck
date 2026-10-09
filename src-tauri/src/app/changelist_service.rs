@@ -860,6 +860,10 @@ mod tests {
             client_path: None,
             revision: None,
             file_type: None,
+            lock_ownership: None,
+            lock_owner: None,
+            other_open: Vec::new(),
+            exclusive_open: None,
         };
         PendingChange {
             id,

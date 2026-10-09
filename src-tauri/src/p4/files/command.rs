@@ -95,16 +95,11 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
                 OutputMode::JsonLines,
             )
         }
-        FileAction::Lock => (
-            "lock",
-            changelist_args(request.changelist_id),
-            OutputMode::JsonLines,
-        ),
-        FileAction::Unlock => (
-            "unlock",
-            changelist_args(request.changelist_id),
-            OutputMode::JsonLines,
-        ),
+        FileAction::Lock | FileAction::Unlock => {
+            return Err(
+                "GUI lock/unlock must use the dedicated preflight and confirmation API".into(),
+            )
+        }
         FileAction::Integrate | FileAction::Branch | FileAction::Copy => {
             if paths.len() != 1 {
                 return Err("source action requires exactly one source path".into());
@@ -316,8 +311,6 @@ mod tests {
                 vec!["//depot/main/a b.txt"],
             ),
             (FileAction::Revert, "revert", vec!["//depot/main/a b.txt"]),
-            (FileAction::Lock, "lock", vec!["//depot/main/a b.txt"]),
-            (FileAction::Unlock, "unlock", vec!["//depot/main/a b.txt"]),
             (FileAction::Clean, "clean", vec!["//depot/main/a b.txt"]),
         ];
         for (action, command, args) in cases {
@@ -340,7 +333,7 @@ mod tests {
 
     #[test]
     fn plans_actions_with_changelists() {
-        for action in [FileAction::Add, FileAction::Checkout, FileAction::Lock] {
+        for action in [FileAction::Add, FileAction::Checkout] {
             let mut value = request(action);
             value.changelist_id = Some(123);
             assert_eq!(
@@ -382,6 +375,8 @@ mod tests {
             invocation(&filetype).args,
             vec!["-t", "binary+l", "//depot/main/a b.txt"]
         );
+        assert!(plan(&request(FileAction::Lock)).is_err());
+        assert!(plan(&request(FileAction::Unlock)).is_err());
     }
 
     #[test]

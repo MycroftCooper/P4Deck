@@ -21,6 +21,8 @@ export type AppCommandId =
   | "file.revgraph"
   | "file.preview"
   | "file.rename"
+  | "file.lock"
+  | "file.unlock"
   | "file.resolve"
   | "file.checkout"
   | "file.add"
@@ -187,6 +189,8 @@ export const appCommands: readonly AppCommandDefinition[] = [
   ...(
     [
       ["file.rename", "重命名 / 移动", "Rename / Move", "rename"],
+      ["file.lock", "锁定", "Lock", "lock"],
+      ["file.unlock", "解锁", "Unlock", "unlock"],
       ["file.resolve", "解决冲突", "Resolve", "resolve"],
       ["file.checkout", "签出", "Checkout", "checkout"],
       ["file.add", "添加", "Add", "add"],

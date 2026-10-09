@@ -143,12 +143,16 @@ export function ToolDrawer(props: Props) {
     setLines((value) => [...value, `p4> ${decision.display}`]);
     setInput("");
     if (decision.blocked) {
-      setCredentialBlocked(true);
+      setCredentialBlocked(decision.reason === "credential");
       setLines((value) => [
         ...value,
         props.zh
-          ? "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。"
-          : "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
+          ? decision.reason === "lockWorkflow"
+            ? "Lock/Unlock 不能从 Terminal 执行；请使用文件工具栏或右键菜单的预检工作流。"
+            : "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。"
+          : decision.reason === "lockWorkflow"
+            ? "Lock/Unlock cannot run from Terminal; use the file toolbar or context-menu preflight workflow."
+            : "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
       ]);
       return;
     }

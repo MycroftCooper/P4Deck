@@ -24,6 +24,8 @@ import {
   SquarePen,
   AppWindow,
   Columns2,
+  LockKeyhole,
+  LockKeyholeOpen,
 } from "lucide-react";
 import { selectionRequest } from "../../features/files/selectionCommands";
 import { resolveSelection } from "../../features/files/resolveSelection";
@@ -66,6 +68,8 @@ const groups: {
     { id: "add", icon: FilePlus2, zh: "添加", en: "Add" },
     { id: "delete", icon: FileX2, zh: "标记删除", en: "Mark delete" },
     { id: "revert", icon: RotateCcw, zh: "还原", en: "Revert" },
+    { id: "lock", icon: LockKeyhole, zh: "锁定", en: "Lock" },
+    { id: "unlock", icon: LockKeyholeOpen, zh: "解锁", en: "Unlock" },
   ],
   [
     { id: "diff", icon: Columns2, zh: "差异", en: "Diff" },
@@ -292,6 +296,15 @@ export function CommandBar({
       dialogs.open({
         kind: "rename",
         node: { ...target.node },
+        source: source ?? (document.activeElement as HTMLElement | null),
+      });
+      return;
+    }
+    if ((id === "lock" || id === "unlock") && target.type === "file") {
+      dialogs.open({
+        kind: "fileLock",
+        nodes: nodes.map((node) => ({ ...node })),
+        operation: id,
         source: source ?? (document.activeElement as HTMLElement | null),
       });
       return;

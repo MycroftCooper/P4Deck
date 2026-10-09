@@ -132,12 +132,12 @@ export const menuCatalog = {
       {
         id: "F01-26",
         label: "锁定文件",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F01-27",
         label: "解锁文件",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F01-28",
@@ -313,12 +313,12 @@ export const menuCatalog = {
       {
         id: "F02-25",
         label: "锁定文件",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F02-26",
         label: "解锁文件",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F02-27",
@@ -829,12 +829,12 @@ export const menuCatalog = {
       {
         id: "F07-17",
         label: "锁定",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F07-18",
         label: "解锁",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "F07-19",
@@ -1254,12 +1254,12 @@ export const menuCatalog = {
       {
         id: "C04-22",
         label: "锁定文件",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "C04-23",
         label: "解锁文件",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },
@@ -1329,12 +1329,12 @@ export const menuCatalog = {
       {
         id: "C05-13",
         label: "锁定",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "C05-14",
         label: "解锁",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },

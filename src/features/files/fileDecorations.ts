@@ -164,6 +164,22 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
       });
     }
     if (status?.resolve === "unresolved") badges.push({ id: "resolve" });
+    if (status?.lockOwnership === "ours")
+      badges.push({ id: "locked", owner: "self", detail: status.lockReason });
+    if (status?.lockOwnership === "other")
+      badges.push({
+        id: "globalLock",
+        owner: "other",
+        detail: status.lockOwner ?? status.lockReason,
+      });
+    if (status?.exclusiveOpen)
+      badges.push({
+        id: "exclusive",
+        owner: status.lockOwnership === "other" ? "other" : undefined,
+        detail: status.otherOpen?.length
+          ? status.otherOpen.join(", ")
+          : status.fileType,
+      });
     if (status?.local === "modified") badges.push({ id: "modified" });
     if (status?.local === "missing") badges.push({ id: "missing" });
     if (status?.local === "symlink") badges.push({ id: "symlink" });

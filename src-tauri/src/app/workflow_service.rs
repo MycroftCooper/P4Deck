@@ -2341,6 +2341,10 @@ mod tests {
                 client_path: Some("missing".into()),
                 revision: Some(1),
                 file_type: Some("text".into()),
+                lock_ownership: None,
+                lock_owner: None,
+                other_open: Vec::new(),
+                exclusive_open: None,
             }],
             shelved_files: Vec::new(),
         }
@@ -2599,6 +2603,10 @@ mod tests {
                 client_path: None,
                 revision: Some(1),
                 file_type: Some("text".into()),
+                lock_ownership: None,
+                lock_owner: None,
+                other_open: Vec::new(),
+                exclusive_open: None,
             }],
             ..change()
         };

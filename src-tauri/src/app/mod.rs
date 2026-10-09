@@ -2,6 +2,7 @@ pub mod changelist_service;
 pub mod confirmation;
 pub mod connection_service;
 pub mod diagnostics;
+pub mod file_lock_service;
 pub mod file_service;
 pub mod preview;
 pub mod rename_service;

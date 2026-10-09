@@ -25,6 +25,10 @@ import type {
   DiffRequest,
   FileActionRequest,
   FileActionResult,
+  FileLockPreflightRequest,
+  FileLockPreflight,
+  FileLockConfirmation,
+  FileLockResult,
   RenameMovePreflightRequest,
   RenameMovePreflight,
   RenameMoveConfirmation,
@@ -169,6 +173,10 @@ export interface Backend {
   listDepotChildren(path?: string): Promise<DepotNode[]>;
   resolvePath(request: PathResolveRequest): Promise<PathResolveResult>;
   performFileAction(request: FileActionRequest): Promise<FileActionResult>;
+  preflightFileLock(
+    request: FileLockPreflightRequest,
+  ): Promise<FileLockPreflight>;
+  confirmFileLock(confirmation: FileLockConfirmation): Promise<FileLockResult>;
   preflightRenameMove(
     request: RenameMovePreflightRequest,
   ): Promise<RenameMovePreflight>;

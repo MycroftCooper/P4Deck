@@ -99,3 +99,31 @@ it("renders orthogonal aggregate evidence and explains ignore provenance", () =>
     { id: "ignored", detail: "target/ · C:/ws/.p4ignore:4" },
   ]);
 });
+
+it("renders authoritative lock ownership and +l independently", () => {
+  expect(
+    fileBadges({
+      status: {
+        primary: "openedEdit",
+        openedAction: "edit",
+        sync: "unknown",
+        resolve: "none",
+        local: "present",
+        completeness: "complete",
+        fileType: "binary+l",
+        exclusiveOpen: true,
+        lockOwnership: "other",
+        lockOwner: "bob@render",
+        otherOpen: ["bob@render"],
+        canLock: false,
+        canUnlock: false,
+        evidence: [],
+        errors: [],
+      },
+    }).map((badge) => [badge.id, badge.owner, badge.detail]),
+  ).toEqual([
+    ["globalLock", "other", "bob@render"],
+    ["exclusive", "other", "bob@render"],
+    ["edit", "self", undefined],
+  ]);
+});

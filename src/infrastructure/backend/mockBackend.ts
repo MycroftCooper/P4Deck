@@ -12,6 +12,7 @@ import type {
   SubmitTargetSnapshot,
   RenameMoveTargetSnapshot,
   WorkflowTargetSnapshot,
+  WorkspaceOpenedAction,
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
@@ -67,6 +68,14 @@ const mockRenameTokens = new Map<
   string,
   {
     target: RenameMoveTargetSnapshot;
+    digest: string;
+    expiresAt: number;
+  }
+>();
+const mockLockTokens = new Map<
+  string,
+  {
+    target: import("../../shared/contracts/types").FileLockTargetSnapshot;
     digest: string;
     expiresAt: number;
   }
@@ -955,6 +964,7 @@ export const mockBackend: Backend = {
       mockShelfSnapshots.clear();
       mockSyncTokens.clear();
       mockRenameTokens.clear();
+      mockLockTokens.clear();
     }
     return this.listConnectionProfiles();
   },
@@ -993,6 +1003,7 @@ export const mockBackend: Backend = {
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
+    mockLockTokens.clear();
     return this.runtimeInfo();
   },
   async switchWorkspace(request) {
@@ -1021,6 +1032,7 @@ export const mockBackend: Backend = {
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
+    mockLockTokens.clear();
     return this.runtimeInfo();
   },
   async saveConnection(context) {
@@ -1042,6 +1054,7 @@ export const mockBackend: Backend = {
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
+    mockLockTokens.clear();
     return { ...context };
   },
   async runtimeInfo() {
@@ -1060,6 +1073,10 @@ export const mockBackend: Backend = {
     };
   },
   async runP4(request) {
+    if (["lock", "unlock"].includes(request.command.toLowerCase()))
+      throw new Error(
+        "Lock and unlock are blocked in generic runP4; use the dedicated lock workflow.",
+      );
     const terminalDecision = inspectTerminalCommand(
       [request.command, ...request.args].join(" "),
       [request.command, ...request.args],
@@ -1564,9 +1581,9 @@ export const mockBackend: Backend = {
       );
     if ((request.action as string) === "submit")
       throw new Error("Submit must use preflightSubmit and confirmSubmit");
-    if (["shelve", "resolve"].includes(request.action))
+    if (["shelve", "resolve", "lock", "unlock"].includes(request.action))
       throw new Error(
-        "Shelf and resolve must use preflight and confirmation APIs",
+        "Shelf, resolve, lock and unlock must use dedicated preflight and confirmation APIs",
       );
     if (
       ["getLatest", "getRevision", "removeFromWorkspace"].includes(
@@ -1608,6 +1625,195 @@ export const mockBackend: Backend = {
       },
       affectedPaths: request.paths,
       message: `${request.action} completed in Mock Backend.`,
+    };
+  },
+  async preflightFileLock(request) {
+    const paths = [...new Set(request.paths)].sort();
+    const files = paths.map((inputPath) => {
+      const node = mockWorkspace.find(
+        (item) =>
+          item.absolutePath === inputPath || item.depotPath === inputPath,
+      );
+      const ownership = node?.status?.lockOwnership ?? "unlocked";
+      const opened =
+        node?.status?.openedAction ??
+        (node?.state?.startsWith("opened") ? "edit" : undefined);
+      const alreadySatisfied =
+        (request.operation === "lock" && ownership === "ours") ||
+        (request.operation === "unlock" && ownership === "unlocked");
+      const applicable = Boolean(opened) && !alreadySatisfied;
+      return {
+        inputPath,
+        depotPath: node?.depotPath ?? inputPath,
+        clientPath: `//${mockContext.client}/${node?.relativePath ?? ""}`,
+        localPath: node?.absolutePath,
+        openedAction: opened ?? "",
+        changelistId: node?.changelistId ?? 0,
+        fileType: node?.status?.fileType ?? "text",
+        exclusive: node?.status?.exclusiveOpen ?? false,
+        ownership,
+        lockOwner: node?.status?.lockOwner,
+        otherOpen: node?.status?.otherOpen ?? [],
+        permission: "allowed" as const,
+        applicable,
+        reason: !opened
+          ? "Mock target is not opened in the current workspace."
+          : alreadySatisfied
+            ? "Requested state is already satisfied."
+            : undefined,
+      };
+    });
+    const target = {
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      activeProfileId: mockActiveProfileId,
+      contextGeneration: mockContextGeneration,
+      operation: request.operation,
+      files,
+    };
+    const stateDigest = JSON.stringify(target);
+    const blockers: import("../../shared/contracts/types").FileLockIssue[] =
+      files
+        .filter((file) => !file.openedAction)
+        .map((file) => ({
+          code: "notOpened" as const,
+          certainty: "confirmed" as const,
+          message: file.reason!,
+          paths: [file.depotPath],
+        }));
+    const applicable = files.filter((file) => file.applicable).length;
+    if (!blockers.length && applicable === 0)
+      blockers.push({
+        code: request.operation === "lock" ? "alreadyLocked" : "notLocked",
+        certainty: "confirmed",
+        message: "No selected file requires a lock state change.",
+        paths: files.map((file) => file.depotPath),
+      });
+    const ready = blockers.length === 0 && applicable > 0;
+    const token = ready ? crypto.randomUUID() : undefined;
+    const expiresAt = Date.now() + 120_000;
+    if (token)
+      mockLockTokens.set(token, { target, digest: stateDigest, expiresAt });
+    return {
+      ready,
+      operation: request.operation,
+      files,
+      counts: {
+        requested: paths.length,
+        applicable,
+        alreadySatisfied: files.filter(
+          (file) => !file.applicable && !!file.openedAction,
+        ).length,
+        blocked: files.filter((file) => !file.applicable && !file.openedAction)
+          .length,
+        exclusive: files.filter((file) => file.exclusive).length,
+      },
+      blockers,
+      warnings: [],
+      targetSnapshot: target,
+      stateDigest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      logReference: request.operationId,
+    };
+  },
+  async confirmFileLock(confirmation) {
+    const record = mockLockTokens.get(confirmation.token);
+    mockLockTokens.delete(confirmation.token);
+    const refresh = {
+      workspaceStatus: true,
+      pendingChanges: true,
+      search: true,
+      review: true,
+      depotPaths: confirmation.target.files.map((file) => file.depotPath),
+      localPaths: confirmation.target.files.flatMap((file) =>
+        file.localPath ? [file.localPath] : [],
+      ),
+      reason: "Mock lock state changed; refresh simulated data.",
+    };
+    if (!record)
+      return {
+        outcome: "rejected",
+        failure: "tokenUnknown",
+        message: "Mock lock confirmation token is unknown or already used.",
+        files: [],
+        refresh,
+      };
+    if (record.expiresAt <= Date.now())
+      return {
+        outcome: "rejected",
+        failure: "tokenExpired",
+        message: "Mock lock confirmation expired.",
+        files: [],
+        refresh,
+      };
+    if (
+      record.digest !== confirmation.stateDigest ||
+      JSON.stringify(record.target) !== JSON.stringify(confirmation.target)
+    )
+      return {
+        outcome: "rejected",
+        failure: "targetMismatch",
+        message: "Mock lock confirmation does not match the reviewed target.",
+        files: [],
+        refresh,
+      };
+    const ownership =
+      confirmation.target.operation === "lock" ? "ours" : "unlocked";
+    for (const file of confirmation.target.files.filter(
+      (file) => file.applicable,
+    )) {
+      const node = mockWorkspace.find(
+        (item) => item.depotPath === file.depotPath,
+      );
+      if (node) {
+        node.status ??= {
+          primary: node.state,
+          openedAction: file.openedAction as WorkspaceOpenedAction,
+          sync: "unknown",
+          resolve: "unknown",
+          local: "unknown",
+          fileType: file.fileType,
+          exclusiveOpen: file.exclusive,
+          completeness: "complete",
+          evidence: [
+            {
+              source: "fstat",
+              summary: "Simulated lock state from Mock Backend.",
+            },
+          ],
+          errors: [],
+        };
+        node.status.lockOwnership = ownership;
+        node.status.lockOwner =
+          ownership === "ours"
+            ? `${mockContext.user}@${mockContext.client}`
+            : undefined;
+        node.status.canLock = ownership === "unlocked";
+        node.status.canUnlock = ownership === "ours";
+        node.status.lockReason =
+          ownership === "ours"
+            ? "Mock: locked by this workspace."
+            : "Mock: unlocked.";
+      }
+    }
+    return {
+      outcome: "succeeded",
+      message: "Mock lock workflow completed without contacting a P4 Server.",
+      files: confirmation.target.files.map((file) => ({
+        depotPath: file.depotPath,
+        outcome: file.applicable ? "succeeded" : "alreadySatisfied",
+        message: "Simulated and verified in Mock Backend.",
+        ownership,
+        operationId: confirmation.operationId,
+      })),
+      operationId: confirmation.operationId,
+      logReference: confirmation.operationId,
+      refresh,
     };
   },
   async preflightRenameMove(request) {

@@ -28,6 +28,18 @@ describe("terminal credential boundary", () => {
     expect(decision.display).not.toContain("safe path");
   });
 
+  it.each(["lock //depot/main/a.txt", "p4 unlock //depot/main/a.txt"])(
+    "routes %s to the dedicated lock workflow without treating paths as secrets",
+    (raw) => {
+      expect(inspectTerminalCommand(raw, tokenize(raw))).toEqual({
+        blocked: true,
+        sensitive: false,
+        display: raw,
+        reason: "lockWorkflow",
+      });
+    },
+  );
+
   it.each(["info", "files //depot/main/...", "changes -m 20"])(
     "keeps normal command behavior for %s",
     (raw) => {

@@ -686,6 +686,10 @@ mod tests {
                     client_path: None,
                     revision: Some(1),
                     file_type: Some("text".into()),
+                    lock_ownership: None,
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    exclusive_open: None,
                 })
                 .collect(),
             shelved_files: Vec::new(),

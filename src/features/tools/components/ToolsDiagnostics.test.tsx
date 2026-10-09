@@ -351,6 +351,40 @@ it("keeps the credential boundary inside a detached-capable Terminal panel", asy
   expect(localStorage.getItem("p4deck.terminalHistory")).toBe("[]");
 });
 
+it("routes Terminal lock commands to the file preflight workflow without an auth prompt", async () => {
+  localStorage.setItem("p4deck.toolOpen", "true");
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="terminal-lock-workflow" zh={false}>
+        <ToolArea
+          t={messages["en-US"]}
+          zh={false}
+          native
+          connectionKey="terminal-lock"
+          context={{ server: "fixture", user: "u", client: "c" }}
+          onOpenChange={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </ContextMenuProvider>,
+    ),
+  );
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "lock //depot/main/a.txt");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("Run").click());
+  expect(backend.runP4).not.toHaveBeenCalled();
+  expect(host.textContent).toContain(
+    "file toolbar or context-menu preflight workflow",
+  );
+  expect(host.textContent).not.toContain("Settings > Connections");
+});
+
 it("keeps normal terminal execution and history after backend validation", async () => {
   localStorage.setItem("p4deck.toolOpen", "true");
   backend.runP4.mockResolvedValue({

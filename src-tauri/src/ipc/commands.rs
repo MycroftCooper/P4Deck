@@ -360,6 +360,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.workflows.clear_shelf_details();
     state.files.clear_review_cache();
     state.rename.clear_confirmations();
+    state.file_locks.clear_confirmations();
     state.stream_switch.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
@@ -368,6 +369,7 @@ fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.files.clear_review_cache();
+    state.file_locks.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
 
@@ -444,6 +446,12 @@ pub async fn run_p4(
 ) -> Result<OperationResult, String> {
     if request.input.is_some() {
         return Err("Generic IPC commands cannot provide stdin".into());
+    }
+    if matches!(
+        request.command.to_ascii_lowercase().as_str(),
+        "lock" | "unlock"
+    ) {
+        return Err("Lock and unlock are blocked in Terminal and generic run_p4; use the dedicated preflight and confirmation workflow".into());
     }
     if matches!(request.source, OperationSource::Gui)
         && matches!(
@@ -637,6 +645,11 @@ pub async fn perform_file_action(
             "GUI changelist moves must use the move preflight and confirmation APIs".into(),
         );
     }
+    if matches!(request.action, FileAction::Lock | FileAction::Unlock) {
+        return Err(
+            "GUI lock/unlock must use the dedicated preflight and confirmation APIs".into(),
+        );
+    }
     state
         .files
         .perform(state.connection.context(), request, Some(&app))
@@ -650,6 +663,33 @@ pub async fn preflight_rename_move(
     app: AppHandle,
 ) -> Result<RenameMovePreflight, String> {
     Ok(state.rename.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn preflight_file_lock(
+    request: FileLockPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<FileLockPreflight, String> {
+    Ok(state.file_locks.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_file_lock(
+    confirmation: FileLockConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<FileLockResult, String> {
+    let result = state.file_locks.confirm(confirmation, Some(&app)).await;
+    if matches!(
+        result.outcome,
+        FileLockOutcome::Succeeded | FileLockOutcome::Partial | FileLockOutcome::Unknown
+    ) {
+        state.changelists.invalidate_pending_pages();
+        state.search.clear_for_context_switch();
+        state.files.clear_review_cache();
+    }
+    Ok(result)
 }
 
 #[tauri::command]

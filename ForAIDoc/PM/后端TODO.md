@@ -31,7 +31,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换的强类型状态机和 Windows localhost 双 Stream 验收；原生 UI 仍待验收。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环和 Windows localhost 双用户/双 Client 验收；原生 UI 仍待验收。
 
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
 
@@ -57,6 +57,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-008Q | Submitted 组合查询与稳定游标            | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收                                                                                                                                                                                              |
 | BE-008G | 全局搜索生产后端                        | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
 | BE-010  | 基础 Stream 切换安全闭环                | 强类型 preflight/confirm/result、一次性短期 token、完整 profile/connection/workspace/generation/spec/risk digest 绑定、mutation lane 内 TOCTOU 复检、非 force `client -s -S`、默认不改文件、显式可选非 force `sync #head`、最终 Client spec 验证、结构化恢复和缓存/generation 失效已完成；GUI 通用写旁路已封死；Windows localhost 双 Stream 默认双轮通过，原生 UI/macOS 待验 |
+| BE-011  | 文件 Lock/Unlock 与独占打开安全闭环     | `preflight_file_lock` / `confirm_file_lock` 绑定完整文件集合、映射、opened action、CL、filetype、权限、锁 owner、profile/context generation 与 digest；mutation lane 内逐文件执行并以 tagged `fstat -Ol` 复核，不自动回滚、不提供 force unlock；Workspace/Pending 聚合我方/他方锁、owner、other-open 与 `+l`。泛化 FileAction、Terminal 和 `run_p4` 旁路已关闭；Windows localhost 双用户/双 Client 覆盖冲突、解锁、独占、重放、generation/TOCTOU，原生 UI/macOS 待验。 |
 
 ## P0：下一阶段必须完成
 
@@ -211,6 +212,15 @@ pnpm test:e2e:p4d:win
 
 ## P1：Alpha 质量
 
+### BE-011 — 文件 Lock/Unlock 与 `+l` 独占打开（DONE：Windows localhost，原生 UI/macOS 待验）
+
+- 只接受 1～512 个显式非递归文件；预检以 `where`、`fstat -Ol` 和 `protects -M` 获取映射、opened action、Default/编号 CL、filetype、我方/他方锁、`user@client` owner、other-open 与权限。目录、未打开、映射外、权限拒绝、他人锁和未知状态均为结构化 blocker；already locked/not locked 明确显示而不伪造操作。
+- 一次性 120 秒 token 绑定活动 Profile、Server/User/Client/Root、Context generation、操作类型、排序后的完整文件快照与 SHA-256 digest。确认消费 token 后进入同 Server mutation lane，完整重查并拒绝错绑、重放、过期、generation、映射、opened/CL、filetype、权限和 owner 漂移。
+- 执行只调用逐文件参数数组 `p4 lock` / `p4 unlock`；路径按 literal filespec 转义，大集合状态查询使用 `-x -`。每个文件返回 succeeded/alreadySatisfied/failed/cancelled/unknown，部分成功不自动回滚；最终仅以 tagged `fstat -Ol` 复核，超时或不可验证结果要求刷新后人工重试。管理员 force unlock 不在产品范围。
+- Workspace 与 Pending 状态聚合显示我方锁、他方锁 owner、other-open、filetype 与 `+l`；成功或不确定结果失效 Workspace/Pending/Search/Review 相关缓存。通用 `FileAction::Lock/Unlock`、Terminal 与 generic `run_p4 lock/unlock` 均在执行前拒绝，所有 GUI 入口统一进入预检对话框。
+- Windows localhost 隔离数据覆盖两个真实 User/Client、普通文件双方打开后的 lock conflict/owner、lock→unlock、`binary+l` 第二 Client 无法打开、一次性 token 重放、Context generation 与 owner TOCTOU 漂移；失败也清理 User/Client/Root 和专属 depot 路径。Windows/macOS 原生点击、真实读屏、macOS 和多 P4 版本矩阵仍未验收。
+- 验收：2026-10-09 Windows localhost 默认连续两轮通过（135.59 秒、134.97 秒）；全量 Web 73 文件/417 项、Rust 144 项通过（另 1 项 localhost E2E 默认 ignored），生产构建、TypeScript/Cargo check、Clippy `--all-targets -D warnings`、Prettier、rustfmt 与前后端性能正确性门禁通过。
+
 ### BE-010 — 基础 Stream 切换安全闭环（DONE：Windows localhost，原生 UI/macOS 待验）
 
 - 入口：Streams 页通过 `preflight_stream_switch` → `confirm_stream_switch`；GUI 通用 `run_p4` 明确拒绝 `client/stream/switch` 写命令，Terminal 语义不变。
@@ -277,6 +287,7 @@ BE-007 日志策略与诊断导出              DONE
 BE-007S 凭据泄漏边界加固               DONE（自动化；原生 UI/macOS 待验）
 BE-008 Submitted 详情与可靠合并分类    DONE（Windows localhost；前端已接线）
 BE-010 基础 Stream 切换                 DONE（Windows localhost；原生 UI/macOS 待验）
+BE-011 文件 Lock/Unlock 与独占打开      DONE（Windows localhost；原生 UI/macOS 待验）
 ```
 
 BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线已在后续批次完成，原生 UI 证据仍未取得。

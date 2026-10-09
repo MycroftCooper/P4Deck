@@ -8,6 +8,7 @@ const CONTROLLED_COMMANDS = new Set([
   "set",
   "configure",
 ]);
+const LOCK_COMMANDS = new Set(["lock", "unlock"]);
 
 const SECRET_ASSIGNMENT =
   /^(?:p4passwd|p4tickets|password|passwd|ticket|authorization)\s*=/i;
@@ -17,6 +18,7 @@ export interface TerminalSecurityDecision {
   blocked: boolean;
   sensitive: boolean;
   display: string;
+  reason?: "credential" | "lockWorkflow";
 }
 
 export function inspectTerminalCommand(
@@ -39,15 +41,24 @@ export function inspectTerminalCommand(
     ) ||
     /\bticket\s+value(?:\s*[:=]|\s+)\S+/i.test(raw) ||
     /\bbearer\s+\S+/i.test(raw);
-  const blocked =
-    secretArgument ||
-    credentialMaterial ||
-    Boolean(command && CONTROLLED_COMMANDS.has(command));
-  const sensitive = blocked;
+  const credentialCommand = Boolean(
+    command && CONTROLLED_COMMANDS.has(command),
+  );
+  const lockCommand = Boolean(command && LOCK_COMMANDS.has(command));
+  const sensitive = secretArgument || credentialMaterial || credentialCommand;
+  const blocked = sensitive || lockCommand;
   return {
     blocked,
     sensitive,
     display: sensitive ? "[credential-sensitive command hidden]" : raw,
+    ...(blocked
+      ? {
+          reason:
+            lockCommand && !sensitive
+              ? ("lockWorkflow" as const)
+              : ("credential" as const),
+        }
+      : {}),
   };
 }
 

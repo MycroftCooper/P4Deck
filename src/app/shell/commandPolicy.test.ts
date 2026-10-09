@@ -64,6 +64,32 @@ it("separates local untracked, controlled, opened and conflicted files", () => {
   expect(allowed("getLatest", file("conflicted"))).toBe(false);
   expect(allowed("diff", file("conflicted"))).toBe(true);
 });
+it("enables lock and unlock only for explicit opened files with compatible authoritative state", () => {
+  const opened = file("openedEdit");
+  if (opened.type !== "file") throw new Error("fixture");
+  opened.node.status = {
+    primary: "openedEdit",
+    openedAction: "edit",
+    sync: "current",
+    resolve: "none",
+    local: "present",
+    completeness: "complete",
+    lockOwnership: "unlocked",
+    canLock: true,
+    canUnlock: false,
+    evidence: [],
+    errors: [],
+  };
+  expect(allowed("lock", opened)).toBe(true);
+  expect(allowed("unlock", opened)).toBe(false);
+  opened.node.status.lockOwnership = "ours";
+  opened.node.status.canLock = false;
+  opened.node.status.canUnlock = true;
+  expect(allowed("lock", opened)).toBe(false);
+  expect(allowed("unlock", opened)).toBe(true);
+  expect(allowed("lock", file("controlled"))).toBe(false);
+  expect(allowed("lock", file("openedEdit", "directory"))).toBe(false);
+});
 it("supports recursive folder actions but keeps file-only viewers disabled", () => {
   expect(allowed("checkout", file("controlled", "directory"))).toBe(true);
   expect(allowed("preview", file("controlled", "directory"))).toBe(false);

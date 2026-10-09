@@ -3,19 +3,22 @@ mod tests {
     use crate::{
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
-            file_service::FileService, rename_service::RenameService,
-            search_service::GlobalSearchService, status_cache::StatusCache,
-            stream_switch_service::StreamSwitchService, submit_service::SubmitService,
-            sync_service::SyncService, workflow_service::WorkflowService,
+            file_lock_service::FileLockService, file_service::FileService,
+            rename_service::RenameService, search_service::GlobalSearchService,
+            status_cache::StatusCache, stream_switch_service::StreamSwitchService,
+            submit_service::SubmitService, sync_service::SyncService,
+            workflow_service::WorkflowService,
         },
         domain::{
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
-            DeleteConnectionProfileRequest, FileAction, FileActionRequest, LoginRequest,
-            MoveFilesPreflightRequest, OperationResult, OperationSource, OutputMode,
-            P4CommandRequest, P4Context, PendingChangeMutation, PendingChangeMutationRequest,
-            PendingChangeQuery, PendingChangeSort, RenameMoveConfirmation, RenameMoveFailureCode,
-            RenameMoveIssueCode, RenameMoveOutcome, RenameMovePreflightRequest,
-            ResolveConfirmation, ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
+            DeleteConnectionProfileRequest, FileAction, FileActionRequest, FileLockConfirmation,
+            FileLockFailureCode, FileLockIssueCode, FileLockOperation, FileLockOutcome,
+            FileLockOwnership, FileLockPreflightRequest, LoginRequest, MoveFilesPreflightRequest,
+            OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
+            PendingChangeMutation, PendingChangeMutationRequest, PendingChangeQuery,
+            PendingChangeSort, RenameMoveConfirmation, RenameMoveFailureCode, RenameMoveIssueCode,
+            RenameMoveOutcome, RenameMovePreflightRequest, ResolveConfirmation,
+            ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
             SetActiveConnectionProfileRequest, ShelfDetailRequest, ShelfFilePreviewRequest,
             ShelfMode, ShelfPreflightRequest, StreamSwitchConfirmation, StreamSwitchFailureCode,
             StreamSwitchIssueCode, StreamSwitchMode, StreamSwitchOutcome,
@@ -26,8 +29,9 @@ mod tests {
             WorkflowOutcome,
         },
         p4::{
-            changelists::ChangelistRepository, context::ContextStore, rename::RenameRepository,
-            runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
+            changelists::ChangelistRepository, context::ContextStore, locks::LockRepository,
+            rename::RenameRepository, runner::P4Runner, submit::SubmitRepository,
+            workflows::WorkflowRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -56,6 +60,8 @@ mod tests {
     const STREAM_CLIENT: &str = "p4deck-fixture-stream-e2e";
     const MAIN_STREAM: &str = "//p4deck-stream-e2e/main";
     const DEV_STREAM: &str = "//p4deck-stream-e2e/dev";
+    const LOCK_CLIENT: &str = "p4deck-fixture-lock-other";
+    const LOCK_USER: &str = "p4deck-fixture-lock-user";
 
     struct FixtureConfig {
         context: P4Context,
@@ -198,6 +204,11 @@ mod tests {
             contexts.clone(),
             status_cache.clone(),
         );
+        let file_locks = FileLockService::new(
+            LockRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+        );
         let expiring_rename = RenameService::with_ttl(
             RenameRepository::new(runner.clone()),
             contexts.clone(),
@@ -253,6 +264,7 @@ mod tests {
                             search: &search,
                             rename: &rename,
                             expiring_rename: &expiring_rename,
+                            file_locks: &file_locks,
                             stream_switch: &stream_switch,
                             expiring_stream_switch: &expiring_stream_switch,
                         },
@@ -658,6 +670,512 @@ mod tests {
         )?;
         delete_empty_change(changelists, context, target_change).await?;
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn exercise_file_lock_state_machine(
+        runner: &Arc<P4Runner>,
+        files: &FileService,
+        changelists: &ChangelistService,
+        locks: &FileLockService,
+        contexts: &ContextStore,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        const NORMAL: &str = "//depot/p4deck-lock-e2e/normal.txt";
+        const EXCLUSIVE: &str = "//depot/p4deck-lock-e2e/exclusive.bin";
+
+        let other_root = root
+            .parent()
+            .ok_or("lock fixture workspace has no parent")?
+            .join("lock-other-workspace");
+        let other_context_root =
+            std::env::temp_dir().join(format!("p4deck-lock-context-{}", Uuid::new_v4()));
+        let local_dir = root.join("p4deck-lock-e2e");
+        let normal_local = local_dir.join("normal.txt");
+        let exclusive_local = local_dir.join("exclusive.bin");
+        let mut other = context.clone();
+        other.user = LOCK_USER.into();
+        other.client = LOCK_CLIENT.into();
+        other.cwd = Some(other_root.to_string_lossy().into_owned());
+
+        let scenario = async {
+            let user_form = format!(
+                "User: {LOCK_USER}\nEmail: lock@fixture.invalid\nFullName: P4Deck lock fixture\n"
+            );
+            checked_run(
+                runner,
+                context,
+                "user",
+                vec!["-f".into(), "-i".into()],
+                Some(user_form),
+                OutputMode::Text,
+            )
+            .await?;
+            fixture_passwd(
+                context,
+                Some(LOCK_USER),
+                "p4deck-lock-initial\np4deck-lock-initial\n".into(),
+            )
+            .await?;
+            std::fs::create_dir_all(&other_root).map_err(|error| error.to_string())?;
+            let client_form = format!(
+                "Client: {LOCK_CLIENT}\nOwner: {LOCK_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nLineEnd: local\nView:\n\t//depot/... //{LOCK_CLIENT}/...\n",
+                other_root.to_string_lossy().replace('\\', "/")
+            );
+            checked_run(
+                runner,
+                context,
+                "client",
+                vec!["-i".into()],
+                Some(client_form),
+                OutputMode::Text,
+            )
+            .await?;
+            fixture_passwd(
+                &other,
+                None,
+                "p4deck-lock-initial\np4deck-lock-local\np4deck-lock-local\n".into(),
+            )
+            .await?;
+            let login = crate::p4::connection::ConnectionAdapter::execute(
+                &other,
+                crate::p4::connection::ConnectionOperation::Login,
+                None,
+                Some("p4deck-lock-local"),
+            )
+            .await;
+            ensure(
+                login.state == ConnectionState::Connected,
+                format!("lock fixture login failed: {login:?}"),
+            )?;
+
+            std::fs::create_dir_all(&local_dir).map_err(|error| error.to_string())?;
+            std::fs::write(&normal_local, b"lock fixture\n")
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&exclusive_local, b"exclusive fixture\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                context,
+                "add",
+                vec!["-t".into(), "text".into(), NORMAL.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "add",
+                vec!["-t".into(), "binary+l".into(), EXCLUSIVE.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "submit",
+                vec!["-d".into(), "P4Deck lock fixture seed".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                &other,
+                "sync",
+                vec![NORMAL.into(), EXCLUSIVE.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "edit",
+                vec![NORMAL.into(), EXCLUSIVE.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let exclusive_fstat = checked_run(
+                runner,
+                context,
+                "fstat",
+                vec!["-T".into(), "depotFile,action,type,headType".into(), EXCLUSIVE.into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+            ensure(
+                json_values(&exclusive_fstat).iter().any(|value| {
+                    value.get("action").and_then(Value::as_str) == Some("edit")
+                        && value
+                            .get("type")
+                            .or_else(|| value.get("headType"))
+                            .and_then(Value::as_str)
+                            == Some("binary+l")
+                }),
+                format!("binary+l fixture was not opened with its authoritative type: {exclusive_fstat:?}"),
+            )?;
+            checked_run(
+                runner,
+                &other,
+                "edit",
+                vec![NORMAL.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let _ = checked_run(
+                runner,
+                &other,
+                "edit",
+                vec![EXCLUSIVE.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+            let exclusive_opens = checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-a".into(), EXCLUSIVE.into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+            ensure(
+                json_values(&exclusive_opens).iter().all(|value| {
+                    value.get("client").and_then(Value::as_str) != Some(LOCK_CLIENT)
+                }),
+                format!("binary+l file was opened by a second client: {exclusive_opens:?}"),
+            )?;
+
+            let drift = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-generation".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(drift.ready, format!("lock drift preflight failed: {drift:?}"))?;
+            contexts
+                .save(context.clone())
+                .map_err(|error| error.to_string())?;
+            let drifted = locks
+                .confirm(lock_confirmation(drift, "lock-e2e-generation-confirm")?, None)
+                .await;
+            ensure(
+                drifted.failure == Some(FileLockFailureCode::ContextChanged),
+                format!("lock generation drift was accepted: {drifted:?}"),
+            )?;
+
+            let preflight = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-main".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                preflight.ready
+                    && preflight.files[0].ownership == FileLockOwnership::Unlocked,
+                format!("normal lock preflight failed: {preflight:?}"),
+            )?;
+            let confirmation = lock_confirmation(preflight, "lock-e2e-main-confirm")?;
+            let locked = locks.confirm(confirmation.clone(), None).await;
+            ensure(
+                locked.outcome == FileLockOutcome::Succeeded
+                    && locked.files[0].ownership == FileLockOwnership::Ours,
+                format!("normal lock failed final verification: {locked:?}"),
+            )?;
+            let replayed = locks.confirm(confirmation, None).await;
+            ensure(
+                replayed.failure == Some(FileLockFailureCode::TokenUnknown),
+                format!("lock token replay was accepted: {replayed:?}"),
+            )?;
+
+            let status = files
+                .workspace_children(
+                    context.clone(),
+                    Some(local_dir.to_string_lossy().into_owned()),
+                    true,
+                    None,
+                )
+                .await?;
+            ensure(
+                status.items.iter().any(|node| {
+                    node.name == "normal.txt"
+                        && node.status.lock_ownership == Some(FileLockOwnership::Ours)
+                        && node.status.can_unlock == Some(true)
+                }) && status.items.iter().any(|node| {
+                    node.name == "exclusive.bin"
+                        && node.status.exclusive_open == Some(true)
+                        && node.status.file_type.as_deref() == Some("binary+l")
+                }),
+                format!("workspace lock/+l status was not aggregated: {status:?}"),
+            )?;
+            let pending = changelists.query_pending(context.clone(), None).await?;
+            let pending_files = pending
+                .iter()
+                .flat_map(|change| change.files.iter())
+                .collect::<Vec<_>>();
+            ensure(
+                pending_files.iter().any(|file| {
+                    file.depot_path == NORMAL
+                        && file.lock_ownership == Some(FileLockOwnership::Ours)
+                }) && pending_files.iter().any(|file| {
+                    file.depot_path == EXCLUSIVE && file.exclusive_open == Some(true)
+                }),
+                format!("Pending lock/+l status was not aggregated: {pending_files:?}"),
+            )?;
+
+            std::fs::create_dir_all(&other_context_root).map_err(|error| error.to_string())?;
+            let other_contexts = Arc::new(
+                ContextStore::load(&other_context_root).map_err(|error| error.to_string())?,
+            );
+            other_contexts
+                .save(other.clone())
+                .map_err(|error| error.to_string())?;
+            let other_locks = FileLockService::new(
+                LockRepository::new(runner.clone()),
+                other_contexts,
+                Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024)),
+            );
+            let conflict = other_locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-other-conflict".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !conflict.ready
+                    && conflict.blockers.iter().any(|item| {
+                        item.code == FileLockIssueCode::LockedByOther
+                            && item.message.contains("Another user")
+                    })
+                    && conflict.files[0]
+                        .lock_owner
+                        .as_deref()
+                        .is_some_and(|owner| owner.contains(E2E_CLIENT)),
+                format!("other-client lock conflict was not explicit: {conflict:?}"),
+            )?;
+
+            let unlock = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Unlock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-unlock".into()),
+                    },
+                    None,
+                )
+                .await;
+            let unlocked = locks
+                .confirm(lock_confirmation(unlock, "lock-e2e-unlock-confirm")?, None)
+                .await;
+            ensure(
+                unlocked.outcome == FileLockOutcome::Succeeded
+                    && unlocked.files[0].ownership == FileLockOwnership::Unlocked,
+                format!("unlock did not verify final state: {unlocked:?}"),
+            )?;
+
+            let stale = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-toctou".into()),
+                    },
+                    None,
+                )
+                .await;
+            let other_ready = other_locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-other".into()),
+                    },
+                    None,
+                )
+                .await;
+            let other_locked = other_locks
+                .confirm(
+                    lock_confirmation(other_ready, "lock-e2e-other-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                other_locked.outcome == FileLockOutcome::Succeeded,
+                format!("other-client lock failed: {other_locked:?}"),
+            )?;
+            let changed = locks
+                .confirm(lock_confirmation(stale, "lock-e2e-toctou-confirm")?, None)
+                .await;
+            ensure(
+                changed.failure == Some(FileLockFailureCode::StateChanged),
+                format!("lock TOCTOU ownership drift was accepted: {changed:?}"),
+            )?;
+            let other_unlock = other_locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Unlock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("lock-e2e-other-unlock".into()),
+                    },
+                    None,
+                )
+                .await;
+            let other_unlocked = other_locks
+                .confirm(
+                    lock_confirmation(other_unlock, "lock-e2e-other-unlock-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                other_unlocked.outcome == FileLockOutcome::Succeeded,
+                format!("other-client unlock failed: {other_unlocked:?}"),
+            )?;
+
+            let exclusive = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![EXCLUSIVE.into()],
+                        operation_id: Some("lock-e2e-exclusive".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                exclusive.ready && exclusive.files[0].exclusive,
+                format!("binary+l preflight was not explicit: {exclusive:?}"),
+            )?;
+            let exclusive_locked = locks
+                .confirm(
+                    lock_confirmation(exclusive, "lock-e2e-exclusive-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                exclusive_locked.outcome == FileLockOutcome::Succeeded,
+                format!("binary+l lock failed: {exclusive_locked:?}"),
+            )?;
+            let exclusive_unlock = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Unlock,
+                        paths: vec![EXCLUSIVE.into()],
+                        operation_id: Some("lock-e2e-exclusive-unlock".into()),
+                    },
+                    None,
+                )
+                .await;
+            let exclusive_unlocked = locks
+                .confirm(
+                    lock_confirmation(exclusive_unlock, "lock-e2e-exclusive-unlock-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                exclusive_unlocked.outcome == FileLockOutcome::Succeeded,
+                format!("binary+l unlock failed: {exclusive_unlocked:?}"),
+            )?;
+            Ok(())
+        }
+        .await;
+
+        let _ = checked_run(
+            runner,
+            &other,
+            "revert",
+            vec!["-w".into(), "//depot/p4deck-lock-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            runner,
+            context,
+            "revert",
+            vec!["-w".into(), "//depot/p4deck-lock-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        delete_pending_for_client(runner, context, LOCK_USER, LOCK_CLIENT).await;
+        let client_cleanup = checked_run(
+            runner,
+            context,
+            "client",
+            vec!["-d".into(), "-f".into(), LOCK_CLIENT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await
+        .map(|_| ());
+        let user_cleanup = checked_run(
+            runner,
+            context,
+            "user",
+            vec!["-d".into(), "-f".into(), LOCK_USER.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await
+        .map(|_| ());
+        let depot_cleanup = checked_run(
+            runner,
+            context,
+            "obliterate",
+            vec!["-y".into(), "//depot/p4deck-lock-e2e/...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await
+        .map(|_| ());
+        for path in [&other_root, &other_context_root] {
+            if path.exists() {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
+        match (
+            scenario,
+            client_cleanup.and(user_cleanup).and(depot_cleanup),
+        ) {
+            (Err(error), Err(cleanup)) => Err(format!("{error}; lock cleanup failed: {cleanup}")),
+            (Err(error), _) => Err(error),
+            (Ok(()), Err(error)) => Err(format!("lock cleanup failed: {error}")),
+            (Ok(()), Ok(())) => Ok(()),
+        }
+    }
+
+    fn lock_confirmation(
+        preflight: crate::domain::FileLockPreflight,
+        operation_id: &str,
+    ) -> Result<FileLockConfirmation, String> {
+        Ok(FileLockConfirmation {
+            token: preflight.token.ok_or("lock preflight returned no token")?,
+            target: preflight
+                .target_snapshot
+                .ok_or("lock preflight returned no target")?,
+            state_digest: preflight.state_digest,
+            operation_id: Some(operation_id.into()),
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1440,6 +1958,7 @@ mod tests {
         search: &'a GlobalSearchService,
         rename: &'a RenameService,
         expiring_rename: &'a RenameService,
+        file_locks: &'a FileLockService,
         stream_switch: &'a Arc<StreamSwitchService>,
         expiring_stream_switch: &'a Arc<StreamSwitchService>,
     }
@@ -1466,6 +1985,7 @@ mod tests {
             search,
             rename,
             expiring_rename,
+            file_locks,
             stream_switch,
             expiring_stream_switch,
         } = services;
@@ -1580,6 +2100,16 @@ mod tests {
             runner,
             files,
             changelists,
+            context,
+            root,
+        )
+        .await?;
+        exercise_file_lock_state_machine(
+            runner,
+            files,
+            changelists,
+            file_locks,
+            contexts,
             context,
             root,
         )

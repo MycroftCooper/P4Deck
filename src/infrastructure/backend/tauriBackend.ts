@@ -65,6 +65,9 @@ export const tauriBackend: Backend = {
   openLocalPath: (request) => invoke("open_local_path", { request }),
   localPathCapabilities: (path) => invoke("local_path_capabilities", { path }),
   performFileAction: (request) => invoke("perform_file_action", { request }),
+  preflightFileLock: (request) => invoke("preflight_file_lock", { request }),
+  confirmFileLock: (confirmation) =>
+    invoke("confirm_file_lock", { confirmation }),
   preflightRenameMove: (request) =>
     invoke("preflight_rename_move", { request }),
   confirmRenameMove: (confirmation) =>

@@ -15,6 +15,7 @@ mod e2e;
 use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
+use app::file_lock_service::FileLockService;
 use app::file_service::FileService;
 use app::rename_service::RenameService;
 use app::search_service::GlobalSearchService;
@@ -25,8 +26,8 @@ use app::sync_service::SyncService;
 use app::workflow_service::WorkflowService;
 use p4::context::ContextStore;
 use p4::{
-    changelists::ChangelistRepository, rename::RenameRepository, runner::P4Runner,
-    submit::SubmitRepository, workflows::WorkflowRepository,
+    changelists::ChangelistRepository, locks::LockRepository, rename::RenameRepository,
+    runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository,
 };
 use persistence::{log_store::LogStore, operation_journal::OperationJournal};
 use std::sync::Arc;
@@ -40,6 +41,7 @@ pub(crate) struct AppState {
     pub sync: Arc<SyncService>,
     pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
+    pub file_locks: Arc<FileLockService>,
     pub rename: Arc<RenameService>,
     pub connection: Arc<ConnectionService>,
     pub status_cache: Arc<StatusCache>,
@@ -111,6 +113,8 @@ pub fn run() {
                 .text("changelist.submit", "Submit Selected Changelist…")
                 .separator()
                 .text("file.rename", "Rename / Move…")
+                .text("file.lock", "Lock…")
+                .text("file.unlock", "Unlock…")
                 .text("file.resolve", "Resolve…")
                 .text("file.checkout", "Checkout")
                 .text("file.add", "Add")
@@ -215,6 +219,11 @@ pub fn run() {
                 contexts.clone(),
                 status_cache.clone(),
             ));
+            let file_locks = Arc::new(FileLockService::new(
+                LockRepository::new(runner.clone()),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
             let search = Arc::new(GlobalSearchService::new(
                 runner.clone(),
                 changelists.clone(),
@@ -229,6 +238,7 @@ pub fn run() {
                 sync,
                 workflows,
                 files,
+                file_locks,
                 rename,
                 connection,
                 status_cache,
@@ -283,6 +293,8 @@ pub fn run() {
             ipc::commands::perform_file_action,
             ipc::commands::preflight_rename_move,
             ipc::commands::confirm_rename_move,
+            ipc::commands::preflight_file_lock,
+            ipc::commands::confirm_file_lock,
             ipc::commands::preview_sync,
             ipc::commands::confirm_sync,
             ipc::commands::get_diff,

@@ -845,6 +845,14 @@ pub struct WorkspaceFileStatus {
     pub mapped: Option<bool>,
     pub moved_file: Option<String>,
     pub ignore: Option<WorkspaceIgnoreMatch>,
+    pub file_type: Option<String>,
+    pub exclusive_open: Option<bool>,
+    pub lock_ownership: Option<FileLockOwnership>,
+    pub lock_owner: Option<String>,
+    pub other_open: Vec<String>,
+    pub can_lock: Option<bool>,
+    pub can_unlock: Option<bool>,
+    pub lock_reason: Option<String>,
     pub completeness: WorkspaceStatusCompleteness,
     pub evidence: Vec<WorkspaceStatusEvidence>,
     pub errors: Vec<WorkspaceStatusError>,
@@ -969,6 +977,213 @@ pub struct FileActionResult {
     pub operation: Option<OperationResult>,
     pub affected_paths: Vec<String>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockOperation {
+    Lock,
+    Unlock,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockOwnership {
+    Unlocked,
+    Ours,
+    Other,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockPermission {
+    Allowed,
+    Denied,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockPreflightRequest {
+    pub operation: FileLockOperation,
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockFileSnapshot {
+    pub input_path: String,
+    pub depot_path: String,
+    pub client_path: String,
+    pub local_path: Option<String>,
+    pub opened_action: String,
+    pub changelist_id: i64,
+    pub file_type: String,
+    pub exclusive: bool,
+    pub ownership: FileLockOwnership,
+    pub lock_owner: Option<String>,
+    pub other_open: Vec<String>,
+    pub permission: FileLockPermission,
+    pub applicable: bool,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockTargetSnapshot {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub operation: FileLockOperation,
+    pub files: Vec<FileLockFileSnapshot>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockIssueCode {
+    InvalidTarget,
+    ConnectionUnavailable,
+    AuthenticationRequired,
+    OutsideClientView,
+    NotOpened,
+    UnsupportedAction,
+    AlreadyLocked,
+    NotLocked,
+    LockedByOther,
+    PermissionDenied,
+    PermissionUnknown,
+    StateUnknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockIssueCertainty {
+    Confirmed,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockIssue {
+    pub code: FileLockIssueCode,
+    pub certainty: FileLockIssueCertainty,
+    pub message: String,
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockCounts {
+    pub requested: usize,
+    pub applicable: usize,
+    pub already_satisfied: usize,
+    pub blocked: usize,
+    pub exclusive: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockPreflight {
+    pub ready: bool,
+    pub operation: FileLockOperation,
+    pub files: Vec<FileLockFileSnapshot>,
+    pub counts: FileLockCounts,
+    pub blockers: Vec<FileLockIssue>,
+    pub warnings: Vec<FileLockIssue>,
+    pub target_snapshot: Option<FileLockTargetSnapshot>,
+    pub state_digest: String,
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockConfirmation {
+    pub token: String,
+    pub target: FileLockTargetSnapshot,
+    pub state_digest: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockFileOutcome {
+    Succeeded,
+    AlreadySatisfied,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockFileResult {
+    pub depot_path: String,
+    pub outcome: FileLockFileOutcome,
+    pub message: String,
+    pub ownership: FileLockOwnership,
+    pub lock_owner: Option<String>,
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockOutcome {
+    Succeeded,
+    Partial,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FileLockFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    ContextChanged,
+    StateChanged,
+    PreflightBlocked,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockRefreshAdvice {
+    pub workspace_status: bool,
+    pub pending_changes: bool,
+    pub search: bool,
+    pub review: bool,
+    pub depot_paths: Vec<String>,
+    pub local_paths: Vec<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLockResult {
+    pub outcome: FileLockOutcome,
+    pub failure: Option<FileLockFailureCode>,
+    pub message: String,
+    pub files: Vec<FileLockFileResult>,
+    pub operation_id: Option<String>,
+    pub log_reference: Option<String>,
+    pub refresh: FileLockRefreshAdvice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1704,6 +1919,14 @@ pub struct PendingFile {
     pub revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_ownership: Option<FileLockOwnership>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub other_open: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclusive_open: Option<bool>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

@@ -43,6 +43,8 @@ describe("application command catalog", () => {
         "getLatest",
         "getRevision",
         "rename",
+        "lock",
+        "unlock",
         "resolve",
         "moveFiles",
         "shelve",

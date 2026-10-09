@@ -330,6 +330,24 @@ impl ChangelistRepository {
                 truncated_by_safety_limit = true;
             }
         }
+        if !opened_files.is_empty() {
+            let depot_paths = opened_files
+                .iter()
+                .map(|(_, file)| file.depot_path.clone())
+                .collect::<Vec<_>>();
+            if let Ok(invocation) = crate::p4::locks::command::fstat_status(&depot_paths) {
+                let lock_operation_id = operation_id
+                    .as_deref()
+                    .map(|id| format!("{id}:lock-status"));
+                if let Ok(lock_status) = self
+                    .run_lock_status(&context, invocation, lock_operation_id, app)
+                    .await
+                {
+                    let facts = crate::p4::locks::parser::file_facts(&lock_status.events);
+                    parser::merge_lock_status(&mut opened_files, &facts);
+                }
+            }
+        }
         let scanned_count = parsed_changes.len();
         let mut changes = parsed_changes
             .into_iter()
@@ -657,6 +675,33 @@ impl ChangelistRepository {
             .map_err(|error| error.to_string())?;
         ensure_success(&result)?;
         Ok(result)
+    }
+
+    async fn run_lock_status(
+        &self,
+        context: &P4Context,
+        invocation: crate::p4::locks::command::Invocation,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        self.runner
+            .run_with_progress(
+                P4CommandRequest {
+                    operation_id,
+                    source: OperationSource::Gui,
+                    command: invocation.command.into(),
+                    args: invocation.args,
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(120_000),
+                    input: None,
+                },
+                app,
+                None,
+                invocation.argument_input,
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 
     async fn run_allow_empty_opened_with_operation(

@@ -367,10 +367,36 @@ pub fn parse_opened_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)> 
                         .map(str::to_owned),
                     revision: number_option(&value, "rev"),
                     file_type: value.get("type").and_then(Value::as_str).map(str::to_owned),
+                    lock_ownership: None,
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    exclusive_open: None,
                 },
             ))
         })
         .collect()
+}
+
+pub fn merge_lock_status(
+    files: &mut [(i64, PendingFile)],
+    facts: &[crate::p4::locks::parser::FileFact],
+) {
+    let facts = facts
+        .iter()
+        .map(|fact| (fact.depot_path.as_str(), fact))
+        .collect::<std::collections::HashMap<_, _>>();
+    for (_, file) in files {
+        let Some(fact) = facts.get(file.depot_path.as_str()) else {
+            continue;
+        };
+        if !fact.file_type.is_empty() {
+            file.file_type = Some(fact.file_type.clone());
+        }
+        file.lock_ownership = Some(fact.ownership);
+        file.lock_owner.clone_from(&fact.lock_owner);
+        file.other_open.clone_from(&fact.other_open);
+        file.exclusive_open = Some(crate::p4::locks::parser::exclusive(&fact.file_type));
+    }
 }
 
 pub fn parse_shelved_change_ids(
@@ -411,6 +437,10 @@ pub fn parse_shelved_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)>
                         .get(format!("type{index}"))
                         .and_then(Value::as_str)
                         .map(str::to_owned),
+                    lock_ownership: None,
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    exclusive_open: None,
                 },
             ));
         }

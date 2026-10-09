@@ -283,6 +283,27 @@ export function PendingFileList({
                 facts={{
                   ...files[index],
                   scope: shelf ? "shelf" : "workspace",
+                  badges: shelf
+                    ? undefined
+                    : [
+                        files[index].lockOwnership === "ours"
+                          ? { id: "locked" as const, owner: "self" as const }
+                          : files[index].lockOwnership === "other"
+                            ? {
+                                id: "globalLock" as const,
+                                owner: "other" as const,
+                                detail: files[index].lockOwner,
+                              }
+                            : undefined,
+                        files[index].exclusiveOpen
+                          ? {
+                              id: "exclusive" as const,
+                              detail: files[index].otherOpen?.join(", "),
+                            }
+                          : undefined,
+                      ].filter(
+                        (value): value is NonNullable<typeof value> => !!value,
+                      ),
                 }}
                 zh={zh}
               />

@@ -3,8 +3,9 @@ use std::{collections::HashMap, future::Future, sync::Arc, time::Instant};
 use tokio::sync::watch;
 
 use crate::domain::{
-    WorkspaceIgnoreMatch, WorkspaceLocalState, WorkspaceOpenedAction, WorkspaceReconcileAction,
-    WorkspaceResolveState, WorkspaceStatusError, WorkspaceStatusEvidence, WorkspaceSyncState,
+    FileLockOwnership, WorkspaceIgnoreMatch, WorkspaceLocalState, WorkspaceOpenedAction,
+    WorkspaceReconcileAction, WorkspaceResolveState, WorkspaceStatusError, WorkspaceStatusEvidence,
+    WorkspaceSyncState,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -81,6 +82,14 @@ pub struct CachedFileStatus {
     pub mapped: Option<bool>,
     pub moved_file: Option<String>,
     pub ignore: Option<WorkspaceIgnoreMatch>,
+    pub file_type: Option<String>,
+    pub exclusive_open: Option<bool>,
+    pub lock_ownership: Option<FileLockOwnership>,
+    pub lock_owner: Option<String>,
+    pub other_open: Vec<String>,
+    pub can_lock: Option<bool>,
+    pub can_unlock: Option<bool>,
+    pub lock_reason: Option<String>,
     pub evidence: Vec<WorkspaceStatusEvidence>,
     pub errors: Vec<WorkspaceStatusError>,
 }
@@ -475,6 +484,14 @@ mod tests {
                 mapped: Some(true),
                 moved_file: None,
                 ignore: None,
+                file_type: None,
+                exclusive_open: None,
+                lock_ownership: None,
+                lock_owner: None,
+                other_open: Vec::new(),
+                can_lock: None,
+                can_unlock: None,
+                lock_reason: None,
                 evidence: Vec::new(),
                 errors: Vec::new(),
             }],

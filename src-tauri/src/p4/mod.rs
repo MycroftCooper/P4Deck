@@ -3,6 +3,7 @@ pub mod connection;
 pub mod context;
 pub mod files;
 pub mod history;
+pub mod locks;
 pub mod query;
 pub mod rename;
 pub mod runner;
