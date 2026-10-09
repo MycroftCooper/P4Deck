@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { backend, tokenize } from ".";
 import type { ClQuery } from "../../shared/contracts/types";
+import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 
 function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
   return {
@@ -389,7 +390,7 @@ describe("controlled P4 terminal", () => {
       (await backend.getRevisionGraph({ scope, revisionLimit: 100 })).nodes
         .length,
     ).toBeGreaterThan(1);
-    expect((await backend.queryPendingChanges()).length).toBeGreaterThan(1);
+    expect((await queryAllPendingChanges()).length).toBeGreaterThan(1);
     await expect(
       backend.openLocalPath({
         path: files.items[3].absolutePath,
@@ -399,7 +400,7 @@ describe("controlled P4 terminal", () => {
   });
 
   it("models scoped pending CL create, edit Jobs, delete, and Default round-trip moves", async () => {
-    const initial = await backend.queryPendingChanges();
+    const initial = await queryAllPendingChanges();
     const defaultChange = initial.find((change) => change.id === 0)!;
     expect(defaultChange.user).toBeTruthy();
     expect(defaultChange.client).toBeTruthy();
@@ -425,9 +426,7 @@ describe("controlled P4 terminal", () => {
       jobs: ["ATLAS-EDITED", "ATLAS-EDITED"],
     });
     expect(
-      (await backend.queryPendingChanges()).find(
-        (change) => change.id === changeId,
-      ),
+      (await queryAllPendingChanges()).find((change) => change.id === changeId),
     ).toMatchObject({
       description: "Edited description",
       jobs: ["ATLAS-EDITED"],
@@ -442,7 +441,7 @@ describe("controlled P4 terminal", () => {
       depotPaths: [path],
     });
     expect(
-      (await backend.queryPendingChanges())
+      (await queryAllPendingChanges())
         .find((change) => change.id === changeId)
         ?.files.map((file) => file.depotPath),
     ).toContain(path);
@@ -459,9 +458,7 @@ describe("controlled P4 terminal", () => {
     });
     await backend.mutatePendingChange({ type: "delete", changeId });
     expect(
-      (await backend.queryPendingChanges()).some(
-        (change) => change.id === changeId,
-      ),
+      (await queryAllPendingChanges()).some((change) => change.id === changeId),
     ).toBe(false);
   });
 
@@ -508,7 +505,7 @@ describe("controlled P4 terminal", () => {
   });
 
   it("models typed shelf and unshelve confirmation while keeping unknown resolve blocked", async () => {
-    const changes = await backend.queryPendingChanges();
+    const changes = await queryAllPendingChanges();
     const shelfSource = changes.find((change) => change.shelvedFiles.length)!;
     const shelfPath = shelfSource.shelvedFiles[0].depotPath;
     await expect(
@@ -551,7 +548,7 @@ describe("controlled P4 terminal", () => {
   });
 
   it("rejects a mock shelf token after its source changelist drifts", async () => {
-    const changes = await backend.queryPendingChanges();
+    const changes = await queryAllPendingChanges();
     const source = changes.find(
       (change) =>
         change.id > 0 &&

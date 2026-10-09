@@ -11,7 +11,12 @@ import {
   type MenuEnvironmentValue,
 } from "../../src/app/context-menu/environment";
 import { PendingFileList } from "../../src/features/changelists/components/PendingFileList";
-import { mergePendingMutation } from "../../src/features/changelists/components/PendingPage";
+import {
+  mergePendingMutation,
+  PendingPage,
+} from "../../src/features/changelists/components/PendingPage";
+import { backend } from "../../src/infrastructure/backend";
+import { filterPendingChanges } from "../../src/features/changelists/pendingQueries";
 import {
   filterWorkspaceNodes,
   searchWorkspaceNodes,
@@ -271,11 +276,22 @@ describe("documented frontend performance targets", () => {
       "Production merge, replacement, and descending CL sort; no documented numeric limit.",
     );
   });
+
+  it("gates 50,000 Pending combination filtering at p95 < 50 ms", () => {
+    benchmark(
+      "pending changelist combination filter (50k)",
+      50_000,
+      () => filterPendingChanges(pendingChanges, "世界 job-4 path"),
+      DOCUMENTED_SEARCH_FILTER_THRESHOLD_MS,
+      "Production Pending keyword matcher over ID, description, jobs, and depot paths.",
+    );
+  });
 });
 
 const runtime: RuntimeInfo = {
   mode: "tauri",
   p4Version: "P4/PERF",
+  contextGeneration: 1,
   context: { server: "fixture:1666", user: "perf", client: "perf-client" },
   connection: {
     state: "connected",
@@ -356,6 +372,63 @@ describe("100,000-row production virtual-list structure", () => {
       note: "Structural DOM bound only; it is not a native scrolling/FPS or screen-reader result.",
     };
     structures.push(result);
+    expect(result.passed).toBe(true);
+  });
+
+  it("mounts only the Pending changelist card window", async () => {
+    const changes = pendingDataset(100_000);
+    const query = vi
+      .spyOn(backend, "queryPendingChanges")
+      .mockImplementation((request) =>
+        Promise.resolve({
+          requestGeneration: request.requestGeneration,
+          defaultChange: changes[0],
+          items: changes.slice(1),
+          hasMore: false,
+          partial: false,
+          stats: {
+            scannedCount: 100_000,
+            matchedCount: 99_999,
+            truncatedBySafetyLimit: false,
+          },
+        }),
+      );
+    await act(async () =>
+      root.render(
+        <ContextMenuProvider scope="perf-pending-changes" zh={false}>
+          <MenuEnvironment.Provider value={environment}>
+            <PendingPage
+              t={messages["en-US"]}
+              clientName="perf-client"
+              connectionKey="perf"
+              demo={false}
+              ready
+            />
+          </MenuEnvironment.Provider>
+        </ContextMenuProvider>,
+      ),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+    const list = host.querySelector<HTMLElement>(
+      '[data-testid="pending-change-virtual-list"]',
+    )!;
+    const mountedRows = list.querySelectorAll(".pending-card").length;
+    const totalVirtualHeightPx = Number.parseInt(
+      list.querySelector<HTMLElement>(".pending-change-spacer")!.style.height,
+      10,
+    );
+    const result: StructuralResult = {
+      name: "PendingPage changelist DOM window",
+      datasetSize: 100_000,
+      mountedRows,
+      maximumMountedRows: 40,
+      totalVirtualHeightPx,
+      passed:
+        mountedRows > 0 && mountedRows < 40 && totalVirtualHeightPx > 6_000_000,
+      note: "Production PendingPage with dynamic card measurement; structural DOM bound only.",
+    };
+    structures.push(result);
+    query.mockRestore();
     expect(result.passed).toBe(true);
   });
 });

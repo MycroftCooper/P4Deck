@@ -71,7 +71,7 @@ export const tauriBackend: Backend = {
   getDiff: (request) => invoke("get_diff", { request }),
   getFileHistory: (request) => invoke("get_file_history", { request }),
   getRevisionGraph: (request) => invoke("get_revision_graph", { request }),
-  queryPendingChanges: () => invoke("query_pending_changes"),
+  queryPendingChanges: (query) => invoke("query_pending_changes", { query }),
   mutatePendingChange: (request) =>
     invoke("mutate_pending_change", { request }),
   preflightSubmit: (request) => invoke("preflight_submit", { request }),

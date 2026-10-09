@@ -3,7 +3,7 @@ import type {
   PendingChange,
   WorkspaceNode,
 } from "../../../shared/contracts/types";
-import { backend } from "../../../infrastructure/backend";
+import { queryAllPendingChanges } from "../pendingQueries";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
 import { MoveFilesDialog } from "./MoveFilesDialog";
@@ -41,8 +41,7 @@ export function FileClWorkflow({
     let live = true;
     setChanges(undefined);
     setError("");
-    void backend
-      .queryPendingChanges()
+    void queryAllPendingChanges()
       .then((value) => {
         if (live) setChanges(value);
       })

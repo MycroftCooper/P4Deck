@@ -597,12 +597,13 @@ pub async fn get_revision_graph(
 
 #[tauri::command]
 pub async fn query_pending_changes(
+    query: PendingChangeQuery,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<Vec<PendingChange>, String> {
+) -> Result<PendingChangePage, String> {
     state
         .changelists
-        .query_pending(state.connection.context(), Some(&app))
+        .query_pending_page(state.connection.context(), query, Some(&app))
         .await
 }
 
@@ -647,7 +648,14 @@ pub async fn confirm_move_files(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<MoveFilesResult, String> {
-    Ok(state.workflows.confirm_move(confirmation, Some(&app)).await)
+    let result = state.workflows.confirm_move(confirmation, Some(&app)).await;
+    if matches!(
+        result.outcome,
+        WorkflowOutcome::Succeeded | WorkflowOutcome::Partial
+    ) {
+        state.changelists.invalidate_pending_pages();
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -665,7 +673,11 @@ pub async fn confirm_submit(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<SubmitResult, String> {
-    Ok(state.submit.confirm(confirmation, Some(&app)).await)
+    let result = state.submit.confirm(confirmation, Some(&app)).await;
+    if result.outcome == SubmitOutcome::Submitted {
+        state.changelists.invalidate_pending_pages();
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -691,6 +703,7 @@ pub async fn confirm_shelf(
         result.outcome,
         WorkflowOutcome::Succeeded | WorkflowOutcome::Partial
     ) {
+        state.changelists.invalidate_pending_pages();
         state.files.clear_review_cache();
     }
     Ok(result)
@@ -714,10 +727,17 @@ pub async fn confirm_unshelve(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkflowResult, String> {
-    Ok(state
+    let result = state
         .workflows
         .confirm_unshelve(confirmation, Some(&app))
-        .await)
+        .await;
+    if matches!(
+        result.outcome,
+        WorkflowOutcome::Succeeded | WorkflowOutcome::Partial
+    ) {
+        state.changelists.invalidate_pending_pages();
+    }
+    Ok(result)
 }
 
 #[tauri::command]

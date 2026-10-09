@@ -161,6 +161,20 @@ pub fn pending_changes_invocation(context: &P4Context) -> Result<P4Invocation, S
     })
 }
 
+pub fn pending_changes_bounded_invocation(
+    context: &P4Context,
+    max_results: usize,
+) -> Result<P4Invocation, String> {
+    if max_results == 0 || max_results > 5_001 {
+        return Err("pending changelist scan limit must be between 1 and 5001".into());
+    }
+    let mut invocation = pending_changes_invocation(context)?;
+    invocation
+        .args
+        .extend(["-m".into(), max_results.to_string()]);
+    Ok(invocation)
+}
+
 pub fn opened_invocation(context: &P4Context) -> Result<P4Invocation, String> {
     ensure_scope(context)?;
     Ok(P4Invocation {
@@ -174,6 +188,20 @@ pub fn opened_invocation(context: &P4Context) -> Result<P4Invocation, String> {
         ],
         input: None,
     })
+}
+
+pub fn opened_bounded_invocation(
+    context: &P4Context,
+    max_results: usize,
+) -> Result<P4Invocation, String> {
+    if max_results == 0 || max_results > 100_001 {
+        return Err("opened file scan limit must be between 1 and 100001".into());
+    }
+    let mut invocation = opened_invocation(context)?;
+    invocation
+        .args
+        .extend(["-m".into(), max_results.to_string()]);
+    Ok(invocation)
 }
 
 pub fn shelved_changes_invocation(context: &P4Context) -> Result<P4Invocation, String> {
@@ -191,6 +219,20 @@ pub fn shelved_changes_invocation(context: &P4Context) -> Result<P4Invocation, S
         ],
         input: None,
     })
+}
+
+pub fn shelved_changes_bounded_invocation(
+    context: &P4Context,
+    max_results: usize,
+) -> Result<P4Invocation, String> {
+    if max_results == 0 || max_results > 5_001 {
+        return Err("shelved changelist scan limit must be between 1 and 5001".into());
+    }
+    let mut invocation = shelved_changes_invocation(context)?;
+    invocation
+        .args
+        .extend(["-m".into(), max_results.to_string()]);
+    Ok(invocation)
 }
 
 pub fn change_spec_invocation(change_id: i64) -> Result<P4Invocation, String> {
@@ -658,5 +700,27 @@ mod tests {
         }])
         .unwrap();
         assert_eq!(filelog.args, ["-m", "1", "-i", "//depot/a b.txt#3"]);
+    }
+
+    #[test]
+    fn pending_snapshot_commands_are_scoped_and_hard_bounded() {
+        let context = P4Context {
+            server: "p4:1666".into(),
+            user: "alice".into(),
+            client: "ws-main".into(),
+            ..Default::default()
+        };
+        let pending = pending_changes_bounded_invocation(&context, 5_001).unwrap();
+        assert_eq!(
+            pending.args,
+            ["-s", "pending", "-u", "alice", "-c", "ws-main", "-l", "-m", "5001"]
+        );
+        let opened = opened_bounded_invocation(&context, 100_001).unwrap();
+        assert_eq!(
+            opened.args,
+            ["-a", "-u", "alice", "-C", "ws-main", "-m", "100001"]
+        );
+        assert!(pending_changes_bounded_invocation(&context, 5_002).is_err());
+        assert!(opened_bounded_invocation(&context, 100_002).is_err());
     }
 }

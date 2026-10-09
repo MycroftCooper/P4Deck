@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { WorkspaceNode } from "../../shared/contracts/types";
 import { backend } from "../../infrastructure/backend";
+import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 import { SubmitDialog } from "../../features/changelists/components/SubmitDialog";
 import { FileClWorkflow } from "../../features/changelists/components/FileClWorkflow";
 import { RenameDialog } from "../../features/files/components/RenameDialog";
@@ -152,7 +153,7 @@ export function useCommandDialogs(
             loadSummary={async () => {
               if (latest.current !== connectionKey)
                 throw new Error(zh ? "连接已改变" : "Connection changed");
-              const changes = await backend.queryPendingChanges();
+              const changes = await queryAllPendingChanges();
               if (latest.current !== connectionKey)
                 throw new Error(zh ? "连接已改变" : "Connection changed");
               return changes.find((change) => change.id === request.id);

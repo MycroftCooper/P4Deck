@@ -3,7 +3,11 @@ import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness, dialogButton, chooseSelect } from "./testHarness";
 import { useCommandDialogs } from "./useCommandDialogs";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type {
+  PendingChange,
+  PendingChangePage,
+  WorkspaceNode,
+} from "../../shared/contracts/types";
 import { backend } from "../../infrastructure/backend";
 const harness = dialogHarness();
 const node: WorkspaceNode = {
@@ -15,6 +19,18 @@ const node: WorkspaceNode = {
   relativePath: "a",
 };
 let api!: ReturnType<typeof useCommandDialogs>;
+const pendingPage = (changes: PendingChange[]): PendingChangePage => ({
+  requestGeneration: 0,
+  defaultChange: changes.find((change) => change.id === 0),
+  items: changes.filter((change) => change.id > 0),
+  hasMore: false,
+  partial: false,
+  stats: {
+    scannedCount: changes.length,
+    matchedCount: changes.length,
+    truncatedBySafetyLimit: false,
+  },
+});
 function Harness({ scope = "a" }: { scope?: string }) {
   api = useCommandDialogs(scope, "workspace", true);
   return api.element;
@@ -52,7 +68,9 @@ it("connects the shared submit dialog to preflight and confirmation adapters", a
     files: [{ depotPath: "//depot/a", action: "edit" }],
     shelvedFiles: [],
   };
-  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue([change]);
+  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue(
+    pendingPage([change]),
+  );
   const preflight = vi.spyOn(backend, "preflightSubmit").mockResolvedValue({
     ready: true,
     change,
@@ -196,7 +214,9 @@ it("connects file shelving requests through FileClWorkflow to the typed workflow
     ],
     shelvedFiles: [],
   };
-  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue([change]);
+  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue(
+    pendingPage([change]),
+  );
   const target = {
     kind: "shelf" as const,
     server: "server:1666",

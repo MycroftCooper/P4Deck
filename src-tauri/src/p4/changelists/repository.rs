@@ -22,6 +22,12 @@ pub struct PendingMutationExecution {
     pub affected_paths: Vec<String>,
 }
 
+pub struct PendingScan {
+    pub changes: Vec<PendingChange>,
+    pub scanned_count: usize,
+    pub truncated_by_safety_limit: bool,
+}
+
 impl ChangelistRepository {
     pub fn new(runner: Arc<P4Runner>) -> Self {
         Self { runner }
@@ -236,34 +242,99 @@ impl ChangelistRepository {
         context: P4Context,
         app: Option<&AppHandle>,
     ) -> Result<Vec<PendingChange>, String> {
+        Ok(self
+            .query_pending_scan(context, None, None, app)
+            .await?
+            .changes)
+    }
+
+    pub async fn query_pending_bounded(
+        &self,
+        context: P4Context,
+        max_changes: usize,
+        max_files: usize,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<PendingScan, String> {
+        if max_changes == 0 || max_changes > 5_000 {
+            return Err("pending changelist scan cap must be between 1 and 5000".into());
+        }
+        if max_files == 0 || max_files > 100_000 {
+            return Err("pending file scan cap must be between 1 and 100000".into());
+        }
+        self.query_pending_scan(context, Some((max_changes, max_files)), operation_id, app)
+            .await
+    }
+
+    async fn query_pending_scan(
+        &self,
+        context: P4Context,
+        limits: Option<(usize, usize)>,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<PendingScan, String> {
+        let pending_invocation = match limits {
+            Some((max_changes, _)) => {
+                command::pending_changes_bounded_invocation(&context, max_changes + 1)?
+            }
+            None => command::pending_changes_invocation(&context)?,
+        };
         let pending = self
-            .run(
-                &context,
-                command::pending_changes_invocation(&context)?,
-                None,
-                app,
-            )
+            .run(&context, pending_invocation, operation_id.clone(), app)
             .await?;
+        let opened_invocation = match limits {
+            Some((_, max_files)) => command::opened_bounded_invocation(&context, max_files + 1)?,
+            None => command::opened_invocation(&context)?,
+        };
         let opened = self
-            .run_allow_empty_opened(&context, command::opened_invocation(&context)?, app)
-            .await?;
-        let shelved = self
-            .run(
+            .run_allow_empty_opened_with_operation(
                 &context,
-                command::shelved_changes_invocation(&context)?,
-                None,
+                opened_invocation,
+                operation_id.clone(),
                 app,
             )
+            .await?;
+        let shelved_invocation = match limits {
+            Some((max_changes, _)) => {
+                command::shelved_changes_bounded_invocation(&context, max_changes + 1)?
+            }
+            None => command::shelved_changes_invocation(&context)?,
+        };
+        let shelved = self
+            .run(&context, shelved_invocation, operation_id.clone(), app)
             .await?;
 
-        let mut changes = parser::parse_pending_changes(
+        let mut parsed_changes = parser::parse_pending_changes(
             &pending.events,
             context.user.trim(),
             context.client.trim(),
-        )
-        .into_iter()
-        .map(|change| (change.id, change))
-        .collect::<BTreeMap<_, _>>();
+        );
+        let mut opened_files = parser::parse_opened_files(&opened.events);
+        let mut shelved_ids = parser::parse_shelved_change_ids(
+            &shelved.events,
+            context.user.trim(),
+            context.client.trim(),
+        );
+        let mut truncated_by_safety_limit = false;
+        if let Some((max_changes, max_files)) = limits {
+            if parsed_changes.len() > max_changes {
+                parsed_changes.truncate(max_changes);
+                truncated_by_safety_limit = true;
+            }
+            if opened_files.len() > max_files {
+                opened_files.truncate(max_files);
+                truncated_by_safety_limit = true;
+            }
+            if shelved_ids.len() > max_changes {
+                shelved_ids.truncate(max_changes);
+                truncated_by_safety_limit = true;
+            }
+        }
+        let scanned_count = parsed_changes.len();
+        let mut changes = parsed_changes
+            .into_iter()
+            .map(|change| (change.id, change))
+            .collect::<BTreeMap<_, _>>();
         changes.insert(
             0,
             PendingChange {
@@ -289,7 +360,7 @@ impl ChangelistRepository {
                 .run(
                     &context,
                     command::change_spec_invocation(change_id)?,
-                    None,
+                    operation_id.clone(),
                     app,
                 )
                 .await?;
@@ -310,7 +381,11 @@ impl ChangelistRepository {
             }
         }
 
-        for (change_id, file) in parser::parse_opened_files(&opened.events) {
+        for (change_id, file) in opened_files {
+            if limits.is_some() && change_id > 0 && !changes.contains_key(&change_id) {
+                truncated_by_safety_limit = true;
+                continue;
+            }
             let change = changes.entry(change_id).or_insert_with(|| PendingChange {
                 id: change_id,
                 description: String::new(),
@@ -325,20 +400,16 @@ impl ChangelistRepository {
             change.files.push(file);
         }
 
-        let shelved_ids = parser::parse_shelved_change_ids(
-            &shelved.events,
-            context.user.trim(),
-            context.client.trim(),
-        )
-        .into_iter()
-        .filter(|id| changes.contains_key(id))
-        .collect::<Vec<_>>();
+        let shelved_ids = shelved_ids
+            .into_iter()
+            .filter(|id| changes.contains_key(id))
+            .collect::<Vec<_>>();
         if !shelved_ids.is_empty() {
             let described = self
                 .run(
                     &context,
                     command::describe_shelves_invocation(&shelved_ids)?,
-                    None,
+                    operation_id.clone(),
                     app,
                 )
                 .await?;
@@ -351,7 +422,11 @@ impl ChangelistRepository {
 
         let mut result = changes.into_values().collect::<Vec<_>>();
         result.sort_by_key(|change| if change.id == 0 { i64::MIN } else { -change.id });
-        Ok(result)
+        Ok(PendingScan {
+            changes: result,
+            scanned_count,
+            truncated_by_safety_limit,
+        })
     }
 
     pub async fn submitted_detail(
@@ -584,17 +659,18 @@ impl ChangelistRepository {
         Ok(result)
     }
 
-    async fn run_allow_empty_opened(
+    async fn run_allow_empty_opened_with_operation(
         &self,
         context: &P4Context,
         invocation: command::P4Invocation,
+        operation_id: Option<String>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let result = self
             .runner
             .run(
                 P4CommandRequest {
-                    operation_id: None,
+                    operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,

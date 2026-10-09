@@ -51,7 +51,8 @@ import type {
   P4CommandRequest,
   PathResolveRequest,
   PathResolveResult,
-  PendingChange,
+  PendingChangePage,
+  PendingChangeQuery,
   PendingChangeMutationRequest,
   PendingChangeMutationResult,
   SubmitConfirmation,
@@ -172,7 +173,7 @@ export interface Backend {
   getDiff(request: DiffRequest): Promise<DiffResult>;
   getFileHistory(request: FileHistoryRequest): Promise<FileHistoryPage>;
   getRevisionGraph(request: RevisionGraphRequest): Promise<RevisionGraph>;
-  queryPendingChanges(): Promise<PendingChange[]>;
+  queryPendingChanges(query: PendingChangeQuery): Promise<PendingChangePage>;
   mutatePendingChange(
     request: PendingChangeMutationRequest,
   ): Promise<PendingChangeMutationResult>;

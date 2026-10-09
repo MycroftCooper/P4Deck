@@ -13,14 +13,15 @@ mod tests {
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, LoginRequest,
             MoveFilesPreflightRequest, OperationResult, OperationSource, OutputMode,
             P4CommandRequest, P4Context, PendingChangeMutation, PendingChangeMutationRequest,
-            RenameMoveConfirmation, RenameMoveFailureCode, RenameMoveIssueCode, RenameMoveOutcome,
-            RenameMovePreflightRequest, ResolveConfirmation, ResolvePreflightRequest,
-            ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest,
-            ShelfDetailRequest, ShelfFilePreviewRequest, ShelfMode, ShelfPreflightRequest,
-            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
-            SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
-            SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
-            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
+            PendingChangeQuery, PendingChangeSort, RenameMoveConfirmation, RenameMoveFailureCode,
+            RenameMoveIssueCode, RenameMoveOutcome, RenameMovePreflightRequest,
+            ResolveConfirmation, ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
+            SetActiveConnectionProfileRequest, ShelfDetailRequest, ShelfFilePreviewRequest,
+            ShelfMode, ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
+            SubmitPreflightRequest, SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode,
+            SyncOutcome, SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec,
+            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
+            WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, rename::RenameRepository,
@@ -1809,6 +1810,98 @@ mod tests {
         ensure(
             created_change.jobs == [E2E_JOB],
             format!("created jobs were {:?}", created_change.jobs),
+        )?;
+
+        let paging_extra = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-paging-create".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "pending paging stability fixture".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?
+            .created_change_id
+            .ok_or("paging fixture changelist was not created")?;
+        let first_page = changelists
+            .query_pending_page(
+                context.clone(),
+                PendingChangeQuery {
+                    operation_id: "be004-page-1".into(),
+                    request_generation: 41,
+                    keyword: String::new(),
+                    sort: PendingChangeSort::Newest,
+                    page_size: 1,
+                    cursor: None,
+                },
+                None,
+            )
+            .await?;
+        let cursor = first_page
+            .next_cursor
+            .clone()
+            .ok_or("pending first page did not return a continuation cursor")?;
+        ensure(
+            first_page
+                .default_change
+                .as_ref()
+                .is_some_and(|change| change.id == 0)
+                && first_page.items.len() == 1,
+            format!("pending first page shape was invalid: {first_page:?}"),
+        )?;
+        let second_page = changelists
+            .query_pending_page(
+                context.clone(),
+                PendingChangeQuery {
+                    operation_id: "be004-page-2".into(),
+                    request_generation: 42,
+                    keyword: String::new(),
+                    sort: PendingChangeSort::Newest,
+                    page_size: 1,
+                    cursor: Some(cursor.clone()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            second_page.default_change.is_none()
+                && second_page.items.len() == 1
+                && second_page.items[0].id != first_page.items[0].id,
+            format!("pending continuation duplicated or forged Default: {second_page:?}"),
+        )?;
+        changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("be004-paging-delete".into()),
+                    mutation: PendingChangeMutation::Delete {
+                        change_id: paging_extra,
+                    },
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            changelists
+                .query_pending_page(
+                    context.clone(),
+                    PendingChangeQuery {
+                        operation_id: "be004-page-stale".into(),
+                        request_generation: 43,
+                        keyword: String::new(),
+                        sort: PendingChangeSort::Newest,
+                        page_size: 1,
+                        cursor: Some(cursor),
+                    },
+                    None,
+                )
+                .await
+                .is_err(),
+            "pending cursor survived a create/delete generation change",
         )?;
 
         let move_numbered = workflows

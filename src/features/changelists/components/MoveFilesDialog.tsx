@@ -279,6 +279,29 @@ export function MoveFilesDialog({
           ))}
         </select>
       </label>
+      <label>
+        {tr("离屏目标编号", "Off-screen target ID")}
+        <input
+          type="number"
+          min={0}
+          value={target ?? ""}
+          onChange={(event) => {
+            generation.current += 1;
+            const value = event.target.value;
+            setTarget(value === "" ? undefined : Number(value));
+            setPreflight(undefined);
+            setResult(undefined);
+            setError("");
+          }}
+          placeholder={tr("0 表示 Default", "0 means Default")}
+        />
+      </label>
+      <p className="workflow-context">
+        {tr(
+          "拖放仅接受当前已挂载的可见卡片；滚动会自动挂载新目标。键盘或右键入口可在此直接输入未挂载的 CL 编号。",
+          "Drop accepts mounted visible cards; scrolling mounts additional targets. Keyboard and context-menu flows can enter an unmounted CL ID here.",
+        )}
+      </p>
       {target !== undefined && (
         <p className="workflow-context">
           {fromLabel} → {name(target)} · {effectivePaths.length}{" "}

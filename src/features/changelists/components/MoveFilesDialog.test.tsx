@@ -192,6 +192,24 @@ it("blocks empty and repeated same-target drops before preflight", async () => {
   expect(document.body.textContent).toContain("已跳过本来就在目标 CL");
 });
 
+it("accepts a stable off-screen target ID for the keyboard alternative", async () => {
+  const check = vi.fn().mockResolvedValue(ready());
+  await render(undefined, { check });
+  await act(async () => {
+    const input = document.querySelector<HTMLInputElement>(
+      'input[type="number"]',
+    )!;
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "999");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("预检（不执行）").click());
+  expect(check.mock.calls[0][0]).toMatchObject({ targetChangeId: 999 });
+  expect(document.body.textContent).toContain("未挂载的 CL 编号");
+});
+
 it("cancels the active grouped operation instead of dismissing a busy dialog", async () => {
   const check = vi.fn().mockReturnValue(new Promise(() => undefined));
   const cancel = vi

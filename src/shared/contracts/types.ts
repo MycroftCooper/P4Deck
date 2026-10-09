@@ -1108,6 +1108,33 @@ export interface PendingChange {
   shelvedFiles: PendingFile[];
 }
 
+export type PendingChangeSort = "newest" | "oldest";
+
+export interface PendingChangeQuery {
+  operationId: string;
+  requestGeneration: number;
+  keyword: string;
+  sort: PendingChangeSort;
+  pageSize: number;
+  cursor?: string;
+}
+
+export interface PendingChangeQueryStats {
+  scannedCount: number;
+  matchedCount: number;
+  truncatedBySafetyLimit: boolean;
+}
+
+export interface PendingChangePage {
+  requestGeneration: number;
+  defaultChange?: PendingChange;
+  items: PendingChange[];
+  hasMore: boolean;
+  nextCursor?: string;
+  partial: boolean;
+  stats: PendingChangeQueryStats;
+}
+
 export type PendingChangeMutationRequest = {
   operationId?: string;
 } & (

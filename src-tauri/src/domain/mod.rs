@@ -1528,6 +1528,44 @@ pub struct PendingChange {
     pub shelved_files: Vec<PendingFile>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PendingChangeSort {
+    Newest,
+    Oldest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingChangeQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    pub keyword: String,
+    pub sort: PendingChangeSort,
+    pub page_size: usize,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingChangeQueryStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub truncated_by_safety_limit: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingChangePage {
+    pub request_generation: u64,
+    pub default_change: Option<PendingChange>,
+    pub items: Vec<PendingChange>,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub partial: bool,
+    pub stats: PendingChangeQueryStats,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",

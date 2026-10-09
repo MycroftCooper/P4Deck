@@ -120,6 +120,67 @@ const mockChanges: ChangelistSummary[] = Array.from(
     } as ChangelistSummary;
   },
 );
+
+function allMockPendingChanges(): PendingChange[] {
+  mockPendingChanges ??= [
+    {
+      id: 0,
+      description: "",
+      user: mockContext.user,
+      client: mockContext.client,
+      status: "pending",
+      jobs: [],
+      files: mockWorkspace
+        .filter((node) => node.state === "openedEdit")
+        .slice(0, 5)
+        .map((node) => ({
+          depotPath: node.depotPath!,
+          action: "edit",
+          state: node.state,
+        })),
+      shelvedFiles: [],
+    },
+    {
+      id: 31821,
+      description: "Render pipeline cache improvements",
+      user: mockContext.user,
+      client: mockContext.client,
+      status: "pending",
+      updatedAt: new Date(now - 3_600_000).toISOString(),
+      jobs: ["ATLAS-1042"],
+      files: mockWorkspace
+        .filter((node) => node.state === "openedAdd")
+        .slice(0, 4)
+        .map((node) => ({
+          depotPath: node.depotPath!,
+          action: "add",
+          state: node.state,
+        })),
+      shelvedFiles: mockWorkspace.slice(20, 23).map((node) => ({
+        depotPath: node.depotPath!,
+        action: "edit",
+        revision: node.revision,
+        fileType: "text",
+      })),
+    },
+    {
+      id: 31798,
+      description: "Atlas material cleanup",
+      user: mockContext.user,
+      client: mockContext.client,
+      status: "pending",
+      updatedAt: new Date(now - 7_200_000).toISOString(),
+      jobs: [],
+      files: mockWorkspace.slice(30, 33).map((node) => ({
+        depotPath: node.depotPath!,
+        action: "edit",
+        state: "openedEdit" as const,
+      })),
+      shelvedFiles: [],
+    },
+  ];
+  return mockPendingChanges;
+}
 const mockNames = [
   "Assets",
   "Config",
@@ -1334,7 +1395,7 @@ export const mockBackend: Backend = {
           headRevision: sourceNode.headRevision,
         }
       : undefined;
-    const changes = await this.queryPendingChanges();
+    const changes = allMockPendingChanges();
     const targetChangeValid =
       request.targetChangeId === 0 ||
       changes.some((change) => change.id === request.targetChangeId);
@@ -1755,68 +1816,56 @@ export const mockBackend: Backend = {
       operationIds: [request.operationId ?? "mock-graph"],
     };
   },
-  async queryPendingChanges() {
-    mockPendingChanges ??= [
-      {
-        id: 0,
-        description: "",
-        user: mockContext.user,
-        client: mockContext.client,
-        status: "pending",
-        jobs: [],
-        files: mockWorkspace
-          .filter((node) => node.state === "openedEdit")
-          .slice(0, 5)
-          .map((node) => ({
-            depotPath: node.depotPath!,
-            action: "edit",
-            state: node.state,
-          })),
-        shelvedFiles: [],
+  async queryPendingChanges(query) {
+    const all = structuredClone(allMockPendingChanges());
+    const defaultChange = all.find((change) => change.id === 0);
+    const keyword = query.keyword.trim().toLocaleLowerCase();
+    const fingerprint = encodeURIComponent(
+      JSON.stringify([keyword, query.sort, query.pageSize]),
+    );
+    let offset = 0;
+    if (query.cursor) {
+      const prefix = `${fingerprint}:`;
+      if (!query.cursor.startsWith(prefix))
+        throw new Error("pending changelist cursor does not match this query");
+      offset = Number(query.cursor.slice(prefix.length));
+      if (!Number.isSafeInteger(offset) || offset <= 0)
+        throw new Error("invalid pending changelist cursor");
+    }
+    const items = all
+      .filter((change) => change.id > 0)
+      .filter(
+        (change) =>
+          !keyword ||
+          String(change.id).includes(keyword) ||
+          change.description.toLocaleLowerCase().includes(keyword) ||
+          change.jobs.some((job) =>
+            job.toLocaleLowerCase().includes(keyword),
+          ) ||
+          [...change.files, ...change.shelvedFiles].some((file) =>
+            file.depotPath.toLocaleLowerCase().includes(keyword),
+          ),
+      )
+      .sort((left, right) =>
+        query.sort === "newest" ? right.id - left.id : left.id - right.id,
+      );
+    const end = Math.min(offset + query.pageSize, items.length);
+    return {
+      requestGeneration: query.requestGeneration,
+      defaultChange: offset === 0 ? defaultChange : undefined,
+      items: items.slice(offset, end),
+      hasMore: end < items.length,
+      nextCursor: end < items.length ? `${fingerprint}:${end}` : undefined,
+      partial: false,
+      stats: {
+        scannedCount: all.length - (defaultChange ? 1 : 0),
+        matchedCount: items.length,
+        truncatedBySafetyLimit: false,
       },
-      {
-        id: 31821,
-        description: "Render pipeline cache improvements",
-        user: mockContext.user,
-        client: mockContext.client,
-        status: "pending",
-        updatedAt: new Date(now - 3_600_000).toISOString(),
-        jobs: ["ATLAS-1042"],
-        files: mockWorkspace
-          .filter((node) => node.state === "openedAdd")
-          .slice(0, 4)
-          .map((node) => ({
-            depotPath: node.depotPath!,
-            action: "add",
-            state: node.state,
-          })),
-        shelvedFiles: mockWorkspace.slice(20, 23).map((node) => ({
-          depotPath: node.depotPath!,
-          action: "edit",
-          revision: node.revision,
-          fileType: "text",
-        })),
-      },
-      {
-        id: 31798,
-        description: "Atlas material cleanup",
-        user: mockContext.user,
-        client: mockContext.client,
-        status: "pending",
-        updatedAt: new Date(now - 7_200_000).toISOString(),
-        jobs: [],
-        files: mockWorkspace.slice(30, 33).map((node) => ({
-          depotPath: node.depotPath!,
-          action: "edit",
-          state: "openedEdit" as const,
-        })),
-        shelvedFiles: [],
-      },
-    ];
-    return structuredClone(mockPendingChanges);
+    };
   },
   async mutatePendingChange(request) {
-    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    const changes = allMockPendingChanges();
     mockPendingChanges ??= changes;
     const operationId = request.operationId ?? crypto.randomUUID();
     const affectedChanges = new Set<number>();
@@ -1913,7 +1962,7 @@ export const mockBackend: Backend = {
     };
   },
   async preflightSubmit(request) {
-    const changes = await this.queryPendingChanges();
+    const changes = allMockPendingChanges();
     const change = changes.find((item) => item.id === request.changeId);
     const target: SubmitTargetSnapshot = {
       server: mockContext.server,
@@ -2029,7 +2078,7 @@ export const mockBackend: Backend = {
     };
     if (JSON.stringify(currentTarget) !== JSON.stringify(record.target))
       return reject("contextChanged", "The connection changed.");
-    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    const changes = allMockPendingChanges();
     const index = changes.findIndex(
       (change) => change.id === confirmation.target.changeId,
     );
@@ -2059,7 +2108,7 @@ export const mockBackend: Backend = {
     };
   },
   async preflightShelf(request) {
-    const change = (await this.queryPendingChanges()).find(
+    const change = allMockPendingChanges().find(
       (item) => item.id === request.changeId,
     );
     const paths = [...new Set(request.depotPaths)].sort();
@@ -2142,7 +2191,7 @@ export const mockBackend: Backend = {
   },
   async getShelfDetail(request) {
     if (request.changeId <= 0) throw new Error("Numbered shelf required.");
-    const change = (await this.queryPendingChanges()).find(
+    const change = allMockPendingChanges().find(
       (item) => item.id === request.changeId,
     );
     if (!change?.shelvedFiles.length) throw new Error("Shelf not found.");
@@ -2230,7 +2279,7 @@ export const mockBackend: Backend = {
   },
   async preflightMoveFiles(request) {
     const paths = [...new Set(request.depotPaths)].sort();
-    const changes = await this.queryPendingChanges();
+    const changes = allMockPendingChanges();
     const targetChange = changes.find(
       (change) => change.id === request.targetChangeId,
     );
@@ -2332,7 +2381,7 @@ export const mockBackend: Backend = {
       };
     const request =
       record.request as import("../../shared/contracts/types").MoveFilesPreflightRequest;
-    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    const changes = allMockPendingChanges();
     mockPendingChanges ??= changes;
     const affected = new Set<number>([request.targetChangeId]);
     const target = changes.find(
@@ -2367,7 +2416,7 @@ export const mockBackend: Backend = {
     };
   },
   async preflightUnshelve(request) {
-    const source = (await this.queryPendingChanges()).find(
+    const source = allMockPendingChanges().find(
       (item) => item.id === request.sourceChangeId,
     );
     const paths = [...new Set(request.depotPaths)].sort();
@@ -2411,9 +2460,7 @@ export const mockBackend: Backend = {
       ready: !blockers.length,
       source,
       targetChange:
-        request.targetChangeId === 0
-          ? (await this.queryPendingChanges())[0]
-          : undefined,
+        request.targetChangeId === 0 ? allMockPendingChanges()[0] : undefined,
       mappings,
       blockers,
       warnings: [
@@ -2521,8 +2568,7 @@ async function confirmMockWorkflow(
     (kind !== "unshelve" && record.target.client !== mockContext.client)
   )
     return reject("contextChanged", "The connection or workspace changed.");
-  const changes =
-    mockPendingChanges ?? (await mockBackend.queryPendingChanges());
+  const changes = allMockPendingChanges();
   mockPendingChanges ??= changes;
   if (kind === "shelf") {
     const request =

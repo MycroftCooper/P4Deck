@@ -4,8 +4,11 @@ use crate::{
     p4::{changelists::ChangelistRepository, context::ContextStore},
 };
 use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
+    collections::{BTreeSet, HashMap, HashSet},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::AppHandle;
@@ -62,6 +65,47 @@ struct SubmittedQueryCache {
     state: parking_lot::Mutex<SubmittedQueryCacheState>,
     ttl_ms: u64,
     max_entries: usize,
+}
+
+struct PendingSnapshot {
+    query_fingerprint: String,
+    connection_fingerprint: String,
+    connection_generation: u64,
+    pending_generation: u64,
+    default_change: PendingChange,
+    items: Vec<PendingChange>,
+    stats: PendingChangeQueryStats,
+    issued_cursors: HashSet<String>,
+    inserted_ms: u64,
+    last_access: u64,
+}
+
+struct PendingSnapshotState {
+    entries: HashMap<String, PendingSnapshot>,
+    access_clock: u64,
+}
+
+struct PendingSnapshotCache {
+    state: parking_lot::Mutex<PendingSnapshotState>,
+    ttl_ms: u64,
+    max_entries: usize,
+}
+
+impl PendingSnapshotCache {
+    fn new(ttl_ms: u64, max_entries: usize) -> Self {
+        Self {
+            state: parking_lot::Mutex::new(PendingSnapshotState {
+                entries: HashMap::new(),
+                access_clock: 0,
+            }),
+            ttl_ms: ttl_ms.max(1),
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    fn clear(&self) {
+        self.state.lock().entries.clear();
+    }
 }
 
 impl SubmittedQueryCache {
@@ -208,6 +252,8 @@ pub struct ChangelistService {
     contexts: Arc<ContextStore>,
     submitted_details: SubmittedDetailCache,
     submitted_queries: SubmittedQueryCache,
+    pending_snapshots: PendingSnapshotCache,
+    pending_generation: AtomicU64,
 }
 
 impl ChangelistService {
@@ -222,12 +268,21 @@ impl ChangelistService {
             contexts,
             submitted_details: SubmittedDetailCache::new(60_000, 256),
             submitted_queries: SubmittedQueryCache::new(15_000, 128),
+            pending_snapshots: PendingSnapshotCache::new(60_000, 32),
+            pending_generation: AtomicU64::new(1),
         }
     }
 
     pub fn clear_caches(&self) {
         self.submitted_details.state.lock().entries.clear();
         self.submitted_queries.clear();
+        self.pending_snapshots.clear();
+        self.pending_generation.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn invalidate_pending_pages(&self) {
+        self.pending_snapshots.clear();
+        self.pending_generation.fetch_add(1, Ordering::SeqCst);
     }
 
     pub async fn query(
@@ -292,12 +347,218 @@ impl ChangelistService {
         Ok(result)
     }
 
+    #[cfg(test)]
     pub async fn query_pending(
         &self,
         context: P4Context,
         app: Option<&AppHandle>,
     ) -> Result<Vec<PendingChange>, String> {
         self.repository.query_pending(context, app).await
+    }
+
+    pub async fn query_pending_page(
+        &self,
+        context: P4Context,
+        mut query: PendingChangeQuery,
+        app: Option<&AppHandle>,
+    ) -> Result<PendingChangePage, String> {
+        normalize_pending_query(&mut query)?;
+        let (current, connection_generation) = self.contexts.snapshot();
+        if !same_connection(&current, &context) {
+            return Err("The connection changed before the pending query started.".into());
+        }
+        let connection_fingerprint =
+            crate::p4::query::fingerprint(&(self.contexts.active_profile_id(), &current))?;
+        let query_fingerprint = crate::p4::query::fingerprint(&(
+            query.keyword.clone(),
+            query.sort.clone(),
+            query.page_size,
+        ))?;
+        let pending_generation = self.pending_generation.load(Ordering::SeqCst);
+
+        if let Some(cursor) = query.cursor.as_deref() {
+            let (snapshot_id, offset) = crate::p4::query::decode_pending_change_cursor(
+                cursor,
+                &query_fingerprint,
+                &connection_fingerprint,
+                connection_generation,
+                pending_generation,
+            )?;
+            return self.page_pending_snapshot(
+                &snapshot_id,
+                Some(cursor),
+                offset,
+                &query,
+                &query_fingerprint,
+                &connection_fingerprint,
+                connection_generation,
+                pending_generation,
+            );
+        }
+
+        const MAX_CHANGES: usize = 500;
+        const MAX_FILES: usize = 100_000;
+        let scan = self
+            .repository
+            .query_pending_bounded(
+                current.clone(),
+                MAX_CHANGES,
+                MAX_FILES,
+                Some(query.operation_id.clone()),
+                app,
+            )
+            .await?;
+        let (after, after_generation) = self.contexts.snapshot();
+        if after_generation != connection_generation || !same_connection(&after, &current) {
+            return Err("The connection changed while the pending query was running.".into());
+        }
+        if self.pending_generation.load(Ordering::SeqCst) != pending_generation {
+            return Err("Pending changelists changed while the query was running.".into());
+        }
+        let mut default_change = None;
+        let keyword = query.keyword.to_lowercase();
+        let mut items = scan
+            .changes
+            .into_iter()
+            .filter_map(|change| {
+                if change.id == 0 {
+                    default_change = Some(change);
+                    return None;
+                }
+                let matches = keyword.is_empty()
+                    || change.id.to_string().contains(&keyword)
+                    || change.description.to_lowercase().contains(&keyword)
+                    || change
+                        .jobs
+                        .iter()
+                        .any(|job| job.to_lowercase().contains(&keyword))
+                    || change
+                        .files
+                        .iter()
+                        .chain(change.shelved_files.iter())
+                        .any(|file| file.depot_path.to_lowercase().contains(&keyword));
+                matches.then_some(change)
+            })
+            .collect::<Vec<_>>();
+        match query.sort {
+            PendingChangeSort::Newest => items.sort_by_key(|change| std::cmp::Reverse(change.id)),
+            PendingChangeSort::Oldest => items.sort_by_key(|change| change.id),
+        }
+        let default_change = default_change.ok_or("pending query did not produce Default")?;
+        let stats = PendingChangeQueryStats {
+            scanned_count: scan.scanned_count,
+            matched_count: items.len(),
+            truncated_by_safety_limit: scan.truncated_by_safety_limit,
+        };
+        let snapshot_id = uuid::Uuid::new_v4().to_string();
+        {
+            let mut state = self.pending_snapshots.state.lock();
+            state.access_clock = state.access_clock.saturating_add(1);
+            let access = state.access_clock;
+            state.entries.insert(
+                snapshot_id.clone(),
+                PendingSnapshot {
+                    query_fingerprint: query_fingerprint.clone(),
+                    connection_fingerprint: connection_fingerprint.clone(),
+                    connection_generation,
+                    pending_generation,
+                    default_change,
+                    items,
+                    stats,
+                    issued_cursors: HashSet::new(),
+                    inserted_ms: now_ms(),
+                    last_access: access,
+                },
+            );
+            while state.entries.len() > self.pending_snapshots.max_entries {
+                let Some(oldest) = state
+                    .entries
+                    .iter()
+                    .min_by_key(|(_, entry)| entry.last_access)
+                    .map(|(key, _)| key.clone())
+                else {
+                    break;
+                };
+                state.entries.remove(&oldest);
+            }
+        }
+        self.page_pending_snapshot(
+            &snapshot_id,
+            None,
+            0,
+            &query,
+            &query_fingerprint,
+            &connection_fingerprint,
+            connection_generation,
+            pending_generation,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn page_pending_snapshot(
+        &self,
+        snapshot_id: &str,
+        presented_cursor: Option<&str>,
+        offset: usize,
+        query: &PendingChangeQuery,
+        query_fingerprint: &str,
+        connection_fingerprint: &str,
+        connection_generation: u64,
+        pending_generation: u64,
+    ) -> Result<PendingChangePage, String> {
+        let now = now_ms();
+        let mut state = self.pending_snapshots.state.lock();
+        state.entries.retain(|_, entry| {
+            now.saturating_sub(entry.inserted_ms) <= self.pending_snapshots.ttl_ms
+        });
+        state.access_clock = state.access_clock.saturating_add(1);
+        let access = state.access_clock;
+        let snapshot = state
+            .entries
+            .get_mut(snapshot_id)
+            .ok_or("pending changelist cursor expired; refresh the list")?;
+        if snapshot.query_fingerprint != query_fingerprint
+            || snapshot.connection_fingerprint != connection_fingerprint
+            || snapshot.connection_generation != connection_generation
+            || snapshot.pending_generation != pending_generation
+            || presented_cursor.is_some_and(|cursor| !snapshot.issued_cursors.contains(cursor))
+        {
+            return Err(
+                "pending changelist cursor is stale or was not issued by this server".into(),
+            );
+        }
+        snapshot.last_access = access;
+        if offset > snapshot.items.len() {
+            return Err("pending changelist cursor offset is outside the snapshot".into());
+        }
+        let end = offset
+            .saturating_add(query.page_size)
+            .min(snapshot.items.len());
+        let items = snapshot.items[offset..end].to_vec();
+        let has_more = end < snapshot.items.len();
+        let next_cursor = if has_more {
+            let cursor = crate::p4::query::encode_pending_change_cursor(
+                snapshot_id,
+                end,
+                query_fingerprint,
+                connection_fingerprint,
+                connection_generation,
+                pending_generation,
+            )?;
+            snapshot.issued_cursors.insert(cursor.clone());
+            Some(cursor)
+        } else {
+            None
+        };
+        Ok(PendingChangePage {
+            request_generation: query.request_generation,
+            default_change: (offset == 0).then(|| snapshot.default_change.clone()),
+            items,
+            has_more,
+            next_cursor,
+            partial: snapshot.stats.truncated_by_safety_limit,
+            stats: snapshot.stats.clone(),
+        })
     }
 
     pub async fn submitted_detail(
@@ -377,6 +638,8 @@ impl ChangelistService {
             .repository
             .perform_pending(context.clone(), &request, &preserved_files, app)
             .await?;
+
+        self.invalidate_pending_pages();
 
         affected_changes.extend(execution.affected_changes.iter().copied());
         let mut created_change_id = execution.created_change_id;
@@ -553,6 +816,31 @@ fn unavailable_detail(change_id: i64, message: &str) -> SubmittedChangeDetail {
     }
 }
 
+fn normalize_pending_query(query: &mut PendingChangeQuery) -> Result<(), String> {
+    query.operation_id = query.operation_id.trim().into();
+    if query.operation_id.is_empty()
+        || query.operation_id.len() > 128
+        || query.operation_id.chars().any(char::is_control)
+    {
+        return Err("a valid pending query operation ID is required".into());
+    }
+    query.keyword = query.keyword.trim().into();
+    if query.keyword.len() > 4_096 {
+        return Err("pending query keyword is too long".into());
+    }
+    if !(1..=500).contains(&query.page_size) {
+        return Err("pending query page size must be between 1 and 500".into());
+    }
+    if query
+        .cursor
+        .as_ref()
+        .is_some_and(|cursor| cursor.len() > 2_048)
+    {
+        return Err("invalid pending changelist cursor".into());
+    }
+    Ok(())
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -712,5 +1000,22 @@ mod tests {
         changed.request_generation += 1;
         assert!(cache.get(&changed, 2).is_none());
         assert!(cache.get(&key, 12).is_none());
+    }
+
+    #[test]
+    fn pending_query_normalization_rejects_unbounded_or_ambiguous_requests() {
+        let mut query = PendingChangeQuery {
+            operation_id: " op ".into(),
+            request_generation: 4,
+            keyword: "  JOB-1  ".into(),
+            sort: PendingChangeSort::Newest,
+            page_size: 100,
+            cursor: None,
+        };
+        normalize_pending_query(&mut query).unwrap();
+        assert_eq!(query.operation_id, "op");
+        assert_eq!(query.keyword, "JOB-1");
+        query.page_size = 501;
+        assert!(normalize_pending_query(&mut query).is_err());
     }
 }
