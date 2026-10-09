@@ -33,6 +33,10 @@ import type {
   SyncPreviewPlan,
   SyncConfirmRequest,
   SyncResult,
+  StreamSwitchPreflightRequest,
+  StreamSwitchPreflight,
+  StreamSwitchConfirmation,
+  StreamSwitchResult,
   FileHistoryPage,
   FileHistoryRequest,
   GlobalSearchQuery,
@@ -117,6 +121,12 @@ export interface Backend {
   listStreams(): Promise<
     import("../../shared/contracts/types").StreamSummary[]
   >;
+  preflightStreamSwitch(
+    request: StreamSwitchPreflightRequest,
+  ): Promise<StreamSwitchPreflight>;
+  confirmStreamSwitch(
+    confirmation: StreamSwitchConfirmation,
+  ): Promise<StreamSwitchResult>;
   listUserWorkspaces(): Promise<
     import("../../shared/contracts/types").ClientWorkspace[]
   >;

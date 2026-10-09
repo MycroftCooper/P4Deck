@@ -193,6 +193,7 @@ function Content({
           target={target.target}
           locked={target.locked}
           onTargetChange={changeTarget}
+          onRuntime={onRuntime}
           zh={zh}
         />
       );

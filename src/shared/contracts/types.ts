@@ -957,6 +957,118 @@ export interface SyncResult {
   refreshWorkspace: boolean;
   refreshDepot: boolean;
 }
+
+export type StreamSwitchMode = "viewOnly" | "sync";
+export interface StreamSwitchPreflightRequest {
+  targetStream: string;
+  mode: StreamSwitchMode;
+  operationId?: string;
+}
+export interface StreamSwitchRiskSummary {
+  openedFiles: number;
+  unresolvedFiles: number;
+  reconcileFiles: number;
+  targetFileCount?: number;
+  targetFileBytes?: number;
+}
+export interface StreamSwitchTargetSnapshot {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  activeProfileId?: string;
+  contextGeneration: number;
+  currentStream?: string;
+  targetStream: string;
+  targetType: string;
+  targetParent?: string;
+  mode: StreamSwitchMode;
+  clientSpecDigest: string;
+  streamSpecDigest: string;
+  riskDigest: string;
+}
+export type StreamSwitchIssueCode =
+  | "invalidTarget"
+  | "missingWorkspaceRoot"
+  | "classicWorkspace"
+  | "sameStream"
+  | "unsupportedStreamType"
+  | "clientOwnerMismatch"
+  | "lockedClient"
+  | "openedFiles"
+  | "unresolvedFiles"
+  | "localChanges"
+  | "authenticationRequired"
+  | "permissionDenied"
+  | "connectionUnavailable"
+  | "inspectionUnavailable"
+  | "syncChangesWorkspace"
+  | "virtualStream";
+export interface StreamSwitchIssue {
+  code: StreamSwitchIssueCode;
+  message: string;
+  paths: string[];
+}
+export interface StreamSwitchPreflight {
+  ready: boolean;
+  currentStream?: string;
+  targetStream: string;
+  targetType?: string;
+  targetParent?: string;
+  mode: StreamSwitchMode;
+  syncRequired: boolean;
+  risks: StreamSwitchRiskSummary;
+  blockers: StreamSwitchIssue[];
+  warnings: StreamSwitchIssue[];
+  targetSnapshot?: StreamSwitchTargetSnapshot;
+  previewDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+export interface StreamSwitchConfirmation {
+  token: string;
+  target: StreamSwitchTargetSnapshot;
+  previewDigest: string;
+  acknowledgeWarnings: boolean;
+  operationId?: string;
+}
+export type StreamSwitchFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "warningAcknowledgementRequired"
+  | "contextChanged"
+  | "preflightChanged"
+  | "preflightBlocked"
+  | "switchFailed"
+  | "verificationFailed"
+  | "syncFailed"
+  | "cancelled"
+  | "uncertainOutcome";
+export interface StreamSwitchResult {
+  outcome: "succeeded" | "rejected" | "failed" | "cancelled" | "unknown";
+  failure?: StreamSwitchFailureCode;
+  message: string;
+  streamChanged: boolean;
+  syncPerformed: boolean;
+  syncCompleted: boolean;
+  verifiedStream?: string;
+  operationId?: string;
+  logReference?: string;
+  runtime?: RuntimeInfo;
+  refresh: {
+    workspace: boolean;
+    streams: boolean;
+    pendingChanges: boolean;
+    submittedChanges: boolean;
+    search: boolean;
+    depot: boolean;
+    reason: string;
+  };
+}
 export type RevisionReference =
   | { kind: "workspace" }
   | { kind: "have" }

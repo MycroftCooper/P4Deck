@@ -7,6 +7,7 @@ pub mod preview;
 pub mod rename_service;
 pub mod search_service;
 pub mod status_cache;
+pub mod stream_switch_service;
 pub mod submit_service;
 pub mod sync_service;
 pub mod system_open;

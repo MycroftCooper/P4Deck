@@ -365,6 +365,28 @@ impl ContextStore {
         state.generation = state.generation.saturating_add(1);
         Ok(context)
     }
+
+    /// Advances the runtime generation after an external mutation changes how the active
+    /// workspace is interpreted without changing its connection fields (for example, a stream
+    /// view switch). The compare-and-swap prevents an old operation from rebinding a newer
+    /// profile or workspace.
+    pub fn advance_generation_if_unchanged(
+        &self,
+        expected_generation: u64,
+    ) -> Result<u64, ConnectionProfileError> {
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        if state.generation != expected_generation {
+            return Err(profile_error(
+                ConnectionProfileErrorCode::ContextChanged,
+                "The active connection changed while the workspace stream was being switched.",
+            ));
+        }
+        state.generation = state.generation.saturating_add(1);
+        Ok(state.generation)
+    }
 }
 
 fn load_document(

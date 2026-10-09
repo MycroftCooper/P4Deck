@@ -172,6 +172,40 @@ pub async fn list_streams(
 }
 
 #[tauri::command]
+pub async fn preflight_stream_switch(
+    request: StreamSwitchPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<StreamSwitchPreflight, String> {
+    Ok(state.stream_switch.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_stream_switch(
+    confirmation: StreamSwitchConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<StreamSwitchResult, String> {
+    let expected_generation = confirmation.target.context_generation;
+    let mut result = state.stream_switch.confirm(confirmation, Some(&app)).await;
+    let runtime = state.connection.runtime_info();
+    if result.stream_changed {
+        invalidate_after_context_change(&state);
+        if runtime.context_generation == expected_generation.saturating_add(1) {
+            result.runtime = Some(state.connection.verified_runtime(
+                "Client Stream and workspace state were verified after switching.",
+            ));
+        }
+    } else if result.sync_performed
+        || result.outcome == StreamSwitchOutcome::Unknown
+        || result.failure == Some(StreamSwitchFailureCode::VerificationFailed)
+    {
+        invalidate_workspace_dependent_caches(&state);
+    }
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn list_user_workspaces(
     state: State<'_, AppState>,
     app: AppHandle,
@@ -326,6 +360,14 @@ fn invalidate_after_context_change(state: &AppState) {
     state.workflows.clear_shelf_details();
     state.files.clear_review_cache();
     state.rename.clear_confirmations();
+    state.stream_switch.clear_confirmations();
+    state.status_cache.clear_for_context_switch();
+}
+
+fn invalidate_workspace_dependent_caches(state: &AppState) {
+    state.changelists.clear_caches();
+    state.search.clear_for_context_switch();
+    state.files.clear_review_cache();
     state.status_cache.clear_for_context_switch();
 }
 
@@ -406,10 +448,19 @@ pub async fn run_p4(
     if matches!(request.source, OperationSource::Gui)
         && matches!(
             request.command.to_ascii_lowercase().as_str(),
-            "submit" | "shelve" | "unshelve" | "resolve" | "sync" | "move" | "reopen"
+            "submit"
+                | "shelve"
+                | "unshelve"
+                | "resolve"
+                | "sync"
+                | "move"
+                | "reopen"
+                | "client"
+                | "stream"
+                | "switch"
         )
     {
-        return Err("GUI submit, shelf, unshelve, resolve, sync, move and reopen must use their preview/preflight and confirmation APIs".into());
+        return Err("GUI mutations, including client/stream changes, must use their dedicated preview/preflight and confirmation APIs".into());
     }
     state
         .runner

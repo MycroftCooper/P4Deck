@@ -14,6 +14,7 @@ export type AppCommandId =
   | "view.submitted"
   | "view.search"
   | "view.workspaces"
+  | "view.streams"
   | "view.diagnostics"
   | "file.diff"
   | "file.history"
@@ -159,6 +160,10 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command("view.workspaces", "navigation", "打开 Workspace", "Open Workspace", {
     requires: "mainWindow",
     execution: { kind: "page", page: "workspaces" },
+  }),
+  command("view.streams", "navigation", "打开 Streams", "Open Streams", {
+    requires: "mainWindow",
+    execution: { kind: "page", page: "streams" },
   }),
   command("view.diagnostics", "tools", "打开诊断", "Open Diagnostics", {
     execution: { kind: "tool", tool: "diagnostics" },

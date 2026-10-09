@@ -31,7 +31,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线，原生 UI 仍待验收。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换的强类型状态机和 Windows localhost 双 Stream 验收；原生 UI 仍待验收。
 
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
 
@@ -56,6 +56,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-008  | Submitted 详情与可靠合并分类            | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                  |
 | BE-008Q | Submitted 组合查询与稳定游标            | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收                                                                                                                                                                                              |
 | BE-008G | 全局搜索生产后端                        | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
+| BE-010  | 基础 Stream 切换安全闭环                | 强类型 preflight/confirm/result、一次性短期 token、完整 profile/connection/workspace/generation/spec/risk digest 绑定、mutation lane 内 TOCTOU 复检、非 force `client -s -S`、默认不改文件、显式可选非 force `sync #head`、最终 Client spec 验证、结构化恢复和缓存/generation 失效已完成；GUI 通用写旁路已封死；Windows localhost 双 Stream 默认双轮通过，原生 UI/macOS 待验 |
 
 ## P0：下一阶段必须完成
 
@@ -210,6 +211,16 @@ pnpm test:e2e:p4d:win
 
 ## P1：Alpha 质量
 
+### BE-010 — 基础 Stream 切换安全闭环（DONE：Windows localhost，原生 UI/macOS 待验）
+
+- 入口：Streams 页通过 `preflight_stream_switch` → `confirm_stream_switch`；GUI 通用 `run_p4` 明确拒绝 `client/stream/switch` 写命令，Terminal 语义不变。
+- 预检：权威读取连接、Client/Stream spec、protects、opened、resolve preview、reconcile preview 与 sizes；打开文件、未解决文件、无 Root、owner 不匹配、不可见/不支持目标会阻断。同步模式下本地变化阻断；仅切视图模式下本地变化作为必须确认的警告。
+- 绑定：一次性 120 秒 token 绑定 active profile、Server/User/Client/Root、Context generation、源/目标 Stream、类型/父级、模式、Client/Stream spec digest 和风险 digest；确认在 mutation lane 内完整重查，错绑、重放、过期、generation/spec/文件状态漂移全部拒绝。
+- 执行：只使用非 force `p4 client -s -S`。默认不触碰工作区；显式选择同步时，在目标 Stream 验证成功后运行非 force `p4 sync //client/...#head`。取消只停止尚可停止的步骤，不宣称回滚；失败/未知结果返回已验证 Stream、同步是否开始/完成、operation/log 与恢复预检建议。
+- 刷新：已确认 Stream 改变时 CAS 推进 generation；IPC 清除 Workspace/Streams/Pending/Submitted/Search/Depot 等依赖缓存和其他确认 token。结果页关闭后前端应用新 runtime，避免验证结果被提前卸载。
+- 验收：Windows localhost 固定 fixture 创建 `//p4deck-stream-e2e/main` 与 `dev`、独立 Client/Root，覆盖过期、错绑/重放、generation 漂移、预检后本地 TOCTOU、opened blocker、仅切视图不改文件、同 Stream 恢复同步和同步回切；默认连续两轮分别 115.59 秒、114.50 秒通过，并清理 Client/Root/depot/版本化 Stream spec。
+- 非范围：不实现 Stream Graph、Branch Mapping、Stream spec 创建/编辑/删除或管理员能力；不调用高层 `p4 switch`，因为其隐式 reconcile/shelve/revert/unshelve/sync 不符合本批显式副作用边界。
+
 ### BE-006 — 操作记录、离线与 ticket 状态（DONE：真实离线/过期错误分类待兼容矩阵）
 
 - 建立有上限的操作历史，关联 operation ID、用户动作、结果和脱敏日志。
@@ -248,7 +259,7 @@ BE-009b 实现结果（2026-10-09）：
 
 ## P2：后置范围
 
-- Stream 写操作与完整切换编排。
+- Stream Graph、Branch Mapping、Stream spec 写入和管理员能力（基础当前 Workspace 切换已由 BE-010 完成）。
 - Branch Mapping、Labels、Jobs 独立工作台。
 - P4API 原生绑定 Adapter。首版继续使用官方 `p4` CLI；引入前需完成 ABI、打包、升级和许可证评估。
 
@@ -265,6 +276,7 @@ BE-006 操作记录、离线与 ticket 状态    DONE
 BE-007 日志策略与诊断导出              DONE
 BE-007S 凭据泄漏边界加固               DONE（自动化；原生 UI/macOS 待验）
 BE-008 Submitted 详情与可靠合并分类    DONE（Windows localhost；前端已接线）
+BE-010 基础 Stream 切换                 DONE（Windows localhost；原生 UI/macOS 待验）
 ```
 
 BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线已在后续批次完成，原生 UI 证据仍未取得。

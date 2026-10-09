@@ -81,6 +81,36 @@
   padding: 16px 24px;
   border-top: 1px solid var(--border);
 }
+.workflow-choice-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.stream-switch-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.stream-switch-summary > div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+.stream-switch-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.stream-switch-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
 .workflow-dialog fieldset {
   margin: 0;
   padding: 0;
@@ -276,6 +306,9 @@
   margin: 0 8px 4px 0;
 }
 @media (max-width: 480px) {
+  .stream-switch-summary {
+    grid-template-columns: 1fr;
+  }
   .sync-counts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

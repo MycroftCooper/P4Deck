@@ -789,6 +789,11 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
                 .args
                 .first()
                 .is_some_and(|argument| argument == "-o"))
+        || (request.command == "stream"
+            && request
+                .args
+                .first()
+                .is_some_and(|argument| argument == "-o"))
         || (matches!(request.command.as_str(), "unshelve" | "resolve")
             && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "reconcile" && request.args.iter().any(|argument| argument == "-n"))

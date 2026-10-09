@@ -27,6 +27,7 @@ import {
   reviewSessionIdentity,
   useReviewRequestOwner,
 } from "./reviewRequests";
+import { StreamSwitchDialog } from "./StreamSwitchDialog";
 const cache = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
@@ -38,6 +39,7 @@ export function ReadOnlyPage({
   target = "",
   locked = false,
   onTargetChange,
+  onRuntime,
   zh,
 }: {
   kind: "history" | "streams";
@@ -45,6 +47,7 @@ export function ReadOnlyPage({
   target?: string;
   locked?: boolean;
   onTargetChange?(path: string): void;
+  onRuntime?(runtime: RuntimeInfo): void;
   zh: boolean;
 }) {
   const [path, setPath] = useState(target);
@@ -77,6 +80,10 @@ export function ReadOnlyPage({
     value: DiffResult;
   }>();
   const [historyDiffLoadingOwner, setHistoryDiffLoadingOwner] = useState("");
+  const [streamSwitch, setStreamSwitch] = useState<{
+    stream: StreamSummary;
+    source: HTMLElement | null;
+  }>();
   const consumedHistoryCursors = useRef(new Set<string>());
   const pendingHistoryCursors = useRef(new Set<string>());
   const scroll = useRef<HTMLDivElement>(null);
@@ -285,6 +292,22 @@ export function ReadOnlyPage({
     await cache.invalidateQueries({ queryKey: key });
     setRefresh((v) => v + 1);
   };
+  const refreshAfterStreamSwitch = () => {
+    for (const activePage of [
+      "streams",
+      "workspaces",
+      "pending",
+      "submitted",
+      "search",
+      "files",
+      "depot",
+    ])
+      window.dispatchEvent(
+        new CustomEvent("p4deck:auto-refresh", { detail: { activePage } }),
+      );
+    window.dispatchEvent(new Event("p4deck:pending-refresh"));
+    void reload();
+  };
   useEffect(() => {
     const autoRefresh = (event: Event) => {
       const detail = (event as CustomEvent<{ activePage?: string }>).detail;
@@ -492,6 +515,18 @@ export function ReadOnlyPage({
           {historyNotice}
         </div>
       )}
+      {streamSwitch && (
+        <StreamSwitchDialog
+          stream={streamSwitch.stream}
+          runtime={runtime}
+          connectionKey={streamOwner}
+          source={streamSwitch.source}
+          zh={zh}
+          onDismiss={() => setStreamSwitch(undefined)}
+          onRuntime={onRuntime}
+          onRefresh={refreshAfterStreamSwitch}
+        />
+      )}
       <div
         className={`workspace-layout ${visibleSelected ? "with-detail" : ""}`}
       >
@@ -564,6 +599,9 @@ export function ReadOnlyPage({
                               "复制 Stream 路径": copy(item.stream),
                               复制名称: copy(item.name),
                               "复制父 Stream 路径": copy(item.parent),
+                              "切换当前工作区到此 Stream": action(() =>
+                                setStreamSwitch({ stream: item, source: null }),
+                              ),
                               刷新: action(reload),
                               "复制 Stream 路径列表": copy(
                                 selection
@@ -683,6 +721,20 @@ export function ReadOnlyPage({
             <p className="workspace-description">
               {visibleSelected.description}
             </p>
+            {"stream" in visibleSelected && (
+              <button
+                onClick={(event) =>
+                  setStreamSwitch({
+                    stream: visibleSelected,
+                    source: event.currentTarget,
+                  })
+                }
+              >
+                {zh
+                  ? "切换当前工作区到此 Stream…"
+                  : "Switch current workspace to this stream…"}
+              </button>
+            )}
           </aside>
         )}
       </div>

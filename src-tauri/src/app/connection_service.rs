@@ -145,6 +145,18 @@ impl ConnectionService {
         }
     }
 
+    pub(crate) fn verified_runtime(&self, message: impl Into<String>) -> RuntimeInfo {
+        let context = self.contexts.current();
+        self.runtime_info_with_status(ConnectionStatus {
+            state: ConnectionState::Connected,
+            error_code: None,
+            message: message.into(),
+            recovery: RecoveryAction::None,
+            server: context.server,
+            fingerprint: None,
+        })
+    }
+
     pub fn discover_cli(&self, request: CliDiscoveryRequest) -> CliDiscoveryResult {
         ConnectionAdapter::discover(request.executable.as_deref())
     }

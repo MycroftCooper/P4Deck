@@ -19,6 +19,7 @@ use app::file_service::FileService;
 use app::rename_service::RenameService;
 use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
+use app::stream_switch_service::StreamSwitchService;
 use app::submit_service::SubmitService;
 use app::sync_service::SyncService;
 use app::workflow_service::WorkflowService;
@@ -45,6 +46,7 @@ pub(crate) struct AppState {
     pub journal: Arc<OperationJournal>,
     pub diagnostics: Arc<DiagnosticService>,
     pub search: Arc<GlobalSearchService>,
+    pub stream_switch: Arc<StreamSwitchService>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -122,6 +124,7 @@ pub fn run() {
                 .text("view.pending", "Pending")
                 .text("view.submitted", "Submitted")
                 .text("view.workspaces", "Workspaces")
+                .text("view.streams", "Streams")
                 .separator()
                 .text("file.diff", "Diff")
                 .text("file.history", "History")
@@ -215,8 +218,9 @@ pub fn run() {
             let search = Arc::new(GlobalSearchService::new(
                 runner.clone(),
                 changelists.clone(),
-                contexts,
+                contexts.clone(),
             ));
+            let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts));
             app.manage(AppState {
                 runner,
                 logs,
@@ -231,6 +235,7 @@ pub fn run() {
                 journal,
                 diagnostics,
                 search,
+                stream_switch,
             });
             Ok(())
         })
@@ -238,6 +243,8 @@ pub fn run() {
             ipc::commands::workspace_disk_usage,
             ipc::commands::list_user_workspaces,
             ipc::commands::list_streams,
+            ipc::commands::preflight_stream_switch,
+            ipc::commands::confirm_stream_switch,
             ipc::commands::open_panel_window,
             ipc::commands::runtime_info,
             ipc::commands::list_connection_profiles,

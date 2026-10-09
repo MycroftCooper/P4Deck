@@ -5,8 +5,8 @@ mod tests {
             changelist_service::ChangelistService, connection_service::ConnectionService,
             file_service::FileService, rename_service::RenameService,
             search_service::GlobalSearchService, status_cache::StatusCache,
-            submit_service::SubmitService, sync_service::SyncService,
-            workflow_service::WorkflowService,
+            stream_switch_service::StreamSwitchService, submit_service::SubmitService,
+            sync_service::SyncService, workflow_service::WorkflowService,
         },
         domain::{
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
@@ -17,7 +17,9 @@ mod tests {
             RenameMoveIssueCode, RenameMoveOutcome, RenameMovePreflightRequest,
             ResolveConfirmation, ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
             SetActiveConnectionProfileRequest, ShelfDetailRequest, ShelfFilePreviewRequest,
-            ShelfMode, ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
+            ShelfMode, ShelfPreflightRequest, StreamSwitchConfirmation, StreamSwitchFailureCode,
+            StreamSwitchIssueCode, StreamSwitchMode, StreamSwitchOutcome,
+            StreamSwitchPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
             SubmitPreflightRequest, SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode,
             SyncOutcome, SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec,
             UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
@@ -50,6 +52,10 @@ mod tests {
     const READ_ONLY_USER: &str = "p4deck-fixture-readonly";
     const FIXTURE_SERVER_ID: &str = "p4deck-fixture-local";
     const E2E_JOB: &str = "P4DECK-E2E-JOB";
+    const STREAM_DEPOT: &str = "p4deck-stream-e2e";
+    const STREAM_CLIENT: &str = "p4deck-fixture-stream-e2e";
+    const MAIN_STREAM: &str = "//p4deck-stream-e2e/main";
+    const DEV_STREAM: &str = "//p4deck-stream-e2e/dev";
 
     struct FixtureConfig {
         context: P4Context,
@@ -198,6 +204,12 @@ mod tests {
             status_cache.clone(),
             1,
         );
+        let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts.clone()));
+        let expiring_stream_switch = Arc::new(StreamSwitchService::with_ttl(
+            runner.clone(),
+            contexts.clone(),
+            1,
+        ));
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
         let setup = setup_client(&runner, &context, &config.workspace_root).await;
@@ -241,6 +253,8 @@ mod tests {
                             search: &search,
                             rename: &rename,
                             expiring_rename: &expiring_rename,
+                            stream_switch: &stream_switch,
+                            expiring_stream_switch: &expiring_stream_switch,
                         },
                         &context,
                         &config.workspace_root,
@@ -254,6 +268,12 @@ mod tests {
         let profile_cleanup =
             cleanup_named_client(&runner, &context, PROFILE_CLIENT, &profile_root).await;
         let cleanup = cleanup_client(&runner, &context, &config.workspace_root).await;
+        let stream_root = config
+            .workspace_root
+            .parent()
+            .map(|parent| parent.join("stream-switch-workspace"))
+            .unwrap_or_else(|| config.workspace_root.join("stream-switch-workspace"));
+        let stream_cleanup = cleanup_stream_fixture(&runner, &context, &stream_root).await;
 
         drop(files);
         drop(rename);
@@ -262,7 +282,7 @@ mod tests {
         drop(journal);
         drop(connection);
 
-        match (scenario, cleanup.and(profile_cleanup)) {
+        match (scenario, cleanup.and(profile_cleanup).and(stream_cleanup)) {
             (Err(error), Err(cleanup_error)) => {
                 Err(format!("{error}; cleanup also failed: {cleanup_error}"))
             }
@@ -1148,6 +1168,261 @@ mod tests {
         }
     }
 
+    async fn setup_stream_fixture(
+        runner: &P4Runner,
+        base: &P4Context,
+        root: &Path,
+    ) -> Result<P4Context, String> {
+        cleanup_stream_fixture(runner, base, root).await?;
+        std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
+
+        let depot_spec = format!(
+            "Depot: {STREAM_DEPOT}\nOwner: {FIXTURE_USER}\nDescription:\n\tP4Deck isolated stream-switch fixture.\nType: stream\nStreamDepth: 1\nMap: {STREAM_DEPOT}/...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "depot",
+            vec!["-i".into()],
+            Some(depot_spec),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let main_spec = format!(
+            "Stream: {MAIN_STREAM}\nOwner: {FIXTURE_USER}\nName: main\nParent: none\nType: mainline\nParentView: inherit\nDescription:\n\tP4Deck stream-switch mainline.\nOptions: allsubmit unlocked notoparent nofromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(main_spec),
+            OutputMode::Text,
+        )
+        .await?;
+        let dev_spec = format!(
+            "Stream: {DEV_STREAM}\nOwner: {FIXTURE_USER}\nName: dev\nParent: {MAIN_STREAM}\nType: development\nParentView: inherit\nDescription:\n\tP4Deck stream-switch development stream.\nOptions: allsubmit unlocked toparent fromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(dev_spec),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let mut context = base.clone();
+        context.client = STREAM_CLIENT.into();
+        context.cwd = Some(root.to_string_lossy().into_owned());
+        let client_spec = format!(
+            "Client: {STREAM_CLIENT}\nOwner: {FIXTURE_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nSubmitOptions: submitunchanged\nLineEnd: local\nStream: {MAIN_STREAM}\n",
+            root.to_string_lossy().replace('\\', "/")
+        );
+        checked_run(
+            runner,
+            &context,
+            "client",
+            vec!["-i".into()],
+            Some(client_spec),
+            OutputMode::Text,
+        )
+        .await?;
+
+        let file = root.join("stream-switch.txt");
+        std::fs::write(&file, b"main\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            &context,
+            "add",
+            vec![file.to_string_lossy().into_owned()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "submit",
+            vec!["-d".into(), "P4Deck stream-switch main seed".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "populate",
+            vec![
+                "-r".into(),
+                "-S".into(),
+                DEV_STREAM.into(),
+                "-d".into(),
+                "P4Deck stream-switch child seed".into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "client",
+            vec![
+                "-s".into(),
+                "-S".into(),
+                DEV_STREAM.into(),
+                STREAM_CLIENT.into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "sync",
+            vec![format!("//{STREAM_CLIENT}/...#head")],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        make_writable(&file)?;
+        checked_run(
+            runner,
+            &context,
+            "edit",
+            vec![file.to_string_lossy().into_owned()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        std::fs::write(&file, b"dev\n").map_err(|error| error.to_string())?;
+        checked_run(
+            runner,
+            &context,
+            "submit",
+            vec!["-d".into(), "P4Deck stream-switch child edit".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "client",
+            vec![
+                "-s".into(),
+                "-S".into(),
+                MAIN_STREAM.into(),
+                STREAM_CLIENT.into(),
+            ],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            &context,
+            "sync",
+            vec![format!("//{STREAM_CLIENT}/...#head")],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+        ensure(
+            std::fs::read_to_string(&file)
+                .map_err(|error| error.to_string())?
+                .trim_end()
+                == "main",
+            "stream fixture did not restore the mainline content",
+        )?;
+        Ok(context)
+    }
+
+    async fn cleanup_stream_fixture(
+        runner: &P4Runner,
+        base: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let mut context = base.clone();
+        context.client = STREAM_CLIENT.into();
+        context.cwd = Some(root.to_string_lossy().into_owned());
+        let _ = checked_run(
+            runner,
+            &context,
+            "revert",
+            vec!["-w".into(), "//...".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        delete_pending_for_client(runner, base, FIXTURE_USER, STREAM_CLIENT).await;
+        let _ = checked_run(
+            runner,
+            base,
+            "client",
+            vec!["-d".into(), "-f".into(), STREAM_CLIENT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            runner,
+            base,
+            "obliterate",
+            vec!["-y".into(), format!("//{STREAM_DEPOT}/...")],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        for stream in [DEV_STREAM, MAIN_STREAM] {
+            let _ = checked_run(
+                runner,
+                base,
+                "stream",
+                vec!["-f".into(), "-d".into(), stream.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+            let _ = checked_run(
+                runner,
+                base,
+                "stream",
+                vec![
+                    "-f".into(),
+                    "--obliterate".into(),
+                    "-y".into(),
+                    stream.into(),
+                ],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+        let deletion = checked_run(
+            runner,
+            base,
+            "depot",
+            vec!["-d".into(), STREAM_DEPOT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        if root.exists() {
+            std::fs::remove_dir_all(root).map_err(|error| error.to_string())?;
+        }
+        match deletion {
+            Ok(_) => Ok(()),
+            Err(error) if error.to_ascii_lowercase().contains("doesn't exist") => Ok(()),
+            Err(error) if error.to_ascii_lowercase().contains("does not exist") => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
     struct ServiceExercise<'a> {
         connection: &'a ConnectionService,
         runner: &'a Arc<P4Runner>,
@@ -1165,6 +1440,8 @@ mod tests {
         search: &'a GlobalSearchService,
         rename: &'a RenameService,
         expiring_rename: &'a RenameService,
+        stream_switch: &'a Arc<StreamSwitchService>,
+        expiring_stream_switch: &'a Arc<StreamSwitchService>,
     }
 
     async fn exercise_services(
@@ -1189,6 +1466,8 @@ mod tests {
             search,
             rename,
             expiring_rename,
+            stream_switch,
+            expiring_stream_switch,
         } = services;
         let status = connection.test_connection(context.clone()).await;
         ensure(
@@ -1438,7 +1717,327 @@ mod tests {
         exercise_global_search(runner, changelists, search, contexts, context, root).await?;
         exercise_submit_blockers(runner, changelists, submit, sync, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
+        exercise_stream_switch(
+            connection,
+            runner,
+            contexts,
+            stream_switch,
+            expiring_stream_switch,
+            context,
+            root,
+        )
+        .await?;
         Ok(())
+    }
+
+    async fn exercise_stream_switch(
+        connection: &ConnectionService,
+        runner: &Arc<P4Runner>,
+        contexts: &ContextStore,
+        service: &Arc<StreamSwitchService>,
+        expiring_service: &Arc<StreamSwitchService>,
+        original_context: &P4Context,
+        original_root: &Path,
+    ) -> Result<(), String> {
+        let stream_root = original_root
+            .parent()
+            .ok_or("fixture workspace has no parent")?
+            .join("stream-switch-workspace");
+        let stream_context = setup_stream_fixture(runner, original_context, &stream_root).await?;
+        let (_, generation) = contexts.snapshot();
+        let switched_workspace = connection
+            .switch_workspace(
+                SwitchWorkspaceRequest {
+                    expected_generation: generation,
+                    client: STREAM_CLIENT.into(),
+                },
+                stream_root.to_string_lossy().into_owned(),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure(
+            switched_workspace.context.client == STREAM_CLIENT,
+            "stream fixture workspace was not activated",
+        )?;
+
+        let scenario = async {
+            let preflight = |target: &str, mode, operation: &str| StreamSwitchPreflightRequest {
+                target_stream: target.into(),
+                mode,
+                operation_id: Some(operation.into()),
+            };
+            let confirmation = |preview: &crate::domain::StreamSwitchPreflight, operation: &str| {
+                Ok::<_, String>(StreamSwitchConfirmation {
+                    token: preview
+                        .token
+                        .clone()
+                        .ok_or_else(|| "stream preflight returned no token".to_owned())?,
+                    target: preview
+                        .target_snapshot
+                        .clone()
+                        .ok_or_else(|| "stream preflight returned no target".to_owned())?,
+                    preview_digest: preview.preview_digest.clone(),
+                    acknowledge_warnings: true,
+                    operation_id: Some(operation.into()),
+                })
+            };
+
+            let expiring = expiring_service
+                .preflight(
+                    preflight(
+                        DEV_STREAM,
+                        StreamSwitchMode::ViewOnly,
+                        "stream-e2e-expiring",
+                    ),
+                    None,
+                )
+                .await;
+            ensure(
+                expiring.ready,
+                format!("expiring stream preflight was blocked: {expiring:?}"),
+            )?;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            let expired = expiring_service
+                .confirm(confirmation(&expiring, "stream-e2e-expired-confirm")?, None)
+                .await;
+            ensure(
+                expired.failure == Some(StreamSwitchFailureCode::TokenExpired),
+                format!("expired stream token was not rejected: {expired:?}"),
+            )?;
+
+            let bound = service
+                .preflight(
+                    preflight(DEV_STREAM, StreamSwitchMode::ViewOnly, "stream-e2e-binding"),
+                    None,
+                )
+                .await;
+            ensure(
+                bound.ready,
+                format!("binding stream preflight was blocked: {bound:?}"),
+            )?;
+            let original_confirmation = confirmation(&bound, "stream-e2e-binding-confirm")?;
+            let mut tampered = original_confirmation.clone();
+            tampered.target.target_stream = MAIN_STREAM.into();
+            let mismatch = service.confirm(tampered, None).await;
+            ensure(
+                mismatch.failure == Some(StreamSwitchFailureCode::TargetMismatch),
+                format!("tampered stream target was not rejected: {mismatch:?}"),
+            )?;
+            let replay = service.confirm(original_confirmation, None).await;
+            ensure(
+                replay.failure == Some(StreamSwitchFailureCode::TokenUnknown),
+                format!("consumed stream token was replayable: {replay:?}"),
+            )?;
+
+            let drift = service
+                .preflight(
+                    preflight(
+                        DEV_STREAM,
+                        StreamSwitchMode::ViewOnly,
+                        "stream-e2e-generation",
+                    ),
+                    None,
+                )
+                .await;
+            let drift_generation = drift
+                .target_snapshot
+                .as_ref()
+                .ok_or("generation stream preflight returned no target")?
+                .context_generation;
+            contexts
+                .advance_generation_if_unchanged(drift_generation)
+                .map_err(|error| error.to_string())?;
+            let drifted = service
+                .confirm(confirmation(&drift, "stream-e2e-generation-confirm")?, None)
+                .await;
+            ensure(
+                drifted.failure == Some(StreamSwitchFailureCode::ContextChanged),
+                format!("stream generation drift was not rejected: {drifted:?}"),
+            )?;
+
+            let changed = service
+                .preflight(
+                    preflight(DEV_STREAM, StreamSwitchMode::ViewOnly, "stream-e2e-toctou"),
+                    None,
+                )
+                .await;
+            ensure(
+                changed.ready,
+                format!("TOCTOU stream preflight was blocked: {changed:?}"),
+            )?;
+            let untracked = stream_root.join("untracked-after-preflight.txt");
+            std::fs::write(&untracked, b"must survive\n").map_err(|error| error.to_string())?;
+            let rejected = service
+                .confirm(confirmation(&changed, "stream-e2e-toctou-confirm")?, None)
+                .await;
+            ensure(
+                rejected.failure == Some(StreamSwitchFailureCode::PreflightChanged)
+                    || rejected.failure == Some(StreamSwitchFailureCode::PreflightBlocked),
+                format!("stream TOCTOU drift was not rejected: {rejected:?}"),
+            )?;
+            ensure(
+                std::fs::read_to_string(&untracked).map_err(|error| error.to_string())?
+                    == "must survive\n",
+                "TOCTOU rejection modified the untracked file",
+            )?;
+            std::fs::remove_file(&untracked).map_err(|error| error.to_string())?;
+
+            let fixture_file = stream_root.join("stream-switch.txt");
+            checked_run(
+                runner,
+                &stream_context,
+                "edit",
+                vec![fixture_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let opened = service
+                .preflight(
+                    preflight(DEV_STREAM, StreamSwitchMode::ViewOnly, "stream-e2e-opened"),
+                    None,
+                )
+                .await;
+            ensure(
+                !opened.ready
+                    && opened
+                        .blockers
+                        .iter()
+                        .any(|item| item.code == StreamSwitchIssueCode::OpenedFiles),
+                format!("opened files did not block stream switch: {opened:?}"),
+            )?;
+            checked_run(
+                runner,
+                &stream_context,
+                "revert",
+                vec![fixture_file.to_string_lossy().into_owned()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+
+            let view_only = service
+                .preflight(
+                    preflight(
+                        DEV_STREAM,
+                        StreamSwitchMode::ViewOnly,
+                        "stream-e2e-view-only",
+                    ),
+                    None,
+                )
+                .await;
+            ensure(
+                view_only.ready,
+                format!("view-only stream preflight was blocked: {view_only:?}"),
+            )?;
+            let viewed = service
+                .confirm(
+                    confirmation(&view_only, "stream-e2e-view-only-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                viewed.outcome == StreamSwitchOutcome::Succeeded
+                    && viewed.stream_changed
+                    && !viewed.sync_performed
+                    && viewed.verified_stream.as_deref() == Some(DEV_STREAM),
+                format!("view-only stream switch failed: {viewed:?}"),
+            )?;
+            ensure(
+                std::fs::read_to_string(&fixture_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "main",
+                "view-only stream switch unexpectedly changed workspace content",
+            )?;
+
+            let recover = service
+                .preflight(
+                    preflight(DEV_STREAM, StreamSwitchMode::Sync, "stream-e2e-recover"),
+                    None,
+                )
+                .await;
+            ensure(
+                recover.ready,
+                format!("same-stream recovery preflight was blocked: {recover:?}"),
+            )?;
+            let recovered = service
+                .confirm(confirmation(&recover, "stream-e2e-recover-confirm")?, None)
+                .await;
+            ensure(
+                recovered.outcome == StreamSwitchOutcome::Succeeded
+                    && !recovered.stream_changed
+                    && recovered.sync_performed
+                    && recovered.sync_completed
+                    && recovered.verified_stream.as_deref() == Some(DEV_STREAM),
+                format!("same-stream recovery sync failed: {recovered:?}"),
+            )?;
+            ensure(
+                std::fs::read_to_string(&fixture_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "dev",
+                "recovery sync did not materialize development content",
+            )?;
+
+            let return_main = service
+                .preflight(
+                    preflight(
+                        MAIN_STREAM,
+                        StreamSwitchMode::Sync,
+                        "stream-e2e-return-main",
+                    ),
+                    None,
+                )
+                .await;
+            ensure(
+                return_main.ready,
+                format!("return-to-main preflight was blocked: {return_main:?}"),
+            )?;
+            let returned = service
+                .confirm(
+                    confirmation(&return_main, "stream-e2e-return-main-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                returned.outcome == StreamSwitchOutcome::Succeeded
+                    && returned.stream_changed
+                    && returned.sync_completed
+                    && returned.verified_stream.as_deref() == Some(MAIN_STREAM),
+                format!("return-to-main stream switch failed: {returned:?}"),
+            )?;
+            ensure(
+                std::fs::read_to_string(&fixture_file)
+                    .map_err(|error| error.to_string())?
+                    .trim_end()
+                    == "main",
+                "return-to-main sync did not restore mainline content",
+            )?;
+            Ok(())
+        }
+        .await;
+
+        let (_, generation) = contexts.snapshot();
+        let restore = connection
+            .switch_workspace(
+                SwitchWorkspaceRequest {
+                    expected_generation: generation,
+                    client: original_context.client.clone(),
+                },
+                original_root.to_string_lossy().into_owned(),
+            )
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+        match (scenario, restore) {
+            (Err(error), Err(restore_error)) => Err(format!(
+                "{error}; restoring the original workspace also failed: {restore_error}"
+            )),
+            (Err(error), _) => Err(error),
+            (Ok(()), Err(error)) => Err(format!("restoring original workspace failed: {error}")),
+            (Ok(()), Ok(())) => Ok(()),
+        }
     }
 
     async fn exercise_workspace_status(

@@ -1307,6 +1307,176 @@ pub struct SyncResult {
     pub refresh_workspace: bool,
     pub refresh_depot: bool,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamSwitchMode {
+    ViewOnly,
+    Sync,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchPreflightRequest {
+    pub target_stream: String,
+    pub mode: StreamSwitchMode,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchRiskSummary {
+    pub opened_files: usize,
+    pub unresolved_files: usize,
+    pub reconcile_files: usize,
+    pub target_file_count: Option<u64>,
+    pub target_file_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchTargetSnapshot {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub current_stream: Option<String>,
+    pub target_stream: String,
+    pub target_type: String,
+    pub target_parent: Option<String>,
+    pub mode: StreamSwitchMode,
+    pub client_spec_digest: String,
+    pub stream_spec_digest: String,
+    pub risk_digest: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamSwitchIssueCode {
+    InvalidTarget,
+    MissingWorkspaceRoot,
+    ClassicWorkspace,
+    SameStream,
+    UnsupportedStreamType,
+    ClientOwnerMismatch,
+    LockedClient,
+    OpenedFiles,
+    UnresolvedFiles,
+    LocalChanges,
+    AuthenticationRequired,
+    PermissionDenied,
+    ConnectionUnavailable,
+    InspectionUnavailable,
+    SyncChangesWorkspace,
+    VirtualStream,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchIssue {
+    pub code: StreamSwitchIssueCode,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchPreflight {
+    pub ready: bool,
+    pub current_stream: Option<String>,
+    pub target_stream: String,
+    pub target_type: Option<String>,
+    pub target_parent: Option<String>,
+    pub mode: StreamSwitchMode,
+    pub sync_required: bool,
+    pub risks: StreamSwitchRiskSummary,
+    pub blockers: Vec<StreamSwitchIssue>,
+    pub warnings: Vec<StreamSwitchIssue>,
+    pub target_snapshot: Option<StreamSwitchTargetSnapshot>,
+    pub preview_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchConfirmation {
+    pub token: String,
+    pub target: StreamSwitchTargetSnapshot,
+    pub preview_digest: String,
+    pub acknowledge_warnings: bool,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamSwitchOutcome {
+    Succeeded,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamSwitchFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    WarningAcknowledgementRequired,
+    ContextChanged,
+    PreflightChanged,
+    PreflightBlocked,
+    SwitchFailed,
+    VerificationFailed,
+    SyncFailed,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchRefreshAdvice {
+    pub workspace: bool,
+    pub streams: bool,
+    pub pending_changes: bool,
+    pub submitted_changes: bool,
+    pub search: bool,
+    pub depot: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamSwitchResult {
+    pub outcome: StreamSwitchOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<StreamSwitchFailureCode>,
+    pub message: String,
+    pub stream_changed: bool,
+    pub sync_performed: bool,
+    pub sync_completed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified_stream: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<RuntimeInfo>,
+    pub refresh: StreamSwitchRefreshAdvice,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum RevisionReference {

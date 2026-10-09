@@ -31,6 +31,16 @@ let mockProfiles: import("../../shared/contracts/types").ConnectionProfile[] = [
   { id: mockActiveProfileId, name: "Primary", context: { ...mockContext } },
 ];
 let mockAuthentication: "connected" | "authRequired" = "connected";
+let mockCurrentStream = "//atlas/main";
+const mockStreamSwitchTokens = new Map<
+  string,
+  {
+    target: import("../../shared/contracts/types").StreamSwitchTargetSnapshot;
+    digest: string;
+    expiresAt: number;
+    hasWarnings: boolean;
+  }
+>();
 const mockSubmitTokens = new Map<
   string,
   { target: SubmitTargetSnapshot; digest: string; expiresAt: number }
@@ -699,13 +709,173 @@ export const mockBackend: Backend = {
       },
     ];
   },
+  async preflightStreamSwitch(request) {
+    const stream = (await this.listStreams()).find(
+      (item) => item.stream === request.targetStream,
+    );
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const same = mockCurrentStream === request.targetStream;
+    const blockers = !stream
+      ? [
+          {
+            code: "invalidTarget" as const,
+            message: "Browser Mock: target stream does not exist.",
+            paths: [],
+          },
+        ]
+      : same && request.mode === "viewOnly"
+        ? [
+            {
+              code: "sameStream" as const,
+              message: "Browser Mock: workspace already uses this stream.",
+              paths: [],
+            },
+          ]
+        : [];
+    const warnings =
+      request.mode === "sync"
+        ? [
+            {
+              code: "syncChangesWorkspace" as const,
+              message:
+                "Browser Mock: a real sync would change workspace files; this simulation does not touch disk.",
+              paths: [],
+            },
+          ]
+        : [];
+    const target = stream
+      ? {
+          server: mockContext.server,
+          user: mockContext.user,
+          client: mockContext.client,
+          workspace: mockContext.cwd ?? "",
+          activeProfileId: mockActiveProfileId,
+          contextGeneration: mockContextGeneration,
+          currentStream: mockCurrentStream || undefined,
+          targetStream: stream.stream,
+          targetType: stream.kind,
+          targetParent: stream.parent === "none" ? undefined : stream.parent,
+          mode: request.mode,
+          clientSpecDigest: "mock-client-spec",
+          streamSpecDigest: `mock-${stream.stream}`,
+          riskDigest: "mock-clean-workspace",
+        }
+      : undefined;
+    const previewDigest = target
+      ? JSON.stringify({ target, blockers, warnings })
+      : "";
+    const expiresAt = Date.now() + 120_000;
+    const token = !blockers.length && target ? crypto.randomUUID() : undefined;
+    if (token && target)
+      mockStreamSwitchTokens.set(token, {
+        target,
+        digest: previewDigest,
+        expiresAt,
+        hasWarnings: !!warnings.length,
+      });
+    return {
+      ready: !blockers.length,
+      currentStream: mockCurrentStream || undefined,
+      targetStream: request.targetStream,
+      targetType: stream?.kind,
+      targetParent: stream?.parent === "none" ? undefined : stream?.parent,
+      mode: request.mode,
+      syncRequired: !same,
+      risks: {
+        openedFiles: 0,
+        unresolvedFiles: 0,
+        reconcileFiles: 0,
+        targetFileCount: request.mode === "sync" ? 3 : undefined,
+        targetFileBytes: request.mode === "sync" ? 4096 : undefined,
+      },
+      blockers,
+      warnings,
+      targetSnapshot: target,
+      previewDigest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [operationId],
+      logReference: operationId,
+    };
+  },
+  async confirmStreamSwitch(confirmation) {
+    const record = mockStreamSwitchTokens.get(confirmation.token);
+    mockStreamSwitchTokens.delete(confirmation.token);
+    const reject = (
+      failure: import("../../shared/contracts/types").StreamSwitchFailureCode,
+      message: string,
+    ) => ({
+      outcome: "rejected" as const,
+      failure,
+      message,
+      streamChanged: false,
+      syncPerformed: false,
+      syncCompleted: false,
+      refresh: {
+        workspace: true,
+        streams: true,
+        pendingChanges: true,
+        submittedChanges: true,
+        search: true,
+        depot: true,
+        reason: "Browser Mock: run a new preflight.",
+      },
+    });
+    if (!record)
+      return reject("tokenUnknown", "Browser Mock: token was already used.");
+    if (record.expiresAt <= Date.now())
+      return reject("tokenExpired", "Browser Mock: preflight expired.");
+    if (
+      JSON.stringify(record.target) !== JSON.stringify(confirmation.target) ||
+      record.digest !== confirmation.previewDigest
+    )
+      return reject("targetMismatch", "Browser Mock: target binding changed.");
+    if (record.hasWarnings && !confirmation.acknowledgeWarnings)
+      return reject(
+        "warningAcknowledgementRequired",
+        "Browser Mock: warnings require acknowledgement.",
+      );
+    if (
+      record.target.contextGeneration !== mockContextGeneration ||
+      record.target.activeProfileId !== mockActiveProfileId ||
+      record.target.client !== mockContext.client
+    )
+      return reject("contextChanged", "Browser Mock: runtime context changed.");
+    const streamChanged = mockCurrentStream !== record.target.targetStream;
+    mockCurrentStream = record.target.targetStream;
+    if (streamChanged) mockContextGeneration += 1;
+    const runtime = await this.runtimeInfo();
+    return {
+      outcome: "succeeded" as const,
+      message:
+        record.target.mode === "sync"
+          ? "Browser Mock only: stream switch and sync were simulated; no files changed."
+          : "Browser Mock only: stream view switch was simulated; no files changed.",
+      streamChanged,
+      syncPerformed: record.target.mode === "sync",
+      syncCompleted: record.target.mode === "sync",
+      verifiedStream: mockCurrentStream,
+      operationId: confirmation.operationId ?? crypto.randomUUID(),
+      runtime: streamChanged ? runtime : undefined,
+      refresh: {
+        workspace: true,
+        streams: true,
+        pendingChanges: true,
+        submittedChanges: true,
+        search: true,
+        depot: true,
+        reason: "Browser Mock: refresh simulated workspace-dependent views.",
+      },
+    };
+  },
   async listUserWorkspaces() {
     return [
       {
         name: mockContext.client,
         host: "fm-mac",
         root: "/workspace/atlas",
-        stream: "//atlas/main",
+        stream: mockCurrentStream,
         description: "Atlas 主线开发工作区",
       },
       {
@@ -780,6 +950,8 @@ export const mockBackend: Backend = {
     if (request.id === mockActiveProfileId) {
       mockContext = { ...request.context };
       mockContextGeneration += 1;
+      mockCurrentStream = "//atlas/main";
+      mockStreamSwitchTokens.clear();
       mockShelfSnapshots.clear();
       mockSyncTokens.clear();
       mockRenameTokens.clear();
@@ -816,6 +988,8 @@ export const mockBackend: Backend = {
     mockContext = { ...profile.context };
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockStreamSwitchTokens.clear();
+    mockCurrentStream = "//atlas/main";
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -842,6 +1016,8 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockCurrentStream = workspace.stream || "";
+    mockStreamSwitchTokens.clear();
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -861,6 +1037,8 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockCurrentStream = "//atlas/main";
+    mockStreamSwitchTokens.clear();
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -893,12 +1071,19 @@ export const mockBackend: Backend = {
     }
     if (
       request.source === "gui" &&
-      ["submit", "shelve", "unshelve", "resolve", "move"].includes(
-        request.command.toLowerCase(),
-      )
+      [
+        "submit",
+        "shelve",
+        "unshelve",
+        "resolve",
+        "move",
+        "client",
+        "stream",
+        "switch",
+      ].includes(request.command.toLowerCase())
     )
       throw new Error(
-        "GUI submit, shelf, unshelve, resolve and move require preflight and confirmation",
+        "GUI mutations require a dedicated preflight and confirmation workflow",
       );
     const operationId = request.operationId ?? crypto.randomUUID();
     const started = new Date().toISOString();

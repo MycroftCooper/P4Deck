@@ -89,6 +89,45 @@ it("passes typed sync preview and confirmation requests through narrow commands"
   expect(invoke).toHaveBeenLastCalledWith("confirm_sync", { confirmation });
 });
 
+it("passes immutable stream-switch preflight and confirmation payloads unchanged", async () => {
+  const request = {
+    targetStream: "//depot/开发 stream",
+    mode: "viewOnly" as const,
+    operationId: "stream-preview-42",
+  };
+  invoke.mockResolvedValue({ ready: true });
+  await tauriBackend.preflightStreamSwitch(request);
+  expect(invoke).toHaveBeenLastCalledWith("preflight_stream_switch", {
+    request,
+  });
+  const confirmation = {
+    token: "one-use-stream-token",
+    target: {
+      server: "server:1666",
+      user: "alice",
+      client: "main",
+      workspace: "C:/work",
+      activeProfileId: "profile-1",
+      contextGeneration: 7,
+      currentStream: "//depot/main",
+      targetStream: request.targetStream,
+      targetType: "development",
+      targetParent: "//depot/main",
+      mode: request.mode,
+      clientSpecDigest: "client-digest",
+      streamSpecDigest: "stream-digest",
+      riskDigest: "risk-digest",
+    },
+    previewDigest: "preview-digest",
+    acknowledgeWarnings: true,
+    operationId: "stream-switch-42",
+  };
+  await tauriBackend.confirmStreamSwitch(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_stream_switch", {
+    confirmation,
+  });
+});
+
 it("passes the typed submitted query and opaque cursor through unchanged", async () => {
   const query = {
     operationId: "submitted-query-42",

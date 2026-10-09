@@ -1,5 +1,13 @@
 # 前端操作流程 TODO
 
+## 最近完成：基础 Stream 安全切换（2026-10-09）
+
+- Streams 页右键菜单与详情区按钮统一打开 `StreamSwitchDialog`，按 `Preflight → Review → Execute → Verify/Recover` 展示当前/目标 Stream、类型/父级、opened/unresolved/reconcile 数量、目标规模、blocker/warning、operation 和最终验证结果。
+- 默认“仅切换视图”只改变 Client 的 Stream，不触碰文件；用户显式选择“切换并同步”时才执行非 force `sync #head`，警告必须勾选。本地变化在同步模式下直接阻断；执行中取消不会冒充回滚，Stream 已改变但同步未完成时提供同 Stream 恢复预检。
+- 对话框固定打开时目标并绑定连接 key；连接变化会取消完整 operation group 并丢弃迟到响应。结果页保留到用户关闭，再应用后端已验证的新 runtime 和刷新 Streams/Workspace/Pending/Submitted/Search/Files/Depot，避免 generation 更新提前卸载验证结果。
+- Browser Mock 明示模拟；Tauri 适配只透传窄 preflight/confirmation 契约。Windows localhost 已以真实 main/development Stream 验证状态机；Windows/macOS 原生点击、焦点、390px、读屏和 macOS P4 仍待外部验收。
+- 最终门禁：Web 72 文件/408 项、Rust 138 项通过（另 1 项 localhost E2E 默认 ignored）；build/check/format、Clippy `--all-targets -D warnings`、rustfmt、前端 8 项与后端 5 项性能正确性门禁、`git diff --check` 通过；Windows localhost 连续两轮分别 115.59 秒、114.50 秒通过。
+
 ## 最近完成：统一 Action、失败恢复、自动刷新与通知（2026-10-09）
 
 - `app/commands/catalog.ts` 现为命令面板、Web 快捷键、Tauri 菜单和执行映射的统一 action 目录，覆盖全部现有 `CommandBar` 操作及 Profile、页面、Diagnostics、Terminal/P4 Log、设置和窗口动作；mutation 无直接快捷键且只调用既有状态机。
@@ -39,14 +47,22 @@
 | FE-17 | 大列表窗口化与自动基准 | Pending 打开/搁置文件、Submitted 详情、Search、Log、Journal、Files/Depot；50k 生产筛选/搜索/去重和 100k 结构门禁 | 不挂全量 DOM；稳定 ID 选择；键盘焦点、窄屏、ARIA 和操作按钮不回退；50k p95 `<50 ms`；报告含环境与非跨平台声明 | 实现完成；52 文件/306 项 Web 测试与本机 `test:perf` 6 项通过。Windows/macOS 固定设备原生 FPS/内存/读屏未验 |
 | FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |
 | FE-19 | Workspace 文件状态聚合呈现 | 消费 `WorkspaceListing` 与强类型正交状态；组合角标、证据/ignore 来源、partial/error、刷新与取消 | 未知不冒充 untracked；目录不推断子项；手动刷新穿透前后端缓存；AbortSignal 取消聚合子命令；大列表保持窗口化 | BE-005 生产契约、Mock/Tauri、55 文件/327 项 Web 测试与 Windows localhost 场景通过；原生 UI/macOS 待验 |
+| FE-20 | 基础 Stream 安全切换 | Streams 右键/详情入口、仅切视图默认项、可选同步、预检风险、确认、执行、验证和恢复 | 无 ready token 不执行；目标/连接/代次漂移拒绝；opened/unresolved 阻断；同步需确认且本地变化阻断；取消不冒充回滚；最终验证后统一刷新 | 生产契约、Mock/Tauri、组件状态机与 Windows localhost 双 Stream E2E 已完成；Windows/macOS 原生点击/焦点/读屏待验 |
 
 ## 执行顺序
 
-FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
+FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～20。
 
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
 ## 验收记录
+
+### 第二十批：基础 Stream 安全切换
+
+- `StreamSwitchService` 和前端对话框采用同一阶段模型：先冻结目标和模式，再预检并展示风险，确认消费一次性 token，mutation lane 内复检后执行，最后依据 Client spec 返回 verified/failed/cancelled/unknown 与恢复建议。
+- 只切视图为默认值；同步是显式危险选项且只使用非 force `sync #head`。任何 opened/unresolved 都阻断，reconcile 变化对同步阻断、对只切视图警告；没有自动 clean/revert/回滚。
+- 组件自动化覆盖预检前不可执行、blocker/警告确认、连接 owner 变化取消并隔离迟到结果、执行结果延迟 runtime 重绑，以及同步不完整后的恢复入口。Rust 覆盖身份/digest/Unicode 路径/类型/令牌与失败措辞；真实 P4D 覆盖两条 Stream 的视图切换、文件保持、恢复同步和回切。
+- 明确非范围：Stream Graph、Branch Mapping、Stream spec 管理和管理员能力留在 P2。原生 Windows/macOS 操作与 macOS/多版本 P4 仍是外部验收项，不以浏览器或 localhost 应用层测试替代。
 
 ### 第十七批：Diff / History / Revision Graph 生产接线
 
