@@ -1,6 +1,6 @@
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type {
   PendingFile,
@@ -19,6 +19,9 @@ export function PendingFileList({
   refresh,
   onMove,
   onShelf,
+  onInspect,
+  onDragFiles,
+  onDragEnd,
 }: {
   files: PendingFile[];
   changeId: number;
@@ -30,6 +33,9 @@ export function PendingFileList({
     paths: string[],
     source?: HTMLElement,
   ): void;
+  onInspect?(path: string, fresh?: boolean): void;
+  onDragFiles?(paths: string[], event: DragEvent<HTMLElement>): void;
+  onDragEnd?(): void;
 }) {
   const nodes = useMemo(
     () =>
@@ -156,6 +162,22 @@ export function PendingFileList({
                     ),
                   ),
                   "复制 Depot 路径": copy(node.depotPath),
+                  查看搁置内容: action(
+                    () => onInspect?.(node.depotPath!),
+                    onInspect ? undefined : "入口尚未接通 / Not connected",
+                  ),
+                  在新页签查看搁置内容: action(
+                    () => onInspect?.(node.depotPath!, true),
+                    onInspect ? undefined : "入口尚未接通 / Not connected",
+                  ),
+                  与工作副本比较: action(
+                    () => onInspect?.(node.depotPath!),
+                    onInspect ? undefined : "入口尚未接通 / Not connected",
+                  ),
+                  与基线比较: action(
+                    () => onInspect?.(node.depotPath!),
+                    onInspect ? undefined : "入口尚未接通 / Not connected",
+                  ),
                   复制搁置来源标识: copy(`${node.depotPath}@=${changeId}`),
                   "复制 Depot 路径列表": copy(
                     selection
@@ -220,7 +242,18 @@ export function PendingFileList({
               aria-selected={selection.isSelected(node)}
               aria-setsize={nodes.length}
               aria-posinset={index + 1}
+              draggable={!shelf && !!onDragFiles}
+              aria-label={`${node.depotPath}, ${files[index].action}${!shelf && onDragFiles ? ", draggable" : ""}`}
               {...menuProps}
+              onDragStart={(event) => {
+                if (shelf || !onDragFiles) return;
+                selection.context(node);
+                onDragFiles(
+                  selection.targets(node).map((item) => item.depotPath!),
+                  event,
+                );
+              }}
+              onDragEnd={onDragEnd}
               onFocus={() => setActiveIndex(index)}
               onKeyDown={(event) => {
                 menuProps.onKeyDown(event);

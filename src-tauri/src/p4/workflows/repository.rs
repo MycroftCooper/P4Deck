@@ -46,6 +46,17 @@ pub struct ResolveInspection {
     pub operation_ids: Vec<String>,
 }
 
+pub struct MoveInspection {
+    pub changes: Vec<PendingChange>,
+    pub facts: Vec<parser::WorkflowFileFact>,
+    pub operation_ids: Vec<String>,
+}
+
+pub struct ShelfDetailInspection {
+    pub detail: parser::ParsedShelfDetail,
+    pub operation_ids: Vec<String>,
+}
+
 pub struct WorkflowRepository {
     runner: Arc<P4Runner>,
     changelists: ChangelistRepository,
@@ -61,6 +72,101 @@ impl WorkflowRepository {
 
     pub async fn lock_mutations(&self, server: &str) -> MutationGuard {
         self.runner.lock_mutations(server).await
+    }
+
+    pub async fn shelf_detail(
+        &self,
+        context: &P4Context,
+        change_id: i64,
+        prefix: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<ShelfDetailInspection, String> {
+        command::ensure_context(context)?;
+        let described = self
+            .checked_named(
+                context,
+                command::describe_shelf(change_id)?,
+                format!("{prefix}-describe"),
+                app,
+            )
+            .await?;
+        let preliminary = parser::shelf_detail(&described.events, change_id, &[])?;
+        let paths = preliminary
+            .files
+            .iter()
+            .map(|file| file.depot_path.clone())
+            .collect::<Vec<_>>();
+        let mut operation_ids = vec![described.operation_id.clone()];
+        let facts = self
+            .checked_named(
+                context,
+                command::fstat(&paths, Some(change_id))?,
+                format!("{prefix}-fstat"),
+                app,
+            )
+            .await
+            .map(|result| {
+                operation_ids.push(result.operation_id.clone());
+                parser::file_facts(&result.events)
+            })
+            .unwrap_or_default();
+        Ok(ShelfDetailInspection {
+            detail: parser::shelf_detail(&described.events, change_id, &facts)?,
+            operation_ids,
+        })
+    }
+
+    pub async fn inspect_move(
+        &self,
+        context: &P4Context,
+        paths: &[String],
+        prefix: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<MoveInspection, String> {
+        command::ensure_context(context)?;
+        let paths = command::validate_paths(paths)?;
+        let changes = self.changelists.query_pending(context.clone(), app).await?;
+        let result = self
+            .checked_named(
+                context,
+                command::fstat(&paths, None)?,
+                format!("{prefix}-fstat"),
+                app,
+            )
+            .await?;
+        Ok(MoveInspection {
+            changes,
+            facts: parser::file_facts(&result.events),
+            operation_ids: vec![result.operation_id],
+        })
+    }
+
+    pub async fn execute_reopen(
+        &self,
+        context: &P4Context,
+        target_change_id: i64,
+        path: &str,
+        operation_id: String,
+        guard: &MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        self.guarded(
+            context,
+            command::reopen(target_change_id, path)?,
+            operation_id,
+            1,
+            guard,
+            app,
+        )
+        .await
+    }
+
+    pub async fn pending_snapshot(
+        &self,
+        context: P4Context,
+        app: Option<&AppHandle>,
+    ) -> Result<Vec<PendingChange>, String> {
+        self.changelists.query_pending(context, app).await
     }
 
     pub async fn inspect_shelf(

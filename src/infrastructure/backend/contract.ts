@@ -60,6 +60,13 @@ import type {
   SubmitResult,
   ShelfPreflight,
   ShelfPreflightRequest,
+  ShelfDetail,
+  ShelfDetailRequest,
+  ShelfFilePreview,
+  ShelfFilePreviewRequest,
+  MoveFilesPreflight,
+  MoveFilesPreflightRequest,
+  MoveFilesResult,
   UnshelvePreflight,
   UnshelvePreflightRequest,
   ResolvePreflight,
@@ -173,6 +180,16 @@ export interface Backend {
   confirmSubmit(confirmation: SubmitConfirmation): Promise<SubmitResult>;
   preflightShelf(request: ShelfPreflightRequest): Promise<ShelfPreflight>;
   confirmShelf(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
+  getShelfDetail(request: ShelfDetailRequest): Promise<ShelfDetail>;
+  getShelfFilePreview(
+    request: ShelfFilePreviewRequest,
+  ): Promise<ShelfFilePreview>;
+  preflightMoveFiles(
+    request: MoveFilesPreflightRequest,
+  ): Promise<MoveFilesPreflight>;
+  confirmMoveFiles(
+    confirmation: WorkflowConfirmation,
+  ): Promise<MoveFilesResult>;
   preflightUnshelve(
     request: UnshelvePreflightRequest,
   ): Promise<UnshelvePreflight>;

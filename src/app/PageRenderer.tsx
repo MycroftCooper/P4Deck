@@ -24,6 +24,11 @@ const SubmittedPage = lazy(() =>
     default: m.SubmittedPage,
   })),
 );
+const ShelfDetailPage = lazy(() =>
+  import("../features/changelists/components/ShelfDetailPage").then((m) => ({
+    default: m.ShelfDetailPage,
+  })),
+);
 const WorkspacePage = lazy(() =>
   import("../features/workspaces/WorkspacePage").then((m) => ({
     default: m.WorkspacePage,
@@ -147,6 +152,15 @@ function Content({
                 }
               : undefined
           }
+        />
+      );
+    case "shelf":
+      return (
+        <ShelfDetailPage
+          key={`${connectionKey}:${target.target}`}
+          target={target.target}
+          runtime={runtime}
+          zh={zh}
         />
       );
     case "workspaces":

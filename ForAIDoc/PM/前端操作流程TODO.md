@@ -156,7 +156,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 - `ChangelistFormDialog` 已由 Pending 与 Submitted 的新建入口接到 `mutatePendingChange`；编号 CL 编辑完整带回并提交 Jobs。成功使用 `refreshedChanges` 只合并受影响 CL，`refreshError` 不显示全成功；失败保留草稿并显示后端原因。
 - 编号 Pending CL 的删除按钮和右键菜单共用明确确认框。Default 永不允许删除；前端展示当前 files/shelves/Jobs 快照，但最终以后端“真正为空”复核为准，拒绝原因原样展示。
-- `MoveFilesDialog` 保留打开时的来源、文件集合和候选快照，采用“检查选择 → 确认移动”两阶段；目标改变、连接/Workspace 改变会让确认失效。Pending 页面与 Files/右键统一调用强类型 `moveFiles`，成功合并来源/目标 CL 并刷新文件状态，失败按不确定/可能部分执行路径刷新。
+- `MoveFilesDialog` 保留打开时的来源、文件集合和候选快照，采用后端 `preflightMoveFiles → confirmMoveFiles` 两阶段；目标改变、连接/Workspace 改变会让 token 失效。Pending 页面菜单、键盘与拖放统一调用同一对话框和强类型状态机，执行中可按 operation ID 取消；成功只合并来源/目标 CL 并刷新文件状态，partial/cancelled/failed 按逐项结果和可能部分执行路径保守刷新。
 - `useCommandDialogs` 的统一 Submit 入口已接 `preflightSubmit` / `confirmSubmit`。被 blocker 阻断且无 token 是合法预检结果；只有 ready、目标一致、未过期且持有 token 时才可确认。confirmed warning、unknown、token 过期、连接/Workspace/CL 漂移、加载失败、结构化拒绝/失败/unknown、成功和重复点击均有独立状态。
 - Submit 结果按后端 refresh advice 刷新 Pending、Submitted 与 Workspace 查询；错误或 IPC 异常也保守刷新 Pending/Workspace。成功显示 operation/log 引用；非 `submitted` outcome 不显示成功。
 - Browser Mock 继续实现同一契约并驱动状态测试；成功提示明确是浏览器模拟、未访问真实 P4 Server。Shelf/Unshelve/Resolve 仍维持既有预览边界，本批没有扩大执行范围。
@@ -213,11 +213,20 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 - 2026-10-09 全量 Web 为 46 个测试文件、281 项通过；`pnpm format:check`、`pnpm build`、`pnpm check`、Rust 单测（77 通过、1 个 localhost E2E 显式 ignored）、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost E2E 默认连续两轮均通过。
 - Computer Use 返回原生 apps 空列表，且当前客户端没有 `listWindows` / 原生启动能力，无法绑定 P4Deck Tauri 窗口；因此 Windows/macOS 原生点击、390px 原生窗口、键盘焦点和真实读屏保持“未验收”，不以浏览器组件或 Mock 证据替代。
 
+### 第十九批：Pending 拖放移动与独立 Shelf 内容页
+
+- Pending 的 opened file 行可拖拽到任一 Default/编号 CL 卡片；拖拽开始时冻结当前单选或多选 depot path 集合，Shelf 行明确不可拖。目标卡只负责打开既有 `MoveFilesDialog`，菜单、键盘和拖放不分叉业务实现。
+- `MoveFilesDialog` 改用 `preflightMoveFiles → confirmMoveFiles`：展示来源/目标、阻塞项、token 到期和逐文件结果；同目标、空集合、锁、未打开或已漂移文件在后端预检/复核中拒绝。partial/cancelled/failed 不显示全成功，只合并后端返回的来源/目标刷新快照并失效 Workspace/Depot 状态。
+- Shelf 标题、Shelf 文件双击及 C06/C07 菜单均可打开独立可停靠 `ShelfDetailPage`。页面 key 为 change 或 change+depot path，支持 Refresh/Cancel、500 项分段加载、10,000 项上限和虚拟列表；指定文件不在首屏时自动继续分页定位，并明确显示 cached/partial/truncated。
+- Shelf 文件内容使用窄后端契约；文本可预览，并可与 Workspace/Have/Head 比较。binary、symlink、delete/missing 与超过 4 MiB 的文件只显示 filetype/size/digest/action 和不可文本预览原因，同时提供复制 `depot@=change`，不把二进制解码成文本。
+- Browser Mock 实现同一契约；组件测试覆盖特殊字符文本、binary 元数据、partial、预检/确认、partial move、连接/目标失效和多选拖拽。Windows localhost E2E 覆盖 Shelf 稳定分页、文本/二进制语义、Default ↔ 编号移动、最终服务器归属和逐文件 Journal；原生 Windows/macOS 点击、拖放与读屏仍待验收。
+- 2026-10-09 最终门禁：全量 Web 57 个测试文件、331 项通过；Rust 107 项通过、1 个 localhost E2E 显式 ignored；`pnpm check/build/format:check`、Cargo check、Clippy `--all-targets --all-features -D warnings`、rustfmt、前后端性能门禁与 `git diff --check` 通过；Windows localhost 应用层 E2E 连续两轮分别 82.28 秒、88.57 秒通过。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。
 2. FE-12/FE-13 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
-3. 新建/编辑/删除空 Pending CL、Default↔编号移动、单文件 Rename/Move、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-002R/003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。目录/跨 Workspace/覆盖/Windows 仅大小写 rename 不在本批范围。
+3. 新建/编辑/删除空 Pending CL、Default↔编号菜单/键盘/拖放移动、单文件 Rename/Move、Submit、独立 Shelf 内容页及 Shelf/Unshelve/Resolve 已完成 BE-002R/003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。目录/跨 Workspace/覆盖/Windows 仅大小写 rename 不在本批范围。
 4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。
 
 ### 第十批：测试整理与逐项审计
@@ -231,12 +240,12 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 | --- | --- | --- |
 | FE-01 | `app/dialogs/Dialog.tsx`；`workflow.test.tsx` 的键盘循环；`ChangelistFormDialog.test.tsx` 的初始/恢复焦点和忙碌；`ContextMenu.test.tsx` 的来源 document；第八/九批浏览器记录 | 浏览器与跨 document 证据通过；原生来源窗口待实测 |
 | FE-02 | `ChangelistFormDialog.test.tsx` 10 项、`DeleteChangelistDialog.test.tsx` 3 项、`backend.test.ts` Pending 契约；第十一批接线记录 | 创建/编辑 Jobs/删除拒绝与成功已接 BE-004a；原生待验 |
-| FE-03 | `MoveFilesDialog.test.tsx` 7 项；`FileClWorkflow.test.tsx` 3 项；`fileClScope.test.ts` 2 项；`PendingPage.test.ts` 局部合并 | Default 往返、固定快照、目标/连接失效、失败保留与局部刷新已覆盖 |
+| FE-03 | `MoveFilesDialog.test.tsx` 覆盖预检、确认、partial、目标/连接失效、同目标/空集合；`PendingFileList.test.tsx` 覆盖多选拖拽快照与 Shelf 不可拖；`FileClWorkflow.test.tsx` / `fileClScope.test.ts` / Pending 局部合并；localhost 覆盖 Default 往返及最终归属 | 菜单、键盘、拖放共用强类型状态机；固定快照、逐项结果、目标/连接失效、失败保留与局部刷新已覆盖 |
 | FE-04 | `SubmitDialog.test.tsx` 11 项；`useCommandDialogs.test.tsx` 生产适配器接线；后端 Submit 契约测试 | BE-003 已接；blocker/warning/unknown/过期/漂移/成功/失败/防重复已覆盖，原生待验 |
 | FE-05 | `SyncDialog.test.tsx` 2 项、Tauri 窄契约与后端 parser/token/E2E；保留 `RevisionDialog`/selector 回归 | Preview → Review → Confirming → Result、Mock simulated、force 二次确认与真实 localhost sync 已覆盖；原生点击/读屏待验 |
 | FE-06 | `renamePath.test.ts`、`RenameDialog.test.tsx`、`workflow.test.tsx`、Rust rename 单测与 localhost E2E | Preview → Review → Confirming → Result、token/input/context 失效、映射/opened/CL/目标/case-only blocker、成功/失败刷新已覆盖；原生 UI/macOS 待验 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
-| FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约测试 | BE-004b Shelf 生产契约已接；原生待验 |
+| FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`ShelfDetailPage.test.tsx` 的特殊字符文本预览、binary 元数据/partial；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约与 localhost 文本/二进制证据 | BE-004b Shelf 写入和独立详情/内容页已接；原生待验 |
 | FE-09 | `ShelfDialog.test.tsx` 的 Unshelve Default/编号/跨 Workspace 与映射/覆盖/锁/Resolve 风险；双 Backend 契约 | BE-004b Unshelve 生产契约已接；不提供强制覆盖，原生待验 |
 | FE-10 | `ResolveDialog.test.tsx` 的策略过滤、blocked/unknown、逐文件计划、partial/unknown/成功、防重复与关闭保护 | BE-004b Resolve 生产契约已接；仅后端允许策略可执行，原生待验 |
 | FE-11 | `PreflightStatus` 状态测试；第八批 Tab 实测；第九批 40 个布局组合；语义标签/错误不只靠颜色 | 已覆盖浏览器键盘与布局；原生及真实读屏未验收 |

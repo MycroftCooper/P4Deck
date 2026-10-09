@@ -7,12 +7,12 @@ use crate::{
     p4::{
         context::ContextStore,
         workflows::{
-            content_digest, local_content_facts, parser, PermissionAssessment, ResolveInspection,
-            ShelfInspection, UnshelveInspection, WorkflowRepository,
+            content_digest, local_content_facts, parser, MoveInspection, PermissionAssessment,
+            ResolveInspection, ShelfInspection, UnshelveInspection, WorkflowRepository,
         },
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
@@ -25,6 +25,7 @@ enum TokenPayload {
     Shelf(ShelfPreflightRequest),
     Unshelve(UnshelvePreflightRequest),
     Resolve(Vec<String>),
+    Move(MoveFilesPreflightRequest),
 }
 
 #[derive(Clone)]
@@ -76,6 +77,7 @@ pub struct WorkflowService {
     tokens: ConfirmationStore<TokenRecord>,
     confirmation_gate: AsyncMutex<()>,
     ttl_ms: u64,
+    shelf_details: parking_lot::Mutex<HashMap<String, (i64, ShelfDetail)>>,
 }
 
 impl WorkflowService {
@@ -100,11 +102,366 @@ impl WorkflowService {
             tokens: ConfirmationStore::default(),
             confirmation_gate: AsyncMutex::new(()),
             ttl_ms: ttl_ms.max(1),
+            shelf_details: parking_lot::Mutex::new(HashMap::new()),
         }
     }
 
     pub fn clear_confirmations(&self) {
         self.tokens.clear();
+    }
+
+    pub fn clear_shelf_details(&self) {
+        self.shelf_details.lock().clear();
+    }
+
+    pub async fn shelf_detail(
+        &self,
+        request: ShelfDetailRequest,
+        app: Option<&AppHandle>,
+    ) -> Result<ShelfDetail, String> {
+        const MAX_FILES: usize = 10_000;
+        const CACHE_TTL_MS: i64 = 30_000;
+        if request.change_id <= 0 {
+            return Err("a numbered shelved changelist is required".into());
+        }
+        if !(1..=500).contains(&request.page_size) {
+            return Err("Shelf detail pageSize must be between 1 and 500".into());
+        }
+        if request.offset > MAX_FILES {
+            return Err("Shelf detail offset exceeds the 10,000-file safety limit".into());
+        }
+        let (context, generation) = self.contexts.snapshot();
+        let profile = self.contexts.active_profile_id();
+        let key = format!(
+            "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+            context.server.to_ascii_lowercase(),
+            context.user,
+            context.client,
+            generation,
+            request.change_id
+        );
+        if request.refresh {
+            self.shelf_details.lock().remove(&key);
+        } else if let Some((inserted, detail)) = self.shelf_details.lock().get(&key).cloned() {
+            if now_ms().saturating_sub(inserted) <= CACHE_TTL_MS {
+                return Ok(page_shelf_detail(
+                    detail,
+                    request.offset,
+                    request.page_size,
+                    "cached",
+                ));
+            }
+        }
+        let operation_id = request
+            .operation_id
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| format!("shelf-detail-{}", Uuid::new_v4()));
+        let inspection = self
+            .repository
+            .shelf_detail(&context, request.change_id, &operation_id, app)
+            .await?;
+        let (current, current_generation) = self.contexts.snapshot();
+        if current != context
+            || current_generation != generation
+            || self.contexts.active_profile_id() != profile
+        {
+            return Err("Shelf detail context changed; discard the stale result and retry".into());
+        }
+        let total_files = inspection.detail.files.len();
+        let truncated = total_files > MAX_FILES;
+        let mut files = inspection.detail.files;
+        files.truncate(MAX_FILES);
+        let detail = ShelfDetail {
+            scope: ShelfDetailScope {
+                server: context.server,
+                user: context.user,
+                client: context.client,
+                workspace: context.cwd.unwrap_or_default(),
+                active_profile_id: profile,
+                context_generation: generation,
+                change_id: request.change_id,
+            },
+            description: inspection.detail.description,
+            time: inspection.detail.time,
+            owner: inspection.detail.owner,
+            user: inspection.detail.user,
+            client: inspection.detail.client,
+            jobs: inspection.detail.jobs,
+            files,
+            total_files,
+            offset: 0,
+            has_more: false,
+            truncated,
+            inspection_status: if truncated {
+                ShelfInspectionStatus::Partial
+            } else {
+                inspection.detail.inspection_status
+            },
+            message: if truncated {
+                Some("Shelf file list reached the 10,000-file safety limit.".into())
+            } else {
+                inspection.detail.message
+            },
+            operation_ids: inspection.operation_ids,
+            cache_freshness: "fresh".into(),
+        };
+        self.shelf_details
+            .lock()
+            .insert(key, (now_ms(), detail.clone()));
+        Ok(page_shelf_detail(
+            detail,
+            request.offset,
+            request.page_size,
+            "fresh",
+        ))
+    }
+
+    pub async fn preflight_move(
+        &self,
+        mut request: MoveFilesPreflightRequest,
+        app: Option<&AppHandle>,
+    ) -> MoveFilesPreflight {
+        request.depot_paths = normalized_paths(request.depot_paths);
+        let (context, generation) = self.contexts.snapshot();
+        let snapshot = target(
+            "move",
+            &context,
+            generation,
+            None,
+            Some(request.target_change_id),
+            request.depot_paths.clone(),
+        );
+        let inspected = self
+            .repository
+            .inspect_move(
+                &context,
+                &request.depot_paths,
+                request.operation_id.as_deref().unwrap_or("move-preflight"),
+                app,
+            )
+            .await;
+        let (files, blockers, warnings, digest, operation_ids) = match inspected {
+            Ok(value) => evaluate_move(&request, value),
+            Err(error) => (
+                request
+                    .depot_paths
+                    .iter()
+                    .map(|path| MoveFileCandidate {
+                        depot_path: path.clone(),
+                        source_change_id: None,
+                        action: String::new(),
+                        movable: false,
+                        message: Some(error.clone()),
+                    })
+                    .collect(),
+                vec![issue(
+                    WorkflowIssueCode::InspectionUnknown,
+                    WorkflowIssueCertainty::Unknown,
+                    "Move preflight could not obtain a reliable server snapshot.",
+                    request.depot_paths.clone(),
+                )],
+                Vec::new(),
+                content_digest(&request),
+                Vec::new(),
+            ),
+        };
+        let ready =
+            blockers.is_empty() && !files.is_empty() && files.iter().all(|file| file.movable);
+        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
+        let token = ready.then(|| {
+            self.tokens.issue(
+                TokenRecord {
+                    target: snapshot.clone(),
+                    content_digest: digest.clone(),
+                    expires_at,
+                    payload: TokenPayload::Move(request),
+                },
+                now_ms(),
+            )
+        });
+        MoveFilesPreflight {
+            ready,
+            target: snapshot,
+            files,
+            blockers,
+            warnings,
+            content_digest: digest,
+            token,
+            expires_at,
+            ttl_ms: self.ttl_ms,
+            log_reference: operation_ids.first().cloned(),
+            operation_ids,
+        }
+    }
+
+    pub async fn confirm_move(
+        &self,
+        confirmation: WorkflowConfirmation,
+        app: Option<&AppHandle>,
+    ) -> MoveFilesResult {
+        let _gate = self.confirmation_gate.lock().await;
+        let record = match self.consume(&confirmation, "move") {
+            Ok(record) => record,
+            Err(result) => return rejected_move(*result),
+        };
+        let TokenPayload::Move(request) = record.payload else {
+            return rejected_move(rejected(
+                &confirmation.target,
+                WorkflowFailureCode::TargetMismatch,
+                "The token belongs to another workflow.",
+            ));
+        };
+        let (context, generation) = self.contexts.snapshot();
+        if target(
+            "move",
+            &context,
+            generation,
+            None,
+            Some(request.target_change_id),
+            request.depot_paths.clone(),
+        ) != record.target
+        {
+            return rejected_move(rejected(
+                &record.target,
+                WorkflowFailureCode::ContextChanged,
+                "The connection or workspace changed after preflight.",
+            ));
+        }
+        let guard = self.repository.lock_mutations(&context.server).await;
+        let inspected = self
+            .repository
+            .inspect_move(&context, &request.depot_paths, "move-recheck", app)
+            .await;
+        let Ok(inspected) = inspected else {
+            return rejected_move(rejected(
+                &record.target,
+                WorkflowFailureCode::PreflightBlocked,
+                "The move snapshot could not be revalidated safely.",
+            ));
+        };
+        let (candidates, blockers, _, digest, mut operation_ids) =
+            evaluate_move(&request, inspected);
+        if !blockers.is_empty()
+            || digest != record.content_digest
+            || !same_active_context(&self.contexts, &record.target)
+        {
+            return rejected_move(rejected(
+                &record.target,
+                if digest != record.content_digest {
+                    WorkflowFailureCode::ContentChanged
+                } else {
+                    WorkflowFailureCode::PreflightBlocked
+                },
+                "Opened files or target changelist changed after preflight.",
+            ));
+        }
+        let root_id = valid_operation_id(confirmation.operation_id);
+        let mut files = Vec::new();
+        let mut cancelled = false;
+        for (index, candidate) in candidates.iter().enumerate() {
+            let operation_id = format!("{root_id}:{}", index + 1);
+            if cancelled {
+                files.push(WorkflowFileResult {
+                    depot_path: candidate.depot_path.clone(),
+                    state: WorkflowFileState::Cancelled,
+                    message: "Move batch was cancelled before this file ran.".into(),
+                    operation_id: None,
+                });
+                continue;
+            }
+            let result = self
+                .repository
+                .execute_reopen(
+                    &context,
+                    request.target_change_id,
+                    &candidate.depot_path,
+                    operation_id.clone(),
+                    &guard,
+                    app,
+                )
+                .await;
+            let item =
+                reopen_file_result(candidate.depot_path.clone(), result, operation_id.clone());
+            cancelled = item.state == WorkflowFileState::Cancelled;
+            operation_ids.push(operation_id);
+            files.push(item);
+        }
+        let mut affected_changes = candidates
+            .iter()
+            .filter_map(|candidate| candidate.source_change_id)
+            .collect::<BTreeSet<_>>();
+        affected_changes.insert(request.target_change_id);
+        let (after, refresh_error) =
+            match self.repository.pending_snapshot(context.clone(), app).await {
+                Ok(changes) => (changes, None),
+                Err(error) => (Vec::new(), Some(error)),
+            };
+        if refresh_error.is_none() {
+            for file in &mut files {
+                if file.state != WorkflowFileState::Succeeded {
+                    continue;
+                }
+                let verified = after
+                    .iter()
+                    .find(|change| change.id == request.target_change_id)
+                    .is_some_and(|change| {
+                        change
+                            .files
+                            .iter()
+                            .any(|item| item.depot_path == file.depot_path)
+                    });
+                if !verified {
+                    file.state = WorkflowFileState::Unknown;
+                    file.message = "p4 reopen succeeded, but the final target changelist could not be verified.".into();
+                }
+            }
+        }
+        self.invalidate(
+            &context,
+            &request.depot_paths,
+            InvalidationReason::ChangelistMutation,
+        );
+        let succeeded = files
+            .iter()
+            .filter(|file| file.state == WorkflowFileState::Succeeded)
+            .count();
+        let failed = files.len().saturating_sub(succeeded);
+        let outcome = if succeeded == files.len() && refresh_error.is_none() {
+            WorkflowOutcome::Succeeded
+        } else if succeeded > 0 {
+            WorkflowOutcome::Partial
+        } else if cancelled {
+            WorkflowOutcome::Cancelled
+        } else {
+            WorkflowOutcome::Failed
+        };
+        let affected_changes = affected_changes.into_iter().collect::<Vec<_>>();
+        let refreshed_changes = after
+            .into_iter()
+            .filter(|change| affected_changes.contains(&change.id))
+            .collect();
+        MoveFilesResult {
+            outcome,
+            failure: (outcome != WorkflowOutcome::Succeeded).then_some(if cancelled {
+                WorkflowFailureCode::Cancelled
+            } else {
+                WorkflowFailureCode::CommandFailure
+            }),
+            message: format!(
+                "Moved {succeeded} file(s); {failed} file(s) were not confirmed moved."
+            ),
+            log_reference: operation_ids.first().cloned(),
+            operation_ids,
+            files,
+            affected_changes,
+            refreshed_changes,
+            refresh_error,
+            refresh: refresh(
+                request.depot_paths,
+                "Refresh only the affected source and target changelists and workspace status.",
+            ),
+        }
     }
 
     pub async fn preflight_shelf(
@@ -241,6 +598,7 @@ impl WorkflowService {
             .repository
             .execute_shelf(&context, &request, operation_id.clone(), &guard, app)
             .await;
+        self.clear_shelf_details();
         self.invalidate(
             &context,
             &request.depot_paths,
@@ -657,6 +1015,132 @@ impl WorkflowService {
             reason,
         );
     }
+}
+
+fn page_shelf_detail(
+    mut detail: ShelfDetail,
+    offset: usize,
+    page_size: usize,
+    freshness: &str,
+) -> ShelfDetail {
+    let available = detail.files.len();
+    detail.files = detail
+        .files
+        .into_iter()
+        .skip(offset)
+        .take(page_size)
+        .collect();
+    detail.offset = offset;
+    detail.has_more = offset.saturating_add(detail.files.len()) < available;
+    detail.cache_freshness = freshness.into();
+    detail
+}
+
+fn evaluate_move(
+    request: &MoveFilesPreflightRequest,
+    inspection: MoveInspection,
+) -> (
+    Vec<MoveFileCandidate>,
+    Vec<WorkflowIssue>,
+    Vec<WorkflowIssue>,
+    String,
+    Vec<String>,
+) {
+    let mut blockers = Vec::new();
+    let warnings = Vec::new();
+    let target_exists = request.target_change_id == 0
+        || inspection
+            .changes
+            .iter()
+            .any(|change| change.id == request.target_change_id && change.status == "pending");
+    if request.target_change_id < 0 || !target_exists {
+        blockers.push(issue(
+            WorkflowIssueCode::ChangeNotFound,
+            WorkflowIssueCertainty::Confirmed,
+            "The target changelist is not pending in the current user/client scope.",
+            request.depot_paths.clone(),
+        ));
+    }
+    if request.depot_paths.is_empty() {
+        blockers.push(issue(
+            WorkflowIssueCode::FileNotInChange,
+            WorkflowIssueCertainty::Confirmed,
+            "No opened files were selected.",
+            Vec::new(),
+        ));
+    }
+    let facts = inspection
+        .facts
+        .iter()
+        .map(|fact| (fact.depot_path.as_str(), fact))
+        .collect::<BTreeMap<_, _>>();
+    let mut candidates = Vec::new();
+    for path in &request.depot_paths {
+        let source = inspection
+            .changes
+            .iter()
+            .find(|change| change.files.iter().any(|file| file.depot_path == *path));
+        let file = source.and_then(|change| {
+            change
+                .files
+                .iter()
+                .find(|file| file.depot_path == *path)
+                .map(|file| (change.id, file))
+        });
+        let fact = facts.get(path.as_str()).copied();
+        let message: Option<String> = if file.is_none() {
+            Some("The file is not opened by the current user and workspace.".into())
+        } else if source.is_some_and(|change| change.id == request.target_change_id) {
+            Some("The file is already in the target changelist.".into())
+        } else if fact.is_some_and(|fact| fact.other_lock > 0 || fact.our_lock > 0) {
+            Some("The file is locked and cannot be moved safely.".into())
+        } else {
+            None
+        };
+        if let Some(message) = &message {
+            blockers.push(issue(
+                if message.contains("locked") {
+                    WorkflowIssueCode::LockedFile
+                } else {
+                    WorkflowIssueCode::FileNotInChange
+                },
+                WorkflowIssueCertainty::Confirmed,
+                message.clone(),
+                vec![path.clone()],
+            ));
+        }
+        candidates.push(MoveFileCandidate {
+            depot_path: path.clone(),
+            source_change_id: file.map(|(change_id, _)| change_id),
+            action: file
+                .map(|(_, file)| file.action.clone())
+                .unwrap_or_default(),
+            movable: message.is_none() && target_exists,
+            message,
+        });
+    }
+    let digest = content_digest(&(
+        request,
+        &candidates,
+        inspection
+            .changes
+            .iter()
+            .filter(|change| {
+                change.id == request.target_change_id
+                    || candidates
+                        .iter()
+                        .any(|candidate| candidate.source_change_id == Some(change.id))
+            })
+            .collect::<Vec<_>>(),
+        &inspection.facts,
+    ));
+    (
+        candidates,
+        blockers,
+        warnings,
+        digest,
+        inspection.operation_ids,
+    )
 }
 
 fn evaluate_shelf(request: &ShelfPreflightRequest, inspection: ShelfInspection) -> ShelfEvaluation {
@@ -1311,6 +1795,66 @@ fn rejected(
     }
 }
 
+fn rejected_move(result: WorkflowResult) -> MoveFilesResult {
+    MoveFilesResult {
+        outcome: result.outcome,
+        failure: result.failure,
+        message: result.message,
+        operation_ids: result.operation_ids,
+        log_reference: result.log_reference,
+        files: result.files,
+        affected_changes: Vec::new(),
+        refreshed_changes: Vec::new(),
+        refresh_error: None,
+        refresh: result.refresh,
+    }
+}
+
+fn reopen_file_result(
+    path: String,
+    result: Result<OperationResult, String>,
+    operation_id: String,
+) -> WorkflowFileResult {
+    match result {
+        Ok(operation) if operation.exit_code == 0 => WorkflowFileResult {
+            depot_path: path,
+            state: WorkflowFileState::Succeeded,
+            message: "File moved; final changelist membership will be verified.".into(),
+            operation_id: Some(operation_id),
+        },
+        Ok(operation)
+            if operation
+                .events
+                .iter()
+                .any(|event| matches!(event.kind, EventKind::Cancelled)) =>
+        {
+            WorkflowFileResult {
+                depot_path: path,
+                state: WorkflowFileState::Cancelled,
+                message: "Move was cancelled.".into(),
+                operation_id: Some(operation_id),
+            }
+        }
+        Ok(_) => WorkflowFileResult {
+            depot_path: path,
+            state: WorkflowFileState::Failed,
+            message: "The server rejected this file move; it remains in its source changelist."
+                .into(),
+            operation_id: Some(operation_id),
+        },
+        Err(error) => WorkflowFileResult {
+            depot_path: path,
+            state: if error.to_ascii_lowercase().contains("cancel") {
+                WorkflowFileState::Cancelled
+            } else {
+                WorkflowFileState::Unknown
+            },
+            message: format!("Move outcome is not confirmed: {error}"),
+            operation_id: Some(operation_id),
+        },
+    }
+}
+
 fn operation_result(
     target: &WorkflowTargetSnapshot,
     result: Result<OperationResult, String>,
@@ -1514,9 +2058,13 @@ mod tests {
                     file_type: "text".into(),
                     digest: "a".into(),
                     shelved_digest: "b".into(),
+                    size: Some(1),
+                    shelved_size: Some(1),
+                    shelved_type: Some("text".into()),
                     unresolved: 0,
                     other_open: 0,
                     other_lock: 0,
+                    our_lock: 0,
                 }],
                 shelf_facts: Vec::new(),
                 permission: PermissionAssessment::Allowed,
@@ -1538,5 +2086,85 @@ mod tests {
         );
         assert!(!resolve.blockers.is_empty());
         assert_eq!(resolve.conflicts[0].status, "unknown");
+    }
+
+    #[test]
+    fn move_preflight_tracks_source_target_and_blocks_unopened_locked_and_same_target() {
+        let default = PendingChange {
+            id: 0,
+            files: vec![PendingFile {
+                depot_path: "//depot/default.txt".into(),
+                action: "edit".into(),
+                state: None,
+                client_path: None,
+                revision: Some(1),
+                file_type: Some("text".into()),
+            }],
+            ..change()
+        };
+        let request = MoveFilesPreflightRequest {
+            target_change_id: 7,
+            depot_paths: vec!["//depot/default.txt".into()],
+            operation_id: None,
+        };
+        let fact = parser::WorkflowFileFact {
+            depot_path: "//depot/default.txt".into(),
+            client_path: None,
+            action: "edit".into(),
+            change_id: Some(0),
+            have_revision: Some(1),
+            head_revision: Some(1),
+            file_type: "text".into(),
+            digest: "a".into(),
+            shelved_digest: String::new(),
+            size: Some(1),
+            shelved_size: None,
+            shelved_type: None,
+            unresolved: 0,
+            other_open: 0,
+            other_lock: 0,
+            our_lock: 0,
+        };
+        let (files, blockers, _, _, _) = evaluate_move(
+            &request,
+            MoveInspection {
+                changes: vec![default.clone(), change()],
+                facts: vec![fact.clone()],
+                operation_ids: vec!["inspect".into()],
+            },
+        );
+        assert!(blockers.is_empty());
+        assert_eq!(files[0].source_change_id, Some(0));
+        assert!(files[0].movable);
+
+        let mut locked = fact;
+        locked.other_lock = 1;
+        let (_, blockers, _, _, _) = evaluate_move(
+            &request,
+            MoveInspection {
+                changes: vec![default, change()],
+                facts: vec![locked],
+                operation_ids: Vec::new(),
+            },
+        );
+        assert!(blockers
+            .iter()
+            .any(|issue| issue.code == WorkflowIssueCode::LockedFile));
+
+        let (_, blockers, _, _, _) = evaluate_move(
+            &MoveFilesPreflightRequest {
+                target_change_id: 7,
+                depot_paths: vec!["//depot/missing".into()],
+                operation_id: None,
+            },
+            MoveInspection {
+                changes: vec![change()],
+                facts: Vec::new(),
+                operation_ids: Vec::new(),
+            },
+        );
+        assert!(blockers
+            .iter()
+            .any(|issue| issue.code == WorkflowIssueCode::FileNotInChange));
     }
 }

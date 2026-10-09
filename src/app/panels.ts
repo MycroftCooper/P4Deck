@@ -19,6 +19,12 @@ export const pageDefinitions = {
   history: { zh: "History", en: "History", scope: "file", target: "depot" },
   streams: { zh: "Streams", en: "Streams", scope: "global", target: "depot" },
   diff: { zh: "Diff", en: "Diff", scope: "file", target: "depot" },
+  shelf: {
+    zh: "Shelf 详情",
+    en: "Shelf Detail",
+    scope: "file",
+    target: "depot",
+  },
   revgraph: {
     zh: "Rev Graph",
     en: "Rev Graph",

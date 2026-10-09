@@ -94,7 +94,7 @@ pub fn job_fixes_invocation(job: &str, max_results: usize) -> Result<P4Invocatio
 pub fn action_invocation(action: ClAction) -> Result<ActionInvocation, String> {
     let (command, args, input, affected_changes, warnings) = match action {
         ClAction::Create { description } => {
-            let input = change_form(None, &description, &[])?;
+            let input = change_form(None, &description, &[], &[])?;
             ("change", vec!["-i".into()], Some(input), vec![], vec![])
         }
         ClAction::Edit {
@@ -103,7 +103,7 @@ pub fn action_invocation(action: ClAction) -> Result<ActionInvocation, String> {
             jobs,
         } => {
             ensure_numbered_change(change_id)?;
-            let input = change_form(Some(change_id), &description, &jobs)?;
+            let input = change_form(Some(change_id), &description, &jobs, &[])?;
             (
                 "change",
                 vec!["-i".into()],
@@ -121,24 +121,6 @@ pub fn action_invocation(action: ClAction) -> Result<ActionInvocation, String> {
                 vec![change_id],
                 vec![],
             )
-        }
-        ClAction::MoveFiles {
-            change_id,
-            depot_paths,
-        } => {
-            if change_id < 0 {
-                return Err("target changelist must be Default (0) or numbered".into());
-            }
-            let mut args = vec![
-                "-c".into(),
-                if change_id == 0 {
-                    "default".into()
-                } else {
-                    change_id.to_string()
-                },
-            ];
-            args.extend(validate_paths(&depot_paths)?);
-            ("reopen", args, None, vec![change_id], vec![])
         }
         ClAction::SubmitValidate { change_id } => (
             "opened",
@@ -295,12 +277,13 @@ pub fn job_query_invocation(job: &str) -> Result<P4Invocation, String> {
 
 pub fn pending_mutation_invocation(
     mutation: &PendingChangeMutation,
+    preserved_files: &[String],
 ) -> Result<PendingMutationInvocation, String> {
     let (command, args, input, affected_changes, affected_paths) = match mutation {
         PendingChangeMutation::Create { description, jobs } => (
             "change",
             vec!["-i".into()],
-            Some(change_form(None, description, jobs)?),
+            Some(change_form(None, description, jobs, &[])?),
             Vec::new(),
             Vec::new(),
         ),
@@ -313,7 +296,12 @@ pub fn pending_mutation_invocation(
             (
                 "change",
                 vec!["-i".into()],
-                Some(change_form(Some(*change_id), description, jobs)?),
+                Some(change_form(
+                    Some(*change_id),
+                    description,
+                    jobs,
+                    preserved_files,
+                )?),
                 vec![*change_id],
                 Vec::new(),
             )
@@ -365,6 +353,7 @@ fn change_form(
     change_id: Option<i64>,
     description: &str,
     jobs: &[String],
+    files: &[String],
 ) -> Result<String, String> {
     let description = description.replace("\r\n", "\n").replace('\r', "\n");
     if description.trim().is_empty() {
@@ -389,6 +378,15 @@ fn change_form(
         form.push('\t');
         form.push_str(&job);
         form.push('\n');
+    }
+    if !files.is_empty() {
+        let files = validate_paths(files)?;
+        form.push_str("Files:\n");
+        for file in files {
+            form.push('\t');
+            form.push_str(&file);
+            form.push('\n');
+        }
     }
     Ok(form)
 }
@@ -579,32 +577,41 @@ mod tests {
     }
 
     #[test]
-    fn move_files_uses_reopen_without_shell() {
-        let action = action_invocation(ClAction::MoveFiles {
-            change_id: 42,
-            depot_paths: vec!["//depot/a b.txt".into()],
-        })
-        .unwrap();
-        assert_eq!(action.invocation.command, "reopen");
-        assert_eq!(action.invocation.args, vec!["-c", "42", "//depot/a b.txt"]);
-    }
-
-    #[test]
     fn indents_every_description_line_and_rejects_job_injection() {
-        let prepared = pending_mutation_invocation(&PendingChangeMutation::Create {
-            description: "first\nJobs:\nChange: injected".into(),
-            jobs: vec!["JOB-1".into()],
-        })
+        let prepared = pending_mutation_invocation(
+            &PendingChangeMutation::Create {
+                description: "first\nJobs:\nChange: injected".into(),
+                jobs: vec!["JOB-1".into()],
+            },
+            &[],
+        )
         .unwrap();
         assert_eq!(
             prepared.invocation.input.unwrap(),
             "Change: new\nDescription:\n\tfirst\n\tJobs:\n\tChange: injected\nJobs:\n\tJOB-1\n"
         );
-        assert!(pending_mutation_invocation(&PendingChangeMutation::Create {
-            description: "safe".into(),
-            jobs: vec!["JOB-1\nFiles:".into()],
-        })
+        assert!(pending_mutation_invocation(
+            &PendingChangeMutation::Create {
+                description: "safe".into(),
+                jobs: vec!["JOB-1\nFiles:".into()],
+            },
+            &[],
+        )
         .is_err());
+
+        let edit = pending_mutation_invocation(
+            &PendingChangeMutation::Edit {
+                change_id: 42,
+                description: "keep files".into(),
+                jobs: Vec::new(),
+            },
+            &["//depot/世界 @#%.txt".into()],
+        )
+        .unwrap();
+        assert!(edit
+            .invocation
+            .input
+            .is_some_and(|form| form.contains("Files:\n\t//depot/世界 @#%.txt\n")));
     }
 
     #[test]

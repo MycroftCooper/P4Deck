@@ -223,6 +223,8 @@ fn invalidate_after_context_change(state: &AppState) {
     state.submit.clear_confirmations();
     state.sync.clear_confirmations();
     state.workflows.clear_confirmations();
+    state.workflows.clear_shelf_details();
+    state.files.clear_review_cache();
     state.rename.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
@@ -304,10 +306,10 @@ pub async fn run_p4(
     if matches!(request.source, OperationSource::Gui)
         && matches!(
             request.command.to_ascii_lowercase().as_str(),
-            "submit" | "shelve" | "unshelve" | "resolve" | "sync" | "move"
+            "submit" | "shelve" | "unshelve" | "resolve" | "sync" | "move" | "reopen"
         )
     {
-        return Err("GUI submit, shelf, unshelve, resolve, sync and move must use their preview/preflight and confirmation APIs".into());
+        return Err("GUI submit, shelf, unshelve, resolve, sync, move and reopen must use their preview/preflight and confirmation APIs".into());
     }
     state
         .runner
@@ -479,6 +481,11 @@ pub async fn perform_file_action(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<FileActionResult, String> {
+    if request.action == FileAction::MoveToChangelist {
+        return Err(
+            "GUI changelist moves must use the move preflight and confirmation APIs".into(),
+        );
+    }
     state
         .files
         .perform(state.connection.context(), request, Some(&app))
@@ -528,6 +535,15 @@ pub async fn get_diff(
     app: AppHandle,
 ) -> Result<DiffResult, String> {
     state.files.diff(request, Some(&app)).await
+}
+
+#[tauri::command]
+pub async fn get_shelf_file_preview(
+    request: ShelfFilePreviewRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ShelfFilePreview, String> {
+    state.files.shelf_preview(request, Some(&app)).await
 }
 
 #[tauri::command]
@@ -596,10 +612,42 @@ pub async fn mutate_pending_change(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<PendingChangeMutationResult, String> {
-    state
+    if matches!(&request.mutation, PendingChangeMutation::MoveFiles { .. }) {
+        return Err("GUI file moves must use the move preflight and confirmation APIs".into());
+    }
+    let result = state
         .changelists
         .mutate_pending(state.connection.context(), request, Some(&app))
-        .await
+        .await?;
+    state.workflows.clear_shelf_details();
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_shelf_detail(
+    request: ShelfDetailRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ShelfDetail, String> {
+    state.workflows.shelf_detail(request, Some(&app)).await
+}
+
+#[tauri::command]
+pub async fn preflight_move_files(
+    request: MoveFilesPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<MoveFilesPreflight, String> {
+    Ok(state.workflows.preflight_move(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_move_files(
+    confirmation: WorkflowConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<MoveFilesResult, String> {
+    Ok(state.workflows.confirm_move(confirmation, Some(&app)).await)
 }
 
 #[tauri::command]
@@ -635,10 +683,17 @@ pub async fn confirm_shelf(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkflowResult, String> {
-    Ok(state
+    let result = state
         .workflows
         .confirm_shelf(confirmation, Some(&app))
-        .await)
+        .await;
+    if matches!(
+        result.outcome,
+        WorkflowOutcome::Succeeded | WorkflowOutcome::Partial
+    ) {
+        state.files.clear_review_cache();
+    }
+    Ok(result)
 }
 
 #[tauri::command]

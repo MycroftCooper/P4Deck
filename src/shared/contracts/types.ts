@@ -395,6 +395,52 @@ export interface SubmittedChangeDetail {
   message?: string;
 }
 
+export interface ShelfDetailRequest {
+  changeId: number;
+  offset?: number;
+  pageSize: number;
+  refresh?: boolean;
+  operationId?: string;
+}
+export interface ShelfDetailScope {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  activeProfileId?: string;
+  contextGeneration: number;
+  changeId: number;
+}
+export interface ShelfDetailFile {
+  depotPath: string;
+  action: string;
+  revision?: number;
+  fileType?: string;
+  size?: number;
+  digest?: string;
+  binary: boolean;
+  symlink: boolean;
+  deleted: boolean;
+}
+export interface ShelfDetail {
+  scope: ShelfDetailScope;
+  description: string;
+  time: string;
+  owner: string;
+  user: string;
+  client: string;
+  jobs: string[];
+  files: ShelfDetailFile[];
+  totalFiles: number;
+  offset: number;
+  hasMore: boolean;
+  truncated: boolean;
+  inspectionStatus: "complete" | "partial";
+  message?: string;
+  operationIds: string[];
+  cacheFreshness: "fresh" | "cached";
+}
+
 export interface ClQueryResult {
   requestGeneration: number;
   items: ChangelistSummary[];
@@ -486,7 +532,6 @@ export type ClAction =
   | { type: "create"; description: string }
   | { type: "edit"; changeId: number; description: string; jobs: string[] }
   | { type: "delete"; changeId: number }
-  | { type: "moveFiles"; changeId: number; depotPaths: string[] }
   | { type: "submitValidate"; changeId: number };
 
 export interface ClActionResult {
@@ -902,7 +947,8 @@ export type RevisionReference =
   | { kind: "workspace" }
   | { kind: "have" }
   | { kind: "head" }
-  | { kind: "revision"; revision: number };
+  | { kind: "revision"; revision: number }
+  | { kind: "shelf"; changeId: number };
 export interface FileReviewScope {
   server: string;
   user: string;
@@ -942,6 +988,21 @@ export interface DiffResult {
   identical: boolean;
   truncated: boolean;
   partial: boolean;
+  operationIds: string[];
+}
+export interface ShelfFilePreviewRequest {
+  scope: FileReviewScope;
+  changeId: number;
+  refresh?: boolean;
+  operationId?: string;
+}
+export interface ShelfFilePreview {
+  side: DiffSide;
+  content?: string;
+  encoding: string;
+  truncated: boolean;
+  unsupported: boolean;
+  reason?: string;
   operationIds: string[];
 }
 export interface FileIntegration {
@@ -1190,7 +1251,7 @@ export interface WorkflowIssue {
 }
 
 export interface WorkflowTargetSnapshot {
-  kind: "shelf" | "unshelve" | "resolve";
+  kind: "shelf" | "unshelve" | "resolve" | "move";
   server: string;
   user: string;
   client: string;
@@ -1236,6 +1297,44 @@ export interface ShelfPreflight {
   ttlMs: number;
   operationIds: string[];
   logReference?: string;
+}
+
+export interface MoveFilesPreflightRequest {
+  targetChangeId: number;
+  depotPaths: string[];
+  operationId?: string;
+}
+export interface MoveFileCandidate {
+  depotPath: string;
+  sourceChangeId?: number;
+  action: string;
+  movable: boolean;
+  message?: string;
+}
+export interface MoveFilesPreflight {
+  ready: boolean;
+  target: WorkflowTargetSnapshot;
+  files: MoveFileCandidate[];
+  blockers: WorkflowIssue[];
+  warnings: WorkflowIssue[];
+  contentDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+export interface MoveFilesResult {
+  outcome: WorkflowOutcome;
+  failure?: WorkflowFailureCode;
+  message: string;
+  operationIds: string[];
+  logReference?: string;
+  files: WorkflowFileResult[];
+  affectedChanges: number[];
+  refreshedChanges: PendingChange[];
+  refreshError?: string;
+  refresh: WorkflowRefreshAdvice;
 }
 
 export interface WorkflowConfirmation {
@@ -1331,6 +1430,9 @@ export interface WorkflowFileResult {
   operationId?: string;
 }
 
+export type WorkflowOutcome =
+  "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+
 export type WorkflowFailureCode =
   | "tokenUnknown"
   | "tokenExpired"
@@ -1344,8 +1446,7 @@ export type WorkflowFailureCode =
   | "uncertainOutcome";
 
 export interface WorkflowResult {
-  outcome:
-    "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+  outcome: WorkflowOutcome;
   failure?: WorkflowFailureCode;
   message: string;
   operationIds: string[];

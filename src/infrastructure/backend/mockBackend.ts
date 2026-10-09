@@ -1634,18 +1634,23 @@ export const mockBackend: Backend = {
     const label = (reference: typeof request.left) =>
       reference.kind === "revision"
         ? `Revision #${reference.revision}`
-        : reference.kind === "workspace"
-          ? "Workspace"
-          : reference.kind === "head"
-            ? "Head #12"
-            : "Have #11";
+        : reference.kind === "shelf"
+          ? `Shelf @=${reference.changeId}`
+          : reference.kind === "workspace"
+            ? "Workspace"
+            : reference.kind === "head"
+              ? "Head #12"
+              : "Have #11";
     return {
       path,
       left: {
         reference: request.left,
         label: label(request.left),
         depotPath: path,
-        revision: request.left.kind === "workspace" ? undefined : 11,
+        revision:
+          request.left.kind === "workspace" || request.left.kind === "shelf"
+            ? undefined
+            : 11,
         fileType: "text",
         size: 54,
         digest: "mock-left",
@@ -1656,7 +1661,10 @@ export const mockBackend: Backend = {
         reference: request.right,
         label: label(request.right),
         depotPath: path,
-        revision: request.right.kind === "workspace" ? undefined : 12,
+        revision:
+          request.right.kind === "workspace" || request.right.kind === "shelf"
+            ? undefined
+            : 12,
         fileType: "text",
         size: 78,
         digest: "mock-right",
@@ -2121,6 +2129,232 @@ export const mockBackend: Backend = {
       "Browser Mock only: shelf operation was simulated. No real P4 server was accessed.",
       "shelf",
     );
+  },
+  async getShelfDetail(request) {
+    if (request.changeId <= 0) throw new Error("Numbered shelf required.");
+    const change = (await this.queryPendingChanges()).find(
+      (item) => item.id === request.changeId,
+    );
+    if (!change?.shelvedFiles.length) throw new Error("Shelf not found.");
+    const all = [...change.shelvedFiles]
+      .sort((a, b) => a.depotPath.localeCompare(b.depotPath))
+      .map((file) => ({
+        depotPath: file.depotPath,
+        action: file.action,
+        revision: file.revision,
+        fileType: file.fileType ?? "text",
+        size: file.action === "delete" ? undefined : 128,
+        digest:
+          file.action === "delete" ? undefined : mockDigest(file.depotPath),
+        binary: (file.fileType ?? "").includes("binary"),
+        symlink: (file.fileType ?? "").startsWith("symlink"),
+        deleted: file.action === "delete",
+      }));
+    const offset = request.offset ?? 0;
+    return {
+      scope: {
+        server: mockContext.server,
+        user: mockContext.user,
+        client: mockContext.client,
+        workspace: mockContext.cwd ?? "",
+        activeProfileId: mockActiveProfileId,
+        contextGeneration: mockContextGeneration,
+        changeId: request.changeId,
+      },
+      description: change.description,
+      time: change.updatedAt ?? new Date().toISOString(),
+      owner: change.user,
+      user: change.user,
+      client: change.client,
+      jobs: change.jobs,
+      files: all.slice(offset, offset + request.pageSize),
+      totalFiles: all.length,
+      offset,
+      hasMore: offset + request.pageSize < all.length,
+      truncated: false,
+      inspectionStatus: "complete" as const,
+      operationIds: [`mock-shelf-detail-${request.changeId}`],
+      cacheFreshness: request.refresh
+        ? ("fresh" as const)
+        : ("cached" as const),
+    };
+  },
+  async getShelfFilePreview(request) {
+    const detail = await this.getShelfDetail({
+      changeId: request.changeId,
+      pageSize: 500,
+      refresh: request.refresh,
+    });
+    const file = detail.files.find(
+      (item) => item.depotPath === request.scope.fileIdentity,
+    );
+    if (!file) throw new Error("Shelved file not found.");
+    const unsupported = file.binary || file.symlink || file.deleted;
+    return {
+      side: {
+        reference: { kind: "shelf" as const, changeId: request.changeId },
+        label: `Shelf @=${request.changeId}`,
+        depotPath: file.depotPath,
+        revision: file.revision,
+        fileType: file.fileType,
+        size: file.size,
+        digest: file.digest,
+        exists: !file.deleted,
+        binary: file.binary,
+      },
+      content: unsupported
+        ? undefined
+        : `Browser Mock shelved content for ${file.depotPath}\n`,
+      encoding: "UTF-8",
+      truncated: false,
+      unsupported,
+      reason: file.deleted
+        ? "Shelved delete has no content."
+        : file.binary
+          ? "Binary content is metadata-only."
+          : file.symlink
+            ? "Symlink content is metadata-only."
+            : undefined,
+      operationIds: [request.operationId ?? "mock-shelf-preview"],
+    };
+  },
+  async preflightMoveFiles(request) {
+    const paths = [...new Set(request.depotPaths)].sort();
+    const changes = await this.queryPendingChanges();
+    const targetChange = changes.find(
+      (change) => change.id === request.targetChangeId,
+    );
+    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    if (!targetChange || request.targetChangeId < 0)
+      blockers.push({
+        code: "changeNotFound",
+        certainty: "confirmed",
+        message: "Target changelist was not found.",
+        paths,
+      });
+    const files = paths.map((depotPath) => {
+      const source = changes.find((change) =>
+        change.files.some((file) => file.depotPath === depotPath),
+      );
+      const opened = source?.files.find((file) => file.depotPath === depotPath);
+      const movable =
+        !!opened && source?.id !== request.targetChangeId && !!targetChange;
+      if (!movable)
+        blockers.push({
+          code: "fileNotInChange",
+          certainty: "confirmed",
+          message: opened
+            ? "File is already in the target changelist."
+            : "File is not opened in this workspace.",
+          paths: [depotPath],
+        });
+      return {
+        depotPath,
+        sourceChangeId: source?.id,
+        action: opened?.action ?? "",
+        movable,
+        message: movable ? undefined : blockers.at(-1)?.message,
+      };
+    });
+    const target: WorkflowTargetSnapshot = {
+      kind: "move",
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      workspace: mockContext.cwd ?? "",
+      contextGeneration: mockContextGeneration,
+      targetChangeId: request.targetChangeId,
+      depotPaths: paths,
+    };
+    const digest = mockDigest(JSON.stringify({ files, target, targetChange }));
+    const token =
+      !blockers.length && files.length ? crypto.randomUUID() : undefined;
+    const expiresAt = Date.now() + 120_000;
+    if (token)
+      mockWorkflowTokens.set(token, { target, digest, expiresAt, request });
+    return {
+      ready: !!token,
+      target,
+      files,
+      blockers,
+      warnings: [],
+      contentDigest: digest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [],
+    };
+  },
+  async confirmMoveFiles(confirmation) {
+    const record = mockWorkflowTokens.get(confirmation.token);
+    mockWorkflowTokens.delete(confirmation.token);
+    const refresh = {
+      pendingChanges: true,
+      workspaceStatus: true,
+      depotPaths: confirmation.target.depotPaths,
+      reason: "Refresh affected source and target changelists.",
+    };
+    if (!record || record.target.kind !== "move")
+      return {
+        outcome: "rejected" as const,
+        failure: "tokenUnknown" as const,
+        message: "Unknown or consumed move token.",
+        operationIds: [],
+        files: [],
+        affectedChanges: [],
+        refreshedChanges: [],
+        refresh,
+      };
+    if (
+      record.expiresAt <= Date.now() ||
+      JSON.stringify(record.target) !== JSON.stringify(confirmation.target) ||
+      record.target.contextGeneration !== mockContextGeneration
+    )
+      return {
+        outcome: "rejected" as const,
+        failure: "contextChanged" as const,
+        message: "The move preview expired or its context changed.",
+        operationIds: [],
+        files: [],
+        affectedChanges: [],
+        refreshedChanges: [],
+        refresh,
+      };
+    const request =
+      record.request as import("../../shared/contracts/types").MoveFilesPreflightRequest;
+    const changes = mockPendingChanges ?? (await this.queryPendingChanges());
+    mockPendingChanges ??= changes;
+    const affected = new Set<number>([request.targetChangeId]);
+    const target = changes.find(
+      (change) => change.id === request.targetChangeId,
+    )!;
+    const results = request.depotPaths.map((depotPath, index) => {
+      const source = changes.find((change) =>
+        change.files.some((file) => file.depotPath === depotPath),
+      )!;
+      const itemIndex = source.files.findIndex(
+        (file) => file.depotPath === depotPath,
+      );
+      const [file] = source.files.splice(itemIndex, 1);
+      target.files.push(file);
+      affected.add(source.id);
+      return {
+        depotPath,
+        state: "succeeded" as const,
+        message: "Browser Mock move completed.",
+        operationId: `${confirmation.operationId ?? "mock-move"}:${index + 1}`,
+      };
+    });
+    return {
+      outcome: "succeeded" as const,
+      message: `Moved ${results.length} file(s).`,
+      operationIds: results.map((item) => item.operationId),
+      logReference: results[0]?.operationId,
+      files: results,
+      affectedChanges: [...affected].sort((a, b) => a - b),
+      refreshedChanges: changes.filter((change) => affected.has(change.id)),
+      refresh,
+    };
   },
   async preflightUnshelve(request) {
     const source = (await this.queryPendingChanges()).find(

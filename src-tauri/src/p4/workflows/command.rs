@@ -32,6 +32,27 @@ pub fn fstat(paths: &[String], shelved_change: Option<i64>) -> Result<Invocation
     scoped("fstat", args, paths)
 }
 
+pub fn describe_shelf(change: i64) -> Result<Invocation, String> {
+    ensure_numbered(change)?;
+    Ok(Invocation {
+        command: "describe",
+        args: vec!["-s".into(), "-S".into(), change.to_string()],
+        argument_input: None,
+    })
+}
+
+pub fn reopen(change: i64, path: &str) -> Result<Invocation, String> {
+    if change < 0 {
+        return Err("target changelist must be Default (0) or numbered".into());
+    }
+    let target = if change == 0 {
+        "default".into()
+    } else {
+        change.to_string()
+    };
+    scoped("reopen", vec!["-c".into(), target], &[path.to_owned()])
+}
+
 pub fn protects(paths: &[String]) -> Result<Invocation, String> {
     scoped("protects", vec!["-M".into()], paths)
 }
@@ -186,5 +207,10 @@ mod tests {
         );
         assert_eq!(unshelve(7, 0, &paths, true).unwrap().args[0], "-n");
         assert!(resolve("//depot/a", ResolveStrategy::MergePreview).is_err());
+        assert_eq!(
+            reopen(0, "//depot/a b#@%.txt").unwrap().args,
+            ["-c", "default", "//depot/a b#@%.txt"]
+        );
+        assert_eq!(describe_shelf(7).unwrap().args, ["-s", "-S", "7"]);
     }
 }

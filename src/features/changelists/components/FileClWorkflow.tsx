@@ -69,36 +69,17 @@ export function FileClWorkflow({
           connectionKey={connectionKey}
           zh={zh}
           onDismiss={onDismiss}
-          onMove={async (targetChangeId, depotPaths) => {
-            try {
-              const result = await backend.mutatePendingChange({
-                type: "moveFiles",
-                targetChangeId,
-                depotPaths,
-                operationId: crypto.randomUUID(),
-              });
-              if (result.refreshError) {
-                window.dispatchEvent(new Event("p4deck:pending-refresh"));
-                throw new Error(
-                  `${zh ? "移动可能已成功，但刷新失败；请关闭并刷新后确认，不要直接重试。" : "The move may have succeeded, but refresh failed. Close and refresh before retrying."} ${result.refreshError}`,
-                );
-              }
-              window.dispatchEvent(
-                new CustomEvent("p4deck:pending-mutation", { detail: result }),
-              );
-            } catch (cause) {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              throw cause;
-            } finally {
-              await Promise.all([
-                workspaceCache.invalidateQueries({
-                  queryKey: ["workspace-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["depot-files", connectionKey],
-                }),
-              ]);
-            }
+          onResult={async (result) => {
+            window.dispatchEvent(new Event("p4deck:pending-refresh"));
+            if (result.refreshError) throw new Error(result.refreshError);
+            await Promise.all([
+              workspaceCache.invalidateQueries({
+                queryKey: ["workspace-files", connectionKey],
+              }),
+              workspaceCache.invalidateQueries({
+                queryKey: ["depot-files", connectionKey],
+              }),
+            ]);
           }}
         />
       );

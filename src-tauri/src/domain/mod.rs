@@ -435,6 +435,79 @@ pub struct SubmittedChangeDetail {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShelfDetailRequest {
+    pub change_id: i64,
+    #[serde(default)]
+    pub offset: usize,
+    pub page_size: usize,
+    #[serde(default)]
+    pub refresh: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfDetailScope {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub change_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfDetailFile {
+    pub depot_path: String,
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub digest: Option<String>,
+    pub binary: bool,
+    pub symlink: bool,
+    pub deleted: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ShelfInspectionStatus {
+    Complete,
+    Partial,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfDetail {
+    pub scope: ShelfDetailScope,
+    pub description: String,
+    pub time: String,
+    pub owner: String,
+    pub user: String,
+    pub client: String,
+    pub jobs: Vec<String>,
+    pub files: Vec<ShelfDetailFile>,
+    pub total_files: usize,
+    pub offset: usize,
+    pub has_more: bool,
+    pub truncated: bool,
+    pub inspection_status: ShelfInspectionStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    pub operation_ids: Vec<String>,
+    pub cache_freshness: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClQueryResult {
@@ -605,10 +678,6 @@ pub enum ClAction {
     },
     Delete {
         change_id: i64,
-    },
-    MoveFiles {
-        change_id: i64,
-        depot_paths: Vec<String>,
     },
     SubmitValidate {
         change_id: i64,
@@ -1223,6 +1292,7 @@ pub enum RevisionReference {
     Have,
     Head,
     Revision { revision: i64 },
+    Shelf { change_id: i64 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1291,6 +1361,31 @@ pub struct DiffResult {
     pub identical: bool,
     pub truncated: bool,
     pub partial: bool,
+    pub operation_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShelfFilePreviewRequest {
+    pub scope: FileReviewScope,
+    pub change_id: i64,
+    #[serde(default)]
+    pub refresh: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfFilePreview {
+    pub side: DiffSide,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    pub encoding: String,
+    pub truncated: bool,
+    pub unsupported: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     pub operation_ids: Vec<String>,
 }
 
@@ -1732,6 +1827,63 @@ pub struct ShelfPreflight {
     pub operation_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MoveFilesPreflightRequest {
+    pub target_change_id: i64,
+    pub depot_paths: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveFileCandidate {
+    pub depot_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_change_id: Option<i64>,
+    pub action: String,
+    pub movable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveFilesPreflight {
+    pub ready: bool,
+    pub target: WorkflowTargetSnapshot,
+    pub files: Vec<MoveFileCandidate>,
+    pub blockers: Vec<WorkflowIssue>,
+    pub warnings: Vec<WorkflowIssue>,
+    pub content_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveFilesResult {
+    pub outcome: WorkflowOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<WorkflowFailureCode>,
+    pub message: String,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub files: Vec<WorkflowFileResult>,
+    pub affected_changes: Vec<i64>,
+    pub refreshed_changes: Vec<PendingChange>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_error: Option<String>,
+    pub refresh: WorkflowRefreshAdvice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -187,3 +187,69 @@
   border-radius: 6px;
   padding: 12px;
 }
+
+.shelf-detail-page {
+  min-height: 0;
+}
+
+.shelf-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.shelf-file-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  contain: strict;
+}
+
+.shelf-file-scroll button[role="option"] {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.shelf-file-scroll button[role="option"].selected,
+.shelf-file-scroll button[role="option"]:focus-visible {
+  background: var(--selected);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.shelf-file-scroll span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-file-scroll em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.shelf-preview {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .shelf-detail-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);
+  }
+}

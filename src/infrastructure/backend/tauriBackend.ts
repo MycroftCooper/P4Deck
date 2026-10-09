@@ -78,6 +78,12 @@ export const tauriBackend: Backend = {
   confirmSubmit: (confirmation) => invoke("confirm_submit", { confirmation }),
   preflightShelf: (request) => invoke("preflight_shelf", { request }),
   confirmShelf: (confirmation) => invoke("confirm_shelf", { confirmation }),
+  getShelfDetail: (request) => invoke("get_shelf_detail", { request }),
+  getShelfFilePreview: (request) =>
+    invoke("get_shelf_file_preview", { request }),
+  preflightMoveFiles: (request) => invoke("preflight_move_files", { request }),
+  confirmMoveFiles: (confirmation) =>
+    invoke("confirm_move_files", { confirmation }),
   preflightUnshelve: (request) => invoke("preflight_unshelve", { request }),
   confirmUnshelve: (confirmation) =>
     invoke("confirm_unshelve", { confirmation }),

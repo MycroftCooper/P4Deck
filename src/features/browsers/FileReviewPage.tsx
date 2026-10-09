@@ -583,7 +583,12 @@ function ReferenceSelector({
                   kind,
                   revision: value.kind === "revision" ? value.revision : 1,
                 }
-              : { kind },
+              : kind === "shelf"
+                ? {
+                    kind,
+                    changeId: value.kind === "shelf" ? value.changeId : 1,
+                  }
+                : { kind },
           );
         }}
       >
@@ -591,6 +596,7 @@ function ReferenceSelector({
         <option value="have">Have</option>
         <option value="head">Head</option>
         <option value="revision">Revision</option>
+        <option value="shelf">Shelf</option>
       </select>
       {value.kind === "revision" && (
         <input
@@ -603,6 +609,21 @@ function ReferenceSelector({
             onChange({
               kind: "revision",
               revision: Math.max(1, Number(event.target.value) || 1),
+            })
+          }
+        />
+      )}
+      {value.kind === "shelf" && (
+        <input
+          aria-label={`${label} shelf changelist`}
+          type="number"
+          min={1}
+          step={1}
+          value={value.changeId}
+          onChange={(event) =>
+            onChange({
+              kind: "shelf",
+              changeId: Math.max(1, Number(event.target.value) || 1),
             })
           }
         />

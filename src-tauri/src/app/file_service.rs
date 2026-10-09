@@ -107,6 +107,10 @@ impl FileService {
         }
     }
 
+    pub fn clear_review_cache(&self) {
+        self.review_cache.lock().entries.clear();
+    }
+
     #[cfg(test)]
     pub async fn workspace_children(
         &self,
@@ -787,6 +791,55 @@ impl FileService {
         Ok(result)
     }
 
+    pub async fn shelf_preview(
+        &self,
+        request: ShelfFilePreviewRequest,
+        app: Option<&AppHandle>,
+    ) -> Result<ShelfFilePreview, String> {
+        const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
+        let context = self.validate_review_scope(&request.scope)?;
+        let cache_key = format!(
+            "shelf-preview:{}:{}",
+            review_fingerprint(&request.scope),
+            request.change_id
+        );
+        if !request.refresh {
+            if let Some(cached) = self.review_cache.lock().get(&cache_key) {
+                return serde_json::from_value(cached).map_err(|error| error.to_string());
+            }
+        }
+        let operation_id = request
+            .operation_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let inspection = self
+            .inspect_review_file(&context, &request.scope.file_identity, &operation_id, app)
+            .await?;
+        let loaded = self
+            .load_shelf_diff_side(
+                &context,
+                &inspection,
+                request.change_id,
+                MAX_TEXT_BYTES,
+                format!("{operation_id}:shelf"),
+                app,
+            )
+            .await?;
+        self.ensure_review_scope_current(&request.scope)?;
+        let mut operation_ids = inspection.operation_ids;
+        operation_ids.extend(loaded.operation_ids);
+        let result = ShelfFilePreview {
+            side: loaded.metadata,
+            content: loaded.text,
+            encoding: "UTF-8".into(),
+            truncated: loaded.truncated,
+            unsupported: loaded.unsupported,
+            reason: loaded.reason,
+            operation_ids,
+        };
+        self.review_cache.lock().put(cache_key, &result)?;
+        Ok(result)
+    }
+
     pub async fn history(
         &self,
         request: FileHistoryRequest,
@@ -1037,12 +1090,25 @@ impl FileService {
         if reference == RevisionReference::Workspace {
             return load_workspace_side(inspection, max_text_bytes, reference);
         }
+        if let RevisionReference::Shelf { change_id } = reference {
+            return self
+                .load_shelf_diff_side(
+                    context,
+                    inspection,
+                    change_id,
+                    max_text_bytes,
+                    operation_id,
+                    app,
+                )
+                .await;
+        }
         let revision = match reference {
             RevisionReference::Have => inspection.have_revision,
             RevisionReference::Head => inspection.head_revision,
             RevisionReference::Revision { revision } if revision > 0 => Some(revision),
             RevisionReference::Revision { .. } => return Err("Revision must be positive".into()),
             RevisionReference::Workspace => unreachable!(),
+            RevisionReference::Shelf { .. } => unreachable!(),
         };
         let Some(revision) = revision else {
             return Ok(missing_diff_side(reference, &inspection.depot_path));
@@ -1143,6 +1209,123 @@ impl FileService {
             truncated: false,
             reason: None,
             operation_ids: vec![history.operation_id, printed.operation_id],
+        })
+    }
+
+    async fn load_shelf_diff_side(
+        &self,
+        context: &P4Context,
+        inspection: &ReviewInspection,
+        change_id: i64,
+        max_text_bytes: u64,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<LoadedDiffSide, String> {
+        if change_id <= 0 {
+            return Err("Shelved revision requires a positive changelist ID".into());
+        }
+        let reference = RevisionReference::Shelf { change_id };
+        let path = escape_filespec_literal(&inspection.depot_path);
+        let metadata_result = self
+            .run_status(
+                context,
+                "fstat",
+                vec![
+                    "-Ol".into(),
+                    "-Rs".into(),
+                    "-e".into(),
+                    change_id.to_string(),
+                    "-T".into(),
+                    "depotFile,action,shelvedType,shelvedSize,shelvedDigest,type,fileSize,digest"
+                        .into(),
+                    path.clone(),
+                ],
+                Some(format!("{operation_id}:meta")),
+                true,
+                app,
+            )
+            .await?;
+        if metadata_result.exit_code != 0 {
+            return Ok(missing_shelf_diff_side(reference, &inspection.depot_path));
+        }
+        let Some(value) = json_values(&metadata_result)
+            .into_iter()
+            .find(|value| value.get("depotFile").is_some())
+        else {
+            return Ok(missing_shelf_diff_side(reference, &inspection.depot_path));
+        };
+        let action = text(&value, "action").to_ascii_lowercase();
+        let deleted = matches!(action.as_str(), "delete" | "move/delete" | "purge");
+        let file_type = value
+            .get("shelvedType")
+            .or_else(|| value.get("type"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let size = value
+            .get("shelvedSize")
+            .or_else(|| value.get("fileSize"))
+            .and_then(value_u64);
+        let digest = value
+            .get("shelvedDigest")
+            .or_else(|| value.get("digest"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let binary = file_type.as_deref().is_some_and(is_binary_file_type);
+        let symlink = file_type.as_deref().is_some_and(is_symlink_file_type);
+        let metadata = DiffSide {
+            reference: reference.clone(),
+            label: reference_label(&reference, None),
+            depot_path: inspection.depot_path.clone(),
+            revision: None,
+            file_type,
+            size,
+            digest: digest.clone(),
+            exists: !deleted,
+            binary,
+        };
+        if deleted || binary || symlink || size.is_some_and(|value| value > max_text_bytes) {
+            return Ok(LoadedDiffSide {
+                metadata,
+                text: None,
+                digest,
+                exists: !deleted,
+                unsupported: true,
+                truncated: size.is_some_and(|value| value > max_text_bytes),
+                reason: Some(if deleted {
+                    "The shelved action deletes this file; no shelved text exists.".into()
+                } else if symlink {
+                    "Shelved symlinks are shown as metadata only.".into()
+                } else if binary {
+                    "Shelved binary content is shown as metadata only.".into()
+                } else {
+                    "Shelved file exceeds the 4 MiB text diff safety limit.".into()
+                }),
+                operation_ids: vec![metadata_result.operation_id],
+            });
+        }
+        let spec = format!("{path}@={change_id}");
+        let printed = self
+            .run_status(
+                context,
+                "print",
+                vec!["-q".into(), spec],
+                Some(format!("{operation_id}:print")),
+                false,
+                app,
+            )
+            .await?;
+        ensure_success(&printed, "print shelved revision")?;
+        let text = event_text(&printed);
+        let digest = digest.or_else(|| Some(sha256_hex(text.as_bytes())));
+        Ok(LoadedDiffSide {
+            metadata,
+            text: Some(text),
+            digest,
+            exists: true,
+            unsupported: false,
+            truncated: false,
+            reason: None,
+            operation_ids: vec![metadata_result.operation_id, printed.operation_id],
         })
     }
     async fn run(
@@ -1352,6 +1535,16 @@ fn missing_diff_side(reference: RevisionReference, depot_path: &str) -> LoadedDi
     }
 }
 
+fn missing_shelf_diff_side(reference: RevisionReference, depot_path: &str) -> LoadedDiffSide {
+    let mut side = missing_diff_side(reference, depot_path);
+    side.text = None;
+    side.unsupported = true;
+    side.reason = Some(
+        "Shelved content is deleted, missing, or no longer visible in this changelist.".into(),
+    );
+    side
+}
+
 fn reference_label(reference: &RevisionReference, resolved_revision: Option<i64>) -> String {
     match reference {
         RevisionReference::Workspace => "Workspace".into(),
@@ -1362,6 +1555,7 @@ fn reference_label(reference: &RevisionReference, resolved_revision: Option<i64>
             .map(|revision| format!("Head #{revision}"))
             .unwrap_or_else(|| "Head (missing)".into()),
         RevisionReference::Revision { revision } => format!("Revision #{revision}"),
+        RevisionReference::Shelf { change_id } => format!("Shelf @={change_id}"),
     }
 }
 

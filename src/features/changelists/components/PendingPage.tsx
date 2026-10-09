@@ -1,5 +1,5 @@
 import { useCommandFocus } from "../../../app/shell/CommandContext";
-import { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext, useRef, type DragEvent } from "react";
 import {
   ChevronDown,
   FolderArchive,
@@ -24,6 +24,7 @@ import { UnshelveDialog } from "./UnshelveDialog";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
 import { DeleteChangelistDialog } from "./DeleteChangelistDialog";
 import { workspaceCache } from "../../files/workspaceQueries";
+import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import {
   mergeWorkflowPending,
   type WorkflowRefreshDetail,
@@ -64,6 +65,7 @@ export function PendingPage({
   ready: boolean;
   navigation?: { changeId: number; nonce: number };
 }) {
+  const menuEnvironment = useMenuEnvironment();
   const focus = useCommandFocus();
   const surface = useRef<HTMLElement>(null);
   const handledNavigation = useRef<number | undefined>(undefined);
@@ -79,6 +81,13 @@ export function PendingPage({
     });
   const [refresh, setRefresh] = useState(0);
   const [move, setMove] = useState<MoveFilesRequest>();
+  const [drag, setDrag] = useState<{
+    connectionKey: string;
+    from: number;
+    paths: string[];
+    origins: Record<string, number>;
+  }>();
+  const [dropTarget, setDropTarget] = useState<number>();
   const [deleting, setDeleting] = useState<{
     change: PendingChange;
     source: HTMLElement | null;
@@ -112,6 +121,56 @@ export function PendingPage({
       source: surface.current?.ownerDocument
         .activeElement as HTMLElement | null,
     });
+  const beginDrag = (
+    from: number,
+    paths: string[],
+    event: DragEvent<HTMLElement>,
+  ) => {
+    const snapshot = {
+      connectionKey,
+      from,
+      paths: [...new Set(paths)],
+      origins: Object.fromEntries(paths.map((path) => [path, from])),
+    };
+    setDrag(snapshot);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(
+      "application/x-p4deck-opened-files",
+      JSON.stringify({ from, count: snapshot.paths.length, connectionKey }),
+    );
+    event.dataTransfer.setData("text/plain", snapshot.paths.join("\n"));
+  };
+  const dropFiles = (targetChangeId: number, event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropTarget(undefined);
+    if (!drag || drag.connectionKey !== connectionKey) {
+      setDrag(undefined);
+      return;
+    }
+    setMove({
+      from: drag.from,
+      origins: drag.origins,
+      paths: [...drag.paths],
+      target: targetChangeId,
+      source: event.currentTarget,
+    });
+    setDrag(undefined);
+  };
+  const openShelfDetail = (changeId: number, path?: string, fresh = false) =>
+    menuEnvironment.openFilePage(
+      "shelf",
+      {
+        id: `shelf:${changeId}:${path ?? ""}`,
+        name: `Shelf ${changeId}`,
+        kind: "file",
+        absolutePath: "",
+        relativePath: "",
+        depotPath: `${changeId}${path ? `::${encodeURIComponent(path)}` : ""}`,
+        state: "controlled",
+      },
+      fresh,
+    );
   useEffect(() => {
     let live = true;
     const reload = () => setRefresh((n) => n + 1);
@@ -375,27 +434,27 @@ export function PendingPage({
           connectionKey={connectionKey}
           zh={t.files === "文件"}
           onDismiss={() => setMove(undefined)}
-          onMove={async (targetChangeId, depotPaths) => {
-            try {
-              const result = await backend.mutatePendingChange({
-                type: "moveFiles",
-                targetChangeId,
-                depotPaths,
-                operationId: crypto.randomUUID(),
-              });
-              applyMutation(
-                result,
-                t.files === "文件"
-                  ? "文件移动结果不完整"
-                  : "Move refresh incomplete",
-                t.files === "文件" ? "文件已移动" : "Files moved",
+          onResult={async (result) => {
+            if (!result.refreshError) {
+              setChanges((current) =>
+                mergePendingMutation(current, {
+                  operation: {
+                    operationId: result.operationIds[0] ?? "move",
+                    exitCode: result.outcome === "succeeded" ? 0 : 1,
+                    events: [],
+                    durationMs: 0,
+                  },
+                  affectedChanges: result.affectedChanges,
+                  affectedPaths: result.refresh.depotPaths,
+                  refreshedChanges: result.refreshedChanges,
+                }),
               );
-            } catch (cause) {
+            } else {
+              setError(result.refreshError);
               window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              throw cause;
-            } finally {
-              await refreshFileStatus();
             }
+            setNotice(result.message);
+            await refreshFileStatus();
           }}
         />
       )}
@@ -511,7 +570,26 @@ export function PendingPage({
         {changes.map((change) => (
           <section
             key={change.id}
-            className={`pending-card ${selection.isSelected(change) ? "command-selected" : ""}`}
+            className={`pending-card ${selection.isSelected(change) ? "command-selected" : ""} ${dropTarget === change.id ? "drop-target" : ""}`}
+            aria-label={`${change.id === 0 ? "Default" : `CL ${change.id}`} drop target`}
+            onDragOver={(event) => {
+              if (
+                drag?.connectionKey === connectionKey &&
+                drag.paths.some((path) => drag.origins[path] !== change.id)
+              ) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTarget(change.id);
+              }
+            }}
+            onDragLeave={(event) => {
+              if (
+                !event.relatedTarget ||
+                !event.currentTarget.contains(event.relatedTarget as Node)
+              )
+                setDropTarget(undefined);
+            }}
+            onDrop={(event) => dropFiles(change.id, event)}
           >
             <header
               data-pending-change={change.id}
@@ -580,6 +658,13 @@ export function PendingPage({
                   changeId={change.id}
                   refresh={reload}
                   onMove={(paths) => openMove(change.id, paths)}
+                  onDragFiles={(paths, event) =>
+                    beginDrag(change.id, paths, event)
+                  }
+                  onDragEnd={() => {
+                    setDrag(undefined);
+                    setDropTarget(undefined);
+                  }}
                   onShelf={(mode, paths, source) =>
                     openShelf(change, mode, paths, source)
                   }
@@ -597,6 +682,7 @@ export function PendingPage({
                             source,
                           ),
                         ),
+                        查看搁置详情: action(() => openShelfDetail(change.id)),
                         "删除搁置内容…": action((source) =>
                           openShelf(
                             change,
@@ -625,6 +711,9 @@ export function PendingPage({
                         files={change.shelvedFiles}
                         changeId={change.id}
                         shelf
+                        onInspect={(path, fresh) =>
+                          openShelfDetail(change.id, path, fresh)
+                        }
                         onShelf={(mode, paths, source) =>
                           openShelf(change, mode, paths, source)
                         }

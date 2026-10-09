@@ -11,16 +11,16 @@ mod tests {
         domain::{
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, LoginRequest,
-            OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
-            PendingChangeMutation, PendingChangeMutationRequest, RenameMoveConfirmation,
-            RenameMoveFailureCode, RenameMoveIssueCode, RenameMoveOutcome,
+            MoveFilesPreflightRequest, OperationResult, OperationSource, OutputMode,
+            P4CommandRequest, P4Context, PendingChangeMutation, PendingChangeMutationRequest,
+            RenameMoveConfirmation, RenameMoveFailureCode, RenameMoveIssueCode, RenameMoveOutcome,
             RenameMovePreflightRequest, ResolveConfirmation, ResolvePreflightRequest,
-            ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest, ShelfMode,
-            ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
-            SubmitPreflightRequest, SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode,
-            SyncOutcome, SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec,
-            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
-            WorkflowOutcome,
+            ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest,
+            ShelfDetailRequest, ShelfFilePreviewRequest, ShelfMode, ShelfPreflightRequest,
+            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
+            SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
+            SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
+            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, context::ContextStore, rename::RenameRepository,
@@ -883,12 +883,7 @@ mod tests {
             )?;
             confirmed_sync(sync, vec![depot_path.clone()], None).await?;
 
-            let mut permissions = std::fs::metadata(&local_file)
-                .map_err(|error| error.to_string())?
-                .permissions();
-            permissions.set_readonly(false);
-            std::fs::set_permissions(&local_file, permissions)
-                .map_err(|error| error.to_string())?;
+            make_writable(&local_file)?;
             std::fs::write(&local_file, b"local writable change\n")
                 .map_err(|error| error.to_string())?;
             checked_run(
@@ -1405,13 +1400,21 @@ mod tests {
                 .all(|value| value.get("depotFile").is_none()),
             format!("E2E client still has opened files after Revert: {opened_values:?}"),
         )?;
-        exercise_pending_changelists(changelists, journal, runner, files, context, root).await?;
+        exercise_pending_changelists(
+            changelists,
+            workflows,
+            journal,
+            runner,
+            files,
+            context,
+            root,
+        )
+        .await?;
         exercise_shelf_unshelve_resolve(
             runner,
             files,
             changelists,
-            workflows,
-            expiring_workflows,
+            (workflows, expiring_workflows),
             contexts,
             context,
             root,
@@ -1460,11 +1463,7 @@ mod tests {
             "workspace status fixture started with an opened README",
         )?;
 
-        let mut permissions = std::fs::metadata(&baseline)
-            .map_err(|error| error.to_string())?
-            .permissions();
-        permissions.set_readonly(false);
-        std::fs::set_permissions(&baseline, permissions).map_err(|error| error.to_string())?;
+        make_writable(&baseline)?;
         std::fs::write(&baseline, b"workspace modified outside Perforce\n")
             .map_err(|error| error.to_string())?;
         let direct_preview = checked_run(
@@ -1715,6 +1714,7 @@ mod tests {
 
     async fn exercise_pending_changelists(
         changelists: &ChangelistService,
+        workflows: &WorkflowService,
         journal: &OperationJournal,
         runner: &P4Runner,
         files: &FileService,
@@ -1810,25 +1810,48 @@ mod tests {
             format!("created jobs were {:?}", created_change.jobs),
         )?;
 
-        let moved = changelists
-            .mutate_pending(
-                context.clone(),
-                PendingChangeMutationRequest {
-                    operation_id: Some("be004-move-numbered".into()),
-                    mutation: PendingChangeMutation::MoveFiles {
-                        target_change_id: change_id,
-                        depot_paths: vec!["//depot/main/README.txt".into()],
-                    },
+        let move_numbered = workflows
+            .preflight_move(
+                MoveFilesPreflightRequest {
+                    target_change_id: change_id,
+                    depot_paths: vec!["//depot/main/README.txt".into()],
+                    operation_id: Some("be004-move-numbered-preflight".into()),
                 },
                 None,
             )
-            .await?;
+            .await;
+        ensure(
+            move_numbered.ready,
+            format!("typed move preflight was blocked: {move_numbered:?}"),
+        )?;
+        let moved = workflows
+            .confirm_move(
+                WorkflowConfirmation {
+                    token: move_numbered
+                        .token
+                        .ok_or("move preflight returned no token")?,
+                    target: move_numbered.target,
+                    operation_id: Some("be004-move-numbered".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            moved.outcome == WorkflowOutcome::Succeeded,
+            format!("typed move failed: {moved:?}"),
+        )?;
         ensure(
             pending_change(&moved.refreshed_changes, change_id)?
                 .files
                 .iter()
                 .any(|file| file.depot_path == "//depot/main/README.txt"),
             "numbered changelist did not receive the moved file",
+        )?;
+        ensure(
+            journal
+                .get("be004-move-numbered:1")
+                .is_some_and(|record| record.state == JournalState::Succeeded),
+            "typed move did not record its per-file reopen in the Journal",
         )?;
 
         checked_run(
@@ -1929,19 +1952,34 @@ mod tests {
             "non-empty/shelved changelist deletion unexpectedly succeeded",
         )?;
 
-        let moved_default = changelists
-            .mutate_pending(
-                context.clone(),
-                PendingChangeMutationRequest {
-                    operation_id: Some("be004-move-default".into()),
-                    mutation: PendingChangeMutation::MoveFiles {
-                        target_change_id: 0,
-                        depot_paths: vec!["//depot/main/README.txt".into()],
-                    },
+        let move_default = workflows
+            .preflight_move(
+                MoveFilesPreflightRequest {
+                    target_change_id: 0,
+                    depot_paths: vec!["//depot/main/README.txt".into()],
+                    operation_id: Some("be004-move-default-preflight".into()),
                 },
                 None,
             )
-            .await?;
+            .await;
+        ensure(
+            move_default.ready,
+            format!("Default move preflight was blocked: {move_default:?}"),
+        )?;
+        let moved_default = workflows
+            .confirm_move(
+                WorkflowConfirmation {
+                    token: move_default.token.ok_or("Default move returned no token")?,
+                    target: move_default.target,
+                    operation_id: Some("be004-move-default".into()),
+                },
+                None,
+            )
+            .await;
+        ensure(
+            moved_default.outcome == WorkflowOutcome::Succeeded,
+            format!("Default typed move failed: {moved_default:?}"),
+        )?;
         ensure(
             pending_change(&moved_default.refreshed_changes, 0)?
                 .files
@@ -2779,12 +2817,7 @@ mod tests {
             special_history.items.len() == 1,
             format!("special filespec history failed: {special_history:?}"),
         )?;
-        let mut special_permissions = std::fs::metadata(&special_local)
-            .map_err(|error| error.to_string())?
-            .permissions();
-        special_permissions.set_readonly(false);
-        std::fs::set_permissions(&special_local, special_permissions)
-            .map_err(|error| error.to_string())?;
+        make_writable(&special_local)?;
         std::fs::OpenOptions::new()
             .append(true)
             .open(&special_local)
@@ -2881,12 +2914,7 @@ mod tests {
             large_diff.unsupported && large_diff.truncated && large_diff.partial,
             format!("large diff did not report its safety limit: {large_diff:?}"),
         )?;
-        let mut special_permissions = std::fs::metadata(&special_local)
-            .map_err(|error| error.to_string())?
-            .permissions();
-        special_permissions.set_readonly(false);
-        std::fs::set_permissions(&special_local, special_permissions)
-            .map_err(|error| error.to_string())?;
+        make_writable(&special_local)?;
         std::fs::remove_file(&special_local).map_err(|error| error.to_string())?;
         let missing_diff = files
             .diff(
@@ -3681,12 +3709,12 @@ mod tests {
         runner: &Arc<P4Runner>,
         files: &FileService,
         changelists: &ChangelistService,
-        workflows: &WorkflowService,
-        expiring_workflows: &WorkflowService,
+        workflow_services: (&WorkflowService, &WorkflowService),
         contexts: &ContextStore,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
+        let (workflows, expiring_workflows) = workflow_services;
         const A: &str = "//depot/p4deck-workflow-e2e/a.txt";
         const B: &str = "//depot/p4deck-workflow-e2e/b.txt";
         const TARGET_CLIENT: &str = "p4deck-fixture-workflow-target";
@@ -3702,7 +3730,7 @@ mod tests {
             runner,
             context,
             "add",
-            vec!["-t".into(), "binary".into(), A.into(), B.into()],
+            vec![A.into(), B.into()],
             None,
             OutputMode::Text,
         )
@@ -3711,7 +3739,7 @@ mod tests {
             runner,
             context,
             "reopen",
-            vec!["-t".into(), "binary".into(), A.into(), B.into()],
+            vec!["-t".into(), "binary".into(), B.into()],
             None,
             OutputMode::Text,
         )
@@ -3814,6 +3842,79 @@ mod tests {
                 .len()
                 == 2,
             "partial shelf did not preserve both selected shelf revisions",
+        )?;
+        let shelf_detail = workflows
+            .shelf_detail(
+                ShelfDetailRequest {
+                    change_id: source_change,
+                    offset: 0,
+                    page_size: 1,
+                    refresh: true,
+                    operation_id: Some("be004b-shelf-detail".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            shelf_detail.total_files == 2
+                && shelf_detail.files.len() == 1
+                && shelf_detail.has_more
+                && shelf_detail.files[0].depot_path == A
+                && !shelf_detail.files[0].binary,
+            format!("typed shelf detail was incomplete or unstable: {shelf_detail:?}"),
+        )?;
+        let (_, generation) = contexts.snapshot();
+        let text_preview = files
+            .shelf_preview(
+                ShelfFilePreviewRequest {
+                    scope: crate::domain::FileReviewScope {
+                        server: context.server.clone(),
+                        user: context.user.clone(),
+                        client: context.client.clone(),
+                        workspace: context.cwd.clone().unwrap_or_default(),
+                        active_profile_id: contexts.active_profile_id(),
+                        context_generation: generation,
+                        file_identity: A.into(),
+                    },
+                    change_id: source_change,
+                    refresh: true,
+                    operation_id: Some("be004b-shelf-preview".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            !text_preview.side.binary
+                && text_preview
+                    .content
+                    .as_deref()
+                    .is_some_and(|content| content.contains("shelf a v1")),
+            format!("text shelf preview did not return shelved content: {text_preview:?}"),
+        )?;
+        let binary_preview = files
+            .shelf_preview(
+                ShelfFilePreviewRequest {
+                    scope: crate::domain::FileReviewScope {
+                        server: context.server.clone(),
+                        user: context.user.clone(),
+                        client: context.client.clone(),
+                        workspace: context.cwd.clone().unwrap_or_default(),
+                        active_profile_id: contexts.active_profile_id(),
+                        context_generation: generation,
+                        file_identity: B.into(),
+                    },
+                    change_id: source_change,
+                    refresh: true,
+                    operation_id: Some("be004b-binary-shelf-preview".into()),
+                },
+                None,
+            )
+            .await?;
+        ensure(
+            binary_preview.side.binary
+                && binary_preview.content.is_none()
+                && binary_preview.reason.is_some(),
+            format!("binary shelf preview was treated as text: {binary_preview:?}"),
         )?;
 
         let replace_required = workflows
@@ -4974,6 +5075,21 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n")
             + "\n"
+    }
+
+    fn make_writable(path: &Path) -> Result<(), String> {
+        let mut permissions = std::fs::metadata(path)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        #[cfg(windows)]
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() | 0o200);
+        }
+        std::fs::set_permissions(path, permissions).map_err(|error| error.to_string())
     }
 
     fn ensure(condition: bool, message: impl Into<String>) -> Result<(), String> {

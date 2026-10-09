@@ -417,9 +417,10 @@ impl ChangelistRepository {
         &self,
         context: P4Context,
         request: &PendingChangeMutationRequest,
+        preserved_files: &[String],
         app: Option<&AppHandle>,
     ) -> Result<PendingMutationExecution, String> {
-        let prepared = command::pending_mutation_invocation(&request.mutation)?;
+        let prepared = command::pending_mutation_invocation(&request.mutation, preserved_files)?;
         let output_mode = if prepared.invocation.input.is_some() {
             OutputMode::Text
         } else {

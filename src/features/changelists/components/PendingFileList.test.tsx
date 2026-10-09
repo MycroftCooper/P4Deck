@@ -118,3 +118,48 @@ it("windows 100,000 pending files and preserves keyboard focus and selection", a
   rows = list.querySelectorAll<HTMLElement>('[role="option"]');
   expect(rows.length).toBeLessThan(40);
 });
+
+it("freezes selected opened files for drag while shelves remain non-draggable", async () => {
+  const files: PendingFile[] = [
+    { depotPath: "//depot/a b.txt", action: "edit" },
+    { depotPath: "//depot/项目.txt", action: "add" },
+  ];
+  const drag = vi.fn();
+  const render = (shelf = false) =>
+    root.render(
+      <ContextMenuProvider scope={`pending-drag-${shelf}`} zh={false}>
+        <MenuEnvironment.Provider value={environment}>
+          <PendingFileList
+            files={files}
+            changeId={42}
+            shelf={shelf}
+            refresh={vi.fn()}
+            onDragFiles={drag}
+          />
+        </MenuEnvironment.Provider>
+      </ContextMenuProvider>,
+    );
+  await act(async () => render());
+  const rows = host.querySelectorAll<HTMLElement>('[role="option"]');
+  await act(async () => {
+    rows[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    rows[1].dispatchEvent(
+      new MouseEvent("click", { bubbles: true, ctrlKey: true }),
+    );
+  });
+  const event = new Event("dragstart", { bubbles: true });
+  Object.defineProperty(event, "dataTransfer", {
+    value: { effectAllowed: "none", setData: vi.fn() },
+  });
+  await act(async () => rows[1].dispatchEvent(event));
+  expect(drag.mock.calls[0][0]).toEqual([
+    "//depot/a b.txt",
+    "//depot/项目.txt",
+  ]);
+  expect(rows[0].draggable).toBe(true);
+
+  await act(async () => render(true));
+  expect(host.querySelector<HTMLElement>('[role="option"]')!.draggable).toBe(
+    false,
+  );
+});

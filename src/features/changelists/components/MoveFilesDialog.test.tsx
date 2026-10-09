@@ -2,14 +2,16 @@
 import { act, type ComponentProps } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
+import { backend } from "../../../infrastructure/backend";
+import type {
+  MoveFilesPreflight,
+  MoveFilesResult,
+  PendingChange,
+} from "../../../shared/contracts/types";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
-import type { PendingChange } from "../../../shared/contracts/types";
 
 const root = dialogHarness();
 const dismiss = vi.fn();
-beforeEach(() => {
-  dismiss.mockClear();
-});
 const changes: PendingChange[] = [0, 10, 20].map((id) => ({
   id,
   description: `Change ${id}`,
@@ -20,79 +22,156 @@ const changes: PendingChange[] = [0, 10, 20].map((id) => ({
   files: [],
   shelvedFiles: [],
 }));
+const target = {
+  kind: "move" as const,
+  server: "fixture:1666",
+  user: "tester",
+  client: "workspace",
+  workspace: "/workspace",
+  contextGeneration: 1,
+  targetChangeId: 0,
+  depotPaths: ["//depot/a"],
+};
+const ready = (
+  overrides: Partial<MoveFilesPreflight> = {},
+): MoveFilesPreflight => ({
+  ready: true,
+  target,
+  files: [
+    {
+      depotPath: "//depot/a",
+      sourceChangeId: 10,
+      action: "edit",
+      movable: true,
+    },
+  ],
+  blockers: [],
+  warnings: [],
+  contentDigest: "digest",
+  token: "token",
+  expiresAt: Date.now() + 60_000,
+  ttlMs: 60_000,
+  operationIds: ["preflight"],
+  ...overrides,
+});
+const success = (
+  overrides: Partial<MoveFilesResult> = {},
+): MoveFilesResult => ({
+  outcome: "succeeded",
+  message: "Moved 1 file(s).",
+  operationIds: ["move:1"],
+  files: [
+    {
+      depotPath: "//depot/a",
+      state: "succeeded",
+      message: "Moved",
+      operationId: "move:1",
+    },
+  ],
+  affectedChanges: [0, 10],
+  refreshedChanges: [],
+  refresh: {
+    pendingChanges: true,
+    workspaceStatus: true,
+    depotPaths: ["//depot/a"],
+    reason: "refresh",
+  },
+  ...overrides,
+});
+
+beforeEach(() => dismiss.mockClear());
+
 async function render(
   request: MoveFilesRequest = {
     from: 10,
     paths: ["//depot/a", "//depot/a"],
     source: null,
   },
-  candidates = changes,
   overrides: Partial<ComponentProps<typeof MoveFilesDialog>> = {},
 ) {
   await act(async () =>
     root.render(
       <MoveFilesDialog
         request={request}
-        changes={candidates}
+        changes={changes}
         client="workspace"
         connectionKey="connection-a"
         zh
         onDismiss={dismiss}
+        check={vi.fn().mockResolvedValue(ready())}
+        execute={vi.fn().mockResolvedValue(success())}
         {...overrides}
       />,
     ),
   );
 }
-function checkButton() {
+
+function button(text: string) {
   return [...document.querySelectorAll("button")].find(
-    (button) => button.textContent === "检查选择（不执行）",
+    (item) => item.textContent === text,
   )!;
 }
-it("excludes the source CL, includes Default, and requires an explicit target", async () => {
-  await render();
-  expect(
-    [...document.querySelectorAll("option")].map((option) => option.value),
-  ).toEqual(["", "0", "20"]);
-  expect(checkButton().disabled).toBe(true);
-  expect(document.activeElement).toBe(document.querySelector("input"));
+
+it("preflights the frozen, deduplicated numbered-to-Default snapshot", async () => {
+  const check = vi.fn().mockResolvedValue(ready());
+  await render(undefined, { check });
+  const select = document.querySelector("select")!;
   await act(async () => {
-    const select = document.querySelector("select")!;
     select.value = "0";
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  expect(checkButton().disabled).toBe(false);
-  await act(async () => checkButton().click());
-  expect(document.body.textContent).toContain("尚未移动任何文件");
+  await act(async () => button("预检（不执行）").click());
+  expect(check).toHaveBeenCalledOnce();
+  expect(check.mock.calls[0][0]).toMatchObject({
+    targetChangeId: 0,
+    depotPaths: ["//depot/a"],
+  });
+  expect(document.body.textContent).toContain("预检通过：1 个文件");
   expect(dismiss).not.toHaveBeenCalled();
 });
-it("executes the frozen numbered-to-Default scope once after confirmation", async () => {
-  const move = vi.fn(async () => {});
-  await render(undefined, changes, { onMove: move });
-  await act(async () => {
-    const select = document.querySelector("select")!;
-    select.value = "0";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await act(async () => checkButton().click());
-  await act(async () =>
-    [...document.querySelectorAll("button")]
-      .find((button) => button.textContent === "确认移动")!
-      .click(),
+
+it("confirms only the returned token/target and closes on verified success", async () => {
+  const execute = vi.fn().mockResolvedValue(success());
+  await render(
+    { from: 10, target: 0, paths: ["//depot/a"], source: null },
+    { execute },
   );
-  expect(move).toHaveBeenCalledExactlyOnceWith(0, ["//depot/a"]);
+  await act(async () => button("预检（不执行）").click());
+  await act(async () => button("确认移动").click());
+  expect(execute).toHaveBeenCalledOnce();
+  expect(execute.mock.calls[0][0]).toMatchObject({ token: "token", target });
   expect(dismiss).toHaveBeenCalledOnce();
 });
-it("supports Default-to-numbered moves and invalidates confirmation on target or connection changes", async () => {
-  const move = vi.fn(async () => {});
-  await render({ from: 0, paths: ["//depot/a"], source: null }, changes, {
-    onMove: move,
-  });
-  await act(async () => {
-    const select = document.querySelector("select")!;
-    select.value = "10";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await act(async () => checkButton().click());
+
+it("keeps partial failures visible and never presents them as full success", async () => {
+  const execute = vi.fn().mockResolvedValue(
+    success({
+      outcome: "partial",
+      message: "Moved 1 file(s); 1 file(s) were not confirmed moved.",
+      files: [
+        success().files[0],
+        {
+          depotPath: "//depot/b",
+          state: "failed",
+          message: "Target rejected this file",
+        },
+      ],
+    }),
+  );
+  await render(
+    { from: 10, target: 0, paths: ["//depot/a"], source: null },
+    { execute },
+  );
+  await act(async () => button("预检（不执行）").click());
+  await act(async () => button("确认移动").click());
+  expect(document.body.textContent).toContain("not confirmed moved");
+  expect(document.body.textContent).toContain("Target rejected this file");
+  expect(dismiss).not.toHaveBeenCalled();
+});
+
+it("invalidates an old preview when target or connection changes", async () => {
+  await render({ from: 0, target: 10, paths: ["//depot/a"], source: null });
+  await act(async () => button("预检（不执行）").click());
   expect(document.body.textContent).toContain("确认移动");
   await act(async () => {
     const select = document.querySelector("select")!;
@@ -100,66 +179,32 @@ it("supports Default-to-numbered moves and invalidates confirmation on target or
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   expect(document.body.textContent).not.toContain("确认移动");
-  await act(async () => checkButton().click());
-  await render({ from: 0, paths: ["//different"], source: null }, changes, {
-    onMove: move,
-    connectionKey: "connection-b",
-  });
-  expect(document.body.textContent).toContain("连接或 Workspace 已改变");
-  expect(document.body.textContent).not.toContain("确认移动");
-  expect(move).not.toHaveBeenCalled();
-});
-it("keeps the dialog open with the real move failure and allows a fresh retry", async () => {
-  const move = vi.fn(async () => {
-    throw new Error("target changelist is outside the current scope");
-  });
-  await render(undefined, changes, { onMove: move });
-  await act(async () => {
-    const select = document.querySelector("select")!;
-    select.value = "20";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await act(async () => checkButton().click());
-  await act(async () =>
-    [...document.querySelectorAll("button")]
-      .find((button) => button.textContent === "确认移动")!
-      .click(),
-  );
-  expect(document.body.textContent).toContain(
-    "target changelist is outside the current scope",
-  );
-  expect(document.body.textContent).not.toContain("确认移动");
-  expect(dismiss).not.toHaveBeenCalled();
-});
-it("freezes and deduplicates the exact file subset and candidate snapshot", async () => {
-  await render();
   await render(
-    { from: 20, paths: ["//different/a", "//different/b"], source: null },
-    [],
+    { from: 0, target: 10, paths: ["//depot/a"], source: null },
+    { connectionKey: "connection-b" },
   );
-  expect(document.body.textContent).toContain("来源 CL 10 · 1 个文件");
-  expect(document.querySelector('option[value="20"]')).not.toBeNull();
+  expect(document.body.textContent).toContain("连接或 Workspace 已改变");
 });
-it("explains empty candidate snapshots and disables empty file scope", async () => {
-  await render({ from: 10, paths: [], source: null }, [changes[1]]);
-  expect(document.body.textContent).toContain("没有选择文件");
-  expect(document.body.textContent).toContain("没有其他目标 CL");
-  expect(checkButton().disabled).toBe(true);
+
+it("blocks empty and repeated same-target drops before preflight", async () => {
+  await render({ from: 10, target: 10, paths: ["//depot/a"], source: null });
+  expect(button("预检（不执行）").disabled).toBe(true);
+  expect(document.body.textContent).toContain("已跳过本来就在目标 CL");
 });
-it("filters candidates without changing the selected target", async () => {
-  await render();
-  await act(async () => {
-    const select = document.querySelector("select")!;
-    select.value = "20";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    const input = document.querySelector("input")!;
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, "no-match");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  expect(document.body.textContent).toContain("没有匹配项");
-  expect(document.querySelector("select")!.value).toBe("20");
-  expect(document.body.textContent).toContain("CL 10 → CL 20");
+
+it("cancels the active grouped operation instead of dismissing a busy dialog", async () => {
+  const check = vi.fn().mockReturnValue(new Promise(() => undefined));
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  await render(
+    { from: 10, target: 0, paths: ["//depot/a"], source: null },
+    { check },
+  );
+  await act(async () => button("预检（不执行）").click());
+  const operationId = check.mock.calls[0][0].operationId;
+  await act(async () => button("取消操作").click());
+  expect(cancel).toHaveBeenCalledWith(operationId);
+  expect(dismiss).not.toHaveBeenCalled();
+  cancel.mockRestore();
 });

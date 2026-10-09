@@ -503,6 +503,20 @@ button {
 .pending-file.shelf {
   color: var(--muted);
 }
+
+.pending-card.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.pending-card.drop-target > header::after {
+  content: "Drop to move / 拖放以移动";
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
 .streams-empty {
   height: 100%;
   display: grid;

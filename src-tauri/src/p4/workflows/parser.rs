@@ -1,4 +1,5 @@
-use crate::domain::{OperationEvent, ResolveVersionSource};
+use crate::domain::{OperationEvent, ResolveVersionSource, ShelfDetailFile, ShelfInspectionStatus};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
@@ -13,9 +14,13 @@ pub struct WorkflowFileFact {
     pub file_type: String,
     pub digest: String,
     pub shelved_digest: String,
+    pub size: Option<u64>,
+    pub shelved_size: Option<u64>,
+    pub shelved_type: Option<String>,
     pub unresolved: usize,
     pub other_open: usize,
     pub other_lock: usize,
+    pub our_lock: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,12 +60,108 @@ pub fn file_facts(events: &[OperationEvent]) -> Vec<WorkflowFileFact> {
                     .to_owned(),
                 digest: text(&value, "digest"),
                 shelved_digest: text(&value, "shelvedDigest"),
+                size: unsigned(&value, "fileSize"),
+                shelved_size: unsigned(&value, "shelvedSize"),
+                shelved_type: value
+                    .get("shelvedType")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
                 unresolved: count(&value, "unresolved"),
                 other_open: count(&value, "otherOpen"),
                 other_lock: count(&value, "otherLock"),
+                our_lock: count(&value, "ourLock"),
             })
         })
         .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedShelfDetail {
+    pub description: String,
+    pub time: String,
+    pub owner: String,
+    pub user: String,
+    pub client: String,
+    pub jobs: Vec<String>,
+    pub files: Vec<ShelfDetailFile>,
+    pub inspection_status: ShelfInspectionStatus,
+    pub message: Option<String>,
+}
+
+pub fn shelf_detail(
+    events: &[OperationEvent],
+    expected_change: i64,
+    facts: &[WorkflowFileFact],
+) -> Result<ParsedShelfDetail, String> {
+    let value = json_values(events)
+        .into_iter()
+        .find(|value| number(value, "change") == Some(expected_change))
+        .ok_or("p4 describe -S returned no structured shelf")?;
+    if text(&value, "status") == "submitted" {
+        return Err("the requested changelist is submitted, not a shelf".into());
+    }
+    let mut files = Vec::new();
+    for index in 0.. {
+        let Some(path) = value
+            .get(format!("depotFile{index}"))
+            .and_then(Value::as_str)
+        else {
+            break;
+        };
+        let action = text(&value, &format!("action{index}"));
+        let described_type = value
+            .get(format!("type{index}"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let fact = facts.iter().find(|fact| fact.depot_path == path);
+        let file_type = fact
+            .and_then(|fact| fact.shelved_type.clone())
+            .or(described_type);
+        let lowered_type = file_type
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let lowered_action = action.to_ascii_lowercase();
+        files.push(ShelfDetailFile {
+            depot_path: path.to_owned(),
+            action,
+            revision: number(&value, &format!("rev{index}")),
+            file_type,
+            size: fact.and_then(|fact| fact.shelved_size.or(fact.size)),
+            digest: fact.and_then(|fact| {
+                (!fact.shelved_digest.is_empty())
+                    .then(|| fact.shelved_digest.clone())
+                    .or_else(|| (!fact.digest.is_empty()).then(|| fact.digest.clone()))
+            }),
+            binary: lowered_type.contains("binary") || lowered_type.contains("apple"),
+            symlink: lowered_type.starts_with("symlink"),
+            deleted: matches!(lowered_action.as_str(), "delete" | "move/delete" | "purge"),
+        });
+    }
+    if files.is_empty() {
+        return Err("the changelist has no visible shelved files".into());
+    }
+    files.sort_by(|left, right| left.depot_path.cmp(&right.depot_path));
+    let missing_metadata = files
+        .iter()
+        .filter(|file| !file.deleted && (file.file_type.is_none() || file.digest.is_none()))
+        .count();
+    Ok(ParsedShelfDetail {
+        description: normalized_multiline(&text(&value, "desc")),
+        time: timestamp(&value),
+        owner: text(&value, "user"),
+        user: text(&value, "user"),
+        client: text(&value, "client"),
+        jobs: indexed_text(&value, "job"),
+        files,
+        inspection_status: if missing_metadata == 0 {
+            ShelfInspectionStatus::Complete
+        } else {
+            ShelfInspectionStatus::Partial
+        },
+        message: (missing_metadata > 0)
+            .then(|| format!("Metadata is unavailable for {missing_metadata} shelved file(s).")),
+    })
 }
 
 pub fn permissions(events: &[OperationEvent]) -> Vec<PermissionFact> {
@@ -214,6 +315,36 @@ fn number(value: &Value, key: &str) -> Option<i64> {
     })
 }
 
+fn unsigned(value: &Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(|value| {
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+    })
+}
+
+fn indexed_text(value: &Value, prefix: &str) -> Vec<String> {
+    (0..)
+        .map_while(|index| {
+            value
+                .get(format!("{prefix}{index}"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+fn normalized_multiline(value: &str) -> String {
+    value.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+fn timestamp(value: &Value) -> String {
+    number(value, "time")
+        .and_then(|value| DateTime::<Utc>::from_timestamp(value, 0))
+        .unwrap_or_else(Utc::now)
+        .to_rfc3339()
+}
+
 fn change_number(value: &Value, key: &str) -> Option<i64> {
     match value.get(key).and_then(Value::as_str) {
         Some("default") => Some(0),
@@ -258,5 +389,22 @@ mod tests {
         let sources =
             resolve_sources(&["//client/a - merging //depot/a#3 using base //depot/a#2".into()]);
         assert_eq!(sources.len(), 2);
+    }
+
+    #[test]
+    fn parses_sorted_shelf_detail_with_binary_delete_and_special_paths() {
+        let events = [event(
+            r#"{"change":"7","status":"shelved","user":"tester","client":"ws","time":"1700000000","desc":"Shelf\n","job0":"JOB-1","depotFile0":"//depot/z bin@#%.dat","action0":"edit","type0":"binary","rev0":"3","depotFile1":"//depot/a 删除.txt","action1":"delete","type1":"text","rev1":"2"}"#,
+        )];
+        let facts = file_facts(&[event(
+            r#"{"depotFile":"//depot/z bin@#%.dat","shelvedType":"binary","shelvedSize":"4096","shelvedDigest":"ABC"}"#,
+        )]);
+        let detail = shelf_detail(&events, 7, &facts).unwrap();
+        assert_eq!(detail.jobs, ["JOB-1"]);
+        assert_eq!(detail.files[0].depot_path, "//depot/a 删除.txt");
+        assert!(detail.files[0].deleted);
+        assert!(detail.files[1].binary);
+        assert_eq!(detail.files[1].size, Some(4096));
+        assert_eq!(detail.inspection_status, ShelfInspectionStatus::Complete);
     }
 }

@@ -355,13 +355,27 @@ impl ChangelistService {
             PendingChangeMutation::MoveFiles { depot_paths, .. } => depot_paths.clone(),
             _ => Vec::new(),
         };
+        let preserved_files = match &request.mutation {
+            PendingChangeMutation::Edit { change_id, .. } => before
+                .iter()
+                .find(|change| change.id == *change_id)
+                .map(|change| {
+                    change
+                        .files
+                        .iter()
+                        .map(|file| file.depot_path.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
         let local_paths = self
             .repository
             .local_paths(&context, &requested_paths, app)
             .await?;
         let execution = self
             .repository
-            .perform_pending(context.clone(), &request, app)
+            .perform_pending(context.clone(), &request, &preserved_files, app)
             .await?;
 
         affected_changes.extend(execution.affected_changes.iter().copied());

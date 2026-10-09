@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
-import type { PendingChange } from "../../../shared/contracts/types";
+import { backend } from "../../../infrastructure/backend";
+import type {
+  MoveFilesPreflight,
+  MoveFilesPreflightRequest,
+  MoveFilesResult,
+  PendingChange,
+  WorkflowConfirmation,
+} from "../../../shared/contracts/types";
 
 export interface MoveFilesRequest {
   from: number;
   origins?: Record<string, number>;
   paths: string[];
+  target?: number;
   source: HTMLElement | null;
 }
+
 export function MoveFilesDialog({
   request,
   changes,
@@ -16,7 +25,9 @@ export function MoveFilesDialog({
   connectionKey,
   zh,
   onDismiss,
-  onMove,
+  onResult,
+  check = (value) => backend.preflightMoveFiles(value),
+  execute = (value) => backend.confirmMoveFiles(value),
 }: {
   request: MoveFilesRequest;
   changes: PendingChange[];
@@ -24,10 +35,11 @@ export function MoveFilesDialog({
   connectionKey: string;
   zh: boolean;
   onDismiss(): void;
-  onMove?(targetChangeId: number, depotPaths: string[]): Promise<void>;
+  onResult?(result: MoveFilesResult): Promise<void> | void;
+  check?(request: MoveFilesPreflightRequest): Promise<MoveFilesPreflight>;
+  execute?(confirmation: WorkflowConfirmation): Promise<MoveFilesResult>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
-  // Freeze both the exact file subset and candidate snapshot when the workflow opens.
   const [snapshot] = useState(() => ({
     ...request,
     origins: request.origins ? { ...request.origins } : undefined,
@@ -36,34 +48,18 @@ export function MoveFilesDialog({
     changes: changes.map((change) => ({
       id: change.id,
       description: change.description,
+      status: change.status,
     })),
   }));
   const [filter, setFilter] = useState("");
-  const [target, setTarget] = useState<number>();
-  const [checked, setChecked] = useState(false);
+  const [target, setTarget] = useState<number | undefined>(request.target);
+  const [preflight, setPreflight] = useState<MoveFilesPreflight>();
+  const [result, setResult] = useState<MoveFilesResult>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const running = useRef(false);
   const generation = useRef(0);
+  const activeOperation = useRef<string | undefined>(undefined);
   const staleConnection = snapshot.connectionKey !== connectionKey;
-  useEffect(() => {
-    if (staleConnection) {
-      generation.current += 1;
-      running.current = false;
-      setBusy(false);
-      setChecked(false);
-      setError(
-        tr(
-          "连接或 Workspace 已改变，请关闭后重新选择文件。",
-          "Connection or workspace changed. Close and select the files again.",
-        ),
-      );
-    }
-    return () => {
-      generation.current += 1;
-    };
-  }, [staleConnection]);
   const originIds = [
     ...new Set(
       snapshot.paths.map((path) => snapshot.origins?.[path] ?? snapshot.from),
@@ -75,7 +71,9 @@ export function MoveFilesDialog({
       (snapshot.origins?.[path] ?? snapshot.from) !== target,
   );
   const available = snapshot.changes.filter(
-    (change) => originIds.length > 1 || change.id !== snapshot.from,
+    (change) =>
+      change.status === "pending" &&
+      (originIds.length > 1 || change.id !== snapshot.from),
   );
   const matches = available.filter((change) =>
     `${change.id === 0 ? "default" : change.id} ${change.description}`
@@ -83,25 +81,113 @@ export function MoveFilesDialog({
       .includes(filter.trim().toLowerCase()),
   );
   const name = (id: number) => (id === 0 ? "Default" : `CL ${id}`);
-  const fromLabel =
-    originIds.length > 1 ? originIds.map(name).join(", ") : name(snapshot.from);
+  const fromLabel = originIds.map(name).join(", ");
+
+  useEffect(() => {
+    if (staleConnection) {
+      generation.current += 1;
+      if (activeOperation.current)
+        void backend.cancelOperation(activeOperation.current);
+      activeOperation.current = undefined;
+      setBusy(false);
+      setPreflight(undefined);
+      setError(
+        tr(
+          "连接或 Workspace 已改变，请关闭后重新选择文件。",
+          "Connection or workspace changed. Close and select the files again.",
+        ),
+      );
+    }
+    return () => void ++generation.current;
+  }, [staleConnection]);
+
+  const runCheck = () => {
+    if (
+      target === undefined ||
+      !effectivePaths.length ||
+      busy ||
+      staleConnection
+    )
+      return;
+    const epoch = ++generation.current;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
+    setBusy(true);
+    setError("");
+    setResult(undefined);
+    void check({
+      targetChangeId: target,
+      depotPaths: effectivePaths,
+      operationId,
+    })
+      .then((value) => {
+        if (epoch === generation.current) setPreflight(value);
+      })
+      .catch((cause) => {
+        if (epoch === generation.current) setError(String(cause));
+      })
+      .finally(() => {
+        if (epoch === generation.current) {
+          activeOperation.current = undefined;
+          setBusy(false);
+        }
+      });
+  };
+
+  const confirm = () => {
+    if (!preflight?.ready || !preflight.token || busy || staleConnection)
+      return;
+    const epoch = generation.current;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
+    setBusy(true);
+    setError("");
+    void execute({
+      token: preflight.token,
+      target: preflight.target,
+      operationId,
+    })
+      .then(async (value) => {
+        if (epoch !== generation.current) return;
+        setResult(value);
+        setPreflight(undefined);
+        await onResult?.(value);
+        if (value.outcome === "succeeded") onDismiss();
+      })
+      .catch((cause) => {
+        if (epoch === generation.current) setError(String(cause));
+      })
+      .finally(() => {
+        if (epoch === generation.current) {
+          activeOperation.current = undefined;
+          setBusy(false);
+        }
+      });
+  };
+
+  const cancelActive = () => {
+    const operationId = activeOperation.current;
+    if (operationId) void backend.cancelOperation(operationId);
+  };
+
   return (
     <Dialog
       title={tr("移动文件到 CL", "Move files to changelist")}
       description={tr(
-        "仅移动下面列出的已打开文件，不提交文件，也不移动磁盘目录。",
-        "Reassign only the opened files listed below. This does not submit files or move disk folders.",
+        "拖放与键盘入口共用同一服务：先冻结选择并预检，再逐项 reopen 与验证。",
+        "Drag/drop and keyboard entry share one service: freeze and preflight, then reopen and verify each file.",
       )}
       source={snapshot.source}
       zh={zh}
       busy={busy}
-      onRequestClose={() => {
-        if (!busy) onDismiss();
-      }}
+      onRequestClose={() => !busy && onDismiss()}
       footer={
         <>
-          <button disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+          <button
+            disabled={busy && !activeOperation.current}
+            onClick={busy ? cancelActive : onDismiss}
+          >
+            {busy ? tr("取消操作", "Cancel operation") : tr("关闭", "Close")}
           </button>
           <button
             className="primary"
@@ -111,58 +197,19 @@ export function MoveFilesDialog({
               target === undefined ||
               !effectivePaths.length
             }
-            onClick={() => {
-              setChecked(true);
-              setError("");
-              setNotice("");
-            }}
+            onClick={runCheck}
           >
-            {tr("检查选择（不执行）", "Check selection (no execution)")}
+            {busy && !preflight
+              ? tr("检查中…", "Checking…")
+              : tr("预检（不执行）", "Preflight (no execution)")}
           </button>
-          {checked && onMove && (
+          {preflight?.ready && (
             <button
               className="primary"
-              disabled={busy || staleConnection}
-              onClick={() => {
-                if (
-                  running.current ||
-                  target === undefined ||
-                  !effectivePaths.length
-                )
-                  return;
-                running.current = true;
-                setBusy(true);
-                setError("");
-                setNotice("");
-                const epoch = generation.current;
-                const selectedTarget = target;
-                const selectedPaths = [...effectivePaths];
-                void onMove(selectedTarget, selectedPaths)
-                  .then(() => {
-                    if (generation.current !== epoch) return;
-                    setNotice(
-                      tr(
-                        `已移动 ${selectedPaths.length} 个文件。`,
-                        `Moved ${selectedPaths.length} file(s).`,
-                      ),
-                    );
-                    onDismiss();
-                  })
-                  .catch((cause) => {
-                    if (generation.current !== epoch) return;
-                    setError(String(cause));
-                    setChecked(false);
-                  })
-                  .finally(() => {
-                    if (generation.current !== epoch) return;
-                    running.current = false;
-                    setBusy(false);
-                  });
-              }}
+              disabled={busy || Date.now() >= preflight.expiresAt}
+              onClick={confirm}
             >
-              {busy
-                ? tr("正在移动…", "Moving…")
-                : tr("确认移动", "Confirm move")}
+              {busy ? tr("移动中…", "Moving…") : tr("确认移动", "Confirm move")}
             </button>
           )}
         </>
@@ -172,14 +219,6 @@ export function MoveFilesDialog({
         {client} · {tr("来源", "From")} {fromLabel} · {snapshot.paths.length}{" "}
         {tr("个文件", "files")}
       </div>
-      {!onMove && (
-        <DialogNotice>
-          {tr(
-            "界面预览：候选来自当前页面快照；尚未验证归属、锁或连接状态，不会执行移动。",
-            "UI preview: candidates are from this page snapshot. Ownership, locks and connection have not been verified. No files will be moved.",
-          )}
-        </DialogNotice>
-      )}
       {staleConnection && <DialogNotice error>{error}</DialogNotice>}
       <TargetList
         paths={effectivePaths}
@@ -210,23 +249,19 @@ export function MoveFilesDialog({
         />
       </label>
       <label>
-        {originIds.length > 1
-          ? tr("目标 CL", "Target changelist")
-          : tr(
-              "目标 CL（不包含当前 CL）",
-              "Target changelist (current CL excluded)",
-            )}
+        {tr("目标 CL", "Target changelist")}
         <select
           value={target ?? ""}
           onChange={(event) => {
+            generation.current += 1;
             setTarget(
               event.target.value === ""
                 ? undefined
                 : Number(event.target.value),
             );
-            setChecked(false);
+            setPreflight(undefined);
+            setResult(undefined);
             setError("");
-            setNotice("");
           }}
         >
           <option value="">{tr("请选择目标 CL", "Choose a target")}</option>
@@ -244,35 +279,42 @@ export function MoveFilesDialog({
           ))}
         </select>
       </label>
-      {!available.length && (
-        <DialogNotice>
-          {tr(
-            "当前快照没有其他目标 CL。可以先新建 CL，待写入流程接通后刷新重试。",
-            "No other target changelists in this snapshot. Create a CL and refresh once writing is connected.",
-          )}
-        </DialogNotice>
-      )}
-      {!!available.length && !matches.length && (
-        <DialogNotice>
-          {tr("没有匹配项，请修改筛选条件。", "No matches. Change the filter.")}
-        </DialogNotice>
-      )}
       {target !== undefined && (
         <p className="workflow-context">
           {fromLabel} → {name(target)} · {effectivePaths.length}{" "}
           {tr("个文件", "files")}
         </p>
       )}
-      {checked && (
-        <DialogNotice>
-          {tr(
-            "选择已检查，尚未移动任何文件。执行前仍需重新验证目标与文件状态。",
-            "Selection checked. No files were moved. Target and file state must be revalidated before execution.",
-          )}
+      {preflight && (
+        <>
+          <DialogNotice error={!preflight.ready}>
+            {preflight.ready
+              ? tr(
+                  `预检通过：${preflight.files.length} 个文件。`,
+                  `Preflight ready: ${preflight.files.length} file(s).`,
+                )
+              : tr(
+                  `预检阻止：${preflight.blockers.length} 项。`,
+                  `Preflight blocked: ${preflight.blockers.length} issue(s).`,
+                )}
+          </DialogNotice>
+          {preflight.blockers.map((issue, index) => (
+            <DialogNotice key={`${issue.code}-${index}`} error>
+              {issue.message}
+              {issue.paths.length ? ` · ${issue.paths.join(", ")}` : ""}
+            </DialogNotice>
+          ))}
+        </>
+      )}
+      {result && (
+        <DialogNotice error={result.outcome !== "succeeded"}>
+          {result.message}
+          {result.files
+            .filter((file) => file.state !== "succeeded")
+            .map((file) => `\n${file.depotPath}: ${file.message}`)}
         </DialogNotice>
       )}
       {error && !staleConnection && <DialogNotice error>{error}</DialogNotice>}
-      {notice && <DialogNotice>{notice}</DialogNotice>}
     </Dialog>
   );
 }
