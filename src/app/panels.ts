@@ -1,3 +1,5 @@
+import type { GlobalSearchTarget } from "../shared/contracts/types";
+
 export const pageDefinitions = {
   files: { zh: "文件", en: "Files", scope: "global", target: "depot" },
   search: { zh: "搜索", en: "Search", scope: "global", target: "depot" },
@@ -80,6 +82,22 @@ export function reusablePanel<
 }
 export function isPage(value: string): value is PageId {
   return (pageIds as readonly string[]).includes(value);
+}
+
+export function pageForSearchTarget(
+  target: GlobalSearchTarget,
+): "submitted" | "pending" | "files" | undefined {
+  switch (target.type) {
+    case "submittedChange":
+      return "submitted";
+    case "pendingChange":
+      return "pending";
+    case "workspaceFile":
+    case "depotFile":
+      return "files";
+    case "job":
+      return undefined;
+  }
 }
 export function readPages(raw: string | null): PageId[] {
   try {

@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008/BE-008Q 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证及 BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G 生产接线已完成自动化验收；等待 SSL/SSO 与 Windows/macOS 原生 UI 验收，整体未完成。
 
 ## 范围与约束
 
@@ -27,7 +27,7 @@
 | FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
 | FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
 | FE-14 | Submitted 组合查询与保存过滤器 | 全字段组合筛选、稳定 cursor 分页、stats/截断、保存/应用/覆盖/删除/重置 | 字段内 OR、条件间 AND；切换取消并淘汰旧页；多页不重不漏；敏感字段不持久化 | BE-008Q 生产接线与自动化/localhost 通过；原生点击/读屏待验收 |
-| FE-15 | 全局搜索生产接线 | 将现有 UI-only `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围渲染，不自行拼 P4 参数 | BE-008G 后端与 Mock/Tauri 契约、Windows localhost 双轮已完成；页面仍明确未接线。Stream/Shelf 延后 |
+| FE-15 | 全局搜索生产接线 | `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围以文本节点渲染，不自行拼 P4 参数 | 已完成生产接线与 49 文件/296 项 Web 自动化；Windows localhost 默认双轮复验通过。Job 因无现有详情页明确禁用，Stream/Shelf 延后；原生点击/390px 原生窗口/读屏待验 |
 
 ## 执行顺序
 
@@ -36,6 +36,8 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
 ## 验收记录
+
+- FE-15 Global Search（2026-10-09）：五类结果分组、facet/count、后端 target 导航、Unicode/特殊字符与 UTF-16 安全高亮、300ms debounce/取消/stale 隔离、稳定 cursor 追加去重、分页失败保留与重试、partial/单类别失败/扫描上限、空结果/整体错误、类别切换重置、Mock/Tauri 契约、390px、键盘焦点和 ARIA live/status 自动化通过。全量 `pnpm format:check`、49 文件/296 项 `pnpm test:web`、`pnpm build`、`pnpm check`、Rust 81 项通过/1 项 ignored、Clippy `-D warnings`、rustfmt、`git diff --check` 与 Windows localhost `p4d` 默认两轮均通过。当前自动化环境不提供原生窗口枚举，因此未用浏览器或 Mock 冒充 Windows/macOS 原生点击、390px 原生窗口和真实读屏验收。
 
 - PM 独立稳定性复验（2026-09-29）：37 个前端测试文件、222 项测试全部通过；同时 53 项 Rust 测试、生产构建、TypeScript/Rust Check、Clippy 和 `git diff --check` 全部通过。该结果确认当前工程基线绿色，但不替代真实 P4、原生窗口和 Windows/macOS 验收。
 

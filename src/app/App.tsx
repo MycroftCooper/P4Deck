@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SelectionContext } from "../features/files/SelectionContext";
 import { ResourceExplorer } from "../features/files/components/ResourceExplorer";
+import { resolveAddress } from "../features/files/resolveAddress";
 import { ToolArea, type ToolHandle } from "../features/tools/ToolArea";
-import type { WorkspaceNode } from "../shared/contracts/types";
+import type {
+  GlobalSearchTarget,
+  WorkspaceNode,
+} from "../shared/contracts/types";
 import { storage } from "../shared/lib/storage";
 import { DockWorkspace, detachedPage } from "./DockWorkspace";
 import { PageRenderer } from "./PageRenderer";
-import { pageLabels, targetForPage, type FilePageId } from "./panels";
+import {
+  pageForSearchTarget,
+  pageLabels,
+  targetForPage,
+  type FilePageId,
+} from "./panels";
 import { usePreferences } from "./hooks/usePreferences";
 import { useRuntime } from "./hooks/useRuntime";
 import { usePageNavigation } from "./hooks/usePageNavigation";
@@ -71,6 +80,41 @@ export function App() {
     navigate: navigateFile,
     context: selectionContext,
   } = useWorkspaceSelection(connectionKey, runtime.context.cwd, openFiles);
+  const [searchNavigation, setSearchNavigation] = useState<{
+    target: GlobalSearchTarget;
+    nonce: number;
+  }>();
+  const searchNavigationNonce = useRef(0);
+  const navigateSearchTarget = useCallback(
+    async (target: GlobalSearchTarget) => {
+      const page = pageForSearchTarget(target);
+      if (target.type === "job" || !page)
+        throw new Error(
+          zh ? "尚无 Job 详情页。" : "No Job details page exists yet.",
+        );
+      if (
+        target.type === "submittedChange" ||
+        target.type === "pendingChange"
+      ) {
+        searchNavigationNonce.current += 1;
+        setSearchNavigation({ target, nonce: searchNavigationNonce.current });
+        dockRef.current?.open(page);
+        return;
+      }
+      const path =
+        target.type === "workspaceFile"
+          ? target.absolutePath
+          : target.depotPath;
+      const node = await resolveAddress(
+        path,
+        connectionKey,
+        runtime.context.cwd,
+      );
+      navigateFile(node);
+    },
+    [connectionKey, dockRef, navigateFile, runtime.context.cwd, zh],
+  );
+  useEffect(() => setSearchNavigation(undefined), [connectionKey]);
   const labels = useMemo(() => pageLabels(zh), [zh]);
   useEffect(() => {
     storage.setItem("p4deck.leftOpen", String(leftOpen));
@@ -209,6 +253,8 @@ export function App() {
                             onReview={openReview}
                             onConnection={applyConnection}
                             onOperation={afterOperation}
+                            searchNavigation={searchNavigation}
+                            onSearchNavigate={navigateSearchTarget}
                           />
                         )}
                       />

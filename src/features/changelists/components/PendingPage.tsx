@@ -55,15 +55,18 @@ export function PendingPage({
   connectionKey,
   demo,
   ready,
+  navigation,
 }: {
   t: T;
   clientName: string;
   connectionKey: string;
   demo: boolean;
   ready: boolean;
+  navigation?: { changeId: number; nonce: number };
 }) {
   const focus = useCommandFocus();
   const surface = useRef<HTMLElement>(null);
+  const handledNavigation = useRef<number | undefined>(undefined);
   const [form, setForm] = useState<{
     change?: PendingChange;
     source: HTMLElement | null;
@@ -155,6 +158,24 @@ export function PendingPage({
   const [collapsedShelves, setCollapsedShelves] = useState<Set<number>>(
     new Set(),
   );
+  useEffect(() => {
+    if (
+      !navigation ||
+      handledNavigation.current === navigation.nonce ||
+      !changes.some((change) => change.id === navigation.changeId)
+    )
+      return;
+    handledNavigation.current = navigation.nonce;
+    setExpanded((value) => new Set([...value, navigation.changeId]));
+    const frame = requestAnimationFrame(() => {
+      surface.current
+        ?.querySelector<HTMLElement>(
+          `[data-pending-change="${navigation.changeId}"]`,
+        )
+        ?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [changes, navigation]);
   const toggleShelf = (id: number) =>
     setCollapsedShelves((previous) => {
       const next = new Set(previous);
@@ -493,6 +514,7 @@ export function PendingPage({
             className={`pending-card ${selection.isSelected(change) ? "command-selected" : ""}`}
           >
             <header
+              data-pending-change={change.id}
               tabIndex={0}
               {...changeMenu(change)}
               onFocus={() => {

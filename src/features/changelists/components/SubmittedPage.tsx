@@ -54,10 +54,12 @@ export function SubmittedPage({
   runtime,
   t,
   onOperation,
+  navigation,
 }: {
   runtime: RuntimeInfo;
   t: (typeof messages)[keyof typeof messages];
   onOperation(warnings: string[]): Promise<void>;
+  navigation?: { changeId: number; nonce: number };
 }) {
   const [draft, setDraft] = useState<SubmittedFilterDraft>(() =>
     createDefaultSubmittedFilter(),
@@ -105,6 +107,10 @@ export function SubmittedPage({
   >(undefined);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  const pendingNavigation = useRef<
+    { changeId: number; nonce: number } | undefined
+  >(undefined);
+  const handledNavigation = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
   const zh = t.language === "Switch to English";
 
@@ -184,6 +190,15 @@ export function SubmittedPage({
         const combined = [...prior, ...added];
         changesRef.current = combined;
         setChanges(combined);
+        const navigationTarget = pendingNavigation.current;
+        if (
+          !append &&
+          navigationTarget &&
+          combined.some((change) => change.id === navigationTarget.changeId)
+        ) {
+          pendingNavigation.current = undefined;
+          setSelected(navigationTarget.changeId);
+        }
         setHiddenMergeCount((value) =>
           append
             ? value + result.stats.hiddenReliableMergeCount
@@ -285,6 +300,16 @@ export function SubmittedPage({
     clearResults,
     startFreshQuery,
   ]);
+
+  useEffect(() => {
+    if (!navigation || handledNavigation.current === navigation.nonce) return;
+    handledNavigation.current = navigation.nonce;
+    pendingNavigation.current = navigation;
+    setDraft({
+      ...createDefaultSubmittedFilter(),
+      keyword: String(navigation.changeId),
+    });
+  }, [navigation]);
 
   const refresh = useCallback(() => {
     if (validation.query) startFreshQuery(validation.query);

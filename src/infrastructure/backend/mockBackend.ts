@@ -571,7 +571,11 @@ export const mockBackend: Backend = {
   },
   async cancelOperation() {},
   async globalSearch(query) {
-    if (!query.operationId.trim() || query.operationId.length > 128)
+    if (
+      !query.operationId.trim() ||
+      [...query.operationId].length > 128 ||
+      [...query.operationId].some((character) => /\p{Cc}/u.test(character))
+    )
       throw new Error("A valid global search operation ID is required.");
     if (
       !Number.isInteger(query.pageSize) ||
@@ -579,11 +583,7 @@ export const mockBackend: Backend = {
       query.pageSize > 100
     )
       throw new Error("Global search page size must be between 1 and 100.");
-    if (
-      [...query.text].some((character) =>
-        /[\u0000-\u001f\u007f]/u.test(character),
-      )
-    )
+    if ([...query.text].some((character) => /\p{Cc}/u.test(character)))
       throw new Error("Global search text cannot contain control characters.");
     const text = query.text.trim().replace(/\s+/gu, " ");
     if (!text || [...text].length > 128)

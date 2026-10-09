@@ -140,6 +140,7 @@ function environment(
 async function render(
   mode: RuntimeInfo["mode"] = "tauri",
   locale: "zh-CN" | "en-US" = "zh-CN",
+  navigation?: { changeId: number; nonce: number },
 ) {
   const value = { ...runtime, mode };
   await act(async () =>
@@ -150,6 +151,7 @@ async function render(
             runtime={value}
             t={messages[locale]}
             onOperation={async () => undefined}
+            navigation={navigation}
           />
         </MenuEnvironment.Provider>
       </ContextMenuProvider>,
@@ -273,6 +275,17 @@ it("renders ordinary, evidence-backed reliable, text-only suspected, and unavail
   expect(host.textContent).toContain("无法加载提交详情");
   expect(host.textContent).toContain("describe failed");
   expect(row(104).textContent).toContain("分类未知");
+});
+
+it("opens a searched submitted target with an exact query and live detail", async () => {
+  await render("tauri", "en-US", { changeId: 102, nonce: 1 });
+  expect(backend.queryChangelists).toHaveBeenCalledWith(
+    expect.objectContaining({ keyword: "102" }),
+  );
+  expect(backend.getSubmittedChangeDetail).toHaveBeenCalledWith(
+    expect.objectContaining({ changeId: 102 }),
+  );
+  expect(host.textContent).toContain("JOB-102");
 });
 
 it("never promotes unproven reliable or incomplete normal classifications", () => {

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { FileWorkbench } from "../features/files/components/FileWorkbench";
 import type {
+  GlobalSearchTarget,
   RuntimeInfo,
   WorkspaceNode,
   P4Context,
@@ -58,6 +59,11 @@ export interface PageEnvironment {
   onReview(kind: FilePageId, node: WorkspaceNode): void;
   onConnection(context: P4Context): void;
   onOperation(warnings: string[]): Promise<void>;
+  searchNavigation?: {
+    target: GlobalSearchTarget;
+    nonce: number;
+  };
+  onSearchNavigate(target: GlobalSearchTarget): Promise<void>;
 }
 interface Props extends PageEnvironment {
   page: PageId;
@@ -77,6 +83,8 @@ function Content({
   onReview,
   onConnection,
   onOperation,
+  searchNavigation,
+  onSearchNavigate,
 }: Props) {
   const { t, zh, ui, theme, setTheme, locale, setLocale, setUi } = preferences;
   switch (page) {
@@ -84,7 +92,8 @@ function Content({
       return (
         <SearchPage
           zh={zh}
-          client={runtime.context.client}
+          runtimeMode={runtime.mode}
+          onNavigate={onSearchNavigate}
           key={connectionKey}
         />
       );
@@ -111,6 +120,14 @@ function Content({
           connectionKey={connectionKey}
           demo={runtime.mode === "mock"}
           ready={runtime.p4Version !== "loading"}
+          navigation={
+            searchNavigation?.target.type === "pendingChange"
+              ? {
+                  changeId: searchNavigation.target.changeId,
+                  nonce: searchNavigation.nonce,
+                }
+              : undefined
+          }
         />
       );
     case "submitted":
@@ -120,6 +137,14 @@ function Content({
           runtime={runtime}
           t={t}
           onOperation={onOperation}
+          navigation={
+            searchNavigation?.target.type === "submittedChange"
+              ? {
+                  changeId: searchNavigation.target.changeId,
+                  nonce: searchNavigation.nonce,
+                }
+              : undefined
+          }
         />
       );
     case "workspaces":

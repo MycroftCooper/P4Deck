@@ -4,6 +4,7 @@ import {
   activityPageIds,
   pageLabels,
   targetForPage,
+  pageForSearchTarget,
   normalizePanelTarget,
   readPages,
   isPage,
@@ -98,4 +99,23 @@ describe("workspace panels", () => {
       locked: true,
     });
   });
+});
+
+it("maps every global search target only to an existing destination page", () => {
+  expect(pageForSearchTarget({ type: "submittedChange", changeId: 42 })).toBe(
+    "submitted",
+  );
+  expect(pageForSearchTarget({ type: "pendingChange", changeId: 43 })).toBe(
+    "pending",
+  );
+  expect(
+    pageForSearchTarget({
+      type: "workspaceFile",
+      absolutePath: "C:\\work\\a.txt",
+    }),
+  ).toBe("files");
+  expect(
+    pageForSearchTarget({ type: "depotFile", depotPath: "//depot/a.txt" }),
+  ).toBe("files");
+  expect(pageForSearchTarget({ type: "job", jobId: "JOB-1" })).toBeUndefined();
 });

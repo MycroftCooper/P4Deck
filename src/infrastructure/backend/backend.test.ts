@@ -84,6 +84,15 @@ describe("controlled P4 terminal", () => {
         pageSize: 10,
       }),
     ).rejects.toThrow("control");
+    await expect(
+      backend.globalSearch({
+        operationId: "mock-global-unicode-control",
+        requestGeneration: 45,
+        text: "bad\u0085query",
+        kinds: [],
+        pageSize: 10,
+      }),
+    ).rejects.toThrow("control");
   });
 
   it("previews mock text and images and rejects unsupported files", async () => {

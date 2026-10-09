@@ -31,7 +31,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端，`SearchPage` 仍待前端接线，原生 UI 仍待验收。
+当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线，原生 UI 仍待验收。
 
 BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部分仍需额外版本矩阵。合成数据性能基准可以继续执行。
 
@@ -50,8 +50,8 @@ BE-002 的 Windows localhost 基线已完成；BE-009 中的多版本兼容部�
 | BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、游标分页、结构化终态、崩溃恢复和不可重放边界已完成 |
 | BE-007 | 日志策略与诊断导出 | 稳定分页/过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成 |
 | BE-008 | Submitted 详情与可靠合并分类 | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收 |
-| BE-008Q | Submitted 组合查询与稳定游标 | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器待接线 |
-| BE-008G | 全局搜索生产后端 | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 待接线。Stream/Shelf 本批不纳入 |
+| BE-008Q | Submitted 组合查询与稳定游标 | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收 |
+| BE-008G | 全局搜索生产后端 | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
 
 ## P0：下一阶段必须完成
 
