@@ -25,6 +25,7 @@ import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import { RevisionFileList } from "./RevisionFileList";
 import { ChangelistFormDialog } from "./ChangelistFormDialog";
 import { backend } from "../../../infrastructure/backend";
+import { SwarmAction, swarmMenuAction } from "../../swarm/SwarmAction";
 type Copy = (typeof messages)[keyof typeof messages];
 
 interface Props {
@@ -126,6 +127,15 @@ export function ChangelistPage(props: Props) {
         "复制来源 CL 编号": copy(change.id),
         复制描述: copy(change.description),
         刷新: action(props.onRefresh),
+        "在 Swarm 中打开": swarmMenuAction(env.runtime, env.preferences.zh, {
+          kind:
+            change.status === "shelved"
+              ? "shelf"
+              : change.status === "pending"
+                ? "pendingChange"
+                : "submittedChange",
+          changeId: change.id,
+        }),
         "复制 CL 编号列表": copy(
           selection
             .targets(change)
@@ -381,6 +391,14 @@ export function ChangelistPage(props: Props) {
                 >
                   <MoreHorizontal size={18} />
                 </button>
+                <SwarmAction
+                  runtime={env.runtime}
+                  zh={env.preferences.zh}
+                  target={{
+                    kind: "submittedChange",
+                    changeId: selectedChange.id,
+                  }}
+                />
               </header>
               <p className="detail-description">{selectedChange.description}</p>
               <dl>

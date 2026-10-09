@@ -151,6 +151,7 @@ export interface P4Context {
   charset?: string;
   trustPath?: string;
   ticketsPath?: string;
+  swarmBaseUrl?: string;
 }
 
 export interface ConnectionProfile {
@@ -160,7 +161,7 @@ export interface ConnectionProfile {
 }
 
 export interface ConnectionProfiles {
-  schemaVersion: 2;
+  schemaVersion: 3;
   revision: number;
   activeProfileId?: string;
   profiles: ConnectionProfile[];
@@ -186,6 +187,12 @@ export interface SetActiveConnectionProfileRequest extends DeleteConnectionProfi
 export interface SwitchWorkspaceRequest {
   expectedGeneration: number;
   client: string;
+}
+
+export interface OpenSwarmLinkRequest {
+  url: string;
+  expectedProfileId?: string;
+  expectedContextGeneration: number;
 }
 
 export type ConnectionProfileErrorCode =

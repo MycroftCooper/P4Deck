@@ -101,7 +101,7 @@ function profilesDocument(
   revision = 4,
   activeProfileId = "primary",
 ): ConnectionProfiles {
-  return { schemaVersion: 2, revision, activeProfileId, profiles };
+  return { schemaVersion: 3, revision, activeProfileId, profiles };
 }
 
 function props(
@@ -246,6 +246,44 @@ it("creates a profile with CAS and never persists sensitive authentication state
   expect(serialized).not.toMatch(/password|fingerprint|ticketContents/i);
   expect(host.textContent).toContain("状态仍为“尚未验证”");
   expect(onRuntime).not.toHaveBeenCalled();
+});
+
+it("normalizes a safe Swarm base URL and rejects credentials or non-http schemes", async () => {
+  const created = profile("created", "Office", "office:1666");
+  backend.createConnectionProfile.mockResolvedValue(
+    profilesDocument(
+      [
+        profile("primary", "Primary"),
+        profile("secondary", "Secondary"),
+        created,
+      ],
+      5,
+    ),
+  );
+  await render();
+  await act(async () => button("新建").click());
+  await change(input("Profile 名称"), "Office");
+  await change(input("服务器 / P4PORT"), "office:1666");
+  await change(input("用户 / P4USER"), "tester");
+  await change(input("工作区 / P4CLIENT"), "created-client");
+  const swarm = input("Swarm 基础 URL（可选）");
+  await change(swarm, "javascript:alert(1)");
+  expect(button("保存 Profile").disabled).toBe(true);
+  await change(swarm, "https://user:secret@swarm.example/");
+  expect(button("保存 Profile").disabled).toBe(true);
+  await change(swarm, "https://swarm.example/team");
+  expect(button("保存 Profile").disabled).toBe(false);
+  await act(async () => button("保存 Profile").click());
+  expect(backend.createConnectionProfile).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: expect.objectContaining({
+        swarmBaseUrl: "https://swarm.example/team/",
+      }),
+    }),
+  );
+  expect(
+    JSON.stringify(backend.createConnectionProfile.mock.calls),
+  ).not.toContain("secret");
 });
 
 it("edits and renames the active profile, refreshes runtime generation, and remains not tested", async () => {

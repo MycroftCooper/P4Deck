@@ -63,6 +63,7 @@ export const tauriBackend: Backend = {
   listDepotChildren: (path) => invoke("list_depot_children", { path }),
   resolvePath: (request) => invoke("resolve_path", { request }),
   openLocalPath: (request) => invoke("open_local_path", { request }),
+  openSwarmLink: (request) => invoke("open_swarm_link", { request }),
   localPathCapabilities: (path) => invoke("local_path_capabilities", { path }),
   performFileAction: (request) => invoke("perform_file_action", { request }),
   preflightFileLock: (request) => invoke("preflight_file_lock", { request }),

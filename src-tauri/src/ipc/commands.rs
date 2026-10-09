@@ -968,6 +968,21 @@ pub async fn open_local_path(
 }
 
 #[tauri::command]
+pub async fn open_swarm_link(
+    request: OpenSwarmLinkRequest,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let (profile_id, generation, context) = state.connection.swarm_snapshot();
+    crate::app::swarm_open::validate_binding(profile_id.as_deref(), generation, &request)?;
+    let base = context
+        .swarm_base_url
+        .ok_or("Configure a Swarm base URL for the active profile first.")?;
+    tauri::async_runtime::spawn_blocking(move || crate::app::swarm_open::open(&base, &request))
+        .await
+        .map_err(|_| "The Swarm opener did not complete.".to_string())?
+}
+
+#[tauri::command]
 pub async fn local_path_capabilities(
     path: String,
     state: State<'_, AppState>,

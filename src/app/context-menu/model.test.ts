@@ -18,8 +18,8 @@ it("registers every object and every leaf from the product inventory in order", 
     const object = cells[1] as MenuObjectId;
     const labels = [...cells[3].split("；"), ...cells[4].split("；")]
       .map((v) => v.trim())
-      .filter((v) => v.startsWith("☐"))
-      .map((v) => v.replace(/^☐\s*/, ""));
+      .filter((v) => /^[☐☑]/u.test(v))
+      .map((v) => v.replace(/^[☐☑]\s*/u, ""));
     expect(
       menuCatalog[object].items.map((item) => item.label),
       object,

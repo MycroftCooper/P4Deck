@@ -27,6 +27,7 @@ import {
   notTestedStatus,
   probeConnection,
 } from "./connectionWizard";
+import { normalizeSwarmBaseUrl } from "../swarm/swarmLinks";
 
 interface Props {
   runtime: RuntimeInfo;
@@ -64,7 +65,7 @@ const profileErrorCodes: ConnectionProfileErrorCode[] = [
 ];
 
 function normalizeContext(draft: P4Context): P4Context {
-  return Object.fromEntries(
+  const normalized = Object.fromEntries(
     Object.entries(draft).map(([key, value]) => [
       key,
       typeof value === "string"
@@ -73,6 +74,13 @@ function normalizeContext(draft: P4Context): P4Context {
         : value,
     ]),
   ) as unknown as P4Context;
+  if (normalized.swarmBaseUrl)
+    try {
+      normalized.swarmBaseUrl = normalizeSwarmBaseUrl(normalized.swarmBaseUrl);
+    } catch {
+      // Keep invalid draft text available for inline validation and correction.
+    }
+  return normalized;
 }
 
 function emptyDraft(runtime: RuntimeInfo): ProfileDraft {
@@ -232,6 +240,15 @@ export function ConnectionProfilesCard({
   const restoreFocusRef = useRef<HTMLButtonElement | undefined>(undefined);
 
   const current = normalizeContext(draft.context);
+  const swarmUrlValid = (() => {
+    if (!current.swarmBaseUrl) return true;
+    try {
+      normalizeSwarmBaseUrl(current.swarmBaseUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
   const dirty =
     draftIdentity({ ...draft, context: current }) !== draftIdentity(baseline);
   selectedIdRef.current = selectedId;
@@ -246,7 +263,8 @@ export function ConnectionProfilesCard({
     !/[\u0000-\u001f\u007f]/u.test(draft.name) &&
     current.server &&
     current.user &&
-    current.client
+    current.client &&
+    swarmUrlValid
   );
   const presentation = connectionPresentation(connection, zh);
   const fields: [keyof P4Context, string, string][] = [
@@ -258,6 +276,7 @@ export function ConnectionProfilesCard({
     ["executable", "P4 可执行文件", "p4 / p4.exe"],
     ["trustPath", "Trust 文件路径", "P4TRUST"],
     ["ticketsPath", "Tickets 文件路径", "P4TICKETS"],
+    ["swarmBaseUrl", "Swarm 基础 URL（可选）", "https://swarm.example/"],
   ];
 
   const resetTransient = useCallback(
@@ -395,6 +414,11 @@ export function ConnectionProfilesCard({
   }
 
   function clientValidation() {
+    if (!swarmUrlValid)
+      return tr(
+        "Swarm URL 必须是无凭据、query、fragment、控制字符的 http/https 基础地址。",
+        "Swarm URL must be an http(s) base URL without credentials, query, fragment, or control characters.",
+      );
     if (!valid)
       return tr(
         "Profile 名称需为 1–128 个非控制字符，Server、User、Workspace 为必填。",
@@ -997,6 +1021,12 @@ export function ConnectionProfilesCard({
                   </label>
                 ))}
               </div>
+              <p className="settings-field-note">
+                {tr(
+                  "Swarm URL 按 Profile 保存，仅用于生成只读网页链接；不会保存 Swarm token、密码或登录信息。",
+                  "The Swarm URL is profile-scoped and only builds read-only web links. Swarm tokens, passwords, and login data are never stored.",
+                )}
+              </p>
               <div className="settings-actions">
                 <button
                   className="primary"

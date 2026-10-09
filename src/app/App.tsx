@@ -37,6 +37,11 @@ import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { StatusBar } from "./shell/StatusBar";
 import { ActivityBar } from "./shell/ActivityBar";
 import { isTauri } from "@tauri-apps/api/core";
+import {
+  buildSwarmLink,
+  openSwarmLink,
+  type SwarmLinkTarget,
+} from "../features/swarm/swarmLinks";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CommandPalette } from "./commands/CommandPalette";
@@ -170,8 +175,19 @@ export function App() {
     },
     zh,
   );
-  const commandEnvironment = useMemo(
-    () => ({
+  const commandEnvironment = useMemo(() => {
+    const swarmTarget: SwarmLinkTarget | undefined =
+      command.target.type === "submitted"
+        ? { kind: "submittedChange", changeId: command.target.id }
+        : command.target.type === "pending"
+          ? { kind: "pendingChange", changeId: command.target.id }
+          : command.target.type === "file" && command.target.node.depotPath
+            ? { kind: "file", depotPath: command.target.node.depotPath }
+            : undefined;
+    const swarm = swarmTarget
+      ? buildSwarmLink(runtime.context.swarmBaseUrl, swarmTarget)
+      : undefined;
+    return {
       detached: !!detachedPage,
       runtimeReady: runtime.p4Version !== "loading",
       connected: runtime.connection.state === "connected",
@@ -199,15 +215,22 @@ export function App() {
             : [],
         ),
       ),
-    }),
-    [
-      command.target,
-      commandBusy,
-      runtime.connection.state,
-      runtime.p4Version,
-      zh,
-    ],
-  );
+      swarmReason: !swarmTarget
+        ? zh
+          ? "请先选择 CL 或 Depot 文件"
+          : "Select a changelist or depot file first"
+        : swarm && swarm.enabled
+          ? undefined
+          : swarm?.reason,
+    };
+  }, [
+    command.target,
+    commandBusy,
+    runtime.connection.state,
+    runtime.p4Version,
+    runtime.context.swarmBaseUrl,
+    zh,
+  ]);
   const runtimeBinding = useMemo(
     () => ({
       profileId: runtime.activeProfileId,
@@ -246,6 +269,22 @@ export function App() {
         case "view.refresh":
           void autoRefresh.refreshNow();
           break;
+        case "swarm.open": {
+          const target: SwarmLinkTarget | undefined =
+            command.target.type === "submitted"
+              ? { kind: "submittedChange", changeId: command.target.id }
+              : command.target.type === "pending"
+                ? { kind: "pendingChange", changeId: command.target.id }
+                : command.target.type === "file" &&
+                    command.target.node.depotPath
+                  ? {
+                      kind: "file",
+                      depotPath: command.target.node.depotPath,
+                    }
+                  : undefined;
+          if (target) void openSwarmLink(runtime, target);
+          break;
+        }
         case "tools.openTerminal":
           dockRef.current?.open("terminal");
           break;
@@ -277,6 +316,8 @@ export function App() {
       executeCommand,
       openPage,
       preferences,
+      command.target,
+      runtime,
       zh,
     ],
   );

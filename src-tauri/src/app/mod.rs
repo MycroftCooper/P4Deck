@@ -10,6 +10,7 @@ pub mod search_service;
 pub mod status_cache;
 pub mod stream_switch_service;
 pub mod submit_service;
+pub mod swarm_open;
 pub mod sync_service;
 pub mod system_open;
 pub mod workflow_service;

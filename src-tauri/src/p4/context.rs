@@ -16,7 +16,8 @@ use std::{
 };
 use uuid::Uuid;
 
-pub const CONNECTION_SCHEMA_VERSION: u32 = 2;
+pub const CONNECTION_SCHEMA_VERSION: u32 = 3;
+const PREVIOUS_CONNECTION_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -70,6 +71,15 @@ impl ContextStore {
     pub fn snapshot(&self) -> (P4Context, u64) {
         let state = self.state.read().unwrap_or_else(|error| error.into_inner());
         (state.runtime_context.clone(), state.generation)
+    }
+
+    pub fn swarm_snapshot(&self) -> (Option<String>, u64, P4Context) {
+        let state = self.state.read().unwrap_or_else(|error| error.into_inner());
+        (
+            state.document.active_profile_id.clone(),
+            state.generation,
+            state.runtime_context.clone(),
+        )
     }
 
     pub fn active_profile_id(&self) -> Option<String> {
@@ -409,7 +419,12 @@ fn load_document(
                 ),
                 )
             })?;
-        if document.schema_version != CONNECTION_SCHEMA_VERSION {
+        if ![
+            PREVIOUS_CONNECTION_SCHEMA_VERSION,
+            CONNECTION_SCHEMA_VERSION,
+        ]
+        .contains(&document.schema_version)
+        {
             return Err(profile_error(
                 ConnectionProfileErrorCode::UnsupportedSchema,
                 format!(
@@ -424,7 +439,17 @@ fn load_document(
                 "connection.json contains unsupported fields and was left unchanged.",
             ));
         }
-        validate_document(&document)?;
+        let mut document = document;
+        if document.schema_version == PREVIOUS_CONNECTION_SCHEMA_VERSION {
+            for profile in &mut document.profiles {
+                profile.context = normalize_context(profile.context.clone())?;
+            }
+            document.schema_version = CONNECTION_SCHEMA_VERSION;
+            validate_document(&document)?;
+            persist_document(path, &document)?;
+        } else {
+            validate_document(&document)?;
+        }
         let runtime = active_context(&document).unwrap_or_else(environment_context);
         return Ok((document, runtime));
     }
@@ -591,6 +616,14 @@ fn normalize_context(mut context: P4Context) -> Result<P4Context, ConnectionProf
     context.server = context.server.trim().to_owned();
     context.user = context.user.trim().to_owned();
     context.client = context.client.trim().to_owned();
+    context.swarm_base_url = context
+        .swarm_base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(normalize_swarm_base_url)
+        .transpose()
+        .map_err(|message| profile_error(ConnectionProfileErrorCode::InvalidInput, message))?;
     validate_persisted_context(&context)
         .map_err(|message| profile_error(ConnectionProfileErrorCode::InvalidInput, message))?;
     Ok(context)
@@ -758,6 +791,7 @@ fn environment_context() -> P4Context {
         charset: std::env::var("P4CHARSET").ok(),
         trust_path: std::env::var("P4TRUST").ok(),
         tickets_path: std::env::var("P4TICKETS").ok(),
+        swarm_base_url: None,
     }
 }
 
@@ -788,6 +822,7 @@ fn validate_values(context: &P4Context) -> Result<(), String> {
         context.charset.as_deref(),
         context.trust_path.as_deref(),
         context.tickets_path.as_deref(),
+        context.swarm_base_url.as_deref(),
     ];
     if values
         .into_iter()
@@ -796,7 +831,41 @@ fn validate_values(context: &P4Context) -> Result<(), String> {
     {
         return Err("Connection settings contain control characters or exceed limits".into());
     }
+    if let Some(value) = context.swarm_base_url.as_deref() {
+        normalize_swarm_base_url(value)?;
+    }
     Ok(())
+}
+
+pub fn normalize_swarm_base_url(input: &str) -> Result<String, String> {
+    if input != input.trim()
+        || input.chars().any(char::is_control)
+        || input.contains('\\')
+        || regex::Regex::new("(?i)%(?:0[0-9a-f]|1[0-9a-f]|7f)")
+            .expect("static encoded-control regex")
+            .is_match(input)
+        || regex::Regex::new("(?i)%(?:2e|2f|5c)")
+            .expect("static encoded-path-syntax regex")
+            .is_match(input)
+        || input.len() > 2048
+    {
+        return Err("Swarm URL contains unsupported characters".into());
+    }
+    let mut url = url::Url::parse(input).map_err(|_| "Swarm URL is invalid")?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(
+            "Swarm URL must be an http(s) base URL without credentials, query, or fragment".into(),
+        );
+    }
+    let path = url.path().trim_end_matches('/').to_owned() + "/";
+    url.set_path(&path);
+    Ok(url.into())
 }
 
 #[cfg(test)]
@@ -831,7 +900,7 @@ mod tests {
         assert!(!backup.contains("password"));
         assert!(!backup.contains("must-not-survive"));
         let migrated = std::fs::read_to_string(directory.join("connection.json")).unwrap();
-        assert!(migrated.contains("\"schemaVersion\": 2"));
+        assert!(migrated.contains("\"schemaVersion\": 3"));
         assert!(!migrated.contains("password"));
         assert!(!migrated.contains("must-not-survive"));
         assert!(!migrated.to_ascii_lowercase().contains("\"ticket\":"));
@@ -852,6 +921,67 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
             assert!(!directory.join("connection.json.legacy.bak").exists());
             std::fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
+    fn migrates_schema_v2_to_v3_without_inventing_swarm_configuration() {
+        let directory = directory();
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("connection.json");
+        std::fs::write(
+            &path,
+            r#"{
+  "schemaVersion": 2,
+  "revision": 7,
+  "activeProfileId": "550e8400-e29b-41d4-a716-446655440000",
+  "profiles": [{
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Existing",
+    "context": {
+      "executable": null,
+      "server": "ssl:test:1666",
+      "user": "tester",
+      "client": "main",
+      "cwd": null,
+      "charset": null,
+      "trustPath": null,
+      "ticketsPath": null
+    }
+  }]
+}"#,
+        )
+        .unwrap();
+        let store = ContextStore::load(&directory).unwrap();
+        let document = store.profiles();
+        assert_eq!(document.schema_version, 3);
+        assert_eq!(document.revision, 7);
+        assert_eq!(document.profiles[0].context.swarm_base_url, None);
+        let persisted = std::fs::read_to_string(path).unwrap();
+        assert!(persisted.contains("\"schemaVersion\": 3"));
+        assert!(!persisted.contains("swarmBaseUrl"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn normalizes_and_rejects_unsafe_swarm_base_urls() {
+        assert_eq!(
+            normalize_swarm_base_url("https://swarm.example/team").unwrap(),
+            "https://swarm.example/team/"
+        );
+        for value in [
+            "javascript:alert(1)",
+            "file:///tmp/a",
+            "data:text/plain,x",
+            "https://user:secret@swarm.example/",
+            "https://swarm.example/?token=secret",
+            "https://swarm.example/#fragment",
+            "https://swarm.example/%0d%0aheader",
+            "https://swarm.example/%2e%2e/other",
+            "https://swarm.example/team%2fother",
+            " https://swarm.example/",
+        ] {
+            assert!(normalize_swarm_base_url(value).is_err(), "{value}");
         }
     }
 

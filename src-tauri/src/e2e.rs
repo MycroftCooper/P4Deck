@@ -139,6 +139,7 @@ mod tests {
                     charset: None,
                     trust_path: Some(trust.to_string_lossy().into_owned()),
                     tickets_path: Some(tickets.to_string_lossy().into_owned()),
+                    swarm_base_url: None,
                 },
                 workspace_root,
                 runtime_root,

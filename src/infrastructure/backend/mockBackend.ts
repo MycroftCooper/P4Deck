@@ -917,7 +917,7 @@ export const mockBackend: Backend = {
   },
   async listConnectionProfiles() {
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       revision: mockProfileRevision,
       activeProfileId: mockActiveProfileId,
       profiles: structuredClone(mockProfiles),
@@ -1570,6 +1570,9 @@ export const mockBackend: Backend = {
   },
   async openLocalPath() {
     throw new Error("系统打开功能仅在桌面应用中可用 / Use the desktop app");
+  },
+  async openSwarmLink() {
+    throw new Error("Native Swarm opening is unavailable in the browser demo.");
   },
   async localPathCapabilities() {
     return { reveal: false, openWith: false };

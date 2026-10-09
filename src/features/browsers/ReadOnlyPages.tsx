@@ -28,6 +28,7 @@ import {
   useReviewRequestOwner,
 } from "./reviewRequests";
 import { StreamSwitchDialog } from "./StreamSwitchDialog";
+import { SwarmAction, swarmMenuAction } from "../swarm/SwarmAction";
 const cache = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
@@ -351,6 +352,13 @@ export function ReadOnlyPage({
           <RefreshCw size={15} className={loading ? "spin" : ""} />
           {zh ? "刷新" : "Refresh"}
         </button>
+        {kind === "history" && (
+          <SwarmAction
+            runtime={runtime}
+            zh={zh}
+            target={{ kind: "file", depotPath: queryPath }}
+          />
+        )}
       </header>
       {kind === "history" && (
         <form
@@ -539,6 +547,14 @@ export function ReadOnlyPage({
               刷新: action(reload),
               刷新当前视图: action(reload),
               复制当前目标标识: copy(queryPath),
+              ...(kind === "history"
+                ? {
+                    "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
+                      kind: "file",
+                      depotPath: queryPath,
+                    }),
+                  }
+                : {}),
               全选结果: action(selection.all),
               清除选择: action(selection.clear),
             }))}
@@ -634,6 +650,11 @@ export function ReadOnlyPage({
                                 `${queryPath}#${item.revision}`,
                               ),
                               "复制 CL 编号": copy(item.changelistId),
+                              "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
+                                kind: "file",
+                                depotPath: queryPath,
+                                revision: item.revision,
+                              }),
                               复制所选修订标识: copy(
                                 selection
                                   .targets(item)

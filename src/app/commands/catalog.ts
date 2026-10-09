@@ -30,6 +30,7 @@ export type AppCommandId =
   | "file.revert"
   | "file.reveal"
   | "file.openWith"
+  | "swarm.open"
   | "operation.cancel"
   | "tools.openTerminal"
   | "tools.openP4Log"
@@ -53,7 +54,8 @@ export interface AppCommandDefinition {
   allowInEditable?: boolean;
   risk: AppCommandRisk;
   confirmation: AppCommandConfirmation;
-  requires?: "runtime" | "connected" | "file" | "pending" | "mainWindow";
+  requires?:
+    "runtime" | "connected" | "file" | "pending" | "swarm" | "mainWindow";
   execution?:
     | { kind: "shell"; command: CommandId }
     | { kind: "page"; page: PageId }
@@ -213,6 +215,9 @@ export const appCommands: readonly AppCommandDefinition[] = [
     requires: "file",
     execution: { kind: "shell", command: "openWith" },
   }),
+  command("swarm.open", "navigation", "在 Swarm 中打开", "Open in Swarm", {
+    requires: "swarm",
+  }),
   command(
     "operation.cancel",
     "app",
@@ -288,6 +293,7 @@ export interface AppCommandEnvironment {
   pendingCount?: number;
   pendingId?: number;
   shellReasons?: Partial<Record<CommandId, string | undefined>>;
+  swarmReason?: string;
 }
 
 export function appCommandReason(
@@ -313,6 +319,8 @@ export function appCommandReason(
     return message("另一项操作正在执行", "Another operation is running");
   if (definition.requires === "file" && environment.target !== "file")
     return message("请先选择文件或目录", "Select a file or folder first");
+  if (definition.requires === "swarm" && environment.swarmReason)
+    return environment.swarmReason;
   if (
     definition.requires === "pending" &&
     (environment.target !== "pending" ||

@@ -1106,6 +1106,7 @@ export const menuCatalog = {
         label: "删除空 CL…",
         phase: "later",
       },
+      { id: "C02-13", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   C03: {
@@ -1141,6 +1142,7 @@ export const menuCatalog = {
         label: "查看其搁置内容",
         phase: "later",
       },
+      { id: "C03-07", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   C04: {
@@ -1371,6 +1373,7 @@ export const menuCatalog = {
         label: "删除搁置内容…",
         phase: "later",
       },
+      { id: "C06-07", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   C07: {
@@ -1506,6 +1509,7 @@ export const menuCatalog = {
         label: "撤销此 CL…",
         phase: "later",
       },
+      { id: "C09-08", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   C10: {
@@ -1571,6 +1575,7 @@ export const menuCatalog = {
         label: "获取此修订…",
         phase: "later",
       },
+      { id: "C10-13", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   C11: {
@@ -1721,6 +1726,7 @@ export const menuCatalog = {
         label: "获取此修订…",
         phase: "later",
       },
+      { id: "V01-12", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   V02: {
@@ -1781,6 +1787,7 @@ export const menuCatalog = {
         label: "打开当前侧精确版本",
         phase: "later",
       },
+      { id: "V04-07", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   V05: {
@@ -1901,6 +1908,7 @@ export const menuCatalog = {
         label: "修订图重置缩放",
         phase: "later",
       },
+      { id: "V08-05", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
   S01: {

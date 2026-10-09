@@ -23,6 +23,7 @@ import {
   reviewSessionIdentity,
   useReviewRequestOwner,
 } from "./reviewRequests";
+import { SwarmAction, swarmMenuAction } from "../swarm/SwarmAction";
 export type ReviewKind = "diff" | "revgraph";
 const cache = new QueryClient({
   defaultOptions: {
@@ -416,6 +417,11 @@ export function FileReviewPage({
           <RefreshCw size={15} className={loading ? "spin" : ""} />
           {zh ? "刷新" : "Refresh"}
         </button>
+        <SwarmAction
+          runtime={runtime}
+          zh={zh}
+          target={{ kind: "file", depotPath: queryPath }}
+        />
       </header>
       <form
         className="history-path"
@@ -476,6 +482,10 @@ export function FileReviewPage({
         {...menu("V08", () => ({
           刷新当前视图: action(reload),
           复制当前目标标识: copy(queryPath),
+          "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
+            kind: "file",
+            depotPath: queryPath,
+          }),
           修订图重置缩放: action(() => setZoom(1)),
         }))}
       >
@@ -591,6 +601,10 @@ export function FileReviewPage({
                       ? "复制两侧文件/修订标识"
                       : "Copy both file/revision identifiers",
                   },
+                  "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
+                    kind: "file",
+                    depotPath: queryPath,
+                  }),
                 }),
                 { title: "统一差异 / Unified diff" },
               )}
@@ -702,6 +716,11 @@ export function FileReviewPage({
                         `${node.depotPath}#${node.revision}`,
                       ),
                       "复制 CL 编号": copy(node.changelistId),
+                      "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
+                        kind: "file",
+                        depotPath: node.depotPath,
+                        revision: node.revision,
+                      }),
                       复制所选修订标识: copy(
                         selection
                           .targets(node)

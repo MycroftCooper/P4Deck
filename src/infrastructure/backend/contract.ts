@@ -53,6 +53,7 @@ import type {
   OperationEvent,
   OperationResult,
   OpenLocalPathRequest,
+  OpenSwarmLinkRequest,
   OperationJournalPage,
   OperationJournalQuery,
   OperationRecord,
@@ -119,6 +120,7 @@ export interface Backend {
   login(request: LoginRequest): Promise<ConnectionStatus>;
   logout(request: AuthenticationRequest): Promise<ConnectionStatus>;
   openLocalPath(request: OpenLocalPathRequest): Promise<void>;
+  openSwarmLink(request: OpenSwarmLinkRequest): Promise<void>;
   localPathCapabilities(
     path: string,
   ): Promise<import("../../shared/contracts/types").LocalPathCapabilities>;

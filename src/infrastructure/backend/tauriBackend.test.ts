@@ -60,6 +60,19 @@ it("passes only the narrow submitted-detail request through the Tauri adapter", 
   expect(JSON.stringify(invoke.mock.calls[0])).not.toContain('"files"');
 });
 
+it("passes a generation-bound Swarm request through the narrow opener command", async () => {
+  const request = {
+    url: "https://swarm.example/changes/42",
+    expectedProfileId: "profile-a",
+    expectedContextGeneration: 9,
+  };
+  invoke.mockResolvedValue(undefined);
+  await tauriBackend.openSwarmLink(request);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("open_swarm_link", {
+    request,
+  });
+});
+
 it("passes typed sync preview and confirmation requests through narrow commands", async () => {
   const request = {
     paths: ["//depot/main/..."],

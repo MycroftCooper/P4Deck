@@ -504,3 +504,15 @@
 | U05-04 | 单个执行中/排队任务 | 取消此任务 | ☑ | 后续能力 |
 | U06-01 | 多任务聚合进度条 | 打开日志栏 | ☑ | 首期 |
 | U06-02 | 多任务聚合进度条 | 查看任务列表 | ☑ | 后续能力 |
+## 2026-10-09 Swarm 基础链接增量
+
+| 台账 ID | 对象 | 菜单项 | 状态 | 备注 |
+| --- | --- | --- | --- | --- |
+| C02-13 | 当前用户/工作区编号 Pending CL | 在 Swarm 中打开 | ☑ | 当前活动 profile；缺配置进入 Settings |
+| C03-07 | 其他用户/工作区 Pending CL | 在 Swarm 中打开 | ☑ | 只读 change URL |
+| C06-07 | Shelf 分组 / 搁置 CL | 在 Swarm 中打开 | ☑ | 来源 CL URL，不猜 Review ID |
+| C09-08 | Submitted CL | 在 Swarm 中打开 | ☑ | change URL |
+| C10-13 | Submitted CL 内单个文件 | 在 Swarm 中打开 | ☑ | 精确 revision 可用时携带 `v` |
+| V01-12 | History 修订 / Rev Graph 节点 | 在 Swarm 中打开 | ☑ | depot path + revision |
+| V04-07 | Diff 内容 | 在 Swarm 中打开 | ☑ | 当前 Depot 目标；未知侧 revision 不猜测 |
+| V08-05 | History / Rev Graph / Diff 空白区 | 在 Swarm 中打开 | ☑ | 当前 Depot 文件 URL |

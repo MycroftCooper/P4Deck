@@ -125,6 +125,7 @@ const english: Record<string, string> = {
   刷新当前视图: "Refresh view",
   修订图适应视图: "Fit revision graph",
   修订图重置缩放: "Reset graph zoom",
+  "在 Swarm 中打开": "Open in Swarm",
   在所在目录显示: "Show in containing folder",
   "打开 CL 详情": "Open CL details",
   刷新此结果: "Refresh result",

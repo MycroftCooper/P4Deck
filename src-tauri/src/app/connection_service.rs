@@ -21,6 +21,10 @@ impl ConnectionService {
         self.contexts.current()
     }
 
+    pub fn swarm_snapshot(&self) -> (Option<String>, u64, P4Context) {
+        self.contexts.swarm_snapshot()
+    }
+
     pub fn save(&self, context: P4Context) -> Result<P4Context, ConnectionProfileError> {
         self.contexts.save(context)
     }

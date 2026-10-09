@@ -45,6 +45,7 @@ import {
 } from "../pendingFilterState";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import type { WorkflowRefreshDetail } from "../workflowRefresh";
+import { swarmMenuAction } from "../../swarm/SwarmAction";
 type T = (typeof messages)[keyof typeof messages];
 
 export function mergePendingMutation(
@@ -519,6 +520,14 @@ export function PendingPage({
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),
         刷新: action(reload),
+        "在 Swarm 中打开": swarmMenuAction(
+          menuEnvironment.runtime,
+          menuEnvironment.preferences.zh,
+          {
+            kind: change.shelvedFiles.length ? "shelf" : "pendingChange",
+            changeId: change.id,
+          },
+        ),
         "编辑 CL…": action(
           () => openForm(change),
           change.id > 0
@@ -970,6 +979,11 @@ export function PendingPage({
                               "展开/折叠": action(() => toggleShelf(change.id)),
                               "复制来源 CL 编号": copy(change.id),
                               刷新: action(reload),
+                              "在 Swarm 中打开": swarmMenuAction(
+                                menuEnvironment.runtime,
+                                menuEnvironment.preferences.zh,
+                                { kind: "shelf", changeId: change.id },
+                              ),
                             }))}
                           >
                             <FolderArchive size={13} />

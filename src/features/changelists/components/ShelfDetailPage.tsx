@@ -13,6 +13,7 @@ import type {
   ShelfFilePreview,
 } from "../../../shared/contracts/types";
 import { makeReviewScope } from "../../browsers/reviewModel";
+import { SwarmAction } from "../../swarm/SwarmAction";
 
 const PAGE_SIZE = 500;
 
@@ -418,6 +419,11 @@ export function ShelfDetailPage({
         >
           {zh ? "取消" : "Cancel"}
         </button>
+        <SwarmAction
+          runtime={runtime}
+          zh={zh}
+          target={{ kind: "shelf", changeId }}
+        />
       </header>
       {error && (
         <div role="alert" className="workspace-load-error">

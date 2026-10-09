@@ -5,6 +5,7 @@ import { copy } from "../../../app/context-menu/bindings";
 import { useRecordSelection } from "../../../app/context-menu/useRecordSelection";
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
+import { swarmMenuAction } from "../../swarm/SwarmAction";
 
 export interface RevisionFileTarget {
   depotPath: string;
@@ -24,9 +25,10 @@ export function RevisionFileList({
   demo: boolean;
 }) {
   const menu = useContextMenu();
+  const env = useMenuEnvironment();
   const {
     preferences: { zh },
-  } = useMenuEnvironment();
+  } = env;
   const selection = useRecordSelection(
     files,
     (file) => `${file.depotPath}#${file.revision}`,
@@ -104,6 +106,11 @@ export function RevisionFileList({
                 "复制 Depot 路径": copy(file.depotPath),
                 复制精确修订标识: copy(exactRevision),
                 "复制所属 CL 编号": copy(file.changeId),
+                "在 Swarm 中打开": swarmMenuAction(env.runtime, zh, {
+                  kind: "file",
+                  depotPath: file.depotPath,
+                  revision: file.revision,
+                }),
                 "复制 Depot 路径列表": copy(
                   selection
                     .targets(file)

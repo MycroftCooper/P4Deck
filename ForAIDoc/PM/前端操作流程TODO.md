@@ -14,7 +14,8 @@
 - 默认“仅切换视图”只改变 Client 的 Stream，不触碰文件；用户显式选择“切换并同步”时才执行非 force `sync #head`，警告必须勾选。本地变化在同步模式下直接阻断；执行中取消不会冒充回滚，Stream 已改变但同步未完成时提供同 Stream 恢复预检。
 - 对话框固定打开时目标并绑定连接 key；连接变化会取消完整 operation group 并丢弃迟到响应。结果页保留到用户关闭，再应用后端已验证的新 runtime 和刷新 Streams/Workspace/Pending/Submitted/Search/Files/Depot，避免 generation 更新提前卸载验证结果。
 - Browser Mock 明示模拟；Tauri 适配只透传窄 preflight/confirmation 契约。Windows localhost 已以真实 main/development Stream 验证状态机；Windows/macOS 原生点击、焦点、390px、读屏和 macOS P4 仍待外部验收。
-- 最终门禁：Web 72 文件/408 项、Rust 138 项通过（另 1 项 localhost E2E 默认 ignored）；build/check/format、Clippy `--all-targets -D warnings`、rustfmt、前端 8 项与后端 5 项性能正确性门禁、`git diff --check` 通过；Windows localhost 连续两轮分别 115.59 秒、114.50 秒通过。
+- P1 基础 Swarm 链接（2026-10-09）：Connection Profile schema v3 已加入可选规范化 base URL；Submitted/Pending/Shelf/File/Revision 使用官方稳定路由并接入按钮、右键、命令面板和原生菜单。Rust opener 在外部打开前复核活动 profile/generation、同源/部署路径和 route allowlist。无网络探测、Swarm API、登录/凭据、评论或 Review 创建；Windows/macOS 原生浏览器启动与焦点仍待真实设备验收。
+- 最终门禁：Web 74 文件/439 项、Rust 150 项通过（另 1 项 localhost E2E 默认 ignored）；build/check/format、Clippy `--all-targets -D warnings`、rustfmt、前端 8 项与后端 5 项性能正确性门禁、`git diff --check` 通过；Windows localhost 连续两轮分别 134.86 秒、135.57 秒通过。
 
 ## 最近完成：统一 Action、失败恢复、自动刷新与通知（2026-10-09）
 

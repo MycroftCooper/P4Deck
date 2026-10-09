@@ -41,6 +41,7 @@ similar = "2.7"
 regex = "1"
 zeroize = "1"
 urlencoding = "2"
+url = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

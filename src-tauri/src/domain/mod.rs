@@ -11,6 +11,8 @@ pub struct P4Context {
     pub charset: Option<String>,
     pub trust_path: Option<String>,
     pub tickets_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swarm_base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -66,6 +68,14 @@ pub struct SetActiveConnectionProfileRequest {
 pub struct SwitchWorkspaceRequest {
     pub expected_generation: u64,
     pub client: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenSwarmLinkRequest {
+    pub url: String,
+    pub expected_profile_id: Option<String>,
+    pub expected_context_generation: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

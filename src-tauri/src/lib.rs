@@ -136,6 +136,7 @@ pub fn run() {
                 .text("file.preview", "Preview")
                 .text("file.reveal", "Reveal in System")
                 .text("file.openWith", "Open With…")
+                .text("swarm.open", "Open in Swarm")
                 .build()?;
             let view = SubmenuBuilder::new(app, "View")
                 .items(&[&palette, &refresh, &terminal, &log])
@@ -289,6 +290,7 @@ pub fn run() {
             ipc::commands::list_depot_children,
             ipc::commands::resolve_path,
             ipc::commands::open_local_path,
+            ipc::commands::open_swarm_link,
             ipc::commands::local_path_capabilities,
             ipc::commands::perform_file_action,
             ipc::commands::preflight_rename_move,
