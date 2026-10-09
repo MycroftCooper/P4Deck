@@ -217,10 +217,11 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 - Pending 的 opened file 行可拖拽到任一 Default/编号 CL 卡片；拖拽开始时冻结当前单选或多选 depot path 集合，Shelf 行明确不可拖。目标卡只负责打开既有 `MoveFilesDialog`，菜单、键盘和拖放不分叉业务实现。
 - `MoveFilesDialog` 改用 `preflightMoveFiles → confirmMoveFiles`：展示来源/目标、阻塞项、token 到期和逐文件结果；同目标、空集合、锁、未打开或已漂移文件在后端预检/复核中拒绝。partial/cancelled/failed 不显示全成功，只合并后端返回的来源/目标刷新快照并失效 Workspace/Depot 状态。
-- Shelf 标题、Shelf 文件双击及 C06/C07 菜单均可打开独立可停靠 `ShelfDetailPage`。页面 key 为 change 或 change+depot path，支持 Refresh/Cancel、500 项分段加载、10,000 项上限和虚拟列表；指定文件不在首屏时自动继续分页定位，并明确显示 cached/partial/truncated。
+- Shelf 标题、Shelf 文件双击及 C06/C07 菜单均可打开独立可停靠 `ShelfDetailPage`。页面 key 为 change 或 change+depot path，支持 Refresh/Cancel、opaque cursor 的 500 项分段加载、10,000 项上限和虚拟列表；指定文件不在首屏时自动继续分页定位，并明确显示 cached/partial/truncated。列表 owner 绑定 profile/Connection/context generation/change/request generation；列表与 preview/diff 分开取消，错代响应不能写回，重复/缺失 cursor 会保留可信行并要求从首屏重启。
 - Shelf 文件内容使用窄后端契约；文本可预览，并可与 Workspace/Have/Head 比较。binary、symlink、delete/missing 与超过 4 MiB 的文件只显示 filetype/size/digest/action 和不可文本预览原因，同时提供复制 `depot@=change`，不把二进制解码成文本。
-- Browser Mock 实现同一契约；组件测试覆盖特殊字符文本、binary 元数据、partial、预检/确认、partial move、连接/目标失效和多选拖拽。Windows localhost E2E 覆盖 Shelf 稳定分页、文本/二进制语义、Default ↔ 编号移动、最终服务器归属和逐文件 Journal；原生 Windows/macOS 点击、拖放与读屏仍待验收。
-- 2026-10-09 最终门禁：全量 Web 57 个测试文件、331 项通过；Rust 107 项通过、1 个 localhost E2E 显式 ignored；`pnpm check/build/format:check`、Cargo check、Clippy `--all-targets --all-features -D warnings`、rustfmt、前后端性能门禁与 `git diff --check` 通过；Windows localhost 应用层 E2E 连续两轮分别 82.28 秒、88.57 秒通过。
+- Browser Mock 实现同一强类型 cursor 契约；组件测试覆盖 501 文件两页、过期重启、旧 generation 响应隔离、特殊字符文本、binary 元数据、partial、预检/确认、partial move、连接/目标失效和多选拖拽。Rust 覆盖 1,201 文件、查询/连接/双 generation 错绑、过期和 cursor 重放；Windows localhost E2E 覆盖 Shelf 两页 cursor 与重放拒绝、文本/二进制语义、Default ↔ 编号移动、最终服务器归属和逐文件 Journal。
+- Shelf 已加入 Rust 独立窗口白名单；`shelf--<instance>` 的 route/deep link、已有窗口聚焦、关闭回主 Dock 和启动时 panel 参数恢复沿用统一 Dock 机制。项目当前没有统一的原生窗口坐标/尺寸持久化机制，本批没有另造一套并行存储。
+- 2026-10-09 最终门禁：全量 Web 63 个测试文件、376 项通过；Rust 126 项通过、1 个 localhost E2E 显式 ignored；`pnpm check/build/format:check`、Cargo check、Clippy `--all-targets -D warnings`、rustfmt、前后端性能门禁与 `git diff --check` 通过；Windows localhost 应用层 E2E 连续两轮分别 77.40 秒、77.45 秒通过。未执行 Windows/macOS 原生点击、独立窗口位置/大小恢复、焦点、拖放或读屏验收。
 
 ## 剩余验收与交接边界
 
@@ -245,7 +246,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 | FE-05 | `SyncDialog.test.tsx` 2 项、Tauri 窄契约与后端 parser/token/E2E；保留 `RevisionDialog`/selector 回归 | Preview → Review → Confirming → Result、Mock simulated、force 二次确认与真实 localhost sync 已覆盖；原生点击/读屏待验 |
 | FE-06 | `renamePath.test.ts`、`RenameDialog.test.tsx`、`workflow.test.tsx`、Rust rename 单测与 localhost E2E | Preview → Review → Confirming → Result、token/input/context 失效、映射/opened/CL/目标/case-only blocker、成功/失败刷新已覆盖；原生 UI/macOS 待验 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
-| FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`ShelfDetailPage.test.tsx` 的特殊字符文本预览、binary 元数据/partial；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约与 localhost 文本/二进制证据 | BE-004b Shelf 写入和独立详情/内容页已接；原生待验 |
+| FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`ShelfDetailPage.test.tsx` 的 501 文件 cursor、失效重启、旧 generation 隔离、特殊字符文本预览、binary 元数据/partial；Rust 1,201 文件/重放/错绑/过期及窗口白名单；Mock/localhost 两页 cursor 与文本/二进制证据 | BE-004b Shelf 写入和独立详情/内容页已接；独立窗口 route/恢复已接统一 Dock，但原生位置/大小、点击、焦点和读屏待验 |
 | FE-09 | `ShelfDialog.test.tsx` 的 Unshelve Default/编号/跨 Workspace 与映射/覆盖/锁/Resolve 风险；双 Backend 契约 | BE-004b Unshelve 生产契约已接；不提供强制覆盖，原生待验 |
 | FE-10 | `ResolveDialog.test.tsx` 的策略过滤、blocked/unknown、逐文件计划、partial/unknown/成功、防重复与关闭保护 | BE-004b Resolve 生产契约已接；仅后端允许策略可执行，原生待验 |
 | FE-11 | `PreflightStatus` 状态测试；第八批 Tab 实测；第九批 40 个布局组合；语义标签/错误不只靠颜色 | 已覆盖浏览器键盘与布局；原生及真实读屏未验收 |

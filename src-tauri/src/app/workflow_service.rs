@@ -13,7 +13,10 @@ use crate::{
     },
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
@@ -70,6 +73,23 @@ struct ResolveEvaluation {
     operation_ids: Vec<String>,
 }
 
+#[derive(Clone)]
+struct ShelfDetailSnapshot {
+    query_fingerprint: String,
+    connection_fingerprint: String,
+    connection_generation: u64,
+    shelf_generation: u64,
+    detail: ShelfDetail,
+    issued_cursors: HashMap<String, usize>,
+    inserted_ms: i64,
+    last_access: u64,
+}
+
+struct ShelfDetailSnapshotState {
+    entries: HashMap<String, ShelfDetailSnapshot>,
+    access_clock: u64,
+}
+
 pub struct WorkflowService {
     repository: WorkflowRepository,
     contexts: Arc<ContextStore>,
@@ -77,7 +97,8 @@ pub struct WorkflowService {
     tokens: ConfirmationStore<TokenRecord>,
     confirmation_gate: AsyncMutex<()>,
     ttl_ms: u64,
-    shelf_details: parking_lot::Mutex<HashMap<String, (i64, ShelfDetail)>>,
+    shelf_details: parking_lot::Mutex<ShelfDetailSnapshotState>,
+    shelf_generation: AtomicU64,
 }
 
 impl WorkflowService {
@@ -102,7 +123,11 @@ impl WorkflowService {
             tokens: ConfirmationStore::default(),
             confirmation_gate: AsyncMutex::new(()),
             ttl_ms: ttl_ms.max(1),
-            shelf_details: parking_lot::Mutex::new(HashMap::new()),
+            shelf_details: parking_lot::Mutex::new(ShelfDetailSnapshotState {
+                entries: HashMap::new(),
+                access_clock: 0,
+            }),
+            shelf_generation: AtomicU64::new(1),
         }
     }
 
@@ -111,68 +136,170 @@ impl WorkflowService {
     }
 
     pub fn clear_shelf_details(&self) {
-        self.shelf_details.lock().clear();
+        self.shelf_details.lock().entries.clear();
+        self.shelf_generation.fetch_add(1, Ordering::SeqCst);
     }
 
     pub async fn shelf_detail(
         &self,
         request: ShelfDetailRequest,
         app: Option<&AppHandle>,
-    ) -> Result<ShelfDetail, String> {
+    ) -> Result<ShelfDetail, ShelfDetailRequestError> {
         const MAX_FILES: usize = 10_000;
         const CACHE_TTL_MS: i64 = 30_000;
+        const SNAPSHOT_TTL_MS: i64 = 120_000;
+        const SNAPSHOT_CAPACITY: usize = 32;
         if request.change_id <= 0 {
-            return Err("a numbered shelved changelist is required".into());
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::InvalidQuery,
+                "A numbered shelved changelist is required; Default cannot own a shelf.",
+            ));
         }
         if !(1..=500).contains(&request.page_size) {
-            return Err("Shelf detail pageSize must be between 1 and 500".into());
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::InvalidQuery,
+                "Shelf detail pageSize must be between 1 and 500.",
+            ));
         }
-        if request.offset > MAX_FILES {
-            return Err("Shelf detail offset exceeds the 10,000-file safety limit".into());
+        if request.refresh && request.cursor.is_some() {
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::InvalidQuery,
+                "A refreshed shelf query must start without a cursor.",
+            ));
         }
         let (context, generation) = self.contexts.snapshot();
         let profile = self.contexts.active_profile_id();
-        let key = format!(
-            "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
-            context.server.to_ascii_lowercase(),
-            context.user,
-            context.client,
-            generation,
-            request.change_id
-        );
         if request.refresh {
-            self.shelf_details.lock().remove(&key);
-        } else if let Some((inserted, detail)) = self.shelf_details.lock().get(&key).cloned() {
-            if now_ms().saturating_sub(inserted) <= CACHE_TTL_MS {
-                return Ok(page_shelf_detail(
-                    detail,
-                    request.offset,
-                    request.page_size,
+            self.clear_shelf_details();
+        }
+        let shelf_generation = self.shelf_generation.load(Ordering::SeqCst);
+        let connection_fingerprint = crate::p4::query::fingerprint(&(profile.clone(), &context))
+            .map_err(|message| {
+                shelf_detail_error(ShelfDetailRequestErrorCode::InvalidQuery, message)
+            })?;
+        let query_fingerprint =
+            crate::p4::query::fingerprint(&(request.change_id, request.page_size)).map_err(
+                |message| shelf_detail_error(ShelfDetailRequestErrorCode::InvalidQuery, message),
+            )?;
+
+        if let Some(cursor) = request.cursor.as_deref() {
+            use crate::p4::query::ShelfDetailCursorError;
+            let boundary = crate::p4::query::decode_shelf_detail_cursor(
+                cursor,
+                &query_fingerprint,
+                &connection_fingerprint,
+                generation,
+                shelf_generation,
+            )
+            .map_err(|error| match error {
+                ShelfDetailCursorError::ConnectionMismatch => shelf_detail_error(
+                    ShelfDetailRequestErrorCode::ConnectionChanged,
+                    "The shelf cursor belongs to another connection or profile.",
+                ),
+                ShelfDetailCursorError::GenerationMismatch => shelf_detail_error(
+                    ShelfDetailRequestErrorCode::SnapshotChanged,
+                    "The shelf data generation changed; refresh from the first page.",
+                ),
+                ShelfDetailCursorError::Invalid | ShelfDetailCursorError::QueryMismatch => {
+                    shelf_detail_error(
+                        ShelfDetailRequestErrorCode::InvalidCursor,
+                        "The shelf cursor is invalid or belongs to another query.",
+                    )
+                }
+            })?;
+            return self.page_shelf_snapshot(
+                &boundary.snapshot_id,
+                Some(&boundary.cursor_id),
+                boundary.offset,
+                &request,
+                &query_fingerprint,
+                &connection_fingerprint,
+                generation,
+                shelf_generation,
+                "cached",
+                SNAPSHOT_TTL_MS,
+            );
+        }
+
+        if !request.refresh {
+            let now = now_ms();
+            let reusable = {
+                let mut state = self.shelf_details.lock();
+                state.entries.retain(|_, snapshot| {
+                    now.saturating_sub(snapshot.inserted_ms) <= SNAPSHOT_TTL_MS
+                });
+                state
+                    .entries
+                    .iter()
+                    .filter(|(_, snapshot)| {
+                        now.saturating_sub(snapshot.inserted_ms) <= CACHE_TTL_MS
+                            && snapshot.query_fingerprint == query_fingerprint
+                            && snapshot.connection_fingerprint == connection_fingerprint
+                            && snapshot.connection_generation == generation
+                            && snapshot.shelf_generation == shelf_generation
+                    })
+                    .max_by_key(|(_, snapshot)| snapshot.inserted_ms)
+                    .map(|(id, _)| id.clone())
+            };
+            if let Some(snapshot_id) = reusable {
+                return self.page_shelf_snapshot(
+                    &snapshot_id,
+                    None,
+                    0,
+                    &request,
+                    &query_fingerprint,
+                    &connection_fingerprint,
+                    generation,
+                    shelf_generation,
                     "cached",
-                ));
+                    SNAPSHOT_TTL_MS,
+                );
             }
         }
+
         let operation_id = request
             .operation_id
             .clone()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| format!("shelf-detail-{}", Uuid::new_v4()));
+        let operation = self.repository.begin_operation_group(operation_id.clone());
         let inspection = self
             .repository
             .shelf_detail(&context, request.change_id, &operation_id, app)
-            .await?;
+            .await
+            .map_err(|message| {
+                let code = if message.to_ascii_lowercase().contains("cancel") {
+                    ShelfDetailRequestErrorCode::Cancelled
+                } else {
+                    ShelfDetailRequestErrorCode::QueryFailed
+                };
+                shelf_detail_error(code, message)
+            })?;
+        operation.ensure_active().map_err(|message| {
+            shelf_detail_error(ShelfDetailRequestErrorCode::Cancelled, message)
+        })?;
         let (current, current_generation) = self.contexts.snapshot();
         if current != context
             || current_generation != generation
             || self.contexts.active_profile_id() != profile
         {
-            return Err("Shelf detail context changed; discard the stale result and retry".into());
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::ConnectionChanged,
+                "The connection or profile changed while the shelf was loading.",
+            ));
+        }
+        if self.shelf_generation.load(Ordering::SeqCst) != shelf_generation {
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::SnapshotChanged,
+                "The shelf changed while its snapshot was loading; refresh and retry.",
+            ));
         }
         let total_files = inspection.detail.files.len();
         let truncated = total_files > MAX_FILES;
         let mut files = inspection.detail.files;
         files.truncate(MAX_FILES);
         let detail = ShelfDetail {
+            request_generation: request.request_generation,
             scope: ShelfDetailScope {
                 server: context.server,
                 user: context.user,
@@ -190,8 +317,8 @@ impl WorkflowService {
             jobs: inspection.detail.jobs,
             files,
             total_files,
-            offset: 0,
             has_more: false,
+            next_cursor: None,
             truncated,
             inspection_status: if truncated {
                 ShelfInspectionStatus::Partial
@@ -206,15 +333,138 @@ impl WorkflowService {
             operation_ids: inspection.operation_ids,
             cache_freshness: "fresh".into(),
         };
-        self.shelf_details
-            .lock()
-            .insert(key, (now_ms(), detail.clone()));
-        Ok(page_shelf_detail(
-            detail,
-            request.offset,
-            request.page_size,
+        operation.ensure_active().map_err(|message| {
+            shelf_detail_error(ShelfDetailRequestErrorCode::Cancelled, message)
+        })?;
+        let snapshot_id = Uuid::new_v4().to_string();
+        {
+            let mut state = self.shelf_details.lock();
+            state.access_clock = state.access_clock.saturating_add(1);
+            let access = state.access_clock;
+            state.entries.insert(
+                snapshot_id.clone(),
+                ShelfDetailSnapshot {
+                    query_fingerprint: query_fingerprint.clone(),
+                    connection_fingerprint: connection_fingerprint.clone(),
+                    connection_generation: generation,
+                    shelf_generation,
+                    detail,
+                    issued_cursors: HashMap::new(),
+                    inserted_ms: now_ms(),
+                    last_access: access,
+                },
+            );
+            while state.entries.len() > SNAPSHOT_CAPACITY {
+                let Some(oldest) = state
+                    .entries
+                    .iter()
+                    .min_by_key(|(_, snapshot)| snapshot.last_access)
+                    .map(|(id, _)| id.clone())
+                else {
+                    break;
+                };
+                state.entries.remove(&oldest);
+            }
+        }
+        self.page_shelf_snapshot(
+            &snapshot_id,
+            None,
+            0,
+            &request,
+            &query_fingerprint,
+            &connection_fingerprint,
+            generation,
+            shelf_generation,
             "fresh",
-        ))
+            SNAPSHOT_TTL_MS,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn page_shelf_snapshot(
+        &self,
+        snapshot_id: &str,
+        presented_cursor_id: Option<&str>,
+        offset: usize,
+        request: &ShelfDetailRequest,
+        query_fingerprint: &str,
+        connection_fingerprint: &str,
+        connection_generation: u64,
+        shelf_generation: u64,
+        freshness: &str,
+        snapshot_ttl_ms: i64,
+    ) -> Result<ShelfDetail, ShelfDetailRequestError> {
+        let now = now_ms();
+        let mut state = self.shelf_details.lock();
+        state
+            .entries
+            .retain(|_, snapshot| now.saturating_sub(snapshot.inserted_ms) <= snapshot_ttl_ms);
+        state.access_clock = state.access_clock.saturating_add(1);
+        let access = state.access_clock;
+        let snapshot = state.entries.get_mut(snapshot_id).ok_or_else(|| {
+            shelf_detail_error(
+                ShelfDetailRequestErrorCode::CursorExpired,
+                "The shelf cursor expired; refresh from the first page.",
+            )
+        })?;
+        if snapshot.query_fingerprint != query_fingerprint
+            || snapshot.connection_fingerprint != connection_fingerprint
+            || snapshot.connection_generation != connection_generation
+            || snapshot.shelf_generation != shelf_generation
+        {
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::SnapshotChanged,
+                "The shelf snapshot no longer matches this query or connection.",
+            ));
+        }
+        if let Some(cursor_id) = presented_cursor_id {
+            if snapshot.issued_cursors.remove(cursor_id) != Some(offset) {
+                return Err(shelf_detail_error(
+                    ShelfDetailRequestErrorCode::InvalidCursor,
+                    "The shelf cursor was not issued by this server, was altered, or has already been used.",
+                ));
+            }
+        }
+        snapshot.last_access = access;
+        if offset > snapshot.detail.files.len()
+            || (offset > 0 && offset == snapshot.detail.files.len())
+        {
+            return Err(shelf_detail_error(
+                ShelfDetailRequestErrorCode::InvalidCursor,
+                "The shelf cursor points outside the result snapshot.",
+            ));
+        }
+        let end = offset
+            .saturating_add(request.page_size)
+            .min(snapshot.detail.files.len());
+        let files = snapshot.detail.files[offset..end].to_vec();
+        let has_more = end < snapshot.detail.files.len();
+        let next_cursor = if has_more {
+            let cursor_id = Uuid::new_v4().to_string();
+            let cursor = crate::p4::query::encode_shelf_detail_cursor(
+                snapshot_id,
+                &cursor_id,
+                end,
+                query_fingerprint,
+                connection_fingerprint,
+                connection_generation,
+                shelf_generation,
+            )
+            .map_err(|message| {
+                shelf_detail_error(ShelfDetailRequestErrorCode::InvalidCursor, message)
+            })?;
+            snapshot.issued_cursors.insert(cursor_id, end);
+            Some(cursor)
+        } else {
+            None
+        };
+        let mut detail = snapshot.detail.clone();
+        detail.request_generation = request.request_generation;
+        detail.files = files;
+        detail.has_more = has_more;
+        detail.next_cursor = next_cursor;
+        detail.cache_freshness = freshness.into();
+        Ok(detail)
     }
 
     pub async fn preflight_move(
@@ -1017,23 +1267,14 @@ impl WorkflowService {
     }
 }
 
-fn page_shelf_detail(
-    mut detail: ShelfDetail,
-    offset: usize,
-    page_size: usize,
-    freshness: &str,
-) -> ShelfDetail {
-    let available = detail.files.len();
-    detail.files = detail
-        .files
-        .into_iter()
-        .skip(offset)
-        .take(page_size)
-        .collect();
-    detail.offset = offset;
-    detail.has_more = offset.saturating_add(detail.files.len()) < available;
-    detail.cache_freshness = freshness.into();
-    detail
+fn shelf_detail_error(
+    code: ShelfDetailRequestErrorCode,
+    message: impl Into<String>,
+) -> ShelfDetailRequestError {
+    ShelfDetailRequestError {
+        code,
+        message: message.into(),
+    }
 }
 
 fn evaluate_move(
@@ -2014,6 +2255,76 @@ fn refresh(paths: Vec<String>, reason: impl Into<String>) -> WorkflowRefreshAdvi
 mod tests {
     use super::*;
 
+    fn shelf_test_service() -> (WorkflowService, std::path::PathBuf) {
+        let directory = std::env::temp_dir().join(format!(
+            "p4deck-shelf-cursor-{}-{}",
+            std::process::id(),
+            Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let logs = Arc::new(
+            crate::persistence::log_store::LogStore::open(&directory.join("logs.sqlite")).unwrap(),
+        );
+        let journal = Arc::new(
+            crate::persistence::operation_journal::OperationJournal::open(
+                &directory.join("operations.sqlite"),
+            )
+            .unwrap(),
+        );
+        let runner = Arc::new(crate::p4::runner::P4Runner::new(logs, journal));
+        let contexts = Arc::new(crate::p4::context::ContextStore::load(&directory).unwrap());
+        (
+            WorkflowService::new(
+                WorkflowRepository::new(runner),
+                contexts,
+                crate::app::status_cache::shared_default(),
+            ),
+            directory,
+        )
+    }
+
+    fn shelf_detail_with_files(count: usize) -> ShelfDetail {
+        ShelfDetail {
+            request_generation: 1,
+            scope: ShelfDetailScope {
+                server: "server:1666".into(),
+                user: "user".into(),
+                client: "client".into(),
+                workspace: "/workspace".into(),
+                active_profile_id: Some("profile".into()),
+                context_generation: 7,
+                change_id: 42,
+            },
+            description: "large shelf".into(),
+            time: "2026-10-09T00:00:00Z".into(),
+            owner: "user".into(),
+            user: "user".into(),
+            client: "client".into(),
+            jobs: Vec::new(),
+            files: (0..count)
+                .map(|index| ShelfDetailFile {
+                    depot_path: format!("//depot/file-{index:05}.txt"),
+                    action: "edit".into(),
+                    revision: Some(1),
+                    file_type: Some("text".into()),
+                    size: Some(1),
+                    digest: Some(format!("digest-{index}")),
+                    binary: false,
+                    symlink: false,
+                    deleted: false,
+                })
+                .collect(),
+            total_files: count,
+            has_more: false,
+            next_cursor: None,
+            truncated: false,
+            inspection_status: ShelfInspectionStatus::Complete,
+            message: None,
+            operation_ids: vec!["test".into()],
+            cache_freshness: "fresh".into(),
+        }
+    }
+
     fn change() -> PendingChange {
         PendingChange {
             id: 7,
@@ -2033,6 +2344,195 @@ mod tests {
             }],
             shelved_files: Vec::new(),
         }
+    }
+
+    #[test]
+    fn shelf_snapshot_pages_more_than_500_without_duplicates_and_rejects_replay() {
+        let (service, directory) = shelf_test_service();
+        let snapshot_id = "snapshot-large";
+        let query_fingerprint = "query";
+        let connection_fingerprint = "connection";
+        let generation = 7;
+        let shelf_generation = service.shelf_generation.load(Ordering::SeqCst);
+        service.shelf_details.lock().entries.insert(
+            snapshot_id.into(),
+            ShelfDetailSnapshot {
+                query_fingerprint: query_fingerprint.into(),
+                connection_fingerprint: connection_fingerprint.into(),
+                connection_generation: generation,
+                shelf_generation,
+                detail: shelf_detail_with_files(1_201),
+                issued_cursors: HashMap::new(),
+                inserted_ms: now_ms(),
+                last_access: 1,
+            },
+        );
+        let request = ShelfDetailRequest {
+            change_id: 42,
+            request_generation: 11,
+            page_size: 500,
+            cursor: None,
+            refresh: false,
+            operation_id: None,
+        };
+        let first = service
+            .page_shelf_snapshot(
+                snapshot_id,
+                None,
+                0,
+                &request,
+                query_fingerprint,
+                connection_fingerprint,
+                generation,
+                shelf_generation,
+                "fresh",
+                120_000,
+            )
+            .unwrap();
+        assert_eq!(first.files.len(), 500);
+        assert_eq!(first.request_generation, 11);
+        let first_cursor = first.next_cursor.unwrap();
+        let boundary = crate::p4::query::decode_shelf_detail_cursor(
+            &first_cursor,
+            query_fingerprint,
+            connection_fingerprint,
+            generation,
+            shelf_generation,
+        )
+        .unwrap();
+        let altered = service
+            .page_shelf_snapshot(
+                &boundary.snapshot_id,
+                Some(&boundary.cursor_id),
+                boundary.offset + 1,
+                &request,
+                query_fingerprint,
+                connection_fingerprint,
+                generation,
+                shelf_generation,
+                "cached",
+                120_000,
+            )
+            .unwrap_err();
+        assert_eq!(altered.code, ShelfDetailRequestErrorCode::InvalidCursor);
+        let retry_first = service
+            .page_shelf_snapshot(
+                snapshot_id,
+                None,
+                0,
+                &request,
+                query_fingerprint,
+                connection_fingerprint,
+                generation,
+                shelf_generation,
+                "cached",
+                120_000,
+            )
+            .unwrap();
+        let first_cursor = retry_first.next_cursor.unwrap();
+        let boundary = crate::p4::query::decode_shelf_detail_cursor(
+            &first_cursor,
+            query_fingerprint,
+            connection_fingerprint,
+            generation,
+            shelf_generation,
+        )
+        .unwrap();
+        let second = service
+            .page_shelf_snapshot(
+                &boundary.snapshot_id,
+                Some(&boundary.cursor_id),
+                boundary.offset,
+                &request,
+                query_fingerprint,
+                connection_fingerprint,
+                generation,
+                shelf_generation,
+                "cached",
+                120_000,
+            )
+            .unwrap();
+        assert_eq!(second.files.len(), 500);
+        assert_ne!(first.files.last(), second.files.first());
+        let replay = service
+            .page_shelf_snapshot(
+                &boundary.snapshot_id,
+                Some(&boundary.cursor_id),
+                boundary.offset,
+                &request,
+                query_fingerprint,
+                connection_fingerprint,
+                generation,
+                shelf_generation,
+                "cached",
+                120_000,
+            )
+            .unwrap_err();
+        assert_eq!(replay.code, ShelfDetailRequestErrorCode::InvalidCursor);
+        drop(service);
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn shelf_snapshot_reports_expiry_and_generation_drift() {
+        let (service, directory) = shelf_test_service();
+        let shelf_generation = service.shelf_generation.load(Ordering::SeqCst);
+        service.shelf_details.lock().entries.insert(
+            "snapshot".into(),
+            ShelfDetailSnapshot {
+                query_fingerprint: "query".into(),
+                connection_fingerprint: "connection".into(),
+                connection_generation: 7,
+                shelf_generation,
+                detail: shelf_detail_with_files(2),
+                issued_cursors: HashMap::new(),
+                inserted_ms: now_ms(),
+                last_access: 1,
+            },
+        );
+        let request = ShelfDetailRequest {
+            change_id: 42,
+            request_generation: 1,
+            page_size: 1,
+            cursor: None,
+            refresh: false,
+            operation_id: None,
+        };
+        let drift = service
+            .page_shelf_snapshot(
+                "snapshot",
+                None,
+                0,
+                &request,
+                "query",
+                "connection",
+                8,
+                shelf_generation,
+                "cached",
+                120_000,
+            )
+            .unwrap_err();
+        assert_eq!(drift.code, ShelfDetailRequestErrorCode::SnapshotChanged);
+        let expired = service
+            .page_shelf_snapshot(
+                "snapshot",
+                None,
+                0,
+                &request,
+                "query",
+                "connection",
+                7,
+                shelf_generation,
+                "cached",
+                -1,
+            )
+            .unwrap_err();
+        assert_eq!(expired.code, ShelfDetailRequestErrorCode::CursorExpired);
+        let previous = shelf_generation;
+        service.clear_shelf_details();
+        assert!(service.shelf_generation.load(Ordering::SeqCst) > previous);
+        drop(service);
+        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[test]

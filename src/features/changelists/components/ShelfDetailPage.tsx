@@ -9,11 +9,39 @@ import type {
   RuntimeInfo,
   ShelfDetail,
   ShelfDetailFile,
+  ShelfDetailRequestError,
   ShelfFilePreview,
 } from "../../../shared/contracts/types";
 import { makeReviewScope } from "../../browsers/reviewModel";
 
 const PAGE_SIZE = 500;
+
+function shelfError(cause: unknown): ShelfDetailRequestError {
+  if (cause && typeof cause === "object") {
+    const value = cause as Partial<ShelfDetailRequestError>;
+    if (typeof value.code === "string" && typeof value.message === "string")
+      return value as ShelfDetailRequestError;
+  }
+  return { code: "queryFailed", message: String(cause) };
+}
+
+function ownsShelfResult(
+  value: ShelfDetail,
+  runtime: RuntimeInfo,
+  changeId: number,
+  generation: number,
+) {
+  return (
+    value.requestGeneration === generation &&
+    value.scope.changeId === changeId &&
+    value.scope.server === runtime.context.server &&
+    value.scope.user === runtime.context.user &&
+    value.scope.client === runtime.context.client &&
+    value.scope.workspace === (runtime.context.cwd ?? "") &&
+    value.scope.activeProfileId === runtime.activeProfileId &&
+    value.scope.contextGeneration === runtime.contextGeneration
+  );
+}
 
 export function ShelfDetailPage({
   target,
@@ -39,11 +67,15 @@ export function ShelfDetailPage({
   const [contentLoading, setContentLoading] = useState(false);
   const [cancelled, setCancelled] = useState(false);
   const [error, setError] = useState("");
+  const [restartRequired, setRestartRequired] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const operations = useRef(new Set<string>());
+  const listOperations = useRef(new Set<string>());
+  const contentOperations = useRef(new Set<string>());
+  const usedCursors = useRef(new Set<string>());
   const requestGeneration = useRef(0);
+  const contentGeneration = useRef(0);
   const files = detail?.files ?? [];
   const rows = useVirtualizer({
     count: files.length,
@@ -81,7 +113,16 @@ export function ShelfDetailPage({
     setSelected(undefined);
     setPreview(undefined);
     setDiff(undefined);
-  }, [changeId, runtime.contextGeneration]);
+    setRestartRequired(false);
+    usedCursors.current.clear();
+  }, [
+    changeId,
+    runtime.activeProfileId,
+    runtime.context.server,
+    runtime.context.user,
+    runtime.context.client,
+    runtime.contextGeneration,
+  ]);
 
   useEffect(() => {
     if (!Number.isSafeInteger(changeId) || changeId <= 0) {
@@ -95,27 +136,52 @@ export function ShelfDetailPage({
     let active = true;
     const generation = requestGeneration.current;
     const operationId = crypto.randomUUID();
-    operations.current.add(operationId);
+    listOperations.current.add(operationId);
     setLoading(true);
     setError("");
     void backend
       .getShelfDetail({
         changeId,
-        offset: 0,
+        requestGeneration: generation,
         pageSize: PAGE_SIZE,
         refresh: refresh > 0,
         operationId,
       })
       .then((value) => {
-        if (active && generation === requestGeneration.current)
-          setDetail(value);
+        if (!active || generation !== requestGeneration.current) return;
+        if (!ownsShelfResult(value, runtime, changeId, generation)) {
+          setRestartRequired(true);
+          setError(
+            zh
+              ? "Shelf 响应与当前连接或请求代次不匹配；请重新加载。"
+              : "The shelf response does not match the current connection or request generation; restart the query.",
+          );
+          return;
+        }
+        setDetail(value);
+        setRestartRequired(false);
+        if (value.hasMore && !value.nextCursor) {
+          setRestartRequired(true);
+          setError(
+            zh
+              ? "后端未返回可继续的 Shelf 游标；请重新加载。"
+              : "The backend did not return a usable shelf cursor; restart the query.",
+          );
+        }
       })
       .catch((cause) => {
-        if (active && generation === requestGeneration.current)
-          setError(String(cause));
+        if (active && generation === requestGeneration.current) {
+          const failure = shelfError(cause);
+          setRestartRequired(
+            ["invalidCursor", "cursorExpired", "snapshotChanged"].includes(
+              failure.code,
+            ),
+          );
+          setError(failure.message);
+        }
       })
       .finally(() => {
-        operations.current.delete(operationId);
+        listOperations.current.delete(operationId);
         if (active && generation === requestGeneration.current)
           setLoading(false);
       });
@@ -123,14 +189,14 @@ export function ShelfDetailPage({
       active = false;
       void backend.cancelOperation(operationId);
     };
-  }, [changeId, refresh, runtime.contextGeneration, runtime.p4Version, zh]);
+  }, [changeId, refresh, runtime, zh]);
 
   useEffect(() => {
     if (!selected) return;
     let active = true;
-    const generation = requestGeneration.current;
+    const generation = ++contentGeneration.current;
     const operationId = crypto.randomUUID();
-    operations.current.add(operationId);
+    contentOperations.current.add(operationId);
     setPreview(undefined);
     setDiff(undefined);
     setContentLoading(true);
@@ -143,16 +209,16 @@ export function ShelfDetailPage({
         operationId,
       })
       .then((value) => {
-        if (active && generation === requestGeneration.current)
+        if (active && generation === contentGeneration.current)
           setPreview(value);
       })
       .catch((cause) => {
-        if (active && generation === requestGeneration.current)
+        if (active && generation === contentGeneration.current)
           setError(String(cause));
       })
       .finally(() => {
-        operations.current.delete(operationId);
-        if (active && generation === requestGeneration.current)
+        contentOperations.current.delete(operationId);
+        if (active && generation === contentGeneration.current)
           setContentLoading(false);
       });
     return () => {
@@ -162,38 +228,82 @@ export function ShelfDetailPage({
   }, [selected, changeId, refresh, runtime]);
 
   const loadMore = useCallback(() => {
-    if (!detail?.hasMore || loadingMore) return;
+    const cursor = detail?.nextCursor;
+    if (!detail?.hasMore || loadingMore || restartRequired) return;
+    if (!cursor || usedCursors.current.has(cursor)) {
+      setRestartRequired(true);
+      setError(
+        zh
+          ? "Shelf 游标不可继续；请从第一页重新加载。"
+          : "The shelf cursor cannot advance; restart from the first page.",
+      );
+      return;
+    }
+    usedCursors.current.add(cursor);
     const generation = requestGeneration.current;
     const operationId = crypto.randomUUID();
-    operations.current.add(operationId);
+    listOperations.current.add(operationId);
     setLoadingMore(true);
     void backend
       .getShelfDetail({
         changeId,
-        offset: detail.files.length,
+        requestGeneration: generation,
         pageSize: PAGE_SIZE,
+        cursor,
         operationId,
       })
       .then((page) => {
         if (generation !== requestGeneration.current) return;
-        setDetail((current) =>
-          current
-            ? {
-                ...page,
-                offset: 0,
-                files: [...current.files, ...page.files],
-              }
-            : page,
-        );
+        if (!ownsShelfResult(page, runtime, changeId, generation)) {
+          setRestartRequired(true);
+          setError(
+            zh
+              ? "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。"
+              : "The shelf page does not match the current connection or request generation; current results were preserved. Restart the query.",
+          );
+          return;
+        }
+        setDetail((current) => {
+          if (!current) return page;
+          const known = new Set(current.files.map((file) => file.depotPath));
+          const incoming = page.files.filter(
+            (file) => !known.has(file.depotPath),
+          );
+          const stalled = incoming.length !== page.files.length;
+          if (stalled || (page.hasMore && !page.nextCursor)) {
+            setRestartRequired(true);
+            setError(
+              zh
+                ? "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。"
+                : "The shelf snapshot returned duplicates or a non-progressing cursor; current results were preserved. Restart the query.",
+            );
+          }
+          return {
+            ...page,
+            hasMore: stalled ? false : page.hasMore,
+            nextCursor: stalled ? undefined : page.nextCursor,
+            files: [...current.files, ...incoming],
+          };
+        });
       })
       .catch((cause) => {
-        if (generation === requestGeneration.current) setError(String(cause));
+        if (generation === requestGeneration.current) {
+          const failure = shelfError(cause);
+          setRestartRequired(true);
+          setError(
+            `${failure.message} ${
+              zh
+                ? "已保留当前结果；请从第一页重新加载。"
+                : "Current results were preserved; restart from the first page."
+            }`,
+          );
+        }
       })
       .finally(() => {
-        operations.current.delete(operationId);
+        listOperations.current.delete(operationId);
         if (generation === requestGeneration.current) setLoadingMore(false);
       });
-  }, [changeId, detail, loadingMore]);
+  }, [changeId, detail, loadingMore, restartRequired, runtime, zh]);
 
   useEffect(() => {
     if (cancelled || selected || !initialPath || !detail) return;
@@ -204,19 +314,32 @@ export function ShelfDetailPage({
 
   const supersedeOperations = () => {
     requestGeneration.current += 1;
-    for (const operationId of operations.current)
+    contentGeneration.current += 1;
+    for (const operationId of [
+      ...listOperations.current,
+      ...contentOperations.current,
+    ])
       void backend.cancelOperation(operationId);
-    operations.current.clear();
+    listOperations.current.clear();
+    contentOperations.current.clear();
     setLoading(false);
     setLoadingMore(false);
     setContentLoading(false);
   };
 
+  const supersedeContent = () => {
+    contentGeneration.current += 1;
+    for (const operationId of contentOperations.current)
+      void backend.cancelOperation(operationId);
+    contentOperations.current.clear();
+    setContentLoading(false);
+  };
+
   const compare = () => {
     if (!selected) return;
-    const generation = requestGeneration.current;
+    const generation = ++contentGeneration.current;
     const operationId = crypto.randomUUID();
-    operations.current.add(operationId);
+    contentOperations.current.add(operationId);
     setContentLoading(true);
     setError("");
     void backend
@@ -228,16 +351,16 @@ export function ShelfDetailPage({
         operationId,
       })
       .then((value) => {
-        if (generation !== requestGeneration.current) return;
+        if (generation !== contentGeneration.current) return;
         setPreview(undefined);
         setDiff(value);
       })
       .catch((cause) => {
-        if (generation === requestGeneration.current) setError(String(cause));
+        if (generation === contentGeneration.current) setError(String(cause));
       })
       .finally(() => {
-        operations.current.delete(operationId);
-        if (generation === requestGeneration.current) setContentLoading(false);
+        contentOperations.current.delete(operationId);
+        if (generation === contentGeneration.current) setContentLoading(false);
       });
   };
 
@@ -253,9 +376,14 @@ export function ShelfDetailPage({
   useEffect(
     () => () => {
       requestGeneration.current += 1;
-      for (const operationId of operations.current)
+      contentGeneration.current += 1;
+      for (const operationId of [
+        ...listOperations.current,
+        ...contentOperations.current,
+      ])
         void backend.cancelOperation(operationId);
-      operations.current.clear();
+      listOperations.current.clear();
+      contentOperations.current.clear();
     },
     [],
   );
@@ -294,6 +422,19 @@ export function ShelfDetailPage({
       {error && (
         <div role="alert" className="workspace-load-error">
           {error}
+          {restartRequired && (
+            <button
+              onClick={() => {
+                supersedeOperations();
+                setCancelled(false);
+                setRestartRequired(false);
+                usedCursors.current.clear();
+                setRefresh((value) => value + 1);
+              }}
+            >
+              {zh ? "重新加载" : "Restart"}
+            </button>
+          )}
         </div>
       )}
       {detail && (
@@ -357,7 +498,7 @@ export function ShelfDetailPage({
                         transform: `translateY(${row.start}px)`,
                       }}
                       onClick={() => {
-                        supersedeOperations();
+                        supersedeContent();
                         setCancelled(false);
                         setSelected(file);
                       }}
@@ -375,6 +516,7 @@ export function ShelfDetailPage({
                             row.index + (event.key === "ArrowDown" ? 1 : -1),
                           ),
                         );
+                        supersedeContent();
                         setSelected(files[next]);
                         rows.scrollToIndex(next, { align: "auto" });
                       }}
@@ -389,7 +531,7 @@ export function ShelfDetailPage({
                 })}
               </div>
             </div>
-            {detail.hasMore && (
+            {detail.hasMore && !restartRequired && (
               <button
                 disabled={loadingMore}
                 onClick={() => {
@@ -434,7 +576,7 @@ export function ShelfDetailPage({
               <button
                 disabled={!selected}
                 onClick={() => {
-                  supersedeOperations();
+                  supersedeContent();
                   setCancelled(false);
                   compare();
                 }}

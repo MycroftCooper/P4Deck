@@ -35,7 +35,13 @@ describe("workspace panels", () => {
       "settings",
     ] as const)
       expect(isMultiPage(page)).toBe(false);
-    for (const page of ["history", "diff", "revgraph", "preview"] as const)
+    for (const page of [
+      "history",
+      "diff",
+      "shelf",
+      "revgraph",
+      "preview",
+    ] as const)
       expect(isMultiPage(page)).toBe(true);
   });
   it("preview instances retain locked targets", () => {
@@ -75,7 +81,13 @@ describe("workspace panels", () => {
   it("restores file review tabs and accepts their routes", () => {
     expect(isPage("diff")).toBe(true);
     expect(isPage("revgraph")).toBe(true);
-    expect(readPages('["diff","revgraph"]')).toEqual(["diff", "revgraph"]);
+    expect(isPage("shelf")).toBe(true);
+    expect(panelKind("shelf--saved-instance")).toBe("shelf");
+    expect(readPages('["diff","shelf","revgraph"]')).toEqual([
+      "diff",
+      "shelf",
+      "revgraph",
+    ]);
   });
   it("restores a closed-all layout and rejects invalid IDs", () => {
     expect(readPages("[]")).toEqual([]);

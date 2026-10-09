@@ -74,6 +74,10 @@ impl WorkflowRepository {
         self.runner.lock_mutations(server).await
     }
 
+    pub fn begin_operation_group(&self, operation_id: String) -> crate::p4::runner::OperationGroup {
+        self.runner.begin_operation_group(operation_id)
+    }
+
     pub async fn shelf_detail(
         &self,
         context: &P4Context,
@@ -86,7 +90,7 @@ impl WorkflowRepository {
             .checked_named(
                 context,
                 command::describe_shelf(change_id)?,
-                format!("{prefix}-describe"),
+                format!("{prefix}:describe"),
                 app,
             )
             .await?;
@@ -101,7 +105,7 @@ impl WorkflowRepository {
             .checked_named(
                 context,
                 command::fstat(&paths, Some(change_id))?,
-                format!("{prefix}-fstat"),
+                format!("{prefix}:fstat"),
                 app,
             )
             .await

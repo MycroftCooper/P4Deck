@@ -3977,21 +3977,68 @@ mod tests {
             .shelf_detail(
                 ShelfDetailRequest {
                     change_id: source_change,
-                    offset: 0,
+                    request_generation: 1,
                     page_size: 1,
+                    cursor: None,
                     refresh: true,
                     operation_id: Some("be004b-shelf-detail".into()),
                 },
                 None,
             )
-            .await?;
+            .await
+            .map_err(|error| error.message)?;
         ensure(
             shelf_detail.total_files == 2
                 && shelf_detail.files.len() == 1
                 && shelf_detail.has_more
+                && shelf_detail.next_cursor.is_some()
                 && shelf_detail.files[0].depot_path == A
                 && !shelf_detail.files[0].binary,
             format!("typed shelf detail was incomplete or unstable: {shelf_detail:?}"),
+        )?;
+        let shelf_cursor = shelf_detail
+            .next_cursor
+            .clone()
+            .ok_or("shelf detail did not issue a continuation cursor")?;
+        let shelf_detail_second = workflows
+            .shelf_detail(
+                ShelfDetailRequest {
+                    change_id: source_change,
+                    request_generation: 2,
+                    page_size: 1,
+                    cursor: Some(shelf_cursor.clone()),
+                    refresh: false,
+                    operation_id: Some("be004b-shelf-detail-page-2".into()),
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            shelf_detail_second.request_generation == 2
+                && shelf_detail_second.files.len() == 1
+                && !shelf_detail_second.has_more
+                && shelf_detail_second.next_cursor.is_none()
+                && shelf_detail_second.files[0].depot_path == B,
+            format!("typed shelf cursor page was incomplete or unstable: {shelf_detail_second:?}"),
+        )?;
+        let replay = workflows
+            .shelf_detail(
+                ShelfDetailRequest {
+                    change_id: source_change,
+                    request_generation: 3,
+                    page_size: 1,
+                    cursor: Some(shelf_cursor),
+                    refresh: false,
+                    operation_id: Some("be004b-shelf-detail-replay".into()),
+                },
+                None,
+            )
+            .await
+            .expect_err("a consumed shelf cursor must not be replayable");
+        ensure(
+            replay.code == crate::domain::ShelfDetailRequestErrorCode::InvalidCursor,
+            format!("shelf cursor replay returned the wrong error: {replay:?}"),
         )?;
         let (_, generation) = contexts.snapshot();
         let text_preview = files

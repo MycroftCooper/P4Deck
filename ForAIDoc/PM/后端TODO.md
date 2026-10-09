@@ -184,10 +184,10 @@ pnpm test:e2e:p4d:win
 - Shelf、Unshelve、Resolve 与 Submit 共用一次性内存 token 基础设施：默认 120 秒、绑定 Connection/Workspace/context generation/CL/文件集合/内容摘要，在同 Server mutation lane 内复核后执行。
 - 所有执行关联 operation ID、Journal、脱敏 Log、进度/取消与局部缓存失效；失败、取消、部分成功和不确定结果均返回结构化刷新建议。
 - 已移除泛化 `ClAction` 的 MoveFiles/shelve/unshelve 变体；FileAction 与 GUI `run_p4` 明确拒绝 reopen/shelve/unshelve/resolve，显式 Terminal 语义不变。
-- `get_shelf_detail` 提供绑定 Connection identity/generation/change 的 30 秒缓存、1～500 分页与 10,000 项硬上限，返回 owner/description/files、partial/truncated/cache freshness；文件顺序稳定，显式刷新绕过缓存。
+- `get_shelf_detail` 不再接受原始 offset：首屏冻结服务端快照，后续只接受后端签发的一次性 opaque cursor。cursor 绑定 active profile、完整 Connection、context generation、Shelf mutation generation、change 与 page size，并由快照内 cursor ID→offset 映射拒绝伪造、边界篡改和重放；错查询/错连接/代次漂移/过期分别返回结构化 `invalidCursor`、`connectionChanged`、`snapshotChanged`、`cursorExpired`。30 秒内首屏可复用缓存，分页快照最多保留 120 秒/32 份；显式刷新和 Shelf/Pending mutation 清空快照并推进代次。Default 明确拒绝，1～500 page size 与 10,000 文件硬上限保持不变。
 - `get_shelf_file_preview` 使用 `fstat -Rs -e` 判定 action/filetype/size/digest，仅文本调用 `p4 print -q depot@=change`；binary、symlink、delete/missing 与超过 4 MiB 的内容不按文本解码，返回明确元数据原因。`RevisionReference::Shelf { changeId }` 同时接入 Diff 读取。
 
-验收结果（2026-10-09）：Windows localhost Fixture 默认连续两轮通过，覆盖部分文件首次 Shelf、选中文件覆盖更新、子集删除、Shelf 详情稳定分页、真实文本预览、二进制元数据语义、TTL 与本地/来源内容漂移拒绝、Unshelve 到 Default/编号 CL、跨 Workspace、映射失败、本地覆盖阻断、锁、权限拒绝、需要 Resolve、真实 Resolve 成功与不可解决/未知保持阻断，并清理临时 Client/Root/CL/Shelf 与专属 `//depot/p4deck-workflow-e2e/...` 数据；不修改 Fixture seed 或用户配置。独立 Shelf 页已接生产入口，原生 UI 待验收。
+验收结果（2026-10-09）：Windows localhost Fixture 默认连续两轮通过（77.40 秒、77.45 秒），覆盖部分文件首次 Shelf、选中文件覆盖更新、子集删除、Shelf 详情两页 cursor、重放拒绝、真实文本预览、二进制元数据语义、TTL 与本地/来源内容漂移拒绝、Unshelve 到 Default/编号 CL、跨 Workspace、映射失败、本地覆盖阻断、锁、权限拒绝、需要 Resolve、真实 Resolve 成功与不可解决/未知保持阻断，并清理临时 Client/Root/CL/Shelf 与专属 `//depot/p4deck-workflow-e2e/...` 数据；不修改 Fixture seed 或用户配置。独立 Shelf 页已接生产入口及 Rust `shelf` 窗口白名单；原生点击、焦点、读屏仍待验收。
 
 ### BE-005 — 文件状态聚合与缓存失效（DONE：Windows localhost 已验，兼容矩阵待 BE-009）
 

@@ -61,6 +61,77 @@ const mockRenameTokens = new Map<
     expiresAt: number;
   }
 >();
+type MockShelfFile = import("../../shared/contracts/types").ShelfDetailFile;
+const mockShelfSnapshots = new Map<
+  string,
+  {
+    signature: string;
+    files: MockShelfFile[];
+    issued: Map<string, number>;
+    createdAt: number;
+  }
+>();
+
+function mockShelfError(
+  code: import("../../shared/contracts/types").ShelfDetailRequestErrorCode,
+  message: string,
+) {
+  return { code, message };
+}
+
+function encodeMockShelfCursor(
+  snapshotId: string,
+  cursorId: string,
+  offset: number,
+  signature: string,
+) {
+  const bytes = new TextEncoder().encode(
+    JSON.stringify({
+      version: 1,
+      snapshotId,
+      cursorId,
+      offset,
+      signature,
+      generation: mockContextGeneration,
+      profile: mockActiveProfileId,
+    }),
+  );
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+function decodeMockShelfCursor(cursor: string, signature: string) {
+  try {
+    const base64 = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const value = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(
+          atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")),
+          (character) => character.charCodeAt(0),
+        ),
+      ),
+    );
+    if (
+      value.version !== 1 ||
+      value.signature !== signature ||
+      value.generation !== mockContextGeneration ||
+      value.profile !== mockActiveProfileId ||
+      typeof value.snapshotId !== "string" ||
+      typeof value.cursorId !== "string" ||
+      !Number.isSafeInteger(value.offset) ||
+      value.offset <= 0
+    )
+      throw new Error();
+    return value as { snapshotId: string; cursorId: string; offset: number };
+  } catch {
+    throw mockShelfError(
+      "invalidCursor",
+      "The shelf cursor is invalid or belongs to another query.",
+    );
+  }
+}
 try {
   const saved = JSON.parse(
     localStorage.getItem("p4deck.mockConnection") ?? "null",
@@ -709,6 +780,7 @@ export const mockBackend: Backend = {
     if (request.id === mockActiveProfileId) {
       mockContext = { ...request.context };
       mockContextGeneration += 1;
+      mockShelfSnapshots.clear();
       mockSyncTokens.clear();
       mockRenameTokens.clear();
     }
@@ -744,6 +816,7 @@ export const mockBackend: Backend = {
     mockContext = { ...profile.context };
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
     return this.runtimeInfo();
@@ -769,6 +842,7 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
     return this.runtimeInfo();
@@ -787,6 +861,7 @@ export const mockBackend: Backend = {
     );
     mockProfileRevision += 1;
     mockContextGeneration += 1;
+    mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
     return { ...context };
@@ -2190,7 +2265,16 @@ export const mockBackend: Backend = {
     );
   },
   async getShelfDetail(request) {
-    if (request.changeId <= 0) throw new Error("Numbered shelf required.");
+    if (request.changeId <= 0)
+      throw mockShelfError(
+        "invalidQuery",
+        "A numbered shelved changelist is required; Default cannot own a shelf.",
+      );
+    if (request.pageSize < 1 || request.pageSize > 500)
+      throw mockShelfError(
+        "invalidQuery",
+        "Shelf detail pageSize must be between 1 and 500.",
+      );
     const change = allMockPendingChanges().find(
       (item) => item.id === request.changeId,
     );
@@ -2209,8 +2293,62 @@ export const mockBackend: Backend = {
         symlink: (file.fileType ?? "").startsWith("symlink"),
         deleted: file.action === "delete",
       }));
-    const offset = request.offset ?? 0;
+    const signature = JSON.stringify({
+      changeId: request.changeId,
+      pageSize: request.pageSize,
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+      profile: mockActiveProfileId,
+      generation: mockContextGeneration,
+    });
+    if (request.refresh) mockShelfSnapshots.clear();
+    let snapshotId: string;
+    let offset = 0;
+    let snapshot:
+      | {
+          signature: string;
+          files: MockShelfFile[];
+          issued: Map<string, number>;
+          createdAt: number;
+        }
+      | undefined;
+    if (request.cursor) {
+      const decoded = decodeMockShelfCursor(request.cursor, signature);
+      snapshotId = decoded.snapshotId;
+      offset = decoded.offset;
+      snapshot = mockShelfSnapshots.get(snapshotId);
+      if (!snapshot || Date.now() - snapshot.createdAt > 120_000)
+        throw mockShelfError(
+          "cursorExpired",
+          "The shelf cursor expired; refresh from the first page.",
+        );
+      if (snapshot.issued.get(decoded.cursorId) !== offset)
+        throw mockShelfError(
+          "invalidCursor",
+          "The shelf cursor was not issued by this server, was altered, or has already been used.",
+        );
+      snapshot.issued.delete(decoded.cursorId);
+    } else {
+      snapshotId = crypto.randomUUID();
+      snapshot = {
+        signature,
+        files: all,
+        issued: new Map(),
+        createdAt: Date.now(),
+      };
+      mockShelfSnapshots.set(snapshotId, snapshot);
+    }
+    const end = Math.min(offset + request.pageSize, snapshot.files.length);
+    const hasMore = end < snapshot.files.length;
+    let nextCursor: string | undefined;
+    if (hasMore) {
+      const cursorId = crypto.randomUUID();
+      snapshot.issued.set(cursorId, end);
+      nextCursor = encodeMockShelfCursor(snapshotId, cursorId, end, signature);
+    }
     return {
+      requestGeneration: request.requestGeneration,
       scope: {
         server: mockContext.server,
         user: mockContext.user,
@@ -2226,10 +2364,10 @@ export const mockBackend: Backend = {
       user: change.user,
       client: change.client,
       jobs: change.jobs,
-      files: all.slice(offset, offset + request.pageSize),
-      totalFiles: all.length,
-      offset,
-      hasMore: offset + request.pageSize < all.length,
+      files: snapshot.files.slice(offset, end),
+      totalFiles: snapshot.files.length,
+      hasMore,
+      nextCursor,
       truncated: false,
       inspectionStatus: "complete" as const,
       operationIds: [`mock-shelf-detail-${request.changeId}`],
@@ -2241,6 +2379,7 @@ export const mockBackend: Backend = {
   async getShelfFilePreview(request) {
     const detail = await this.getShelfDetail({
       changeId: request.changeId,
+      requestGeneration: 0,
       pageSize: 500,
       refresh: request.refresh,
     });

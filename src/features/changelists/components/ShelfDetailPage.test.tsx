@@ -32,6 +32,7 @@ const runtime: RuntimeInfo = {
   },
 };
 const detail: ShelfDetail = {
+  requestGeneration: 1,
   scope: {
     server: "fixture:1666",
     user: "tester",
@@ -71,7 +72,6 @@ const detail: ShelfDetail = {
     },
   ],
   totalFiles: 2,
-  offset: 0,
   hasMore: false,
   truncated: false,
   inspectionStatus: "complete",
@@ -124,7 +124,11 @@ it("loads an independent shelf, selects an encoded path, and previews authoritat
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   expect(backend.getShelfDetail).toHaveBeenCalledWith(
-    expect.objectContaining({ changeId: 42, pageSize: 500 }),
+    expect.objectContaining({
+      changeId: 42,
+      requestGeneration: 1,
+      pageSize: 500,
+    }),
   );
   expect(backend.getShelfFilePreview).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -175,4 +179,115 @@ it("renders partial metadata and unsupported binary preview without treating byt
   expect(host.textContent).toContain("Metadata is unavailable");
   expect(host.textContent).toContain("metadata only");
   expect(host.textContent).not.toContain("shelved text");
+});
+
+it("paginates more than 500 shelved files with an opaque cursor and no offset", async () => {
+  const files = Array.from({ length: 501 }, (_, index) => ({
+    ...detail.files[0],
+    depotPath: `//depot/file-${String(index).padStart(3, "0")}.txt`,
+  }));
+  backend.getShelfDetail
+    .mockResolvedValueOnce({
+      ...detail,
+      files: files.slice(0, 500),
+      totalFiles: 501,
+      hasMore: true,
+      nextCursor: "server-snapshot-cursor",
+    })
+    .mockResolvedValueOnce({
+      ...detail,
+      files: files.slice(500),
+      totalFiles: 501,
+      hasMore: false,
+    });
+  await act(async () =>
+    root.render(<ShelfDetailPage target="42" runtime={runtime} zh={false} />),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const loadMore = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Load more",
+  );
+  expect(loadMore).toBeDefined();
+  await act(async () => loadMore!.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(backend.getShelfDetail).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      changeId: 42,
+      requestGeneration: 1,
+      cursor: "server-snapshot-cursor",
+      pageSize: 500,
+    }),
+  );
+  expect(backend.getShelfDetail.mock.calls[1][0]).not.toHaveProperty("offset");
+  expect(host.textContent).not.toContain("Load more");
+});
+
+it("preserves loaded rows on cursor expiry and restarts from a fresh snapshot", async () => {
+  backend.getShelfDetail
+    .mockResolvedValueOnce({
+      ...detail,
+      totalFiles: 501,
+      hasMore: true,
+      nextCursor: "expiring-cursor",
+    })
+    .mockRejectedValueOnce({
+      code: "cursorExpired",
+      message: "The shelf cursor expired; refresh from the first page.",
+    })
+    .mockResolvedValueOnce({ ...detail, requestGeneration: 2 });
+  await act(async () =>
+    root.render(<ShelfDetailPage target="42" runtime={runtime} zh={false} />),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const loadMore = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Load more",
+  );
+  await act(async () => loadMore!.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(host.textContent).toContain("cursor expired");
+  expect(host.textContent).toContain("501 files");
+  const restart = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Restart",
+  );
+  await act(async () => restart!.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(backend.getShelfDetail).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      requestGeneration: 2,
+      refresh: true,
+    }),
+  );
+});
+
+it("cancels and isolates stale shelf responses across a runtime generation change", async () => {
+  let resolveOld: (value: ShelfDetail) => void = () => undefined;
+  const oldResult = new Promise<ShelfDetail>((resolve) => {
+    resolveOld = resolve;
+  });
+  const nextRuntime = { ...runtime, contextGeneration: 8 };
+  backend.getShelfDetail.mockReturnValueOnce(oldResult).mockResolvedValueOnce({
+    ...detail,
+    requestGeneration: 2,
+    description: "current generation",
+    scope: { ...detail.scope, contextGeneration: 8 },
+  });
+  await act(async () =>
+    root.render(<ShelfDetailPage target="42" runtime={runtime} zh={false} />),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  await act(async () =>
+    root.render(
+      <ShelfDetailPage target="42" runtime={nextRuntime} zh={false} />,
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(host.textContent).toContain("current generation");
+  await act(async () =>
+    resolveOld({ ...detail, description: "stale generation" }),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(host.textContent).toContain("current generation");
+  expect(host.textContent).not.toContain("stale generation");
+  expect(backend.cancelOperation).toHaveBeenCalled();
 });

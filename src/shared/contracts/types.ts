@@ -397,10 +397,23 @@ export interface SubmittedChangeDetail {
 
 export interface ShelfDetailRequest {
   changeId: number;
-  offset?: number;
+  requestGeneration: number;
   pageSize: number;
+  cursor?: string;
   refresh?: boolean;
   operationId?: string;
+}
+export type ShelfDetailRequestErrorCode =
+  | "invalidQuery"
+  | "invalidCursor"
+  | "cursorExpired"
+  | "snapshotChanged"
+  | "connectionChanged"
+  | "cancelled"
+  | "queryFailed";
+export interface ShelfDetailRequestError {
+  code: ShelfDetailRequestErrorCode;
+  message: string;
 }
 export interface ShelfDetailScope {
   server: string;
@@ -423,6 +436,7 @@ export interface ShelfDetailFile {
   deleted: boolean;
 }
 export interface ShelfDetail {
+  requestGeneration: number;
   scope: ShelfDetailScope;
   description: string;
   time: string;
@@ -432,8 +446,8 @@ export interface ShelfDetail {
   jobs: string[];
   files: ShelfDetailFile[];
   totalFiles: number;
-  offset: number;
   hasMore: boolean;
+  nextCursor?: string;
   truncated: boolean;
   inspectionStatus: "complete" | "partial";
   message?: string;

@@ -439,13 +439,33 @@ pub struct SubmittedChangeDetail {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ShelfDetailRequest {
     pub change_id: i64,
-    #[serde(default)]
-    pub offset: usize,
+    pub request_generation: u64,
     pub page_size: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     #[serde(default)]
     pub refresh: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ShelfDetailRequestErrorCode {
+    InvalidQuery,
+    InvalidCursor,
+    CursorExpired,
+    SnapshotChanged,
+    ConnectionChanged,
+    Cancelled,
+    QueryFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ShelfDetailRequestError {
+    pub code: ShelfDetailRequestErrorCode,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -489,6 +509,7 @@ pub enum ShelfInspectionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShelfDetail {
+    pub request_generation: u64,
     pub scope: ShelfDetailScope,
     pub description: String,
     pub time: String,
@@ -498,8 +519,9 @@ pub struct ShelfDetail {
     pub jobs: Vec<String>,
     pub files: Vec<ShelfDetailFile>,
     pub total_files: usize,
-    pub offset: usize,
     pub has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
     pub truncated: bool,
     pub inspection_status: ShelfInspectionStatus,
     #[serde(skip_serializing_if = "Option::is_none")]

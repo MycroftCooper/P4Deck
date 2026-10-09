@@ -378,6 +378,24 @@ fn verify_correctness(runtime: &tokio::runtime::Runtime) -> Result<Vec<Correctne
         query::decode_pending_change_cursor(&pending_cursor, &fingerprint, "connection", 9, 5,)
             .is_err()
     );
+    let shelf_cursor = query::encode_shelf_detail_cursor(
+        "shelf-snapshot",
+        "one-time-cursor",
+        500,
+        &fingerprint,
+        "connection",
+        9,
+        4,
+    )?;
+    assert_eq!(
+        query::decode_shelf_detail_cursor(&shelf_cursor, &fingerprint, "connection", 9, 4)
+            .map_err(|error| format!("{error:?}"))?
+            .offset,
+        500
+    );
+    assert!(
+        query::decode_shelf_detail_cursor(&shelf_cursor, &fingerprint, "connection", 9, 5).is_err()
+    );
 
     let mut search_items = changelist_summaries(100)
         .into_iter()
@@ -406,7 +424,7 @@ fn verify_correctness(runtime: &tokio::runtime::Runtime) -> Result<Vec<Correctne
         ),
         correctness(
             "cursor_binding",
-            "Submitted and Pending cursors round-trip and reject mismatched query or generations",
+            "Submitted, Pending and Shelf cursors round-trip and reject mismatched query or generations",
         ),
         correctness(
             "search_filter_dedup",

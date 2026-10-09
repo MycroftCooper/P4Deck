@@ -19,27 +19,7 @@ pub async fn workspace_disk_usage(state: State<'_, AppState>) -> Result<serde_js
 #[tauri::command]
 pub async fn open_panel_window(page: String, app: AppHandle) -> Result<(), String> {
     use tauri::{Emitter, Manager};
-    let kind = page.split("--").next().unwrap_or("");
-    if page.len() > 100 || !page.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err("Invalid panel ID".into());
-    }
-    if ![
-        "files",
-        "search",
-        "pending",
-        "submitted",
-        "workspaces",
-        "history",
-        "streams",
-        "diff",
-        "revgraph",
-        "settings",
-        "preview",
-    ]
-    .contains(&kind)
-    {
-        return Err("Unknown panel".into());
-    }
+    let kind = panel_window_kind(&page)?;
     let label = format!("panel-{page}");
     if let Some(window) = app.get_webview_window(&label) {
         return window.set_focus().map_err(|e| e.to_string());
@@ -61,6 +41,32 @@ pub async fn open_panel_window(page: String, app: AppHandle) -> Result<(), Strin
         }
     });
     Ok(())
+}
+
+fn panel_window_kind(page: &str) -> Result<&str, String> {
+    let kind = page.split("--").next().unwrap_or("");
+    if page.len() > 100 || !page.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Invalid panel ID".into());
+    }
+    if ![
+        "files",
+        "search",
+        "pending",
+        "submitted",
+        "workspaces",
+        "history",
+        "streams",
+        "diff",
+        "shelf",
+        "revgraph",
+        "settings",
+        "preview",
+    ]
+    .contains(&kind)
+    {
+        return Err("Unknown panel".into());
+    }
+    Ok(kind)
 }
 
 #[tauri::command]
@@ -629,7 +635,7 @@ pub async fn get_shelf_detail(
     request: ShelfDetailRequest,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<ShelfDetail, String> {
+) -> Result<ShelfDetail, ShelfDetailRequestError> {
     state.workflows.shelf_detail(request, Some(&app)).await
 }
 
@@ -791,4 +797,20 @@ pub async fn local_path_capabilities(
     tauri::async_runtime::spawn_blocking(move || crate::app::system_open::capabilities(&root, path))
         .await
         .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::panel_window_kind;
+
+    #[test]
+    fn detached_shelf_panel_is_whitelisted_and_deep_link_safe() {
+        assert_eq!(
+            panel_window_kind("shelf--550e8400-e29b-41d4-a716-446655440000"),
+            Ok("shelf")
+        );
+        assert_eq!(panel_window_kind("shelf"), Ok("shelf"));
+        assert!(panel_window_kind("unknown--1").is_err());
+        assert!(panel_window_kind("shelf?panel=files").is_err());
+    }
 }
