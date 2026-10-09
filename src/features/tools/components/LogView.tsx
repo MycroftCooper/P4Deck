@@ -8,6 +8,8 @@ import type {
   LogPolicy,
   OperationSource,
 } from "../../../shared/contracts/types";
+import { storage } from "../../../shared/lib/storage";
+import { readLogViewPreferences } from "../logPreferences";
 
 const PAGE_SIZE = 100;
 
@@ -30,11 +32,17 @@ export function LogView({
   onOpenJournal,
   onPolicy,
 }: Props) {
+  const saved = useRef(
+    readLogViewPreferences(storage.getItem("p4deck.p4Log.view.v1")),
+  );
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string>();
   const [keyword, setKeyword] = useState("");
-  const [level, setLevel] = useState<LogLevel | "">("");
-  const [source, setSource] = useState<OperationSource | "">("");
+  const [level, setLevel] = useState<LogLevel | "">(saved.current.level);
+  const [source, setSource] = useState<OperationSource | "">(
+    saved.current.source,
+  );
+  const [followTail, setFollowTail] = useState(saved.current.followTail);
   const [command, setCommand] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -69,6 +77,18 @@ export function LogView({
     ? totalSize - virtualRows.at(-1)!.end
     : 0;
   const policyGeneration = useRef(0);
+
+  useEffect(() => {
+    storage.setItem(
+      "p4deck.p4Log.view.v1",
+      JSON.stringify({ level, source, followTail }),
+    );
+  }, [followTail, level, source]);
+
+  useEffect(() => {
+    if (followTail && entries.length)
+      scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight });
+  }, [entries.length, followTail]);
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -230,6 +250,14 @@ export function LogView({
         >
           {zh ? "清空显示" : "Clear view"}
         </button>
+        <label className="check-field log-follow-tail">
+          <input
+            type="checkbox"
+            checked={followTail}
+            onChange={(event) => setFollowTail(event.target.checked)}
+          />
+          <span>{zh ? "跟随尾部" : "Follow tail"}</span>
+        </label>
       </div>
 
       {operationFilter && (

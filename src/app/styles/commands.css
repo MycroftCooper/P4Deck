@@ -7,6 +7,97 @@
 .app-shell.detached-shell {
   grid-template-rows: auto minmax(0, 1fr);
 }
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: start center;
+  padding-top: min(14vh, 120px);
+  background: rgb(0 0 0 / 32%);
+}
+.command-palette {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(620px, 72vh);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 35%);
+}
+.command-palette > input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: 0;
+  background: var(--panel-2);
+}
+.command-palette ul {
+  max-height: 54vh;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+}
+.command-palette li button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, auto) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+}
+.command-palette li button:hover:not(:disabled) {
+  background: var(--selected);
+}
+.command-palette small,
+.command-palette em {
+  color: var(--muted);
+  font-style: normal;
+}
+.command-palette em {
+  grid-column: 1 / -1;
+}
+.detached-dock-back {
+  position: fixed;
+  z-index: 20;
+  top: 6px;
+  right: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+.runtime-rebound {
+  position: fixed;
+  z-index: 19;
+  top: 7px;
+  left: 10px;
+  max-width: calc(100vw - 250px);
+  padding: 5px 8px;
+  border: 1px solid var(--warning);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--warning);
+  font-size: 11px;
+}
+.tool-panel-page,
+.tool-drawer.embedded {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.tool-drawer.embedded {
+  border-top: 0;
+}
+.tool-drawer.embedded .tool-tabs {
+  padding-right: 180px;
+}
 .command-center {
   min-width: 0;
   background: var(--panel);

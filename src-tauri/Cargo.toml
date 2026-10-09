@@ -40,6 +40,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 similar = "2.7"
 regex = "1"
 zeroize = "1"
+urlencoding = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }

@@ -17,6 +17,7 @@ import type { messages } from "../../shared/i18n";
 import { storage } from "../../shared/lib/storage";
 import { subscribeSafely } from "../../shared/lib/subscription";
 import { ToolDrawer, type ToolTab } from "./components/ToolDrawer";
+import { readToolTab } from "./terminalPreferences";
 
 export type { ToolTab } from "./components/ToolDrawer";
 export interface ToolHandle {
@@ -47,7 +48,9 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   const [open, setOpen] = useState(
     () => storage.getItem("p4deck.toolOpen") === "true",
   );
-  const [active, setActive] = useState<ToolTab>("terminal");
+  const [active, setActive] = useState<ToolTab>(() =>
+    readToolTab(storage.getItem("p4deck.toolTab")),
+  );
   const [operationFilter, setOperationFilter] = useState<string>();
   const [journalOperation, setJournalOperation] = useState<string>();
   const [unread, setUnread] = useState(0);
@@ -65,6 +68,9 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
     storage.setItem("p4deck.toolOpen", String(open));
     onOpenChange(open);
   }, [open, onOpenChange]);
+  useEffect(() => {
+    storage.setItem("p4deck.toolTab", active);
+  }, [active]);
 
   useEffect(() => {
     let live = true;

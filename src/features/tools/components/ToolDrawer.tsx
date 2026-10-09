@@ -55,6 +55,8 @@ interface Props {
   onRun(input: string, operationId: string): Promise<OperationResult>;
   onCancel(operationId: string): void;
   onOpenSettings(): void;
+  embedded?: boolean;
+  visibleTabs?: ToolTab[];
 }
 
 export function ToolDrawer(props: Props) {
@@ -78,6 +80,10 @@ export function ToolDrawer(props: Props) {
   );
   const historyIndex = useRef(-1);
   const streamedCount = useRef(0);
+  const terminalGeneration = useRef(0);
+  const runningRef = useRef<string | null>(null);
+  const terminalConnection = useRef(props.connectionKey);
+  runningRef.current = running;
 
   useEffect(
     () => storage.setItem("p4deck.toolHeight", String(height)),
@@ -91,6 +97,28 @@ export function ToolDrawer(props: Props) {
       JSON.stringify(historyRef.current),
     );
   }, []);
+  useEffect(() => {
+    if (terminalConnection.current === props.connectionKey) return;
+    terminalConnection.current = props.connectionKey;
+    const operation = runningRef.current;
+    terminalGeneration.current += 1;
+    if (operation) props.onCancel(operation);
+    setRunning(null);
+    setInput("");
+    setCredentialBlocked(false);
+    setLines([
+      "P4Deck controlled terminal — connection context changed; previous output was cleared.",
+    ]);
+    streamedCount.current = 0;
+  }, [props.connectionKey]);
+  useEffect(
+    () => () => {
+      terminalGeneration.current += 1;
+      const operation = runningRef.current;
+      if (operation) props.onCancel(operation);
+    },
+    [],
+  );
   useEffect(() => {
     if (!running) return;
     const matching = props.operationEvents.filter(
@@ -106,6 +134,7 @@ export function ToolDrawer(props: Props) {
   }, [props.operationEvents, running]);
 
   async function execute() {
+    const generation = terminalGeneration.current;
     const raw = input.trim();
     if (!raw || running) return;
     const parts = tokenize(raw);
@@ -129,6 +158,7 @@ export function ToolDrawer(props: Props) {
     setRunning(temporaryId);
     try {
       const result = await props.onRun(raw, temporaryId);
+      if (generation !== terminalGeneration.current) return;
       if (!decision.sensitive) rememberHistory(raw);
       setRunning(result.operationId);
       const output = streamedCount.current
@@ -144,6 +174,7 @@ export function ToolDrawer(props: Props) {
         `[exit ${result.exitCode} · ${result.durationMs}ms]`,
       ]);
     } catch (error) {
+      if (generation !== terminalGeneration.current) return;
       const message = String(error);
       const controlled = message.includes(
         "use Settings > Connection authentication",
@@ -161,7 +192,7 @@ export function ToolDrawer(props: Props) {
             : "error: The command returned no safe result; inspect the redacted P4 Log.",
       ]);
     } finally {
-      setRunning(null);
+      if (generation === terminalGeneration.current) setRunning(null);
     }
   }
 
@@ -206,11 +237,11 @@ export function ToolDrawer(props: Props) {
 
   return (
     <section
-      className={`tool-drawer ${props.open ? "expanded" : "collapsed"}`}
-      style={props.open ? { height } : undefined}
+      className={`tool-drawer ${props.embedded ? "embedded" : ""} ${props.open ? "expanded" : "collapsed"}`}
+      style={props.open && !props.embedded ? { height } : undefined}
       aria-label={props.zh ? "P4 工具与诊断" : "P4 tools and diagnostics"}
     >
-      {props.open && (
+      {props.open && !props.embedded && (
         <div
           className="resize-handle"
           aria-hidden="true"
@@ -238,26 +269,32 @@ export function ToolDrawer(props: Props) {
         role="tablist"
         aria-label={props.zh ? "工具视图" : "Tool views"}
       >
-        <button
-          className="drawer-toggle"
-          aria-label={props.open ? props.t.close : props.t.openTools}
-          onClick={() => props.onOpenChange(!props.open)}
-        >
-          {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-        </button>
-        {tabs.map((tab) => (
+        {!props.embedded && (
           <button
-            key={tab.id}
-            role="tab"
-            aria-selected={props.active === tab.id}
-            className={props.active === tab.id ? "active" : ""}
-            onClick={() => props.onActiveChange(tab.id)}
+            className="drawer-toggle"
+            aria-label={props.open ? props.t.close : props.t.openTools}
+            onClick={() => props.onOpenChange(!props.open)}
           >
-            {tab.icon}
-            {tab.label}
-            {tab.id === "logs" && props.unread ? <b>{props.unread}</b> : null}
+            {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
           </button>
-        ))}
+        )}
+        {tabs
+          .filter(
+            (tab) => !props.visibleTabs || props.visibleTabs.includes(tab.id),
+          )
+          .map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={props.active === tab.id}
+              className={props.active === tab.id ? "active" : ""}
+              onClick={() => props.onActiveChange(tab.id)}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.id === "logs" && props.unread ? <b>{props.unread}</b> : null}
+            </button>
+          ))}
       </header>
       {textSelection.dialog}
       {pasteDialog.request && (

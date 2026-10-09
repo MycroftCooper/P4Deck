@@ -21,6 +21,8 @@ describe("workspace panels", () => {
       "submitted",
       "workspaces",
       "streams",
+      "terminal",
+      "p4log",
     ]);
   });
   it("classifies global and file-target tabs", () => {
@@ -32,6 +34,8 @@ describe("workspace panels", () => {
       "submitted",
       "workspaces",
       "streams",
+      "terminal",
+      "p4log",
       "settings",
     ] as const)
       expect(isMultiPage(page)).toBe(false);

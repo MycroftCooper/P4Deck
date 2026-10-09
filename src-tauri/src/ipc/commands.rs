@@ -16,31 +16,123 @@ pub async fn workspace_disk_usage(state: State<'_, AppState>) -> Result<serde_js
     }).await.map_err(|e| e.to_string())?
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelRuntimeBinding {
+    profile_id: Option<String>,
+    context_generation: u64,
+    connection_key: String,
+}
+
 #[tauri::command]
-pub async fn open_panel_window(page: String, app: AppHandle) -> Result<(), String> {
+pub async fn open_panel_window(
+    page: String,
+    binding: Option<PanelRuntimeBinding>,
+    app: AppHandle,
+) -> Result<(), String> {
     use tauri::{Emitter, Manager};
     let kind = panel_window_kind(&page)?;
     let label = format!("panel-{page}");
     if let Some(window) = app.get_webview_window(&label) {
         return window.set_focus().map_err(|e| e.to_string());
     }
-    let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::WebviewUrl::App(format!("index.html?panel={page}#/{kind}").into()),
-    )
-    .title(format!("P4Deck · {page}"))
-    .inner_size(1100.0, 760.0)
-    .min_inner_size(640.0, 450.0)
-    .disable_drag_drop_handler()
-    .build()
-    .map_err(|e| e.to_string())?;
+    let route = panel_window_url(&page, kind, binding.as_ref());
+    let placement_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("window-placement-v1.json");
+    let monitors = app
+        .get_webview_window("main")
+        .and_then(|window| window.available_monitors().ok())
+        .unwrap_or_default();
+    let screens: Vec<crate::window_placement::ScreenRect> = monitors
+        .iter()
+        .map(|monitor| crate::window_placement::ScreenRect {
+            x: monitor.position().x,
+            y: monitor.position().y,
+            width: monitor.size().width,
+            height: monitor.size().height,
+        })
+        .collect();
+    let fallback = screens
+        .first()
+        .copied()
+        .unwrap_or(crate::window_placement::ScreenRect {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        });
+    let placement = crate::window_placement::load(&placement_path, &page)
+        .map(|value| crate::window_placement::sanitize(value, &screens, fallback));
+    let mut builder =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(route.into()))
+            .title(format!("P4Deck · {page}"))
+            .inner_size(1100.0, 760.0)
+            .min_inner_size(640.0, 450.0)
+            .disable_drag_drop_handler();
+    if let Some(value) = placement {
+        builder = builder
+            .position(value.x as f64, value.y as f64)
+            .inner_size(value.width as f64, value.height as f64);
+    }
+    let window = builder.build().map_err(|e| e.to_string())?;
+    if placement.is_some_and(|value| value.maximized) {
+        let _ = window.maximize();
+    }
+    let placement_window = window.clone();
+    let placement_key = page.clone();
+    let last_placement = std::sync::Arc::new(std::sync::Mutex::new(placement.unwrap_or(
+        crate::window_placement::WindowPlacement {
+            x: fallback.x,
+            y: fallback.y,
+            width: 1100.min(fallback.width),
+            height: 760.min(fallback.height),
+            maximized: false,
+        },
+    )));
     window.on_window_event(move |event| {
+        if matches!(
+            event,
+            tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)
+        ) {
+            if let (Ok(position), Ok(size), Ok(maximized), Ok(mut previous)) = (
+                placement_window.outer_position(),
+                placement_window.inner_size(),
+                placement_window.is_maximized(),
+                last_placement.lock(),
+            ) {
+                if !maximized {
+                    previous.x = position.x;
+                    previous.y = position.y;
+                    previous.width = size.width;
+                    previous.height = size.height;
+                }
+                previous.maximized = maximized;
+                let _ = crate::window_placement::save(&placement_path, &placement_key, *previous);
+            }
+        }
         if matches!(event, tauri::WindowEvent::Destroyed) {
             let _ = app.emit_to("main", "panel-returned", page.clone());
         }
     });
     Ok(())
+}
+
+fn panel_window_url(page: &str, kind: &str, binding: Option<&PanelRuntimeBinding>) -> String {
+    let mut query = format!("panel={}", urlencoding::encode(page));
+    if let Some(binding) = binding {
+        if let Some(profile_id) = binding.profile_id.as_deref() {
+            query.push_str("&profileId=");
+            query.push_str(&urlencoding::encode(profile_id));
+        }
+        query.push_str("&contextGeneration=");
+        query.push_str(&binding.context_generation.to_string());
+        query.push_str("&connectionKey=");
+        query.push_str(&urlencoding::encode(&binding.connection_key));
+    }
+    format!("index.html?{query}#/{kind}")
 }
 
 fn panel_window_kind(page: &str) -> Result<&str, String> {
@@ -56,6 +148,8 @@ fn panel_window_kind(page: &str) -> Result<&str, String> {
         "workspaces",
         "history",
         "streams",
+        "terminal",
+        "p4log",
         "diff",
         "shelf",
         "revgraph",
@@ -801,7 +895,7 @@ pub async fn local_path_capabilities(
 
 #[cfg(test)]
 mod tests {
-    use super::panel_window_kind;
+    use super::{panel_window_kind, panel_window_url, PanelRuntimeBinding};
 
     #[test]
     fn detached_shelf_panel_is_whitelisted_and_deep_link_safe() {
@@ -812,5 +906,22 @@ mod tests {
         assert_eq!(panel_window_kind("shelf"), Ok("shelf"));
         assert!(panel_window_kind("unknown--1").is_err());
         assert!(panel_window_kind("shelf?panel=files").is_err());
+    }
+
+    #[test]
+    fn terminal_and_log_panels_are_whitelisted_with_encoded_runtime_binding() {
+        assert_eq!(panel_window_kind("terminal"), Ok("terminal"));
+        assert_eq!(panel_window_kind("p4log"), Ok("p4log"));
+        let binding = PanelRuntimeBinding {
+            profile_id: Some("team/profile".into()),
+            context_generation: 9,
+            connection_key: "profile:9:ssl:1666".into(),
+        };
+        assert_eq!(
+            panel_window_url("terminal", "terminal", Some(&binding)),
+            "index.html?panel=terminal&profileId=team%2Fprofile&contextGeneration=9&connectionKey=profile%3A9%3Assl%3A1666#/terminal"
+        );
+        assert!(panel_window_kind("terminal--unexpected-instance").is_ok());
+        assert!(panel_window_kind("p4log?panel=terminal").is_err());
     }
 }

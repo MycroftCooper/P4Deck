@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import type { PageId, PanelTarget } from "../panels";
+import type { PanelRuntimeBinding } from "./floatingPanels";
 export const detachedPage = new URLSearchParams(location.search).get("panel");
 export interface DockHandle {
   open(page: PageId, target?: string, newInstance?: boolean): void;
   closeAll(): void;
+  popoutPage(page: PageId): Promise<void>;
 }
 export interface DockProps {
   zh: boolean;
@@ -12,6 +14,7 @@ export interface DockProps {
   selectedPath?: string;
   selectedLocalPath?: string;
   labels: Record<PageId, string>;
+  runtimeBinding: PanelRuntimeBinding;
   render(
     page: PageId,
     target: PanelTarget,

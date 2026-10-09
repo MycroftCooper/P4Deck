@@ -1,5 +1,6 @@
 import { tokenize } from "../../shared/lib/tokenize";
 import { inspectTerminalCommand } from "./terminalSecurity";
+import type { ToolTab } from "./components/ToolDrawer";
 
 export function readTerminalHistory(raw: string | null): string[] {
   try {
@@ -20,4 +21,9 @@ export function readTerminalHistory(raw: string | null): string[] {
 export function readToolHeight(raw: string | null): number {
   const value = Number(raw ?? 260);
   return Number.isFinite(value) ? Math.min(560, Math.max(180, value)) : 260;
+}
+export function readToolTab(raw: string | null): ToolTab {
+  return ["terminal", "logs", "journal", "diagnostics"].includes(raw ?? "")
+    ? (raw as ToolTab)
+    : "terminal";
 }

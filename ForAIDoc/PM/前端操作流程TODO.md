@@ -223,6 +223,16 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 - Shelf 已加入 Rust 独立窗口白名单；`shelf--<instance>` 的 route/deep link、已有窗口聚焦、关闭回主 Dock 和启动时 panel 参数恢复沿用统一 Dock 机制。项目当前没有统一的原生窗口坐标/尺寸持久化机制，本批没有另造一套并行存储。
 - 2026-10-09 最终门禁：全量 Web 63 个测试文件、376 项通过；Rust 126 项通过、1 个 localhost E2E 显式 ignored；`pnpm check/build/format:check`、Cargo check、Clippy `--all-targets -D warnings`、rustfmt、前后端性能门禁与 `git diff --check` 通过；Windows localhost 应用层 E2E 连续两轮分别 77.40 秒、77.45 秒通过。未执行 Windows/macOS 原生点击、独立窗口位置/大小恢复、焦点、拖放或读屏验收。
 
+### 第二十批：Terminal / P4 Log 可发现、独立窗口与恢复闭环
+
+- `terminal` / `p4log` 注册为全局单实例 panel；活动栏、页签栏菜单、应用 View 菜单、命令面板、底部既有工具区和状态栏入口共同可达。`app/commands/catalog.ts` 统一命令 ID、双语名称、快捷键、可用条件和禁用原因；快捷键表见 `Designer/Terminal与P4Log工作流.md`。
+- 两个工具沿用既有 Dockview / Tauri `open_panel_window`：Rust 白名单与编码 deep link、已有窗口聚焦、关闭回 dock、主窗口分配页签和启动恢复均不另开旁路。浮窗 URL 绑定 profile/context generation/不透明 connection token，不接受 URL Context 覆盖；连接漂移时取消 Terminal operation、清空旧输入/输出、淘汰迟到结果，Log 请求按 connection key 重建。
+- `nativePanels` 升级为版本化恢复记录并兼容旧数组。新增所有 panel 共用的 Rust `window-placement-v1.json`：普通 bounds + maximized、屏幕交集选择、最小/最大尺寸和越界回主屏均为可单测纯函数；Shelf 等既有 panel 自动复用，未创建 Terminal/Log 专属 bounds hack。
+- 底部工具区恢复 open/selected tab/height；P4 Log 恢复 level/source/follow-tail 和 operation filter。为避免凭据落盘，keyword/command filter、Terminal 输入/输出不持久化，旧 Terminal 历史继续读时清洗。
+- 独立 Terminal 仍走同一个 `runP4` 与 Rust Runner；`login/login2/logout/trust/tickets/passwd/set/configure`、`-P`、敏感长参数和 `P4PASSWD/P4TICKETS` 在 spawn 前拒绝，输出、Log、Journal 与诊断导出继续脱敏。新增独立 panel 组件防绕过、切换连接取消和旧响应隔离测试。
+- 2026-10-09 最终门禁：全量 Web 68 个测试文件、390 项通过；Rust 130 项通过、1 个 localhost E2E 在默认套件中显式 ignored；Windows localhost 应用层 E2E 连续两轮分别 86.01 秒、80.06 秒通过。`pnpm format/format:check/check/build`、Cargo check/test、Clippy `--all-targets -D warnings`、rustfmt、`git diff --check` 通过；前端性能 8 项与后端 5 项 correctness gates 通过。
+- 未执行 Windows/macOS 原生应用菜单、原生窗口位置/大小、单实例焦点、系统快捷键、拖出/dock 和读屏验证；纯函数/浏览器测试不记作原生通过。多屏校正使用 Tauri 当前 monitor 几何，系统任务栏/Stage Manager 等平台工作区细节需实机复核。
+
 ## 剩余验收与交接边界
 
 1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。

@@ -54,6 +54,11 @@ const SettingsPage = lazy(() =>
     default: m.SettingsPage,
   })),
 );
+const ToolPanel = lazy(() =>
+  import("../features/tools/ToolPanel").then((m) => ({
+    default: m.ToolPanel,
+  })),
+);
 export interface PageEnvironment {
   preferences: Preferences;
   runtime: RuntimeInfo;
@@ -214,6 +219,22 @@ function Content({
           onLocale={setLocale}
           ui={ui}
           onUi={setUi}
+        />
+      );
+    case "terminal":
+    case "p4log":
+      return (
+        <ToolPanel
+          key={connectionKey}
+          kind={page}
+          t={t}
+          zh={zh}
+          native={runtime.mode === "tauri"}
+          connectionKey={connectionKey}
+          context={runtime.context}
+          onOpenSettings={() =>
+            window.dispatchEvent(new Event("p4deck:open-settings"))
+          }
         />
       );
     default: {

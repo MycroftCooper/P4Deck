@@ -38,6 +38,8 @@ export const DockWorkspace = forwardRef<DockHandle, DockProps>(
           Submitted: "submitted",
           Workspaces: "workspaces",
           Streams: "streams",
+          Terminal: "terminal",
+          "P4 Log": "p4log",
           设置: "settings",
         } as const)) {
           bindings["打开全局页签 › " + name] = {
@@ -60,6 +62,7 @@ export const DockWorkspace = forwardRef<DockHandle, DockProps>(
     useImperativeHandle(ref, () => ({
       open: controller.open,
       closeAll: controller.closeAll,
+      popoutPage: controller.popoutPage,
     }));
     return (
       <LanguageContext.Provider value={props.zh}>

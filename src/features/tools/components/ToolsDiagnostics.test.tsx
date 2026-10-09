@@ -12,6 +12,7 @@ import { DiagnosticsView } from "./DiagnosticsView";
 import { LogView } from "./LogView";
 import { OperationJournalView } from "./OperationJournalView";
 import { ToolArea } from "../ToolArea";
+import { ToolPanel } from "../ToolPanel";
 import { messages } from "../../../shared/i18n";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
 
@@ -82,6 +83,7 @@ beforeEach(() => {
   backend.setLogPolicy.mockResolvedValue(policy);
   backend.queryLogPage.mockResolvedValue({ entries: [] });
   backend.queryOperationJournal.mockResolvedValue({ records: [] });
+  backend.cancelOperation.mockResolvedValue(undefined);
   backend.statusCacheDiagnostics.mockResolvedValue({
     hits: 8,
     misses: 2,
@@ -318,6 +320,37 @@ it("blocks credential commands before backend execution and offers Settings reco
   expect(openSettings).toHaveBeenCalledOnce();
 });
 
+it("keeps the credential boundary inside a detached-capable Terminal panel", async () => {
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="detached-terminal-security" zh={false}>
+        <ToolPanel
+          kind="terminal"
+          t={messages["en-US"]}
+          zh={false}
+          native
+          connectionKey="profile:7"
+          context={{ server: "fixture", user: "u", client: "c" }}
+          onOpenSettings={vi.fn()}
+        />
+      </ContextMenuProvider>,
+    ),
+  );
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "p4 login2 -P never-persist-this");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("Run").click());
+  expect(backend.runP4).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("never-persist-this");
+  expect(localStorage.getItem("p4deck.terminalHistory")).toBe("[]");
+});
+
 it("keeps normal terminal execution and history after backend validation", async () => {
   localStorage.setItem("p4deck.toolOpen", "true");
   backend.runP4.mockResolvedValue({
@@ -364,6 +397,119 @@ it("keeps normal terminal execution and history after backend validation", async
   );
   expect(localStorage.getItem("p4deck.terminalHistory")).toBe('["info"]');
   expect(host.textContent).toContain("safe info");
+});
+
+it("cancels a running Terminal command and isolates its stale result after connection generation changes", async () => {
+  localStorage.setItem("p4deck.toolOpen", "true");
+  let resolveOld!: (value: {
+    operationId: string;
+    exitCode: number;
+    durationMs: number;
+    events: OperationEvent[];
+  }) => void;
+  backend.runP4.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveOld = resolve;
+    }),
+  );
+  const render = (connectionKey: string, user: string) => (
+    <ContextMenuProvider scope={`terminal-generation-${connectionKey}`} zh>
+      <ToolArea
+        t={messages["zh-CN"]}
+        zh
+        native
+        connectionKey={connectionKey}
+        context={{ server: "fixture", user, client: "c" }}
+        onOpenChange={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />
+    </ContextMenuProvider>
+  );
+  await act(async () => root.render(render("generation-a", "old-user")));
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "info");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("运行").click());
+  const operationId = backend.runP4.mock.calls[0][0].operationId;
+  await act(async () => root.render(render("generation-b", "new-user")));
+  await flush();
+  expect(backend.cancelOperation).toHaveBeenCalledWith(operationId);
+  await act(async () =>
+    resolveOld({
+      operationId,
+      exitCode: 0,
+      durationMs: 2,
+      events: [
+        {
+          operationId,
+          type: "stdout",
+          message: "stale generation output",
+          timestamp: "2026-10-09T01:02:03Z",
+        },
+      ],
+    }),
+  );
+  await flush();
+  expect(host.textContent).toContain("connection context changed");
+  expect(host.textContent).not.toContain("stale generation output");
+  expect(localStorage.getItem("p4deck.terminalHistory")).toBe("[]");
+});
+
+it("invalidates a detached Terminal promise when a runtime-keyed panel remounts", async () => {
+  let resolveOld!: (value: {
+    operationId: string;
+    exitCode: number;
+    durationMs: number;
+    events: OperationEvent[];
+  }) => void;
+  backend.runP4.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveOld = resolve;
+    }),
+  );
+  const panel = (key: string) => (
+    <ContextMenuProvider key={key} scope={`detached-${key}`} zh={false}>
+      <ToolPanel
+        kind="terminal"
+        t={messages["en-US"]}
+        zh={false}
+        native
+        connectionKey={key}
+        context={{ server: "fixture", user: key, client: "c" }}
+        onOpenSettings={vi.fn()}
+      />
+    </ContextMenuProvider>
+  );
+  await act(async () => root.render(panel("runtime-a")));
+  await flush();
+  const input = host.querySelector<HTMLInputElement>(".terminal-input input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "info");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => button("Run").click());
+  const operationId = backend.runP4.mock.calls[0][0].operationId;
+  await act(async () => root.render(panel("runtime-b")));
+  expect(backend.cancelOperation).toHaveBeenCalledWith(operationId);
+  await act(async () =>
+    resolveOld({
+      operationId,
+      exitCode: 0,
+      durationMs: 1,
+      events: [],
+    }),
+  );
+  await flush();
+  expect(localStorage.getItem("p4deck.terminalHistory")).toBe("[]");
 });
 
 it("filters and paginates the journal and jumps back to related logs", async () => {

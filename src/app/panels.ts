@@ -18,6 +18,13 @@ export const pageDefinitions = {
   },
   history: { zh: "History", en: "History", scope: "file", target: "depot" },
   streams: { zh: "Streams", en: "Streams", scope: "global", target: "depot" },
+  terminal: {
+    zh: "Terminal",
+    en: "Terminal",
+    scope: "global",
+    target: "depot",
+  },
+  p4log: { zh: "P4 日志", en: "P4 Log", scope: "global", target: "depot" },
   diff: { zh: "Diff", en: "Diff", scope: "file", target: "depot" },
   shelf: {
     zh: "Shelf 详情",

@@ -7,6 +7,8 @@ import {
   Network,
   Settings,
   X,
+  TerminalSquare,
+  ScrollText,
 } from "lucide-react";
 import { activityPageIds, type PageId } from "../panels";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -19,6 +21,8 @@ const icons = {
   submitted: ListChecks,
   workspaces: Monitor,
   streams: Network,
+  terminal: TerminalSquare,
+  p4log: ScrollText,
   settings: Settings,
 };
 interface Props {

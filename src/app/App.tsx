@@ -32,6 +32,21 @@ import {
 import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { StatusBar } from "./shell/StatusBar";
 import { ActivityBar } from "./shell/ActivityBar";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { CommandPalette } from "./commands/CommandPalette";
+import {
+  appCommandReason,
+  commandForShortcut,
+  isAppCommand,
+  type AppCommandId,
+} from "./commands/catalog";
+import {
+  detachedBindingMatches,
+  opaqueConnectionBinding,
+  readDetachedBinding,
+} from "./docking/detachedBinding";
 
 export function App() {
   const preferences = usePreferences();
@@ -64,6 +79,7 @@ export function App() {
     [],
   );
   const [commandBusy, setCommandBusy] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchDirectory, setSearchDirectory] = useState<string>();
   const toolsRef = useRef<ToolHandle>(null);
   const [toolOpen, setToolOpen] = useState(
@@ -132,6 +148,81 @@ export function App() {
   const afterOperation = useCallback(async (warnings: string[]) => {
     await toolsRef.current?.afterOperation(warnings);
   }, []);
+  const commandEnvironment = useMemo(
+    () => ({
+      detached: !!detachedPage,
+      runtimeReady: runtime.p4Version !== "loading",
+    }),
+    [runtime.p4Version],
+  );
+  const runtimeBinding = useMemo(
+    () => ({
+      profileId: runtime.activeProfileId,
+      contextGeneration: runtime.contextGeneration,
+      connectionKey: opaqueConnectionBinding(connectionKey),
+    }),
+    [connectionKey, runtime.activeProfileId, runtime.contextGeneration],
+  );
+  const detachedRebound =
+    !!detachedPage &&
+    runtime.p4Version !== "loading" &&
+    !detachedBindingMatches(
+      readDetachedBinding(location.search),
+      runtimeBinding,
+    );
+  const executeAppCommand = useCallback(
+    (id: AppCommandId) => {
+      if (appCommandReason(id, commandEnvironment, zh)) return;
+      switch (id) {
+        case "app.commandPalette":
+          setPaletteOpen(true);
+          break;
+        case "tools.openTerminal":
+          dockRef.current?.open("terminal");
+          break;
+        case "tools.openP4Log":
+          dockRef.current?.open("p4log");
+          break;
+        case "tools.popoutTerminal":
+          void dockRef.current?.popoutPage("terminal");
+          break;
+        case "tools.popoutP4Log":
+          void dockRef.current?.popoutPage("p4log");
+          break;
+        case "panel.dockBack":
+          if (isTauri()) void getCurrentWindow().close();
+          else window.close();
+          break;
+      }
+    },
+    [commandEnvironment, dockRef, zh],
+  );
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const id = commandForShortcut(event);
+      if (!id) return;
+      event.preventDefault();
+      executeAppCommand(id);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const openSettings = () => openPage("settings");
+    window.addEventListener("p4deck:open-settings", openSettings);
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    if (isTauri())
+      void listen<unknown>("app-command", ({ payload }) => {
+        if (isAppCommand(payload)) executeAppCommand(payload);
+      }).then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("p4deck:open-settings", openSettings);
+    };
+  }, [executeAppCommand, openPage]);
   const hasSidebar = leftOpen && !detachedPage;
   return (
     <ContextMenuProvider
@@ -169,6 +260,14 @@ export function App() {
                   runtime={runtime}
                   onSettings={() => openPage("settings")}
                 />
+                {detachedPage && (
+                  <button
+                    className="detached-dock-back"
+                    onClick={() => executeAppCommand("panel.dockBack")}
+                  >
+                    Dock back / 停靠回主窗口 <kbd>Ctrl+Alt+D</kbd>
+                  </button>
+                )}
                 <CommandBar
                   zh={zh}
                   runtime={runtime}
@@ -184,6 +283,13 @@ export function App() {
                 {error && (
                   <div className="runtime-error" role="alert">
                     {error}
+                  </div>
+                )}
+                {detachedRebound && (
+                  <div className="runtime-rebound" role="status">
+                    {zh
+                      ? "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。"
+                      : "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection."}
                   </div>
                 )}
                 <div
@@ -237,6 +343,7 @@ export function App() {
                             : undefined
                         }
                         labels={labels}
+                        runtimeBinding={runtimeBinding}
                         onPages={setPages}
                         onActive={onActive}
                         onTarget={command.onTarget}
@@ -282,6 +389,13 @@ export function App() {
                   <AppControls preferences={preferences} />
                 </StatusBar>
               </div>
+              <CommandPalette
+                open={paletteOpen}
+                zh={zh}
+                environment={commandEnvironment}
+                onClose={() => setPaletteOpen(false)}
+                onExecute={executeAppCommand}
+              />
             </CommandContext.Provider>
           </CommandExecutionContext.Provider>
         </SelectionContext.Provider>

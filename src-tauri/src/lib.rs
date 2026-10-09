@@ -4,6 +4,7 @@ mod ipc;
 mod p4;
 mod persistence;
 mod security;
+mod window_placement;
 
 #[cfg(feature = "backend-perf")]
 pub mod backend_perf;
@@ -28,7 +29,7 @@ use p4::{
 };
 use persistence::{log_store::LogStore, operation_journal::OperationJournal};
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub(crate) struct AppState {
     pub runner: Arc<P4Runner>,
@@ -50,6 +51,59 @@ pub(crate) struct AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .menu(|app| {
+            use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
+            let palette = MenuItem::with_id(
+                app,
+                "app.commandPalette",
+                "Command Palette…",
+                true,
+                Some("CmdOrCtrl+Shift+P"),
+            )?;
+            let terminal = MenuItem::with_id(
+                app,
+                "tools.openTerminal",
+                "Terminal",
+                true,
+                Some("CmdOrCtrl+Alt+T"),
+            )?;
+            let log = MenuItem::with_id(
+                app,
+                "tools.openP4Log",
+                "P4 Log",
+                true,
+                Some("CmdOrCtrl+Alt+L"),
+            )?;
+            let dock_back = MenuItem::with_id(
+                app,
+                "panel.dockBack",
+                "Dock Back to Main Window",
+                true,
+                Some("CmdOrCtrl+Alt+D"),
+            )?;
+            let view = SubmenuBuilder::new(app, "View")
+                .items(&[&palette, &terminal, &log])
+                .separator()
+                .text("tools.popoutTerminal", "Open Terminal in New Window")
+                .text("tools.popoutP4Log", "Open P4 Log in New Window")
+                .item(&dock_back)
+                .build()?;
+            MenuBuilder::new(app).item(&view).build()
+        })
+        .on_menu_event(|app, event| {
+            let target = app
+                .webview_windows()
+                .into_iter()
+                .find_map(|(label, window)| {
+                    window
+                        .is_focused()
+                        .ok()
+                        .filter(|value| *value)
+                        .map(|_| label)
+                })
+                .unwrap_or_else(|| "main".to_owned());
+            let _ = app.emit_to(target, "app-command", event.id().as_ref());
+        })
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let contexts = Arc::new(

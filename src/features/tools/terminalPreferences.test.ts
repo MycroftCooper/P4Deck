@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { readTerminalHistory, readToolHeight } from "./terminalPreferences";
+import {
+  readTerminalHistory,
+  readToolHeight,
+  readToolTab,
+} from "./terminalPreferences";
 it("rejects damaged saved terminal state", () => {
   expect(readTerminalHistory("broken")).toEqual([]);
   expect(readTerminalHistory("null")).toEqual([]);
@@ -20,4 +24,10 @@ it("drops credential-sensitive legacy terminal history", () => {
       ]),
     ),
   ).toEqual(["info"]);
+});
+
+it("restores only registered tool tabs", () => {
+  expect(readToolTab("logs")).toBe("logs");
+  expect(readToolTab("<script>")).toBe("terminal");
+  expect(readToolTab(null)).toBe("terminal");
 });

@@ -14,6 +14,7 @@ import {
 import { storage } from "../../shared/lib/storage";
 import { deferredTask } from "../../shared/lib/deferredTask";
 import { detachedPage, type DockProps, type DockHandle } from "./types";
+import { readFloatingPanels, type FloatingPanelRecord } from "./floatingPanels";
 
 export function useDockController(props: DockProps) {
   const api = useRef<DockviewApi | undefined>(undefined);
@@ -22,6 +23,25 @@ export function useDockController(props: DockProps) {
   const disposables = useRef<{ dispose(): void }[]>([]);
   const [error, setError] = useState("");
   const nativeWindows = useRef(new Set<string>());
+  const persistFloating = (records?: FloatingPanelRecord[]) => {
+    const panels =
+      records ??
+      [...nativeWindows.current].map((id) => ({
+        id,
+        binding: latest.current.runtimeBinding,
+      }));
+    storage.setItem(
+      "p4deck.nativePanels",
+      JSON.stringify({ version: 1, panels }),
+    );
+  };
+  useEffect(() => {
+    if (nativeWindows.current.size) persistFloating();
+  }, [
+    props.runtimeBinding.connectionKey,
+    props.runtimeBinding.contextGeneration,
+    props.runtimeBinding.profileId,
+  ]);
   const title = (panel: IDockviewPanel) => {
     const kind = panelKind(panel.id);
     if (kind) {
@@ -64,9 +84,10 @@ export function useDockController(props: DockProps) {
       return;
     }
     if (!isMultiPage(page) && nativeWindows.current.has(page)) {
-      void invoke("open_panel_window", { page }).catch((e) =>
-        setError(String(e)),
-      );
+      void invoke("open_panel_window", {
+        page,
+        binding: latest.current.runtimeBinding,
+      }).catch((e) => setError(String(e)));
       return;
     }
     const path =
@@ -164,10 +185,7 @@ export function useDockController(props: DockProps) {
       void listen<string>("panel-returned", ({ payload }) => {
         if (panelKind(payload)) {
           nativeWindows.current.delete(payload);
-          storage.setItem(
-            "p4deck.nativePanels",
-            JSON.stringify([...nativeWindows.current]),
-          );
+          persistFloating();
           restorePanel(payload);
         }
       }).then((fn) => {
@@ -210,12 +228,12 @@ export function useDockController(props: DockProps) {
           `p4deck.panel.${panel.id}`,
           JSON.stringify(panel.params ?? {}),
         );
-        await invoke("open_panel_window", { page: panel.id });
+        await invoke("open_panel_window", {
+          page: panel.id,
+          binding: latest.current.runtimeBinding,
+        });
         nativeWindows.current.add(panel.id);
-        storage.setItem(
-          "p4deck.nativePanels",
-          JSON.stringify([...nativeWindows.current]),
-        );
+        persistFloating();
         api.current?.removePanel(panel);
       } else {
         const opened = await api.current?.addPopoutGroup(panel, {
@@ -233,6 +251,14 @@ export function useDockController(props: DockProps) {
     } catch (cause) {
       setError(String(cause));
     }
+  };
+
+  const popoutPage: DockHandle["popoutPage"] = async (page) => {
+    const dock = api.current;
+    if (!dock) return;
+    open(page);
+    const panel = reusablePanel(dock.panels, page);
+    if (panel) await popout(panel);
   };
 
   const ready = (dock: DockviewApi) => {
@@ -255,20 +281,21 @@ export function useDockController(props: DockProps) {
     }
     // Recover detached pages after an application restart rather than losing them.
     if (!detachedPage) {
-      try {
-        const saved: unknown = JSON.parse(
-          storage.getItem("p4deck.nativePanels") ?? "[]",
-        );
-        if (Array.isArray(saved))
-          saved
-            .filter(
-              (page): page is string =>
-                typeof page === "string" && !!panelKind(page),
-            )
-            .forEach(restorePanel);
-        storage.removeItem("p4deck.nativePanels");
-      } catch {
-        /* Ignore invalid saved state. */
+      const saved = readFloatingPanels(storage.getItem("p4deck.nativePanels"));
+      for (const record of saved.panels) {
+        if (isTauri()) {
+          nativeWindows.current.add(record.id);
+          void invoke("open_panel_window", {
+            page: record.id,
+            binding: latest.current.runtimeBinding,
+          }).catch(() => {
+            nativeWindows.current.delete(record.id);
+            persistFloating();
+            restorePanel(record.id);
+          });
+          const panel = dock.getPanel(record.id);
+          if (panel) dock.removePanel(panel);
+        } else restorePanel(record.id);
       }
     }
     dock.panels.forEach((panel) =>
@@ -376,5 +403,14 @@ export function useDockController(props: DockProps) {
     latest.current.onActive(null);
     latest.current.onTarget?.(null, normalizePanelTarget(null));
   };
-  return { api, open, closeAll, popout, ready, error, setError };
+  return {
+    api,
+    open,
+    closeAll,
+    popout,
+    popoutPage,
+    ready,
+    error,
+    setError,
+  };
 }

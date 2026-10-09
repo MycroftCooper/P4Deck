@@ -7,6 +7,7 @@ describe("terminal credential boundary", () => {
     "tickets",
     "PASSWD",
     "p4 login",
+    "p4 login2",
     "p4 LoGoUt",
     "trust -y",
     "-p ssl:localhost:1666 tickets",
@@ -16,6 +17,7 @@ describe("terminal credential boundary", () => {
     "info -P sentinel",
     "info -Psentinel",
     "info P4PASSWD=sentinel",
+    "info P4TICKETS=C:\\sentinel-ticket",
     "info Authorization: Bearer sentinel",
     'info "p4tickets=C:\\\\safe path\\tickets"',
   ])("blocks and hides %s", (raw) => {
