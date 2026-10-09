@@ -24,15 +24,31 @@ const nodes: WorkspaceNode[] = [
     relativePath: "incoming.bin",
     state: "outOfDate",
   },
+  {
+    id: "three",
+    name: "local.txt",
+    kind: "file",
+    absolutePath: "C:\\workspace\\local.txt",
+    relativePath: "local.txt",
+    state: "modified",
+  },
+  {
+    id: "four",
+    name: "not-synced.txt",
+    kind: "file",
+    absolutePath: "C:\\workspace\\not-synced.txt",
+    relativePath: "not-synced.txt",
+    state: "notSynced",
+  },
 ];
 
 it("filters file rows with the production status semantics", () => {
   expect(filterWorkspaceNodes(nodes, "changed").map((node) => node.id)).toEqual(
-    ["one"],
+    ["one", "three"],
   );
   expect(
     filterWorkspaceNodes(nodes, "incoming").map((node) => node.id),
-  ).toEqual(["two"]);
+  ).toEqual(["two", "four"]);
   expect(filterWorkspaceNodes(nodes, "all")).not.toBe(nodes);
 });
 
@@ -43,7 +59,7 @@ it("searches resource names case-insensitively without mutating input", () => {
   expect(searchWorkspaceNodes(nodes, "世界").map((node) => node.id)).toEqual([
     "one",
   ]);
-  expect(nodes).toHaveLength(2);
+  expect(nodes).toHaveLength(4);
 });
 
 it("adapts depot nodes through the shared production mapper", () => {

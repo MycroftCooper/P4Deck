@@ -54,7 +54,8 @@ export const tauriBackend: Backend = {
     listen<OperationEvent>("operation-event", (event) =>
       callback(event.payload),
     ),
-  listWorkspaceChildren: (path) => invoke("list_workspace_children", { path }),
+  listWorkspaceChildren: (path, refresh, operationId) =>
+    invoke("list_workspace_children", { path, refresh, operationId }),
   listDepotChildren: (path) => invoke("list_depot_children", { path }),
   resolvePath: (request) => invoke("resolve_path", { request }),
   openLocalPath: (request) => invoke("open_local_path", { request }),

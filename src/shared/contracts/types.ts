@@ -26,10 +26,80 @@ export type FileState =
   | "openedEdit"
   | "openedAdd"
   | "openedDelete"
+  | "openedMoveAdd"
+  | "openedMoveDelete"
+  | "modified"
   | "outOfDate"
+  | "notSynced"
   | "conflicted"
   | "missing"
-  | "ignored";
+  | "ignored"
+  | "unknown";
+
+export type WorkspaceOpenedAction =
+  | "add"
+  | "edit"
+  | "delete"
+  | "moveAdd"
+  | "moveDelete"
+  | "branch"
+  | "integrate"
+  | "import"
+  | "purge"
+  | "archive"
+  | "unknown";
+export type WorkspaceReconcileAction =
+  "add" | "edit" | "delete" | "moveAdd" | "moveDelete";
+export type WorkspaceSyncState =
+  "current" | "outOfDate" | "notSynced" | "unknown";
+export type WorkspaceResolveState = "none" | "unresolved" | "unknown";
+export type WorkspaceLocalState =
+  | "present"
+  | "missing"
+  | "modified"
+  | "untracked"
+  | "ignored"
+  | "directory"
+  | "symlink"
+  | "unreadable"
+  | "unknown";
+export type WorkspaceStatusSource =
+  | "filesystem"
+  | "fstat"
+  | "opened"
+  | "reconcilePreview"
+  | "resolvePreview"
+  | "ignore"
+  | "cache";
+export type WorkspaceStatusCompleteness = "complete" | "partial" | "error";
+export interface WorkspaceStatusEvidence {
+  source: WorkspaceStatusSource;
+  summary: string;
+}
+export interface WorkspaceIgnoreMatch {
+  rule: string;
+  source: string;
+  line?: number;
+  explanation: string;
+}
+export interface WorkspaceStatusError {
+  source: WorkspaceStatusSource;
+  message: string;
+}
+export interface WorkspaceFileStatus {
+  primary: FileState;
+  openedAction?: WorkspaceOpenedAction;
+  reconcileAction?: WorkspaceReconcileAction;
+  sync: WorkspaceSyncState;
+  resolve: WorkspaceResolveState;
+  local: WorkspaceLocalState;
+  mapped?: boolean;
+  movedFile?: string;
+  ignore?: WorkspaceIgnoreMatch;
+  completeness: WorkspaceStatusCompleteness;
+  evidence: WorkspaceStatusEvidence[];
+  errors: WorkspaceStatusError[];
+}
 export type P4FileAction =
   | "refresh"
   | "getLatest"
@@ -535,6 +605,18 @@ export interface WorkspaceNode {
   changelistId?: number;
   modifiedAt?: string;
   hasChildren?: boolean;
+  /** Present for workspace queries; absent for Depot/Pending projection rows. */
+  status?: WorkspaceFileStatus;
+}
+
+export interface WorkspaceListing {
+  items: WorkspaceNode[];
+  completeness: WorkspaceStatusCompleteness;
+  errors: WorkspaceStatusError[];
+  operationIds: string[];
+  truncated: boolean;
+  safetyLimit: number;
+  cacheFreshness: "fresh" | "stale" | "offlineFallback";
 }
 
 export type OpenLocalPathMode = "reveal" | "openWith";

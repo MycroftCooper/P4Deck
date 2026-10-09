@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        file_service::status_snapshot,
+        file_service::fstat_status_snapshot,
         search_service::deduplicate_items,
         status_cache::{
             CacheFreshness, CachedFileStatus, FileStatusKind, InvalidationReason, StatusCache,
@@ -9,7 +9,8 @@ use crate::{
     },
     domain::{
         ChangelistSummary, ClQueryResult, ClQueryStats, EventKind, LogEntry, LogLevel,
-        MergeClassification, OperationEvent, OperationResult, OperationSource,
+        MergeClassification, OperationEvent, OperationResult, OperationSource, WorkspaceLocalState,
+        WorkspaceResolveState, WorkspaceSyncState,
     },
     p4::{changelists::parser, query, search::item_for_submitted},
 };
@@ -152,7 +153,7 @@ pub fn run() -> Result<(), String> {
         files.events.len(),
         Some(messages_bytes(&files.events)),
         || {
-            let parsed = status_snapshot(black_box(&files));
+            let parsed = fstat_status_snapshot(black_box(&files));
             black_box(parsed.files.len())
         },
     ));
@@ -337,11 +338,19 @@ fn verify_correctness(runtime: &tokio::runtime::Runtime) -> Result<Vec<Correctne
     assert_eq!(pending[1].0, 10_001);
     assert_eq!(pending[0].1.state.as_deref(), Some("openedEdit"));
 
-    let file_snapshot = status_snapshot(&file_result(32));
+    let file_snapshot = fstat_status_snapshot(&file_result(32));
     assert_eq!(file_snapshot.files.len(), 32);
-    assert_eq!(file_snapshot.files[0].status, FileStatusKind::Conflicted);
-    assert_eq!(file_snapshot.files[1].status, FileStatusKind::OpenedAdd);
-    assert_eq!(file_snapshot.files[4].status, FileStatusKind::OutOfDate);
+    let status_for = |index: usize| {
+        file_snapshot
+            .files
+            .iter()
+            .find(|status| status.path.contains(&format!("文件-{index:06}.bin")))
+            .map(|status| status.status)
+            .expect("synthetic file status should exist")
+    };
+    assert_eq!(status_for(0), FileStatusKind::Conflicted);
+    assert_eq!(status_for(1), FileStatusKind::OpenedAdd);
+    assert_eq!(status_for(4), FileStatusKind::OutOfDate);
 
     let payload = changelist_payload(1_024);
     let bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
@@ -699,8 +708,21 @@ fn cache_snapshot(path: &str) -> StatusSnapshot {
             have_revision: Some(1),
             head_revision: Some(1),
             changelist_id: None,
+            opened_action: None,
+            reconcile_action: None,
+            sync: WorkspaceSyncState::Current,
+            resolve: WorkspaceResolveState::None,
+            local: WorkspaceLocalState::Present,
+            mapped: Some(true),
+            moved_file: None,
+            ignore: None,
+            evidence: Vec::new(),
+            errors: Vec::new(),
         }],
         freshness: CacheFreshness::Fresh,
+        errors: Vec::new(),
+        operation_ids: Vec::new(),
+        truncated: false,
     }
 }
 

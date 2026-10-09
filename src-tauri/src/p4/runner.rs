@@ -84,8 +84,12 @@ impl P4Runner {
     }
 
     pub fn cancel(&self, id: &str) {
-        if let Some(token) = self.operations.lock().get(id) {
-            token.cancel();
+        let operations = self.operations.lock();
+        let prefix = format!("{id}:");
+        for (operation_id, token) in operations.iter() {
+            if operation_id == id || operation_id.starts_with(&prefix) {
+                token.cancel();
+            }
         }
     }
 
@@ -853,7 +857,7 @@ mod tests {
     }
 
     #[test]
-    fn context_switch_cancels_every_registered_operation() {
+    fn grouped_cancel_and_context_switch_cancel_registered_operations() {
         let directory =
             std::env::temp_dir().join(format!("p4deck-runner-cancel-all-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&directory).unwrap();
@@ -866,13 +870,15 @@ mod tests {
         runner
             .operations
             .lock()
-            .insert("first".into(), first.clone());
+            .insert("workspace-status:fstat".into(), first.clone());
         runner
             .operations
             .lock()
             .insert("second".into(), second.clone());
-        assert_eq!(runner.cancel_all(), 2);
+        runner.cancel("workspace-status");
         assert!(first.is_cancelled());
+        assert!(!second.is_cancelled());
+        assert_eq!(runner.cancel_all(), 2);
         assert!(second.is_cancelled());
         drop(runner);
         std::fs::remove_dir_all(directory).unwrap();

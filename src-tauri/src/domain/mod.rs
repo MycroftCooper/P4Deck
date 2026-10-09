@@ -623,6 +623,142 @@ pub struct ClActionResult {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspacePrimaryState {
+    Controlled,
+    OpenedEdit,
+    OpenedAdd,
+    OpenedDelete,
+    OpenedMoveAdd,
+    OpenedMoveDelete,
+    Modified,
+    Missing,
+    Untracked,
+    Ignored,
+    OutOfDate,
+    NotSynced,
+    Conflicted,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceOpenedAction {
+    Add,
+    Edit,
+    Delete,
+    MoveAdd,
+    MoveDelete,
+    Branch,
+    Integrate,
+    Import,
+    Purge,
+    Archive,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceReconcileAction {
+    Add,
+    Edit,
+    Delete,
+    MoveAdd,
+    MoveDelete,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceSyncState {
+    Current,
+    OutOfDate,
+    NotSynced,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceResolveState {
+    None,
+    Unresolved,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceLocalState {
+    Present,
+    Missing,
+    Modified,
+    Untracked,
+    Ignored,
+    Directory,
+    Symlink,
+    Unreadable,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceStatusSource {
+    Filesystem,
+    Fstat,
+    Opened,
+    ReconcilePreview,
+    ResolvePreview,
+    Ignore,
+    Cache,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceStatusCompleteness {
+    Complete,
+    Partial,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceStatusEvidence {
+    pub source: WorkspaceStatusSource,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceIgnoreMatch {
+    pub rule: String,
+    pub source: String,
+    pub line: Option<u32>,
+    pub explanation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceStatusError {
+    pub source: WorkspaceStatusSource,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileStatus {
+    pub primary: WorkspacePrimaryState,
+    pub opened_action: Option<WorkspaceOpenedAction>,
+    pub reconcile_action: Option<WorkspaceReconcileAction>,
+    pub sync: WorkspaceSyncState,
+    pub resolve: WorkspaceResolveState,
+    pub local: WorkspaceLocalState,
+    pub mapped: Option<bool>,
+    pub moved_file: Option<String>,
+    pub ignore: Option<WorkspaceIgnoreMatch>,
+    pub completeness: WorkspaceStatusCompleteness,
+    pub evidence: Vec<WorkspaceStatusEvidence>,
+    pub errors: Vec<WorkspaceStatusError>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceNode {
@@ -638,6 +774,19 @@ pub struct WorkspaceNode {
     pub changelist_id: Option<i64>,
     pub modified_at: Option<String>,
     pub has_children: Option<bool>,
+    pub status: WorkspaceFileStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceListing {
+    pub items: Vec<WorkspaceNode>,
+    pub completeness: WorkspaceStatusCompleteness,
+    pub errors: Vec<WorkspaceStatusError>,
+    pub operation_ids: Vec<String>,
+    pub truncated: bool,
+    pub safety_limit: usize,
+    pub cache_freshness: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

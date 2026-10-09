@@ -54,3 +54,48 @@ it("distinguishes unsynced, latest, older and missing without duplicate badges",
     fileBadges({ state: "missing", revision: 3, headRevision: 3 }),
   ).toEqual([{ id: "missing" }]);
 });
+
+it("renders orthogonal aggregate evidence and explains ignore provenance", () => {
+  const partial = fileBadges({
+    state: "openedEdit",
+    status: {
+      primary: "openedEdit",
+      openedAction: "edit",
+      sync: "outOfDate",
+      resolve: "unresolved",
+      local: "missing",
+      mapped: true,
+      completeness: "partial",
+      evidence: [],
+      errors: [{ source: "reconcilePreview", message: "preview unavailable" }],
+    },
+  });
+  expect(partial.map((badge) => badge.id)).toEqual([
+    "resolve",
+    "edit",
+    "missing",
+    "outOfDate",
+    "stale",
+  ]);
+  const ignored = fileBadges({
+    state: "ignored",
+    status: {
+      primary: "ignored",
+      sync: "unknown",
+      resolve: "none",
+      local: "ignored",
+      completeness: "complete",
+      ignore: {
+        rule: "target/",
+        source: "C:/ws/.p4ignore",
+        line: 4,
+        explanation: "matched",
+      },
+      evidence: [],
+      errors: [],
+    },
+  });
+  expect(ignored).toEqual([
+    { id: "ignored", detail: "target/ · C:/ws/.p4ignore:4" },
+  ]);
+});

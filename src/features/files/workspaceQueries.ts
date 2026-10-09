@@ -11,9 +11,22 @@ export const workspaceCache = new QueryClient({
     },
   },
 });
-export const workspaceQuery = (connectionKey: string, path?: string) => ({
+export const workspaceQuery = (
+  connectionKey: string,
+  path?: string,
+  refresh = false,
+) => ({
   queryKey: ["workspace-files", connectionKey, path ?? ""] as const,
-  queryFn: () => backend.listWorkspaceChildren(path),
+  queryFn: async ({ signal }: { signal: AbortSignal }) => {
+    const operationId = `workspace-status-${crypto.randomUUID()}`;
+    const cancel = () => void backend.cancelOperation(operationId);
+    signal.addEventListener("abort", cancel, { once: true });
+    try {
+      return await backend.listWorkspaceChildren(path, refresh, operationId);
+    } finally {
+      signal.removeEventListener("abort", cancel);
+    }
+  },
 });
 export function useWorkspaceFiles(
   connectionKey: string,

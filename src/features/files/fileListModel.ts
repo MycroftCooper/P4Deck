@@ -10,8 +10,9 @@ export function filterWorkspaceNodes(
   if (filter === "all") return nodes.slice();
   return nodes.filter((node) =>
     filter === "changed"
-      ? node.state.startsWith("opened")
-      : node.state === "outOfDate",
+      ? node.state.startsWith("opened") ||
+        ["modified", "missing", "untracked", "conflicted"].includes(node.state)
+      : ["outOfDate", "notSynced"].includes(node.state),
   );
 }
 

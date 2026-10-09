@@ -1165,21 +1165,29 @@ export const mockBackend: Backend = {
     operationSubscribers.add(callback);
     return () => operationSubscribers.delete(callback);
   },
-  async listWorkspaceChildren(path) {
-    return mockWorkspace.map((node) =>
-      path
-        ? {
-            ...node,
-            id: `${path}-${node.id}`,
-            relativePath:
-              `${path.replace(/^\/workspace\/atlas\/?/, "")}/${node.name}`.replace(
-                /^\//,
-                "",
-              ),
-            absolutePath: `${path.startsWith("/") ? path : `/workspace/atlas/${path}`}/${node.name}`,
-          }
-        : node,
-    );
+  async listWorkspaceChildren(path, _refresh, _operationId) {
+    return {
+      items: mockWorkspace.map((node) =>
+        path
+          ? {
+              ...node,
+              id: `${path}-${node.id}`,
+              relativePath:
+                `${path.replace(/^\/workspace\/atlas\/?/, "")}/${node.name}`.replace(
+                  /^\//,
+                  "",
+                ),
+              absolutePath: `${path.startsWith("/") ? path : `/workspace/atlas/${path}`}/${node.name}`,
+            }
+          : node,
+      ),
+      completeness: "complete",
+      errors: [],
+      operationIds: [],
+      truncated: false,
+      safetyLimit: 10_000,
+      cacheFreshness: "fresh",
+    };
   },
   async listDepotChildren(path = "//atlas/main") {
     return mockWorkspace.slice(0, 80).map((node) => ({

@@ -573,6 +573,25 @@ mod tests {
             !source.exists() && target.is_file(),
             "p4 move did not rename the workspace file",
         )?;
+        let move_status = files
+            .workspace_children(
+                context.clone(),
+                Some(root.join("main").to_string_lossy().into_owned()),
+                true,
+                None,
+            )
+            .await?;
+        ensure(
+            move_status
+                .items
+                .iter()
+                .any(|node| node.name == "README-renamed-e2e.txt" && node.state == "openedMoveAdd")
+                && move_status
+                    .items
+                    .iter()
+                    .any(|node| node.name == "README.txt" && node.state == "openedMoveDelete"),
+            format!("move pair status was not preserved: {move_status:?}"),
+        )?;
         let opened = checked_run(
             runner,
             context,
@@ -617,6 +636,7 @@ mod tests {
     #[allow(clippy::too_many_arguments)]
     async fn exercise_sync_state_machine(
         runner: &Arc<P4Runner>,
+        files: &FileService,
         sync: &SyncService,
         expiring_sync: &SyncService,
         contexts: &ContextStore,
@@ -809,6 +829,27 @@ mod tests {
             ensure(
                 updated.ready && updated.counts.updated == 1,
                 format!("outdated sync preview was not classified as update: {updated:?}"),
+            )?;
+            let out_of_date = files
+                .workspace_children(
+                    context.clone(),
+                    Some(
+                        local_file
+                            .parent()
+                            .expect("sync file has a parent")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                    true,
+                    None,
+                )
+                .await?;
+            ensure(
+                out_of_date
+                    .items
+                    .iter()
+                    .any(|node| node.name == "state.txt" && node.state == "outOfDate"),
+                format!("workspace out-of-date status was not exposed: {out_of_date:?}"),
             )?;
             confirmed_sync(sync, vec![depot_path.clone()], None).await?;
             ensure(
@@ -1250,6 +1291,7 @@ mod tests {
             baseline.is_file(),
             "Sync did not materialize the seed README",
         )?;
+        exercise_workspace_status(runner, files, context, root).await?;
         exercise_rename_state_machine(
             rename,
             expiring_rename,
@@ -1265,11 +1307,12 @@ mod tests {
             .workspace_children(
                 context.clone(),
                 Some(root.join("main").to_string_lossy().into_owned()),
+                false,
                 None,
             )
             .await?;
         ensure(
-            main.iter().any(|node| {
+            main.items.iter().any(|node| {
                 node.name == "README.txt"
                     && node.depot_path.as_deref() == Some("//depot/main/README.txt")
             }),
@@ -1296,6 +1339,7 @@ mod tests {
 
         exercise_sync_state_machine(
             runner,
+            files,
             sync,
             expiring_sync,
             contexts,
@@ -1336,6 +1380,7 @@ mod tests {
             }),
             "Delete did not open the seed README for delete",
         )?;
+        ensure_state(files, context, root, "README.txt", "openedDelete").await?;
         action(files, context, FileAction::Revert, vec![baseline_path]).await?;
         ensure_state(files, context, root, "README.txt", "controlled").await?;
 
@@ -1358,6 +1403,7 @@ mod tests {
         exercise_pending_changelists(changelists, journal, runner, files, context, root).await?;
         exercise_shelf_unshelve_resolve(
             runner,
+            files,
             changelists,
             workflows,
             expiring_workflows,
@@ -1382,6 +1428,283 @@ mod tests {
         exercise_global_search(runner, changelists, search, contexts, context, root).await?;
         exercise_submit_blockers(runner, changelists, submit, sync, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
+        Ok(())
+    }
+
+    async fn exercise_workspace_status(
+        runner: &Arc<P4Runner>,
+        files: &FileService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let main = root.join("main");
+        let baseline = main.join("README.txt");
+        let opened_before = checked_run(
+            runner,
+            context,
+            "opened",
+            vec!["//depot/main/README.txt".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        ensure(
+            json_values(&opened_before)
+                .iter()
+                .all(|value| value.get("depotFile").is_none()),
+            "workspace status fixture started with an opened README",
+        )?;
+
+        let mut permissions = std::fs::metadata(&baseline)
+            .map_err(|error| error.to_string())?
+            .permissions();
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&baseline, permissions).map_err(|error| error.to_string())?;
+        std::fs::write(&baseline, b"workspace modified outside Perforce\n")
+            .map_err(|error| error.to_string())?;
+        let direct_preview = checked_run(
+            runner,
+            context,
+            "reconcile",
+            vec![
+                "-n".into(),
+                "-e".into(),
+                "-a".into(),
+                "-d".into(),
+                "-f".into(),
+                "-l".into(),
+                format!("{}/*", main.to_string_lossy().replace('\\', "/")),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        ensure(
+            json_values(&direct_preview).iter().any(|value| {
+                value.get("action").and_then(Value::as_str) == Some("edit")
+                    || value
+                        .get("data")
+                        .and_then(Value::as_str)
+                        .is_some_and(|message| message.contains("opened for edit"))
+            }),
+            format!(
+                "fixture reconcile preview did not see local edit: {}",
+                event_text(&direct_preview)
+            ),
+        )?;
+        let modified = files
+            .workspace_children(
+                context.clone(),
+                Some(main.to_string_lossy().into_owned()),
+                true,
+                None,
+            )
+            .await?;
+        let modified_node = modified
+            .items
+            .iter()
+            .find(|node| node.name == "README.txt")
+            .ok_or("modified README was missing from workspace status")?;
+        ensure(
+            modified_node.state == "modified"
+                && modified_node.status.reconcile_action
+                    == Some(crate::domain::WorkspaceReconcileAction::Edit)
+                && modified_node.status.evidence.iter().any(|item| {
+                    item.source == crate::domain::WorkspaceStatusSource::ReconcilePreview
+                }),
+            format!("workspace modification was not classified: {modified_node:?}"),
+        )?;
+        let opened_after = checked_run(
+            runner,
+            context,
+            "opened",
+            vec!["//depot/main/README.txt".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        ensure(
+            json_values(&opened_after)
+                .iter()
+                .all(|value| value.get("depotFile").is_none()),
+            "reconcile preview changed opened state",
+        )?;
+        checked_run(
+            runner,
+            context,
+            "sync",
+            vec!["-f".into(), "//depot/main/README.txt".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        std::fs::remove_file(&baseline).map_err(|error| error.to_string())?;
+        let missing = files
+            .workspace_children(
+                context.clone(),
+                Some(main.to_string_lossy().into_owned()),
+                true,
+                None,
+            )
+            .await?;
+        ensure(
+            missing
+                .items
+                .iter()
+                .any(|node| node.name == "README.txt" && node.state == "missing"),
+            format!("missing controlled file was not returned: {missing:?}"),
+        )?;
+        checked_run(
+            runner,
+            context,
+            "sync",
+            vec!["-f".into(), "//depot/main/README.txt".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
+
+        let old_ignore = std::env::var_os("P4IGNORE");
+        std::env::set_var("P4IGNORE", ".p4ignore");
+        let ignore_file = root.join(".p4ignore");
+        let ignored = main.join("ignored reason 世界.txt");
+        let untracked = main.join("untracked space 世界@#%.txt");
+        let cache_file = main.join("cache-add.txt");
+        let local_scenario = async {
+            std::fs::write(&ignore_file, b"ignored*.txt\n").map_err(|error| error.to_string())?;
+            std::fs::write(&ignored, b"ignored\n").map_err(|error| error.to_string())?;
+            std::fs::write(&untracked, b"untracked\n").map_err(|error| error.to_string())?;
+            std::fs::write(&cache_file, b"cache invalidation\n")
+                .map_err(|error| error.to_string())?;
+            let first = files
+                .workspace_children(
+                    context.clone(),
+                    Some(main.to_string_lossy().into_owned()),
+                    true,
+                    None,
+                )
+                .await?;
+            let ignored_node = first
+                .items
+                .iter()
+                .find(|node| node.name == "ignored reason 世界.txt")
+                .ok_or("ignored Unicode file was absent")?;
+            ensure(
+                ignored_node.state == "ignored"
+                    && ignored_node.status.ignore.as_ref().is_some_and(|item| {
+                        item.rule == "ignored*.txt"
+                            && item.source.ends_with(".p4ignore")
+                            && item.line == Some(1)
+                    }),
+                format!("ignore reason/source was not preserved: {ignored_node:?}"),
+            )?;
+            ensure(
+                first.items.iter().any(|node| {
+                    node.name == "untracked space 世界@#%.txt" && node.state == "untracked"
+                }),
+                format!("special Unicode add candidate was not classified: {first:?}"),
+            )?;
+            let cached = files
+                .workspace_children(
+                    context.clone(),
+                    Some(main.to_string_lossy().into_owned()),
+                    false,
+                    None,
+                )
+                .await?;
+            ensure(
+                cached.operation_ids == first.operation_ids,
+                "repeated workspace status query did not use the cached aggregate snapshot",
+            )?;
+            action(
+                files,
+                context,
+                FileAction::Add,
+                vec![cache_file.to_string_lossy().into_owned()],
+            )
+            .await?;
+            let invalidated = files
+                .workspace_children(
+                    context.clone(),
+                    Some(main.to_string_lossy().into_owned()),
+                    false,
+                    None,
+                )
+                .await?;
+            ensure(
+                invalidated.operation_ids != first.operation_ids
+                    && invalidated
+                        .items
+                        .iter()
+                        .any(|node| node.name == "cache-add.txt" && node.state == "openedAdd"),
+                format!("file mutation did not invalidate status cache: {invalidated:?}"),
+            )?;
+            action(
+                files,
+                context,
+                FileAction::Revert,
+                vec![cache_file.to_string_lossy().into_owned()],
+            )
+            .await
+        }
+        .await;
+        if let Some(value) = old_ignore {
+            std::env::set_var("P4IGNORE", value);
+        } else {
+            std::env::remove_var("P4IGNORE");
+        }
+        let _ = std::fs::remove_file(&ignored);
+        let _ = std::fs::remove_file(&untracked);
+        let _ = std::fs::remove_file(&cache_file);
+        let _ = std::fs::remove_file(&ignore_file);
+        local_scenario?;
+
+        const PARTIAL_CLIENT: &str = "p4deck-fixture-status-partial";
+        let partial_root = root
+            .parent()
+            .ok_or("status fixture root has no parent")?
+            .join("status-partial-workspace");
+        let partial_dir = partial_root.join("outside-view");
+        std::fs::create_dir_all(&partial_dir).map_err(|error| error.to_string())?;
+        std::fs::write(partial_dir.join("kept.txt"), b"local evidence\n")
+            .map_err(|error| error.to_string())?;
+        let spec = format!(
+            "Client: {PARTIAL_CLIENT}\nOwner: {FIXTURE_USER}\nRoot: {}\nOptions: noallwrite noclobber nocompress unlocked nomodtime normdir\nLineEnd: local\nView:\n\t//depot/main/... //{PARTIAL_CLIENT}/main/...\n",
+            partial_root.to_string_lossy().replace('\\', "/")
+        );
+        checked_run(
+            runner,
+            context,
+            "client",
+            vec!["-i".into()],
+            Some(spec),
+            OutputMode::Text,
+        )
+        .await?;
+        let mut partial_context = context.clone();
+        partial_context.client = PARTIAL_CLIENT.into();
+        partial_context.cwd = Some(partial_root.to_string_lossy().into_owned());
+        let partial = files
+            .workspace_children(
+                partial_context,
+                Some(partial_dir.to_string_lossy().into_owned()),
+                true,
+                None,
+            )
+            .await;
+        let cleanup = cleanup_named_client(runner, context, PARTIAL_CLIENT, &partial_root).await;
+        let partial = partial?;
+        ensure(
+            partial.completeness == crate::domain::WorkspaceStatusCompleteness::Partial
+                && partial
+                    .items
+                    .iter()
+                    .any(|node| node.name == "kept.txt" && node.state == "unknown")
+                && !partial.errors.is_empty(),
+            format!("partial status did not preserve local evidence: {partial:?}"),
+        )?;
+        cleanup?;
         Ok(())
     }
 
@@ -2868,6 +3191,7 @@ mod tests {
 
     async fn exercise_shelf_unshelve_resolve(
         runner: &Arc<P4Runner>,
+        files: &FileService,
         changelists: &ChangelistService,
         workflows: &WorkflowService,
         expiring_workflows: &WorkflowService,
@@ -3431,6 +3755,27 @@ mod tests {
             resolve.ready && resolve.conflicts[0].status == "unresolved",
             format!("real resolve conflict was not exposed: {resolve:?}"),
         )?;
+        let unresolved_status = files
+            .workspace_children(
+                target_context.clone(),
+                Some(
+                    target_root
+                        .join("p4deck-workflow-e2e")
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+                true,
+                None,
+            )
+            .await?;
+        ensure(
+            unresolved_status.items.iter().any(|node| {
+                node.name == "b.txt"
+                    && node.state == "conflicted"
+                    && node.status.resolve == crate::domain::WorkspaceResolveState::Unresolved
+            }),
+            format!("unresolved workspace status was not exposed: {unresolved_status:?}"),
+        )?;
         let resolve_result = workflows
             .confirm_resolve(
                 ResolveConfirmation {
@@ -3989,10 +4334,12 @@ mod tests {
             .workspace_children(
                 context.clone(),
                 Some(root.join("main").to_string_lossy().into_owned()),
+                false,
                 None,
             )
             .await?;
         let actual = nodes
+            .items
             .iter()
             .find(|node| node.name == name)
             .map(|node| node.state.as_str());

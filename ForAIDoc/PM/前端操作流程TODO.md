@@ -1,6 +1,6 @@
 # 前端操作流程 TODO
 
-日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-008/BE-008Q/BE-008G、FE-16 诊断体验、FE-17 本机大列表基准及 FE-18 多连接生产 UI 已完成浏览器自动化验收；真实 SSL/SSO/MFA、Windows/macOS 原生点击/读屏与固定设备验收仍未完成，整体未完成。
+日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-005/BE-008/BE-008Q/BE-008G、FE-16 诊断体验、FE-17 本机大列表基准及 FE-18 多连接生产 UI 已完成浏览器自动化验收；真实 SSL/SSO/MFA、Windows/macOS 原生点击/读屏与固定设备验收仍未完成，整体未完成。
 
 ## 范围与约束
 
@@ -31,6 +31,7 @@
 | FE-16 | 日志、操作与诊断生产闭环 | P4 Log 游标分页/筛选/策略，diagnostic-alert，Operation Journal，诊断导出，缓存指标，连接代次清理和双向 operation 导航 | 后端过滤必须作用于分页；策略失败回滚；alert 去重且不抢焦点；导出不泄露敏感字段；Mock 明示模拟；窄屏、键盘和 ARIA 基线 | 生产接线与 50 文件/302 项 Web 自动化通过；Windows localhost 默认两轮通过。原生点击、390px 原生窗口和真实读屏未验 |
 | FE-17 | 大列表窗口化与自动基准 | Pending 打开/搁置文件、Submitted 详情、Search、Log、Journal、Files/Depot；50k 生产筛选/搜索/去重和 100k 结构门禁 | 不挂全量 DOM；稳定 ID 选择；键盘焦点、窄屏、ARIA 和操作按钮不回退；50k p95 `<50 ms`；报告含环境与非跨平台声明 | 实现完成；52 文件/306 项 Web 测试与本机 `test:perf` 6 项通过。Windows/macOS 固定设备原生 FPS/内存/读屏未验 |
 | FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |
+| FE-19 | Workspace 文件状态聚合呈现 | 消费 `WorkspaceListing` 与强类型正交状态；组合角标、证据/ignore 来源、partial/error、刷新与取消 | 未知不冒充 untracked；目录不推断子项；手动刷新穿透前后端缓存；AbortSignal 取消聚合子命令；大列表保持窗口化 | BE-005 生产契约、Mock/Tauri、55 文件/327 项 Web 测试与 Windows localhost 场景通过；原生 UI/macOS 待验 |
 
 ## 执行顺序
 
@@ -39,6 +40,8 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
 ## 验收记录
+
+- FE-19 / BE-005 Workspace 状态（2026-10-09）：Files 主列表与资源侧栏共享连接隔离 query，消费 `WorkspaceListing` 并显示 opened/move、modified/missing/untracked、out-of-date/not-synced、unresolved、ignored rule/source/line、symlink 与 partial/error/unknown。重复请求共享缓存；手动刷新显式失效后端目录缓存；取消使用 operation 前缀终止 `fstat/opened/resolve/reconcile/ignores` 子命令。前端 55 文件/327 项通过；Windows localhost 覆盖真实 clean、修改、缺失、Unicode/特殊字符、ignore provenance、cache hit/mutation invalidation、mapping 外 partial、move/delete/out-of-date/unresolved。Windows/macOS 原生点击、真实读屏及 macOS P4 未验。
 
 - FE-06 单文件 Rename/Move 生产闭环（2026-10-09）：`RenameDialog` 已改为 Preview → Review → Confirming → Result，工具栏和右键菜单共用 `useCommandDialogs` 单入口；展示 source/target depot+local mapping、opened action/CL、目标 CL/存在性、case-only 风险、blocker、operation/log 与刷新原因。目标路径或 CL 改动、连接 key 变化都会丢弃旧 preview/token；真实 move 执行阶段使用已知 operation ID 支持取消，成功、命令失败或 IPC 异常均按 refresh advice 刷新 Workspace/Pending。后端 BE-002R 仅允许单个当前 Workspace 本地受控且 opened 的文件，目标不得存在，Default/既有编号 CL 才有效；目录、Depot-only、跨 Workspace、覆盖、缺失父目录和 Windows 仅大小写 rename 明确阻止。全量 55 文件/325 项 Web 测试、95 项 Rust 单测、build/check、前后端性能、Clippy/Prettier/rustfmt/diff check 与 Windows localhost 默认双轮通过。未执行 Windows/macOS 原生 UI；本机无 Bash，未运行 bash fixture 语法检查；仓库无 `pnpm typecheck` 脚本，实际类型门禁为 `pnpm check:web` / `pnpm check`。
 

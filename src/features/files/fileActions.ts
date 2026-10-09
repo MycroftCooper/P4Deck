@@ -35,11 +35,27 @@ export function isFileActionAllowed(
 ) {
   if (action === "refresh") return true;
   if (!state) return false;
+  if (state === "unknown") return false;
   if (state === "untracked") return ["add", "delete"].includes(action);
+  if (state === "ignored") return action === "deleteLocal";
+  if (state === "modified")
+    return [
+      "checkout",
+      "reconcile",
+      "diff",
+      "history",
+      "revisionGraph",
+    ].includes(action);
+  if (state === "notSynced")
+    return ["getLatest", "getRevision", "history", "revisionGraph"].includes(
+      action,
+    );
   if (state === "openedAdd")
     return ["revert", "diff", "delete"].includes(action);
   if (state === "openedDelete")
     return ["revert", "history", "revisionGraph"].includes(action);
+  if (state === "openedMoveAdd" || state === "openedMoveDelete")
+    return ["revert", "diff", "history", "revisionGraph"].includes(action);
   if (state === "conflicted")
     return ["diff", "history", "revisionGraph", "revert"].includes(action);
   if (state === "openedEdit")

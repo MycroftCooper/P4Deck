@@ -27,7 +27,7 @@ export async function resolveAddress(
   });
   if (resolved.found && resolved.absolutePath) {
     const directory = parentPath(resolved.absolutePath);
-    const nodes = await workspaceCache
+    const listing = await workspaceCache
       .fetchQuery(
         workspaceQuery(
           connection,
@@ -35,9 +35,19 @@ export async function resolveAddress(
         ),
       )
       .catch((cause) => {
-        if (path.startsWith("//")) return [];
+        if (path.startsWith("//"))
+          return {
+            items: [],
+            completeness: "partial" as const,
+            errors: [],
+            operationIds: [],
+            truncated: false,
+            safetyLimit: 10_000,
+            cacheFreshness: "fresh" as const,
+          };
         throw cause;
       });
+    const nodes = listing.items;
     const node = nodes.find((n) =>
       same(n.absolutePath, resolved.absolutePath!),
     );

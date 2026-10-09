@@ -1,4 +1,7 @@
-import type { FileState } from "../../shared/contracts/types";
+import type {
+  FileState,
+  WorkspaceFileStatus,
+} from "../../shared/contracts/types";
 
 export type FileBadgeId =
   | "add"
@@ -45,6 +48,7 @@ export interface FileDecorationFacts {
   action?: string;
   scope?: "workspace" | "depot" | "shelf" | "revision";
   badges?: readonly FileBadge[];
+  status?: WorkspaceFileStatus;
 }
 const labels: Record<FileBadgeId, [string, string, string]> = {
   add: ["待添加", "Open for add", "+"],
@@ -90,7 +94,11 @@ const stateBadges: Partial<Record<FileState, FileBadgeId>> = {
   openedAdd: "add",
   openedEdit: "edit",
   openedDelete: "delete",
+  openedMoveAdd: "move/add",
+  openedMoveDelete: "move/delete",
+  modified: "modified",
   outOfDate: "outOfDate",
+  notSynced: "notSynced",
   conflicted: "resolve",
   missing: "missing",
   untracked: "untracked",
@@ -99,6 +107,7 @@ const stateBadges: Partial<Record<FileState, FileBadgeId>> = {
 export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
   const badges: FileBadge[] = [...(facts.badges ?? [])];
   const scope = facts.scope ?? "workspace";
+  const status = facts.status;
   if (scope === "shelf") badges.push({ id: "shelf" });
   if (
     scope === "depot" &&
@@ -106,10 +115,15 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
   )
     badges.push({ id: "depotDeleted" });
   if (scope === "workspace" || scope === "shelf") {
-    const action = actions.has(facts.action ?? "")
-      ? (facts.action as FileBadgeId)
+    const statusAction = status?.openedAction?.replace(
+      /^move([A-Z])/,
+      (_, letter: string) => `move/${letter.toLowerCase()}`,
+    );
+    const action = actions.has(facts.action ?? statusAction ?? "")
+      ? ((facts.action ?? statusAction) as FileBadgeId)
       : undefined;
-    const state = facts.state && stateBadges[facts.state];
+    const effectiveState = status?.primary ?? facts.state;
+    const state = effectiveState && stateBadges[effectiveState];
     if (action)
       badges.push({ id: action, owner: scope === "shelf" ? "shelf" : "self" });
     if (
@@ -124,6 +138,10 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
             ? "shelf"
             : "self"
           : undefined,
+        detail:
+          state === "ignored" && status?.ignore
+            ? `${status.ignore.rule} · ${status.ignore.source}${status.ignore.line ? `:${status.ignore.line}` : ""}`
+            : undefined,
       });
     if (
       scope === "workspace" &&
@@ -131,7 +149,7 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
       facts.headRevision !== undefined &&
       facts.headRevision > 0 &&
       !["untracked", "ignored", "openedAdd", "missing"].includes(
-        facts.state ?? "",
+        effectiveState ?? "",
       )
     ) {
       badges.push({
@@ -145,6 +163,15 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
                 : "unknown",
       });
     }
+    if (status?.resolve === "unresolved") badges.push({ id: "resolve" });
+    if (status?.local === "modified") badges.push({ id: "modified" });
+    if (status?.local === "missing") badges.push({ id: "missing" });
+    if (status?.local === "symlink") badges.push({ id: "symlink" });
+    if (status?.sync === "outOfDate") badges.push({ id: "outOfDate" });
+    if (status?.sync === "notSynced") badges.push({ id: "notSynced" });
+    if (status?.completeness === "partial") badges.push({ id: "stale" });
+    if (status?.completeness === "error") badges.push({ id: "error" });
+    if (status?.primary === "unknown") badges.push({ id: "unknown" });
   }
   // Never let a revision comparison conceal a stronger explicit stale revision state.
   const hasOlder = badges.some(

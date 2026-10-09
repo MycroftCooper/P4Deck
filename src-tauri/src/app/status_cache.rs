@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, future::Future, sync::Arc, time::Instant};
 use tokio::sync::watch;
 
+use crate::domain::{
+    WorkspaceIgnoreMatch, WorkspaceLocalState, WorkspaceOpenedAction, WorkspaceReconcileAction,
+    WorkspaceResolveState, WorkspaceStatusError, WorkspaceStatusEvidence, WorkspaceSyncState,
+};
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StatusCacheKey {
     server: String,
@@ -48,9 +53,16 @@ pub enum FileStatusKind {
     OpenedEdit,
     OpenedAdd,
     OpenedDelete,
+    OpenedMoveAdd,
+    OpenedMoveDelete,
+    Modified,
+    Missing,
+    Ignored,
+    NotSynced,
     OutOfDate,
     Conflicted,
     ReconcileCandidate,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +73,16 @@ pub struct CachedFileStatus {
     pub have_revision: Option<i64>,
     pub head_revision: Option<i64>,
     pub changelist_id: Option<i64>,
+    pub opened_action: Option<WorkspaceOpenedAction>,
+    pub reconcile_action: Option<WorkspaceReconcileAction>,
+    pub sync: WorkspaceSyncState,
+    pub resolve: WorkspaceResolveState,
+    pub local: WorkspaceLocalState,
+    pub mapped: Option<bool>,
+    pub moved_file: Option<String>,
+    pub ignore: Option<WorkspaceIgnoreMatch>,
+    pub evidence: Vec<WorkspaceStatusEvidence>,
+    pub errors: Vec<WorkspaceStatusError>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -75,6 +97,9 @@ pub enum CacheFreshness {
 pub struct StatusSnapshot {
     pub files: Vec<CachedFileStatus>,
     pub freshness: CacheFreshness,
+    pub errors: Vec<WorkspaceStatusError>,
+    pub operation_ids: Vec<String>,
+    pub truncated: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -385,8 +410,31 @@ fn estimate_snapshot(snapshot: &StatusSnapshot) -> usize {
             .files
             .iter()
             .map(|file| {
-                file.path.len() + file.depot_path.as_deref().map(str::len).unwrap_or(0) + 96
+                file.path.len()
+                    + file.depot_path.as_deref().map(str::len).unwrap_or(0)
+                    + file.moved_file.as_deref().map(str::len).unwrap_or(0)
+                    + file
+                        .evidence
+                        .iter()
+                        .map(|item| item.summary.len() + 24)
+                        .sum::<usize>()
+                    + file
+                        .errors
+                        .iter()
+                        .map(|item| item.message.len() + 24)
+                        .sum::<usize>()
+                    + 160
             })
+            .sum::<usize>()
+        + snapshot
+            .errors
+            .iter()
+            .map(|item| item.message.len() + 24)
+            .sum::<usize>()
+        + snapshot
+            .operation_ids
+            .iter()
+            .map(String::len)
             .sum::<usize>()
 }
 
@@ -419,8 +467,21 @@ mod tests {
                 have_revision: Some(1),
                 head_revision: Some(1),
                 changelist_id: None,
+                opened_action: None,
+                reconcile_action: None,
+                sync: WorkspaceSyncState::Current,
+                resolve: WorkspaceResolveState::None,
+                local: WorkspaceLocalState::Present,
+                mapped: Some(true),
+                moved_file: None,
+                ignore: None,
+                evidence: Vec::new(),
+                errors: Vec::new(),
             }],
             freshness: CacheFreshness::Fresh,
+            errors: Vec::new(),
+            operation_ids: Vec::new(),
+            truncated: false,
         }
     }
 

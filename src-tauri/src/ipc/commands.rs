@@ -432,12 +432,20 @@ pub async fn perform_cl_action(
 #[tauri::command]
 pub async fn list_workspace_children(
     path: Option<String>,
+    refresh: Option<bool>,
+    operation_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<Vec<WorkspaceNode>, String> {
+) -> Result<WorkspaceListing, String> {
     state
         .files
-        .workspace_children(state.connection.context(), path, Some(&app))
+        .workspace_children_with_operation(
+            state.connection.context(),
+            path,
+            refresh.unwrap_or(false),
+            operation_id,
+            Some(&app),
+        )
         .await
 }
 

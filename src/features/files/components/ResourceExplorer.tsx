@@ -1,5 +1,10 @@
 import { useObjectSelection } from "../SelectionContext";
-import { useWorkspaceFiles, useDepotFiles } from "../workspaceQueries";
+import {
+  useWorkspaceFiles,
+  useDepotFiles,
+  workspaceCache,
+  workspaceQuery,
+} from "../workspaceQueries";
 import { useMemo, useRef, useState, useContext } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -65,17 +70,35 @@ export function ResourceExplorer({
   const query = mode === "workspace" ? workspace : depot;
   const error = query.error ? String(query.error) : "";
   const items = useMemo(() => {
-    const nodes = (query.data ?? []).map((node): WorkspaceNode =>
-      "absolutePath" in node ? node : depotNodeAsWorkspaceNode(node),
-    );
+    const nodes =
+      mode === "workspace"
+        ? (workspace.data?.items ?? [])
+        : (depot.data ?? []).map(depotNodeAsWorkspaceNode);
     return searchWorkspaceNodes(nodes, filter);
-  }, [query.data, filter]);
+  }, [mode, workspace.data, depot.data, filter]);
+  const partial =
+    mode === "workspace" &&
+    workspace.data &&
+    workspace.data.completeness !== "complete"
+      ? workspace.data.errors.map((item) => item.message).join(" · ") ||
+        (zh ? "状态证据不完整" : "Partial status evidence")
+      : "";
   const selection = useObjectSelection(items);
   const { select } = useContext(SelectionContext);
   const fileMenu = useFileMenu();
   const menu = useContextMenu();
   const env = useMenuEnvironment();
-  const refresh = () => query.refetch();
+  const refresh = () =>
+    mode === "workspace"
+      ? workspaceCache.fetchQuery({
+          ...workspaceQuery(
+            connectionKey,
+            directory?.startsWith("//") ? undefined : directory,
+            true,
+          ),
+          staleTime: 0,
+        })
+      : depot.refetch();
   const scope = resourceScope(mode, directory, env.runtime.context.cwd);
   const blankMenu = useDirectoryMenu(
     scope.current,
@@ -185,6 +208,11 @@ export function ResourceExplorer({
         }}
       >
         {error && <p role="alert">{error}</p>}
+        {partial && (
+          <p className="workspace-warning" role="status" title={partial}>
+            {zh ? "部分状态" : "Partial status"}
+          </p>
+        )}
         <div
           className="virtual-spacer"
           style={{ height: virtual.getTotalSize() }}

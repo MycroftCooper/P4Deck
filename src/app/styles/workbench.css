@@ -298,6 +298,25 @@ button {
   color: var(--warning);
   background: #b773161a;
 }
+.file-state.openedEdit,
+.file-state.openedMoveAdd,
+.file-state.openedMoveDelete,
+.file-state.modified {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.file-state.openedDelete,
+.file-state.missing,
+.file-state.conflicted {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.file-state.outOfDate,
+.file-state.notSynced,
+.file-state.unknown {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
 .file-state.outOfDate,
 .file-state.conflicted {
   color: var(--danger);
@@ -1807,6 +1826,17 @@ button {
   float: right;
   background: none;
   border: 0;
+}
+.workspace-warning {
+  margin: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .inspector {
   bottom: 25px;

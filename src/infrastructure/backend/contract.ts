@@ -68,7 +68,7 @@ import type {
   RevisionGraph,
   RuntimeInfo,
   TrustRequest,
-  WorkspaceNode,
+  WorkspaceListing,
 } from "../../shared/contracts/types";
 
 export interface Backend {
@@ -140,7 +140,11 @@ export interface Backend {
   subscribeOperationEvents(
     callback: (event: OperationEvent) => void,
   ): Promise<() => void>;
-  listWorkspaceChildren(path?: string): Promise<WorkspaceNode[]>;
+  listWorkspaceChildren(
+    path?: string,
+    refresh?: boolean,
+    operationId?: string,
+  ): Promise<WorkspaceListing>;
   listDepotChildren(path?: string): Promise<DepotNode[]>;
   resolvePath(request: PathResolveRequest): Promise<PathResolveResult>;
   performFileAction(request: FileActionRequest): Promise<FileActionResult>;

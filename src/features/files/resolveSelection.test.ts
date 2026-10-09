@@ -22,13 +22,19 @@ it("resolves thousands of depot selections with one mapping and one shared direc
     inputKind: "depot",
     absolutePath: "/root",
   });
-  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue(
-    nodes.map((n) => ({
+  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue({
+    items: nodes.map((n) => ({
       ...n,
       absolutePath: `/root/${n.name}`,
       state: "controlled",
     })),
-  );
+    completeness: "complete",
+    errors: [],
+    operationIds: [],
+    truncated: false,
+    safetyLimit: 10_000,
+    cacheFreshness: "fresh",
+  });
   const result = await resolveSelection(nodes, "connection", "/root");
   expect(result).toHaveLength(2000);
   expect(result.every((n) => n.state === "controlled")).toBe(true);

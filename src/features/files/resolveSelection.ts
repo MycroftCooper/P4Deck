@@ -41,7 +41,7 @@ export async function resolveSelection(
           if (!mapped.found || !mapped.absolutePath) continue;
           directory = mapped.absolutePath;
         }
-        const children = await workspaceCache.fetchQuery(
+        const listing = await workspaceCache.fetchQuery(
           workspaceQuery(
             connection,
             root && pathKey(directory) === pathKey(root)
@@ -49,6 +49,7 @@ export async function resolveSelection(
               : directory,
           ),
         );
+        const children = listing.items;
         const byName = new Map(children.map((n) => [n.name, n]));
         for (const old of group) {
           const found = byName.get(old.name);

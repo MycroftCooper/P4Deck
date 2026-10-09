@@ -49,7 +49,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-003  | Submit 预检与执行状态机                 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                              |
 | BE-004a | Pending CL 数据正确性与基础写操作       | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                                   |
 | BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| BE-005  | 文件状态聚合与缓存失效                  | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| BE-005  | 文件状态聚合与缓存失效                  | `fstat/opened/resolve -n/reconcile -n/ignores -v` 与单层本地目录合并为强类型状态；未知不冒充 untracked，忽略规则带来源；15 秒 TTL、512 条/16 MiB 双上限、并发合并、分组取消、generation、stale/offline、局部失效、10,000 项上限和安全诊断已完成；Windows localhost 已验                                                                                                                                                                                                                                                                                                                         |
 | BE-006  | 操作记录、离线与 ticket 状态            | Operation Journal、2,000 条硬上限、当前连接隔离、游标分页及状态/类型/时间/文本服务端筛选、结构化终态、崩溃恢复和不可重放边界已完成；前端已接入                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | BE-007  | 日志策略与诊断导出                      | 稳定分页及级别/来源/Server/Workspace/命令/operation/关键词过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成；前端已接入                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | BE-008  | Submitted 详情与可靠合并分类            | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                  |
@@ -174,7 +174,7 @@ pnpm test:e2e:p4d:win
 
 验收结果（2026-10-08）：Windows localhost Fixture 默认连续两轮通过，覆盖部分文件首次 Shelf、选中文件覆盖更新、子集删除、TTL 与本地/来源内容漂移拒绝、Unshelve 到 Default/编号 CL、跨 Workspace、映射失败、本地覆盖阻断、锁、权限拒绝、需要 Resolve、真实 Resolve 成功与不可解决/未知保持阻断，并清理临时 Client/Root/CL/Shelf 与专属 `//depot/p4deck-workflow-e2e/...` 数据；不修改 Fixture seed 或用户配置。前端生产按钮接线不属于本项。
 
-### BE-005 — 文件状态聚合与缓存失效（DONE：BE-002 组合已验，兼容矩阵待 BE-009）
+### BE-005 — 文件状态聚合与缓存失效（DONE：Windows localhost 已验，兼容矩阵待 BE-009）
 
 目标：稳定输出 Opened、Reconcile、Out-of-date、Conflicted 等日常状态，同时减少 P4 Server 请求。
 
@@ -185,8 +185,13 @@ pnpm test:e2e:p4d:win
 - 合并相同并发查询，支持 generation/cancel，旧响应不得覆盖新上下文。
 - 文件修改、CL 移动、Sync、Revert、Submit 后只失效受影响范围。
 - 提供缓存命中、请求合并、耗时和失效原因的诊断指标，不记录敏感内容。
+- Workspace 查询只扫描当前目录一层，并以转义后的 `//client/path/*` 查询服务器；符号链接/Windows reparse point 不下钻，返回条目硬上限为 10,000。
+- 一次查询聚合 `fstat -Op -Or`、`opened`、`resolve -n -N`、`reconcile -n -e -a -d -f -l` 与分批 `ignores -v -i`。Reconcile 全程 preview，不改变 opened 集合；特殊字符路径作为参数数组传递并转义 P4 filespec。
+- 强类型结果保留 `openedAction`、`reconcileAction`、`sync`、`resolve`、`local`、mapping、move 对端、ignore 来源及 evidence；主状态只用于排序/旧 UI 兼容。优先级为 unresolved/conflicted → 显式 opened action → reconcile edit/delete/add → sync 落后/未同步 → controlled/unknown。缺少权威 P4 证据必须是 `unknown + partial`，不得默认 untracked。
+- 任一子命令失败时保留其余可信证据，在 `WorkspaceListing` 返回查询级错误与 partial；缓存回退明确标为 stale/offline。文件节点不复制整份查询错误，避免大目录内存按条目数放大。
+- 前端 Query 使用连接隔离 key，共享并发请求；AbortSignal 取消 operation 前缀下全部子命令。普通重复查询命中后端缓存，手动刷新先失效对应目录再查询。
 
-验收：并发去重、连接隔离、过期响应淘汰、容量上限、局部失效和离线旧数据标记均有测试。
+验收：Rust 覆盖结构化/旧版 reconcile、部分失败证据保留、Unicode ignore provenance、filespec 转义、单层扫描/硬上限与缓存边界；前端覆盖并发去重、连接隔离、明确刷新和取消分组。Windows localhost 覆盖 clean、未打开修改、missing、Unicode/空格/`@#%` 未跟踪、ignore 规则来源、缓存命中、mutation 失效、mapping 外 unknown/partial、move/delete/out-of-date 与真实 unresolved；入口默认连续两轮并清理隔离数据。
 
 ## P1：Alpha 质量
 

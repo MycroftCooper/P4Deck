@@ -1,5 +1,10 @@
 import { useObjectSelection } from "../SelectionContext";
-import { useWorkspaceFiles, useDepotFiles } from "../workspaceQueries";
+import {
+  useWorkspaceFiles,
+  useDepotFiles,
+  workspaceCache,
+  workspaceQuery,
+} from "../workspaceQueries";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Folder, RefreshCw } from "lucide-react";
@@ -48,7 +53,7 @@ export function FileWorkbench({
     () =>
       isDepot
         ? (depot.data ?? []).map(depotNodeAsWorkspaceNode)
-        : (local.data ?? []),
+        : (local.data?.items ?? []),
     [isDepot, depot.data, local.data],
   );
   const busy = listing.isFetching;
@@ -65,12 +70,28 @@ export function FileWorkbench({
     openedEdit: zh ? "已签出编辑" : "Open for edit",
     openedAdd: zh ? "待添加" : "Added",
     openedDelete: zh ? "待删除" : "Deleted",
+    openedMoveAdd: zh ? "移动目标" : "Move target",
+    openedMoveDelete: zh ? "移动来源" : "Move source",
+    modified: zh ? "本地已修改" : "Modified locally",
     untracked: zh ? "未跟踪" : "Untracked",
     outOfDate: zh ? "待更新" : "Out of date",
+    notSynced: zh ? "尚未同步" : "Not synced",
     conflicted: zh ? "有冲突" : "Conflicted",
     missing: zh ? "本地缺失" : "Missing locally",
     ignored: zh ? "已忽略" : "Ignored",
+    unknown: zh ? "状态未知" : "Unknown",
   };
+  const statusNotice =
+    !isDepot && local.data && local.data.completeness !== "complete"
+      ? local.data.errors.map((item) => item.message).join(" · ") ||
+        (local.data.truncated
+          ? zh
+            ? `结果已限制为 ${local.data.safetyLimit} 项`
+            : `Results limited to ${local.data.safetyLimit} items`
+          : zh
+            ? "状态证据不完整；已保留可信结果"
+            : "Status evidence is partial; trusted results are preserved")
+      : "";
   const visibleNodes = useMemo(
     () => filterWorkspaceNodes(nodes, filter),
     [nodes, filter],
@@ -117,7 +138,12 @@ export function FileWorkbench({
   ]);
   const load = async () => {
     setError("");
-    await listing.refetch();
+    if (isDepot) await depot.refetch();
+    else
+      await workspaceCache.fetchQuery({
+        ...workspaceQuery(connectionKey, directory, true),
+        staleTime: 0,
+      });
   };
 
   const blankMenu = useDirectoryMenu(
@@ -176,6 +202,12 @@ export function FileWorkbench({
         <div className="workspace-error" role="alert">
           {error}
           <button onClick={() => setError("")}>×</button>
+        </div>
+      ) : null}
+      {statusNotice ? (
+        <div className="workspace-warning" role="status" title={statusNotice}>
+          {zh ? "状态查询不完整：" : "Partial status: "}
+          {statusNotice}
         </div>
       ) : null}
       <div className="file-content">
@@ -247,7 +279,10 @@ export function FileWorkbench({
                       )}
                       <b>{node.name}</b>
                     </span>
-                    <em className={`file-state ${node.state}`}>
+                    <em
+                      className={`file-state ${node.state}`}
+                      title={statusExplanation(node, zh)}
+                    >
                       {isDepot
                         ? zh
                           ? "Depot 文件"
@@ -277,4 +312,22 @@ export function FileWorkbench({
       </div>
     </section>
   );
+}
+
+export function statusExplanation(node: WorkspaceNode, zh: boolean) {
+  const status = node.status;
+  if (!status) return "";
+  const evidence = status.evidence.map((item) => item.summary);
+  if (status.ignore)
+    evidence.push(
+      `${zh ? "忽略规则" : "Ignore rule"}: ${status.ignore.rule} (${status.ignore.source}${status.ignore.line ? `:${status.ignore.line}` : ""})`,
+    );
+  if (status.completeness !== "complete")
+    evidence.push(
+      zh
+        ? `证据${status.completeness === "error" ? "失败" : "不完整"}`
+        : `Evidence ${status.completeness}`,
+    );
+  evidence.push(...status.errors.map((item) => item.message));
+  return evidence.join(" · ");
 }

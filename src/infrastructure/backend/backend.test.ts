@@ -341,19 +341,21 @@ describe("controlled P4 terminal", () => {
 
   it("implements the object workbench contract in browser mock", async () => {
     const files = await backend.listWorkspaceChildren();
-    expect(files.length).toBeGreaterThan(100);
-    const located = await backend.resolvePath({ input: files[3].relativePath });
+    expect(files.items.length).toBeGreaterThan(100);
+    const located = await backend.resolvePath({
+      input: files.items[3].relativePath,
+    });
     expect(located.found).toBe(true);
     expect(
-      (await backend.getFileHistory(files[3].depotPath!)).length,
+      (await backend.getFileHistory(files.items[3].depotPath!)).length,
     ).toBeGreaterThan(0);
     expect(
-      (await backend.getRevisionGraph(files[3].depotPath!)).nodes.length,
+      (await backend.getRevisionGraph(files.items[3].depotPath!)).nodes.length,
     ).toBeGreaterThan(1);
     expect((await backend.queryPendingChanges()).length).toBeGreaterThan(1);
     await expect(
       backend.openLocalPath({
-        path: files[3].absolutePath,
+        path: files.items[3].absolutePath,
         mode: "reveal",
       }),
     ).rejects.toThrow("desktop app");

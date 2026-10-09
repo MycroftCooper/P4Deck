@@ -12,22 +12,34 @@ it("locates a nested file, deduplicating both mapping and directory reads", asyn
     inputKind: "depot",
     absolutePath: "/root/src/a.ts",
   });
-  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue([
-    {
-      id: "a",
-      kind: "file",
-      name: "a.ts",
-      absolutePath: "/root/src/a.ts",
-      relativePath: "src/a.ts",
-      state: "controlled",
-    },
-  ]);
+  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue({
+    items: [
+      {
+        id: "a",
+        kind: "file",
+        name: "a.ts",
+        absolutePath: "/root/src/a.ts",
+        relativePath: "src/a.ts",
+        state: "controlled",
+      },
+    ],
+    completeness: "complete",
+    errors: [],
+    operationIds: [],
+    truncated: false,
+    safetyLimit: 10_000,
+    cacheFreshness: "fresh",
+  });
   const [first, second] = await Promise.all([
     resolveAddress("//depot/src/a.ts", "c", "/root"),
     resolveAddress("//depot/src/a.ts", "c", "/root"),
   ]);
   expect(first).toEqual(second);
-  expect(listing).toHaveBeenCalledWith("/root/src");
+  expect(listing).toHaveBeenCalledWith(
+    "/root/src",
+    false,
+    expect.stringMatching(/^workspace-status-/),
+  );
   expect(mapping).toHaveBeenCalledTimes(1);
   expect(listing).toHaveBeenCalledTimes(1);
 });
@@ -37,11 +49,21 @@ it("reuses the root listing key and never invents a missing local file", async (
     inputKind: "absolute",
     absolutePath: "/root/no.txt",
   });
-  const listing = vi
-    .spyOn(backend, "listWorkspaceChildren")
-    .mockResolvedValue([]);
+  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue({
+    items: [],
+    completeness: "complete",
+    errors: [],
+    operationIds: [],
+    truncated: false,
+    safetyLimit: 10_000,
+    cacheFreshness: "fresh",
+  });
   await expect(resolveAddress("/root/no.txt", "c", "/root")).rejects.toThrow();
-  expect(listing).toHaveBeenCalledWith(undefined);
+  expect(listing).toHaveBeenCalledWith(
+    undefined,
+    false,
+    expect.stringMatching(/^workspace-status-/),
+  );
 });
 it("supports a depot file whose local parent has not been synced", async () => {
   vi.spyOn(backend, "resolvePath").mockResolvedValue({

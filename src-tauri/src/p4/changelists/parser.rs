@@ -502,8 +502,10 @@ fn number_option(value: &Value, key: &str) -> Option<i64> {
 fn opened_state(action: &str) -> Option<&'static str> {
     match action {
         "edit" => Some("openedEdit"),
-        "add" | "move/add" | "branch" => Some("openedAdd"),
-        "delete" | "move/delete" => Some("openedDelete"),
+        "add" | "branch" => Some("openedAdd"),
+        "move/add" => Some("openedMoveAdd"),
+        "delete" => Some("openedDelete"),
+        "move/delete" => Some("openedMoveDelete"),
         _ => None,
     }
 }
