@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -43,6 +44,30 @@ export function LogView({
   const [policyBusy, setPolicyBusy] = useState(false);
   const [policyStatus, setPolicyStatus] = useState("");
   const generation = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 58,
+    overscan: 8,
+    initialRect: { width: 900, height: 480 },
+  });
+  const measuredRows = virtualizer.getVirtualItems();
+  const virtualRows = measuredRows.length
+    ? measuredRows
+    : Array.from({ length: Math.min(entries.length, 24) }, (_, index) => ({
+        index,
+        key: entries[index].id,
+        start: index * 58,
+        size: 58,
+        end: (index + 1) * 58,
+        lane: 0,
+      }));
+  const totalSize = virtualizer.getTotalSize() || entries.length * 58;
+  const paddingTop = virtualRows.length ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length
+    ? totalSize - virtualRows.at(-1)!.end
+    : 0;
   const policyGeneration = useRef(0);
 
   const load = useCallback(
@@ -296,8 +321,12 @@ export function LogView({
         </div>
       </details>
 
-      <div className="diagnostic-scroll">
-        <table className="diagnostic-table">
+      <div
+        ref={scrollRef}
+        className="diagnostic-scroll"
+        data-testid="log-virtual-list"
+      >
+        <table className="diagnostic-table" aria-rowcount={entries.length + 1}>
           <caption className="sr-only">{zh ? "P4 日志" : "P4 log"}</caption>
           <thead>
             <tr>
@@ -312,42 +341,61 @@ export function LogView({
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id} className={entry.level}>
-                <td>
-                  <time dateTime={entry.timestamp}>
-                    {new Date(entry.timestamp).toLocaleString()}
-                  </time>
-                </td>
-                <td>{entry.level}</td>
-                <td>{entry.source}</td>
-                <td>
-                  <code>{entry.command}</code>
-                  <span>{entry.message}</span>
-                  {entry.repeatCount > 1 && <b> ×{entry.repeatCount}</b>}
-                </td>
-                <td>
-                  <button
-                    className="link-button"
-                    onClick={() => onOpenJournal(entry.operationId)}
-                  >
-                    {entry.operationId}
-                  </button>
-                </td>
-                <td>
-                  <button
-                    aria-label={zh ? "复制日志" : "Copy log"}
-                    onClick={() =>
-                      void navigator.clipboard.writeText(
-                        `${entry.timestamp}\n${entry.command}\n${entry.message}`,
-                      )
-                    }
-                  >
-                    <Copy size={12} />
-                  </button>
-                </td>
+            {paddingTop > 0 && (
+              <tr aria-hidden="true" className="virtual-table-spacer">
+                <td colSpan={6} style={{ height: paddingTop }} />
               </tr>
-            ))}
+            )}
+            {virtualRows.map((row) => {
+              const entry = entries[row.index];
+              return (
+                <tr
+                  key={entry.id}
+                  className={entry.level}
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  aria-rowindex={row.index + 2}
+                >
+                  <td>
+                    <time dateTime={entry.timestamp}>
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </time>
+                  </td>
+                  <td>{entry.level}</td>
+                  <td>{entry.source}</td>
+                  <td>
+                    <code>{entry.command}</code>
+                    <span>{entry.message}</span>
+                    {entry.repeatCount > 1 && <b> ×{entry.repeatCount}</b>}
+                  </td>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => onOpenJournal(entry.operationId)}
+                    >
+                      {entry.operationId}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      aria-label={zh ? "复制日志" : "Copy log"}
+                      onClick={() =>
+                        void navigator.clipboard.writeText(
+                          `${entry.timestamp}\n${entry.command}\n${entry.message}`,
+                        )
+                      }
+                    >
+                      <Copy size={12} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr aria-hidden="true" className="virtual-table-spacer">
+                <td colSpan={6} style={{ height: paddingBottom }} />
+              </tr>
+            )}
           </tbody>
         </table>
         {!entries.length && !loading && !error && (

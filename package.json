@@ -17,6 +17,7 @@
     "check:web": "tsc -b --pretty false",
     "check": "tsc -b --pretty false && cargo check --manifest-path src-tauri/Cargo.toml",
     "test:web": "vitest run",
+    "test:perf": "node --expose-gc node_modules/vitest/vitest.mjs run --config vitest.perf.config.ts",
     "test:e2e:p4d:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-p4d-e2e.ps1",
     "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
     "doctor": "bash scripts/doctor.sh",

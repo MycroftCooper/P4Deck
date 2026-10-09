@@ -20,6 +20,10 @@ import { action } from "../../../app/context-menu/bindings";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import { resourceScope } from "../resourceScope";
 import { FileStatusIcon } from "./FileStatusIcon";
+import {
+  depotNodeAsWorkspaceNode,
+  searchWorkspaceNodes,
+} from "../fileListModel";
 type T = (typeof messages)[keyof typeof messages];
 
 export function ResourceExplorer({
@@ -60,24 +64,12 @@ export function ResourceExplorer({
   const [filter, setFilter] = useState("");
   const query = mode === "workspace" ? workspace : depot;
   const error = query.error ? String(query.error) : "";
-  const items = useMemo(
-    () =>
-      (query.data ?? [])
-        .map((node): WorkspaceNode =>
-          "absolutePath" in node
-            ? node
-            : {
-                ...node,
-                absolutePath: "",
-                relativePath: node.depotPath,
-                state: "missing",
-              },
-        )
-        .filter((node) =>
-          node.name.toLowerCase().includes(filter.toLowerCase()),
-        ),
-    [query.data, filter],
-  );
+  const items = useMemo(() => {
+    const nodes = (query.data ?? []).map((node): WorkspaceNode =>
+      "absolutePath" in node ? node : depotNodeAsWorkspaceNode(node),
+    );
+    return searchWorkspaceNodes(nodes, filter);
+  }, [query.data, filter]);
   const selection = useObjectSelection(items);
   const { select } = useContext(SelectionContext);
   const fileMenu = useFileMenu();

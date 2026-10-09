@@ -11,6 +11,11 @@ import { useContext } from "react";
 import { SelectionContext } from "../SelectionContext";
 import type { WorkspaceNode } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
+import {
+  depotNodeAsWorkspaceNode,
+  filterWorkspaceNodes,
+  type WorkspaceFileFilter,
+} from "../fileListModel";
 
 type T = (typeof messages)[keyof typeof messages];
 export function FileWorkbench({
@@ -42,17 +47,12 @@ export function FileWorkbench({
   const nodes: WorkspaceNode[] = useMemo(
     () =>
       isDepot
-        ? (depot.data ?? []).map((node) => ({
-            ...node,
-            absolutePath: "",
-            relativePath: node.depotPath,
-            state: "missing" as const,
-          }))
+        ? (depot.data ?? []).map(depotNodeAsWorkspaceNode)
         : (local.data ?? []),
     [isDepot, depot.data, local.data],
   );
   const busy = listing.isFetching;
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<WorkspaceFileFilter>("all");
   const [compact, setCompact] = useState(density ?? false);
   useEffect(() => setCompact(density ?? false), [density]);
   const [operationError, setError] = useState("");
@@ -72,14 +72,7 @@ export function FileWorkbench({
     ignored: zh ? "已忽略" : "Ignored",
   };
   const visibleNodes = useMemo(
-    () =>
-      nodes.filter(
-        (node) =>
-          filter === "all" ||
-          (filter === "changed"
-            ? node.state.startsWith("opened")
-            : node.state === "outOfDate"),
-      ),
+    () => filterWorkspaceNodes(nodes, filter),
     [nodes, filter],
   );
   const selection = useObjectSelection(visibleNodes);
@@ -164,7 +157,7 @@ export function FileWorkbench({
               aria-pressed={filter === id}
               className={filter === id ? "active" : ""}
               onClick={() => {
-                setFilter(id);
+                setFilter(id as WorkspaceFileFilter);
                 scrollRef.current?.scrollTo(0, 0);
               }}
             >

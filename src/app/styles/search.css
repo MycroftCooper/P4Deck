@@ -281,7 +281,19 @@
   margin: 10px;
 }
 .search-result-list {
-  display: grid;
+  position: relative;
+  overflow: auto;
+  contain: strict;
+}
+.search-result-spacer {
+  position: relative;
+  width: 100%;
+}
+.search-result-window-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
 }
 .search-page .search-result-row {
   display: grid;

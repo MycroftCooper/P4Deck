@@ -10,14 +10,8 @@ import {
   Search,
   X,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { backend } from "../../infrastructure/backend";
 import type {
   GlobalSearchItem,
@@ -91,6 +85,165 @@ function HighlightedText({
       ) : (
         <span key={index}>{segment.text}</span>
       ),
+  );
+}
+
+function VirtualSearchResults({
+  items,
+  zh,
+  navigationBusy,
+  onOpen,
+}: {
+  items: GlobalSearchItem[];
+  zh: boolean;
+  navigationBusy?: string;
+  onOpen(item: GlobalSearchItem): Promise<void>;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 82,
+    overscan: 8,
+    initialRect: { width: 720, height: 410 },
+  });
+  const measuredRows = virtualizer.getVirtualItems();
+  const rows = measuredRows.length
+    ? measuredRows
+    : Array.from({ length: Math.min(items.length, 18) }, (_, index) => ({
+        index,
+        key: items[index].identity,
+        start: index * 82,
+        size: 82,
+        end: (index + 1) * 82,
+        lane: 0,
+      }));
+  const focusIndex = (index: number) => {
+    const mounted = scrollRef.current?.querySelector<HTMLButtonElement>(
+      `[data-search-index="${index}"]`,
+    );
+    if (mounted) {
+      mounted.focus();
+      return;
+    }
+    virtualizer.scrollToIndex(index, { align: "auto" });
+    requestAnimationFrame(() =>
+      scrollRef.current
+        ?.querySelector<HTMLButtonElement>(`[data-search-index="${index}"]`)
+        ?.focus(),
+    );
+  };
+  return (
+    <div
+      ref={scrollRef}
+      className="search-result-list"
+      data-testid="search-result-virtual-list"
+      role="list"
+      style={{ height: Math.min(410, Math.max(82, items.length * 82)) }}
+      onKeyDown={(event) => {
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key))
+          return;
+        const current = Number(
+          (event.target as HTMLElement).closest<HTMLElement>(
+            "[data-search-index]",
+          )?.dataset.searchIndex,
+        );
+        const enabled = items
+          .map((item, index) => (item.target.type === "job" ? -1 : index))
+          .filter((index) => index >= 0);
+        if (!enabled.length) return;
+        const position = enabled.indexOf(current);
+        const next =
+          event.key === "Home"
+            ? enabled[0]
+            : event.key === "End"
+              ? enabled.at(-1)!
+              : event.key === "ArrowUp"
+                ? enabled[Math.max(0, position - 1)]
+                : enabled[Math.min(enabled.length - 1, position + 1)];
+        if (next !== undefined) {
+          event.preventDefault();
+          focusIndex(next);
+        }
+      }}
+    >
+      <div
+        className="search-result-spacer"
+        style={{ height: virtualizer.getTotalSize() || items.length * 82 }}
+      >
+        {rows.map((row) => {
+          const item = items[row.index];
+          const Icon = KIND_ICON[item.kind];
+          const disabled = item.target.type === "job";
+          return (
+            <div
+              key={item.identity}
+              ref={virtualizer.measureElement}
+              data-index={row.index}
+              role="listitem"
+              aria-setsize={items.length}
+              aria-posinset={row.index + 1}
+              className="search-result-window-row"
+              style={{ transform: `translateY(${row.start}px)` }}
+            >
+              <button
+                data-search-index={row.index}
+                className="search-result-row"
+                disabled={disabled || navigationBusy === item.identity}
+                title={
+                  disabled
+                    ? zh
+                      ? "尚无 Job 详情页，无法导航。"
+                      : "No Job details page exists yet; navigation is unavailable."
+                    : zh
+                      ? `打开 ${item.title}`
+                      : `Open ${item.title}`
+                }
+                onClick={() => void onOpen(item)}
+              >
+                <Icon size={16} />
+                <span className="search-result-copy">
+                  <strong>
+                    <HighlightedText
+                      value={item.title}
+                      field="title"
+                      item={item}
+                    />
+                  </strong>
+                  <span>
+                    <HighlightedText
+                      value={item.summary}
+                      field="summary"
+                      item={item}
+                    />
+                  </span>
+                  <small>
+                    {zh ? "匹配：" : "Matched: "}
+                    {item.matchedFields
+                      .map((field) => fieldLabel(field, zh))
+                      .join(" · ")}
+                    {disabled
+                      ? zh
+                        ? " · 暂无可用详情页"
+                        : " · no destination page"
+                      : ""}
+                  </small>
+                </span>
+                {disabled ? (
+                  <span className="search-navigation-unavailable">
+                    {zh ? "不可导航" : "Unavailable"}
+                  </span>
+                ) : navigationBusy === item.identity ? (
+                  <LoaderCircle className="spin" size={15} />
+                ) : (
+                  <ChevronRight size={15} />
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -422,12 +575,6 @@ export function SearchPage({
     }
   };
 
-  const renderText = (
-    value: string,
-    field: string,
-    item: GlobalSearchItem,
-  ): ReactNode => <HighlightedText value={value} field={field} item={item} />;
-
   return (
     <main className="search-page">
       <div className="search-live" role="status" aria-live="polite">
@@ -683,93 +830,12 @@ export function SearchPage({
                     </div>
                   ) : null}
                   {groupItems.length ? (
-                    <div
-                      className="search-result-list"
-                      onKeyDown={(event) => {
-                        if (
-                          !["ArrowDown", "ArrowUp", "Home", "End"].includes(
-                            event.key,
-                          )
-                        )
-                          return;
-                        const buttons = [
-                          ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                            ".search-result-row:not(:disabled)",
-                          ),
-                        ];
-                        if (!buttons.length) return;
-                        const active =
-                          event.currentTarget.ownerDocument.activeElement;
-                        const index = buttons.findIndex(
-                          (button) => button === active,
-                        );
-                        const next =
-                          event.key === "Home"
-                            ? 0
-                            : event.key === "End"
-                              ? buttons.length - 1
-                              : event.key === "ArrowUp"
-                                ? Math.max(0, index - 1)
-                                : Math.min(buttons.length - 1, index + 1);
-                        if (next >= 0) {
-                          event.preventDefault();
-                          buttons[next]?.focus();
-                        }
-                      }}
-                    >
-                      {groupItems.map((item) => {
-                        const disabled = item.target.type === "job";
-                        return (
-                          <button
-                            key={item.identity}
-                            className="search-result-row"
-                            disabled={
-                              disabled || navigationBusy === item.identity
-                            }
-                            title={
-                              disabled
-                                ? tr(
-                                    "尚无 Job 详情页，无法导航。",
-                                    "No Job details page exists yet; navigation is unavailable.",
-                                  )
-                                : tr(`打开 ${item.title}`, `Open ${item.title}`)
-                            }
-                            onClick={() => void openItem(item)}
-                          >
-                            <Icon size={16} />
-                            <span className="search-result-copy">
-                              <strong>
-                                {renderText(item.title, "title", item)}
-                              </strong>
-                              <span>
-                                {renderText(item.summary, "summary", item)}
-                              </span>
-                              <small>
-                                {tr("匹配：", "Matched: ")}
-                                {item.matchedFields
-                                  .map((field) => fieldLabel(field, zh))
-                                  .join(" · ")}
-                                {disabled
-                                  ? tr(
-                                      " · 暂无可用详情页",
-                                      " · no destination page",
-                                    )
-                                  : ""}
-                              </small>
-                            </span>
-                            {disabled ? (
-                              <span className="search-navigation-unavailable">
-                                {tr("不可导航", "Unavailable")}
-                              </span>
-                            ) : navigationBusy === item.identity ? (
-                              <LoaderCircle className="spin" size={15} />
-                            ) : (
-                              <ChevronRight size={15} />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <VirtualSearchResults
+                      items={groupItems}
+                      zh={zh}
+                      navigationBusy={navigationBusy}
+                      onOpen={openItem}
+                    />
                   ) : !facet?.error ? (
                     <p className="search-group-empty">
                       {tr("此类别没有匹配项。", "No matches in this category.")}

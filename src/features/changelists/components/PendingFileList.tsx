@@ -1,6 +1,7 @@
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type {
   PendingFile,
   WorkspaceNode,
@@ -52,27 +53,75 @@ export function PendingFileList({
   const fileMenu = useFileMenu();
   const menu = useContextMenu();
   const focus = useCommandFocus();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rowHeight = 36;
+  const virtualizer = useVirtualizer({
+    count: nodes.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => rowHeight,
+    overscan: 8,
+    initialRect: { width: 480, height: 288 },
+  });
+  const measuredRows = virtualizer.getVirtualItems();
+  const visibleRows = measuredRows.length
+    ? measuredRows
+    : Array.from({ length: Math.min(nodes.length, 24) }, (_, index) => ({
+        index,
+        key: nodes[index].id,
+        start: index * rowHeight,
+        size: rowHeight,
+        end: (index + 1) * rowHeight,
+        lane: 0,
+      }));
+  useEffect(() => setActiveIndex(0), [changeId, shelf, files]);
+  const focusIndex = (index: number) => {
+    if (!nodes.length) return;
+    const next = Math.max(0, Math.min(index, nodes.length - 1));
+    setActiveIndex(next);
+    virtualizer.scrollToIndex(next, { align: "auto" });
+    const element = scrollRef.current;
+    if (element) {
+      const top = next * rowHeight;
+      if (
+        top < element.scrollTop ||
+        top + rowHeight > element.scrollTop + element.clientHeight
+      ) {
+        element.scrollTop = top;
+        element.dispatchEvent(new Event("scroll"));
+      }
+    }
+    requestAnimationFrame(() =>
+      scrollRef.current
+        ?.querySelector<HTMLElement>(`[data-pending-file-index="${next}"]`)
+        ?.focus(),
+    );
+  };
   const {
     preferences: { zh },
   } = useMenuEnvironment();
   return (
-    <>
-      {nodes.map((node, index) => (
-        <div
-          key={node.id}
-          className={`pending-file ${shelf ? "shelf" : ""} ${selection.isSelected(node) ? "selected" : ""}`}
-          tabIndex={0}
-          role="button"
-          aria-pressed={selection.isSelected(node)}
-          onKeyDownCapture={(event) => {
-            if (selection.keyboard(node, event) && !shelf)
-              focus({ type: "file", node });
-          }}
-          onClick={(event) => {
-            selection.select(node, event);
-            if (!shelf) focus({ type: "file", node });
-          }}
-          {...(shelf
+    <div
+      ref={scrollRef}
+      className="pending-file-scroll"
+      data-testid="pending-file-virtual-list"
+      role="listbox"
+      aria-label={shelf ? "Shelved files" : "Opened files"}
+      aria-multiselectable="true"
+      style={{
+        height: Math.min(360, Math.max(rowHeight, nodes.length * rowHeight)),
+      }}
+    >
+      <div
+        className="pending-file-spacer"
+        style={{
+          height: virtualizer.getTotalSize() || nodes.length * rowHeight,
+        }}
+      >
+        {visibleRows.map((row) => {
+          const node = nodes[row.index];
+          const index = row.index;
+          const menuProps = shelf
             ? menu(
                 selection.targets(node).length > 1 ? "C08" : "C07",
                 () => ({
@@ -156,16 +205,60 @@ export function PendingFileList({
                   selection.context(node);
                   focus({ type: "file", node, nodes: selection.targets(node) });
                 },
-              }))}
-        >
-          <FileStatusIcon
-            facts={{ ...files[index], scope: shelf ? "shelf" : "workspace" }}
-            zh={zh}
-          />
-          <span>{node.depotPath}</span>
-          <em>{files[index].action}</em>
-        </div>
-      ))}
-    </>
+              });
+          return (
+            <div
+              key={node.id}
+              data-pending-file-index={index}
+              className={`pending-file ${shelf ? "shelf" : ""} ${selection.isSelected(node) ? "selected" : ""}`}
+              style={{
+                transform: `translateY(${row.start}px)`,
+                height: row.size,
+              }}
+              tabIndex={index === activeIndex ? 0 : -1}
+              role="option"
+              aria-selected={selection.isSelected(node)}
+              aria-setsize={nodes.length}
+              aria-posinset={index + 1}
+              {...menuProps}
+              onFocus={() => setActiveIndex(index)}
+              onKeyDown={(event) => {
+                menuProps.onKeyDown(event);
+                if (event.defaultPrevented) return;
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  focusIndex(index + 1);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  focusIndex(index - 1);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  focusIndex(0);
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  focusIndex(nodes.length - 1);
+                } else if (selection.keyboard(node, event) && !shelf) {
+                  focus({ type: "file", node });
+                }
+              }}
+              onClick={(event) => {
+                selection.select(node, event);
+                if (!shelf) focus({ type: "file", node });
+              }}
+            >
+              <FileStatusIcon
+                facts={{
+                  ...files[index],
+                  scope: shelf ? "shelf" : "workspace",
+                }}
+                zh={zh}
+              />
+              <span>{node.depotPath}</span>
+              <em>{files[index].action}</em>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

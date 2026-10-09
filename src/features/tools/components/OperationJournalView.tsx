@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -50,6 +51,30 @@ export function OperationJournalView({
   const [error, setError] = useState("");
   const [appendError, setAppendError] = useState("");
   const generation = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: records.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 62,
+    overscan: 8,
+    initialRect: { width: 900, height: 480 },
+  });
+  const measuredRows = virtualizer.getVirtualItems();
+  const virtualRows = measuredRows.length
+    ? measuredRows
+    : Array.from({ length: Math.min(records.length, 24) }, (_, index) => ({
+        index,
+        key: records[index].operationId,
+        start: index * 62,
+        size: 62,
+        end: (index + 1) * 62,
+        lane: 0,
+      }));
+  const totalSize = virtualizer.getTotalSize() || records.length * 62;
+  const paddingTop = virtualRows.length ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length
+    ? totalSize - virtualRows.at(-1)!.end
+    : 0;
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -186,8 +211,15 @@ export function OperationJournalView({
         </button>
       </div>
 
-      <div className="diagnostic-scroll">
-        <table className="diagnostic-table journal-table">
+      <div
+        ref={scrollRef}
+        className="diagnostic-scroll"
+        data-testid="journal-virtual-list"
+      >
+        <table
+          className="diagnostic-table journal-table"
+          aria-rowcount={records.length + 1}
+        >
           <caption className="sr-only">
             {zh ? "操作记录" : "Operation journal"}
           </caption>
@@ -202,41 +234,60 @@ export function OperationJournalView({
             </tr>
           </thead>
           <tbody>
-            {records.map((record) => (
-              <tr key={record.operationId} className={record.state}>
-                <td>
-                  <strong>{record.state}</strong>
-                </td>
-                <td>
-                  <code>{record.operationId}</code>
-                  <span>
-                    {record.category} · {record.source} · {record.workspace}
-                  </span>
-                </td>
-                <td>
-                  <time dateTime={record.startedAt}>
-                    {new Date(record.startedAt).toLocaleString()}
-                  </time>
-                  <span>
-                    {record.finishedAt
-                      ? new Date(record.finishedAt).toLocaleString()
-                      : zh
-                        ? "进行中"
-                        : "In progress"}
-                  </span>
-                </td>
-                <td>{duration(record)}</td>
-                <td>{record.failure ?? "—"}</td>
-                <td>
-                  <button
-                    className="link-button"
-                    onClick={() => onOpenLogs(record.operationId)}
-                  >
-                    {zh ? "查看日志" : "View logs"}
-                  </button>
-                </td>
+            {paddingTop > 0 && (
+              <tr aria-hidden="true" className="virtual-table-spacer">
+                <td colSpan={6} style={{ height: paddingTop }} />
               </tr>
-            ))}
+            )}
+            {virtualRows.map((row) => {
+              const record = records[row.index];
+              return (
+                <tr
+                  key={record.operationId}
+                  className={record.state}
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  aria-rowindex={row.index + 2}
+                >
+                  <td>
+                    <strong>{record.state}</strong>
+                  </td>
+                  <td>
+                    <code>{record.operationId}</code>
+                    <span>
+                      {record.category} · {record.source} · {record.workspace}
+                    </span>
+                  </td>
+                  <td>
+                    <time dateTime={record.startedAt}>
+                      {new Date(record.startedAt).toLocaleString()}
+                    </time>
+                    <span>
+                      {record.finishedAt
+                        ? new Date(record.finishedAt).toLocaleString()
+                        : zh
+                          ? "进行中"
+                          : "In progress"}
+                    </span>
+                  </td>
+                  <td>{duration(record)}</td>
+                  <td>{record.failure ?? "—"}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => onOpenLogs(record.operationId)}
+                    >
+                      {zh ? "查看日志" : "View logs"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr aria-hidden="true" className="virtual-table-spacer">
+                <td colSpan={6} style={{ height: paddingBottom }} />
+              </tr>
+            )}
           </tbody>
         </table>
         {!records.length && !loading && !error && (
