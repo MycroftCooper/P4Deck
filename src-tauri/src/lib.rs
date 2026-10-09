@@ -14,6 +14,7 @@ use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
 use app::file_service::FileService;
+use app::rename_service::RenameService;
 use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
 use app::submit_service::SubmitService;
@@ -21,8 +22,8 @@ use app::sync_service::SyncService;
 use app::workflow_service::WorkflowService;
 use p4::context::ContextStore;
 use p4::{
-    changelists::ChangelistRepository, runner::P4Runner, submit::SubmitRepository,
-    workflows::WorkflowRepository,
+    changelists::ChangelistRepository, rename::RenameRepository, runner::P4Runner,
+    submit::SubmitRepository, workflows::WorkflowRepository,
 };
 use persistence::{log_store::LogStore, operation_journal::OperationJournal};
 use std::sync::Arc;
@@ -36,6 +37,7 @@ pub(crate) struct AppState {
     pub sync: Arc<SyncService>,
     pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
+    pub rename: Arc<RenameService>,
     pub connection: Arc<ConnectionService>,
     pub status_cache: Arc<StatusCache>,
     pub journal: Arc<OperationJournal>,
@@ -93,6 +95,11 @@ pub fn run() {
                 status_cache.clone(),
                 journal.clone(),
             ));
+            let rename = Arc::new(RenameService::new(
+                RenameRepository::new(runner.clone()),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
             let search = Arc::new(GlobalSearchService::new(
                 runner.clone(),
                 changelists.clone(),
@@ -106,6 +113,7 @@ pub fn run() {
                 sync,
                 workflows,
                 files,
+                rename,
                 connection,
                 status_cache,
                 journal,
@@ -154,6 +162,8 @@ pub fn run() {
             ipc::commands::open_local_path,
             ipc::commands::local_path_capabilities,
             ipc::commands::perform_file_action,
+            ipc::commands::preflight_rename_move,
+            ipc::commands::confirm_rename_move,
             ipc::commands::preview_sync,
             ipc::commands::confirm_sync,
             ipc::commands::get_diff,

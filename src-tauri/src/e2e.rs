@@ -3,25 +3,28 @@ mod tests {
     use crate::{
         app::{
             changelist_service::ChangelistService, connection_service::ConnectionService,
-            file_service::FileService, search_service::GlobalSearchService,
-            status_cache::StatusCache, submit_service::SubmitService, sync_service::SyncService,
+            file_service::FileService, rename_service::RenameService,
+            search_service::GlobalSearchService, status_cache::StatusCache,
+            submit_service::SubmitService, sync_service::SyncService,
             workflow_service::WorkflowService,
         },
         domain::{
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, LoginRequest,
             OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
-            PendingChangeMutation, PendingChangeMutationRequest, ResolveConfirmation,
-            ResolvePreflightRequest, ResolveSelection, ResolveStrategy,
-            SetActiveConnectionProfileRequest, ShelfMode, ShelfPreflightRequest,
-            SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
-            SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
-            SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
-            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
+            PendingChangeMutation, PendingChangeMutationRequest, RenameMoveConfirmation,
+            RenameMoveFailureCode, RenameMoveIssueCode, RenameMoveOutcome,
+            RenameMovePreflightRequest, ResolveConfirmation, ResolvePreflightRequest,
+            ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest, ShelfMode,
+            ShelfPreflightRequest, SubmitConfirmation, SubmitFailureCode, SubmitOutcome,
+            SubmitPreflightRequest, SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode,
+            SyncOutcome, SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec,
+            UnshelvePreflightRequest, WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode,
+            WorkflowOutcome,
         },
         p4::{
-            changelists::ChangelistRepository, context::ContextStore, runner::P4Runner,
-            submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
+            changelists::ChangelistRepository, context::ContextStore, rename::RenameRepository,
+            runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -177,6 +180,17 @@ mod tests {
             1,
         );
         let files = FileService::new(runner.clone(), status_cache.clone(), journal.clone());
+        let rename = RenameService::new(
+            RenameRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+        );
+        let expiring_rename = RenameService::with_ttl(
+            RenameRepository::new(runner.clone()),
+            contexts.clone(),
+            status_cache.clone(),
+            1,
+        );
 
         let _ = cleanup_client(&runner, &context, &config.workspace_root).await;
         let setup = setup_client(&runner, &context, &config.workspace_root).await;
@@ -218,6 +232,8 @@ mod tests {
                             workflows: &workflows,
                             expiring_workflows: &expiring_workflows,
                             search: &search,
+                            rename: &rename,
+                            expiring_rename: &expiring_rename,
                         },
                         &context,
                         &config.workspace_root,
@@ -233,6 +249,7 @@ mod tests {
         let cleanup = cleanup_client(&runner, &context, &config.workspace_root).await;
 
         drop(files);
+        drop(rename);
         drop(runner);
         drop(logs);
         drop(journal);
@@ -407,6 +424,193 @@ mod tests {
             returned.context.client == original.client,
             "workspace E2E did not restore the original Client",
         )?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn exercise_rename_state_machine(
+        rename: &RenameService,
+        expiring_rename: &RenameService,
+        contexts: &ContextStore,
+        runner: &P4Runner,
+        files: &FileService,
+        changelists: &ChangelistService,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        let source = root.join("main").join("README.txt");
+        let target = root.join("main").join("README-renamed-e2e.txt");
+        let request = |target_path: &Path, target_change_id| RenameMovePreflightRequest {
+            source_path: source.to_string_lossy().into_owned(),
+            target_path: target_path.to_string_lossy().into_owned(),
+            target_change_id,
+            operation_id: None,
+        };
+
+        let unopened = rename.preflight(request(&target, 0), None).await;
+        ensure(
+            unopened
+                .blockers
+                .iter()
+                .any(|item| item.code == RenameMoveIssueCode::SourceNotOpened),
+            format!("unopened source was not blocked: {unopened:?}"),
+        )?;
+        action(
+            files,
+            context,
+            FileAction::Checkout,
+            vec![source.to_string_lossy().into_owned()],
+        )
+        .await?;
+
+        std::fs::write(&target, b"must not be overwritten\n").map_err(|error| error.to_string())?;
+        let exists = rename.preflight(request(&target, 0), None).await;
+        ensure(
+            exists
+                .blockers
+                .iter()
+                .any(|item| item.code == RenameMoveIssueCode::TargetExists),
+            format!("existing target was not blocked: {exists:?}"),
+        )?;
+        std::fs::remove_file(&target).map_err(|error| error.to_string())?;
+
+        let outside = root
+            .parent()
+            .ok_or("fixture workspace has no parent")?
+            .join("rename-outside.txt");
+        let unmapped = rename.preflight(request(&outside, 0), None).await;
+        ensure(
+            unmapped.blockers.iter().any(|item| {
+                matches!(
+                    item.code,
+                    RenameMoveIssueCode::TargetUnmapped | RenameMoveIssueCode::CrossWorkspace
+                )
+            }),
+            format!("out-of-mapping target was not blocked: {unmapped:?}"),
+        )?;
+
+        let case_target = root.join("main").join("readme.txt");
+        let case_only = rename.preflight(request(&case_target, 0), None).await;
+        ensure(
+            case_only
+                .blockers
+                .iter()
+                .any(|item| item.code == RenameMoveIssueCode::CaseOnlyRename),
+            format!("case-only Windows rename was not blocked: {case_only:?}"),
+        )?;
+
+        let expiring = expiring_rename.preflight(request(&target, 0), None).await;
+        ensure(
+            expiring.ready && expiring.token.is_some(),
+            format!("expiring rename preview was not ready: {expiring:?}"),
+        )?;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let expired = expiring_rename
+            .confirm(
+                RenameMoveConfirmation {
+                    token: expiring.token.ok_or("expiring preview had no token")?,
+                    target: expiring
+                        .target_snapshot
+                        .ok_or("expiring preview had no target")?,
+                    preview_digest: expiring.preview_digest,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            expired.failure == Some(RenameMoveFailureCode::TokenExpired),
+            format!("expired rename token was not rejected: {expired:?}"),
+        )?;
+
+        let drift = rename.preflight(request(&target, 0), None).await;
+        contexts
+            .save(context.clone())
+            .map_err(|error| error.to_string())?;
+        let drifted = rename
+            .confirm(
+                RenameMoveConfirmation {
+                    token: drift.token.ok_or("generation preview had no token")?,
+                    target: drift
+                        .target_snapshot
+                        .ok_or("generation preview had no target")?,
+                    preview_digest: drift.preview_digest,
+                    operation_id: None,
+                },
+                None,
+            )
+            .await;
+        ensure(
+            drifted.failure == Some(RenameMoveFailureCode::ContextChanged),
+            format!("rename generation drift was not rejected: {drifted:?}"),
+        )?;
+
+        let target_change =
+            create_numbered_change(changelists, context, "BE-002R rename target").await?;
+        let ready = rename
+            .preflight(request(&target, target_change), None)
+            .await;
+        ensure(
+            ready.ready && ready.token.is_some() && ready.target_snapshot.is_some(),
+            format!("rename preview was not ready: {ready:?}"),
+        )?;
+        let confirmation = RenameMoveConfirmation {
+            token: ready.token.ok_or("rename preview had no token")?,
+            target: ready
+                .target_snapshot
+                .ok_or("rename preview had no target")?,
+            preview_digest: ready.preview_digest,
+            operation_id: Some("rename-e2e-success".into()),
+        };
+        let moved = rename.confirm(confirmation.clone(), None).await;
+        ensure(
+            moved.outcome == RenameMoveOutcome::Succeeded
+                && moved.refresh.workspace_status
+                && moved.refresh.pending_changes,
+            format!("confirmed rename failed or omitted refresh hints: {moved:?}"),
+        )?;
+        ensure(
+            !source.exists() && target.is_file(),
+            "p4 move did not rename the workspace file",
+        )?;
+        let opened = checked_run(
+            runner,
+            context,
+            "opened",
+            vec!["//depot/main/README-renamed-e2e.txt".into()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let target_change_text = target_change.to_string();
+        ensure(
+            json_values(&opened).iter().any(|value| {
+                value.get("change").and_then(Value::as_str) == Some(target_change_text.as_str())
+            }),
+            format!("p4 move did not use target change {target_change}: {opened:?}"),
+        )?;
+        let replayed = rename.confirm(confirmation, None).await;
+        ensure(
+            replayed.failure == Some(RenameMoveFailureCode::TokenUnknown),
+            format!("rename token replay was not rejected: {replayed:?}"),
+        )?;
+        checked_run(
+            runner,
+            context,
+            "revert",
+            vec![
+                "//depot/main/README.txt".into(),
+                "//depot/main/README-renamed-e2e.txt".into(),
+            ],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        ensure(
+            source.is_file() && !target.exists(),
+            "reverting the E2E move did not restore the fixture",
+        )?;
+        delete_empty_change(changelists, context, target_change).await?;
         Ok(())
     }
 
@@ -916,6 +1120,8 @@ mod tests {
         workflows: &'a WorkflowService,
         expiring_workflows: &'a WorkflowService,
         search: &'a GlobalSearchService,
+        rename: &'a RenameService,
+        expiring_rename: &'a RenameService,
     }
 
     async fn exercise_services(
@@ -938,6 +1144,8 @@ mod tests {
             workflows,
             expiring_workflows,
             search,
+            rename,
+            expiring_rename,
         } = services;
         let status = connection.test_connection(context.clone()).await;
         ensure(
@@ -1042,6 +1250,17 @@ mod tests {
             baseline.is_file(),
             "Sync did not materialize the seed README",
         )?;
+        exercise_rename_state_machine(
+            rename,
+            expiring_rename,
+            contexts,
+            runner,
+            files,
+            changelists,
+            context,
+            root,
+        )
+        .await?;
         let main = files
             .workspace_children(
                 context.clone(),

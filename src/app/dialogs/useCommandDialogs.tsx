@@ -81,6 +81,17 @@ export function useCommandDialogs(
             source={request.source}
             zh={zh}
             onDismiss={close}
+            onRefresh={async () => {
+              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              await Promise.all([
+                workspaceCache.invalidateQueries({
+                  queryKey: ["workspace-files", connectionKey],
+                }),
+                workspaceCache.invalidateQueries({
+                  queryKey: ["depot-files", connectionKey],
+                }),
+              ]);
+            }}
           />
         );
         break;

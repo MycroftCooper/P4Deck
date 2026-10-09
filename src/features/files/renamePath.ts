@@ -8,7 +8,7 @@ export function checkRenamePath(
   depot: boolean,
 ): RenamePathError | undefined {
   if (!target.trim()) return "empty";
-  if (/[\x00-\x1f\x7f*?]/.test(target) || target.includes("..."))
+  if (/[\x00-\x1f\x7f*?@#%]/.test(target) || target.includes("..."))
     return "characters";
   const normalize = (path: string) =>
     path.replaceAll("\\", "/").replace(/\/$/, "");

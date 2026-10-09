@@ -223,6 +223,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.submit.clear_confirmations();
     state.sync.clear_confirmations();
     state.workflows.clear_confirmations();
+    state.rename.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
 
@@ -303,10 +304,10 @@ pub async fn run_p4(
     if matches!(request.source, OperationSource::Gui)
         && matches!(
             request.command.to_ascii_lowercase().as_str(),
-            "submit" | "shelve" | "unshelve" | "resolve" | "sync"
+            "submit" | "shelve" | "unshelve" | "resolve" | "sync" | "move"
         )
     {
-        return Err("GUI submit, shelf, unshelve, resolve and sync must use their preview/preflight and confirmation APIs".into());
+        return Err("GUI submit, shelf, unshelve, resolve, sync and move must use their preview/preflight and confirmation APIs".into());
     }
     state
         .runner
@@ -474,6 +475,24 @@ pub async fn perform_file_action(
         .files
         .perform(state.connection.context(), request, Some(&app))
         .await
+}
+
+#[tauri::command]
+pub async fn preflight_rename_move(
+    request: RenameMovePreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<RenameMovePreflight, String> {
+    Ok(state.rename.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_rename_move(
+    confirmation: RenameMoveConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<RenameMoveResult, String> {
+    Ok(state.rename.confirm(confirmation, Some(&app)).await)
 }
 
 #[tauri::command]

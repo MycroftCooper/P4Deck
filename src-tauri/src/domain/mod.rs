@@ -695,7 +695,6 @@ pub enum FileAction {
     Integrate,
     Copy,
     Branch,
-    RenameMove,
     Undo,
     Clean,
     TagWithLabel,
@@ -730,6 +729,154 @@ pub struct FileActionResult {
     pub operation: Option<OperationResult>,
     pub affected_paths: Vec<String>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMovePreflightRequest {
+    pub source_path: String,
+    pub target_path: String,
+    pub target_change_id: i64,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveMapping {
+    pub depot_path: String,
+    pub client_path: String,
+    pub local_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveSourceState {
+    pub action: String,
+    pub change_id: i64,
+    pub file_type: Option<String>,
+    pub have_revision: Option<i64>,
+    pub head_revision: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveTargetSnapshot {
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub workspace: String,
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub source: RenameMoveMapping,
+    pub target: RenameMoveMapping,
+    pub source_state: RenameMoveSourceState,
+    pub target_change_id: i64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RenameMoveIssueCode {
+    InvalidPath,
+    SourceMissing,
+    SourceUnmapped,
+    TargetUnmapped,
+    CrossWorkspace,
+    TargetExists,
+    SourceNotOpened,
+    InvalidChangelist,
+    CaseOnlyRename,
+    InspectionUnavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveIssue {
+    pub code: RenameMoveIssueCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMovePreflight {
+    pub ready: bool,
+    pub source: Option<RenameMoveMapping>,
+    pub target: Option<RenameMoveMapping>,
+    pub source_state: Option<RenameMoveSourceState>,
+    pub target_change_id: i64,
+    pub target_change_valid: bool,
+    pub target_exists: bool,
+    pub case_only_risk: bool,
+    pub blockers: Vec<RenameMoveIssue>,
+    pub warnings: Vec<RenameMoveIssue>,
+    pub target_snapshot: Option<RenameMoveTargetSnapshot>,
+    pub preview_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveConfirmation {
+    pub token: String,
+    pub target: RenameMoveTargetSnapshot,
+    pub preview_digest: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RenameMoveOutcome {
+    Succeeded,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RenameMoveFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    ContextChanged,
+    SourceChanged,
+    TargetChanged,
+    PreflightBlocked,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveRefreshAdvice {
+    pub workspace_status: bool,
+    pub pending_changes: bool,
+    pub depot_paths: Vec<String>,
+    pub local_paths: Vec<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameMoveResult {
+    pub outcome: RenameMoveOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<RenameMoveFailureCode>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_reference: Option<String>,
+    pub refresh: RenameMoveRefreshAdvice,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

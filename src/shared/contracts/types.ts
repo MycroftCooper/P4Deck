@@ -54,7 +54,6 @@ export type P4FileAction =
   | "integrate"
   | "copy"
   | "branch"
-  | "renameMove"
   | "undo"
   | "clean"
   | "tagWithLabel";
@@ -590,6 +589,111 @@ export interface FileActionResult {
   operation?: OperationResult;
   affectedPaths: string[];
   message: string;
+}
+
+export interface RenameMovePreflightRequest {
+  sourcePath: string;
+  targetPath: string;
+  targetChangeId: number;
+  operationId?: string;
+}
+
+export interface RenameMoveMapping {
+  depotPath: string;
+  clientPath: string;
+  localPath: string;
+}
+
+export interface RenameMoveSourceState {
+  action: string;
+  changeId: number;
+  fileType?: string;
+  haveRevision?: number;
+  headRevision?: number;
+}
+
+export interface RenameMoveTargetSnapshot {
+  server: string;
+  user: string;
+  client: string;
+  workspace: string;
+  activeProfileId?: string;
+  contextGeneration: number;
+  source: RenameMoveMapping;
+  target: RenameMoveMapping;
+  sourceState: RenameMoveSourceState;
+  targetChangeId: number;
+}
+
+export type RenameMoveIssueCode =
+  | "invalidPath"
+  | "sourceMissing"
+  | "sourceUnmapped"
+  | "targetUnmapped"
+  | "crossWorkspace"
+  | "targetExists"
+  | "sourceNotOpened"
+  | "invalidChangelist"
+  | "caseOnlyRename"
+  | "inspectionUnavailable";
+
+export interface RenameMoveIssue {
+  code: RenameMoveIssueCode;
+  message: string;
+}
+
+export interface RenameMovePreflight {
+  ready: boolean;
+  source?: RenameMoveMapping;
+  target?: RenameMoveMapping;
+  sourceState?: RenameMoveSourceState;
+  targetChangeId: number;
+  targetChangeValid: boolean;
+  targetExists: boolean;
+  caseOnlyRisk: boolean;
+  blockers: RenameMoveIssue[];
+  warnings: RenameMoveIssue[];
+  targetSnapshot?: RenameMoveTargetSnapshot;
+  previewDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  logReference?: string;
+}
+
+export interface RenameMoveConfirmation {
+  token: string;
+  target: RenameMoveTargetSnapshot;
+  previewDigest: string;
+  operationId?: string;
+}
+
+export type RenameMoveFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "contextChanged"
+  | "sourceChanged"
+  | "targetChanged"
+  | "preflightBlocked"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+
+export interface RenameMoveResult {
+  outcome: "succeeded" | "rejected" | "failed" | "cancelled" | "unknown";
+  failure?: RenameMoveFailureCode;
+  message: string;
+  operationId?: string;
+  logReference?: string;
+  refresh: {
+    workspaceStatus: boolean;
+    pendingChanges: boolean;
+    depotPaths: string[];
+    localPaths: string[];
+    reason: string;
+  };
 }
 
 export interface SyncRevisionSpec {

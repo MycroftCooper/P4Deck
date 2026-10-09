@@ -7,53 +7,54 @@
 
 ## 状态说明
 
-| 状态 | 含义 |
-|---|---|
-| IN PROGRESS | 后端 Agent 正在执行 |
-| QUEUED | 已下发给后端 Agent，等待前一项完成后继续 |
-| NEXT | 后端 Agent 下一项直接领取 |
-| READY | 前置条件已满足，可以顺序执行 |
-| BLOCKED | 依赖产品、前端、设备或外部环境 |
-| DONE | 已实现并通过约定验证 |
+| 状态        | 含义                                     |
+| ----------- | ---------------------------------------- |
+| IN PROGRESS | 后端 Agent 正在执行                      |
+| QUEUED      | 已下发给后端 Agent，等待前一项完成后继续 |
+| NEXT        | 后端 Agent 下一项直接领取                |
+| READY       | 前置条件已满足，可以顺序执行             |
+| BLOCKED     | 依赖产品、前端、设备或外部环境           |
+| DONE        | 已实现并通过约定验证                     |
 
 ## 当前本机环境与可执行范围
 
 盘点时间：2026-10-09。
 
-| 环境 | 当前状态 | 影响 |
-|---|---|---|
-| `p4` CLI | 已安装：2023.1 / Windows x64 | 已确认当前命令面与 `-Mj/-x/-b/sync --parallel`可用；真实 Server 行为仍待 E2E |
-| `p4d` Server | 已就绪 | Windows 原生隔离 Fixture 已安装并在 `127.0.0.1:16661` 完成 Seed/停止/重启验收 |
-| P4 连接变量 | Windows P4 注册表已有连接与凭据相关配置，仓库内无 `.p4config` | 自动化测试不得回退到用户真实 Server 上下文 |
-| Node.js / pnpm | Node 24、pnpm 11，已调整为项目基线 | 前端测试、Mock、构建和类型检查可运行 |
-| Rust | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | Common Controls v6 manifest 已覆盖 libtest；Pending CL 单测与 localhost E2E 可真实启动 |
-| Fixture 脚本 | Windows/macOS 均已存在 | Windows 版使用项目内已校验的 P4/P4D 2026.1；Bash 版仍保持显式下载授权 |
+| 环境           | 当前状态                                                              | 影响                                                                                   |
+| -------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `p4` CLI       | 已安装：2023.1 / Windows x64                                          | 已确认当前命令面与 `-Mj/-x/-b/sync --parallel`可用；真实 Server 行为仍待 E2E           |
+| `p4d` Server   | 已就绪                                                                | Windows 原生隔离 Fixture 已安装并在 `127.0.0.1:16661` 完成 Seed/停止/重启验收          |
+| P4 连接变量    | Windows P4 注册表已有连接与凭据相关配置，仓库内无 `.p4config`         | 自动化测试不得回退到用户真实 Server 上下文                                             |
+| Node.js / pnpm | Node 24、pnpm 11，已调整为项目基线                                    | 前端测试、Mock、构建和类型检查可运行                                                   |
+| Rust           | Rust 1.97.1、Cargo、rustfmt 和 Clippy 已安装；MSVC/Windows SDK 已就绪 | Common Controls v6 manifest 已覆盖 libtest；Pending CL 单测与 localhost E2E 可真实启动 |
+| Fixture 脚本   | Windows/macOS 均已存在                                                | Windows 版使用项目内已校验的 P4/P4D 2026.1；Bash 版仍保持显式下载授权                  |
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-003、BE-004a、BE-004b、BE-008 已分别完成 Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线，原生 UI 仍待验收。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线，原生 UI 仍待验收。
 
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
 
 ## 已完成
 
-| ID | 事项 | 验收结果 |
-|---|---|---|
-| BE-000 | P4 文件 Action 与批量执行骨架 | 强类型 Action、参数校验、`-b 128 -x -`、受控并行、进度/取消及单测已落地 |
-| BE-000A | 安全本地路径操作 | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过 |
-| BE-001 | 连接与认证服务 | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收 |
-| BE-001M | 多连接配置与活动 Workspace 切换 | `connection.json` schema v2、profile CRUD/list/get/set active、revision CAS、原子 replace、旧裸 Context allowlist 备份迁移与结构化错误已完成；切换先复核 info/login 再原子提交，失败保留旧活动项；generation、Runner cancel、Submitted/Search/status cache 与确认 token 全部失效；Windows localhost 双 Client 默认两轮通过 |
-| BE-002 | localhost p4d 集成测试基线 | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理 |
-| BE-002S | Sync 安全生产闭环 | 强类型 preview/confirm/result、真实 `p4 sync -n` 分类、一次性短期 token、连接 generation/规范范围/typed revision/force/options/preview digest 绑定、mutation lane 内复核、取消/超时、Journal/Log 与局部缓存失效已完成；GUI 直接 Sync 旁路已封死；Windows localhost 双轮通过，原生 UI/macOS 待验 |
-| BE-003 | Submit 预检与执行状态机 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收 |
-| BE-004a | Pending CL 数据正确性与基础写操作 | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收 |
-| BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收 |
-| BE-005 | 文件状态聚合与缓存失效 | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成 |
-| BE-006 | 操作记录、离线与 ticket 状态 | Operation Journal、2,000 条硬上限、当前连接隔离、游标分页及状态/类型/时间/文本服务端筛选、结构化终态、崩溃恢复和不可重放边界已完成；前端已接入 |
-| BE-007 | 日志策略与诊断导出 | 稳定分页及级别/来源/Server/Workspace/命令/operation/关键词过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成；前端已接入 |
-| BE-008 | Submitted 详情与可靠合并分类 | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收 |
-| BE-008Q | Submitted 组合查询与稳定游标 | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收 |
-| BE-008G | 全局搜索生产后端 | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
+| ID      | 事项                                    | 验收结果                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BE-000  | P4 文件 Action 与批量执行骨架           | 强类型 Action、参数校验、`-b 128 -x -`、受控并行、进度/取消及单测已落地                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| BE-000A | 安全本地路径操作                        | Reveal/Open With 已通过强类型 IPC 接入；限制在 Workspace Root 内，不开放任意 Shell/进程；构建与检查恢复通过                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| BE-001  | 连接与认证服务                          | Context/Adapter/Application Service/IPC 已分层；CLI 发现、强类型状态、info/login status/trust/login/logout、安全 stdin、错误分类和脱敏测试已完成；BE-002 已验 localhost info/ticket，SSL/SSO 仍待专项验收                                                                                                                                                                                                                                                                                                                                                                                       |
+| BE-001M | 多连接配置与活动 Workspace 切换         | `connection.json` schema v2、profile CRUD/list/get/set active、revision CAS、原子 replace、旧裸 Context allowlist 备份迁移与结构化错误已完成；切换先复核 info/login 再原子提交，失败保留旧活动项；generation、Runner cancel、Submitted/Search/status cache 与确认 token 全部失效；Windows localhost 双 Client 默认两轮通过                                                                                                                                                                                                                                                                      |
+| BE-002  | localhost p4d 集成测试基线              | `scripts/test-p4d-e2e.ps1` 固定 `127.0.0.1:16661`、独立凭据文件与测试 Client；应用服务/Repository 覆盖连接、Workspace/Depot、Sync/Edit/Add/Delete/Revert，默认连续运行两次并清理                                                                                                                                                                                                                                                                                                                                                                                                                |
+| BE-002S | Sync 安全生产闭环                       | 强类型 preview/confirm/result、真实 `p4 sync -n` 分类、一次性短期 token、连接 generation/规范范围/typed revision/force/options/preview digest 绑定、mutation lane 内复核、取消/超时、Journal/Log 与局部缓存失效已完成；GUI 直接 Sync 旁路已封死；Windows localhost 双轮通过，原生 UI/macOS 待验                                                                                                                                                                                                                                                                                                 |
+| BE-002R | 单文件 Rename/Move 安全生产闭环         | 强类型 preflight/confirm/result、同 Workspace 映射与目标不存在复核、opened 状态/目标 CL/generation/profile/preview digest 一次性绑定、mutation lane 内真实 `p4 move`、Journal/Log/取消/缓存刷新已完成；泛化 `renameMove` 旁路已移除；目录、跨 Workspace、覆盖和 Windows 仅大小写改名明确阻止；localhost E2E 通过，原生 UI/macOS 待验                                                                                                                                                                                                                                                            |
+| BE-003  | Submit 预检与执行状态机                 | 强类型预检/确认/结果、一次性短期 token、Connection generation 与 CL/文件状态摘要绑定、mutation lane 原子复核、结构化失败/刷新建议及 Journal/Log 关联已完成；Windows localhost Fixture 已通过；前端统一生产入口已接线并有状态机测试，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                              |
+| BE-004a | Pending CL 数据正确性与基础写操作       | 查询按当前 User/Client 严格限定并正确合并 Default、编号 CL、Description/Jobs、opened/shelved files；创建、编辑、删除空 CL 与 Default ↔ 编号移动已通过 Windows localhost 连续两轮 E2E；前端生产按钮/菜单已接线，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                                   |
+| BE-004b | Shelf / Unshelve / Resolve 真实后端闭环 | 强类型预检/确认、共享一次性 token、显式文件子集、跨 Workspace/CL 风险、逐文件 Resolve 与局部刷新已完成；Windows localhost 连续两轮 E2E 与前端生产接线通过，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| BE-005  | 文件状态聚合与缓存失效                  | 15 秒 TTL、512 条/16 MiB 双上限、并发合并、generation、stale/offline、局部失效和安全诊断已完成                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| BE-006  | 操作记录、离线与 ticket 状态            | Operation Journal、2,000 条硬上限、当前连接隔离、游标分页及状态/类型/时间/文本服务端筛选、结构化终态、崩溃恢复和不可重放边界已完成；前端已接入                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| BE-007  | 日志策略与诊断导出                      | 稳定分页及级别/来源/Server/Workspace/命令/operation/关键词过滤、策略硬上限、diagnostic-alert、受控 128 KiB 脱敏 JSON 导出已完成；前端已接入                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| BE-008  | Submitted 详情与可靠合并分类            | 强类型只读详情契约、按需 describe/有界 filelog、保守四态分类、Connection generation 缓存隔离、取消/超时与 Windows localhost 连续两轮普通/真实 integrate 验证已完成；前端按需详情、摘要升级、仅隐藏 reliable 和文件虚拟化已接线，原生 UI 待验收                                                                                                                                                                                                                                                                                                                                                  |
+| BE-008Q | Submitted 组合查询与稳定游标            | 强类型关键词/User/Client/depot path/Stream/time/Job/hasJob/merge 四态契约；1～500 页大小；版本化 keyset cursor 绑定完整 query、connection identity 与 generation；`changes`/`fixes`/批量 `describe` 下推与 5,000 条硬上限；查询缓存防旧连接回写；Windows localhost 连续两轮覆盖插入期间多页稳定性、组合过滤、非法 cursor、取消及代次隔离。前端完整筛选、继续加载与保存过滤器已接线，原生 UI 待验收                                                                                                                                                                                              |
+| BE-008G | 全局搜索生产后端                        | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
 
 ## P0：下一阶段必须完成
 
@@ -109,6 +110,15 @@ pnpm test:e2e:p4d:win
 - 默认连续执行两轮，两轮均通过；每轮创建并最终删除 `p4deck-fixture-e2e` Client 与独立 Workspace Root。
 - Runner Context 显式携带 executable/server/user/client/tickets/trust，测试内部复验 `ServerID=p4deck-fixture-local` 和 loopback 地址；启动器隔离 P4CONFIG/P4ENVIRO/P4PASSWD，缺少固定工具时输出明确 `SKIP`。
 - 已验证强类型连接、Workspace/Depot 浏览、Sync、Edit、Add、Delete、Revert；Sync 已覆盖新增/更新/删除/指定 revision、已最新、writable/clobber blocker、force 二次确认、非法 spec、token 重放/过期/篡改、generation 漂移、Journal 与缓存刷新；同一入口已叠加 BE-003 Submit、BE-004a Pending 与 BE-004b Shelf/Unshelve/Resolve 验收。仍未包含 SSL Trust、SSO/MFA 或 macOS，留给连接兼容矩阵和双平台验收。
+- 同一入口也覆盖 BE-002R：真实单文件 move、目标已存在、source 未 opened、映射外、Windows 仅大小写 blocker、token 重放/过期及 generation drift；成功后 revert 并复核 fixture 恢复。仍未包含目录递归、覆盖、跨 Workspace、macOS 或原生 UI，均不作完成声明。
+
+### BE-002R — 单文件 Rename/Move 安全生产闭环（DONE：Windows localhost）
+
+- 仅接受当前 Workspace view 内的单个本地受控文件；source 必须存在且 `edit/add` opened，目标必须映射到同一 Client、位于 Workspace Root 内且本地/Depot 均不存在。目标 CL 仅允许 Default 或当前 User/Client 拥有的既有 Pending 编号 CL。
+- `RenameMovePreflight` 返回 source/target 的 depot/client/local 映射、opened action/CL、目标 CL 有效性、存在性、case-only 风险、结构化 blocker、operation/log 引用和 120 秒一次性 token。token 绑定 active profile、Context generation、完整映射、source state、目标 CL 与 preview digest。
+- `confirmRenameMove` 消费 token 后进入同 Server mutation lane，重查全部状态并拒绝重放、过期、上下文/映射/opened/目标/CL 漂移；只使用参数数组执行一条 `p4 move -c <CL> <source> <target>`。GUI `run_p4 move` 和泛化 `FileAction::RenameMove` 旁路已关闭，显式 Terminal 语义不变。
+- Windows 仅大小写改名本批不冒险模拟普通 move：由于尚无经过验证的临时名两步事务及完整回滚，预检固定返回 `caseOnlyRename` blocker。目录递归、跨 Workspace、目标覆盖、自动创建父目录及含 `@`、`#`、`%`、`*`、`?` 的 P4 filespec 路径同样不在本批范围。
+- 单文件命令没有可报告的部分成功集合；非零退出返回 `failed`，取消返回 `cancelled`，超时返回 `unknown`，均携带 source/target、Pending 与 Workspace 的保守刷新建议。Runner 继续负责取消、结构化日志和 Operation Journal，成功/失败后均失效两端文件状态缓存。
 
 ### BE-003 — Submit 预检与执行状态机（DONE：Windows localhost）
 

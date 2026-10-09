@@ -4,6 +4,7 @@ pub mod context;
 pub mod files;
 pub mod history;
 pub mod query;
+pub mod rename;
 pub mod runner;
 pub mod search;
 pub mod streams;

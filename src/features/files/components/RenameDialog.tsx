@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
-import type { WorkspaceNode } from "../../../shared/contracts/types";
+import { backend } from "../../../infrastructure/backend";
+import type {
+  RenameMoveConfirmation,
+  RenameMovePreflight,
+  RenameMovePreflightRequest,
+  RenameMoveResult,
+  WorkspaceNode,
+} from "../../../shared/contracts/types";
 import { checkRenamePath, type RenamePathError } from "../renamePath";
 
 const reasons: Record<RenamePathError, [string, string]> = {
@@ -10,8 +17,8 @@ const reasons: Record<RenamePathError, [string, string]> = {
     "Use an absolute path of the same type as the source.",
   ],
   characters: [
-    "路径不能包含控制字符或通配符。",
-    "Control characters and wildcards are not allowed.",
+    "路径不能包含控制字符或 P4 filespec 元字符。",
+    "Control characters and P4 filespec metacharacters are not allowed.",
   ],
   segments: [
     "路径不能是根目录，或包含空段、.、..。",
@@ -23,53 +30,197 @@ const reasons: Record<RenamePathError, [string, string]> = {
     "A folder cannot move into its own descendant.",
   ],
 };
+
+type Phase = "preview" | "checking" | "review" | "confirming" | "result";
+
 export function RenameDialog({
   node,
   source,
   zh,
   onDismiss,
+  onRefresh,
+  check = (request) => backend.preflightRenameMove(request),
+  execute = (confirmation) => backend.confirmRenameMove(confirmation),
 }: {
   node: WorkspaceNode;
   source: HTMLElement | null;
   zh: boolean;
   onDismiss(): void;
+  onRefresh?(): Promise<void> | void;
+  check?(request: RenameMovePreflightRequest): Promise<RenameMovePreflight>;
+  execute?(confirmation: RenameMoveConfirmation): Promise<RenameMoveResult>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({ ...node }));
   const from = snapshot.absolutePath || snapshot.depotPath || "";
   const [target, setTarget] = useState(from);
-  const [checked, setChecked] = useState(false);
+  const [targetChangeId, setTargetChangeId] = useState(
+    snapshot.changelistId ?? 0,
+  );
+  const [phase, setPhase] = useState<Phase>("preview");
+  const [preflight, setPreflight] = useState<RenameMovePreflight>();
+  const [result, setResult] = useState<RenameMoveResult>();
+  const [failure, setFailure] = useState("");
   const [discard, setDiscard] = useState(false);
+  const generation = useRef(0);
+  const activeOperation = useRef<string | undefined>(undefined);
   const error = checkRenamePath(
     from,
     target,
     snapshot.kind === "directory",
     !snapshot.absolutePath,
   );
-  const dismiss = () => (target !== from ? setDiscard(true) : onDismiss());
+  const blockedInput = snapshot.kind !== "file" || !snapshot.absolutePath;
+
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      if (activeOperation.current)
+        void backend
+          .cancelOperation(activeOperation.current)
+          .catch(() => undefined);
+    },
+    [],
+  );
+
+  function invalidatePreview() {
+    generation.current += 1;
+    setPreflight(undefined);
+    setResult(undefined);
+    setFailure("");
+    setPhase("preview");
+  }
+
+  const dismiss = () =>
+    phase === "confirming"
+      ? undefined
+      : target !== from || phase !== "preview"
+        ? setDiscard(true)
+        : onDismiss();
+
+  async function preview() {
+    if (error || blockedInput || phase === "checking") return;
+    const epoch = ++generation.current;
+    setFailure("");
+    setPreflight(undefined);
+    setResult(undefined);
+    setPhase("checking");
+    try {
+      const value = await check({
+        sourcePath: from,
+        targetPath: target,
+        targetChangeId,
+        operationId: crypto.randomUUID(),
+      });
+      if (epoch !== generation.current) return;
+      setPreflight(value);
+      setPhase("review");
+    } catch (cause) {
+      if (epoch !== generation.current) return;
+      setFailure(String(cause));
+      setPhase("preview");
+    }
+  }
+
+  async function confirm() {
+    if (
+      phase !== "review" ||
+      !preflight?.ready ||
+      !preflight.token ||
+      !preflight.targetSnapshot
+    )
+      return;
+    const epoch = generation.current;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
+    setFailure("");
+    setPhase("confirming");
+    try {
+      const value = await execute({
+        token: preflight.token,
+        target: preflight.targetSnapshot,
+        previewDigest: preflight.previewDigest,
+        operationId,
+      });
+      if (epoch !== generation.current) return;
+      setResult(value);
+      setPhase("result");
+      if (value.refresh.workspaceStatus || value.refresh.pendingChanges)
+        await onRefresh?.();
+    } catch (cause) {
+      if (epoch !== generation.current) return;
+      setFailure(String(cause));
+      setPhase("result");
+      await onRefresh?.();
+    } finally {
+      if (activeOperation.current === operationId)
+        activeOperation.current = undefined;
+    }
+  }
+
+  const footer =
+    phase === "confirming" ? (
+      <>
+        <button
+          onClick={() => {
+            const operationId = activeOperation.current;
+            if (operationId) void backend.cancelOperation(operationId);
+          }}
+        >
+          {tr("取消操作", "Cancel operation")}
+        </button>
+        <button disabled>{tr("确认中…", "Confirming…")}</button>
+      </>
+    ) : phase === "result" ? (
+      <button className="primary" onClick={onDismiss}>
+        {tr("关闭", "Close")}
+      </button>
+    ) : phase === "review" ? (
+      <>
+        <button onClick={dismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={() => void preview()}>
+          {tr("重新预检", "Run again")}
+        </button>
+        <button
+          className="primary"
+          disabled={
+            !preflight?.ready || !preflight.token || !preflight.targetSnapshot
+          }
+          onClick={() => void confirm()}
+        >
+          {tr("确认重命名 / 移动", "Confirm rename / move")}
+        </button>
+      </>
+    ) : (
+      <>
+        <button onClick={dismiss}>{tr("取消", "Cancel")}</button>
+        <button
+          className="primary"
+          disabled={!!error || blockedInput || phase === "checking"}
+          onClick={() => void preview()}
+        >
+          {phase === "checking"
+            ? tr("预检中…", "Checking…")
+            : tr("预检并审阅", "Preview and review")}
+        </button>
+      </>
+    );
+
   return (
     <Dialog
       title={tr("重命名 / 移动", "Rename / move")}
       description={tr(
-        "填写完整目标路径。此界面只检查输入，不执行磁盘或 P4 操作。",
-        "Enter the full destination path. This view checks input only; no disk or P4 operations are executed.",
+        "单文件安全流程：先预检映射、打开状态、目标与 CL，再使用一次性令牌确认。",
+        "Safe single-file flow: preview mapping, opened state, target and changelist, then confirm with a one-use token.",
       )}
       zh={zh}
       source={source}
       onRequestClose={dismiss}
-      footer={
-        <>
-          <button onClick={dismiss}>{tr("取消", "Cancel")}</button>
-          <button
-            className="primary"
-            disabled={!!error}
-            onClick={() => setChecked(true)}
-          >
-            {tr("检查路径（不执行）", "Check path (no execution)")}
-          </button>
-        </>
-      }
+      footer={footer}
     >
+      <div className="workflow-context">
+        {tr("阶段", "Phase")} · {phase}
+      </div>
       <label>
         {tr("源路径", "Source path")}
         <input readOnly value={from} />
@@ -79,60 +230,138 @@ export function RenameDialog({
         <input
           data-dialog-autofocus
           value={target}
+          disabled={phase === "confirming" || phase === "result"}
           onChange={(event) => {
             setTarget(event.target.value);
-            setChecked(false);
+            invalidatePreview();
           }}
           aria-invalid={target !== from && !!error}
         />
       </label>
-      <div className="workflow-context">
-        {snapshot.absolutePath
-          ? tr("本地绝对路径", "Local absolute path")
-          : "Depot"}{" "}
-        ·{" "}
-        {snapshot.kind === "directory"
-          ? tr("整个目录（递归）", "Entire folder (recursive)")
-          : tr("单个文件", "Single file")}
-      </div>
-      {snapshot.kind === "directory" && (
-        <DialogNotice>
+      <label>
+        {tr(
+          "目标 Changelist（0 = Default）",
+          "Target changelist (0 = Default)",
+        )}
+        <input
+          type="number"
+          min={0}
+          value={targetChangeId}
+          disabled={phase === "confirming" || phase === "result"}
+          onChange={(event) => {
+            setTargetChangeId(Math.max(0, Number(event.target.value) || 0));
+            invalidatePreview();
+          }}
+        />
+      </label>
+      {blockedInput && (
+        <DialogNotice error>
           {tr(
-            "目录内全部子文件均可能受影响；实际文件范围尚未扫描。",
-            "All descendants may be affected. The actual file scope has not been scanned.",
+            "本批只支持当前 workspace 内的单个本地文件；目录递归和 Depot-only 对象已阻止。",
+            "This release supports one local file in the current workspace only; recursive folders and Depot-only objects are blocked.",
           )}
         </DialogNotice>
       )}
-      <DialogNotice>
-        {tr(
-          "尚未验证：工作区映射、目标是否存在、覆盖风险、权限、签出状态及仅大小写改名。不会自动创建父目录或覆盖已有文件。",
-          "Not verified: workspace mapping, target existence, overwrite risk, permissions, opened state or case-only renames. No parent folders are created and no existing files are overwritten.",
-        )}
-      </DialogNotice>
       {target !== from && error && (
         <DialogNotice error>{reasons[error][zh ? 0 : 1]}</DialogNotice>
       )}
-      {checked && (
+      {phase === "checking" && (
+        <DialogNotice>
+          {tr("正在读取 P4 快照…", "Reading the P4 snapshot…")}
+        </DialogNotice>
+      )}
+      {preflight && (
+        <section
+          className="workflow-review"
+          aria-label={tr("预检结果", "Preflight result")}
+        >
+          <h3>{tr("映射与状态", "Mapping and state")}</h3>
+          <dl>
+            <dt>{tr("源 Depot", "Source depot")}</dt>
+            <dd>{preflight.source?.depotPath ?? "—"}</dd>
+            <dt>{tr("源本地", "Source local")}</dt>
+            <dd>{preflight.source?.localPath ?? "—"}</dd>
+            <dt>{tr("目标 Depot", "Target depot")}</dt>
+            <dd>{preflight.target?.depotPath ?? "—"}</dd>
+            <dt>{tr("目标本地", "Target local")}</dt>
+            <dd>{preflight.target?.localPath ?? "—"}</dd>
+            <dt>{tr("打开状态 / CL", "Opened action / CL")}</dt>
+            <dd>
+              {preflight.sourceState
+                ? `${preflight.sourceState.action} / ${preflight.sourceState.changeId || "Default"}`
+                : "—"}
+            </dd>
+            <dt>{tr("目标 CL", "Target CL")}</dt>
+            <dd>
+              {preflight.targetChangeId || "Default"} ·{" "}
+              {preflight.targetChangeValid
+                ? tr("有效", "valid")
+                : tr("无效", "invalid")}
+            </dd>
+            <dt>{tr("目标存在", "Target exists")}</dt>
+            <dd>{preflight.targetExists ? tr("是", "yes") : tr("否", "no")}</dd>
+            <dt>{tr("仅大小写风险", "Case-only risk")}</dt>
+            <dd>
+              {preflight.caseOnlyRisk
+                ? tr("已阻止", "blocked")
+                : tr("无", "none")}
+            </dd>
+          </dl>
+          {preflight.blockers.map((item) => (
+            <DialogNotice error key={`${item.code}:${item.message}`}>
+              {item.message}
+            </DialogNotice>
+          ))}
+          {preflight.warnings.map((item) => (
+            <DialogNotice key={`${item.code}:${item.message}`}>
+              {item.message}
+            </DialogNotice>
+          ))}
+          {preflight.ready && (
+            <DialogNotice>
+              {tr(
+                "预检通过。令牌只能使用一次；确认时会在 mutation lane 内重新校验全部状态。",
+                "Preflight passed. The token is one-use; confirmation revalidates all state inside the mutation lane.",
+              )}
+            </DialogNotice>
+          )}
+        </section>
+      )}
+      {phase === "confirming" && (
         <DialogNotice>
           {tr(
-            "路径格式检查通过，不代表可以安全执行。尚未移动或重命名任何文件。",
-            "Path syntax checked; this does not establish execution safety. No files were moved or renamed.",
+            "正在重新校验并执行。关闭界面不能撤销服务器已接受的操作。",
+            "Revalidating and executing. Closing the view cannot undo work accepted by the server.",
           )}
         </DialogNotice>
       )}
+      {result && (
+        <section className="workflow-result" role="status">
+          <h3>{result.outcome}</h3>
+          <p>{result.message}</p>
+          {result.failure && <p>{result.failure}</p>}
+          {result.operationId && (
+            <p>
+              {tr("操作记录", "Operation")} {result.operationId}
+            </p>
+          )}
+          <p>{result.refresh.reason}</p>
+        </section>
+      )}
+      {failure && <DialogNotice error>{failure}</DialogNotice>}
       {discard && (
         <section className="workflow-discard" role="alert">
           <p>
             {tr(
-              "关闭将丢弃当前目标路径。",
-              "Closing discards the entered destination.",
+              "关闭将丢弃当前预检与一次性令牌。",
+              "Closing discards the current preview and one-use token.",
             )}
           </p>
           <button onClick={() => setDiscard(false)}>
             {tr("继续编辑", "Keep editing")}
           </button>
           <button className="danger" onClick={onDismiss}>
-            {tr("放弃修改并关闭", "Discard and close")}
+            {tr("放弃并关闭", "Discard and close")}
           </button>
         </section>
       )}

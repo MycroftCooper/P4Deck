@@ -147,13 +147,13 @@ it("retains a frozen recursive scope when outside selection changes", async () =
   expect(document.body.textContent).toContain("1 个目标 · 1 个目录");
   expect(document.body.textContent).toContain("子项已合并");
 });
-it("validates rename syntax without claiming execution and protects changed inputs", async () => {
+it("keeps rename in preview until a changed input is preflighted and protects drafts", async () => {
   await act(async () =>
     root.render(
       <RenameDialog node={node} source={null} zh onDismiss={close} />,
     ),
   );
-  expect(button("检查路径（不执行）").disabled).toBe(true);
+  expect(button("预检并审阅").disabled).toBe(true);
   await act(async () => {
     const input = document.querySelectorAll("input")[1];
     Object.getOwnPropertyDescriptor(
@@ -162,11 +162,11 @@ it("validates rename syntax without claiming execution and protects changed inpu
     )!.set!.call(input, "/workspace/new");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await act(async () => button("检查路径（不执行）").click());
-  expect(document.body.textContent).toContain("尚未移动或重命名任何文件");
+  expect(button("预检并审阅").disabled).toBe(false);
+  expect(document.body.textContent).toContain("阶段 · preview");
   await act(async () => button("取消").click());
   expect(close).not.toHaveBeenCalled();
-  await act(async () => button("放弃修改并关闭").click());
+  await act(async () => button("放弃并关闭").click());
   expect(close).toHaveBeenCalledOnce();
 });
 it("settles pending requests on scope change and unmount, rejecting duplicate requests", async () => {

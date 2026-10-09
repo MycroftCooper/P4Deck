@@ -123,19 +123,6 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
                 OutputMode::JsonLines,
             )
         }
-        FileAction::RenameMove => {
-            if paths.len() != 1 {
-                return Err("rename/move requires exactly one source path".into());
-            }
-            let target = required(&request.target_path, "targetPath")?;
-            validate_path(target)?;
-            paths.push(target.clone());
-            (
-                "move",
-                changelist_args(request.changelist_id),
-                OutputMode::JsonLines,
-            )
-        }
         FileAction::Undo => (
             "undo",
             changelist_args(request.changelist_id),
@@ -190,11 +177,7 @@ fn parallel_args(request: &FileActionRequest) -> Result<Vec<String>, String> {
 fn should_stream_paths(action: FileAction, paths: &[String]) -> bool {
     if matches!(
         action,
-        FileAction::Integrate
-            | FileAction::Branch
-            | FileAction::Copy
-            | FileAction::RenameMove
-            | FileAction::DeleteLocal
+        FileAction::Integrate | FileAction::Branch | FileAction::Copy | FileAction::DeleteLocal
     ) {
         return false;
     }
@@ -407,7 +390,6 @@ mod tests {
             (FileAction::Integrate, "integrate"),
             (FileAction::Branch, "integrate"),
             (FileAction::Copy, "copy"),
-            (FileAction::RenameMove, "move"),
         ] {
             let mut value = request(action);
             value.target_path = Some("//depot/release/a b.txt".into());
@@ -457,10 +439,6 @@ mod tests {
         revision.revision = Some("--force".into());
         assert!(plan(&revision).is_err());
 
-        let mut target = request(FileAction::RenameMove);
-        target.target_path = Some("-f".into());
-        assert!(plan(&target).is_err());
-
         let mut newline = request(FileAction::Checkout);
         newline.paths = vec!["//depot/main/a\nmalicious".into()];
         assert!(plan(&newline).is_err());
@@ -488,19 +466,6 @@ mod tests {
     }
 
     #[test]
-    fn keeps_paired_actions_inline() {
-        let mut value = request(FileAction::RenameMove);
-        value.paths = vec![format!(
-            "//depot/main/{}",
-            "x".repeat(INLINE_ARGUMENT_BYTES)
-        )];
-        value.target_path = Some("//depot/main/target.txt".into());
-        let result = invocation(&value);
-        assert!(result.argument_input.is_none());
-        assert_eq!(result.args.len(), 2);
-    }
-
-    #[test]
     fn bounds_native_parallel_transfer_threads() {
         let mut sync = request(FileAction::GetLatest);
         sync.parallel_threads = Some(4);
@@ -515,23 +480,5 @@ mod tests {
         let mut edit = request(FileAction::Checkout);
         edit.parallel_threads = Some(2);
         assert!(plan(&edit).is_err());
-    }
-
-    #[test]
-    fn deserializes_the_camel_case_ipc_contract() {
-        let request: FileActionRequest = serde_json::from_value(serde_json::json!({
-            "action": "renameMove",
-            "paths": ["//depot/main/source.txt"],
-            "targetPath": "//depot/main/target.txt",
-            "changelistId": 42
-        }))
-        .unwrap();
-
-        assert_eq!(request.action, FileAction::RenameMove);
-        assert_eq!(
-            request.target_path.as_deref(),
-            Some("//depot/main/target.txt")
-        );
-        assert_eq!(request.changelist_id, Some(42));
     }
 }

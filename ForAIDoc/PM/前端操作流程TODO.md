@@ -18,7 +18,7 @@
 | FE-03 | 目标 CL 选择与移动文件 | Default/编号 CL、过滤、文件计数、目标摘要 | 保留明确文件子集；不可选当前/不适用目标；无目标/空列表可解释 | BE-004a 已接生产入口；Default 往返、失效与失败测试通过，原生待验收 |
 | FE-04 | 提交预检与确认 UI | CL 摘要、阻塞/警告、文件范围、检查中、过期、失败、结果 | 只确认整个指定 CL；检查失败/过期不能提交；无后端预检不显示“可提交” | BE-003 已接生产入口；状态机测试通过，原生待验收 |
 | FE-05 | 安全 Sync / 获取指定版本 | head/修订/CL/日期/label、真实变更预览、范围与风险、执行结果 | 真实 preview token 后才能执行；force 二次确认；连接/目标变化拒绝 stale；取消不冒充回滚 | 生产接线、浏览器状态机与 Windows localhost 双轮真实 E2E 已通过；原生 UI/macOS 待验 |
-| FE-06 | 重命名/移动文件 | 原目标、新路径、范围、覆盖/映射提示 | 路径不拼 Shell；未验证映射/覆盖时不能宣称安全；未接通不修改文件 | 前端证据通过；映射/覆盖后端校验待补 |
+| FE-06 | 重命名/移动文件 | 原目标、新路径、范围、覆盖/映射提示 | 路径不拼 Shell；未验证映射/覆盖时不能宣称安全；未接通不修改文件 | BE-002R 单文件生产闭环已接；目录/跨 Workspace/覆盖/case-only 明确阻止，原生 UI/macOS 待验 |
 | FE-07 | 批量与递归确认 | 共用目标清单、数量、父子去重提示、危险操作说明 | 目标不跟随外部选择变化；大列表虚拟化；不隐藏部分失败或取消边界 | 50,000 目标虚拟化证据通过；真实性能待验收 |
 | FE-08 | Shelf UI | 明确 CL 与文件子集、创建/更新/删除确认、状态反馈 | 不把 shelf 当本地副本；删除风险明确；未接通动作不执行 | BE-004b 生产契约与 localhost 通过；原生待验收 |
 | FE-09 | Unshelve UI | 来源、目标 CL、覆盖/映射/锁/Resolve 风险、预检与确认 | 无有效预检不执行；支持加载、空、阻塞、失败及过期状态 | BE-004b 生产契约与 localhost 通过；原生待验收 |
@@ -39,6 +39,8 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
 ## 验收记录
+
+- FE-06 单文件 Rename/Move 生产闭环（2026-10-09）：`RenameDialog` 已改为 Preview → Review → Confirming → Result，工具栏和右键菜单共用 `useCommandDialogs` 单入口；展示 source/target depot+local mapping、opened action/CL、目标 CL/存在性、case-only 风险、blocker、operation/log 与刷新原因。目标路径或 CL 改动、连接 key 变化都会丢弃旧 preview/token；真实 move 执行阶段使用已知 operation ID 支持取消，成功、命令失败或 IPC 异常均按 refresh advice 刷新 Workspace/Pending。后端 BE-002R 仅允许单个当前 Workspace 本地受控且 opened 的文件，目标不得存在，Default/既有编号 CL 才有效；目录、Depot-only、跨 Workspace、覆盖、缺失父目录和 Windows 仅大小写 rename 明确阻止。全量 55 文件/325 项 Web 测试、95 项 Rust 单测、build/check、前后端性能、Clippy/Prettier/rustfmt/diff check 与 Windows localhost 默认双轮通过。未执行 Windows/macOS 原生 UI；本机无 Bash，未运行 bash fixture 语法检查；仓库无 `pnpm typecheck` 脚本，实际类型门禁为 `pnpm check:web` / `pnpm check`。
 
 - FE-18 多连接生产 UI（2026-10-09）：设置页已接 `ConnectionProfiles` schema v2 的列表、活动标识、搜索、新建/编辑/重命名/危险删除确认、revision CAS 与冲突重载，并复用既有 discover/test/trust/login/logout 向导。草稿、已保存 Profile、临时验证状态与活动 `RuntimeInfo` 分离；保存始终回到 `notTested`，未保存活动草稿的验证结果不会写入全局运行时，密码提交后立即清空且请求/Storage/URL/页面文本均无持久化。活动切换显示 verifying/committing/success/error，失败保留旧 runtime/页面数据/焦点，成功消费后端 generation，由既有 `connectionKey` 清理选择、详情、搜索和工具区日志状态。Workspace 页面真实调用 `switchWorkspace(expectedGeneration, client)`，显示当前 Client/Root/Stream、两阶段状态和失败回滚；Mock 明示 simulated。新增 Settings 12 项与 Workspace 4 项组件测试，全量 53 文件/317 项 Web 测试、前后端性能、build/check、Rust 86 项、Clippy、localhost `p4d` 默认两轮、rustfmt/diff check 均通过。Computer Use 枚举 `apps: []`，未执行 Windows/macOS 原生点击、390px 原生窗口、焦点或真实读屏；真实外部 Server、SSL/SSO/MFA 与过期 ticket 仍未实测。
 
@@ -204,7 +206,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 
 1. 原生 Windows/macOS：除独立窗口业务弹窗外，还需验收连接向导的输入顺序、初始焦点、Tab/Shift+Tab、读屏状态、390px、亮暗/中英、密码遮罩与清空、Logout/重登；需可绑定的对应平台桌面实例。整体目标暂不标为完成。
 2. FE-12/FE-13 证据对照见下表；四组旧弹窗测试已迁入公共基础。原生门槛仍未完成，避免仅凭全量测试数量宣布全覆盖。
-3. 新建/编辑/删除空 Pending CL、Default↔编号移动、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。重命名执行不在本批范围。
+3. 新建/编辑/删除空 Pending CL、Default↔编号移动、单文件 Rename/Move、Submit 及 Shelf/Unshelve/Resolve 已完成 BE-002R/003/004a/004b 生产接线；仍需 Windows/macOS 原生 UI 冒烟。目录/跨 Workspace/覆盖/Windows 仅大小写 rename 不在本批范围。
 4. Pending 已使用后端 Jobs 与 opened/shelved 归属事实；锁、映射和策略未知状态仍不得由前端推断。Submit 的 unknown 保持显式呈现，不能把前端校验当作服务器事实。
 
 ### 第十批：测试整理与逐项审计
@@ -221,7 +223,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14。
 | FE-03 | `MoveFilesDialog.test.tsx` 7 项；`FileClWorkflow.test.tsx` 3 项；`fileClScope.test.ts` 2 项；`PendingPage.test.ts` 局部合并 | Default 往返、固定快照、目标/连接失效、失败保留与局部刷新已覆盖 |
 | FE-04 | `SubmitDialog.test.tsx` 11 项；`useCommandDialogs.test.tsx` 生产适配器接线；后端 Submit 契约测试 | BE-003 已接；blocker/warning/unknown/过期/漂移/成功/失败/防重复已覆盖，原生待验 |
 | FE-05 | `SyncDialog.test.tsx` 2 项、Tauri 窄契约与后端 parser/token/E2E；保留 `RevisionDialog`/selector 回归 | Preview → Review → Confirming → Result、Mock simulated、force 二次确认与真实 localhost sync 已覆盖；原生点击/读屏待验 |
-| FE-06 | `renamePath.test.ts` 3 项；`workflow.test.tsx` 的路径/草稿用例；第四/九批页面记录 | 前端证据通过；未声称映射或覆盖已验证 |
+| FE-06 | `renamePath.test.ts`、`RenameDialog.test.tsx`、`workflow.test.tsx`、Rust rename 单测与 localhost E2E | Preview → Review → Confirming → Result、token/input/context 失效、映射/opened/CL/目标/case-only blocker、成功/失败刷新已覆盖；原生 UI/macOS 待验 |
 | FE-07 | `workflow.test.tsx` 的风险确认/目标快照；`fileActionFeedback.test.ts` 3 项；第九批 50,000 目标首尾导航/12 行 DOM | 前端证据通过；未测真实 P4 性能 |
 | FE-08 | `ShelfDialog.test.tsx` 的首次/替换/删除子集、危险确认、过期与漂移；`FileClWorkflow.test.tsx` 跨 CL 分组；Mock/后端契约测试 | BE-004b Shelf 生产契约已接；原生待验 |
 | FE-09 | `ShelfDialog.test.tsx` 的 Unshelve Default/编号/跨 Workspace 与映射/覆盖/锁/Resolve 风险；双 Backend 契约 | BE-004b Unshelve 生产契约已接；不提供强制覆盖，原生待验 |

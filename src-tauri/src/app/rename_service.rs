@@ -1,0 +1,830 @@
+use crate::{
+    app::{
+        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
+    },
+    domain::*,
+    p4::{
+        context::ContextStore,
+        rename::{RenameInspection, RenameRepository},
+    },
+};
+use sha2::{Digest, Sha256};
+use std::{
+    path::{Component, Path},
+    sync::Arc,
+};
+use tauri::AppHandle;
+use tokio::sync::Mutex as AsyncMutex;
+use uuid::Uuid;
+
+const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
+
+#[derive(Clone)]
+struct TokenRecord {
+    target: RenameMoveTargetSnapshot,
+    preview_digest: String,
+    expires_at: i64,
+}
+
+impl ExpiringConfirmation for TokenRecord {
+    fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+}
+
+struct Evaluation {
+    blockers: Vec<RenameMoveIssue>,
+    warnings: Vec<RenameMoveIssue>,
+    target: Option<RenameMoveTargetSnapshot>,
+    case_only_risk: bool,
+}
+
+pub struct RenameService {
+    repository: RenameRepository,
+    contexts: Arc<ContextStore>,
+    status_cache: Arc<StatusCache>,
+    tokens: ConfirmationStore<TokenRecord>,
+    confirmation_gate: AsyncMutex<()>,
+    ttl_ms: u64,
+}
+
+impl RenameService {
+    pub fn new(
+        repository: RenameRepository,
+        contexts: Arc<ContextStore>,
+        status_cache: Arc<StatusCache>,
+    ) -> Self {
+        Self::with_ttl(repository, contexts, status_cache, DEFAULT_TOKEN_TTL_MS)
+    }
+
+    pub(crate) fn with_ttl(
+        repository: RenameRepository,
+        contexts: Arc<ContextStore>,
+        status_cache: Arc<StatusCache>,
+        ttl_ms: u64,
+    ) -> Self {
+        Self {
+            repository,
+            contexts,
+            status_cache,
+            tokens: ConfirmationStore::default(),
+            confirmation_gate: AsyncMutex::new(()),
+            ttl_ms: ttl_ms.max(1),
+        }
+    }
+
+    pub fn clear_confirmations(&self) {
+        self.tokens.clear();
+    }
+
+    pub async fn preflight(
+        &self,
+        request: RenameMovePreflightRequest,
+        app: Option<&AppHandle>,
+    ) -> RenameMovePreflight {
+        let (context, generation) = self.contexts.snapshot();
+        let profile_id = self.contexts.active_profile_id();
+        let prefix = safe_operation_prefix(request.operation_id.as_deref(), "rename-preflight");
+        let inspection = self
+            .repository
+            .inspect(&context, &request, &prefix, app)
+            .await;
+        let (inspection, evaluation) = match inspection {
+            Ok(inspection) => {
+                let evaluation = evaluate(
+                    &context,
+                    generation,
+                    profile_id,
+                    request.target_change_id,
+                    &inspection,
+                );
+                (Some(inspection), evaluation)
+            }
+            Err(message) => (
+                None,
+                Evaluation {
+                    blockers: vec![issue(
+                        if message.starts_with("invalid rename/move path")
+                            || message.contains("identical")
+                            || message.contains("targetChangeId")
+                        {
+                            RenameMoveIssueCode::InvalidPath
+                        } else {
+                            RenameMoveIssueCode::InspectionUnavailable
+                        },
+                        format!("Rename/move preflight could not establish a reliable snapshot: {message}"),
+                    )],
+                    warnings: Vec::new(),
+                    target: None,
+                    case_only_risk: false,
+                },
+            ),
+        };
+        let preview_digest = digest_preview(
+            evaluation.target.as_ref(),
+            &evaluation.blockers,
+            &evaluation.warnings,
+        );
+        let ready = evaluation.blockers.is_empty() && evaluation.target.is_some();
+        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
+        let token = ready.then(|| {
+            let target = evaluation
+                .target
+                .clone()
+                .expect("ready preview has a target");
+            self.tokens.issue(
+                TokenRecord {
+                    target,
+                    preview_digest: preview_digest.clone(),
+                    expires_at,
+                },
+                now_ms(),
+            )
+        });
+        let operation_ids = inspection
+            .as_ref()
+            .map(|value| value.operation_ids.clone())
+            .unwrap_or_default();
+        RenameMovePreflight {
+            ready,
+            source: inspection.as_ref().and_then(|value| value.source.clone()),
+            target: inspection.as_ref().and_then(|value| value.target.clone()),
+            source_state: inspection
+                .as_ref()
+                .and_then(|value| value.source_state.clone()),
+            target_change_id: request.target_change_id,
+            target_change_valid: inspection
+                .as_ref()
+                .is_some_and(|value| value.target_change_valid),
+            target_exists: inspection.as_ref().is_some_and(|value| value.target_exists),
+            case_only_risk: evaluation.case_only_risk,
+            blockers: evaluation.blockers,
+            warnings: evaluation.warnings,
+            target_snapshot: evaluation.target,
+            preview_digest,
+            token,
+            expires_at,
+            ttl_ms: self.ttl_ms,
+            log_reference: operation_ids.first().cloned(),
+            operation_ids,
+        }
+    }
+
+    pub async fn confirm(
+        &self,
+        confirmation: RenameMoveConfirmation,
+        app: Option<&AppHandle>,
+    ) -> RenameMoveResult {
+        let _gate = self.confirmation_gate.lock().await;
+        let Some(record) = self.tokens.consume(&confirmation.token) else {
+            return rejected(
+                RenameMoveFailureCode::TokenUnknown,
+                "The rename/move confirmation token is unknown or was already used.",
+                Some(&confirmation.target),
+            );
+        };
+        if record.expires_at <= now_ms() {
+            return rejected(
+                RenameMoveFailureCode::TokenExpired,
+                "The rename/move preview expired. Run preflight again.",
+                Some(&record.target),
+            );
+        }
+        if record.target != confirmation.target
+            || record.preview_digest != confirmation.preview_digest
+        {
+            return rejected(
+                RenameMoveFailureCode::TargetMismatch,
+                "The confirmation does not match the reviewed preview.",
+                Some(&record.target),
+            );
+        }
+        let (context, generation) = self.contexts.snapshot();
+        if !context_matches(
+            &record.target,
+            &context,
+            generation,
+            self.contexts.active_profile_id(),
+        ) {
+            return rejected(
+                RenameMoveFailureCode::ContextChanged,
+                "The connection, profile, workspace, or runtime generation changed after preview.",
+                Some(&record.target),
+            );
+        }
+
+        let mutation_guard = self.repository.lock_mutations(&context.server).await;
+        let recheck_request = RenameMovePreflightRequest {
+            source_path: record.target.source.local_path.clone(),
+            target_path: record.target.target.local_path.clone(),
+            target_change_id: record.target.target_change_id,
+            operation_id: None,
+        };
+        let reinspection = match self
+            .repository
+            .inspect(
+                &context,
+                &recheck_request,
+                &format!("rename-recheck-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            Ok(value) => value,
+            Err(_) => {
+                return rejected(
+                    RenameMoveFailureCode::PreflightBlocked,
+                    "The source and target could not be revalidated safely.",
+                    Some(&record.target),
+                )
+            }
+        };
+        let evaluation = evaluate(
+            &context,
+            generation,
+            self.contexts.active_profile_id(),
+            record.target.target_change_id,
+            &reinspection,
+        );
+        if !evaluation.blockers.is_empty() {
+            let failure = if reinspection.target_exists {
+                RenameMoveFailureCode::TargetChanged
+            } else {
+                RenameMoveFailureCode::SourceChanged
+            };
+            return rejected(
+                failure,
+                "The source, target, or changelist changed after preview.",
+                Some(&record.target),
+            );
+        }
+        let Some(rechecked_target) = evaluation.target else {
+            return rejected(
+                RenameMoveFailureCode::PreflightBlocked,
+                "The rename/move target is no longer valid.",
+                Some(&record.target),
+            );
+        };
+        if rechecked_target != record.target
+            || digest_preview(Some(&rechecked_target), &[], &[]) != record.preview_digest
+        {
+            return rejected(
+                RenameMoveFailureCode::SourceChanged,
+                "The mapped paths or opened source state changed after preview.",
+                Some(&record.target),
+            );
+        }
+        let (latest_context, latest_generation) = self.contexts.snapshot();
+        if !context_matches(
+            &record.target,
+            &latest_context,
+            latest_generation,
+            self.contexts.active_profile_id(),
+        ) {
+            return rejected(
+                RenameMoveFailureCode::ContextChanged,
+                "The runtime context changed during confirmation.",
+                Some(&record.target),
+            );
+        }
+        if record.expires_at <= now_ms() {
+            return rejected(
+                RenameMoveFailureCode::TokenExpired,
+                "The rename/move preview expired while confirmation was waiting or revalidating. Run preflight again.",
+                Some(&record.target),
+            );
+        }
+
+        let operation_id = confirmation
+            .operation_id
+            .filter(|value| valid_operation_id(value))
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let execution = self
+            .repository
+            .execute(
+                &context,
+                &record.target,
+                operation_id.clone(),
+                &mutation_guard,
+                app,
+            )
+            .await;
+        self.status_cache.invalidate(
+            &context.server,
+            &context.user,
+            &context.client,
+            &[
+                record.target.source.local_path.clone(),
+                record.target.target.local_path.clone(),
+            ],
+            &[
+                StatusQueryKind::WorkspaceStatus,
+                StatusQueryKind::Opened,
+                StatusQueryKind::Reconcile,
+            ],
+            InvalidationReason::FileMutation,
+        );
+        execution_result(&record.target, operation_id, execution)
+    }
+}
+
+fn execution_result(
+    target: &RenameMoveTargetSnapshot,
+    operation_id: String,
+    execution: Result<OperationResult, String>,
+) -> RenameMoveResult {
+    match execution {
+        Ok(operation) if operation.exit_code == 0 => RenameMoveResult {
+            outcome: RenameMoveOutcome::Succeeded,
+            failure: None,
+            message: "The file was opened for move at the reviewed destination.".into(),
+            operation_id: Some(operation_id.clone()),
+            log_reference: Some(operation_id),
+            refresh: refresh(
+                target,
+                "Rename/move completed; refresh workspace and pending changelists.",
+            ),
+        },
+        Ok(operation) => {
+            let cancelled = operation
+                .events
+                .iter()
+                .any(|event| matches!(event.kind, EventKind::Cancelled));
+            RenameMoveResult {
+                    outcome: if cancelled {
+                        RenameMoveOutcome::Cancelled
+                    } else {
+                        RenameMoveOutcome::Failed
+                    },
+                    failure: Some(if cancelled {
+                        RenameMoveFailureCode::Cancelled
+                    } else {
+                        RenameMoveFailureCode::CommandFailure
+                    }),
+                    message: if cancelled {
+                        "Rename/move was cancelled. Refresh before retrying."
+                    } else {
+                        "The server rejected rename/move. Refresh before retrying."
+                    }
+                    .into(),
+                    operation_id: Some(operation_id.clone()),
+                    log_reference: Some(operation_id),
+                    refresh: refresh(
+                        target,
+                        "The command did not complete successfully; refresh both paths and pending changelists.",
+                    ),
+                }
+        }
+        Err(message) => {
+            let cancelled = message.to_ascii_lowercase().contains("cancel");
+            let uncertain = message.to_ascii_lowercase().contains("timed out");
+            RenameMoveResult {
+                outcome: if cancelled {
+                    RenameMoveOutcome::Cancelled
+                } else if uncertain {
+                    RenameMoveOutcome::Unknown
+                } else {
+                    RenameMoveOutcome::Failed
+                },
+                failure: Some(if cancelled {
+                    RenameMoveFailureCode::Cancelled
+                } else if uncertain {
+                    RenameMoveFailureCode::UncertainOutcome
+                } else {
+                    RenameMoveFailureCode::CommandFailure
+                }),
+                message: format!("Rename/move did not complete reliably: {message}"),
+                operation_id: Some(operation_id.clone()),
+                log_reference: Some(operation_id),
+                refresh: refresh(
+                    target,
+                    "The command outcome requires a fresh workspace and changelist snapshot.",
+                ),
+            }
+        }
+    }
+}
+
+fn evaluate(
+    context: &P4Context,
+    generation: u64,
+    active_profile_id: Option<String>,
+    target_change_id: i64,
+    inspection: &RenameInspection,
+) -> Evaluation {
+    let mut blockers = Vec::new();
+    if !inspection.source_exists {
+        blockers.push(issue(
+            RenameMoveIssueCode::SourceMissing,
+            "The source must be an existing controlled file in the current workspace.",
+        ));
+    }
+    if inspection.source.is_none() {
+        blockers.push(issue(
+            RenameMoveIssueCode::SourceUnmapped,
+            "The source is not mapped by the current workspace view.",
+        ));
+    }
+    if inspection.target.is_none() {
+        blockers.push(issue(
+            RenameMoveIssueCode::TargetUnmapped,
+            "The destination is not mapped by the current workspace view.",
+        ));
+    }
+    if inspection.target_exists {
+        blockers.push(issue(
+            RenameMoveIssueCode::TargetExists,
+            "The destination already exists locally or in the depot; overwrite is not allowed.",
+        ));
+    }
+    if inspection.target.is_some() && !inspection.target_parent_exists {
+        blockers.push(issue(
+            RenameMoveIssueCode::InvalidPath,
+            "The destination parent directory must already exist; it will not be created automatically.",
+        ));
+    }
+    if !inspection
+        .source_state
+        .as_ref()
+        .is_some_and(|state| matches!(state.action.as_str(), "edit" | "add"))
+    {
+        blockers.push(issue(
+            RenameMoveIssueCode::SourceNotOpened,
+            "The source must be opened for edit or add before it can be moved.",
+        ));
+    }
+    if !inspection.target_change_valid {
+        blockers.push(issue(
+            RenameMoveIssueCode::InvalidChangelist,
+            "The target changelist must be Default or an existing pending changelist owned by this user and workspace.",
+        ));
+    }
+    let same_mapping = inspection
+        .source
+        .as_ref()
+        .zip(inspection.target.as_ref())
+        .is_some_and(|(source, target)| {
+            mapped_to_context(context, source)
+                && mapped_to_context(context, target)
+                && client_root(&source.client_path) == client_root(&target.client_path)
+        });
+    if inspection.source.is_some() && inspection.target.is_some() && !same_mapping {
+        blockers.push(issue(
+            RenameMoveIssueCode::CrossWorkspace,
+            "Source and destination must remain in the same current workspace mapping.",
+        ));
+    }
+    let case_only_risk = inspection
+        .source
+        .as_ref()
+        .zip(inspection.target.as_ref())
+        .is_some_and(|(source, target)| case_only(&source.local_path, &target.local_path));
+    if case_only_risk {
+        blockers.push(issue(
+            RenameMoveIssueCode::CaseOnlyRename,
+            "Case-only rename is blocked on Windows because a safe temporary-name transaction and rollback are not implemented.",
+        ));
+    }
+    let target = if blockers.is_empty() {
+        Some(RenameMoveTargetSnapshot {
+            server: context.server.clone(),
+            user: context.user.clone(),
+            client: context.client.clone(),
+            workspace: context.cwd.clone().unwrap_or_default(),
+            active_profile_id,
+            context_generation: generation,
+            source: inspection.source.clone().expect("validated source mapping"),
+            target: inspection.target.clone().expect("validated target mapping"),
+            source_state: inspection
+                .source_state
+                .clone()
+                .expect("validated source state"),
+            target_change_id,
+        })
+    } else {
+        None
+    };
+    Evaluation {
+        blockers,
+        warnings: Vec::new(),
+        target,
+        case_only_risk,
+    }
+}
+
+fn mapped_to_context(context: &P4Context, mapping: &RenameMoveMapping) -> bool {
+    let expected_client = format!("//{}/", context.client);
+    if !mapping.client_path.starts_with(&expected_client) {
+        return false;
+    }
+    let Some(root) = context.cwd.as_deref() else {
+        return false;
+    };
+    let root = Path::new(root);
+    let local = Path::new(&mapping.local_path);
+    local.is_absolute()
+        && !local
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+        && path_starts_with(local, root)
+}
+
+fn path_starts_with(path: &Path, root: &Path) -> bool {
+    if cfg!(windows) {
+        let path = path
+            .to_string_lossy()
+            .replace('/', "\\")
+            .to_ascii_lowercase();
+        let root = root
+            .to_string_lossy()
+            .replace('/', "\\")
+            .trim_end_matches('\\')
+            .to_ascii_lowercase();
+        path == root || path.starts_with(&format!("{root}\\"))
+    } else {
+        path.starts_with(root)
+    }
+}
+
+fn client_root(path: &str) -> Option<&str> {
+    let remainder = path.strip_prefix("//")?;
+    remainder.split('/').next()
+}
+
+fn case_only(source: &str, target: &str) -> bool {
+    let source = source.replace('\\', "/");
+    let target = target.replace('\\', "/");
+    source != target && source.to_lowercase() == target.to_lowercase()
+}
+
+fn context_matches(
+    target: &RenameMoveTargetSnapshot,
+    context: &P4Context,
+    generation: u64,
+    active_profile_id: Option<String>,
+) -> bool {
+    target.server == context.server
+        && target.user == context.user
+        && target.client == context.client
+        && target.workspace == context.cwd.clone().unwrap_or_default()
+        && target.context_generation == generation
+        && target.active_profile_id == active_profile_id
+}
+
+fn digest_preview(
+    target: Option<&RenameMoveTargetSnapshot>,
+    blockers: &[RenameMoveIssue],
+    warnings: &[RenameMoveIssue],
+) -> String {
+    let bytes = serde_json::to_vec(&(target, blockers, warnings)).unwrap_or_default();
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn issue(code: RenameMoveIssueCode, message: impl Into<String>) -> RenameMoveIssue {
+    RenameMoveIssue {
+        code,
+        message: message.into(),
+    }
+}
+
+fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
+    value
+        .filter(|value| valid_operation_id(value))
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("{fallback}-{}", Uuid::new_v4()))
+}
+
+fn valid_operation_id(value: &str) -> bool {
+    !value.trim().is_empty()
+        && value.len() <= 128
+        && value
+            .chars()
+            .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
+}
+
+fn rejected(
+    failure: RenameMoveFailureCode,
+    message: impl Into<String>,
+    target: Option<&RenameMoveTargetSnapshot>,
+) -> RenameMoveResult {
+    RenameMoveResult {
+        outcome: RenameMoveOutcome::Rejected,
+        failure: Some(failure),
+        message: message.into(),
+        operation_id: None,
+        log_reference: None,
+        refresh: target.map_or_else(empty_refresh, |target| {
+            refresh(
+                target,
+                "Run a new preflight against the current runtime context.",
+            )
+        }),
+    }
+}
+
+fn empty_refresh() -> RenameMoveRefreshAdvice {
+    RenameMoveRefreshAdvice {
+        workspace_status: true,
+        pending_changes: true,
+        depot_paths: Vec::new(),
+        local_paths: Vec::new(),
+        reason: "Run a new preflight against the current runtime context.".into(),
+    }
+}
+
+fn refresh(
+    target: &RenameMoveTargetSnapshot,
+    reason: impl Into<String>,
+) -> RenameMoveRefreshAdvice {
+    RenameMoveRefreshAdvice {
+        workspace_status: true,
+        pending_changes: true,
+        depot_paths: vec![
+            target.source.depot_path.clone(),
+            target.target.depot_path.clone(),
+        ],
+        local_paths: vec![
+            target.source.local_path.clone(),
+            target.target.local_path.clone(),
+        ],
+        reason: reason.into(),
+    }
+}
+
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mapping(local: &str, depot: &str) -> RenameMoveMapping {
+        RenameMoveMapping {
+            depot_path: depot.into(),
+            client_path: format!("//workspace/{}", depot.rsplit('/').next().unwrap()),
+            local_path: local.into(),
+        }
+    }
+
+    #[test]
+    fn case_only_rename_is_an_explicit_blocker() {
+        assert!(case_only(r"C:\work\Name.txt", r"c:\WORK\name.txt"));
+        assert!(case_only(r"C:\work\Ä.txt", r"C:\work\ä.txt"));
+        assert!(!case_only(r"C:\work\Name.txt", r"C:\work\other.txt"));
+    }
+
+    #[test]
+    fn preview_digest_binds_source_state_target_change_and_mapping() {
+        let mut target = RenameMoveTargetSnapshot {
+            server: "server".into(),
+            user: "alice".into(),
+            client: "workspace".into(),
+            workspace: r"C:\work".into(),
+            active_profile_id: Some("profile".into()),
+            context_generation: 7,
+            source: mapping(r"C:\work\a.txt", "//depot/a.txt"),
+            target: mapping(r"C:\work\b.txt", "//depot/b.txt"),
+            source_state: RenameMoveSourceState {
+                action: "edit".into(),
+                change_id: 0,
+                file_type: Some("text".into()),
+                have_revision: Some(1),
+                head_revision: Some(1),
+            },
+            target_change_id: 0,
+        };
+        let first = digest_preview(Some(&target), &[], &[]);
+        target.target_change_id = 42;
+        assert_ne!(first, digest_preview(Some(&target), &[], &[]));
+        target.target_change_id = 0;
+        target.source_state.action = "add".into();
+        assert_ne!(first, digest_preview(Some(&target), &[], &[]));
+    }
+
+    #[test]
+    fn confirmation_store_consumes_once_and_expires_old_records_on_issue() {
+        let store = ConfirmationStore::default();
+        let target = RenameMoveTargetSnapshot {
+            server: "server".into(),
+            user: "alice".into(),
+            client: "workspace".into(),
+            workspace: "work".into(),
+            active_profile_id: None,
+            context_generation: 1,
+            source: mapping("/work/a", "//depot/a"),
+            target: mapping("/work/b", "//depot/b"),
+            source_state: RenameMoveSourceState {
+                action: "edit".into(),
+                change_id: 0,
+                file_type: None,
+                have_revision: None,
+                head_revision: None,
+            },
+            target_change_id: 0,
+        };
+        let token = store.issue(
+            TokenRecord {
+                target: target.clone(),
+                preview_digest: "a".into(),
+                expires_at: 10,
+            },
+            0,
+        );
+        assert!(store.consume(&token).is_some());
+        assert!(store.consume(&token).is_none());
+        let expired = store.issue(
+            TokenRecord {
+                target,
+                preview_digest: "b".into(),
+                expires_at: 1,
+            },
+            0,
+        );
+        let _fresh = store.issue(
+            TokenRecord {
+                target: mapping_target(),
+                preview_digest: "c".into(),
+                expires_at: 20,
+            },
+            2,
+        );
+        assert!(store.consume(&expired).is_none());
+    }
+
+    fn mapping_target() -> RenameMoveTargetSnapshot {
+        RenameMoveTargetSnapshot {
+            server: "server".into(),
+            user: "alice".into(),
+            client: "workspace".into(),
+            workspace: "work".into(),
+            active_profile_id: None,
+            context_generation: 1,
+            source: mapping("/work/a", "//depot/a"),
+            target: mapping("/work/b", "//depot/b"),
+            source_state: RenameMoveSourceState {
+                action: "edit".into(),
+                change_id: 0,
+                file_type: None,
+                have_revision: None,
+                head_revision: None,
+            },
+            target_change_id: 0,
+        }
+    }
+
+    #[test]
+    fn runtime_generation_and_profile_are_part_of_context_identity() {
+        let target = mapping_target();
+        let context = P4Context {
+            server: "server".into(),
+            user: "alice".into(),
+            client: "workspace".into(),
+            cwd: Some("work".into()),
+            ..Default::default()
+        };
+        assert!(context_matches(&target, &context, 1, None));
+        assert!(!context_matches(&target, &context, 2, None));
+        assert!(!context_matches(
+            &target,
+            &context,
+            1,
+            Some("profile".into())
+        ));
+    }
+
+    #[test]
+    fn command_failure_and_uncertain_result_always_request_full_refresh() {
+        let failed = execution_result(
+            &mapping_target(),
+            "move-failed".into(),
+            Ok(OperationResult {
+                operation_id: "move-failed".into(),
+                exit_code: 1,
+                events: Vec::new(),
+                duration_ms: 1,
+            }),
+        );
+        assert_eq!(failed.outcome, RenameMoveOutcome::Failed);
+        assert_eq!(failed.failure, Some(RenameMoveFailureCode::CommandFailure));
+        assert!(failed.refresh.workspace_status && failed.refresh.pending_changes);
+        assert_eq!(failed.refresh.depot_paths.len(), 2);
+        assert_eq!(failed.refresh.local_paths.len(), 2);
+
+        let uncertain = execution_result(
+            &mapping_target(),
+            "move-timeout".into(),
+            Err("operation timed out".into()),
+        );
+        assert_eq!(uncertain.outcome, RenameMoveOutcome::Unknown);
+        assert_eq!(
+            uncertain.failure,
+            Some(RenameMoveFailureCode::UncertainOutcome)
+        );
+        assert!(uncertain.refresh.workspace_status && uncertain.refresh.pending_changes);
+    }
+}

@@ -24,6 +24,10 @@ import type {
   DiffResult,
   FileActionRequest,
   FileActionResult,
+  RenameMovePreflightRequest,
+  RenameMovePreflight,
+  RenameMoveConfirmation,
+  RenameMoveResult,
   SyncPreviewRequest,
   SyncPreviewPlan,
   SyncConfirmRequest,
@@ -140,6 +144,12 @@ export interface Backend {
   listDepotChildren(path?: string): Promise<DepotNode[]>;
   resolvePath(request: PathResolveRequest): Promise<PathResolveResult>;
   performFileAction(request: FileActionRequest): Promise<FileActionResult>;
+  preflightRenameMove(
+    request: RenameMovePreflightRequest,
+  ): Promise<RenameMovePreflight>;
+  confirmRenameMove(
+    confirmation: RenameMoveConfirmation,
+  ): Promise<RenameMoveResult>;
   previewSync(request: SyncPreviewRequest): Promise<SyncPreviewPlan>;
   confirmSync(confirmation: SyncConfirmRequest): Promise<SyncResult>;
   getFilePreview(

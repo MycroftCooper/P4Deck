@@ -10,6 +10,7 @@ import type {
   PendingChange,
   SubmitPreflight,
   SubmitTargetSnapshot,
+  RenameMoveTargetSnapshot,
   WorkflowTargetSnapshot,
   WorkspaceNode,
 } from "../../shared/contracts/types";
@@ -49,6 +50,14 @@ const mockSyncTokens = new Map<
     digest: string;
     expiresAt: number;
     counts: import("../../shared/contracts/types").SyncPlanCounts;
+  }
+>();
+const mockRenameTokens = new Map<
+  string,
+  {
+    target: RenameMoveTargetSnapshot;
+    digest: string;
+    expiresAt: number;
   }
 >();
 try {
@@ -639,6 +648,7 @@ export const mockBackend: Backend = {
       mockContext = { ...request.context };
       mockContextGeneration += 1;
       mockSyncTokens.clear();
+      mockRenameTokens.clear();
     }
     return this.listConnectionProfiles();
   },
@@ -673,6 +683,7 @@ export const mockBackend: Backend = {
     mockProfileRevision += 1;
     mockContextGeneration += 1;
     mockSyncTokens.clear();
+    mockRenameTokens.clear();
     return this.runtimeInfo();
   },
   async switchWorkspace(request) {
@@ -697,6 +708,7 @@ export const mockBackend: Backend = {
     mockProfileRevision += 1;
     mockContextGeneration += 1;
     mockSyncTokens.clear();
+    mockRenameTokens.clear();
     return this.runtimeInfo();
   },
   async saveConnection(context) {
@@ -714,6 +726,7 @@ export const mockBackend: Backend = {
     mockProfileRevision += 1;
     mockContextGeneration += 1;
     mockSyncTokens.clear();
+    mockRenameTokens.clear();
     return { ...context };
   },
   async runtimeInfo() {
@@ -734,12 +747,12 @@ export const mockBackend: Backend = {
   async runP4(request) {
     if (
       request.source === "gui" &&
-      ["submit", "shelve", "unshelve", "resolve"].includes(
+      ["submit", "shelve", "unshelve", "resolve", "move"].includes(
         request.command.toLowerCase(),
       )
     )
       throw new Error(
-        "GUI submit, shelf, unshelve and resolve require preflight and confirmation",
+        "GUI submit, shelf, unshelve, resolve and move require preflight and confirmation",
       );
     const operationId = request.operationId ?? crypto.randomUUID();
     const started = new Date().toISOString();
@@ -1206,6 +1219,10 @@ export const mockBackend: Backend = {
     return { reveal: false, openWith: false };
   },
   async performFileAction(request) {
+    if ((request.action as string) === "renameMove")
+      throw new Error(
+        "Rename/move must use preflightRenameMove and confirmRenameMove",
+      );
     if ((request.action as string) === "submit")
       throw new Error("Submit must use preflightSubmit and confirmSubmit");
     if (["shelve", "resolve"].includes(request.action))
@@ -1252,6 +1269,207 @@ export const mockBackend: Backend = {
       },
       affectedPaths: request.paths,
       message: `${request.action} completed in Mock Backend.`,
+    };
+  },
+  async preflightRenameMove(request) {
+    const root = (mockContext.cwd ?? "")
+      .replaceAll("\\", "/")
+      .replace(/\/$/, "");
+    const sourceLocal = request.sourcePath.replaceAll("\\", "/");
+    const targetLocal = request.targetPath.replaceAll("\\", "/");
+    const relativeSource = sourceLocal.startsWith(`${root}/`)
+      ? sourceLocal.slice(root.length + 1)
+      : "";
+    const relativeTarget = targetLocal.startsWith(`${root}/`)
+      ? targetLocal.slice(root.length + 1)
+      : "";
+    const sourceNode = mockWorkspace.find(
+      (node) => node.absolutePath.replaceAll("\\", "/") === sourceLocal,
+    );
+    const targetNode = mockWorkspace.find(
+      (node) => node.absolutePath.replaceAll("\\", "/") === targetLocal,
+    );
+    const source = relativeSource
+      ? {
+          depotPath: sourceNode?.depotPath ?? `//atlas/main/${relativeSource}`,
+          clientPath: `//${mockContext.client}/${relativeSource}`,
+          localPath: request.sourcePath,
+        }
+      : undefined;
+    const target = relativeTarget
+      ? {
+          depotPath: `//atlas/main/${relativeTarget}`,
+          clientPath: `//${mockContext.client}/${relativeTarget}`,
+          localPath: request.targetPath,
+        }
+      : undefined;
+    const sourceState = sourceNode
+      ? {
+          action:
+            sourceNode.state === "openedAdd"
+              ? "add"
+              : sourceNode.state === "openedEdit"
+                ? "edit"
+                : "",
+          changeId: sourceNode.changelistId ?? 0,
+          haveRevision: sourceNode.revision,
+          headRevision: sourceNode.headRevision,
+        }
+      : undefined;
+    const changes = await this.queryPendingChanges();
+    const targetChangeValid =
+      request.targetChangeId === 0 ||
+      changes.some((change) => change.id === request.targetChangeId);
+    const caseOnlyRisk =
+      sourceLocal !== targetLocal &&
+      sourceLocal.toLocaleLowerCase() === targetLocal.toLocaleLowerCase();
+    const blockers: import("../../shared/contracts/types").RenameMoveIssue[] =
+      [];
+    if (!sourceNode || sourceNode.kind !== "file")
+      blockers.push({
+        code: "sourceMissing",
+        message: "Browser Mock: source is not an existing controlled file.",
+      });
+    if (!source)
+      blockers.push({
+        code: "sourceUnmapped",
+        message: "Browser Mock: source is outside the workspace mapping.",
+      });
+    if (!target)
+      blockers.push({
+        code: "targetUnmapped",
+        message: "Browser Mock: target is outside the workspace mapping.",
+      });
+    if (targetNode)
+      blockers.push({
+        code: "targetExists",
+        message: "Browser Mock: target already exists.",
+      });
+    if (!sourceState || !["edit", "add"].includes(sourceState.action))
+      blockers.push({
+        code: "sourceNotOpened",
+        message: "Browser Mock: source must be opened for edit or add.",
+      });
+    if (!targetChangeValid)
+      blockers.push({
+        code: "invalidChangelist",
+        message: "Browser Mock: target changelist does not exist.",
+      });
+    if (caseOnlyRisk)
+      blockers.push({
+        code: "caseOnlyRename",
+        message: "Case-only rename is blocked on Windows.",
+      });
+    const targetSnapshot =
+      !blockers.length && source && target && sourceState
+        ? {
+            server: mockContext.server,
+            user: mockContext.user,
+            client: mockContext.client,
+            workspace: mockContext.cwd ?? "",
+            activeProfileId: mockActiveProfileId,
+            contextGeneration: mockContextGeneration,
+            source,
+            target,
+            sourceState,
+            targetChangeId: request.targetChangeId,
+          }
+        : undefined;
+    const previewDigest = mockDigest(
+      JSON.stringify({ targetSnapshot, blockers, warnings: [] }),
+    );
+    const token = targetSnapshot ? crypto.randomUUID() : undefined;
+    const expiresAt = Date.now() + 120_000;
+    if (token)
+      mockRenameTokens.set(token, {
+        target: targetSnapshot!,
+        digest: previewDigest,
+        expiresAt,
+      });
+    return {
+      ready: Boolean(targetSnapshot),
+      source,
+      target,
+      sourceState,
+      targetChangeId: request.targetChangeId,
+      targetChangeValid,
+      targetExists: Boolean(targetNode),
+      caseOnlyRisk,
+      blockers,
+      warnings: [],
+      targetSnapshot,
+      previewDigest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [],
+    };
+  },
+  async confirmRenameMove(confirmation) {
+    const record = mockRenameTokens.get(confirmation.token);
+    mockRenameTokens.delete(confirmation.token);
+    const refresh = {
+      workspaceStatus: true,
+      pendingChanges: true,
+      depotPaths: [
+        confirmation.target.source.depotPath,
+        confirmation.target.target.depotPath,
+      ],
+      localPaths: [
+        confirmation.target.source.localPath,
+        confirmation.target.target.localPath,
+      ],
+      reason: "Browser Mock: refresh the simulated workspace snapshot.",
+    };
+    if (!record)
+      return {
+        outcome: "rejected",
+        failure: "tokenUnknown",
+        message: "Browser Mock: token is unknown or already used.",
+        refresh,
+      };
+    if (record.expiresAt <= Date.now())
+      return {
+        outcome: "rejected",
+        failure: "tokenExpired",
+        message: "Browser Mock: preview expired.",
+        refresh,
+      };
+    if (
+      JSON.stringify(record.target) !== JSON.stringify(confirmation.target) ||
+      record.digest !== confirmation.previewDigest
+    )
+      return {
+        outcome: "rejected",
+        failure: "targetMismatch",
+        message: "Browser Mock: confirmation does not match preview.",
+        refresh,
+      };
+    if (
+      record.target.contextGeneration !== mockContextGeneration ||
+      record.target.activeProfileId !== mockActiveProfileId
+    )
+      return {
+        outcome: "rejected",
+        failure: "contextChanged",
+        message: "Browser Mock: runtime context changed.",
+        refresh,
+      };
+    const operationId = confirmation.operationId ?? crypto.randomUUID();
+    emitMockLog(
+      "info",
+      "gui",
+      "p4 move",
+      "Browser Mock only: simulated confirmed rename/move.",
+      operationId,
+      10,
+    );
+    return {
+      outcome: "succeeded",
+      message: "Browser Mock only: rename/move was simulated.",
+      operationId,
+      logReference: operationId,
+      refresh,
     };
   },
   async previewSync(request) {
