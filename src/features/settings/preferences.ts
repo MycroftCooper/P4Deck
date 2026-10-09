@@ -6,6 +6,9 @@ export interface UiPreferences {
   sidebarWidth: number;
   fontSize: number;
   reducedMotion: boolean;
+  autoRefresh: boolean;
+  desktopNotifications: boolean;
+  notifyOnlyFailures: boolean;
 }
 export const defaultUi: UiPreferences = {
   activityBarText: true,
@@ -14,6 +17,9 @@ export const defaultUi: UiPreferences = {
   sidebarWidth: 240,
   fontSize: 12,
   reducedMotion: false,
+  autoRefresh: true,
+  desktopNotifications: false,
+  notifyOnlyFailures: false,
 };
 export function readUiPreferences(): UiPreferences {
   try {
@@ -24,6 +30,9 @@ export function readUiPreferences(): UiPreferences {
       toolbarText: typeof p.toolbarText === "boolean" ? p.toolbarText : true,
       compact: p.compact === true,
       reducedMotion: p.reducedMotion === true,
+      autoRefresh: p.autoRefresh !== false,
+      desktopNotifications: p.desktopNotifications === true,
+      notifyOnlyFailures: p.notifyOnlyFailures === true,
       sidebarWidth: [200, 240, 280, 320].includes(p.sidebarWidth)
         ? p.sidebarWidth
         : 240,

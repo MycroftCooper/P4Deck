@@ -7,6 +7,7 @@ import type {
   SubmitPreflight,
   SubmitResult,
 } from "../../../shared/contracts/types";
+import { requestDesktopAttention } from "../../../app/notifications/notifications";
 
 export type SubmitCheck = SubmitPreflight;
 interface Props {
@@ -136,6 +137,20 @@ export function SubmitDialog(props: Props) {
         );
       setCheck(result);
       setSummary(result.change);
+      requestDesktopAttention({
+        key: `submit-preflight:${origin.id}:${result.fileSummary.contentDigest}`,
+        title: tr("Submit 等待确认", "Submit awaits confirmation"),
+        body: result.blockers.length
+          ? tr(
+              `CL ${origin.id} 有 ${result.blockers.length} 个阻断项。`,
+              `CL ${origin.id} has ${result.blockers.length} blocker(s).`,
+            )
+          : tr(
+              `请确认提交 CL ${origin.id}。`,
+              `Review and confirm CL ${origin.id}.`,
+            ),
+        kind: "attention",
+      });
       const checkedChange = result.change;
       setPhase(
         !result.ready ||
@@ -189,6 +204,12 @@ export function SubmitDialog(props: Props) {
         setMessage(result.message);
         setPhase(result.outcome === "submitted" ? "success" : "failed");
         if (result.outcome !== "submitted") {
+          requestDesktopAttention({
+            key: `submit-result:${origin.id}:${result.operationId ?? result.outcome}`,
+            title: tr("Submit 需要处理", "Submit needs attention"),
+            body: result.message,
+            kind: "failure",
+          });
           setCheck(undefined);
           setAcknowledged(false);
         }

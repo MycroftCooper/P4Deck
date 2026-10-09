@@ -1,4 +1,4 @@
-import { Palette } from "lucide-react";
+import { Bell, Palette, RefreshCw } from "lucide-react";
 import type {
   ConnectionStatus,
   Locale,
@@ -8,6 +8,7 @@ import type {
 } from "../../shared/contracts/types";
 import { ConnectionProfilesCard } from "./ConnectionProfilesCard";
 import { defaultUi, type UiPreferences } from "./preferences";
+import { requestDesktopNotificationPermission } from "../../app/notifications/notifications";
 
 interface Props {
   runtime: RuntimeInfo;
@@ -58,6 +59,71 @@ export function SettingsPage({
         onRuntime={onRuntime}
         locale={locale}
       />
+      <section className="settings-card">
+        <h2>
+          <RefreshCw size={18} />
+          {tr("刷新与通知", "Refresh & notifications")}
+        </h2>
+        <div className="settings-grid">
+          <label>
+            {tr("只读视图自动刷新", "Auto-refresh read-only views")}
+            <select
+              value={String(ui.autoRefresh)}
+              onChange={(event) =>
+                onUi({ ...ui, autoRefresh: event.target.value === "true" })
+              }
+            >
+              <option value="true">{tr("开启", "On")}</option>
+              <option value="false">{tr("暂停", "Paused")}</option>
+            </select>
+          </label>
+          <label>
+            <Bell size={14} /> {tr("桌面通知", "Desktop notifications")}
+            <select
+              value={String(ui.desktopNotifications)}
+              onChange={(event) => {
+                const enabled = event.target.value === "true";
+                if (!enabled) {
+                  onUi({ ...ui, desktopNotifications: false });
+                  return;
+                }
+                void requestDesktopNotificationPermission().then((granted) =>
+                  onUi({ ...ui, desktopNotifications: granted }),
+                );
+              }}
+            >
+              <option value="false">{tr("关闭", "Off")}</option>
+              <option value="true">{tr("开启", "On")}</option>
+            </select>
+          </label>
+          <label>
+            {tr("通知范围", "Notification scope")}
+            <select
+              value={String(ui.notifyOnlyFailures)}
+              disabled={!ui.desktopNotifications}
+              onChange={(event) =>
+                onUi({
+                  ...ui,
+                  notifyOnlyFailures: event.target.value === "true",
+                })
+              }
+            >
+              <option value="false">
+                {tr("长操作结果与需处理事件", "Long operations and attention")}
+              </option>
+              <option value="true">
+                {tr("仅失败与需处理事件", "Failures and attention only")}
+              </option>
+            </select>
+          </label>
+        </div>
+        <p>
+          {tr(
+            "自动刷新仅重试幂等只读请求；Sync、Submit、Shelf 等修改操作必须由你明确重新发起。前台可见时系统通知会被抑制。",
+            "Automatic refresh retries only idempotent reads. Sync, Submit, Shelf, and other mutations require an explicit retry. System notifications are suppressed while the app is visible.",
+          )}
+        </p>
+      </section>
       <section className="settings-card">
         <h2>
           <Palette size={18} />

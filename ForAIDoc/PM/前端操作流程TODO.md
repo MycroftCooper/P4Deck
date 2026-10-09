@@ -1,5 +1,12 @@
 # 前端操作流程 TODO
 
+## 最近完成：统一 Action、失败恢复、自动刷新与通知（2026-10-09）
+
+- `app/commands/catalog.ts` 现为命令面板、Web 快捷键、Tauri 菜单和执行映射的统一 action 目录，覆盖全部现有 `CommandBar` 操作及 Profile、页面、Diagnostics、Terminal/P4 Log、设置和窗口动作；mutation 无直接快捷键且只调用既有状态机。
+- 幂等只读 retry 具有错误分类、指数退避/jitter/硬上限、AbortSignal 与 profile/generation 漂移检查；mutation、Sync、Submit、Shelf 等不进入自动重试。
+- 自动刷新按窗口可见/聚焦/网络恢复和活动页触发，具有前后台/独立窗口节流、旧请求取消、迟到隔离、暂停/恢复、失败与上次更新时间。通知具有偏好、前台抑制、去重冷却与二次脱敏。
+- 全量门禁：Web 71 文件/403 项、Rust 130 项通过/1 项 ignored；`pnpm build/check/format:check`、Clippy `-D warnings`、rustfmt、前后端性能门禁和 `git diff --check` 通过；Windows localhost p4d 两轮通过（88.90 秒、85.51 秒）。Windows/macOS 原生菜单、系统通知、独立窗口焦点/节流、真实网络恢复和读屏仍为外部验收项。
+
 日期：2026-10-09。负责人：前端 UI。状态：P0 连接认证、BE-003/BE-004a/BE-004b/BE-005/BE-008/BE-008Q/BE-008G、FE-16 诊断体验、FE-17 本机大列表基准及 FE-18 多连接生产 UI 已完成浏览器自动化验收；真实 SSL/SSO/MFA、Windows/macOS 原生点击/读屏与固定设备验收仍未完成，整体未完成。
 
 ## 范围与约束

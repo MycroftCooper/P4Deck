@@ -18,6 +18,8 @@
 
 Terminal / P4 Log 的入口、快捷键、dock/浮窗恢复、连接代次与安全边界见 [Terminal 与 P4 Log 工作流](Designer/Terminal与P4Log工作流.md)。
 
+全应用命令目录、跨平台快捷键、只读重试/自动刷新和桌面通知策略见 [统一 Action、刷新与通知](Designer/统一Action刷新与通知.md)。
+
 逐项实施与验收入口：[右键菜单对象与菜单项总表](Designer/右键菜单对象与菜单项总表.md)，按对象列明全部候选菜单项及实现批次。
 
 菜单 UI 逐项记录：[492 项 UI 验收台账](Coder/右键菜单UI逐项验收台账.md)。UI 通过不等于后端流程已接通。

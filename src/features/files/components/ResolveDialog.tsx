@@ -15,6 +15,7 @@ import {
   type PreflightState,
 } from "../../../app/dialogs/PreflightStatus";
 import { TargetList } from "../../../app/dialogs/TargetList";
+import { requestDesktopAttention } from "../../../app/notifications/notifications";
 import {
   publishWorkflowFailure,
   publishWorkflowResult,
@@ -157,6 +158,20 @@ export function ResolveDialog({
           ),
         );
       setPreflight(value);
+      requestDesktopAttention({
+        key: `resolve-preflight:${value.contentDigest}`,
+        title: tr("Resolve 等待处理", "Resolve awaits attention"),
+        body: value.blockers.length
+          ? tr(
+              `${value.blockers.length} 个 Resolve 阻断项需要检查。`,
+              `${value.blockers.length} Resolve blocker(s) need review.`,
+            )
+          : tr(
+              `${value.conflicts.length} 个冲突等待选择策略。`,
+              `${value.conflicts.length} conflict(s) await a strategy.`,
+            ),
+        kind: "attention",
+      });
       setIndex(0);
       const hasUnsafeConflict = value.conflicts.some(
         (item) =>
@@ -213,6 +228,13 @@ export function ResolveDialog({
         value.files.length === preflight.conflicts.length &&
         value.files.every((file) => file.state === "succeeded");
       setPhase(succeeded ? "success" : "failed");
+      if (!succeeded)
+        requestDesktopAttention({
+          key: `resolve-result:${value.logReference ?? value.outcome}`,
+          title: tr("Resolve 需要处理", "Resolve needs attention"),
+          body: value.message,
+          kind: "failure",
+        });
       await publishWorkflowResult(value, preflight.target, connectionKey);
       if (!succeeded) setPreflight(undefined);
     } catch (cause) {

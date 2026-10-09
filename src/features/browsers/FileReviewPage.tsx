@@ -219,6 +219,14 @@ export function FileReviewPage({
       .invalidateQueries({ queryKey: key })
       .then(() => setRefresh((v) => v + 1));
   };
+  useEffect(() => {
+    const autoRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
+      if (detail?.activePage === kind) reload();
+    };
+    window.addEventListener("p4deck:auto-refresh", autoRefresh);
+    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
+  }, [kind, primaryOwner]);
   const compareGraphNode = () => {
     if (!selected) return;
     const pair = graphNodeDiffPair(selected);

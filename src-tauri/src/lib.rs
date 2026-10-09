@@ -60,6 +60,22 @@ pub fn run() {
                 true,
                 Some("CmdOrCtrl+Shift+P"),
             )?;
+            let refresh = MenuItem::with_id(
+                app,
+                "view.refresh",
+                "Refresh Current Data",
+                true,
+                Some("CmdOrCtrl+R"),
+            )?;
+            let search = MenuItem::with_id(
+                app,
+                "view.search",
+                "Global Search",
+                true,
+                Some("CmdOrCtrl+Shift+F"),
+            )?;
+            let settings =
+                MenuItem::with_id(app, "view.settings", "Settings", true, Some("CmdOrCtrl+,"))?;
             let terminal = MenuItem::with_id(
                 app,
                 "tools.openTerminal",
@@ -81,14 +97,54 @@ pub fn run() {
                 true,
                 Some("CmdOrCtrl+Alt+D"),
             )?;
-            let view = SubmenuBuilder::new(app, "View")
-                .items(&[&palette, &terminal, &log])
+            let connection = SubmenuBuilder::new(app, "Connection")
+                .text("connection.manageProfiles", "Connect / Switch Profile")
+                .item(&settings)
+                .build()?;
+            let changes = SubmenuBuilder::new(app, "Changes")
+                .text("workspace.sync", "Sync Selected Target…")
+                .text("workspace.syncRevision", "Sync to Revision…")
+                .text("changelist.shelf", "Shelf Selected Files…")
+                .text("changelist.moveFiles", "Move Selected Files to Changelist…")
+                .text("changelist.submit", "Submit Selected Changelist…")
                 .separator()
+                .text("file.rename", "Rename / Move…")
+                .text("file.resolve", "Resolve…")
+                .text("file.checkout", "Checkout")
+                .text("file.add", "Add")
+                .text("file.delete", "Mark for Delete…")
+                .text("file.revert", "Revert…")
+                .separator()
+                .text("operation.cancel", "Cancel Current Operation")
+                .build()?;
+            let navigate = SubmenuBuilder::new(app, "Navigate")
+                .item(&search)
+                .text("view.pending", "Pending")
+                .text("view.submitted", "Submitted")
+                .text("view.workspaces", "Workspaces")
+                .separator()
+                .text("file.diff", "Diff")
+                .text("file.history", "History")
+                .text("file.revgraph", "Revision Graph")
+                .text("file.preview", "Preview")
+                .text("file.reveal", "Reveal in System")
+                .text("file.openWith", "Open With…")
+                .build()?;
+            let view = SubmenuBuilder::new(app, "View")
+                .items(&[&palette, &refresh, &terminal, &log])
+                .separator()
+                .text("view.diagnostics", "Diagnostics")
                 .text("tools.popoutTerminal", "Open Terminal in New Window")
                 .text("tools.popoutP4Log", "Open P4 Log in New Window")
+                .text("refresh.toggleAuto", "Pause / Resume Auto Refresh")
                 .item(&dock_back)
                 .build()?;
-            MenuBuilder::new(app).item(&view).build()
+            MenuBuilder::new(app)
+                .item(&connection)
+                .item(&changes)
+                .item(&navigate)
+                .item(&view)
+                .build()
         })
         .on_menu_event(|app, event| {
             let target = app

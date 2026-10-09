@@ -40,7 +40,7 @@
 }
 .statusbar.status-meters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) auto auto;
   gap: 16px;
 }
 .disk-status,
@@ -111,5 +111,36 @@
 @media (prefers-reduced-motion: reduce) {
   .p4-status progress:indeterminate {
     animation: none;
+  }
+}
+.auto-refresh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0 8px;
+}
+
+.auto-refresh-status:hover {
+  background: var(--hover);
+}
+
+@media (max-width: 650px) {
+  .statusbar.status-meters {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 4px;
+    padding-inline: 6px;
+  }
+  .disk-status progress,
+  .disk-status > span:last-child,
+  .p4-status progress,
+  .p4-status > span:last-child,
+  .auto-refresh-status span {
+    display: none;
   }
 }

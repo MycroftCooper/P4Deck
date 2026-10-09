@@ -81,7 +81,14 @@ export function CommandPalette({
                   }}
                 >
                   <span>{zh ? command.zh : command.en}</span>
-                  <small>{command.id}</small>
+                  <small>
+                    {command.group} · {command.id} · {command.risk}
+                    {command.confirmation === "stateMachine"
+                      ? zh
+                        ? " · 需要预检/确认"
+                        : " · preflight/confirmation required"
+                      : ""}
+                  </small>
                   {command.shortcut && (
                     <kbd>
                       {shortcutLabel(

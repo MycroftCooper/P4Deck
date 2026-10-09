@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { HardDrive } from "lucide-react";
+import { HardDrive, Pause, RefreshCw } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import { workspaceCache } from "../../features/files/workspaceQueries";
 import { subscribeSafely } from "../../shared/lib/subscription";
@@ -14,6 +14,7 @@ import {
 import { TaskList } from "./TaskList";
 import { useContextMenu } from "../context-menu/ContextMenu";
 import { action } from "../context-menu/bindings";
+import type { AutoRefreshStatus } from "../refresh/autoRefresh";
 const size = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 export function StatusBar({
   connectionKey,
@@ -21,12 +22,18 @@ export function StatusBar({
   zh,
   children,
   onOpenLogs,
+  autoRefresh,
+  autoRefreshPaused,
+  onToggleAutoRefresh,
 }: {
   connectionKey: string;
   native: boolean;
   zh: boolean;
   children: ReactNode;
   onOpenLogs(id?: string): void;
+  autoRefresh: AutoRefreshStatus;
+  autoRefreshPaused: boolean;
+  onToggleAutoRefresh(): void;
 }) {
   const menu = useContextMenu();
   const [tasksOpen, setTasksOpen] = useState(false);
@@ -151,6 +158,45 @@ export function StatusBar({
           zh={zh}
         />
       )}
+      <button
+        className="auto-refresh-status"
+        onClick={onToggleAutoRefresh}
+        aria-pressed={autoRefreshPaused}
+        title={
+          autoRefresh.error ||
+          (autoRefreshPaused
+            ? zh
+              ? "自动刷新已暂停；点击恢复"
+              : "Auto refresh paused; click to resume"
+            : zh
+              ? "自动刷新只运行幂等只读请求；点击暂停"
+              : "Auto refresh runs idempotent reads only; click to pause")
+        }
+      >
+        {autoRefreshPaused ? (
+          <Pause size={13} />
+        ) : (
+          <RefreshCw
+            size={13}
+            className={autoRefresh.phase === "refreshing" ? "spin" : undefined}
+          />
+        )}
+        <span>
+          {autoRefresh.phase === "failed"
+            ? zh
+              ? "刷新失败"
+              : "Refresh failed"
+            : autoRefreshPaused
+              ? zh
+                ? "自动刷新已暂停"
+                : "Auto refresh paused"
+              : autoRefresh.lastUpdated
+                ? `${zh ? "更新于" : "Updated"} ${new Date(autoRefresh.lastUpdated).toLocaleTimeString()}`
+                : zh
+                  ? "自动刷新"
+                  : "Auto refresh"}
+        </span>
+      </button>
       {children}
     </footer>
   );

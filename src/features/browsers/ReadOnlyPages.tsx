@@ -285,6 +285,14 @@ export function ReadOnlyPage({
     await cache.invalidateQueries({ queryKey: key });
     setRefresh((v) => v + 1);
   };
+  useEffect(() => {
+    const autoRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
+      if (detail?.activePage === kind) void reload();
+    };
+    window.addEventListener("p4deck:auto-refresh", autoRefresh);
+    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
+  }, [kind, viewOwner]);
   const virtual = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scroll.current,

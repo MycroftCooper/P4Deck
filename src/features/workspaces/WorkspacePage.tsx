@@ -144,6 +144,14 @@ export function WorkspacePage({
     setRefresh((value) => value + 1);
   };
   useEffect(() => {
+    const autoRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
+      if (detail?.activePage === "workspaces") void reload();
+    };
+    window.addEventListener("p4deck:auto-refresh", autoRefresh);
+    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
+  }, [key]);
+  useEffect(() => {
     if (previousGeneration.current === runtime.contextGeneration) return;
     previousGeneration.current = runtime.contextGeneration;
     void cache.removeQueries({ queryKey: ["user-workspaces"] });

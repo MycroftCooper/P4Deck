@@ -24,7 +24,11 @@ import { AppControls } from "./shell/AppControls";
 import { CommandBar } from "./shell/CommandBar";
 import { ContextMenuProvider } from "./context-menu/ContextMenu";
 import { MenuEnvironment } from "./context-menu/environment";
-import type { CommandTarget, CommandId } from "./shell/commandPolicy";
+import {
+  commandReason,
+  type CommandTarget,
+  type CommandId,
+} from "./shell/commandPolicy";
 import {
   CommandContext,
   CommandExecutionContext,
@@ -38,6 +42,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CommandPalette } from "./commands/CommandPalette";
 import {
   appCommandReason,
+  appCommands,
   commandForShortcut,
   isAppCommand,
   type AppCommandId,
@@ -47,6 +52,8 @@ import {
   opaqueConnectionBinding,
   readDetachedBinding,
 } from "./docking/detachedBinding";
+import { useAutoRefresh } from "./refresh/autoRefresh";
+import { useDesktopNotifications } from "./notifications/notifications";
 
 export function App() {
   const preferences = usePreferences();
@@ -148,12 +155,58 @@ export function App() {
   const afterOperation = useCallback(async (warnings: string[]) => {
     await toolsRef.current?.afterOperation(warnings);
   }, []);
+  const autoRefresh = useAutoRefresh(
+    runtime,
+    connectionKey,
+    !ui.autoRefresh,
+    !!detachedPage,
+    route,
+  );
+  useDesktopNotifications(
+    runtime,
+    {
+      enabled: ui.desktopNotifications,
+      failuresOnly: ui.notifyOnlyFailures,
+    },
+    zh,
+  );
   const commandEnvironment = useMemo(
     () => ({
       detached: !!detachedPage,
       runtimeReady: runtime.p4Version !== "loading",
+      connected: runtime.connection.state === "connected",
+      busy: commandBusy,
+      target: command.target.type,
+      pendingCount:
+        command.target.type === "pending" ? command.target.count : undefined,
+      pendingId:
+        command.target.type === "pending" ? command.target.id : undefined,
+      shellReasons: Object.fromEntries(
+        appCommands.flatMap((item) =>
+          item.execution?.kind === "shell"
+            ? [
+                [
+                  item.execution.command,
+                  commandReason(
+                    item.execution.command,
+                    command.target,
+                    commandBusy,
+                    isTauri(),
+                    zh,
+                  ),
+                ],
+              ]
+            : [],
+        ),
+      ),
     }),
-    [runtime.p4Version],
+    [
+      command.target,
+      commandBusy,
+      runtime.connection.state,
+      runtime.p4Version,
+      zh,
+    ],
   );
   const runtimeBinding = useMemo(
     () => ({
@@ -173,9 +226,25 @@ export function App() {
   const executeAppCommand = useCallback(
     (id: AppCommandId) => {
       if (appCommandReason(id, commandEnvironment, zh)) return;
+      const execution = appCommands.find((item) => item.id === id)?.execution;
+      if (execution?.kind === "shell") {
+        executeCommand(execution.command);
+        return;
+      }
+      if (execution?.kind === "page") {
+        openPage(execution.page);
+        return;
+      }
+      if (execution?.kind === "tool") {
+        toolsRef.current?.open(execution.tool);
+        return;
+      }
       switch (id) {
         case "app.commandPalette":
           setPaletteOpen(true);
+          break;
+        case "view.refresh":
+          void autoRefresh.refreshNow();
           break;
         case "tools.openTerminal":
           dockRef.current?.open("terminal");
@@ -189,13 +258,27 @@ export function App() {
         case "tools.popoutP4Log":
           void dockRef.current?.popoutPage("p4log");
           break;
+        case "refresh.toggleAuto":
+          preferences.setUi((value) => ({
+            ...value,
+            autoRefresh: !value.autoRefresh,
+          }));
+          break;
         case "panel.dockBack":
           if (isTauri()) void getCurrentWindow().close();
           else window.close();
           break;
       }
     },
-    [commandEnvironment, dockRef, zh],
+    [
+      autoRefresh,
+      commandEnvironment,
+      dockRef,
+      executeCommand,
+      openPage,
+      preferences,
+      zh,
+    ],
   );
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -385,6 +468,14 @@ export function App() {
                   connectionKey={connectionKey}
                   native={runtime.mode === "tauri"}
                   zh={zh}
+                  autoRefresh={autoRefresh.status}
+                  autoRefreshPaused={!ui.autoRefresh}
+                  onToggleAutoRefresh={() =>
+                    preferences.setUi((value) => ({
+                      ...value,
+                      autoRefresh: !value.autoRefresh,
+                    }))
+                  }
                 >
                   <AppControls preferences={preferences} />
                 </StatusBar>
