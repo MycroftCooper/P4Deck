@@ -140,6 +140,6 @@ it("maps every global search target only to an existing destination page", () =>
   expect(pageForSearchTarget({ type: "job", jobId: "JOB-1" })).toBeUndefined();
   expect(
     pageForSearchTarget({ type: "stream", streamPath: "//atlas/main" }),
-  ).toBeUndefined();
-  expect(pageForSearchTarget({ type: "shelf", changeId: 44 })).toBeUndefined();
+  ).toBe("streams");
+  expect(pageForSearchTarget({ type: "shelf", changeId: 44 })).toBe("shelf");
 });

@@ -1844,9 +1844,23 @@ export const mockBackend: Backend = {
             if (item) all.push(item);
           }
         } else {
-          for (const shelf of mockChanges
-            .filter((change) => change.status === "shelved")
-            .slice(0, 140)) {
+          const detailedShelf = allMockPendingChanges().find(
+            (change) => change.id === 31821,
+          );
+          const searchableShelves = [
+            ...(detailedShelf
+              ? [
+                  {
+                    ...detailedShelf,
+                    status: "shelved",
+                    time:
+                      detailedShelf.updatedAt ?? new Date(now).toISOString(),
+                  },
+                ]
+              : []),
+            ...mockChanges.filter((change) => change.status === "shelved"),
+          ].slice(0, 140);
+          for (const shelf of searchableShelves) {
             const fileSummary = `//atlas/shelves/${shelf.id}/deep/search-${shelf.id}.uasset`;
             const item = mockSearchItem(
               kind,

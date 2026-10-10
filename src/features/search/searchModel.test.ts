@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GlobalSearchItem } from "../../shared/contracts/types";
 import {
+  GLOBAL_SEARCH_KINDS,
   highlightedSegments,
   mergeSearchItems,
   validateSearchText,
@@ -18,6 +19,17 @@ const item = (identity: string): GlobalSearchItem => ({
 });
 
 describe("global search model", () => {
+  it("keeps the canonical seven-kind order used by filters and empty-kind backend defaults", () => {
+    expect(GLOBAL_SEARCH_KINDS).toEqual([
+      "submittedChange",
+      "pendingChange",
+      "workspaceFile",
+      "depotFile",
+      "job",
+      "stream",
+      "shelf",
+    ]);
+  });
   it("normalizes Unicode whitespace and rejects empty, control, and overlong input", () => {
     expect(validateSearchText("  你好\u3000[asset]  ")).toEqual({
       valid: true,

@@ -130,17 +130,20 @@ export function App() {
   const navigateSearchTarget = useCallback(
     async (target: GlobalSearchTarget) => {
       const page = pageForSearchTarget(target);
-      if (
-        target.type === "job" ||
-        target.type === "stream" ||
-        target.type === "shelf" ||
-        !page
-      )
+      if (target.type === "job" || !page)
         throw new Error(
           zh
             ? "该搜索结果的详情页尚未接入。"
             : "This search result has no details page yet.",
         );
+      if (target.type === "stream") {
+        locateStream(target.streamPath);
+        return;
+      }
+      if (target.type === "shelf") {
+        dockRef.current?.open("shelf", String(target.changeId));
+        return;
+      }
       if (
         target.type === "submittedChange" ||
         target.type === "pendingChange"
@@ -161,7 +164,14 @@ export function App() {
       );
       navigateFile(node);
     },
-    [connectionKey, dockRef, navigateFile, runtime.context.cwd, zh],
+    [
+      connectionKey,
+      dockRef,
+      locateStream,
+      navigateFile,
+      runtime.context.cwd,
+      zh,
+    ],
   );
   useEffect(() => setSearchNavigation(undefined), [connectionKey]);
   const labels = useMemo(() => pageLabels(zh), [zh]);

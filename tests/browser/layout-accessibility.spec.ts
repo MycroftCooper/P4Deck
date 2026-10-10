@@ -171,6 +171,57 @@ test("representative app, palette, settings, search and pending surfaces pass ax
   await assertAxe(page, "Branch Mappings");
 });
 
+test("Global Search exposes seven filters and navigates Stream and Shelf results at 390px", async ({
+  page,
+}) => {
+  await page.goto("/#/search");
+  const search = page.getByRole("textbox", { name: "Search query" });
+  const categories = page.getByRole("group", { name: "Categories" });
+  await expect(categories.getByRole("checkbox")).toHaveCount(7);
+  await expect(categories.getByRole("checkbox", { name: "Streams" })).toBeChecked();
+  await expect(categories.getByRole("checkbox", { name: "Shelves" })).toBeChecked();
+  await assertNoPageOverflow(page, "seven-kind Global Search");
+
+  await search.fill("Atlas Mainline");
+  const streamResult = page.getByRole("button", { name: /Atlas Mainline/ });
+  await expect(streamResult).toContainText("Path: //atlas/main");
+  await streamResult.press("Enter");
+  await expect(page.locator(".route-view h1")).toHaveText("Streams");
+  await expect(page.getByRole("textbox", { name: "Search list" })).toHaveValue(
+    "//atlas/main",
+  );
+  await expect(page.getByText("Located stream: //atlas/main")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Search/ }).first().click();
+  for (const name of [
+    "Submitted",
+    "Pending",
+    "Workspace files",
+    "Depot files",
+    "Jobs",
+    "Streams",
+  ])
+    await categories.getByRole("checkbox", { name }).uncheck();
+  await search.fill("Render pipeline cache improvements");
+  const shelfResult = page.getByRole("button", { name: /Shelf 31821/ });
+  await expect(shelfResult).toContainText("Numbered CL: 31821");
+  await expect(page.getByText(/Shelf deep search is bounded/)).toBeVisible();
+  await expect(page.locator(".search-category-partial")).toContainText(
+    "Browser Mock simulated shelf detail candidate limit reached",
+  );
+  await assertNoPageOverflow(page, "bounded Shelf search result");
+  await assertAxe(page, "seven-kind Global Search results");
+  await shelfResult.press("Enter");
+  await expect(page.locator(".route-view h1")).toHaveText("Shelf CL 31821");
+  await expect(page.locator(".shelf-detail-page")).toContainText(
+    "Render pipeline cache improvements",
+  );
+  await assertNoPageOverflow(page, "Shelf detail opened from Global Search");
+
+  await page.getByRole("button", { name: /^Search/ }).first().click();
+  await expect(search).toHaveValue("Render pipeline cache improvements");
+});
+
 test("Branch Mapping simulated create, edit, preview and delete stay safe and keyboard operable", async ({
   page,
 }) => {

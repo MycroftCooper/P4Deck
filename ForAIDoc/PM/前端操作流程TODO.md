@@ -1,8 +1,15 @@
 # 前端操作流程 TODO
 
 > 文档角色：**历史累计实现与验收台账**，不是当前任务队列。
-> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是最新 Tauri Windows 原生点击与本人实际 Server 验收。
+> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、Force Unlock、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是最新 Tauri Windows 原生点击与本人实际 Server 验收。
 > 下文保留各批次当时的测试数量、平台范围和“待验”描述作为历史快照。旧数字不得解释为最新门禁；“原生待验”表示缺少 Tauri 实机证据，不表示对应 React/后端功能仍未实现。
+
+## 最近完成：Global Search Stream/Shelf 前端闭环（2026-10-10）
+
+- `SearchPage` 在原五类状态机上正式加入 Stream 与 Shelf，共七类筛选、facet、分组、图标与结果 badge；空 `kinds` 的后端“全部七类”语义未改变，显式类别、重试、分页与快速输入继续绑定原请求快照。
+- Stream 结果原样呈现 target path、标题及后端提供的 owner/type/parent/description 摘要，点击或 Enter 使用 App 显式 state 定位 Streams；找不到精确节点时目标页显示搜索提示。Shelf 结果展示 numbered CL、owner/client/time/description 与后端已返回的匹配路径摘要/数量/截断文字，点击或 Enter 打开独立 Shelf detail，不把 Pending/Submitted 冒充 Shelf。
+- Shelf 深搜继续由后端执行有界 500 metadata、128 detail 候选、8 批、每 shelf 256/总 20,000 文件和 20 秒预算；UI 显示每类 `partialReason`，单类失败不拖垮其他类别。结果只使用后端 UTF-16 ranges 作为文本节点高亮；不使用 `innerHTML`、不重新请求详情做搜索、同 identity 跨页稳定去重。
+- 快速输入/类别变化取消旧 operation 并隔离迟到响应，cursor 失败可从首屏重搜；390px 七类筛选、长路径、键盘结果 Enter、ARIA group/status、Browser Mock simulated 及 Stream/Shelf 导航返回由组件与真实 Edge/axe 覆盖。没有新增全局 command/menu，37/503/502 parity 不变；Windows Tauri 原生点击和本人 Server 规模/权限/trigger 仍待验收。
 
 ## 最近完成：Force Unlock 前端闭环（2026-10-10）
 
@@ -86,7 +93,7 @@
 | FE-12 | 全量接入与验收 | 工具栏/菜单/页面按钮统一入口；清理浏览器原生 prompt/confirm 的相关流程 | 同一动作一套 UI；自动化测试与真实页面验证；逐项记录证据和剩余后端依赖 | Submit/Pending 生产入口统一；原生双平台门槛未通过 |
 | FE-13 | Submitted 详情与 merge 分类 | 按需真实详情、四态分类、可靠 merge 降噪、文件/Jobs/Integration、stale response 与大列表 | 仅隐藏有证据的 reliable；疑似/unknown 可见；详情文件窗口化；Mock 不冒充真实结果 | BE-008 生产接线与自动化/localhost 通过；原生待验收 |
 | FE-14 | Submitted 组合查询与保存过滤器 | 全字段组合筛选、稳定 cursor 分页、stats/截断、保存/应用/覆盖/删除/重置 | 字段内 OR、条件间 AND；切换取消并淘汰旧页；多页不重不漏；敏感字段不持久化 | BE-008Q 生产接线与自动化/localhost 通过；原生点击/读屏待验收 |
-| FE-15 | 全局搜索生产接线 | `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件与 Job 分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围以文本节点渲染，不自行拼 P4 参数 | 已完成生产接线与 49 文件/296 项 Web 自动化；Windows localhost 默认双轮复验通过。Job 因无现有详情页明确禁用，Stream/Shelf 延后；原生点击/390px 原生窗口/读屏待验 |
+| FE-15 | 全局搜索生产接线 | `SearchPage` 接入 `globalSearch`，映射 Submitted/Pending、Workspace/Depot 文件、Job、Stream、Shelf 七类分组、facet、导航、加载/空/失败/partial/继续加载 | Mock 必须显示模拟标识；切换查询需取消旧 operation 并隔离 stale response；按 UTF-16 高亮范围以文本节点渲染，不自行拼 P4 参数 | 原五类于历史批次完成；2026-10-10 后续批次补齐 Stream/Shelf 正式筛选、服务端字段摘要、逐类 partial reason、Streams/Shelf detail 显式导航与真实 Edge 390px/axe。Job 因无现有详情页继续明确禁用；Windows Tauri/本人 Server 待验 |
 | FE-16 | 日志、操作与诊断生产闭环 | P4 Log 游标分页/筛选/策略，diagnostic-alert，Operation Journal，诊断导出，缓存指标，连接代次清理和双向 operation 导航 | 后端过滤必须作用于分页；策略失败回滚；alert 去重且不抢焦点；导出不泄露敏感字段；Mock 明示模拟；窄屏、键盘和 ARIA 基线 | 生产接线与 50 文件/302 项 Web 自动化通过；Windows localhost 默认两轮通过。原生点击、390px 原生窗口和真实读屏未验 |
 | FE-17 | 大列表窗口化与自动基准 | Pending 打开/搁置文件、Submitted 详情、Search、Log、Journal、Files/Depot；50k 生产筛选/搜索/去重和 100k 结构门禁 | 不挂全量 DOM；稳定 ID 选择；键盘焦点、窄屏、ARIA 和操作按钮不回退；50k p95 `<50 ms`；报告含环境与非跨平台声明 | 实现完成；52 文件/306 项 Web 测试与本机 `test:perf` 6 项通过。Windows/macOS 固定设备原生 FPS/内存/读屏未验 |
 | FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |

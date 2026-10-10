@@ -9,6 +9,8 @@ export const GLOBAL_SEARCH_KINDS: readonly GlobalSearchKind[] = [
   "workspaceFile",
   "depotFile",
   "job",
+  "stream",
+  "shelf",
 ];
 
 export const GLOBAL_SEARCH_PAGE_SIZE = 50;

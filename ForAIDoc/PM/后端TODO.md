@@ -32,7 +32,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索五类生产闭环；BE-016 已在同一搜索栈补齐 Stream/Shelf 深度搜索后端与共享契约，前端筛选/导航仍待后续。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成；BE-015 Force Unlock 后端/共享契约、Browser Mock 与后续 FE-24 前端闭环均已完成，Windows 原生交互及本人 Server 管理权限仍待验收。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索五类生产闭环；BE-016 已在同一搜索栈补齐 Stream/Shelf 深度搜索后端与共享契约，后续七类前端筛选/导航也已完成。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成；BE-015 Force Unlock 后端/共享契约、Browser Mock 与后续 FE-24 前端闭环均已完成，Windows 原生交互及本人 Server 管理权限仍待验收。
 
 ### BE-012 — 文本三方手工合并（DONE：Windows localhost；原生 UI/macOS 待验）
 
@@ -68,12 +68,12 @@
 - Windows localhost 使用 admin/nonadmin、双 User/Client 和他人编号 changelist 验证权限拒绝、普通/force 分离、ack、token replay/expiry、generation、cancel、TOCTOU、精确 `-c N` 执行及写后复核；同时证明 opened 记录、文件内容和无关锁未改变。Browser Mock 明示 `simulated=true` 并覆盖 permission/origin/replay/TOCTOU。本后端批次当时没有 UI，后续 FE-24 已完成独立前端入口、typed ack、逐文件结果、取消/迟到隔离及 390px/axe；本人 Server 管理权限、distributed `-x`、真实 aborted-submit `-s` 与跨版本行为仍无证据。
 - 验收（2026-10-10）：Windows localhost 完整应用 fixture 连续两轮通过（121.01 秒、121.24 秒）；`pnpm ci:quick` 通过（Web 80 文件/469 项、Rust 185 项，另 1 项 localhost E2E 默认 ignored），生产 Web build、Cargo build、Prettier、rustfmt、TypeScript/Cargo check 与 Clippy `--all-targets -D warnings` 通过。
 
-### BE-016 — Global Search Stream/Shelf 深度搜索（DONE：后端/契约/Mock/Windows localhost；前端待接）
+### BE-016 — Global Search Stream/Shelf 深度搜索（DONE：前后端/契约/Mock/Windows localhost；原生待验）
 
 - 在既有 `GlobalSearchService`、分组/facet、快照与 cursor 上增加 `stream`、`shelf`，没有第二套搜索服务。identity 由 kind + 稳定主键组成；cursor 绑定 active profile、完整 Context/generation、规范 query、完整 kinds 与 page size，并按 offset 单次消费。单类失败不拖垮其他类别，取消或连接漂移不得写入快照。
 - Stream 复用 `StreamRepository` 的 authoritative `streams -T ... -m 5001 -a` 结果，匹配 path/name/owner/type/parent/description，保留 deleted/virtual/task 和未知官方字段。真实 CLI probe 已确认无 streamPath 时本来就是跨 depot 可见结果，`-a` 只表示包含 deleted；仍执行客户端文本匹配，不从 Stream Graph parent edge 推断搜索事实。
 - Shelf 先执行 `changes -s shelved -l -t -m 501`，保留 500 条 metadata；文件路径深搜使用 `describe -s -S -m 257`，每批 16 个 change、最多 8 批（128 个候选），每 shelf 最多 256 文件、总计 20,000 文件、20 秒总预算。metadata 命中无需 detail；文件命中按 shelf 去重并显示匹配文件摘要。任一候选/命令/文件/时间/解析上限触发 `partial=true + partialReason`，不宣称完整。
-- Browser Mock 明示 `simulated=true`，实现稳定 Stream/Shelf 数据、同类上限、快照分页、page size/profile/context/generation 签名、cursor replay 与取消。当前只做 exhaustive 类型兼容，`SearchPage` 的可选类别列表及 Stream/Shelf 正式导航未提前实现。
+- Browser Mock 明示 `simulated=true`，实现稳定 Stream/Shelf 数据、同类上限、快照分页、page size/profile/context/generation 签名、cursor replay 与取消。后续前端批次已完成 `SearchPage` 七类筛选、partial reason 和 Stream/Shelf 正式导航；这里保留的后端批次边界不是当前缺口。
 - Windows localhost fixture 创建 mainline/development/release/virtual/task/deleted stream 与两个 numbered shelves，覆盖 metadata-only、path-only、同 shelf 多文件去重、七类分页、cursor 错 query/page size/replay/generation、取消、无结果、partial，并比较搜索前后 opened 与 shelf detail 不变。fixture 不是本人 Server 或 Windows Tauri 原生 UI 证据。
 - 验收（2026-10-10）：Windows localhost 完整应用 fixture 最终连续两轮通过（128.35 秒、128.22 秒）；`pnpm ci:quick` 通过（Web 83 文件/484 项、Rust 189 项，另 1 项 localhost E2E 默认 ignored），生产 Web/Cargo build、Prettier、rustfmt、TypeScript/Cargo check、Clippy `--all-targets -D warnings` 与 `git diff --check` 通过。
 
@@ -105,7 +105,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-013  | Stream Graph 后端只读闭环               | 强类型森林、官方 Stream/Parent/Type/ParentView/Options 字段、缺父/循环/未知显式状态、有界 `streams -T/-m` 扫描、客户端 scope 复核、连接代次缓存与一次性快照 cursor 已完成；Windows localhost 已验，后续 FE-22 页面已完成，原生交互待验。                                                                                                                                                                                                                                                                                                                                                         |
 | BE-014  | Branch Mapping 后端安全闭环             | 强类型 list/detail/preview/create/edit/delete、结构化 View、`integrate -n` 双向影响预览、一次性快照 cursor 与 mutation token、owner/未知字段/映射/TOCTOU/危险删除阻断已完成；Windows localhost 已验，后续 FE-23 页面已完成，原生交互及本人 Server 权限/trigger 待验。                                                                                                                                                                                                                                                                                                                        |
 | BE-015  | Force Unlock 独立安全后端               | 独立 admin-only preflight/confirm、精确 depot 文件、正数 numbered CL、owner/origin/permission proof、typed ack、一次性 token、mutation lane/TOCTOU、逐文件 `unlock -f -c N` 与写后复核已完成；Windows localhost 双轮已验。普通 Lock/Unlock 无 force 参数；前端 UI、本人 Server 管理权限和可证明的特殊 `-s/-x` 来源待后续验证。                                                                                                                                                                                                                                                       |
-| BE-016  | Global Search Stream/Shelf 深度搜索     | 复用单一搜索栈增加 authoritative Stream 与有界 Shelf metadata/file-path 深搜；Stream 5,001 sentinel，Shelf 501 sentinel + 128 detail 候选/8 批/20,000 文件/20 秒预算，partial reason 显式；七类快照 cursor 绑定 profile/Context/generation/query/kinds/page size 且单次消费。后端/契约/Mock/localhost 已完成，正式前端筛选与导航仍待后续。 |
+| BE-016  | Global Search Stream/Shelf 深度搜索     | 复用单一搜索栈增加 authoritative Stream 与有界 Shelf metadata/file-path 深搜；Stream 5,001 sentinel，Shelf 501 sentinel + 128 detail 候选/8 批/20,000 文件/20 秒预算，partial reason 显式；七类快照 cursor 绑定 profile/Context/generation/query/kinds/page size 且单次消费。后端/契约/Mock/localhost 与后续正式前端筛选/导航已完成，Windows Tauri/本人 Server 待验。 |
 
 ## 历史 P0 实施记录（以下条目按自身状态判断，不是当前任务队列）
 

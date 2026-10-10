@@ -154,7 +154,7 @@ afterEach(async () => {
   host.remove();
 });
 
-it("groups all five production kinds, shows facets, and honors navigation targets", async () => {
+it("groups all seven production kinds, shows stream and shelf facts, and honors navigation targets", async () => {
   await render();
   await enter("needle");
   expect(backend.globalSearch).toHaveBeenCalledWith(
@@ -164,19 +164,26 @@ it("groups all five production kinds, shows facets, and honors navigation target
       pageSize: 50,
     }),
   );
-  expect(host.querySelectorAll(".search-group")).toHaveLength(5);
-  expect(host.textContent).toContain("5 loaded · 5 matched · 35 scanned");
+  expect(host.querySelectorAll(".search-group")).toHaveLength(7);
+  expect(host.textContent).toContain("7 loaded · 7 matched · 49 scanned");
   expect(host.textContent).toContain("Matched: Title");
+  expect(host.textContent).toContain("Path: //atlas/needle");
+  expect(host.textContent).toContain("Numbered CL: 404");
+  expect(host.textContent).toContain("Shelf deep search is bounded");
 
   await click(button("submittedChange needle"));
   await click(button("pendingChange needle"));
   await click(button("workspaceFile needle"));
   await click(button("depotFile needle"));
+  await click(button("stream needle"));
+  await click(button("shelf needle"));
   expect(navigate.mock.calls.map(([target]) => target)).toEqual([
     TARGETS.submittedChange,
     TARGETS.pendingChange,
     TARGETS.workspaceFile,
     TARGETS.depotFile,
+    TARGETS.stream,
+    TARGETS.shelf,
   ]);
   const job = button("job needle");
   expect(job.disabled).toBe(true);
@@ -289,7 +296,13 @@ it("shows partial category failures, scan truncation, category retry, empty, and
             }
           : facet.kind === "depotFile"
             ? { ...facet, partial: true, scannedCount: 1000 }
-            : facet,
+            : facet.kind === "shelf"
+              ? {
+                  ...facet,
+                  partial: true,
+                  partialReason: "shelf detail candidate limit reached",
+                }
+              : facet,
       );
       return value;
     },
@@ -303,6 +316,9 @@ it("shows partial category failures, scan truncation, category retry, empty, and
   expect(host.textContent).toContain("1 categories failed");
   expect(host.textContent).toContain("pending timed out");
   expect(host.textContent).toContain("scan limit reached");
+  expect(host.textContent).toContain(
+    "Partial reason: shelf detail candidate limit reached",
+  );
   await click(button("Retry category"));
   expect(backend.globalSearch.mock.calls[1][0]).toMatchObject({
     kinds: ["pendingChange"],
@@ -320,6 +336,38 @@ it("shows partial category failures, scan truncation, category retry, empty, and
   await enter("failure");
   expect(host.textContent).toContain("Search failed");
   expect(host.textContent).toContain("server offline");
+});
+
+it("keeps one shelf identity across pages and offers a fresh search after cursor failure", async () => {
+  backend.globalSearch
+    .mockImplementationOnce(async (query: GlobalSearchQuery) =>
+      result(query, [searchItem("shelf", "404")], {
+        hasMore: true,
+        nextCursor: "shelf-cursor",
+      }),
+    )
+    .mockRejectedValueOnce(
+      new Error("Global search cursor expired or was replayed"),
+    )
+    .mockImplementationOnce(async (query: GlobalSearchQuery) =>
+      result(query, [
+        searchItem("shelf", "404"),
+        searchItem("shelf", "405", {
+          target: { type: "shelf", changeId: 405 },
+        }),
+      ]),
+    );
+  await render();
+  await enter("shelf");
+  await click(button("Load more"));
+  expect(host.textContent).toContain("cursor expired or was replayed");
+  expect(button("Restart search")).toBeTruthy();
+  await click(button("Restart search"));
+  expect(host.querySelectorAll(".search-result-row")).toHaveLength(2);
+  expect(backend.globalSearch.mock.calls.at(-1)?.[0]).toMatchObject({
+    cursor: undefined,
+    kinds: [...GLOBAL_SEARCH_KINDS],
+  });
 });
 
 it("resets results and cursors on category change and exposes mock, responsive, keyboard, and aria states", async () => {

@@ -111,7 +111,7 @@ export function isPage(value: string): value is PageId {
 
 export function pageForSearchTarget(
   target: GlobalSearchTarget,
-): "submitted" | "pending" | "files" | undefined {
+): "submitted" | "pending" | "files" | "streams" | "shelf" | undefined {
   switch (target.type) {
     case "submittedChange":
       return "submitted";
@@ -120,9 +120,11 @@ export function pageForSearchTarget(
     case "workspaceFile":
     case "depotFile":
       return "files";
-    case "job":
     case "stream":
+      return "streams";
     case "shelf":
+      return "shelf";
+    case "job":
       return undefined;
   }
 }

@@ -99,6 +99,36 @@ function HighlightedText({
   );
 }
 
+function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
+  if (item.target.type === "stream")
+    return (
+      <span className="search-result-identity">
+        <span className="search-result-kind">Stream</span>
+        <span>
+          {zh ? "路径：" : "Path: "}
+          <HighlightedText
+            value={item.target.streamPath}
+            field="streamPath"
+            item={item}
+          />
+        </span>
+      </span>
+    );
+  if (item.target.type === "shelf") {
+    const changeId = String(item.target.changeId);
+    return (
+      <span className="search-result-identity">
+        <span className="search-result-kind">Shelf</span>
+        <span>
+          {zh ? "编号 CL：" : "Numbered CL: "}
+          <HighlightedText value={changeId} field="changeId" item={item} />
+        </span>
+      </span>
+    );
+  }
+  return <span className="search-result-kind">{kindLabel(item.kind, zh)}</span>;
+}
+
 function VirtualSearchResults({
   items,
   zh,
@@ -114,7 +144,7 @@ function VirtualSearchResults({
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 82,
+    estimateSize: () => 104,
     overscan: 8,
     initialRect: { width: 720, height: 410 },
   });
@@ -124,9 +154,9 @@ function VirtualSearchResults({
     : Array.from({ length: Math.min(items.length, 18) }, (_, index) => ({
         index,
         key: items[index].identity,
-        start: index * 82,
-        size: 82,
-        end: (index + 1) * 82,
+        start: index * 104,
+        size: 104,
+        end: (index + 1) * 104,
         lane: 0,
       }));
   const focusIndex = (index: number) => {
@@ -180,7 +210,7 @@ function VirtualSearchResults({
     >
       <div
         className="search-result-spacer"
-        style={{ height: virtualizer.getTotalSize() || items.length * 82 }}
+        style={{ height: virtualizer.getTotalSize() || items.length * 104 }}
       >
         {rows.map((row) => {
           const item = items[row.index];
@@ -221,6 +251,7 @@ function VirtualSearchResults({
                       item={item}
                     />
                   </strong>
+                  <ResultIdentity item={item} zh={zh} />
                   <span>
                     <HighlightedText
                       value={item.summary}
@@ -597,8 +628,8 @@ export function SearchPage({
           <h1>{tr("全局搜索", "Global search")}</h1>
           <p>
             {tr(
-              "搜索已提交与待提交 CL、工作区与 Depot 文件以及 Job。",
-              "Search Submitted and Pending changelists, workspace and depot files, and jobs.",
+              "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
+              "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
             )}
           </p>
         </div>
@@ -649,8 +680,8 @@ export function SearchPage({
               maxLength={256}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={tr(
-                "文件名、路径、CL、用户或 Job…",
-                "File, path, changelist, user, or job…",
+                "文件、路径、CL、用户、Job、Stream 或 Shelf…",
+                "File, path, changelist, user, job, stream, or shelf…",
               )}
             />
             {draft ? (
@@ -713,6 +744,14 @@ export function SearchPage({
               </label>
             ))}
           </fieldset>
+          {kinds.includes("shelf") ? (
+            <p className="search-bounded-note" id="search-shelf-bounds">
+              {tr(
+                "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
+                "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
+              )}
+            </p>
+          ) : null}
         </form>
       </section>
 
@@ -784,8 +823,8 @@ export function SearchPage({
             <h3>{tr("输入内容开始搜索", "Enter a query to search")}</h3>
             <p>
               {tr(
-                "Stream 与 Shelf 尚未纳入全局搜索。",
-                "Stream and Shelf search are not supported yet.",
+                "支持七类结果；可使用上方筛选缩小范围。",
+                "Seven result categories are available; use the filters above to narrow the search.",
               )}
             </p>
           </div>
@@ -822,6 +861,17 @@ export function SearchPage({
                           : ""}
                     </small>
                   </header>
+                  {facet?.partialReason ? (
+                    <div className="search-category-partial" role="status">
+                      <AlertTriangle size={14} />
+                      <span>
+                        <strong>
+                          {tr("不完整原因：", "Partial reason: ")}
+                        </strong>
+                        {facet.partialReason}
+                      </span>
+                    </div>
+                  ) : null}
                   {facet?.error ? (
                     <div className="search-category-error" role="alert">
                       <span>
@@ -862,7 +912,14 @@ export function SearchPage({
           <div className="search-page-error" role="alert">
             <span>{pageError}</span>
             {hasMore ? (
-              <button onClick={loadMore}>{tr("重试加载", "Retry page")}</button>
+              <>
+                <button onClick={loadMore}>
+                  {tr("重试加载", "Retry page")}
+                </button>
+                <button onClick={submit}>
+                  {tr("重新开始搜索", "Restart search")}
+                </button>
+              </>
             ) : null}
           </div>
         ) : null}

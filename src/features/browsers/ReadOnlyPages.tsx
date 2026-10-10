@@ -241,6 +241,16 @@ export function ReadOnlyPage({
       ),
     [rows, search],
   );
+  const streamNavigationNotice =
+    kind === "streams" && navigation && search === navigation.stream && !loading
+      ? rows.some((row) => "stream" in row && row.stream === navigation.stream)
+        ? zh
+          ? `已定位 Stream：${navigation.stream}`
+          : `Located stream: ${navigation.stream}`
+        : zh
+          ? `已在 Streams 中搜索 ${navigation.stream}，当前列表没有精确匹配。`
+          : `Searching Streams for ${navigation.stream}; the current list has no exact match.`
+      : "";
   const visibleSelected =
     displayCurrent && selected && rows.includes(selected)
       ? selected
@@ -326,7 +336,7 @@ export function ReadOnlyPage({
   useEffect(() => {
     if (kind !== "streams" || !navigation) return;
     setSearch(navigation.stream);
-    scroll.current?.scrollTo(0, 0);
+    scroll.current?.scrollTo?.(0, 0);
   }, [kind, navigation]);
   const virtual = useVirtualizer({
     count: filtered.length,
@@ -546,6 +556,11 @@ export function ReadOnlyPage({
       {historyNotice && (
         <div role="status" className="workspace-load-error">
           {historyNotice}
+        </div>
+      )}
+      {streamNavigationNotice && (
+        <div role="status" className="workspace-load-error">
+          {streamNavigationNotice}
         </div>
       )}
       {streamSwitch && (

@@ -7,13 +7,14 @@ import type {
   FileHistoryPage,
   FileRevision,
   RuntimeInfo,
+  StreamSummary,
 } from "../../shared/contracts/types";
 import { ReadOnlyPage } from "./ReadOnlyPages";
 
 const backend = vi.hoisted(() => ({
   getFileHistory: vi.fn(),
   getDiff: vi.fn(),
-  listStreams: vi.fn(async () => []),
+  listStreams: vi.fn<() => Promise<StreamSummary[]>>(async () => []),
   cancelOperation: vi.fn(async () => undefined),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
@@ -157,6 +158,8 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   backend.getFileHistory.mockReset();
   backend.getDiff.mockReset();
+  backend.listStreams.mockReset();
+  backend.listStreams.mockResolvedValue([]);
   backend.cancelOperation.mockClear();
   host = document.createElement("div");
   document.body.append(host);
@@ -248,4 +251,42 @@ it("hides generation-stale history and accepts the replacement request", async (
   await act(async () => first.resolve(page([1])));
   expect(host.textContent).toContain("REVISION-8");
   expect(host.textContent).not.toContain("REVISION-1");
+});
+
+it("shows an explicit result when Global Search locates or cannot locate a stream", async () => {
+  backend.listStreams.mockResolvedValue([
+    {
+      stream: "//atlas/main",
+      name: "Main",
+      owner: "tester",
+      parent: "none",
+      kind: "mainline",
+      description: "Main stream",
+    },
+  ]);
+  await act(async () => {
+    root.render(
+      <ReadOnlyPage
+        kind="streams"
+        runtime={runtime}
+        navigation={{ stream: "//atlas/main", nonce: 1 }}
+        zh={false}
+      />,
+    );
+    await Promise.resolve();
+  });
+  expect(host.textContent).toContain("Located stream: //atlas/main");
+
+  await act(async () => {
+    root.render(
+      <ReadOnlyPage
+        kind="streams"
+        runtime={runtime}
+        navigation={{ stream: "//atlas/missing", nonce: 2 }}
+        zh={false}
+      />,
+    );
+    await Promise.resolve();
+  });
+  expect(host.textContent).toContain("current list has no exact match");
 });

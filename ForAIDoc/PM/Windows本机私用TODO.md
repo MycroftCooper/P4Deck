@@ -35,7 +35,7 @@
 ### WIN-P0-02 — 最新构建的 Windows 原生 UI 冒烟
 
 - **目标**：在 Tauri 原生窗口中确认本人会使用的核心入口可点击、可聚焦、可恢复。
-- **为何阻塞本机私用**：现有 82/481 Web 测试、5 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
+- **为何阻塞本机私用**：现有 83/487 Web 测试、6 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
 - **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、Lock/Unlock 只在测试数据上执行。Force Unlock 只可使用隔离 fixture 中明确创建的另一 User/Client 正数 numbered CL；`default`、`-s`、`-x` 只验证 blocker，不得尝试绕过。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
@@ -103,5 +103,5 @@
 - Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
 - Branch Mapping 前后端安全闭环已独立完成：正式全局 panel、Streams/Dock/Activity 入口、虚拟列表与 opaque cursor、原样详情/View 语义、正反 `integrate -n` 只读影响预览，以及专用 preflight→confirm create/edit/delete 均已接入；Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter 和明确 simulated 的 Browser Mock 均复用后端权威契约。Web 组件与真实 Edge 覆盖 390px、键盘、axe、大列表 DOM 上限、分页/迟到隔离和模拟增删改闭环。
 - Force Unlock 前后端专用闭环已独立完成：文件工具栏提供与普通 Unlock 分离的高危入口，路径只能来自 1～128 个精确 depot file 选择快照；专用对话框展示后端权威 server/profile/user/client、owner/origin/permission proof、blocker/warning，并要求精确 typed acknowledgement。取消/连接变化隔离迟到响应，执行结果逐文件展示并强制刷新；只有 complete + 全部 `unlocked` 才显示验证成功。后端只允许已证明的正数 numbered changelist，完整 Connection/generation、一次性 token、mutation lane/TOCTOU 与写后复核仍由 Rust 权威执行；普通 unlock 没有 force 开关，generic GUI 旁路仍关闭。Browser Mock 明示 simulated。standard localhost 不能证明 distributed `-x`，tagged facts 不能可靠证明 aborted-submit `-s`，均保持 blocker。
-- Global Search 的 Stream/Shelf 深度搜索后端与共享契约已作为 BE-016 完成：Stream 只读扫描官方字段；Shelf 只读扫描 metadata 与 depot file path，并以 500 条列表、128 个 detail 候选、8 个批次、每 shelf 256/总 20,000 文件及 20 秒预算保守截断，触顶必须显示 partial reason。Browser Mock 与 localhost fixture 已验证七类分页、重放/错绑/取消及搜索前后状态不变；`SearchPage` 尚未提供这两类筛选和正式导航，因此 Windows 原生冒烟暂仍按原五类 UI 执行，不能把后端 fixture 当作前端或本人 Server 验收。
-- 上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout、Force Unlock UI 或本人 Server 权限/trigger 已通过；分别并入 WIN-P0-02 与 WIN-P0-03/04。新增功能批次不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。
+- Global Search 的 Stream/Shelf 深度搜索前后端闭环已完成：`SearchPage` 正式扩为七类筛选、facet、分组与 badge；Stream 结果显示服务端 path/name/owner/type/parent/description 摘要并显式定位到 Streams，Shelf 结果显示 numbered CL、owner/client/time/description 与后端已给出的匹配路径摘要并打开独立 Shelf detail。Shelf 仍按 500 条列表、128 个 detail 候选、8 个批次、每 shelf 256/总 20,000 文件及 20 秒预算保守截断，UI 会逐类别显示 `partialReason`，不宣称全量。分页保序去重、游标失效重搜、快速输入取消/迟到隔离、390px、键盘与 axe 已有 Web/真实 Edge 证据；Browser Mock 明示 simulated。
+- Stream Graph、Branch Mapping、Force Unlock、Global Search Stream/Shelf 四个用户优先功能至此均已完成代码闭环。上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout/搜索导航、本人 Server 大规模与权限/trigger 已通过；真实 `-s/-x` 仍无可靠证明。它们分别并入 WIN-P0-02 与 WIN-P0-03/04，不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。
