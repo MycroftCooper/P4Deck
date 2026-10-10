@@ -18,6 +18,12 @@ export const pageDefinitions = {
   },
   history: { zh: "History", en: "History", scope: "file", target: "depot" },
   streams: { zh: "Streams", en: "Streams", scope: "global", target: "depot" },
+  streamgraph: {
+    zh: "Stream 图",
+    en: "Stream Graph",
+    scope: "global",
+    target: "depot",
+  },
   terminal: {
     zh: "Terminal",
     en: "Terminal",

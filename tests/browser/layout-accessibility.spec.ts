@@ -85,9 +85,43 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await pendingControl.focus();
   await expect(pendingControl).toBeFocused();
 
+  await page
+    .getByRole("button", { name: /^Streams/ })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Open Stream Graph" }).click();
+  const graph = page.getByRole("tree", { name: "Directed stream forest" });
+  await expect(graph).toBeVisible();
+  await expect(page.getByText("Browser Mock simulated data")).toBeVisible();
+  await assertNoPageOverflow(page, "Stream Graph");
+  const firstStream = graph.getByRole("treeitem").first();
+  await firstStream.focus();
+  await expect(firstStream).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("complementary", { name: "Stream details" }),
+  ).toBeVisible();
+  await assertNoPageOverflow(page, "Stream Graph details");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("complementary", { name: "Stream details" }),
+  ).toBeHidden();
+  await firstStream.click();
+  await page.getByRole("button", { name: "Locate in Streams" }).click();
+  await expect(page.locator(".route-view h1")).toHaveText("Streams");
+  await expect(page.getByRole("textbox", { name: "Search list" })).toHaveValue(
+    "//atlas/main",
+  );
+
   await page.goto("/?panel=search");
   await expect(page.locator(".app-shell.detached-shell")).toBeVisible();
   await assertNoPageOverflow(page, "detached search panel");
+  await page.goto("/?panel=streamgraph");
+  await expect(page.locator(".app-shell.detached-shell")).toBeVisible();
+  await expect(
+    page.getByRole("tree", { name: "Directed stream forest" }),
+  ).toBeVisible();
+  await assertNoPageOverflow(page, "detached Stream Graph panel");
 });
 
 test("representative app, palette, settings, search and pending surfaces pass axe", async ({
@@ -107,6 +141,14 @@ test("representative app, palette, settings, search and pending surfaces pass ax
     await expect(page.locator(".route-view")).toContainText(destination);
     await assertAxe(page, destination);
   }
+  await page
+    .getByRole("button", { name: /^Stream Graph/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("tree", { name: "Directed stream forest" }),
+  ).toBeVisible();
+  await assertAxe(page, "Stream Graph");
 });
 
 test("dialog, context menu, and manual merge fixtures fit and pass axe", async ({

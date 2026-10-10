@@ -49,6 +49,11 @@ const ReadOnlyPage = lazy(() =>
     default: m.ReadOnlyPage,
   })),
 );
+const StreamGraphPage = lazy(() =>
+  import("../features/browsers/StreamGraphPage").then((m) => ({
+    default: m.StreamGraphPage,
+  })),
+);
 const SettingsPage = lazy(() =>
   import("../features/settings/SettingsPage").then((m) => ({
     default: m.SettingsPage,
@@ -69,6 +74,9 @@ export interface PageEnvironment {
   onReview(kind: FilePageId, node: WorkspaceNode): void;
   onConnection(context: P4Context): void;
   onRuntime(runtime: RuntimeInfo): void;
+  onOpenPage(page: PageId): void;
+  streamNavigation?: { stream: string; nonce: number };
+  onLocateStream(stream: string): void;
   onOperation(warnings: string[]): Promise<void>;
   searchNavigation?: {
     target: GlobalSearchTarget;
@@ -94,6 +102,9 @@ function Content({
   onReview,
   onConnection,
   onRuntime,
+  onOpenPage,
+  streamNavigation,
+  onLocateStream,
   onOperation,
   searchNavigation,
   onSearchNavigate,
@@ -194,6 +205,18 @@ function Content({
           locked={target.locked}
           onTargetChange={changeTarget}
           onRuntime={onRuntime}
+          onOpenStreamGraph={() => onOpenPage("streamgraph")}
+          navigation={page === "streams" ? streamNavigation : undefined}
+          zh={zh}
+        />
+      );
+    case "streamgraph":
+      return (
+        <StreamGraphPage
+          key={connectionKey}
+          runtime={runtime}
+          onRuntime={onRuntime}
+          onLocateStream={onLocateStream}
           zh={zh}
         />
       );

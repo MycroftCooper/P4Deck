@@ -21,6 +21,7 @@ describe("workspace panels", () => {
       "submitted",
       "workspaces",
       "streams",
+      "streamgraph",
       "terminal",
       "p4log",
     ]);
@@ -34,6 +35,7 @@ describe("workspace panels", () => {
       "submitted",
       "workspaces",
       "streams",
+      "streamgraph",
       "terminal",
       "p4log",
       "settings",

@@ -114,6 +114,19 @@ export function App() {
     nonce: number;
   }>();
   const searchNavigationNonce = useRef(0);
+  const [streamNavigation, setStreamNavigation] = useState<{
+    stream: string;
+    nonce: number;
+  }>();
+  const streamNavigationNonce = useRef(0);
+  const locateStream = useCallback(
+    (stream: string) => {
+      streamNavigationNonce.current += 1;
+      setStreamNavigation({ stream, nonce: streamNavigationNonce.current });
+      dockRef.current?.open("streams");
+    },
+    [dockRef],
+  );
   const navigateSearchTarget = useCallback(
     async (target: GlobalSearchTarget) => {
       const page = pageForSearchTarget(target);
@@ -485,6 +498,9 @@ export function App() {
                             onReview={openReview}
                             onConnection={applyConnection}
                             onRuntime={applyRuntime}
+                            onOpenPage={openPage}
+                            streamNavigation={streamNavigation}
+                            onLocateStream={locateStream}
                             onOperation={afterOperation}
                             searchNavigation={searchNavigation}
                             onSearchNavigate={navigateSearchTarget}

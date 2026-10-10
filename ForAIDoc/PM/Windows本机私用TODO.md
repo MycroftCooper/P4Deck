@@ -35,7 +35,7 @@
 ### WIN-P0-02 — 最新构建的 Windows 原生 UI 冒烟
 
 - **目标**：在 Tauri 原生窗口中确认本人会使用的核心入口可点击、可聚焦、可恢复。
-- **为何阻塞本机私用**：现有 75/445 Web 测试、3 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
+- **为何阻塞本机私用**：现有 77/451 Web 测试、3 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
 - **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Lock/Unlock 只在测试数据上执行。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
@@ -94,11 +94,11 @@
 - 企业 SSO/MFA；仅当本人实际 Server 强制要求时，才升级为 WIN-P0-03 的真实阻塞。
 - 第二 Server、Broker/Proxy、多 P4/P4D 版本、Unicode/non-Unicode Server 兼容矩阵。
 - NVDA/VoiceOver、双平台读屏认证；当前保留键盘/ARIA/axe/对比度自动化基线。
-- Stream Graph 前端页面、Branch Mapping、Label/Job 独立工作台、管理员能力等 P2 产品功能。
+- Branch Mapping、Label/Job 独立工作台、Stream spec 写入和管理员能力等后续产品功能。
 - 菜单台账中 190 个 `phase: later` 项。
 
 ## 新增功能实施批次（不改变上述验收顺序）
 
-- Stream Graph 后端只读闭环已独立完成：强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、客户端 scope 复核、森林/orphan/partial 语义、一次性分页游标、取消/代次/缓存边界和 Windows localhost fixture 覆盖均已落地。
-- 这不表示 Stream Graph 已成为可用页面；前端可视化、交互与 Windows Tauri 原生点击仍需后续单独实现和验收。
+- Stream Graph 前后端只读闭环已独立完成：正式全局 panel/Streams 入口、确定性 parent→child 分层、可访问虚拟树、过滤/分页/取消/重试、详情/键盘/390px、复用安全切换对话框，以及强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、scope 复核、一次性分页游标和 Windows localhost fixture 均已落地。
+- Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
 - 本批不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不把 Branch Mapping、Stream spec 写入、force unlock 或管理员能力带入当前范围。

@@ -38,6 +38,7 @@ export const DockWorkspace = forwardRef<DockHandle, DockProps>(
           Submitted: "submitted",
           Workspaces: "workspaces",
           Streams: "streams",
+          "Stream Graph": "streamgraph",
           Terminal: "terminal",
           "P4 Log": "p4log",
           设置: "settings",

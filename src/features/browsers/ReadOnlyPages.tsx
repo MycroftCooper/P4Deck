@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { RefreshCw, Search } from "lucide-react";
+import { Network, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
   DiffResult,
@@ -41,6 +41,8 @@ export function ReadOnlyPage({
   locked = false,
   onTargetChange,
   onRuntime,
+  onOpenStreamGraph,
+  navigation,
   zh,
 }: {
   kind: "history" | "streams";
@@ -49,6 +51,8 @@ export function ReadOnlyPage({
   locked?: boolean;
   onTargetChange?(path: string): void;
   onRuntime?(runtime: RuntimeInfo): void;
+  onOpenStreamGraph?(): void;
+  navigation?: { stream: string; nonce: number };
   zh: boolean;
 }) {
   const [path, setPath] = useState(target);
@@ -317,6 +321,11 @@ export function ReadOnlyPage({
     window.addEventListener("p4deck:auto-refresh", autoRefresh);
     return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
   }, [kind, viewOwner]);
+  useEffect(() => {
+    if (kind !== "streams" || !navigation) return;
+    setSearch(navigation.stream);
+    scroll.current?.scrollTo(0, 0);
+  }, [kind, navigation]);
   const virtual = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => scroll.current,
@@ -341,6 +350,12 @@ export function ReadOnlyPage({
                 : "Streams, types and parent relationships on this server."}
           </p>
         </div>
+        {kind === "streams" && (
+          <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
+            <Network size={15} />
+            {zh ? "打开 Stream 图" : "Open Stream Graph"}
+          </button>
+        )}
         <button
           disabled={loading || (kind === "history" && !queryPath)}
           onClick={() => {

@@ -148,6 +148,7 @@ fn panel_window_kind(page: &str) -> Result<&str, String> {
         "workspaces",
         "history",
         "streams",
+        "streamgraph",
         "terminal",
         "p4log",
         "diff",
@@ -1089,6 +1090,7 @@ mod tests {
     fn terminal_and_log_panels_are_whitelisted_with_encoded_runtime_binding() {
         assert_eq!(panel_window_kind("terminal"), Ok("terminal"));
         assert_eq!(panel_window_kind("p4log"), Ok("p4log"));
+        assert_eq!(panel_window_kind("streamgraph"), Ok("streamgraph"));
         let binding = PanelRuntimeBinding {
             profile_id: Some("team/profile".into()),
             context_generation: 9,
