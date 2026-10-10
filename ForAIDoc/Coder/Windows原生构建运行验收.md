@@ -147,3 +147,11 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 本批只删除左侧活动栏中不常用的 Stream Graph / Branch Mappings 重复入口；两个功能页及其生产路由保持不变，用户仍可从 Streams 页既有按钮打开。生产源码为 `753112fb36ef48781c930d1e96781986f9e35a07`。前端交接 panels 12/12、真实 Edge 390px + axe 2/2、`check:web`、format、validator 与 diff-check 通过，PM 另行复核 panels 12/12 和 validator；本批没有 Rust 或 P4 逻辑变化，因此未重复运行全量测试或 localhost fixture。
 
 构建前只读确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 20:47:35 +08:00`，大小 `32,118,784` bytes，SHA-256 `24D18F4739F48427552704E597BAFF04C4A73871D9E40566D52E397721AD0AB4`，Authenticode 状态 `NotSigned`。构建后 P4Deck 进程数与 `127.0.0.1:16661` listener 数均为 0；Agent 没有启动应用、读取个人配置或连接 P4 Server。当前 build 尚未由用户重新打开并原生点击，不能把浏览器自动化与构建成功表述为 Windows 原生界面已人工确认。
+
+## 9. Connection / P4 设置拆分与草稿目录批次
+
+本批把 Settings 的连接主区限定为 Server/User/Workspace，并为当前草稿 Context 增加有界 User/Workspace 目录查询及专用 New User/New Workspace preflight → confirm。现有活动连接 `listUserWorkspaces` 语义不变；新流程不借用旧活动 Context，不自动保存/激活 profile，不建本地目录、不 sync、不使用 `-f`，generic GUI 也不能以 `user`/`client` 绕过专用 API。Workspace 创建限定为既有绝对 Root，并要求 Stream 或结构化 classic View 二选一；一次性 token 绑定草稿 Context、request generation、Server identity、计划和存在性摘要，confirm 在 mutation lane 内复核后写入并逐字段回读。
+
+自动化证据为：Rust `connection_setup` 9/9 通过（另 1 项隔离 E2E按设计 ignored），fake CLI 覆盖 self-only New User、generation stale、token replay、单次 `user -i` 以及无 `-f`/`sync`；`cargo check --tests`、`cargo fmt --check`、Clippy `-D warnings`、`check:web`、Tauri adapter 11/11、Prettier 与 diff-check 通过。单一 Windows localhost 隔离场景另行 1/1 通过，真实验证 users/workspaces 查询、classic/stream Workspace 创建与字段回读、重复名不覆盖，以及 stale/replay 不落写。该 fixture 的 New User preflight 实际返回 `ready=false` / `AuthenticationRequired`，因此没有把真实 User 创建写成已通过；本人 Server 策略仍待人工验证。
+
+最终生产源码为 `718bbf4f0b6ddd6bcf33c36c54848f2ce8d902bc`。构建前只读确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0；`beforeBuildCommand` 成功重新生成并嵌入当前 `dist`。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 21:33:22 +08:00`，大小 `32,631,808` bytes，SHA-256 `0562BA5C2453F526983241E0803416500AEEB4525EE7F787113BE3AB5AFCE4D3`，Authenticode 状态 `NotSigned`。构建未启动应用、未读取个人配置、未连接本人 Server，也未自动结束任何用户进程；当前生成物仍需本人重新打开后做 Windows Tauri 原生 Settings 浏览/创建点击验收，不能以服务层 fixture 或构建成功替代。
