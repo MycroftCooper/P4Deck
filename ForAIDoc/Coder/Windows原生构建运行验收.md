@@ -4,6 +4,7 @@
 > 首次原生验收基线：`94b5f0c0179e40af0041cf833ecc38467781b7df`
 > 修复后最终构建基线：`707e51e0ade13053f1e775c9154a1d973f873de3`
 > 报告提交前仓库 HEAD：`2dd0cb9`（仅追加前端验收文档；应用源码仍对应 `707e51e`）
+> 移除管理员强制解锁后的最终源码构建基线：`3c21d03cc56cbe8ff8eab62082041280bba76853`
 > 范围：debug 原生应用、隔离 localhost P4D、结构化运行证据。本文不把前端点击、安装包、签名、公证或长期稳定性冒充为已验证。
 > 产品边界更新（2026-10-10）：管理员强制解锁已从 P4Deck 完全移除。下文相关内容仅是退役旧构建的历史验收证据，不代表当前产品能力，也不再构成当前原生复验阻塞。
 
@@ -17,14 +18,15 @@
 | Rust / Cargo | `1.97.1` / `1.97.1` |
 | Tauri CLI | `2.11.4` |
 | 构建命令 | `pnpm tauri build --debug --no-bundle` |
-| 构建结果 | 两个基线均 exit 0；先执行 `pnpm build` 生成 `dist`，再编译 Tauri debug 应用 |
+| 构建结果 | 三个记录基线均 exit 0；先执行 `pnpm build` 生成 `dist`，再编译 Tauri debug 应用 |
 | 可执行文件 | `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe` |
-| 大小 | `32,627,712` bytes |
+| 当前大小 | `32,208,896` bytes（`3c21d03`） |
 | 首次 build SHA-256 | `D0C3D6D3BA12F750CA49246C4F15561B6101522540EB6F2C9258EC0A0D0C52A2`（`94b5f0c`，用于本轮可见窗口/IPC 验收） |
-| 最终 build SHA-256 | `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`（`707e51e`，包含 Force 自动刷新修复） |
+| 旧最终 build SHA-256 | `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`（`707e51e`，退役旧功能构建） |
+| 当前 build SHA-256 | `E42333BCE95E46E47BF13755026FC7F98AB0EB1FE3B83C321D4DF397113A5E1B`（`3c21d03`，管理员强制解锁已移除） |
 | Authenticode | `NotSigned`，符合本轮 debug / no-bundle 范围；不能据此宣称发布签名通过 |
 
-两次都使用 Tauri 构建入口，不是普通 `cargo build`。构建输出明确执行了前端 production build，因此 exe 嵌入的是对应基线生成的 `dist`。最终 build 后另跑 `pnpm check`，TypeScript build 与 `cargo check` 均 exit 0；构建只有既有的 Vite 大 chunk 提示和 MSVC linker message warning，没有编译错误。
+三次都使用 Tauri 构建入口，不是普通 `cargo build`。构建输出明确执行了前端 production build，因此 exe 嵌入的是对应基线生成的 `dist`。移除功能后的 `3c21d03` 另有 `pnpm ci:quick` 全绿和单轮 localhost fixture 证据；最终构建只有既有的 Vite 大 chunk 提示和 MSVC linker message warning，没有编译错误。该 exe 未启动，构建后确认 P4Deck 进程数为 0、fixture listener 数为 0，未访问个人配置。
 
 ## 2. 用户配置隔离
 
@@ -106,8 +108,8 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 
 已由本轮后端观察确认：
 
-- `94b5f0c` 与修复后的 `707e51e` 都能通过正式 Tauri build 入口生成嵌入 `dist` 的 Windows debug exe；最终 exe 的 SHA-256 已重新记录。
-- 首次生成物能创建真实可见主窗口，进程持续响应；最终生成物只完成构建与静态 check，没有再次启动或点击。
+- `94b5f0c`、退役旧构建 `707e51e` 与移除管理员能力后的 `3c21d03` 都能通过正式 Tauri build 入口生成嵌入 `dist` 的 Windows debug exe；当前 exe 的 SHA-256 已重新记录。
+- 首次生成物能创建真实可见主窗口，进程持续响应；`707e51e` 和当前 `3c21d03` 生成物只完成构建与自动化检查，没有再次启动或点击，不能把旧窗口证据当作当前源码的原生 UI 复验。
 - 隔离 profile 的原生 IPC 确实访问且只访问 localhost fixture；Stream、Branch、Shelf、Global Search 的代表性只读命令已执行并进入结构化日志/operation journal。
 - 用户原有 P4Deck 持久化目录已恢复到原名；本轮测试数据已保留为独立同级 snapshot，fixture 已停止。
 
