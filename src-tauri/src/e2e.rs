@@ -2102,7 +2102,7 @@ mod tests {
         .await?;
 
         let main_spec = format!(
-            "Stream: {MAIN_STREAM}\nOwner: {FIXTURE_USER}\nName: main\nParent: none\nType: mainline\nParentView: inherit\nDescription:\n\tP4Deck stream-switch mainline.\nOptions: allsubmit unlocked notoparent nofromparent mergedown\nPaths:\n\tshare ...\n"
+            "Stream: {MAIN_STREAM}\nOwner: {FIXTURE_USER}\nName: main\nParent: none\nType: mainline\nParentView: inherit\nDescription:\n\tP4Deck global-search-fixture stream-switch mainline.\nOptions: allsubmit unlocked notoparent nofromparent mergedown\nPaths:\n\tshare ...\n"
         );
         checked_run(
             runner,
@@ -5648,6 +5648,11 @@ mod tests {
         use crate::domain::{GlobalSearchKind, GlobalSearchQuery};
 
         let suffix = Uuid::new_v4().simple().to_string();
+        let stream_root = root
+            .parent()
+            .ok_or("fixture workspace has no parent")?
+            .join("global-search-stream-workspace");
+        setup_stream_fixture(runner, context, &stream_root).await?;
         let file_name = format!("global-search-fixture-[x]-{}.txt", &suffix[..8]);
         let local_dir = root.join("global-search-e2e");
         std::fs::create_dir_all(&local_dir).map_err(|error| error.to_string())?;
@@ -5716,6 +5721,93 @@ mod tests {
             &format!("//depot/global-search-e2e/{file_name}"),
         )
         .await?;
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-c".into(), pending_id.to_string()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+
+        let path_token = format!("shelf-path-only-{}", &suffix[..8]);
+        let shelf_names = [format!("{path_token}-a.txt"), format!("{path_token}-b.txt")];
+        let shelf_paths = shelf_names
+            .iter()
+            .map(|name| local_dir.join(name))
+            .collect::<Vec<_>>();
+        for path in &shelf_paths {
+            std::fs::write(path, b"shelf path search fixture\n")
+                .map_err(|error| error.to_string())?;
+        }
+        checked_run(
+            runner,
+            context,
+            "add",
+            shelf_paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let path_shelf = changelists
+            .mutate_pending(
+                context.clone(),
+                PendingChangeMutationRequest {
+                    operation_id: Some("global-search-create-path-shelf".into()),
+                    mutation: PendingChangeMutation::Create {
+                        description: "opaque shelf metadata alpha".into(),
+                        jobs: Vec::new(),
+                    },
+                },
+                None,
+            )
+            .await?
+            .created_change_id
+            .ok_or("path-only shelf changelist was not created")?;
+        for name in &shelf_names {
+            move_to_change(
+                changelists,
+                context,
+                path_shelf,
+                &format!("//depot/global-search-e2e/{name}"),
+            )
+            .await?;
+        }
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-c".into(), path_shelf.to_string()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        let opened_before_search = event_text(
+            &checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-c".into(), path_shelf.to_string()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?,
+        );
+        let shelf_before_search = event_text(
+            &checked_run(
+                runner,
+                context,
+                "describe",
+                vec!["-s".into(), "-S".into(), path_shelf.to_string()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?,
+        );
 
         let kinds = vec![
             GlobalSearchKind::SubmittedChange,
@@ -5723,6 +5815,8 @@ mod tests {
             GlobalSearchKind::WorkspaceFile,
             GlobalSearchKind::DepotFile,
             GlobalSearchKind::Job,
+            GlobalSearchKind::Stream,
+            GlobalSearchKind::Shelf,
         ];
         let base = GlobalSearchQuery {
             operation_id: "global-search-page-1".into(),
@@ -5755,9 +5849,11 @@ mod tests {
         )?;
         let first_cursor = first.next_cursor.clone().unwrap();
         let mut identities = HashSet::new();
+        let mut returned_kinds = HashSet::new();
         let mut page = first;
         loop {
             for item in page.groups.iter().flat_map(|group| &group.items) {
+                returned_kinds.insert(item.kind);
                 ensure(
                     identities.insert(item.identity.clone()),
                     format!("global search repeated identity {}", item.identity),
@@ -5775,6 +5871,101 @@ mod tests {
                 .await
                 .map_err(|error| error.message)?;
         }
+        ensure(
+            kinds.iter().all(|kind| returned_kinds.contains(kind)),
+            format!("global search pages did not cover all seven kinds: {returned_kinds:?}"),
+        )?;
+        let mut replayed = base.clone();
+        replayed.operation_id = "global-search-replay".into();
+        replayed.cursor = Some(first_cursor.clone());
+        ensure(
+            search.query(replayed, None).await.is_err(),
+            "a consumed global search cursor was replayable",
+        )?;
+
+        let path_only = search
+            .query(
+                GlobalSearchQuery {
+                    operation_id: "global-search-shelf-path".into(),
+                    request_generation: 109,
+                    text: path_token.clone(),
+                    kinds: vec![GlobalSearchKind::Shelf],
+                    page_size: 20,
+                    cursor: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        let path_items = path_only
+            .groups
+            .iter()
+            .flat_map(|group| &group.items)
+            .collect::<Vec<_>>();
+        ensure(
+            path_items.len() == 1
+                && path_items[0].identity == format!("shelf:{path_shelf}")
+                && path_items[0].summary.contains("2 matching files"),
+            format!("shelf file-path deep search was not deduplicated: {path_only:?}"),
+        )?;
+
+        for (text, expected) in [
+            (MAIN_STREAM, MAIN_STREAM),
+            (FIXTURE_USER, MAIN_STREAM),
+            ("mainline", MAIN_STREAM),
+            (MAIN_STREAM, DEV_STREAM),
+            ("global-search-fixture", MAIN_STREAM),
+            ("virtual", VIRTUAL_STREAM),
+            ("task", TASK_STREAM),
+        ] {
+            let found = search
+                .query(
+                    GlobalSearchQuery {
+                        operation_id: format!("global-search-stream-{}", Uuid::new_v4()),
+                        request_generation: 109,
+                        text: text.into(),
+                        kinds: vec![GlobalSearchKind::Stream],
+                        page_size: 100,
+                        cursor: None,
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.message)?;
+            ensure(
+                found
+                    .groups
+                    .iter()
+                    .flat_map(|group| &group.items)
+                    .any(|item| {
+                        matches!(
+                            &item.target,
+                            crate::domain::GlobalSearchTarget::Stream { stream_path }
+                                if stream_path == expected
+                        )
+                    }),
+                format!("stream search {text:?} did not find {expected}: {found:?}"),
+            )?;
+        }
+
+        let no_shelf = search
+            .query(
+                GlobalSearchQuery {
+                    operation_id: "global-search-shelf-none".into(),
+                    request_generation: 109,
+                    text: format!("no-such-shelf-{suffix}"),
+                    kinds: vec![GlobalSearchKind::Shelf],
+                    page_size: 20,
+                    cursor: None,
+                },
+                None,
+            )
+            .await
+            .map_err(|error| error.message)?;
+        ensure(
+            no_shelf.stats.matched_count == 0,
+            format!("missing shelf search forged a result: {no_shelf:?}"),
+        )?;
 
         let special = search
             .query(
@@ -5828,6 +6019,14 @@ mod tests {
             search.query(mismatched, None).await.is_err(),
             "a global search cursor was accepted for a different query",
         )?;
+        let mut wrong_page_size = base.clone();
+        wrong_page_size.operation_id = "global-search-page-size-cursor".into();
+        wrong_page_size.page_size = 3;
+        wrong_page_size.cursor = Some(first_cursor.clone());
+        ensure(
+            search.query(wrong_page_size, None).await.is_err(),
+            "a global search cursor was accepted for a different page size",
+        )?;
 
         let mut switched = context.clone();
         switched.client = "p4deck-fixture-global-generation".into();
@@ -5843,11 +6042,71 @@ mod tests {
             "a global search cursor survived a connection generation change",
         )?;
 
+        let opened_after_search = event_text(
+            &checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-c".into(), path_shelf.to_string()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?,
+        );
+        let shelf_after_search = event_text(
+            &checked_run(
+                runner,
+                context,
+                "describe",
+                vec!["-s".into(), "-S".into(), path_shelf.to_string()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?,
+        );
+        ensure(
+            opened_before_search == opened_after_search
+                && shelf_before_search == shelf_after_search,
+            "global search changed opened state or shelf contents",
+        )?;
+
+        checked_run(
+            runner,
+            context,
+            "revert",
+            shelf_paths
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-d".into(), "-c".into(), path_shelf.to_string()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        delete_empty_change(changelists, context, path_shelf).await?;
+
         checked_run(
             runner,
             context,
             "revert",
             vec![local.to_string_lossy().into_owned()],
+            None,
+            OutputMode::JsonLines,
+        )
+        .await?;
+        checked_run(
+            runner,
+            context,
+            "shelve",
+            vec!["-d".into(), "-c".into(), pending_id.to_string()],
             None,
             OutputMode::JsonLines,
         )

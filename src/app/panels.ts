@@ -121,6 +121,8 @@ export function pageForSearchTarget(
     case "depotFile":
       return "files";
     case "job":
+    case "stream":
+    case "shelf":
       return undefined;
   }
 }

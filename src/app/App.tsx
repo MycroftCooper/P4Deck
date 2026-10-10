@@ -130,9 +130,16 @@ export function App() {
   const navigateSearchTarget = useCallback(
     async (target: GlobalSearchTarget) => {
       const page = pageForSearchTarget(target);
-      if (target.type === "job" || !page)
+      if (
+        target.type === "job" ||
+        target.type === "stream" ||
+        target.type === "shelf" ||
+        !page
+      )
         throw new Error(
-          zh ? "尚无 Job 详情页。" : "No Job details page exists yet.",
+          zh
+            ? "该搜索结果的详情页尚未接入。"
+            : "This search result has no details page yet.",
         );
       if (
         target.type === "submittedChange" ||

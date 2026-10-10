@@ -25,6 +25,7 @@ const SUBMITTED_RESULT_LIMIT: usize = 500;
 #[derive(Clone)]
 struct SearchSnapshot {
     created_at_ms: u64,
+    next_offset: usize,
     items: Vec<GlobalSearchItem>,
     facets: Vec<GlobalSearchFacet>,
     partial: bool,
@@ -35,8 +36,10 @@ struct SearchSnapshot {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SearchFingerprint<'a> {
+    profile_id: Option<&'a str>,
     text: &'a str,
     kinds: &'a [GlobalSearchKind],
+    page_size: usize,
 }
 
 pub struct GlobalSearchService {
@@ -78,15 +81,23 @@ impl GlobalSearchService {
     ) -> Result<GlobalSearchResult, GlobalSearchRequestError> {
         let query = normalize_query(query)?;
         self.cancelled.lock().remove(&query.operation_id);
-        let (context, connection_generation) = self.contexts.snapshot();
+        let (profile_id, connection_generation, context) = self.contexts.swarm_snapshot();
         let connection_fingerprint = stable_query::fingerprint(&context).map_err(|message| {
             request_error(GlobalSearchRequestErrorCode::InvalidQuery, message)
         })?;
         let query_fingerprint = stable_query::fingerprint(&SearchFingerprint {
+            profile_id: profile_id.as_deref(),
             text: &query.text,
             kinds: &query.kinds,
+            page_size: query.page_size,
         })
         .map_err(|message| request_error(GlobalSearchRequestErrorCode::InvalidQuery, message))?;
+        self.ensure_active(
+            &query,
+            profile_id.as_deref(),
+            &context,
+            connection_generation,
+        )?;
 
         let outcome = if let Some(cursor) = query.cursor.as_deref() {
             let (snapshot_id, offset) = stable_query::decode_global_search_cursor(
@@ -98,12 +109,7 @@ impl GlobalSearchService {
             .map_err(|message| {
                 request_error(GlobalSearchRequestErrorCode::InvalidCursor, message)
             })?;
-            let snapshot = self.snapshot(&snapshot_id).ok_or_else(|| {
-                request_error(
-                    GlobalSearchRequestErrorCode::CursorExpired,
-                    "The global search cursor expired; restart the search.",
-                )
-            })?;
+            let snapshot = self.consume_snapshot(&snapshot_id, offset, query.page_size)?;
             self.page(
                 &query,
                 snapshot_id,
@@ -115,11 +121,25 @@ impl GlobalSearchService {
             )
         } else {
             let snapshot = self
-                .collect_snapshot(&query, &context, connection_generation, app)
+                .collect_snapshot(
+                    &query,
+                    profile_id.as_deref(),
+                    &context,
+                    connection_generation,
+                    app,
+                )
                 .await?;
+            self.ensure_active(
+                &query,
+                profile_id.as_deref(),
+                &context,
+                connection_generation,
+            )?;
             let snapshot_id = Uuid::new_v4().to_string();
             if snapshot.items.len() > query.page_size {
-                self.insert_snapshot(snapshot_id.clone(), snapshot.clone());
+                let mut retained = snapshot.clone();
+                retained.next_offset = query.page_size;
+                self.insert_snapshot(snapshot_id.clone(), retained);
             }
             self.page(
                 &query,
@@ -205,6 +225,7 @@ impl GlobalSearchService {
     async fn collect_snapshot(
         &self,
         query: &GlobalSearchQuery,
+        profile_id: Option<&str>,
         context: &P4Context,
         connection_generation: u64,
         app: Option<&AppHandle>,
@@ -212,7 +233,7 @@ impl GlobalSearchService {
         let mut items = Vec::new();
         let mut facets = Vec::new();
         for kind in &query.kinds {
-            self.ensure_active(query, context, connection_generation)?;
+            self.ensure_active(query, profile_id, context, connection_generation)?;
             let batch = match kind {
                 GlobalSearchKind::SubmittedChange => {
                     let result = self
@@ -241,6 +262,8 @@ impl GlobalSearchService {
                         .await;
                     result.map(|result| SearchBatch {
                         partial: result.has_more || result.stats.truncated_by_safety_limit,
+                        partial_reason: (result.has_more || result.stats.truncated_by_safety_limit)
+                            .then(|| "submitted changelist scan limit reached".into()),
                         scanned: result.stats.scanned_count,
                         items: result
                             .items
@@ -269,8 +292,21 @@ impl GlobalSearchService {
                         .jobs(context, &query.operation_id, &query.text, app)
                         .await
                 }
+                GlobalSearchKind::Stream => {
+                    self.repository
+                        .streams(context, &query.operation_id, &query.text, app)
+                        .await
+                }
+                GlobalSearchKind::Shelf => {
+                    self.repository
+                        .shelves(context, &query.operation_id, &query.text, app, || {
+                            self.ensure_active(query, profile_id, context, connection_generation)
+                                .map_err(|error| error.message)
+                        })
+                        .await
+                }
             };
-            self.ensure_active(query, context, connection_generation)?;
+            self.ensure_active(query, profile_id, context, connection_generation)?;
             match batch {
                 Ok(mut batch) => {
                     batch.items.sort_by(|left, right| {
@@ -285,6 +321,7 @@ impl GlobalSearchService {
                         matched_count: batch.items.len(),
                         scanned_count: batch.scanned,
                         partial: batch.partial,
+                        partial_reason: batch.partial_reason,
                         error: None,
                     });
                     items.extend(batch.items);
@@ -301,6 +338,7 @@ impl GlobalSearchService {
                         matched_count: 0,
                         scanned_count: 0,
                         partial: true,
+                        partial_reason: Some("category query failed".into()),
                         error: Some(category_error(message)),
                     });
                 }
@@ -315,6 +353,7 @@ impl GlobalSearchService {
         let partial = facets.iter().any(|facet| facet.partial);
         Ok(SearchSnapshot {
             created_at_ms: now_ms(),
+            next_offset: 0,
             items,
             facets,
             partial,
@@ -326,6 +365,7 @@ impl GlobalSearchService {
     fn ensure_active(
         &self,
         query: &GlobalSearchQuery,
+        profile_id: Option<&str>,
         context: &P4Context,
         generation: u64,
     ) -> Result<(), GlobalSearchRequestError> {
@@ -335,8 +375,11 @@ impl GlobalSearchService {
                 "Global search was cancelled.",
             ));
         }
-        let (current, current_generation) = self.contexts.snapshot();
-        if current_generation != generation || current != *context {
+        let (current_profile, current_generation, current) = self.contexts.swarm_snapshot();
+        if current_generation != generation
+            || current != *context
+            || current_profile.as_deref() != profile_id
+        {
             return Err(request_error(
                 GlobalSearchRequestErrorCode::ConnectionChanged,
                 "The connection changed while global search was running.",
@@ -349,12 +392,36 @@ impl GlobalSearchService {
         self.cancelled.lock().contains(operation_id)
     }
 
-    fn snapshot(&self, snapshot_id: &str) -> Option<SearchSnapshot> {
+    fn consume_snapshot(
+        &self,
+        snapshot_id: &str,
+        offset: usize,
+        page_size: usize,
+    ) -> Result<SearchSnapshot, GlobalSearchRequestError> {
         let now = now_ms();
         let mut snapshots = self.snapshots.lock();
         snapshots
             .retain(|_, snapshot| now.saturating_sub(snapshot.created_at_ms) <= SNAPSHOT_TTL_MS);
-        snapshots.get(snapshot_id).cloned()
+        let snapshot = snapshots.get_mut(snapshot_id).ok_or_else(|| {
+            request_error(
+                GlobalSearchRequestErrorCode::CursorExpired,
+                "The global search cursor expired or was already consumed; restart the search.",
+            )
+        })?;
+        if snapshot.next_offset != offset {
+            return Err(request_error(
+                GlobalSearchRequestErrorCode::InvalidCursor,
+                "The global search cursor was replayed or is out of sequence.",
+            ));
+        }
+        let value = snapshot.clone();
+        let next = offset.saturating_add(page_size).min(snapshot.items.len());
+        if next >= snapshot.items.len() {
+            snapshots.remove(snapshot_id);
+        } else {
+            snapshot.next_offset = next;
+        }
+        Ok(value)
     }
 
     fn insert_snapshot(&self, snapshot_id: String, snapshot: SearchSnapshot) {
@@ -416,6 +483,8 @@ fn normalize_query(
             GlobalSearchKind::WorkspaceFile,
             GlobalSearchKind::DepotFile,
             GlobalSearchKind::Job,
+            GlobalSearchKind::Stream,
+            GlobalSearchKind::Shelf,
         ];
     }
     query.kinds.sort();
@@ -502,5 +571,54 @@ mod tests {
         let mut invalid_page = query("ok");
         invalid_page.page_size = 0;
         assert!(normalize_query(invalid_page).is_err());
+    }
+
+    #[test]
+    fn empty_kind_filter_expands_to_all_seven_production_kinds() {
+        let value = normalize_query(query("needle")).unwrap();
+        assert_eq!(
+            value.kinds,
+            vec![
+                GlobalSearchKind::SubmittedChange,
+                GlobalSearchKind::PendingChange,
+                GlobalSearchKind::WorkspaceFile,
+                GlobalSearchKind::DepotFile,
+                GlobalSearchKind::Job,
+                GlobalSearchKind::Stream,
+                GlobalSearchKind::Shelf,
+            ]
+        );
+    }
+
+    #[test]
+    fn deduplication_keeps_same_path_in_distinct_kinds() {
+        let item = |identity: &str, kind, target| GlobalSearchItem {
+            identity: identity.into(),
+            kind,
+            title: "a.txt".into(),
+            summary: "//depot/a.txt".into(),
+            target,
+            matched_fields: vec!["title".into()],
+            highlights: Vec::new(),
+            rank: 1,
+        };
+        let mut items = vec![
+            item(
+                "workspace-file://depot/a.txt",
+                GlobalSearchKind::WorkspaceFile,
+                GlobalSearchTarget::WorkspaceFile {
+                    absolute_path: "C:\\ws\\a.txt".into(),
+                },
+            ),
+            item(
+                "depot-file://depot/a.txt",
+                GlobalSearchKind::DepotFile,
+                GlobalSearchTarget::DepotFile {
+                    depot_path: "//depot/a.txt".into(),
+                },
+            ),
+        ];
+        deduplicate_items(&mut items);
+        assert_eq!(items.len(), 2);
     }
 }

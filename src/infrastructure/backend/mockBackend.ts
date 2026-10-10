@@ -137,6 +137,23 @@ const mockForceUnlockTokens = new Map<
     expiresAt: number;
   }
 >();
+const mockGlobalSearchSnapshots = new Map<
+  string,
+  {
+    signature: string;
+    items: GlobalSearchItem[];
+    facets: Array<{
+      kind: GlobalSearchKind;
+      matchedCount: number;
+      scannedCount: number;
+      partial: boolean;
+      partialReason?: string;
+    }>;
+    nextOffset: number;
+    createdAt: number;
+  }
+>();
+const mockCancelledOperations = new Set<string>();
 type MockShelfFile = import("../../shared/contracts/types").ShelfDetailFile;
 const mockShelfSnapshots = new Map<
   string,
@@ -404,18 +421,28 @@ function decodeSubmittedCursor(cursor: string, signature: string) {
   }
 }
 
-function globalSearchSignature(text: string, kinds: GlobalSearchKind[]) {
+function globalSearchSignature(
+  text: string,
+  kinds: GlobalSearchKind[],
+  pageSize: number,
+) {
   return JSON.stringify({
     text,
     kinds,
+    pageSize,
+    profile: mockActiveProfileId,
     connection: mockContext,
     connectionGeneration: mockContextGeneration,
   });
 }
 
-function encodeGlobalSearchCursor(offset: number, signature: string) {
+function encodeGlobalSearchCursor(
+  snapshotId: string,
+  offset: number,
+  signature: string,
+) {
   const bytes = new TextEncoder().encode(
-    JSON.stringify({ version: 1, offset, signature }),
+    JSON.stringify({ version: 1, snapshotId, offset, signature }),
   );
   return btoa(String.fromCharCode(...bytes))
     .replaceAll("+", "-")
@@ -437,12 +464,13 @@ function decodeGlobalSearchCursor(cursor: string, signature: string) {
     );
     if (
       payload.version !== 1 ||
+      typeof payload.snapshotId !== "string" ||
       !Number.isSafeInteger(payload.offset) ||
       payload.offset <= 0 ||
       payload.signature !== signature
     )
       throw new Error();
-    return payload.offset as number;
+    return payload as { snapshotId: string; offset: number };
   } catch {
     throw new Error(
       "Global search cursor does not match this query or connection.",
@@ -1369,7 +1397,10 @@ export const mockBackend: Backend = {
       return reject("contextChanged", "Browser Mock: runtime context changed.");
     const streamChanged = mockCurrentStream !== record.target.targetStream;
     mockCurrentStream = record.target.targetStream;
-    if (streamChanged) mockContextGeneration += 1;
+    if (streamChanged) {
+      mockContextGeneration += 1;
+      mockGlobalSearchSnapshots.clear();
+    }
     const runtime = await this.runtimeInfo();
     return {
       outcome: "succeeded" as const,
@@ -1477,6 +1508,7 @@ export const mockBackend: Backend = {
       mockContextGeneration += 1;
       mockCurrentStream = "//atlas/main";
       mockStreamSwitchTokens.clear();
+      mockGlobalSearchSnapshots.clear();
       mockShelfSnapshots.clear();
       mockSyncTokens.clear();
       mockRenameTokens.clear();
@@ -1516,6 +1548,7 @@ export const mockBackend: Backend = {
     mockContextGeneration += 1;
     mockStreamSwitchTokens.clear();
     mockCurrentStream = "//atlas/main";
+    mockGlobalSearchSnapshots.clear();
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -1545,6 +1578,7 @@ export const mockBackend: Backend = {
     mockContextGeneration += 1;
     mockCurrentStream = workspace.stream || "";
     mockStreamSwitchTokens.clear();
+    mockGlobalSearchSnapshots.clear();
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -1567,6 +1601,7 @@ export const mockBackend: Backend = {
     mockContextGeneration += 1;
     mockCurrentStream = "//atlas/main";
     mockStreamSwitchTokens.clear();
+    mockGlobalSearchSnapshots.clear();
     mockShelfSnapshots.clear();
     mockSyncTokens.clear();
     mockRenameTokens.clear();
@@ -1665,7 +1700,9 @@ export const mockBackend: Backend = {
       ],
     };
   },
-  async cancelOperation() {},
+  async cancelOperation(operationId) {
+    mockCancelledOperations.add(operationId);
+  },
   async globalSearch(query) {
     if (
       !query.operationId.trim() ||
@@ -1686,101 +1723,174 @@ export const mockBackend: Backend = {
       throw new Error(
         "Global search text must contain 1 to 128 Unicode characters.",
       );
+    if (mockCancelledOperations.delete(query.operationId))
+      throw new Error("Global search was cancelled.");
+    const kindOrder: GlobalSearchKind[] = [
+      "submittedChange",
+      "pendingChange",
+      "workspaceFile",
+      "depotFile",
+      "job",
+      "stream",
+      "shelf",
+    ];
     const kinds = [
-      ...new Set(
-        query.kinds.length
-          ? query.kinds
-          : [
-              "submittedChange",
-              "pendingChange",
-              "workspaceFile",
-              "depotFile",
-              "job",
-            ],
-      ),
+      ...new Set(query.kinds.length ? query.kinds : kindOrder),
     ].sort(
-      (left, right) =>
-        [
-          "submittedChange",
-          "pendingChange",
-          "workspaceFile",
-          "depotFile",
-          "job",
-        ].indexOf(left) -
-        [
-          "submittedChange",
-          "pendingChange",
-          "workspaceFile",
-          "depotFile",
-          "job",
-        ].indexOf(right),
+      (left, right) => kindOrder.indexOf(left) - kindOrder.indexOf(right),
     ) as GlobalSearchKind[];
-    const all: GlobalSearchItem[] = [];
-    for (const kind of kinds) {
-      if (kind === "submittedChange" || kind === "pendingChange") {
-        for (const change of mockChanges.filter((item) =>
-          kind === "submittedChange"
-            ? item.status === "submitted"
-            : item.status === "pending",
-        )) {
-          const item = mockSearchItem(
-            kind,
-            `${kind}:${change.id}`,
-            `CL ${change.id}`,
-            `${change.description} · ${change.user} · ${change.client}`,
+    const signature = globalSearchSignature(text, kinds, query.pageSize);
+    let snapshotId = "";
+    let offset = 0;
+    let deduplicated: GlobalSearchItem[];
+    let facets: Array<{
+      kind: GlobalSearchKind;
+      matchedCount: number;
+      scannedCount: number;
+      partial: boolean;
+      partialReason?: string;
+    }>;
+    if (query.cursor) {
+      const cursor = decodeGlobalSearchCursor(query.cursor, signature);
+      snapshotId = cursor.snapshotId;
+      offset = cursor.offset;
+      const snapshot = mockGlobalSearchSnapshots.get(snapshotId);
+      if (
+        !snapshot ||
+        snapshot.signature !== signature ||
+        snapshot.nextOffset !== offset ||
+        Date.now() - snapshot.createdAt > 120_000
+      )
+        throw new Error("Global search cursor expired or was replayed.");
+      deduplicated = snapshot.items;
+      facets = snapshot.facets;
+    } else {
+      const all: GlobalSearchItem[] = [];
+      for (const kind of kinds) {
+        if (kind === "submittedChange" || kind === "pendingChange") {
+          for (const change of mockChanges.filter((item) =>
             kind === "submittedChange"
-              ? { type: "submittedChange", changeId: change.id }
-              : { type: "pendingChange", changeId: change.id },
-            text,
-          );
-          if (item) all.push(item);
-        }
-      } else if (kind === "workspaceFile" || kind === "depotFile") {
-        for (const file of mockWorkspace.filter(
-          (item) => item.kind === "file",
-        )) {
-          const depotPath =
-            file.depotPath ?? `//atlas/main/${file.relativePath}`;
-          const item = mockSearchItem(
-            kind,
-            `file:${depotPath}`,
-            file.name,
-            kind === "workspaceFile" ? file.absolutePath : depotPath,
-            kind === "workspaceFile"
-              ? { type: "workspaceFile", absolutePath: file.absolutePath }
-              : { type: "depotFile", depotPath },
-            text,
-          );
-          if (item) all.push(item);
-        }
-      } else {
-        for (const jobId of ["ATLAS-1000", "ATLAS-1187", "UNICODE-你好"]) {
-          const item = mockSearchItem(
-            kind,
-            `job:${jobId}`,
-            jobId,
-            `open · Simulated MockBackend job ${jobId}`,
-            { type: "job", jobId },
-            text,
-          );
-          if (item) all.push(item);
+              ? item.status === "submitted"
+              : item.status === "pending",
+          )) {
+            const item = mockSearchItem(
+              kind,
+              `${kind}:${change.id}`,
+              `CL ${change.id}`,
+              `${change.description} · ${change.user} · ${change.client}`,
+              kind === "submittedChange"
+                ? { type: "submittedChange", changeId: change.id }
+                : { type: "pendingChange", changeId: change.id },
+              text,
+            );
+            if (item) all.push(item);
+          }
+        } else if (kind === "workspaceFile" || kind === "depotFile") {
+          for (const file of mockWorkspace.filter(
+            (item) => item.kind === "file",
+          )) {
+            const depotPath =
+              file.depotPath ?? `//atlas/main/${file.relativePath}`;
+            const item = mockSearchItem(
+              kind,
+              `${kind}:${depotPath}`,
+              file.name,
+              kind === "workspaceFile" ? file.absolutePath : depotPath,
+              kind === "workspaceFile"
+                ? { type: "workspaceFile", absolutePath: file.absolutePath }
+                : { type: "depotFile", depotPath },
+              text,
+            );
+            if (item) all.push(item);
+          }
+        } else if (kind === "job") {
+          for (const jobId of ["ATLAS-1000", "ATLAS-1187", "UNICODE-你好"]) {
+            const item = mockSearchItem(
+              kind,
+              `job:${jobId}`,
+              jobId,
+              `open · Simulated MockBackend job ${jobId}`,
+              { type: "job", jobId },
+              text,
+            );
+            if (item) all.push(item);
+          }
+        } else if (kind === "stream") {
+          for (const stream of [
+            {
+              path: "//atlas/main",
+              name: "Atlas Mainline",
+              detail: "mainline · fmeng · simulated production stream",
+            },
+            {
+              path: "//atlas/dev",
+              name: "Atlas Development",
+              detail: "development · alice · parent //atlas/main",
+            },
+            {
+              path: "//atlas/task-render",
+              name: "Render Task",
+              detail: "task · bruno · parent //atlas/dev",
+            },
+          ]) {
+            const item = mockSearchItem(
+              kind,
+              `stream:${stream.path}`,
+              stream.name,
+              `${stream.path} · ${stream.detail} · Browser Mock simulated`,
+              { type: "stream", streamPath: stream.path },
+              text,
+            );
+            if (item) all.push(item);
+          }
+        } else {
+          for (const shelf of mockChanges
+            .filter((change) => change.status === "shelved")
+            .slice(0, 140)) {
+            const fileSummary = `//atlas/shelves/${shelf.id}/deep/search-${shelf.id}.uasset`;
+            const item = mockSearchItem(
+              kind,
+              `shelf:${shelf.id}`,
+              `Shelf ${shelf.id}`,
+              `${shelf.description} · ${shelf.user} · ${shelf.client} · ${shelf.status} · ${shelf.time} · 1 matching file: ${fileSummary} · Browser Mock simulated`,
+              { type: "shelf", changeId: shelf.id },
+              text,
+            );
+            if (item) all.push(item);
+          }
         }
       }
+      all.sort((left, right) =>
+        `${left.kind}:${left.rank}:${left.title}:${left.identity}`.localeCompare(
+          `${right.kind}:${right.rank}:${right.title}:${right.identity}`,
+        ),
+      );
+      deduplicated = all.filter(
+        (item, index) =>
+          all.findIndex((candidate) => candidate.identity === item.identity) ===
+          index,
+      );
+      facets = kinds.map((kind) => ({
+        kind,
+        matchedCount: deduplicated.filter((item) => item.kind === kind).length,
+        scannedCount:
+          kind === "job"
+            ? 3
+            : kind === "stream"
+              ? 3
+              : kind === "shelf"
+                ? 140
+                : kind.includes("Change")
+                  ? mockChanges.length
+                  : mockWorkspace.length,
+        partial: kind === "shelf",
+        partialReason:
+          kind === "shelf"
+            ? "Browser Mock simulated shelf detail candidate limit reached"
+            : undefined,
+      }));
+      snapshotId = `mock-global-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
-    all.sort((left, right) =>
-      `${left.kind}:${left.rank}:${left.title}:${left.identity}`.localeCompare(
-        `${right.kind}:${right.rank}:${right.title}:${right.identity}`,
-      ),
-    );
-    const deduplicated = all.filter(
-      (item, index) =>
-        all.findIndex((candidate) => candidate.identity === item.identity) ===
-        index,
-    );
-    const signature = globalSearchSignature(text, kinds);
-    const offset = query.cursor
-      ? decodeGlobalSearchCursor(query.cursor, signature)
-      : 0;
     if (offset >= deduplicated.length && offset !== 0)
       throw new Error(
         "Global search cursor points beyond the simulated snapshot.",
@@ -1788,6 +1898,17 @@ export const mockBackend: Backend = {
     const page = deduplicated.slice(offset, offset + query.pageSize);
     const end = offset + page.length;
     const hasMore = end < deduplicated.length;
+    if (hasMore) {
+      mockGlobalSearchSnapshots.set(snapshotId, {
+        signature,
+        items: deduplicated,
+        facets,
+        nextOffset: end,
+        createdAt: Date.now(),
+      });
+    } else if (snapshotId) {
+      mockGlobalSearchSnapshots.delete(snapshotId);
+    }
     return {
       requestGeneration: query.requestGeneration,
       normalizedQuery: text,
@@ -1797,22 +1918,12 @@ export const mockBackend: Backend = {
           items: page.filter((item) => item.kind === kind),
         }))
         .filter((group) => group.items.length),
-      facets: kinds.map((kind) => ({
-        kind,
-        matchedCount: deduplicated.filter((item) => item.kind === kind).length,
-        scannedCount:
-          kind === "job"
-            ? 3
-            : kind.includes("Change")
-              ? mockChanges.length
-              : mockWorkspace.length,
-        partial: false,
-      })),
+      facets,
       hasMore,
       nextCursor: hasMore
-        ? encodeGlobalSearchCursor(end, signature)
+        ? encodeGlobalSearchCursor(snapshotId, end, signature)
         : undefined,
-      partial: false,
+      partial: facets.some((facet) => facet.partial),
       simulated: true,
       stats: {
         scannedCount: kinds.length,

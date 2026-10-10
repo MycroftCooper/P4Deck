@@ -138,4 +138,8 @@ it("maps every global search target only to an existing destination page", () =>
     pageForSearchTarget({ type: "depotFile", depotPath: "//depot/a.txt" }),
   ).toBe("files");
   expect(pageForSearchTarget({ type: "job", jobId: "JOB-1" })).toBeUndefined();
+  expect(
+    pageForSearchTarget({ type: "stream", streamPath: "//atlas/main" }),
+  ).toBeUndefined();
+  expect(pageForSearchTarget({ type: "shelf", changeId: 44 })).toBeUndefined();
 });

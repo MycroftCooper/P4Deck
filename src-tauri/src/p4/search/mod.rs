@@ -1,15 +1,26 @@
-use crate::{domain::*, p4::runner::P4Runner};
+use crate::{
+    domain::*,
+    p4::{runner::P4Runner, streams::StreamRepository},
+};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::Instant};
 use tauri::AppHandle;
 
 pub const CATEGORY_SCAN_LIMIT: usize = 1_000;
+pub const SHELF_SCAN_LIMIT: usize = 500;
+pub const SHELF_DETAIL_CANDIDATE_LIMIT: usize = 128;
+pub const SHELF_DETAIL_BATCH_SIZE: usize = 16;
+pub const SHELF_DETAIL_COMMAND_LIMIT: usize = 8;
+pub const SHELF_FILE_LIMIT_PER_CHANGE: usize = 256;
+pub const SHELF_TOTAL_FILE_LIMIT: usize = 20_000;
+pub const SHELF_DEEP_SEARCH_BUDGET_MS: u128 = 20_000;
 
 #[derive(Debug)]
 pub struct SearchBatch {
     pub items: Vec<GlobalSearchItem>,
     pub scanned: usize,
     pub partial: bool,
+    pub partial_reason: Option<String>,
 }
 
 pub struct SearchRepository {
@@ -88,6 +99,7 @@ impl SearchRepository {
             items,
             scanned,
             partial,
+            partial_reason: partial.then(|| "pending changelist scan limit reached".into()),
         })
     }
 
@@ -124,7 +136,7 @@ impl SearchRepository {
                 let fields = [("title", title.as_str()), ("depotPath", path.as_str())];
                 match_fields(needle, &fields).map(|(matched_fields, highlights, rank)| {
                     GlobalSearchItem {
-                        identity: format!("file:{path}"),
+                        identity: format!("depot-file:{path}"),
                         kind: GlobalSearchKind::DepotFile,
                         title,
                         summary: path.clone(),
@@ -142,6 +154,7 @@ impl SearchRepository {
             items,
             scanned,
             partial,
+            partial_reason: partial.then(|| "depot file scan limit reached".into()),
         })
     }
 
@@ -193,9 +206,9 @@ impl SearchRepository {
                 }
                 match_fields(needle, &fields).map(|(matched_fields, highlights, rank)| {
                     GlobalSearchItem {
-                        identity: depot.as_ref().map_or_else(
-                            || format!("workspace-file:{absolute}"),
-                            |path| format!("file:{path}"),
+                        identity: format!(
+                            "workspace-file:{}",
+                            depot.as_deref().unwrap_or(&absolute)
                         ),
                         kind: GlobalSearchKind::WorkspaceFile,
                         title,
@@ -214,6 +227,7 @@ impl SearchRepository {
             items,
             scanned,
             partial,
+            partial_reason: partial.then(|| "workspace file scan limit reached".into()),
         })
     }
 
@@ -279,6 +293,288 @@ impl SearchRepository {
             items,
             scanned,
             partial,
+            partial_reason: partial.then(|| "job scan limit reached".into()),
+        })
+    }
+
+    pub async fn streams(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+        needle: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<SearchBatch, String> {
+        let batch = StreamRepository::new(self.runner.clone())
+            .query(context, operation_id, None, None, true, app)
+            .await?;
+        let scanned = batch.scanned_count;
+        let mut items = Vec::new();
+        for node in batch.nodes {
+            let name = node.name.unwrap_or_default();
+            let owner = node.owner.unwrap_or_default();
+            let parent = node.parent.unwrap_or_default();
+            let kind = node.kind.unwrap_or_default();
+            let description = node.description.unwrap_or_default();
+            let title = if name.is_empty() {
+                node.stream.clone()
+            } else {
+                name.clone()
+            };
+            let fields = [
+                ("title", title.as_str()),
+                ("streamPath", node.stream.as_str()),
+                ("name", name.as_str()),
+                ("owner", owner.as_str()),
+                ("type", kind.as_str()),
+                ("parent", parent.as_str()),
+                ("description", description.as_str()),
+            ];
+            if let Some((matched_fields, highlights, rank)) = match_fields(needle, &fields) {
+                let mut facts = vec![node.stream.clone()];
+                if !kind.is_empty() {
+                    facts.push(kind);
+                }
+                if !owner.is_empty() {
+                    facts.push(owner);
+                }
+                if !parent.is_empty() {
+                    facts.push(format!("parent {parent}"));
+                }
+                if !description.is_empty() {
+                    facts.push(description);
+                }
+                items.push(GlobalSearchItem {
+                    identity: format!("stream:{}", node.stream),
+                    kind: GlobalSearchKind::Stream,
+                    title,
+                    summary: facts.join(" · "),
+                    target: GlobalSearchTarget::Stream {
+                        stream_path: node.stream,
+                    },
+                    matched_fields,
+                    highlights,
+                    rank,
+                });
+            }
+        }
+        let partial = batch.truncated || batch.invalid_record_count > 0;
+        let partial_reason = if batch.truncated {
+            Some("stream scan limit reached".into())
+        } else if batch.invalid_record_count > 0 {
+            Some("one or more stream records could not be parsed".into())
+        } else {
+            None
+        };
+        Ok(SearchBatch {
+            items,
+            scanned,
+            partial,
+            partial_reason,
+        })
+    }
+
+    pub async fn shelves<F>(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+        needle: &str,
+        app: Option<&AppHandle>,
+        ensure_active: F,
+    ) -> Result<SearchBatch, String>
+    where
+        F: Fn() -> Result<(), String>,
+    {
+        ensure_active()?;
+        let listed = self
+            .run(
+                context,
+                operation_id,
+                "changes",
+                vec![
+                    "-l".into(),
+                    "-t".into(),
+                    "-s".into(),
+                    "shelved".into(),
+                    "-m".into(),
+                    (SHELF_SCAN_LIMIT + 1).to_string(),
+                ],
+                app,
+            )
+            .await?;
+        ensure_active()?;
+        let mut candidates = crate::p4::changelists::parser::parse_change_events(&listed.events);
+        let listed_truncated = candidates.len() > SHELF_SCAN_LIMIT;
+        candidates.truncate(SHELF_SCAN_LIMIT);
+        let scanned = candidates.len();
+        let started = Instant::now();
+        let mut details = HashMap::<i64, ShelfFiles>::new();
+        let detail_count = candidates.len().min(SHELF_DETAIL_CANDIDATE_LIMIT);
+        let mut total_files = 0usize;
+        let mut reason =
+            listed_truncated.then(|| "shelved changelist scan limit reached".to_owned());
+
+        for (batch_index, chunk) in candidates[..detail_count]
+            .chunks(SHELF_DETAIL_BATCH_SIZE)
+            .enumerate()
+        {
+            if batch_index >= SHELF_DETAIL_COMMAND_LIMIT {
+                reason.get_or_insert_with(|| "shelf detail command limit reached".into());
+                break;
+            }
+            if started.elapsed().as_millis() >= SHELF_DEEP_SEARCH_BUDGET_MS {
+                reason.get_or_insert_with(|| "shelf deep-search time budget reached".into());
+                break;
+            }
+            ensure_active()?;
+            let remaining_ms = SHELF_DEEP_SEARCH_BUDGET_MS
+                .saturating_sub(started.elapsed().as_millis())
+                .max(1) as u64;
+            let mut args = vec![
+                "-s".into(),
+                "-S".into(),
+                "-m".into(),
+                (SHELF_FILE_LIMIT_PER_CHANGE + 1).to_string(),
+            ];
+            args.extend(chunk.iter().map(|change| change.id.to_string()));
+            let result = match self
+                .run_with_timeout(context, operation_id, "describe", args, remaining_ms, app)
+                .await
+            {
+                Ok(result) => result,
+                Err(error)
+                    if error.to_ascii_lowercase().contains("timed out")
+                        || error.to_ascii_lowercase().contains("timeout")
+                        || error.to_ascii_lowercase().contains("output exceeded") =>
+                {
+                    let lower = error.to_ascii_lowercase();
+                    reason.get_or_insert_with(|| {
+                        if lower.contains("output exceeded") {
+                            "shelf deep-search output safety limit reached".into()
+                        } else {
+                            "shelf deep-search time budget reached".into()
+                        }
+                    });
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
+            ensure_active()?;
+            for value in json_values(&result) {
+                let Some(change_id) = number_field(&value, &["change", "Change"]) else {
+                    continue;
+                };
+                if !chunk.iter().any(|candidate| candidate.id == change_id) {
+                    return Err("shelf detail returned an unexpected changelist".into());
+                }
+                let mut paths = indexed_strings(&value, "depotFile");
+                let truncated = paths.len() > SHELF_FILE_LIMIT_PER_CHANGE;
+                paths.truncate(SHELF_FILE_LIMIT_PER_CHANGE);
+                if total_files.saturating_add(paths.len()) > SHELF_TOTAL_FILE_LIMIT {
+                    let remaining = SHELF_TOTAL_FILE_LIMIT.saturating_sub(total_files);
+                    paths.truncate(remaining);
+                    reason.get_or_insert_with(|| "shelf total file limit reached".into());
+                }
+                total_files = total_files.saturating_add(paths.len());
+                if truncated {
+                    reason.get_or_insert_with(|| "per-shelf file limit reached".into());
+                }
+                details.insert(change_id, ShelfFiles { paths, truncated });
+                if total_files >= SHELF_TOTAL_FILE_LIMIT {
+                    break;
+                }
+            }
+            if total_files >= SHELF_TOTAL_FILE_LIMIT {
+                break;
+            }
+        }
+        if candidates.len() > detail_count {
+            reason.get_or_insert_with(|| "shelf detail candidate limit reached".into());
+        }
+        if details.len() < detail_count && reason.is_none() {
+            reason = Some("one or more shelf details were unavailable".into());
+        }
+
+        let mut items = Vec::new();
+        for change in candidates {
+            let title = format!("Shelf {}", change.id);
+            let id = change.id.to_string();
+            let metadata = [
+                ("title", title.as_str()),
+                ("changeId", id.as_str()),
+                ("description", change.description.as_str()),
+                ("owner", change.user.as_str()),
+                ("user", change.user.as_str()),
+                ("client", change.client.as_str()),
+                ("status", change.status.as_str()),
+                ("time", change.time.as_str()),
+            ];
+            let metadata_match = match_fields(needle, &metadata);
+            let files = details.remove(&change.id).unwrap_or_default();
+            let matching_paths = files
+                .paths
+                .iter()
+                .filter(|path| find_utf16(path, needle).is_some())
+                .cloned()
+                .collect::<Vec<_>>();
+            if metadata_match.is_none() && matching_paths.is_empty() {
+                continue;
+            }
+            let (mut matched_fields, mut highlights, mut rank) =
+                metadata_match.unwrap_or_else(|| (Vec::new(), Vec::new(), u8::MAX));
+            if let Some(path) = matching_paths.first() {
+                let (start, end) = find_utf16(path, needle).expect("matched shelf path");
+                matched_fields.push("depotPath".into());
+                highlights.push(GlobalSearchHighlight {
+                    field: "depotPath".into(),
+                    start,
+                    end,
+                });
+                rank = rank.min(if path.trim() == needle { 0 } else { 2 });
+            }
+            let mut facts = vec![
+                change.description,
+                change.user,
+                change.client,
+                change.status,
+                change.time,
+            ];
+            if !matching_paths.is_empty() {
+                facts.push(format!(
+                    "{} matching file{}: {}{}",
+                    matching_paths.len(),
+                    if matching_paths.len() == 1 { "" } else { "s" },
+                    matching_paths
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    if matching_paths.len() > 3 || files.truncated {
+                        " …"
+                    } else {
+                        ""
+                    }
+                ));
+            }
+            facts.retain(|value| !value.trim().is_empty());
+            items.push(GlobalSearchItem {
+                identity: format!("shelf:{}", change.id),
+                kind: GlobalSearchKind::Shelf,
+                title,
+                summary: facts.join(" · "),
+                target: GlobalSearchTarget::Shelf {
+                    change_id: change.id,
+                },
+                matched_fields,
+                highlights,
+                rank,
+            });
+        }
+        Ok(SearchBatch {
+            items,
+            scanned,
+            partial: reason.is_some(),
+            partial_reason: reason,
         })
     }
 
@@ -288,6 +584,19 @@ impl SearchRepository {
         operation_id: &str,
         command: &str,
         args: Vec<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        self.run_with_timeout(context, operation_id, command, args, 30_000, app)
+            .await
+    }
+
+    async fn run_with_timeout(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+        command: &str,
+        args: Vec<String>,
+        timeout_ms: u64,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let result = self
@@ -300,7 +609,7 @@ impl SearchRepository {
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: Some(timeout_ms),
                     input: None,
                 },
                 app,
@@ -347,7 +656,7 @@ pub fn item_for_submitted(change: ChangelistSummary, needle: &str) -> Option<Glo
     })
 }
 
-fn match_fields(
+pub(crate) fn match_fields(
     needle: &str,
     fields: &[(&'static str, &str)],
 ) -> Option<(Vec<String>, Vec<GlobalSearchHighlight>, u8)> {
@@ -415,6 +724,33 @@ fn string_field(value: &Value, names: &[&str]) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+#[derive(Default)]
+struct ShelfFiles {
+    paths: Vec<String>,
+    truncated: bool,
+}
+
+fn number_field(value: &Value, names: &[&str]) -> Option<i64> {
+    names.iter().find_map(|name| {
+        value.get(*name).and_then(|field| {
+            field
+                .as_i64()
+                .or_else(|| field.as_str().and_then(|raw| raw.parse().ok()))
+        })
+    })
+}
+
+fn indexed_strings(value: &Value, prefix: &str) -> Vec<String> {
+    (0..)
+        .map_while(|index| {
+            value
+                .get(format!("{prefix}{index}"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,5 +762,30 @@ mod tests {
         assert_eq!(rank, 2);
         assert_eq!(highlights[0].start, 5);
         assert_eq!(highlights[0].end, 12);
+    }
+
+    #[test]
+    fn shelf_detail_parser_keeps_order_unicode_and_numeric_change_ids() {
+        let value = serde_json::json!({
+            "change": "42",
+            "depotFile0": "//depot/空 格.txt",
+            "depotFile1": "//depot/emoji😀.uasset"
+        });
+        assert_eq!(number_field(&value, &["change"]), Some(42));
+        assert_eq!(
+            indexed_strings(&value, "depotFile"),
+            vec!["//depot/空 格.txt", "//depot/emoji😀.uasset"]
+        );
+        assert!(find_utf16("//depot/emoji😀.uasset", "😀").is_some());
+    }
+
+    #[test]
+    fn shelf_deep_search_limits_are_bounded_and_batch_consistent() {
+        assert_eq!(SHELF_SCAN_LIMIT, 500);
+        assert_eq!(SHELF_DETAIL_CANDIDATE_LIMIT, 128);
+        assert_eq!(SHELF_DETAIL_BATCH_SIZE * SHELF_DETAIL_COMMAND_LIMIT, 128);
+        assert_eq!(SHELF_FILE_LIMIT_PER_CHANGE, 256);
+        assert_eq!(SHELF_TOTAL_FILE_LIMIT, 20_000);
+        assert_eq!(SHELF_DEEP_SEARCH_BUDGET_MS, 20_000);
     }
 }

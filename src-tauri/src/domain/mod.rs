@@ -567,6 +567,8 @@ pub enum GlobalSearchKind {
     WorkspaceFile,
     DepotFile,
     Job,
+    Stream,
+    Shelf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -593,6 +595,8 @@ pub enum GlobalSearchTarget {
     WorkspaceFile { absolute_path: String },
     DepotFile { depot_path: String },
     Job { job_id: String },
+    Stream { stream_path: String },
+    Shelf { change_id: i64 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -632,6 +636,8 @@ pub struct GlobalSearchFacet {
     pub matched_count: usize,
     pub scanned_count: usize,
     pub partial: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial_reason: Option<String>,
     pub error: Option<GlobalSearchCategoryError>,
 }
 

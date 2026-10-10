@@ -293,7 +293,12 @@ it("passes the narrow global search query through unchanged", async () => {
     operationId: "global-search-42",
     requestGeneration: 12,
     text: "你好 [asset]",
-    kinds: ["workspaceFile" as const, "job" as const],
+    kinds: [
+      "workspaceFile" as const,
+      "job" as const,
+      "stream" as const,
+      "shelf" as const,
+    ],
     pageSize: 25,
     cursor: "opaque-global-cursor",
   };

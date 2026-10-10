@@ -40,6 +40,8 @@ const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
   workspaceFile: File,
   depotFile: File,
   job: Hash,
+  stream: FolderSearch,
+  shelf: Hash,
 };
 
 function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
@@ -49,6 +51,8 @@ function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
     workspaceFile: ["工作区文件", "Workspace files"],
     depotFile: ["Depot 文件", "Depot files"],
     job: ["Job", "Jobs"],
+    stream: ["Stream", "Streams"],
+    shelf: ["Shelf", "Shelves"],
   };
   return labels[kind][zh ? 0 : 1];
 }
@@ -65,6 +69,13 @@ function fieldLabel(field: string, zh: boolean): string {
     status: ["状态", "Status"],
     absolutePath: ["本地路径", "Local path"],
     depotPath: ["Depot 路径", "Depot path"],
+    streamPath: ["Stream 路径", "Stream path"],
+    name: ["名称", "Name"],
+    owner: ["所有者", "Owner"],
+    type: ["类型", "Type"],
+    parent: ["父 Stream", "Parent stream"],
+    changeId: ["变更号", "Change ID"],
+    time: ["时间", "Time"],
   };
   return labels[field]?.[zh ? 0 : 1] ?? field;
 }

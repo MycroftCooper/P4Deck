@@ -27,6 +27,8 @@ const TARGETS: Record<GlobalSearchKind, GlobalSearchTarget> = {
   },
   depotFile: { type: "depotFile", depotPath: "//depot/needle.ts" },
   job: { type: "job", jobId: "JOB-303" },
+  stream: { type: "stream", streamPath: "//atlas/needle" },
+  shelf: { type: "shelf", changeId: 404 },
 };
 
 function searchItem(

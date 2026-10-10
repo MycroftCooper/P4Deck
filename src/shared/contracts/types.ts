@@ -797,7 +797,13 @@ export interface ClQueryResult {
 }
 
 export type GlobalSearchKind =
-  "submittedChange" | "pendingChange" | "workspaceFile" | "depotFile" | "job";
+  | "submittedChange"
+  | "pendingChange"
+  | "workspaceFile"
+  | "depotFile"
+  | "job"
+  | "stream"
+  | "shelf";
 
 export interface GlobalSearchQuery {
   operationId: string;
@@ -814,7 +820,9 @@ export type GlobalSearchTarget =
   | { type: "pendingChange"; changeId: number }
   | { type: "workspaceFile"; absolutePath: string }
   | { type: "depotFile"; depotPath: string }
-  | { type: "job"; jobId: string };
+  | { type: "job"; jobId: string }
+  | { type: "stream"; streamPath: string }
+  | { type: "shelf"; changeId: number };
 
 export interface GlobalSearchItem {
   identity: string;
@@ -854,6 +862,7 @@ export interface GlobalSearchResult {
     matchedCount: number;
     scannedCount: number;
     partial: boolean;
+    partialReason?: string;
     error?: { code: GlobalSearchErrorCode; message: string };
   }>;
   hasMore: boolean;
