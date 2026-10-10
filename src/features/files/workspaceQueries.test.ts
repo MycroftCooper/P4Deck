@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { workspaceCache, workspaceQuery } from "./workspaceQueries";
+import {
+  canScanWorkspace,
+  workspaceCache,
+  workspaceQuery,
+} from "./workspaceQueries";
 import { backend } from "../../infrastructure/backend";
 const emptyListing = {
   items: [],
@@ -14,6 +18,35 @@ afterEach(() => {
   workspaceCache.clear();
   vi.restoreAllMocks();
 });
+it("does not scan a local workspace until connection and Root are verified", () => {
+  const runtime = {
+    connection: {
+      state: "notTested" as const,
+      message: "not tested",
+      recovery: "retry" as const,
+      server: "p4:1666",
+    },
+    context: {
+      server: "p4:1666",
+      user: "alice",
+      client: "main",
+    },
+  };
+  expect(canScanWorkspace(runtime)).toBe(false);
+  expect(
+    canScanWorkspace({
+      ...runtime,
+      connection: { ...runtime.connection, state: "connected" },
+    }),
+  ).toBe(false);
+  expect(
+    canScanWorkspace({
+      connection: { ...runtime.connection, state: "connected" },
+      context: { ...runtime.context, cwd: "C:/work/main" },
+    }),
+  ).toBe(true);
+});
+
 it("deduplicates sidebar/list reads and isolates connections", async () => {
   const load = vi
     .spyOn(backend, "listWorkspaceChildren")

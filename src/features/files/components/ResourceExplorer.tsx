@@ -41,6 +41,7 @@ export function ResourceExplorer({
   clientName,
   connectionKey,
   ready,
+  workspaceReady,
   directory,
   onNavigate,
 }: {
@@ -51,6 +52,7 @@ export function ResourceExplorer({
   clientName: string;
   connectionKey: string;
   ready: boolean;
+  workspaceReady: boolean;
   directory?: string;
   onNavigate(node: WorkspaceNode): void;
   mode: "workspace" | "depot";
@@ -58,7 +60,7 @@ export function ResourceExplorer({
 }) {
   const workspace = useWorkspaceFiles(
     connectionKey,
-    ready && !collapsed && mode === "workspace",
+    workspaceReady && !collapsed && mode === "workspace",
     directory?.startsWith("//") ? undefined : directory,
   );
   const depot = useDepotFiles(

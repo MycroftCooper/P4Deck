@@ -78,12 +78,17 @@ export function WorkspacePage({
   const switchButton = useRef<HTMLButtonElement>(null);
   const restoreSwitchFocus = useRef(false);
   const previousGeneration = useRef(runtime.contextGeneration);
+  const ready = runtime.connection.state === "connected";
   const key = useMemo(
     () => ["user-workspaces", runtime.mode, runtime.context],
     [runtime],
   );
   useEffect(() => {
-    if (runtime.p4Version === "loading") return;
+    if (runtime.p4Version === "loading" || !ready) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     let active = true;
     setItems(cache.getQueryData<ClientWorkspace[]>(key) ?? []);
     setLoading(true);
@@ -105,7 +110,7 @@ export function WorkspacePage({
     return () => {
       active = false;
     };
-  }, [key, runtime.p4Version, refresh]);
+  }, [key, ready, runtime.p4Version, refresh]);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return items.filter((item) =>
@@ -216,7 +221,7 @@ export function WorkspacePage({
               : "Workspaces owned by the current user, across hosts."}
           </p>
         </div>
-        <button disabled={loading} onClick={() => void reload()}>
+        <button disabled={loading || !ready} onClick={() => void reload()}>
           <RefreshCw size={15} className={loading ? "spin" : ""} />
           {t.refresh}
         </button>
@@ -230,6 +235,7 @@ export function WorkspacePage({
               zh ? "搜索工作区、主机、路径…" : "Search workspace, host, path…"
             }
             value={search}
+            disabled={!ready}
             onChange={(event) => {
               setSearch(event.target.value);
               scrollRef.current?.scrollTo(0, 0);
@@ -243,6 +249,13 @@ export function WorkspacePage({
           {runtime.mode === "mock" ? t.mock : runtime.context.server}
         </span>
       </div>
+      {!ready && (
+        <p role="status" className="workspace-load-error">
+          {zh
+            ? "请先在设置中验证并激活连接；连接未验证时不会自动扫描 Workspace。"
+            : "Verify and activate a connection in Settings first. Workspaces are not scanned automatically while the connection is unverified."}
+        </p>
+      )}
       <section
         className="workspace-runtime-summary"
         aria-label={zh ? "当前 Workspace" : "Current workspace"}

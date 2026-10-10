@@ -1,5 +1,16 @@
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { backend } from "../../infrastructure/backend";
+import type { RuntimeInfo } from "../../shared/contracts/types";
+
+export function canScanWorkspace(
+  runtime: Pick<RuntimeInfo, "connection" | "context">,
+) {
+  return (
+    runtime.connection.state === "connected" &&
+    !!runtime.context.client.trim() &&
+    !!runtime.context.cwd?.trim()
+  );
+}
 // Shared observers deduplicate sidebar/list requests and receive the same refresh result.
 export const workspaceCache = new QueryClient({
   defaultOptions: {

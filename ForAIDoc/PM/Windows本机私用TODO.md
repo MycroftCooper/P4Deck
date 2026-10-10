@@ -57,7 +57,7 @@
 
 - **目标**：在应用内连接本人实际使用的 Server、User、Client/Workspace，并确认该 Server 实际要求的认证路径。
 - **为何阻塞本机私用**：localhost fixture 证明协议和安全边界，但不能证明本人 Server 地址、权限、ticket/trust 策略和 Workspace 映射可用。
-- **具体实现/验收步骤**：先备份现有应用配置；创建单独 Profile，输入非敏感 Context；通过应用完成 CLI 发现、`p4 info` 和 `p4 login -s`；仅在服务器确实要求时执行 SSL trust 或外部 SSO/MFA；选择本人测试 Client/Workspace，浏览 Workspace/Depot，并核对 Server/User/Client/Root/Stream。失败时保持旧活动 Profile，不覆盖原配置。
+- **具体实现/验收步骤**：先备份现有应用配置；创建单独 Profile，输入非敏感 Server/User/Workspace 与 P4 高级设置；通过应用完成 CLI 发现、`p4 info` 和 `p4 login -s`；仅在服务器确实要求时执行 SSL trust 或外部 SSO/MFA。Workspace Root 必须由当前草稿向本人 Server 精确解析，不能手填或沿用旧 profile 的 cwd；空 Workspace 时应仍可验证 Server/User。选择本人测试 Client/Workspace 后再浏览 Workspace/Depot，并核对 Server/User/Client/Root/Stream。失败时按钮附近应立即显示原因与恢复方向，保持旧活动 Profile，不覆盖原配置，也不启动本地 Workspace 扫描。
 - **完成证据**：脱敏连接状态、实际认证类型、只读页面成功记录、失败回滚记录和配置备份位置；不保存密码、ticket、fingerprint 全文或内网地址。
 - **负责端**：PM/本人提供环境并验收；前端负责向导状态；后端负责认证分类、Context 与代次隔离。
 

@@ -185,6 +185,20 @@ async function change(control: HTMLInputElement, value: string) {
   });
 }
 
+async function waitForResolvedRoot(expected?: string) {
+  let rootStatus: Element | null = null;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    rootStatus = host.querySelector(".connection-root-resolved");
+    if (rootStatus && (!expected || rootStatus.textContent?.includes(expected)))
+      break;
+  }
+  expect(rootStatus).toBeTruthy();
+  if (expected) expect(rootStatus?.textContent).toContain(expected);
+}
+
 beforeEach(() => {
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -213,6 +227,46 @@ beforeEach(() => {
   });
   backend.testConnection.mockResolvedValue(status("connected"));
   backend.queryLoginStatus.mockResolvedValue(status("connected"));
+  backend.browseConnectionWorkspaces.mockImplementation(
+    async (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => {
+      const name = request.prefix ?? request.context.client;
+      const knownRoots: Record<string, string> = {
+        "fixture-client": "C:\\fixture\\workspace",
+        "secondary-client": "C:\\fixture\\secondary",
+        "created-client": "C:\\fixture\\created",
+        "generated-client": "C:\\fixture\\generated",
+      };
+      const rootPath = knownRoots[name] ?? `C:\\fixture\\${name}`;
+      return {
+        requestGeneration: request.requestGeneration,
+        items: [
+          {
+            name,
+            owner: request.context.user,
+            host: "",
+            root: rootPath,
+            stream: "",
+            description: "",
+            updated: null,
+            accessed: null,
+            rootStatus: "usable" as const,
+            selectable: true,
+          },
+        ],
+        partial: false,
+        truncated: false,
+        stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+        operationIds: [request.operationId ?? "workspace-root"],
+        connection: status("connected", { server: request.context.server }),
+        simulated: true,
+      };
+    },
+  );
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -265,6 +319,137 @@ it("renders saved connections with friendly current and status labels while hidi
   }
 });
 
+it("re-resolves an existing saved Workspace Root instead of trusting its stored cwd", async () => {
+  backend.browseConnectionWorkspaces.mockImplementation(
+    async (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => ({
+      requestGeneration: request.requestGeneration,
+      items: [
+        {
+          name: request.prefix!,
+          owner: request.context.user,
+          host: "",
+          root: "D:\\server-root\\fixture-client",
+          stream: "",
+          description: "",
+          updated: null,
+          accessed: null,
+          rootStatus: "usable" as const,
+          selectable: true,
+        },
+      ],
+      partial: false,
+      truncated: false,
+      stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+      operationIds: [request.operationId ?? "workspace-root"],
+      connection: status("connected", { server: request.context.server }),
+      simulated: true,
+    }),
+  );
+  await render();
+  await waitForResolvedRoot("D:\\server-root\\fixture-client");
+  expect(backend.browseConnectionWorkspaces).toHaveBeenCalledTimes(1);
+  expect(backend.browseConnectionWorkspaces).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prefix: "fixture-client",
+      context: expect.objectContaining({ client: "", cwd: undefined }),
+    }),
+  );
+  expect(button("保存连接").disabled).toBe(false);
+});
+
+it("isolates a late Workspace Root response after the draft identity changes", async () => {
+  let resolveOld!: (value: unknown) => void;
+  backend.browseConnectionWorkspaces.mockImplementation(
+    (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => {
+      const result = (name: string, rootPath: string) => ({
+        requestGeneration: request.requestGeneration,
+        items: [
+          {
+            name,
+            owner: request.context.user,
+            host: "",
+            root: rootPath,
+            stream: "",
+            description: "",
+            updated: null,
+            accessed: null,
+            rootStatus: "usable" as const,
+            selectable: true,
+          },
+        ],
+        partial: false,
+        truncated: false,
+        stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+        operationIds: [request.operationId ?? "workspace-root"],
+        connection: status("connected", { server: request.context.server }),
+        simulated: true,
+      });
+      if (request.prefix === "old-client")
+        return new Promise((resolve) => {
+          resolveOld = resolve;
+        });
+      return Promise.resolve(
+        result(
+          request.prefix!,
+          request.prefix === "new-client"
+            ? "D:\\roots\\new-client"
+            : "C:\\fixture\\workspace",
+        ),
+      );
+    },
+  );
+  await render();
+  await waitForResolvedRoot("C:\\fixture\\workspace");
+  await change(input("工作区"), "old-client");
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
+  await change(input("工作区"), "new-client");
+  await waitForResolvedRoot("D:\\roots\\new-client");
+  const oldRequest = backend.browseConnectionWorkspaces.mock.calls.find(
+    ([request]) => request.prefix === "old-client",
+  )![0];
+  await act(async () => {
+    resolveOld({
+      requestGeneration: oldRequest.requestGeneration,
+      items: [
+        {
+          name: "old-client",
+          owner: "tester",
+          host: "",
+          root: "D:\\roots\\old-client",
+          stream: "",
+          description: "",
+          updated: null,
+          accessed: null,
+          rootStatus: "usable",
+          selectable: true,
+        },
+      ],
+      partial: false,
+      truncated: false,
+      stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+      operationIds: [oldRequest.operationId],
+      connection: status("connected"),
+      simulated: true,
+    });
+    await Promise.resolve();
+  });
+  expect(
+    host.querySelector(".connection-root-resolved")?.textContent,
+  ).toContain("D:\\roots\\new-client");
+});
+
 it("creates a profile with CAS and never persists sensitive authentication state", async () => {
   const created = profile("created", "Office", "office:1666");
   backend.createConnectionProfile.mockResolvedValue(
@@ -283,6 +468,7 @@ it("creates a profile with CAS and never persists sensitive authentication state
   await change(input("服务器"), "office:1666");
   await change(input("用户"), "tester");
   await change(input("工作区"), "created-client");
+  await waitForResolvedRoot("C:\\fixture\\created");
   await act(async () => button("保存连接").click());
   expect(backend.createConnectionProfile).toHaveBeenCalledWith({
     expectedRevision: 4,
@@ -299,6 +485,72 @@ it("creates a profile with CAS and never persists sensitive authentication state
   expect(serialized).not.toMatch(/password|fingerprint|ticketContents/i);
   expect(host.textContent).toContain("状态仍为“尚未验证”");
   expect(onRuntime).not.toHaveBeenCalled();
+});
+
+it("accepts a newly saved profile when the backend returns a normalized Root", async () => {
+  let saved = false;
+  const normalized = {
+    ...profile("normalized", "Normalized", "normalized:1666"),
+    context: {
+      ...profile("normalized", "Normalized", "normalized:1666").context,
+      client: "normalized-client",
+      cwd: "D:\\server-root\\normalized-client",
+    },
+  };
+  backend.createConnectionProfile.mockImplementation(async () => {
+    saved = true;
+    return profilesDocument(
+      [
+        profile("primary", "Primary"),
+        profile("secondary", "Secondary"),
+        normalized,
+      ],
+      5,
+    );
+  });
+  backend.browseConnectionWorkspaces.mockImplementation(
+    async (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => ({
+      requestGeneration: request.requestGeneration,
+      items: [
+        {
+          name: request.prefix!,
+          owner: request.context.user,
+          host: "",
+          root: saved
+            ? "D:\\server-root\\normalized-client"
+            : "C:\\preview\\normalized-client",
+          stream: "",
+          description: "",
+          updated: null,
+          accessed: null,
+          rootStatus: "usable" as const,
+          selectable: true,
+        },
+      ],
+      partial: false,
+      truncated: false,
+      stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+      operationIds: [request.operationId ?? "workspace-root"],
+      connection: status("connected", { server: request.context.server }),
+      simulated: true,
+    }),
+  );
+  await render();
+  await act(async () => button("新建").click());
+  await change(input("连接名称（可选）"), "Normalized");
+  await change(input("服务器"), "normalized:1666");
+  await change(input("用户"), "tester");
+  await change(input("工作区"), "normalized-client");
+  await waitForResolvedRoot("C:\\preview\\normalized-client");
+  await act(async () => button("保存连接").click());
+  expect(host.textContent).toContain("状态仍为“尚未验证”");
+  await waitForResolvedRoot("D:\\server-root\\normalized-client");
+  expect(input("连接名称（可选）").value).toBe("Normalized");
 });
 
 it("generates a secondary saved-connection name when the optional name is blank", async () => {
@@ -322,6 +574,7 @@ it("generates a secondary saved-connection name when the optional name is blank"
   await change(input("服务器"), "generated:1666");
   await change(input("用户"), "generated-user");
   await change(input("工作区"), "generated-client");
+  await waitForResolvedRoot("C:\\fixture\\generated");
   await act(async () => button("保存连接").click());
   expect(backend.createConnectionProfile).toHaveBeenCalledWith({
     expectedRevision: 4,
@@ -569,7 +822,7 @@ it("preflights and confirms self-service user creation before filling without sa
   expect(backend.setActiveConnectionProfile).not.toHaveBeenCalled();
 });
 
-it("creates a workspace only after explicit preview and keeps Root separate from P4 cwd", async () => {
+it("creates a workspace only after explicit preview and fills its server-read Root", async () => {
   backend.preflightCreateConnectionWorkspace.mockImplementation(
     async (request: { requestGeneration: number; plan: { name: string } }) => ({
       ready: true,
@@ -592,9 +845,56 @@ it("creates a workspace only after explicit preview and keeps Root separate from
     message: "Browser Mock simulated workspace creation.",
     operationIds: ["workspace-confirm"],
     simulated: true,
+    workspace: {
+      name: "new-workspace",
+      owner: "tester",
+      host: "",
+      root: "D:\\work\\new-workspace",
+      stream: "//depot/main",
+      description: "",
+      updated: null,
+      accessed: null,
+      rootStatus: "usable",
+      selectable: true,
+    },
   });
+  backend.browseConnectionWorkspaces.mockImplementation(
+    async (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => {
+      const name = request.prefix ?? request.context.client;
+      return {
+        requestGeneration: request.requestGeneration,
+        items: [
+          {
+            name,
+            owner: request.context.user,
+            host: "",
+            root:
+              name === "new-workspace"
+                ? "D:\\work\\new-workspace"
+                : "C:\\fixture\\workspace",
+            stream: name === "new-workspace" ? "//depot/main" : "",
+            description: "",
+            updated: null,
+            accessed: null,
+            rootStatus: "usable" as const,
+            selectable: true,
+          },
+        ],
+        partial: false,
+        truncated: false,
+        stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+        operationIds: [request.operationId ?? "workspace-root"],
+        connection: status("connected", { server: request.context.server }),
+        simulated: true,
+      };
+    },
+  );
   await render();
-  const originalCwd = input("P4 工作目录").value;
   await act(async () => fieldAction("工作区", "新建").click());
   expect(backend.preflightCreateConnectionWorkspace).not.toHaveBeenCalled();
   await change(dialogInput("Workspace 名称"), "new-workspace");
@@ -619,7 +919,8 @@ it("creates a workspace only after explicit preview and keeps Root separate from
   await act(async () => dialogButton("确认创建").click());
   await act(async () => dialogButton("填入连接设置").click());
   expect(input("工作区").value).toBe("new-workspace");
-  expect(input("P4 工作目录").value).toBe(originalCwd);
+  expect(document.querySelector('input[aria-label="P4 工作目录"]')).toBeNull();
+  await waitForResolvedRoot("D:\\work\\new-workspace");
   expect(backend.createConnectionProfile).not.toHaveBeenCalled();
   expect(backend.setActiveConnectionProfile).not.toHaveBeenCalled();
 });
@@ -648,6 +949,7 @@ it("normalizes a safe Swarm base URL and rejects credentials or non-http schemes
   await change(swarm, "https://user:secret@swarm.example/");
   expect(button("保存连接").disabled).toBe(true);
   await change(swarm, "https://swarm.example/team");
+  await waitForResolvedRoot("C:\\fixture\\created");
   expect(button("保存连接").disabled).toBe(false);
   await act(async () => button("保存连接").click());
   expect(backend.createConnectionProfile).toHaveBeenCalledWith(
@@ -672,6 +974,7 @@ it("edits and renames the active profile, refreshes runtime generation, and rema
   backend.updateConnectionProfile.mockResolvedValue(nextDocument);
   backend.runtimeInfo.mockResolvedValue(nextRuntime);
   await render();
+  await waitForResolvedRoot("C:\\fixture\\workspace");
   await change(input("连接名称（可选）"), "Primary renamed");
   await act(async () => button("保存连接").click());
   expect(backend.updateConnectionProfile).toHaveBeenCalledWith(
@@ -697,6 +1000,7 @@ it("rejects empty, control-character, duplicate-name, and duplicate-context draf
   await change(input("服务器"), "unique:1666");
   await change(input("用户"), "tester");
   await change(input("工作区"), "unique-client");
+  await waitForResolvedRoot("C:\\fixture\\unique-client");
   await act(async () => button("保存连接").click());
   expect(host.textContent).toContain("连接名称已存在");
   expect(backend.createConnectionProfile).not.toHaveBeenCalled();
@@ -705,7 +1009,7 @@ it("rejects empty, control-character, duplicate-name, and duplicate-context draf
   await change(input("连接名称（可选）"), "Duplicate context");
   await change(input("服务器"), "secondary:1666");
   await change(input("工作区"), "secondary-client");
-  await change(input("P4 工作目录"), "C:\\fixture\\secondary");
+  await waitForResolvedRoot("C:\\fixture\\secondary");
   await act(async () => button("保存连接").click());
   expect(host.textContent).toContain("相同参数的已保存连接");
 });
@@ -719,6 +1023,7 @@ it("handles revision conflicts by reloading the list while preserving the local 
     .mockResolvedValueOnce(profilesDocument())
     .mockResolvedValueOnce(profilesDocument(undefined, 5));
   await render();
+  await waitForResolvedRoot("C:\\fixture\\workspace");
   await change(input("连接名称（可选）"), "My local rename");
   await act(async () => {
     button("保存连接").click();
@@ -859,6 +1164,12 @@ it("verifies Server and User before a Workspace is selected so recovery is reach
     }),
   );
   expect(host.textContent).toContain("需要登录");
+  expect(
+    host.querySelector(".connection-action-feedback")?.textContent,
+  ).toContain("需要登录");
+  expect(
+    host.querySelector(".connection-action-feedback")?.textContent,
+  ).toContain("详细恢复操作见下方连接状态卡片");
   expect(button("登录")).toBeTruthy();
 });
 

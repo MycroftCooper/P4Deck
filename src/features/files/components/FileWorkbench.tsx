@@ -28,6 +28,7 @@ export function FileWorkbench({
   selected,
   connectionKey,
   ready,
+  workspaceReady,
   onOpenReview,
   density,
   directory,
@@ -37,6 +38,7 @@ export function FileWorkbench({
   selected?: WorkspaceNode;
   connectionKey: string;
   ready: boolean;
+  workspaceReady: boolean;
   density?: boolean;
   directory?: string;
   onNavigate(node: WorkspaceNode): void;
@@ -46,7 +48,11 @@ export function FileWorkbench({
   ): void;
 }) {
   const isDepot = !!directory?.startsWith("//");
-  const local = useWorkspaceFiles(connectionKey, ready && !isDepot, directory);
+  const local = useWorkspaceFiles(
+    connectionKey,
+    workspaceReady && !isDepot,
+    directory,
+  );
   const depot = useDepotFiles(connectionKey, ready && isDepot, directory);
   const listing = isDepot ? depot : local;
   const nodes: WorkspaceNode[] = useMemo(

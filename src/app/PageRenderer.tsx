@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { FileWorkbench } from "../features/files/components/FileWorkbench";
+import { canScanWorkspace } from "../features/files/workspaceQueries";
 import type {
   GlobalSearchTarget,
   RuntimeInfo,
@@ -137,6 +138,7 @@ function Content({
           onNavigate={onNavigate}
           connectionKey={connectionKey}
           ready={runtime.p4Version !== "loading"}
+          workspaceReady={canScanWorkspace(runtime)}
         />
       );
     case "pending":

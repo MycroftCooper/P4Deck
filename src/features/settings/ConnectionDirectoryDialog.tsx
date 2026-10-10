@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
 import type {
+  ConnectionUserCandidate,
   ConnectionUserDirectoryResult,
+  ConnectionWorkspaceCandidate,
   ConnectionWorkspaceDirectoryResult,
   P4Context,
 } from "../../shared/contracts/types";
@@ -29,7 +31,7 @@ export function ConnectionDirectoryDialog({
   source: HTMLElement | null;
   zh: boolean;
   onDismiss(): void;
-  onSelect(value: string): void;
+  onSelect(value: ConnectionUserCandidate | ConnectionWorkspaceCandidate): void;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const snapshot = useMemo(() => ({ ...context }), []);
@@ -234,7 +236,12 @@ export function ConnectionDirectoryDialog({
                   role="option"
                   aria-selected="false"
                   key={item.name}
-                  onClick={() => onSelect(item.name)}
+                  disabled={
+                    kind === "workspace" &&
+                    "selectable" in item &&
+                    !item.selectable
+                  }
+                  onClick={() => onSelect(item)}
                 >
                   <strong>{item.name}</strong>
                   <span>
@@ -249,6 +256,12 @@ export function ConnectionDirectoryDialog({
                       : [
                           "root" in item ? item.root : undefined,
                           "stream" in item ? item.stream : undefined,
+                          "rootStatus" in item && item.rootStatus !== "usable"
+                            ? tr(
+                                `Root 不可用：${item.rootStatus}`,
+                                `Root unavailable: ${item.rootStatus}`,
+                              )
+                            : undefined,
                         ]
                           .filter(Boolean)
                           .join(" · ") ||

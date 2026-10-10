@@ -17,6 +17,7 @@ import type {
   ConnectionProfileErrorCode,
   ConnectionProfiles,
   ConnectionStatus,
+  ConnectionWorkspaceCandidate,
   Locale,
   P4Context,
   RuntimeInfo,
@@ -62,6 +63,14 @@ type ResourceDialog = {
   context: P4Context;
   requestGeneration: number;
   source: HTMLButtonElement;
+};
+
+type RootResolution = {
+  identity: string;
+  phase: "idle" | "saved" | "hint" | "resolving" | "resolved" | "error";
+  root?: string;
+  message?: string;
+  simulated?: boolean;
 };
 
 const profileErrorCodes: ConnectionProfileErrorCode[] = [
@@ -129,6 +138,39 @@ function draftIdentity(draft: ProfileDraft) {
 
 function suggestedConnectionName(context: P4Context) {
   return `${context.client} · ${context.user}@${context.server}`.slice(0, 128);
+}
+
+function workspaceRootIdentity(context: P4Context) {
+  return JSON.stringify({
+    executable: context.executable ?? "",
+    server: context.server.trim(),
+    user: context.user.trim(),
+    client: context.client.trim(),
+    charset: context.charset ?? "",
+    trustPath: context.trustPath ?? "",
+    ticketsPath: context.ticketsPath ?? "",
+    swarmBaseUrl: context.swarmBaseUrl ?? "",
+  });
+}
+
+function savedRootResolution(context: P4Context): RootResolution {
+  return context.client.trim() && context.cwd?.trim()
+    ? {
+        identity: workspaceRootIdentity(context),
+        phase: "saved",
+        root: context.cwd.trim(),
+      }
+    : { identity: workspaceRootIdentity(context), phase: "idle" };
+}
+
+function verifiedRootResolution(context: P4Context): RootResolution {
+  return context.client.trim() && context.cwd?.trim()
+    ? {
+        identity: workspaceRootIdentity(context),
+        phase: "resolved",
+        root: context.cwd.trim(),
+      }
+    : { identity: workspaceRootIdentity(context), phase: "idle" };
 }
 
 function profileError(cause: unknown): {
@@ -250,6 +292,10 @@ export function ConnectionProfilesCard({
   const [profileSearch, setProfileSearch] = useState("");
   const [deleteId, setDeleteId] = useState("");
   const [resourceDialog, setResourceDialog] = useState<ResourceDialog>();
+  const [rootResolution, setRootResolution] = useState<RootResolution>(() =>
+    savedRootResolution(runtime.context),
+  );
+  const [rootRequestRevision, setRootRequestRevision] = useState(0);
   const runtimeRef = useRef(runtime);
   runtimeRef.current = runtime;
   const generation = useRef(0);
@@ -259,6 +305,10 @@ export function ConnectionProfilesCard({
   const skipRuntimeGeneration = useRef<number | undefined>(undefined);
   const newButtonRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLButtonElement | undefined>(undefined);
+  const actionFeedbackRef = useRef<HTMLDivElement>(null);
+  const connectionStatusRef = useRef<HTMLElement>(null);
+  const rootSequence = useRef(0);
+  const rootOperation = useRef<string | undefined>(undefined);
 
   const current = normalizeContext(draft.context);
   const swarmUrlValid = (() => {
@@ -279,6 +329,12 @@ export function ConnectionProfilesCard({
   );
   const isActive = !!draft.id && profiles?.activeProfileId === draft.id;
   const savedName = draft.name.trim() || suggestedConnectionName(current);
+  const rootIdentity = workspaceRootIdentity(current);
+  const rootResolved =
+    rootResolution.identity === rootIdentity &&
+    rootResolution.phase === "resolved" &&
+    !!rootResolution.root &&
+    rootResolution.root === current.cwd;
   const valid = !!(
     savedName &&
     savedName.length <= 128 &&
@@ -286,6 +342,7 @@ export function ConnectionProfilesCard({
     current.server &&
     current.user &&
     current.client &&
+    rootResolved &&
     swarmUrlValid
   );
   const connectionValid = !!(current.server && current.user);
@@ -306,12 +363,6 @@ export function ConnectionProfilesCard({
       "https://swarm.example/",
     ],
     ["executable", "P4 可执行文件", "P4 executable", "p4 / p4.exe"],
-    [
-      "cwd",
-      "P4 工作目录",
-      "P4 working directory",
-      "/workspace/project / C:\\project",
-    ],
   ];
 
   const resetTransient = useCallback(
@@ -331,6 +382,8 @@ export function ConnectionProfilesCard({
       setTrustConfirmed(false);
       setDeleteId("");
       setResourceDialog(undefined);
+      setRootResolution(savedRootResolution(next.context));
+      setRootRequestRevision((revision) => revision + 1);
     },
     [],
   );
@@ -415,6 +468,137 @@ export function ConnectionProfilesCard({
     }
   }, [busy]);
 
+  useEffect(() => {
+    if (!error) return;
+    requestAnimationFrame(() => actionFeedbackRef.current?.focus());
+  }, [error]);
+
+  useEffect(() => {
+    if (rootRequestRevision === 0) return;
+    const identity = rootIdentity;
+    const client = current.client.trim();
+    if (!current.server.trim() || !current.user.trim() || !client) {
+      setRootResolution({ identity, phase: "idle" });
+      return;
+    }
+    const seq = ++rootSequence.current;
+    const operationId = `workspace-root-${crypto.randomUUID()}`;
+    rootOperation.current = operationId;
+    const clearDerivedRoot = () =>
+      setDraft((value) => {
+        if (workspaceRootIdentity(normalizeContext(value.context)) !== identity)
+          return value;
+        return { ...value, context: { ...value.context, cwd: undefined } };
+      });
+    setRootResolution((value) => ({
+      identity,
+      phase: "resolving",
+      root: value.identity === identity ? value.root : undefined,
+      message: undefined,
+    }));
+    const timer = window.setTimeout(() => {
+      void backend
+        .browseConnectionWorkspaces({
+          context: { ...current, client: "", cwd: undefined },
+          requestGeneration: seq,
+          operationId,
+          prefix: client,
+        })
+        .then((result) => {
+          if (
+            seq !== rootSequence.current ||
+            result.requestGeneration !== seq ||
+            workspaceRootIdentity(normalizeContext(draft.context)) !== identity
+          )
+            return;
+          if (result.connection.state !== "connected") {
+            const status = connectionPresentation(result.connection, zh);
+            clearDerivedRoot();
+            setConnection(result.connection);
+            setRootResolution({
+              identity,
+              phase: "error",
+              message: `${status.title} · ${status.detail}`,
+              simulated: result.simulated,
+            });
+            return;
+          }
+          const candidate = result.items.find((item) => item.name === client);
+          if (
+            !candidate ||
+            !candidate.selectable ||
+            candidate.rootStatus !== "usable" ||
+            !candidate.root.trim()
+          ) {
+            clearDerivedRoot();
+            setConnection(notTestedStatus(current.server));
+            setRootResolution({
+              identity,
+              phase: "error",
+              message: candidate
+                ? tr(
+                    "服务器返回的 Workspace Root 在本机不可用。",
+                    "The Workspace Root returned by the server is not usable on this machine.",
+                  )
+                : tr(
+                    "服务器未返回完全匹配的 Workspace。",
+                    "The server returned no exact Workspace match.",
+                  ),
+              simulated: result.simulated,
+            });
+            return;
+          }
+          setDraft((value) => {
+            if (
+              workspaceRootIdentity(normalizeContext(value.context)) !==
+              identity
+            )
+              return value;
+            return {
+              ...value,
+              context: { ...value.context, cwd: candidate.root },
+            };
+          });
+          if (candidate.root !== current.cwd) {
+            setConnection(notTestedStatus(current.server));
+            setPassword("");
+            setTrustConfirmed(false);
+          }
+          setRootResolution({
+            identity,
+            phase: "resolved",
+            root: candidate.root,
+            simulated: result.simulated,
+          });
+        })
+        .catch((cause) => {
+          if (seq !== rootSequence.current) return;
+          clearDerivedRoot();
+          setConnection(notTestedStatus(current.server));
+          setRootResolution({
+            identity,
+            phase: "error",
+            message: cause instanceof Error ? cause.message : String(cause),
+          });
+        })
+        .finally(() => {
+          if (seq === rootSequence.current) rootOperation.current = undefined;
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      rootSequence.current += 1;
+      if (rootOperation.current === operationId) {
+        rootOperation.current = undefined;
+        void Promise.resolve(backend.cancelOperation(operationId)).catch(
+          () => undefined,
+        );
+      }
+    };
+    // current is intentionally captured by the explicit, stable identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootIdentity, rootRequestRevision, tr, zh]);
+
   function begin(nextOperation: string) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -486,6 +670,9 @@ export function ConnectionProfilesCard({
     const token = begin("save");
     if (token == null) return;
     const wasActive = !!draft.id && draft.id === profiles.activeProfileId;
+    const existingProfileIds = new Set(
+      profiles.profiles.map((item) => item.id),
+    );
     try {
       const document = draft.id
         ? await backend.updateConnectionProfile({
@@ -505,8 +692,7 @@ export function ConnectionProfilesCard({
         ? document.profiles.find((item) => item.id === draft.id)
         : document.profiles.find(
             (item) =>
-              item.name === savedName &&
-              contextIdentity(item.context) === contextIdentity(current),
+              item.name === savedName && !existingProfileIds.has(item.id),
           );
       if (!saved)
         throw new Error("notFound: Saved connection was not returned.");
@@ -514,6 +700,10 @@ export function ConnectionProfilesCard({
       setSelectedId(saved.id);
       setDraft(nextDraft);
       setBaseline(nextDraft);
+      // A saved non-active profile is persisted, not activated. Treat its
+      // returned Root as a hint and independently re-resolve the exact draft.
+      setRootResolution(savedRootResolution(saved.context));
+      setRootRequestRevision((revision) => revision + 1);
       const status = notTestedStatus(saved.context.server);
       setConnection(status);
       setPassword("");
@@ -574,6 +764,8 @@ export function ConnectionProfilesCard({
           ? cliVersion
           : "P4 CLI unavailable");
       publish(result.status, version);
+      if (result.status.state !== "connected")
+        requestAnimationFrame(() => connectionStatusRef.current?.focus());
       if (result.status.state === "connected")
         setNotice(
           runtime.mode === "mock"
@@ -752,11 +944,52 @@ export function ConnectionProfilesCard({
   function updateContext(key: keyof P4Context, value: string) {
     generation.current += 1;
     setResourceDialog(undefined);
-    const next = { ...draft.context, [key]: value };
+    const next = { ...draft.context, [key]: value, cwd: undefined };
     setDraft({ ...draft, context: next });
+    setRootResolution({
+      identity: workspaceRootIdentity(next),
+      phase: "idle",
+    });
+    setRootRequestRevision((revision) => revision + 1);
     setConnection(
       notTestedStatus(key === "server" ? value.trim() : next.server.trim()),
     );
+    setNotice("");
+    setError("");
+    setPassword("");
+    setTrustConfirmed(false);
+  }
+
+  function applyWorkspaceCandidate(candidate: ConnectionWorkspaceCandidate) {
+    if (
+      !candidate.selectable ||
+      candidate.rootStatus !== "usable" ||
+      !candidate.root.trim()
+    ) {
+      setError(
+        tr(
+          "该 Workspace 的 Root 在当前机器上不可用，不能填入连接设置。",
+          "This Workspace Root is not usable on this machine and cannot be selected.",
+        ),
+      );
+      return;
+    }
+    generation.current += 1;
+    setResourceDialog(undefined);
+    const next = {
+      ...draft.context,
+      client: candidate.name,
+      cwd: candidate.root,
+    };
+    const identity = workspaceRootIdentity(next);
+    setDraft({ ...draft, context: next });
+    setRootResolution({
+      identity,
+      phase: "hint",
+      root: candidate.root,
+    });
+    setRootRequestRevision((revision) => revision + 1);
+    setConnection(notTestedStatus(next.server.trim()));
     setNotice("");
     setError("");
     setPassword("");
@@ -807,6 +1040,8 @@ export function ConnectionProfilesCard({
       if (!isCurrent(token)) return;
       setConnection(next.connection);
       setCliVersion(next.p4Version);
+      // Activation performs the same authoritative Root validation as save.
+      setRootResolution(verifiedRootResolution(next.context));
       setSwitchPhase("success");
       setNotice(
         runtime.mode === "mock"
@@ -898,6 +1133,60 @@ export function ConnectionProfilesCard({
       "Connection switch failed; the previous connection remains active.",
     ),
   }[switchPhase];
+  const operationMessage =
+    operation && operation !== "switch"
+      ? {
+          save: tr("正在保存连接…", "Saving connection…"),
+          test: tr("正在验证 Server 与 User…", "Verifying Server and User…"),
+          trust: tr("正在写入已确认的 Trust…", "Writing confirmed Trust…"),
+          login: tr("正在验证登录…", "Checking login…"),
+          logout: tr("正在退出登录…", "Logging out…"),
+          delete: tr("正在删除已保存连接…", "Deleting saved connection…"),
+        }[operation]
+      : "";
+  const sharedDisabledReason = loading
+    ? tr("正在加载已保存连接。", "Saved connections are loading.")
+    : busy
+      ? tr(
+          "请等待当前连接操作完成。",
+          "Wait for the current connection operation.",
+        )
+      : "";
+  const saveDisabledReason = sharedDisabledReason
+    ? sharedDisabledReason
+    : !dirty
+      ? tr("没有需要保存的修改。", "There are no changes to save.")
+      : !valid
+        ? tr(
+            "保存需要有效的 Server、User、Workspace 与自动解析的 Workspace Root。",
+            "Saving requires valid Server, User, Workspace, and an automatically resolved Workspace Root.",
+          )
+        : "";
+  const verifyDisabledReason = sharedDisabledReason
+    ? sharedDisabledReason
+    : !current.server
+      ? tr("请先填写 Server。", "Enter Server first.")
+      : !current.user
+        ? tr("请先填写 User。", "Enter User first.")
+        : "";
+  const connectDisabledReason = sharedDisabledReason
+    ? sharedDisabledReason
+    : !draft.id
+      ? tr(
+          "请先保存这个连接，再将它设为当前连接。",
+          "Save this connection before making it current.",
+        )
+      : isActive
+        ? tr("此连接当前正在使用。", "This connection is already current.")
+        : dirty
+          ? tr(
+              "请先保存或撤销修改，再连接并使用。",
+              "Save or discard edits before connecting.",
+            )
+          : "";
+  const connectionFailureNearActions = !["connected", "notTested"].includes(
+    connection.state,
+  );
 
   return (
     <section className="settings-card connection-profiles-card">
@@ -1141,6 +1430,71 @@ export function ConnectionProfilesCard({
                     ),
                   )}
                 </div>
+                <div
+                  className={`connection-root-status connection-root-${rootResolution.phase}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <strong>Workspace Root</strong>
+                  {!current.client ? (
+                    <span>
+                      {tr(
+                        "选择或填写 Workspace 后自动从服务器解析；无需手填本地路径。",
+                        "Choose or enter a Workspace to resolve its Root from the server automatically; no local path entry is needed.",
+                      )}
+                    </span>
+                  ) : rootResolution.phase === "resolving" ||
+                    rootResolution.phase === "hint" ||
+                    rootResolution.phase === "idle" ? (
+                    <span>
+                      {tr(
+                        `正在解析 ${current.client} 的 Root…`,
+                        `Resolving Root for ${current.client}…`,
+                      )}
+                    </span>
+                  ) : rootResolution.phase === "error" ? (
+                    <>
+                      <span>
+                        {rootResolution.message ||
+                          tr(
+                            "Workspace Root 解析失败。",
+                            "Workspace Root resolution failed.",
+                          )}
+                      </span>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setRootResolution({
+                            identity: rootIdentity,
+                            phase: "idle",
+                          });
+                          setRootRequestRevision((revision) => revision + 1);
+                        }}
+                      >
+                        {tr("重试解析", "Retry Root")}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <code>{rootResolution.root || current.cwd}</code>
+                      <span>
+                        {rootResolution.phase === "saved"
+                          ? tr(
+                              "已保存的 Root；保存或激活时后端会再次向服务器核对。",
+                              "Saved Root; the backend rechecks it with the server on save or activation.",
+                            )
+                          : tr(
+                              "已按当前草稿从服务器精确解析；保存时仍会再次核对。",
+                              "Resolved exactly from the current draft; saving rechecks it again.",
+                            )}
+                        {rootResolution.simulated
+                          ? " · Browser Mock simulated"
+                          : ""}
+                      </span>
+                    </>
+                  )}
+                </div>
               </section>
 
               <section
@@ -1150,8 +1504,8 @@ export function ConnectionProfilesCard({
                 <h3 id="p4-settings-heading">{tr("P4 设置", "P4 settings")}</h3>
                 <p>
                   {tr(
-                    "这些值随当前已保存连接保存。P4 工作目录是命令执行上下文，不是新建 Workspace 的 Root。",
-                    "These values are saved with this connection. The P4 working directory is command context, not the Root of a newly created Workspace.",
+                    "这些高级值随当前已保存连接保存。Workspace Root 始终由上方所选 Workspace 自动解析。",
+                    "These advanced values are saved with this connection. Workspace Root is always resolved automatically from the selected Workspace above.",
                   )}
                 </p>
                 <div className="settings-grid profile-fields">
@@ -1182,6 +1536,10 @@ export function ConnectionProfilesCard({
                   className="primary"
                   type="submit"
                   disabled={!valid || !dirty}
+                  aria-describedby={
+                    saveDisabledReason ? "save-connection-reason" : undefined
+                  }
+                  title={saveDisabledReason || undefined}
                 >
                   <Save size={14} />
                   {operation === "save"
@@ -1192,6 +1550,12 @@ export function ConnectionProfilesCard({
                   type="button"
                   className="secondary"
                   disabled={!connectionValid}
+                  aria-describedby={
+                    verifyDisabledReason
+                      ? "verify-connection-reason"
+                      : undefined
+                  }
+                  title={verifyDisabledReason || undefined}
                   onClick={() => void testConnection()}
                 >
                   <RefreshCw
@@ -1208,6 +1572,8 @@ export function ConnectionProfilesCard({
                   disabled={!dirty}
                   onClick={() => {
                     setDraft(baseline);
+                    setRootResolution(savedRootResolution(baseline.context));
+                    setRootRequestRevision((revision) => revision + 1);
                     setConnection(
                       isActive
                         ? runtime.connection
@@ -1225,6 +1591,12 @@ export function ConnectionProfilesCard({
                   type="button"
                   className="secondary"
                   disabled={!draft.id || isActive || dirty || busy}
+                  aria-describedby={
+                    connectDisabledReason
+                      ? "activate-connection-reason"
+                      : undefined
+                  }
+                  title={connectDisabledReason || undefined}
                   onClick={(event) => void switchProfile(event.currentTarget)}
                 >
                   {operation === "switch"
@@ -1234,6 +1606,44 @@ export function ConnectionProfilesCard({
               </div>
             </fieldset>
           </form>
+
+          <div
+            ref={actionFeedbackRef}
+            className="connection-action-feedback"
+            tabIndex={-1}
+          >
+            {(operationMessage || switchMessage) && (
+              <p role="status" aria-live="polite">
+                {operationMessage || switchMessage}
+              </p>
+            )}
+            {notice && (
+              <p role="status" aria-live="polite">
+                {notice}
+              </p>
+            )}
+            {error && <p role="alert">{error}</p>}
+            {connectionFailureNearActions && !error && (
+              <p role="alert" className="connection-action-failure">
+                <strong>{presentation.title}</strong> — {presentation.detail}{" "}
+                <span>
+                  {tr(
+                    "详细恢复操作见下方连接状态卡片。",
+                    "See the connection status card below for recovery steps.",
+                  )}
+                </span>
+              </p>
+            )}
+            {saveDisabledReason && (
+              <p id="save-connection-reason">{saveDisabledReason}</p>
+            )}
+            {verifyDisabledReason && (
+              <p id="verify-connection-reason">{verifyDisabledReason}</p>
+            )}
+            {connectDisabledReason && (
+              <p id="activate-connection-reason">{connectDisabledReason}</p>
+            )}
+          </div>
 
           {dirty && (
             <p role="status" className="settings-unsaved-note">
@@ -1245,9 +1655,11 @@ export function ConnectionProfilesCard({
           )}
 
           <section
+            ref={connectionStatusRef}
             className={`connection-status-card connection-status-${presentation.tone}`}
             aria-live="polite"
             aria-busy={busy}
+            tabIndex={-1}
           >
             <div className="connection-status-heading">
               <span
@@ -1444,23 +1856,6 @@ export function ConnectionProfilesCard({
         </div>
       )}
 
-      <div
-        className="profile-operation-status"
-        role="status"
-        aria-live="polite"
-      >
-        {switchMessage}
-      </div>
-      {notice && (
-        <p role="status" className="settings-note">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="workspace-load-error">
-          {error}
-        </p>
-      )}
       {selectedProfile && isActive && profiles?.profiles.length === 1 && (
         <p className="settings-note">
           {tr(
@@ -1479,12 +1874,11 @@ export function ConnectionProfilesCard({
           source={resourceDialog.source}
           zh={zh}
           onDismiss={() => setResourceDialog(undefined)}
-          onSelect={(value) =>
-            updateContext(
-              resourceDialog.kind === "user" ? "user" : "client",
-              value,
-            )
-          }
+          onSelect={(value) => {
+            if (resourceDialog.kind === "user")
+              updateContext("user", value.name);
+            else applyWorkspaceCandidate(value as ConnectionWorkspaceCandidate);
+          }}
         />
       )}
       {resourceDialog?.mode === "create" && (
@@ -1496,12 +1890,11 @@ export function ConnectionProfilesCard({
           source={resourceDialog.source}
           zh={zh}
           onDismiss={() => setResourceDialog(undefined)}
-          onCreated={(value) =>
-            updateContext(
-              resourceDialog.kind === "user" ? "user" : "client",
-              value,
-            )
-          }
+          onCreated={(value) => {
+            if (resourceDialog.kind === "user")
+              updateContext("user", value as string);
+            else applyWorkspaceCandidate(value as ConnectionWorkspaceCandidate);
+          }}
         />
       )}
     </section>

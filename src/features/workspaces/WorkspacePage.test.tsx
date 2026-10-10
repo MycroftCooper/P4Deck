@@ -130,6 +130,31 @@ it("shows the real current Client, Root, and Stream and marks Mock as simulated"
   expect(host.textContent).toContain("不访问真实网络");
 });
 
+it("does not query or offer refresh before the connection is verified", async () => {
+  const notTested: RuntimeInfo = {
+    ...initial,
+    connection: {
+      state: "notTested",
+      message: "not tested",
+      recovery: "retry",
+      server: initial.context.server,
+    },
+  };
+  await act(async () => {
+    root.render(
+      <WorkspacePage
+        t={messages["zh-CN"]}
+        runtime={notTested}
+        onRuntime={applied}
+      />,
+    );
+    await Promise.resolve();
+  });
+  expect(backend.listUserWorkspaces).not.toHaveBeenCalled();
+  expect(button("刷新").disabled).toBe(true);
+  expect(host.textContent).toContain("连接未验证时不会自动扫描 Workspace");
+});
+
 it("calls switchWorkspace with generation, exposes verify/commit/success, and applies returned runtime", async () => {
   vi.useFakeTimers();
   let resolveSwitch!: (runtime: RuntimeInfo) => void;

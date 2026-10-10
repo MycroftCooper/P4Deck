@@ -98,6 +98,9 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await expect(
     page.getByRole("heading", { name: "P4 settings" }),
   ).toBeVisible();
+  await expect(page.getByLabel("P4 working directory")).toHaveCount(0);
+  await expect(page.locator(".connection-root-status")).toBeVisible();
+  await expect(page.locator(".connection-action-feedback")).toBeVisible();
   await expect(page.getByText("Tab behavior")).toHaveCount(0);
   await assertNoPageOverflow(page, "Settings saved connections");
   const userField = page

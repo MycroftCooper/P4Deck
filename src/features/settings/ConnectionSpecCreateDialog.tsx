@@ -4,6 +4,7 @@ import { backend } from "../../infrastructure/backend";
 import type {
   ConnectionSpecCreatePreflight,
   ConnectionSpecCreateResult,
+  ConnectionWorkspaceCandidate,
   ConnectionWorkspaceMapping,
   P4Context,
 } from "../../shared/contracts/types";
@@ -43,7 +44,7 @@ export function ConnectionSpecCreateDialog({
   source: HTMLElement | null;
   zh: boolean;
   onDismiss(): void;
-  onCreated(value: string): void;
+  onCreated(value: string | ConnectionWorkspaceCandidate): void;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const snapshot = useMemo(() => ({ ...context }), []);
@@ -234,6 +235,11 @@ export function ConnectionSpecCreateDialog({
     ...(preflight?.warnings ?? []),
   ];
   const created = result?.outcome === "created";
+  const createdWorkspaceUsable =
+    kind === "user" ||
+    (!!result?.workspace &&
+      result.workspace.selectable &&
+      result.workspace.rootStatus === "usable");
   return (
     <Dialog
       title={
@@ -309,11 +315,13 @@ export function ConnectionSpecCreateDialog({
                 {tr("返回修改", "Back to edit")}
               </button>
             )}
-            {created && (
+            {created && createdWorkspaceUsable && (
               <button
                 type="button"
                 className="primary"
-                onClick={() => onCreated(result.name)}
+                onClick={() =>
+                  onCreated(kind === "user" ? result.name : result.workspace!)
+                }
               >
                 {tr("填入连接设置", "Use in connection settings")}
               </button>
@@ -372,8 +380,8 @@ export function ConnectionSpecCreateDialog({
                 />
                 <small>
                   {tr(
-                    "Root 是新 Workspace 的本地根目录；它与 P4 设置中的工作目录是不同字段。",
-                    "Root is the new Workspace's local root. It is separate from the P4 working directory setting.",
+                    "Root 仅用于创建新 Workspace；创建成功后会以后端回读结果自动填入连接设置并再次精确核对。",
+                    "Root is used only to create the new Workspace. After creation, the server read-back fills the connection settings and is checked again exactly.",
                   )}
                 </small>
               </label>
@@ -516,9 +524,15 @@ export function ConnectionSpecCreateDialog({
         <>
           {error && <DialogNotice error>{error}</DialogNotice>}
           {result && (
-            <DialogNotice error={!created}>
+            <DialogNotice error={!created || !createdWorkspaceUsable}>
               {result.simulated && "Browser Mock simulated · "}
               {result.message}
+              {created && !createdWorkspaceUsable
+                ? tr(
+                    " 服务端未返回可在本机使用的 Workspace Root，不能填入连接设置。",
+                    " The server did not return a Workspace Root usable on this machine, so it cannot be used in connection settings.",
+                  )
+                : ""}
             </DialogNotice>
           )}
         </>

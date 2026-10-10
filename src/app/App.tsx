@@ -57,6 +57,7 @@ import {
 } from "./docking/detachedBinding";
 import { useAutoRefresh } from "./refresh/autoRefresh";
 import { useDesktopNotifications } from "./notifications/notifications";
+import { canScanWorkspace } from "../features/files/workspaceQueries";
 
 export function App() {
   const preferences = usePreferences();
@@ -459,6 +460,7 @@ export function App() {
                     clientName={runtime.context.client}
                     connectionKey={connectionKey}
                     ready={runtime.p4Version !== "loading"}
+                    workspaceReady={canScanWorkspace(runtime)}
                     mode={treeMode}
                     onModeChange={setTreeMode}
                     t={t}

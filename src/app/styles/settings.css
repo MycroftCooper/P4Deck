@@ -75,6 +75,26 @@
   align-items: center;
   gap: 6px;
 }
+.connection-action-feedback {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.connection-action-feedback:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.connection-action-feedback p {
+  margin: 0;
+  padding: 7px 9px;
+  border-left: 3px solid var(--border);
+  background: color-mix(in srgb, var(--panel-3) 55%, transparent);
+  overflow-wrap: anywhere;
+}
+.connection-action-feedback [role="alert"] {
+  border-left-color: var(--danger);
+  color: var(--danger);
+}
 .settings-note {
   padding: 10px 12px;
   background: var(--accent-soft);
@@ -277,6 +297,29 @@
   align-items: center;
   gap: 5px;
   min-height: 30px;
+}
+.connection-root-status {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 11px;
+}
+.connection-root-status code,
+.connection-root-status span {
+  overflow-wrap: anywhere;
+}
+.connection-root-status span {
+  color: var(--muted);
+}
+.connection-root-status button {
+  justify-self: start;
+}
+.connection-root-error {
+  border-color: var(--danger);
 }
 .connection-directory-list {
   display: grid;

@@ -4,6 +4,12 @@
 > 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、普通 Lock/Unlock、390px Web 布局、37 个前端 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据。本人验收后已移除重复且不符合设计的原生 Connection/Changes/Navigate/View 顶栏菜单；连接管理继续位于 Settings。当前缺口是最终构建、剩余 Tauri Windows 原生点击与本人实际 Server 验收。
 > 下文保留各批次当时的测试数量、平台范围和“待验”描述作为历史快照。旧数字不得解释为最新门禁；“原生待验”表示缺少 Tauri 实机证据，不表示对应 React/后端功能仍未实现。
 
+## 最近完成：连接反馈与 Workspace Root 自动解析（2026-10-10）
+
+- Settings 不再提供可编辑的 P4 工作目录。手填 Workspace、Browse 选择、New 成功回读及旧已保存连接统一按当前草稿 Server/User/CLI/charset/trust/tickets/Swarm 身份精确查询 Workspace，并以服务端 Root 填充 `cwd`；旧保存值只作短暂 hint，不作为已验证事实。
+- Root 查询使用独立 sequence/operation，草稿字段变化、关闭和卸载会取消或隔离迟到结果；保存和激活仍由后端权威复核。空 Workspace 继续允许先验证 Server/User 和完成 Trust/Login，未连接或无有效 Root 时 Files/Workspace 不自动发起本地扫描。
+- 保存、验证、连接按钮附近显示即时进度、成功、typed 失败和禁用原因；详细 Trust/Login 恢复仍复用既有连接状态卡片，不新建认证控制器。Browser Mock 继续明确 simulated；Windows Tauri 本人 Server 点击仍待验，不能由组件或 Edge 证据替代。
+
 ## 最近完成：Global Search Stream/Shelf 前端闭环（2026-10-10）
 
 - `SearchPage` 在原五类状态机上正式加入 Stream 与 Shelf，共七类筛选、facet、分组、图标与结果 badge；空 `kinds` 的后端“全部七类”语义未改变，显式类别、重试、分页与快速输入继续绑定原请求快照。

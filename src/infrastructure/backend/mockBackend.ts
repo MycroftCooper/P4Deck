@@ -1522,6 +1522,8 @@ export const mockBackend: Backend = {
     const seeded = (await this.listUserWorkspaces()).map((item) => ({
       ...item,
       owner: request.context.user,
+      rootStatus: "usable" as const,
+      selectable: true,
     }));
     const all = [...seeded, ...mockConnectionWorkspaces.values()]
       .filter(
@@ -1736,7 +1738,10 @@ export const mockBackend: Backend = {
       description: plan.description ?? "",
       updated: Math.floor(Date.now() / 1000),
       accessed: Math.floor(Date.now() / 1000),
+      rootStatus: "usable",
+      selectable: true,
     });
+    const workspace = mockConnectionWorkspaces.get(record.name)!;
     return {
       outcome: "created",
       kind: "workspace",
@@ -1744,6 +1749,7 @@ export const mockBackend: Backend = {
       message:
         "Browser Mock simulated workspace creation; no real server was changed.",
       operationIds: [crypto.randomUUID()],
+      workspace: structuredClone(workspace),
       simulated: true,
     };
   },
