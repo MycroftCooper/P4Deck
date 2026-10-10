@@ -141,3 +141,9 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 生产源码为 `072195055c2de1a8c5675e50f0fd0c790f4fd7b1`。前端交接的 30 项定向测试、`check:web`、format 与真实 Edge 1/1，以及 PM 独立 23/23、validator 和 diff-check 均通过；本批没有 P4 逻辑变化，未重复运行 localhost fixture 或全量门禁。
 
 构建前确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 20:36:59 +08:00`，大小 `32,118,784` bytes，SHA-256 `44F984ED6068A5B286C588A9D9677DC2A72442B362B764A231D6AF3269BE91A4`，Authenticode 状态 `NotSigned`。构建后 P4Deck 进程数与 `127.0.0.1:16661` listener 数均为 0；没有启动应用、读取个人配置或连接 P4 Server。当前生成物尚未由用户重新打开并原生点击，不能把构建和浏览器自动化证据表述为 Windows 原生界面已人工验收。
+
+## 8. Stream 工具入口精简批次
+
+本批只删除左侧活动栏中不常用的 Stream Graph / Branch Mappings 重复入口；两个功能页及其生产路由保持不变，用户仍可从 Streams 页既有按钮打开。生产源码为 `753112fb36ef48781c930d1e96781986f9e35a07`。前端交接 panels 12/12、真实 Edge 390px + axe 2/2、`check:web`、format、validator 与 diff-check 通过，PM 另行复核 panels 12/12 和 validator；本批没有 Rust 或 P4 逻辑变化，因此未重复运行全量测试或 localhost fixture。
+
+构建前只读确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 20:47:35 +08:00`，大小 `32,118,784` bytes，SHA-256 `24D18F4739F48427552704E597BAFF04C4A73871D9E40566D52E397721AD0AB4`，Authenticode 状态 `NotSigned`。构建后 P4Deck 进程数与 `127.0.0.1:16661` listener 数均为 0；Agent 没有启动应用、读取个人配置或连接 P4 Server。当前 build 尚未由用户重新打开并原生点击，不能把浏览器自动化与构建成功表述为 Windows 原生界面已人工确认。
