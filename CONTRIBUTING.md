@@ -9,6 +9,8 @@ pnpm test
 pnpm check
 ```
 
+也可用 `pnpm ci:quick` 依次执行本地静态检查和测试；发布候选使用 `pnpm ci:local` 加跑构建与前后端性能门禁。详细边界见 [本地门禁与发布配置骨架](ForAIDoc/Coder/本地门禁与发布配置.md)。
+
 前端代码不得直接执行进程；所有 P4 调用和输出解析必须位于 Rust Adapter 边界内。
 
 新增 P4 命令时必须：

@@ -10,3 +10,5 @@ target/
 .env
 .tools/
 artifacts/performance/
+artifacts/ci/
+src-tauri/tauri.release.generated.conf.json
