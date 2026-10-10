@@ -9,7 +9,7 @@
 - **WIN-P0-01 部分完成**：`94b5f0c` 的 `pnpm tauri build --debug --no-bundle` exit 0，真实 exe、SHA-256、可见响应窗口和隔离 IPC 已绑定留证；移除 Force Unlock 后的 `3c21d03` 也已成功重建并由本人启动人工验收，本次“移除原生顶栏菜单”的决定即来自该窗口。旧隔离验收 PID 已正常关闭，fixture 已停止且 listener 消失，原 Roaming/Local 已恢复，测试 snapshot 已保留。菜单移除版的最新构建/版本绑定以 [Windows 原生构建与运行验收](../Coder/Windows原生构建运行验收.md) 为准，仍需本人确认新窗口外观与连接入口。
 - **WIN-P0-02 部分完成**：原生窗口已通过 Profile 保存/验证、Workspace Root 校正、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch Mapping list/detail/forward preview/安全 CRUD。首轮 build 还曾真实执行一次后来下线的 Force Unlock；该历史事实保留在验收记录中，但不再是当前能力、阻塞或待复验项。详见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。
 - **当前产品决定**：普通用户界面只保留普通 Lock/Unlock 及 other-owner blocker/提示；不提供 Force Unlock 按钮、对话框或 API 路径。管理员强制解锁由后台按运维流程执行。
-- **当前工具区决定**：Terminal/P4 Log 只保留底部工具区、命令面板、快捷键与独立 panel，左侧 Activity Bar 不再重复显示；任何新日志/Warning/Error 都不自动展开或切换当前工具，未查看 Error 只显示底部可访问红点，打开日志后清除。
+- **当前入口决定**：Terminal/P4 Log 只保留底部工具区、命令面板、快捷键与独立 panel；Stream Graph/Branch Mappings 从 Streams 页按钮进入，并继续支持 Dock/popout。左侧 Activity Bar 不再重复显示这四个入口。任何新日志/Warning/Error 都不自动展开或切换当前工具，未查看 Error 只显示底部可访问红点，打开日志后清除。
 - **尚未通过**：Shelf `deep-path` 结果到独立详情、其余完整只读入口、命令面板/前端快捷键、390px、dock/popout/归还、焦点、关闭重开/布局恢复，以及剩余安全写入流程。本人验收认为原生 Connection/Changes/Navigate/View 顶栏菜单重复且不符合设计，现已从产品移除；连接管理继续位于 Settings。
 - **未开始/未验**：本人实际 Server（WIN-P0-03）、完整核心读写安全演练（WIN-P0-04）、全部 P1/P2。
 - **控制停止事实**：提交 `707e51e` 后工具返回 “Computer Use was stopped by the user with the physical Escape key.”；随后没有继续原生点击。旧应用、fixture、原配置恢复与临时 seed 清理由后端收尾，不构成新版 UI 复验。
@@ -48,7 +48,7 @@
 
 - **目标**：在 Tauri 原生窗口中确认本人会使用的核心入口可点击、可聚焦、可恢复。
 - **为何阻塞本机私用**：现有 Web/真实 Edge 测试和 localhost 服务层 E2E 没有覆盖 WebView2 焦点、窗口恢复、系统对话与 IPC 串联，也不能证明最终原生窗口已不再显示退役的系统菜单栏。
-- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；确认原生 Connection/Changes/Navigate/View 顶栏菜单不存在，连接 Profile CRUD/验证/激活/认证入口仍在 Settings；确认 Activity Bar 没有重复的 Terminal/P4 Log 按钮、底部工具入口仍可手动打开，并以测试 Error 验证只出现红点、不自动展开/切换、查看后清除；验证命令面板、主要前端快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、普通 Lock/Unlock 只在测试数据上执行。确认其他用户持锁仍显示明确 blocker/owner 提示，且界面不存在管理员强制解锁入口。记录每一步通过/失败及所用构建。
+- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；确认原生 Connection/Changes/Navigate/View 顶栏菜单不存在，连接 Profile CRUD/验证/激活/认证入口仍在 Settings；确认 Activity Bar 没有重复的 Terminal/P4 Log、Stream Graph 或 Branch Mappings 按钮，前两者仍可从底部工具区手动打开、后两者仍可从 Streams 页按钮进入，并以测试 Error 验证只出现红点、不自动展开/切换、查看后清除；验证命令面板、主要前端快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、普通 Lock/Unlock 只在测试数据上执行。确认其他用户持锁仍显示明确 blocker/owner 提示，且界面不存在管理员强制解锁入口。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
 - **当前证据/缺口**：已通过项和精确边界见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。下一步构建并启动移除管理员入口与原生顶栏菜单后的最终 exe，确认 Settings 连接管理、普通 Lock/Unlock 与 other-owner blocker 未受影响，再依有限清单补 Shelf 导航、剩余页面、命令面板/前端快捷键、390px、dock/popout、焦点和重开恢复；未实际点击项不得由后端日志或浏览器截图代替。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
@@ -116,7 +116,7 @@
 
 - Stream Graph 前后端只读闭环已独立完成：正式全局 panel/Streams 入口、确定性 parent→child 分层、可访问虚拟树、过滤/分页/取消/重试、详情/键盘/390px、复用安全切换对话框，以及强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、scope 复核、一次性分页游标和 Windows localhost fixture 均已落地。
 - Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
-- Branch Mapping 前后端安全闭环已独立完成：正式全局 panel、Streams/Dock/Activity 入口、虚拟列表与 opaque cursor、原样详情/View 语义、正反 `integrate -n` 只读影响预览，以及专用 preflight→confirm create/edit/delete 均已接入；Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter 和明确 simulated 的 Browser Mock 均复用后端权威契约。Web 组件与真实 Edge 覆盖 390px、键盘、axe、大列表 DOM 上限、分页/迟到隔离和模拟增删改闭环。
+- Branch Mapping 前后端安全闭环已独立完成：正式全局 panel、Streams 页按钮/Dock/popout、虚拟列表与 opaque cursor、原样详情/View 语义、正反 `integrate -n` 只读影响预览，以及专用 preflight→confirm create/edit/delete 均已接入；Activity Bar 重复入口已移除。Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter 和明确 simulated 的 Browser Mock 均复用后端权威契约。Web 组件与真实 Edge 覆盖 390px、键盘、axe、大列表 DOM 上限、分页/迟到隔离和模拟增删改闭环。
 - 历史记录：Force Unlock 曾完成前后端专用闭环并在首轮 Windows 原生验收执行过一次；用户随后明确决定移除该能力，因为 P4Deck 面向普通用户，管理员强制解锁应在后台执行。该历史不再代表当前产品能力或待验任务。
 - Global Search 的 Stream/Shelf 深度搜索前后端闭环已完成：`SearchPage` 正式扩为七类筛选、facet、分组与 badge；Stream 结果显示服务端 path/name/owner/type/parent/description 摘要并显式定位到 Streams，Shelf 结果显示 numbered CL、owner/client/time/description 与后端已给出的匹配路径摘要并打开独立 Shelf detail。Shelf 仍按 500 条列表、128 个 detail 候选、8 个批次、每 shelf 256/总 20,000 文件及 20 秒预算保守截断，UI 会逐类别显示 `partialReason`，不宣称全量。分页保序去重、游标失效重搜、快速输入取消/迟到隔离、390px、键盘与 axe 已有 Web/真实 Edge 证据；Browser Mock 明示 simulated。
 - 当前保留的三个用户优先功能为 Stream Graph、Branch Mapping、Global Search Stream/Shelf，均已完成代码闭环。上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout/搜索导航、本人 Server 大规模与权限/trigger 已通过；它们分别并入 WIN-P0-02 与 WIN-P0-03/04，不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。

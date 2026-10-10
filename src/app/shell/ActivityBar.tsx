@@ -7,8 +7,6 @@ import {
   Network,
   Settings,
   X,
-  GitFork,
-  GitMerge,
 } from "lucide-react";
 import { activityPageIds, type PageId } from "../panels";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -21,8 +19,6 @@ const icons = {
   submitted: ListChecks,
   workspaces: Monitor,
   streams: Network,
-  streamgraph: GitFork,
-  branchmappings: GitMerge,
   settings: Settings,
 };
 interface Props {

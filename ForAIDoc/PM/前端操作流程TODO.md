@@ -23,7 +23,7 @@
 
 ## 最近完成：Branch Mapping 前端闭环（2026-10-10）
 
-- 新增正式 `branchmappings` 全局 panel，接入 Activity Bar、Dock 新页、Streams 邻近入口与 Tauri popout 白名单；没有增加全局 command，当时的 37 项 TS/Rust 原生菜单 parity 是历史快照，当前只保留 37 项前端 catalog 完整性校验。
+- 当批新增正式 `branchmappings` 全局 panel，并接入当时的 Activity Bar、Dock 新页、Streams 邻近入口与 Tauri popout 白名单；没有增加全局 command，当时的 37 项 TS/Rust 原生菜单 parity 是历史快照。当前 Activity Bar 重复入口已移除，功能继续从 Streams 页按钮、Dock/popout 可达，并保留 37 项前端 catalog 完整性校验。
 - 页面只消费既有强类型 Branch Mapping 契约：服务端 list/detail 与 View 顺序原样呈现，`map/exclude/overlay/comment/unknown` 不猜测；查询/owner 过滤、opaque cursor 分页、稳定去重、不前进 cursor 保守停止、失效 cursor 首屏重启、刷新/取消/重试，以及 partial/truncated/safety-limit/simulated/stale 状态均已接通。大列表使用窗口化并有 DOM 上限测试。
 - 正反影响预览只调用专用 `integrate -n` 接口，明确“不修改 workspace/不打开文件”，并展示 file/action/source/target、blocker 与部分/截断状态。create/edit/delete 只走专用 preflight→一次性 confirm；View 编辑器保留排序、限制 512 行并逐行校验，unknown/comment/不可往返内容禁止编辑，删除要求独立高危确认，失败/过期/取消/未知结果不冒充成功。
 - Profile/connection/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading；详情/对话框具备键盘、ARIA、Escape 和来源回焦，390px 使用列表/详情上下布局，长路径只在受控内容区换行或滚动。Browser Mock 全程标示 simulated。
@@ -31,7 +31,7 @@
 
 ## 最近完成：Stream Graph 前端闭环（2026-10-10）
 
-- 新增正式 `streamgraph` 全局 panel，接入 Activity Bar、Dock 新页入口、Streams 页面入口与 Tauri popout 白名单；没有新增全局 command。原生顶栏菜单移除后，37 项前端 catalog 仍服务命令面板、快捷键和执行策略。
+- 当批新增正式 `streamgraph` 全局 panel，并接入当时的 Activity Bar、Dock 新页入口、Streams 页面入口与 Tauri popout 白名单；没有新增全局 command。当前 Activity Bar 重复入口已移除，功能继续从 Streams 页按钮、Dock/popout 可达；原生顶栏菜单移除后，37 项前端 catalog 仍服务命令面板、快捷键和执行策略。
 - 页面直接消费 `queryStreamGraph` 强类型结果，以确定性 parent→child 分层与虚拟化可访问树表达 root/child/orphan/父节点未加载、unknown/deleted/current/partial/truncated；不存在的父节点不伪造，merge/copy 状态不猜测。
 - depot/text/includeDeleted、刷新/取消/重试、opaque cursor 继续加载、重复/不前进 cursor 保守停止、游标失效首屏重启、cache/simulated/safety-limit 提示均已接通。连接/Profile/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading。
 - 详情展示官方名称、path、owner、type、parent、description、ParentView 与 flow 字段；可定位现有 Streams 页面，切换只打开既有 `StreamSwitchDialog`，图上不直接 mutation。支持缩放/重置/滚动平移、方向/Home/End/Enter/Escape、焦点反馈和 390px 图/详情上下布局。

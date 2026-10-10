@@ -57,6 +57,12 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await expect(
     activityBar.getByRole("button", { name: /^P4 Log/ }),
   ).toHaveCount(0);
+  await expect(
+    activityBar.getByRole("button", { name: /^Stream Graph/ }),
+  ).toHaveCount(0);
+  await expect(
+    activityBar.getByRole("button", { name: /^Branch Mappings/ }),
+  ).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Terminal" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Log" })).toBeVisible();
   await page.getByRole("button", { name: "Expand resource sidebar" }).click();
@@ -171,18 +177,17 @@ test("representative app, palette, settings, search and pending surfaces pass ax
     await expect(page.locator(".route-view")).toContainText(destination);
     await assertAxe(page, destination);
   }
-  await page
-    .getByRole("button", { name: /^Stream Graph/ })
-    .first()
-    .click();
+  const activityBar = page.getByRole("navigation", { name: "Activity bar" });
+  await activityBar.getByRole("button", { name: /^Streams/ }).click();
+  await expect(page.locator(".route-view h1")).toHaveText("Streams");
+  await page.getByRole("button", { name: "Open Stream Graph" }).click();
   await expect(
     page.getByRole("tree", { name: "Directed stream forest" }),
   ).toBeVisible();
   await assertAxe(page, "Stream Graph");
-  await page
-    .getByRole("button", { name: /^Branch Mappings/ })
-    .first()
-    .click();
+  await activityBar.getByRole("button", { name: /^Streams/ }).click();
+  await expect(page.locator(".route-view h1")).toHaveText("Streams");
+  await page.getByRole("button", { name: "Open Branch Mappings" }).click();
   await expect(
     page.getByRole("listbox", { name: "Branch Mappings" }),
   ).toBeVisible();

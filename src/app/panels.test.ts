@@ -13,7 +13,7 @@ import {
   reusablePanel,
 } from "./panels";
 describe("workspace panels", () => {
-  it("keeps target-specific tools and the anchored settings out of the activity list", () => {
+  it("keeps secondary tools and the anchored settings out of the activity list", () => {
     expect(activityPageIds).toEqual([
       "files",
       "search",
@@ -21,8 +21,6 @@ describe("workspace panels", () => {
       "submitted",
       "workspaces",
       "streams",
-      "streamgraph",
-      "branchmappings",
     ]);
   });
   it("classifies global and file-target tabs", () => {

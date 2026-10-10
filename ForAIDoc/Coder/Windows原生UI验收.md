@@ -63,7 +63,7 @@ WIN-P0-01 的首轮构建/启动证据已取得。旧隔离验收 PID 已正常�
 
 1. 构建并启动移除原生顶栏菜单后的新 exe，确认已下线的管理员强制解锁入口/API 仍不存在，且 Connection/Changes/Navigate/View 系统菜单也不再显示；Settings 中 Connection Profiles 的 CRUD、验证、激活与认证入口仍可达，普通 Lock/Unlock 与 other-owner blocker/提示仍可用。
 2. 完成 Shelf 深搜 `deep-path` 的唯一 Shelf 结果 → 独立 Shelf detail 导航、返回与焦点恢复。
-3. 补齐 Workspace/Depot、Preview、Diff、History/Revision Graph、Pending、Submitted、Shelf、Terminal/P4 Log、Operations、Diagnostics 的主要只读入口冒烟；确认 Activity Bar 已无重复 Terminal/P4 Log 按钮、底部入口仍可手动打开，测试 Error 只点亮红点而不自动展开/切换且查看后清除。已打开或后端有命令日志不等于这些页面全部通过。
+3. 补齐 Workspace/Depot、Preview、Diff、History/Revision Graph、Pending、Submitted、Shelf、Terminal/P4 Log、Operations、Diagnostics 的主要只读入口冒烟；确认 Activity Bar 已无重复 Terminal/P4 Log、Stream Graph、Branch Mappings 按钮，前两者仍可从底部工具区手动打开、后两者仍可从 Streams 页按钮进入；测试 Error 只点亮红点而不自动展开/切换且查看后清除。已打开或后端有命令日志不等于这些页面全部通过。
 4. 只在隔离 fixture 完成 Submit、Shelf/Unshelve、Resolve、Stream 切换、普通 Lock/Unlock 等剩余安全写入演练；Branch CRUD 不能替代整套写入验收。
 5. 验证命令面板、主要前端快捷键、Tab/回焦/Escape；确认已退役原生顶栏菜单不再出现，不再执行旧菜单点击矩阵。
 6. 验证主窗口真实 390px、关键页面无意外页面级横向溢出，以及 dock/popout/关闭归还。
