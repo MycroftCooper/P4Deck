@@ -155,3 +155,13 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 自动化证据为：Rust `connection_setup` 9/9 通过（另 1 项隔离 E2E按设计 ignored），fake CLI 覆盖 self-only New User、generation stale、token replay、单次 `user -i` 以及无 `-f`/`sync`；`cargo check --tests`、`cargo fmt --check`、Clippy `-D warnings`、`check:web`、Tauri adapter 11/11、Prettier 与 diff-check 通过。单一 Windows localhost 隔离场景另行 1/1 通过，真实验证 users/workspaces 查询、classic/stream Workspace 创建与字段回读、重复名不覆盖，以及 stale/replay 不落写。该 fixture 的 New User preflight 实际返回 `ready=false` / `AuthenticationRequired`，因此没有把真实 User 创建写成已通过；本人 Server 策略仍待人工验证。
 
 最终生产源码为 `718bbf4f0b6ddd6bcf33c36c54848f2ce8d902bc`。构建前只读确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0；`beforeBuildCommand` 成功重新生成并嵌入当前 `dist`。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 21:33:22 +08:00`，大小 `32,631,808` bytes，SHA-256 `0562BA5C2453F526983241E0803416500AEEB4525EE7F787113BE3AB5AFCE4D3`，Authenticode 状态 `NotSigned`。构建未启动应用、未读取个人配置、未连接本人 Server，也未自动结束任何用户进程；当前生成物仍需本人重新打开后做 Windows Tauri 原生 Settings 浏览/创建点击验收，不能以服务层 fixture 或构建成功替代。
+
+## 10. Workspace Root 权威解析与连接审计批次
+
+本批前端源码为 `13126c4`，后端源码为 `91b9f29`。Workspace 选中、保存活动 profile、首次创建并激活、切换与重新激活时，后端都会用草稿 Server/User/Client 精确读取服务端 client spec，并通过 `p4 info` 复核实际 Client root；草稿中即使提供另一个真实存在的本地目录，也不会再被当作该 Workspace Root。缺失、空白、相对路径、非目录、其他 Host，以及带选项前缀、通配符或控制字符的 Client 名都会 fail closed。环境启动 Context 不再把进程 cwd 猜成工作区；Files/Workspace 本地扫描在 Root 未验证时不会退回 exe 目录。连接审计只记录状态、错误分类、耗时、operation ID 与散列连接标识，不记录 stdin、raw args、ticket、密码或 Server/User/路径正文，且不会自动展开日志工具区。
+
+有限验证已通过：后端定向测试 21/21（connection service 4、connection setup 7、context 9、workspace root 安全门 1），`cargo check`、Clippy `-D warnings`、Rust fmt、`check:web`、Prettier、前端契约 validator 与 diff-check 均通过；PM 另行复跑 connection service 4/4。单一 localhost 隔离 Root 链 1/1 通过，覆盖 classic Workspace 的首次激活、活动更新和保存均把故意给错但确实存在的 cwd 归一化为服务端 Root；测试后 fixture 已停止。没有运行历史全量 P4D 矩阵，也没有连接本人 Server。
+
+本轮日志核查使用系统 Python `sqlite3`，以 `file:///C:/Users/fenganmeng/AppData/Roaming/dev.p4deck.desktop/p4deck.sqlite?mode=ro` 正常只读连接并包含 WAL；PM 使用同一方法独立复核。在 `2026-10-10 23:15:51 +08:00` 的时间截面，该方法观察到 630 行；`22:33:20 +08:00` 之后有 40 条 error，最新到 `23:15:51 +08:00`，40 条都同时包含 Client/Root 语义。另一 SQLite 运行时的短 URI 只读视图曾看到 27 行、最新到 `2026-10-08`，原因未证实，不能归因为忽略 WAL，也不能仅凭该视图判断本次点击没有发生。现有旧日志没有结构化 `notClientRoot` 或其他已知错误码，因此不能严谨宣称 40 条都是同一具体错误；此前“16 条 notClientRoot”是较早时间截面且分类过强，以本段为准。没有从这批记录中证实新的认证或网络错误。
+
+当前标准 debug exe 仍是上一批生成物：时间 `2026-10-10 21:33:22 +08:00`，大小 `32,631,808` bytes，SHA-256 `0562BA5C2453F526983241E0803416500AEEB4525EE7F787113BE3AB5AFCE4D3`。只读检查显示 PID `43656` 自 `22:29:28 +08:00` 起仍在运行该路径，因此没有结束进程、覆盖构建、启动新 exe 或读取个人配置。上述新源码尚未装入当前运行实例；待用户关闭应用后再执行唯一一次正式 Tauri debug/no-bundle 构建与原生复验。
