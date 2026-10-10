@@ -133,3 +133,11 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 准备重建时曾只读观察到 PID `28920` 占用标准 debug exe，路径为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`、启动时间 `2026-10-10 20:12:17 +08:00`。用户随后明确授权只结束该精确残留进程；执行前再次核实时它已自行退出，因此没有调用 Stop/Kill，也没有处理其他进程。再次枚举确认 P4Deck 进程数为 0 后，正式运行 `pnpm tauri build --debug --no-bundle` 并成功覆盖标准生成物。
 
 本次生成物时间为 `2026-10-10 20:23:14 +08:00`，大小 `32,119,296` bytes，SHA-256 为 `F0AE4038C75C00E6AEC3297502C724AEDEF8EB4233AF1833D19BC58E304E0733`，Authenticode 状态仍为 `NotSigned`。构建后 P4Deck 进程数和 `127.0.0.1:16661` listener 数均为 0；没有启动 exe、读取个人配置或连接 P4 Server。构建时使用的生产代码随后原样顺序提交为前端 `48b91a0` 与 Rust `00bbf34`；提交后只更新本报告，因此无需重复构建。当前 build 尚未由用户重新打开并原生点击，不能仅凭构建成功宣称顶栏已在 Windows 窗口中人工确认消失。
+
+## 7. 日志工具入口与被动告警批次
+
+后续产品调整删除左侧活动栏中的 P4 Log / Terminal 两个重复按钮，但底部工具区及其 P4 Log、Terminal、Operations、Diagnostics 页签继续保留；用户仍可从底部按需打开。日志与错误事件不再自动展开工具区或切换页签，Error 只更新红点提示。后端 `diagnostic-alert` 仍只提供脱敏的 operation ID 与 `warning/error` 级别；历史 `autoExpandWarning/autoExpandError` 持久化字段仅为兼容保留，不再驱动可见性。
+
+生产源码为 `072195055c2de1a8c5675e50f0fd0c790f4fd7b1`。前端交接的 30 项定向测试、`check:web`、format 与真实 Edge 1/1，以及 PM 独立 23/23、validator 和 diff-check 均通过；本批没有 P4 逻辑变化，未重复运行 localhost fixture 或全量门禁。
+
+构建前确认标准 debug exe 没有 P4Deck 进程占用，随后唯一一次运行 `pnpm tauri build --debug --no-bundle`，exit 0。生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-10 20:36:59 +08:00`，大小 `32,118,784` bytes，SHA-256 `44F984ED6068A5B286C588A9D9677DC2A72442B362B764A231D6AF3269BE91A4`，Authenticode 状态 `NotSigned`。构建后 P4Deck 进程数与 `127.0.0.1:16661` listener 数均为 0；没有启动应用、读取个人配置或连接 P4 Server。当前生成物尚未由用户重新打开并原生点击，不能把构建和浏览器自动化证据表述为 Windows 原生界面已人工验收。
