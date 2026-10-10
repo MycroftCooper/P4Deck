@@ -3,6 +3,7 @@ pub mod changelists;
 pub mod connection;
 pub mod context;
 pub mod files;
+pub mod force_unlock;
 pub mod history;
 pub mod locks;
 pub mod query;

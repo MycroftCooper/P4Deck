@@ -1181,6 +1181,120 @@ export interface FileLockResult {
   };
 }
 
+export type ForceUnlockOriginMode =
+  "openedChangelist" | "shelvedChangelist" | "orphanDistributed";
+export interface ForceUnlockOrigin {
+  mode: ForceUnlockOriginMode;
+  changeId?: number;
+}
+export type ForceUnlockPermission = "admin" | "super" | "denied" | "unknown";
+export interface ForceUnlockLockFact {
+  depotPath: string;
+  exists: boolean;
+  locked: boolean;
+  lockOwner?: string;
+  lockUser?: string;
+  lockClient?: string;
+  changeId?: number;
+  openedAction?: string;
+  fileType?: string;
+  exclusive: boolean;
+  origin: ForceUnlockOrigin;
+  originProven: boolean;
+  permission: ForceUnlockPermission;
+}
+export type ForceUnlockIssueCode =
+  | "invalidTarget"
+  | "connectionUnavailable"
+  | "authenticationRequired"
+  | "notLocked"
+  | "ownedByCurrentContext"
+  | "lockOwnerUnknown"
+  | "originMismatch"
+  | "originUnproven"
+  | "unsupportedServerTopology"
+  | "adminPermissionRequired"
+  | "stateUnknown";
+export interface ForceUnlockIssue {
+  code: ForceUnlockIssueCode;
+  message: string;
+  paths: string[];
+}
+export interface ForceUnlockPreflightRequest {
+  paths: string[];
+  origin: ForceUnlockOrigin;
+  operationId?: string;
+}
+export interface ForceUnlockTargetSnapshot {
+  context: P4Context;
+  activeProfileId?: string;
+  contextGeneration: number;
+  paths: string[];
+  origin: ForceUnlockOrigin;
+  locks: ForceUnlockLockFact[];
+  expectedAcknowledgement: string;
+}
+export interface ForceUnlockPreflight {
+  ready: boolean;
+  origin: ForceUnlockOrigin;
+  locks: ForceUnlockLockFact[];
+  blockers: ForceUnlockIssue[];
+  warnings: ForceUnlockIssue[];
+  targetSnapshot?: ForceUnlockTargetSnapshot;
+  stateDigest: string;
+  expectedAcknowledgement: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+  simulated: boolean;
+}
+export interface ForceUnlockConfirmation {
+  token: string;
+  target: ForceUnlockTargetSnapshot;
+  stateDigest: string;
+  acknowledgement: string;
+  operationId?: string;
+}
+export type ForceUnlockFileOutcome =
+  | "unlocked"
+  | "stillLocked"
+  | "disappeared"
+  | "unverifiable"
+  | "failed"
+  | "cancelled";
+export interface ForceUnlockFileResult {
+  depotPath: string;
+  outcome: ForceUnlockFileOutcome;
+  previousOwner?: string;
+  observedOwner?: string;
+  message: string;
+  operationId?: string;
+}
+export type ForceUnlockOutcome =
+  "succeeded" | "partial" | "rejected" | "failed" | "cancelled" | "unknown";
+export type ForceUnlockFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "acknowledgementMismatch"
+  | "contextChanged"
+  | "stateChanged"
+  | "preflightBlocked"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome";
+export interface ForceUnlockResult {
+  outcome: ForceUnlockOutcome;
+  failure?: ForceUnlockFailureCode;
+  message: string;
+  files: ForceUnlockFileResult[];
+  operationId?: string;
+  operationIds: string[];
+  refresh: FileLockResult["refresh"];
+  simulated: boolean;
+}
+
 export interface RenameMovePreflightRequest {
   sourcePath: string;
   targetPath: string;

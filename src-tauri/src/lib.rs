@@ -18,6 +18,7 @@ use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
 use app::file_lock_service::FileLockService;
 use app::file_service::FileService;
+use app::force_unlock_service::ForceUnlockService;
 use app::rename_service::RenameService;
 use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
@@ -44,6 +45,7 @@ pub(crate) struct AppState {
     pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
     pub file_locks: Arc<FileLockService>,
+    pub force_unlocks: Arc<ForceUnlockService>,
     pub rename: Arc<RenameService>,
     pub connection: Arc<ConnectionService>,
     pub status_cache: Arc<StatusCache>,
@@ -229,6 +231,11 @@ pub fn run() {
                 contexts.clone(),
                 status_cache.clone(),
             ));
+            let force_unlocks = Arc::new(ForceUnlockService::new(
+                crate::p4::force_unlock::ForceUnlockRepository::new(runner.clone()),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
             let search = Arc::new(GlobalSearchService::new(
                 runner.clone(),
                 changelists.clone(),
@@ -247,6 +254,7 @@ pub fn run() {
                 workflows,
                 files,
                 file_locks,
+                force_unlocks,
                 rename,
                 connection,
                 status_cache,
@@ -312,6 +320,8 @@ pub fn run() {
             ipc::commands::confirm_rename_move,
             ipc::commands::preflight_file_lock,
             ipc::commands::confirm_file_lock,
+            ipc::commands::preflight_force_unlock,
+            ipc::commands::confirm_force_unlock,
             ipc::commands::preview_sync,
             ipc::commands::confirm_sync,
             ipc::commands::get_diff,

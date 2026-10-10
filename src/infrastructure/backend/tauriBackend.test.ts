@@ -159,6 +159,44 @@ it("passes the generation-bound Stream Graph query through unchanged", async () 
   });
 });
 
+it("passes the narrow force unlock preflight and confirmation payloads unchanged", async () => {
+  const request = {
+    paths: ["//depot/项目/locked.bin"],
+    origin: { mode: "openedChangelist" as const, changeId: 42 },
+    operationId: "force-preflight-42",
+  };
+  invoke.mockResolvedValue({ ready: true });
+  await tauriBackend.preflightForceUnlock(request);
+  expect(invoke).toHaveBeenLastCalledWith("preflight_force_unlock", {
+    request,
+  });
+
+  const confirmation = {
+    token: "one-use-force-token",
+    target: {
+      context: {
+        server: "ssl:1666",
+        user: "admin",
+        client: "admin-client",
+        charset: "utf8",
+      },
+      activeProfileId: "profile-1",
+      contextGeneration: 8,
+      paths: request.paths,
+      origin: request.origin,
+      locks: [],
+      expectedAcknowledgement: "FORCE UNLOCK 1 FILES OWNED BY other@client",
+    },
+    stateDigest: "state-digest",
+    acknowledgement: "FORCE UNLOCK 1 FILES OWNED BY other@client",
+    operationId: "force-confirm-42",
+  };
+  await tauriBackend.confirmForceUnlock(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_force_unlock", {
+    confirmation,
+  });
+});
+
 it("passes narrow Branch Mapping list, detail, preview, preflight and confirmation payloads unchanged", async () => {
   const query = {
     operationId: "branch-list-42",

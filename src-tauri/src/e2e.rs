@@ -4,11 +4,11 @@ mod tests {
         app::{
             branch_mapping_service::BranchMappingService, changelist_service::ChangelistService,
             connection_service::ConnectionService, file_lock_service::FileLockService,
-            file_service::FileService, rename_service::RenameService,
-            search_service::GlobalSearchService, status_cache::StatusCache,
-            stream_graph_service::StreamGraphService, stream_switch_service::StreamSwitchService,
-            submit_service::SubmitService, sync_service::SyncService,
-            workflow_service::WorkflowService,
+            file_service::FileService, force_unlock_service::ForceUnlockService,
+            rename_service::RenameService, search_service::GlobalSearchService,
+            status_cache::StatusCache, stream_graph_service::StreamGraphService,
+            stream_switch_service::StreamSwitchService, submit_service::SubmitService,
+            sync_service::SyncService, workflow_service::WorkflowService,
         },
         domain::{
             AuthenticationRequest, BranchImpactDirection, BranchImpactPreviewQuery,
@@ -18,8 +18,10 @@ mod tests {
             BranchViewLine, BranchViewModifier, ConnectionState, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, FileLockConfirmation,
             FileLockFailureCode, FileLockIssueCode, FileLockOperation, FileLockOutcome,
-            FileLockOwnership, FileLockPreflightRequest, LoginRequest, ManualMergeOpenRequest,
-            ManualMergeResolveConfirmation, ManualMergeSaveConfirmation,
+            FileLockOwnership, FileLockPreflightRequest, ForceUnlockConfirmation,
+            ForceUnlockFailureCode, ForceUnlockIssueCode, ForceUnlockOrigin, ForceUnlockOriginMode,
+            ForceUnlockOutcome, ForceUnlockPermission, ForceUnlockPreflightRequest, LoginRequest,
+            ManualMergeOpenRequest, ManualMergeResolveConfirmation, ManualMergeSaveConfirmation,
             ManualMergeValidateRequest, MoveFilesPreflightRequest, OperationResult,
             OperationSource, OutputMode, P4CommandRequest, P4Context, PendingChangeMutation,
             PendingChangeMutationRequest, PendingChangeQuery, PendingChangeSort,
@@ -36,9 +38,9 @@ mod tests {
             WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
-            changelists::ChangelistRepository, context::ContextStore, locks::LockRepository,
-            rename::RenameRepository, runner::P4Runner, submit::SubmitRepository,
-            workflows::WorkflowRepository, workspaces,
+            changelists::ChangelistRepository, context::ContextStore,
+            force_unlock::ForceUnlockRepository, locks::LockRepository, rename::RenameRepository,
+            runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -694,7 +696,7 @@ mod tests {
         files: &FileService,
         changelists: &ChangelistService,
         locks: &FileLockService,
-        contexts: &ContextStore,
+        contexts: &Arc<ContextStore>,
         context: &P4Context,
         root: &Path,
     ) -> Result<(), String> {
@@ -845,6 +847,34 @@ mod tests {
                 OutputMode::Text,
             )
             .await?;
+            let other_change_form = format!(
+                "Change: new\nClient: {LOCK_CLIENT}\nUser: {LOCK_USER}\nStatus: new\nDescription:\n\tP4Deck force unlock fixture\n"
+            );
+            let other_change_result = checked_run(
+                runner,
+                &other,
+                "change",
+                vec!["-i".into()],
+                Some(other_change_form),
+                OutputMode::Text,
+            )
+            .await?;
+            let other_change_id =
+                crate::p4::changelists::parser::parse_created_change_id(&other_change_result)
+                    .ok_or_else(|| {
+                    format!(
+                        "force unlock fixture did not create a numbered changelist: {other_change_result:?}"
+                    )
+                })?;
+            checked_run(
+                runner,
+                &other,
+                "reopen",
+                vec!["-c".into(), other_change_id.to_string(), NORMAL.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
             let _ = checked_run(
                 runner,
                 &other,
@@ -964,7 +994,23 @@ mod tests {
                 .map_err(|error| error.to_string())?;
             let other_locks = FileLockService::new(
                 LockRepository::new(runner.clone()),
-                other_contexts,
+                other_contexts.clone(),
+                Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024)),
+            );
+            let force_unlocks = ForceUnlockService::new(
+                ForceUnlockRepository::new(runner.clone()),
+                contexts.clone(),
+                Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024)),
+            );
+            let expiring_force_unlocks = ForceUnlockService::with_ttl(
+                ForceUnlockRepository::new(runner.clone()),
+                contexts.clone(),
+                Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024)),
+                1,
+            );
+            let other_force_unlocks = ForceUnlockService::new(
+                ForceUnlockRepository::new(runner.clone()),
+                other_contexts.clone(),
                 Arc::new(StatusCache::new(15_000, 64, 2 * 1024 * 1024)),
             );
             let conflict = other_locks
@@ -1046,6 +1092,195 @@ mod tests {
                 changed.failure == Some(FileLockFailureCode::StateChanged),
                 format!("lock TOCTOU ownership drift was accepted: {changed:?}"),
             )?;
+
+            let ordinary_admin_unlock = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Unlock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("force-e2e-ordinary-separation".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !ordinary_admin_unlock.ready
+                    && ordinary_admin_unlock
+                        .blockers
+                        .iter()
+                        .any(|issue| issue.code == FileLockIssueCode::LockedByOther),
+                format!("ordinary unlock became a force-unlock bypass: {ordinary_admin_unlock:?}"),
+            )?;
+
+            let nonadmin = other_force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-nonadmin".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !nonadmin.ready
+                    && nonadmin.token.is_none()
+                    && nonadmin.blockers.iter().any(|issue| {
+                        issue.code == ForceUnlockIssueCode::AdminPermissionRequired
+                    }),
+                format!("non-admin force unlock was not rejected: {nonadmin:?}"),
+            )?;
+
+            let shelved = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: ForceUnlockOrigin {
+                            mode: ForceUnlockOriginMode::ShelvedChangelist,
+                            change_id: Some(1),
+                        },
+                        operation_id: Some("force-e2e-shelved-proof".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !shelved.ready
+                    && shelved.token.is_none()
+                    && shelved
+                        .blockers
+                        .iter()
+                        .any(|issue| issue.code == ForceUnlockIssueCode::OriginUnproven),
+                format!("unproven shelved lock origin was accepted: {shelved:?}"),
+            )?;
+            let orphan = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: ForceUnlockOrigin {
+                            mode: ForceUnlockOriginMode::OrphanDistributed,
+                            change_id: None,
+                        },
+                        operation_id: Some("force-e2e-orphan-proof".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !orphan.ready
+                    && orphan.token.is_none()
+                    && orphan.blockers.iter().any(|issue| {
+                        issue.code == ForceUnlockIssueCode::UnsupportedServerTopology
+                    }),
+                format!("standard-server orphan lock origin was accepted: {orphan:?}"),
+            )?;
+
+            let review = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-review".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                review.ready
+                    && review.locks.len() == 1
+                    && review.locks[0].lock_owner.as_deref()
+                        == Some(&format!("{LOCK_USER}@{LOCK_CLIENT}"))
+                    && review.locks[0].permission == ForceUnlockPermission::Super,
+                format!("admin force unlock review was incomplete: {review:?}"),
+            )?;
+            let mut wrong_ack = force_confirmation(review, "force-e2e-wrong-ack")?;
+            wrong_ack.acknowledgement = "FORCE UNLOCK".into();
+            let rejected_ack = force_unlocks.confirm(wrong_ack.clone(), None).await;
+            ensure(
+                rejected_ack.failure == Some(ForceUnlockFailureCode::AcknowledgementMismatch),
+                format!("incorrect force unlock acknowledgement was accepted: {rejected_ack:?}"),
+            )?;
+            let replayed_ack = force_unlocks.confirm(wrong_ack, None).await;
+            ensure(
+                replayed_ack.failure == Some(ForceUnlockFailureCode::TokenUnknown),
+                format!("consumed force unlock token was replayed: {replayed_ack:?}"),
+            )?;
+
+            let expiring = expiring_force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-expiry".into()),
+                    },
+                    None,
+                )
+                .await;
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            let expired = expiring_force_unlocks
+                .confirm(force_confirmation(expiring, "force-e2e-expired")?, None)
+                .await;
+            ensure(
+                expired.failure == Some(ForceUnlockFailureCode::TokenExpired),
+                format!("expired force unlock token was accepted: {expired:?}"),
+            )?;
+
+            let generation = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-generation".into()),
+                    },
+                    None,
+                )
+                .await;
+            contexts
+                .save(context.clone())
+                .map_err(|error| error.to_string())?;
+            let generation_rejected = force_unlocks
+                .confirm(
+                    force_confirmation(generation, "force-e2e-generation-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                generation_rejected.failure == Some(ForceUnlockFailureCode::ContextChanged),
+                format!("generation drift was accepted by force unlock: {generation_rejected:?}"),
+            )?;
+
+            let cancelled_review = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-cancel-review".into()),
+                    },
+                    None,
+                )
+                .await;
+            runner.cancel("force-e2e-cancel");
+            let cancelled = force_unlocks
+                .confirm(
+                    force_confirmation(cancelled_review, "force-e2e-cancel")?,
+                    None,
+                )
+                .await;
+            ensure(
+                cancelled.failure == Some(ForceUnlockFailureCode::Cancelled),
+                format!("pre-cancelled force unlock was executed: {cancelled:?}"),
+            )?;
+
+            let stale_force = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-toctou".into()),
+                    },
+                    None,
+                )
+                .await;
             let other_unlock = other_locks
                 .preflight(
                     FileLockPreflightRequest {
@@ -1065,6 +1300,125 @@ mod tests {
             ensure(
                 other_unlocked.outcome == FileLockOutcome::Succeeded,
                 format!("other-client unlock failed: {other_unlocked:?}"),
+            )?;
+            let force_changed = force_unlocks
+                .confirm(
+                    force_confirmation(stale_force, "force-e2e-toctou-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                force_changed.failure == Some(ForceUnlockFailureCode::StateChanged),
+                format!("force unlock accepted stale lock facts: {force_changed:?}"),
+            )?;
+
+            let relock = other_locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![NORMAL.into()],
+                        operation_id: Some("force-e2e-relock".into()),
+                    },
+                    None,
+                )
+                .await;
+            let relocked = other_locks
+                .confirm(lock_confirmation(relock, "force-e2e-relock-confirm")?, None)
+                .await;
+            ensure(
+                relocked.outcome == FileLockOutcome::Succeeded,
+                format!("force unlock fixture could not restore other-owner lock: {relocked:?}"),
+            )?;
+
+            let exclusive_guard = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Lock,
+                        paths: vec![EXCLUSIVE.into()],
+                        operation_id: Some("force-e2e-unrelated-lock".into()),
+                    },
+                    None,
+                )
+                .await;
+            let exclusive_guard = locks
+                .confirm(
+                    lock_confirmation(exclusive_guard, "force-e2e-unrelated-lock-confirm")?,
+                    None,
+                )
+                .await;
+            ensure(
+                exclusive_guard.outcome == FileLockOutcome::Succeeded,
+                format!("unrelated lock fixture setup failed: {exclusive_guard:?}"),
+            )?;
+            let content_before = std::fs::read(&normal_local).map_err(|error| error.to_string())?;
+            let final_review = force_unlocks
+                .preflight(
+                    ForceUnlockPreflightRequest {
+                        paths: vec![NORMAL.into()],
+                        origin: opened_origin(other_change_id),
+                        operation_id: Some("force-e2e-final".into()),
+                    },
+                    None,
+                )
+                .await;
+            let final_confirmation = force_confirmation(final_review, "force-e2e-final-confirm")?;
+            let final_replay = final_confirmation.clone();
+            let forced = force_unlocks.confirm(final_confirmation, None).await;
+            ensure(
+                forced.outcome == ForceUnlockOutcome::Succeeded
+                    && forced.files.len() == 1
+                    && forced.files[0].depot_path == NORMAL,
+                format!("force unlock did not prove its exact target unlocked: {forced:?}"),
+            )?;
+            ensure(
+                force_unlocks.confirm(final_replay, None).await.failure
+                    == Some(ForceUnlockFailureCode::TokenUnknown),
+                "successful force unlock token was replayable",
+            )?;
+            ensure(
+                std::fs::read(&normal_local).map_err(|error| error.to_string())? == content_before,
+                "force unlock changed workspace file content",
+            )?;
+            let opened_after = checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-a".into(), NORMAL.into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+            ensure(
+                json_values(&opened_after).iter().any(|value| {
+                    value.get("user").and_then(Value::as_str) == Some(LOCK_USER)
+                        && value.get("client").and_then(Value::as_str) == Some(LOCK_CLIENT)
+                }),
+                format!("force unlock changed the opened record: {opened_after:?}"),
+            )?;
+            let unrelated_after = locks
+                .preflight(
+                    FileLockPreflightRequest {
+                        operation: FileLockOperation::Unlock,
+                        paths: vec![EXCLUSIVE.into()],
+                        operation_id: Some("force-e2e-unrelated-verify".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                unrelated_after.ready
+                    && unrelated_after.files[0].ownership == FileLockOwnership::Ours,
+                format!("force unlock changed an unrelated lock: {unrelated_after:?}"),
+            )?;
+            let unrelated_unlocked = locks
+                .confirm(
+                    lock_confirmation(unrelated_after, "force-e2e-unrelated-cleanup")?,
+                    None,
+                )
+                .await;
+            ensure(
+                unrelated_unlocked.outcome == FileLockOutcome::Succeeded,
+                format!("unrelated lock cleanup failed: {unrelated_unlocked:?}"),
             )?;
 
             let exclusive = locks
@@ -1190,6 +1544,30 @@ mod tests {
                 .target_snapshot
                 .ok_or("lock preflight returned no target")?,
             state_digest: preflight.state_digest,
+            operation_id: Some(operation_id.into()),
+        })
+    }
+
+    fn opened_origin(change_id: i64) -> ForceUnlockOrigin {
+        ForceUnlockOrigin {
+            mode: ForceUnlockOriginMode::OpenedChangelist,
+            change_id: Some(change_id),
+        }
+    }
+
+    fn force_confirmation(
+        preflight: crate::domain::ForceUnlockPreflight,
+        operation_id: &str,
+    ) -> Result<ForceUnlockConfirmation, String> {
+        Ok(ForceUnlockConfirmation {
+            token: preflight
+                .token
+                .ok_or("force unlock preflight returned no token")?,
+            target: preflight
+                .target_snapshot
+                .ok_or("force unlock preflight returned no target")?,
+            state_digest: preflight.state_digest,
+            acknowledgement: preflight.expected_acknowledgement,
             operation_id: Some(operation_id.into()),
         })
     }
@@ -2031,7 +2409,7 @@ mod tests {
         expiring_submit: &'a SubmitService,
         sync: &'a SyncService,
         expiring_sync: &'a SyncService,
-        contexts: &'a ContextStore,
+        contexts: &'a Arc<ContextStore>,
         workflows: &'a WorkflowService,
         expiring_workflows: &'a WorkflowService,
         search: &'a GlobalSearchService,

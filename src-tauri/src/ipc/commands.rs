@@ -422,6 +422,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.files.clear_review_cache();
     state.rename.clear_confirmations();
     state.file_locks.clear_confirmations();
+    state.force_unlocks.clear_confirmations();
     state.stream_switch.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
@@ -433,6 +434,7 @@ fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.branch_mappings.clear_for_context_switch();
     state.files.clear_review_cache();
     state.file_locks.clear_confirmations();
+    state.force_unlocks.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
 
@@ -754,6 +756,30 @@ pub async fn confirm_file_lock(
         result.outcome,
         FileLockOutcome::Succeeded | FileLockOutcome::Partial | FileLockOutcome::Unknown
     ) {
+        state.changelists.invalidate_pending_pages();
+        state.search.clear_for_context_switch();
+        state.files.clear_review_cache();
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn preflight_force_unlock(
+    request: ForceUnlockPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ForceUnlockPreflight, String> {
+    Ok(state.force_unlocks.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_force_unlock(
+    confirmation: ForceUnlockConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ForceUnlockResult, String> {
+    let result = state.force_unlocks.confirm(confirmation, Some(&app)).await;
+    if result.outcome != ForceUnlockOutcome::Rejected {
         state.changelists.invalidate_pending_pages();
         state.search.clear_for_context_switch();
         state.files.clear_review_cache();

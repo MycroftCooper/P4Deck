@@ -79,6 +79,10 @@ export const tauriBackend: Backend = {
   preflightFileLock: (request) => invoke("preflight_file_lock", { request }),
   confirmFileLock: (confirmation) =>
     invoke("confirm_file_lock", { confirmation }),
+  preflightForceUnlock: (request) =>
+    invoke("preflight_force_unlock", { request }),
+  confirmForceUnlock: (confirmation) =>
+    invoke("confirm_force_unlock", { confirmation }),
   preflightRenameMove: (request) =>
     invoke("preflight_rename_move", { request }),
   confirmRenameMove: (confirmation) =>
