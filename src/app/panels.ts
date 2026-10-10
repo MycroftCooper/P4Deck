@@ -84,10 +84,16 @@ export function normalizePanelTarget(value: unknown): PanelTarget {
 }
 export const isMultiPage = (page: PageId): page is FilePageId =>
   pageDefinitions[page].scope === "file";
-// The activity rail only contains global pages; Settings is anchored separately.
+// The activity rail contains primary global pages. Settings is anchored
+// separately, while Terminal and P4 Log stay in the always-visible tool strip.
 export const activityPageIds = pageIds.filter(
-  (page): page is Exclude<PageId, FilePageId | "settings"> =>
-    page !== "settings" && !isMultiPage(page),
+  (
+    page,
+  ): page is Exclude<PageId, FilePageId | "settings" | "terminal" | "p4log"> =>
+    page !== "settings" &&
+    page !== "terminal" &&
+    page !== "p4log" &&
+    !isMultiPage(page),
 );
 export function panelKind(id: string): PageId | undefined {
   const kind = id.split("--")[0];

@@ -133,7 +133,6 @@ export function ToolPanel({
         }}
         onOperationFilter={setOperationFilter}
         onJournalOperation={setJournalOperation}
-        onPolicy={() => undefined}
         onRun={run}
         onCancel={(operationId) => {
           void backend

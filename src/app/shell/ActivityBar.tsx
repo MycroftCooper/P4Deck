@@ -7,8 +7,6 @@ import {
   Network,
   Settings,
   X,
-  TerminalSquare,
-  ScrollText,
   GitFork,
   GitMerge,
 } from "lucide-react";
@@ -25,8 +23,6 @@ const icons = {
   streams: Network,
   streamgraph: GitFork,
   branchmappings: GitMerge,
-  terminal: TerminalSquare,
-  p4log: ScrollText,
   settings: Settings,
 };
 interface Props {

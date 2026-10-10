@@ -23,8 +23,6 @@ describe("workspace panels", () => {
       "streams",
       "streamgraph",
       "branchmappings",
-      "terminal",
-      "p4log",
     ]);
   });
   it("classifies global and file-target tabs", () => {

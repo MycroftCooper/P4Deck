@@ -20,7 +20,6 @@ interface Props {
   operationFilter?: string;
   onOperationFilter(value?: string): void;
   onOpenJournal(operationId: string): void;
-  onPolicy(policy: LogPolicy): void;
 }
 
 export function LogView({
@@ -30,7 +29,6 @@ export function LogView({
   operationFilter,
   onOperationFilter,
   onOpenJournal,
-  onPolicy,
 }: Props) {
   const saved = useRef(
     readLogViewPreferences(storage.getItem("p4deck.p4Log.view.v1")),
@@ -152,14 +150,13 @@ export function LogView({
         if (request !== policyGeneration.current) return;
         setPolicy(value);
         setDraft(value);
-        onPolicy(value);
       })
       .catch((cause) => {
         if (request === policyGeneration.current)
           setPolicyStatus(String(cause));
       });
     return () => void ++policyGeneration.current;
-  }, [connectionKey, onPolicy]);
+  }, [connectionKey]);
 
   async function savePolicy() {
     if (!draft || policyBusy) return;
@@ -184,7 +181,6 @@ export function LogView({
       const saved = await backend.setLogPolicy(draft);
       setPolicy(saved);
       setDraft(saved);
-      onPolicy(saved);
       setPolicyStatus(zh ? "日志策略已保存。" : "Log policy saved.");
     } catch (cause) {
       setDraft(policy);
@@ -275,9 +271,7 @@ export function LogView({
       )}
 
       <details className="policy-panel">
-        <summary>
-          {zh ? "日志与自动展开策略" : "Logging and auto-expand policy"}
-        </summary>
+        <summary>{zh ? "日志保留策略" : "Log retention policy"}</summary>
         {draft ? (
           <div className="policy-grid">
             <label>
@@ -307,35 +301,10 @@ export function LogView({
                 }
               />
             </label>
-            <label className="check-field">
-              <input
-                type="checkbox"
-                checked={draft.autoExpandWarning}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    autoExpandWarning: event.target.checked,
-                  })
-                }
-              />
-              <span>
-                {zh ? "Warning 时展开工具区" : "Expand tools on Warning"}
-              </span>
-            </label>
-            <label className="check-field">
-              <input
-                type="checkbox"
-                checked={draft.autoExpandError}
-                onChange={(event) =>
-                  setDraft({ ...draft, autoExpandError: event.target.checked })
-                }
-              />
-              <span>{zh ? "Error 时展开工具区" : "Expand tools on Error"}</span>
-            </label>
             <p className="policy-boundary">
               {zh
-                ? "保留/容量由后端强制执行；自动展开仅控制前端展示，不移动键盘焦点。"
-                : "Retention/capacity are enforced by the backend; auto-expand only changes frontend visibility and never moves keyboard focus."}
+                ? "保留期与容量由后端强制执行。新日志不会自动展开或切换工具区；未查看的新 Error 只在底部日志入口显示红点。"
+                : "Retention and capacity are enforced by the backend. New logs never expand or switch tools automatically; new unviewed errors only mark the bottom Log entry with a red dot."}
             </p>
             <button onClick={() => void savePolicy()} disabled={policyBusy}>
               {zh ? "保存策略" : "Save policy"}

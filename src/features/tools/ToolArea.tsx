@@ -8,7 +8,6 @@ import {
 } from "react";
 import { backend, tokenize } from "../../infrastructure/backend";
 import type {
-  LogPolicy,
   OperationEvent,
   OperationResult,
   P4Context,
@@ -34,13 +33,6 @@ interface Props {
   onOpenSettings(): void;
 }
 
-const defaultPolicy: LogPolicy = {
-  autoExpandWarning: false,
-  autoExpandError: true,
-  retentionDays: 14,
-  maxMib: 50,
-};
-
 export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   { t, zh, native, connectionKey, context, onOpenChange, onOpenSettings },
   ref,
@@ -57,7 +49,6 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   const [events, setEvents] = useState<OperationEvent[]>([]);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const policy = useRef(defaultPolicy);
   const openRef = useRef(open);
   const activeRef = useRef(active);
   const seenAlerts = useRef(new Set<string>());
@@ -73,7 +64,6 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   }, [active]);
 
   useEffect(() => {
-    let live = true;
     seenAlerts.current.clear();
     setOperationFilter(undefined);
     setJournalOperation(undefined);
@@ -81,17 +71,6 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
     setEvents([]);
     setError("");
     setRefreshKey((value) => value + 1);
-    void backend
-      .getLogPolicy()
-      .then((value) => {
-        if (live) policy.current = value;
-      })
-      .catch((cause) => {
-        if (live) setError(String(cause));
-      });
-    return () => {
-      live = false;
-    };
   }, [connectionKey]);
 
   useEffect(() => {
@@ -114,18 +93,9 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
             const oldest = seenAlerts.current.values().next().value;
             if (oldest) seenAlerts.current.delete(oldest);
           }
-          const enabled =
-            alert.level === "error"
-              ? policy.current.autoExpandError
-              : policy.current.autoExpandWarning;
-          if (!enabled) return;
-          setRefreshKey((value) => value + 1);
-          if (!openRef.current || activeRef.current !== "logs") {
-            setOpen(true);
-            setActive("logs");
-          }
-          setOperationFilter(alert.operationId);
-          setUnread(0);
+          const logsVisible = openRef.current && activeRef.current === "logs";
+          if (logsVisible) setRefreshKey((value) => value + 1);
+          else if (alert.level === "error") setUnread((value) => value + 1);
         }),
       (cause) => setError(String(cause)),
     );
@@ -146,15 +116,18 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
     setActive(tab);
     setOpen(true);
   }, []);
-  const handlePolicy = useCallback((value: LogPolicy) => {
-    policy.current = value;
+  const handleOpenChange = useCallback((value: boolean) => {
+    setOpen(value);
+    if (value && activeRef.current === "logs") {
+      setUnread(0);
+      setRefreshKey((current) => current + 1);
+    }
   }, []);
 
   useImperativeHandle(ref, () => ({
     open: show,
-    async afterOperation(warnings) {
+    async afterOperation(_warnings) {
       setRefreshKey((value) => value + 1);
-      if (warnings.length) show("logs");
     },
   }));
 
@@ -191,11 +164,10 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
         journalOperation={journalOperation}
         onOperationFilter={setOperationFilter}
         onJournalOperation={setJournalOperation}
-        onPolicy={handlePolicy}
         unread={unread}
         context={context}
         operationEvents={events}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         onActiveChange={show}
         onRun={run}
         onCancel={(id) => {

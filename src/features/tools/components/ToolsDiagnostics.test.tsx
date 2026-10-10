@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ComponentProps } from "react";
+import { act, createRef, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
@@ -11,7 +11,7 @@ import type {
 import { DiagnosticsView } from "./DiagnosticsView";
 import { LogView } from "./LogView";
 import { OperationJournalView } from "./OperationJournalView";
-import { ToolArea } from "../ToolArea";
+import { ToolArea, type ToolHandle } from "../ToolArea";
 import { ToolPanel } from "../ToolPanel";
 import { messages } from "../../../shared/i18n";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
@@ -143,7 +143,6 @@ it("applies real log filters, cursor retry, stale isolation, and accessible narr
     operationFilter: "op-filter",
     onOperationFilter: vi.fn(),
     onOpenJournal: onJournal,
-    onPolicy: vi.fn(),
   };
   await act(async () => root.render(<LogView {...props} />));
   await flush();
@@ -214,7 +213,6 @@ it("validates policy and rolls the form back after a failed save", async () => {
         refreshKey={0}
         onOperationFilter={vi.fn()}
         onOpenJournal={vi.fn()}
-        onPolicy={vi.fn()}
       />,
     ),
   );
@@ -222,6 +220,9 @@ it("validates policy and rolls the form back after a failed save", async () => {
   await act(async () =>
     host.querySelector<HTMLDetailsElement>("details")!.setAttribute("open", ""),
   );
+  expect(host.textContent).toContain("新日志不会自动展开");
+  expect(host.textContent).not.toContain("Warning 时展开工具区");
+  expect(host.textContent).not.toContain("Error 时展开工具区");
   const retention = host.querySelector<HTMLInputElement>(
     'input[type="number"]',
   )!;
@@ -241,14 +242,16 @@ it("validates policy and rolls the form back after a failed save", async () => {
   expect(host.textContent).toContain("已恢复原策略");
 });
 
-it("auto-expands once per diagnostic alert without moving focus", async () => {
+it("never auto-expands logs and only marks unviewed errors", async () => {
+  localStorage.setItem("p4deck.toolOpen", "true");
   const focused = document.createElement("button");
   document.body.append(focused);
-  focused.focus();
+  const tools = createRef<ToolHandle>();
   await act(async () =>
     root.render(
       <ContextMenuProvider scope="tools-test" zh>
         <ToolArea
+          ref={tools}
           t={messages["zh-CN"]}
           zh
           native
@@ -261,25 +264,73 @@ it("auto-expands once per diagnostic alert without moving focus", async () => {
     ),
   );
   await flush();
+  focused.focus();
   expect(diagnosticAlert).toBeTypeOf("function");
+  expect(
+    host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain("命令行");
   await act(async () => {
+    await tools.current!.afterOperation(["warning from operation"]);
     diagnosticAlert!({ operationId: "op-alert", level: "warning" });
     diagnosticAlert!({ operationId: "op-alert", level: "warning" });
   });
   await flush();
   expect(
     host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
-  ).toContain("日志");
-  expect(host.textContent).toContain("op-alert");
-  expect(document.activeElement).toBe(focused);
-  await act(async () => button("查看操作").click());
+  ).toContain("命令行");
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
+  await act(async () => {
+    diagnosticAlert!({ operationId: "op-error", level: "error" });
+    diagnosticAlert!({ operationId: "op-error", level: "error" });
+  });
   await flush();
   expect(
     host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
-  ).toContain("操作");
-  expect(backend.queryOperationJournal).toHaveBeenCalledWith(
-    expect.objectContaining({ keyword: "op-alert" }),
+  ).toContain("命令行");
+  expect(host.querySelector(".tool-unread-dot")?.getAttribute("title")).toBe(
+    "1 个未查看的新错误",
   );
+  expect(host.textContent).not.toContain("op-error");
+  expect(document.activeElement).toBe(focused);
+  await act(async () => button("日志").click());
+  await flush();
+  expect(
+    host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain("日志");
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
+  expect(host.textContent).not.toContain("操作筛选");
+  await act(async () => {
+    diagnosticAlert!({ operationId: "op-visible", level: "error" });
+  });
+  await flush();
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
+
+  const journalTab = [
+    ...host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ].find((item) => item.textContent?.includes("操作"))!;
+  await act(async () => journalTab.click());
+  await act(async () => {
+    diagnosticAlert!({ operationId: "op-journal", level: "error" });
+  });
+  await flush();
+  expect(journalTab.getAttribute("aria-selected")).toBe("true");
+  expect(host.textContent).not.toContain("op-journal");
+  expect(host.querySelector(".tool-unread-dot")).toBeTruthy();
+  await act(async () => button("日志").click());
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
+
+  const toggle = host.querySelector<HTMLButtonElement>(".drawer-toggle")!;
+  await act(async () => toggle.click());
+  expect(host.querySelector(".tool-drawer")?.classList).toContain("collapsed");
+  await act(async () => {
+    diagnosticAlert!({ operationId: "op-collapsed", level: "error" });
+  });
+  await flush();
+  expect(host.querySelector(".tool-drawer")?.classList).toContain("collapsed");
+  expect(host.querySelector(".tool-unread-dot")).toBeTruthy();
+  await act(async () => toggle.click());
+  expect(host.querySelector(".tool-drawer")?.classList).toContain("expanded");
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
   focused.remove();
 });
 

@@ -50,6 +50,15 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await expect(
     page.getByRole("navigation", { name: "Activity bar" }),
   ).toBeVisible();
+  const activityBar = page.getByRole("navigation", { name: "Activity bar" });
+  await expect(
+    activityBar.getByRole("button", { name: /^Terminal/ }),
+  ).toHaveCount(0);
+  await expect(
+    activityBar.getByRole("button", { name: /^P4 Log/ }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Terminal" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Log" })).toBeVisible();
   await page.getByRole("button", { name: "Expand resource sidebar" }).click();
   await expect(
     page.getByRole("button", { name: "Collapse resource sidebar" }),

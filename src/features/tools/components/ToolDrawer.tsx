@@ -11,7 +11,6 @@ import {
   ListChecks,
 } from "lucide-react";
 import type {
-  LogPolicy,
   OperationEvent,
   OperationResult,
   P4Context,
@@ -51,7 +50,6 @@ interface Props {
   onActiveChange(tab: ToolTab, operationId?: string): void;
   onOperationFilter(id?: string): void;
   onJournalOperation(id?: string): void;
-  onPolicy(policy: LogPolicy): void;
   onRun(input: string, operationId: string): Promise<OperationResult>;
   onCancel(operationId: string): void;
   onOpenSettings(): void;
@@ -298,7 +296,20 @@ export function ToolDrawer(props: Props) {
                 {tab.icon}
                 {tab.label}
                 {tab.id === "logs" && props.unread ? (
-                  <b>{props.unread}</b>
+                  <span
+                    className="tool-unread-dot"
+                    title={
+                      props.zh
+                        ? `${props.unread} 个未查看的新错误`
+                        : `${props.unread} new unviewed errors`
+                    }
+                  >
+                    <span className="sr-only">
+                      {props.zh
+                        ? `${props.unread} 个未查看的新错误`
+                        : `${props.unread} new unviewed errors`}
+                    </span>
+                  </span>
                 ) : null}
               </button>
             ))}
@@ -427,7 +438,6 @@ export function ToolDrawer(props: Props) {
             props.onJournalOperation(id);
             props.onActiveChange("journal", id);
           }}
-          onPolicy={props.onPolicy}
         />
       )}
       {props.open && props.active === "journal" && (

@@ -883,12 +883,13 @@ button {
   border: 0;
   color: var(--text);
 }
-.tool-tabs b {
-  padding: 1px 5px;
-  border-radius: 9px;
+.tool-unread-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
   background: var(--danger);
-  color: #fff;
-  font-size: 7px;
+  box-shadow: 0 0 0 1px var(--surface);
 }
 .terminal-view {
   min-height: 0;
