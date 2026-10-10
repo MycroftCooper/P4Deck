@@ -2,15 +2,20 @@
 mod tests {
     use crate::{
         app::{
-            changelist_service::ChangelistService, connection_service::ConnectionService,
-            file_lock_service::FileLockService, file_service::FileService,
-            rename_service::RenameService, search_service::GlobalSearchService,
-            status_cache::StatusCache, stream_graph_service::StreamGraphService,
-            stream_switch_service::StreamSwitchService, submit_service::SubmitService,
-            sync_service::SyncService, workflow_service::WorkflowService,
+            branch_mapping_service::BranchMappingService, changelist_service::ChangelistService,
+            connection_service::ConnectionService, file_lock_service::FileLockService,
+            file_service::FileService, rename_service::RenameService,
+            search_service::GlobalSearchService, status_cache::StatusCache,
+            stream_graph_service::StreamGraphService, stream_switch_service::StreamSwitchService,
+            submit_service::SubmitService, sync_service::SyncService,
+            workflow_service::WorkflowService,
         },
         domain::{
-            AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
+            AuthenticationRequest, BranchImpactDirection, BranchImpactPreviewQuery,
+            BranchIssueCode, BranchMappingDetailQuery, BranchMappingDraft, BranchMappingQuery,
+            BranchMappingRequestErrorCode, BranchMutationConfirmation, BranchMutationFailureCode,
+            BranchMutationMode, BranchMutationOutcome, BranchMutationPreflightRequest,
+            BranchViewLine, BranchViewModifier, ConnectionState, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, FileLockConfirmation,
             FileLockFailureCode, FileLockIssueCode, FileLockOperation, FileLockOutcome,
             FileLockOwnership, FileLockPreflightRequest, LoginRequest, ManualMergeOpenRequest,
@@ -224,6 +229,7 @@ mod tests {
         );
         let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts.clone()));
         let stream_graph = Arc::new(StreamGraphService::new(runner.clone(), contexts.clone()));
+        let branch_mappings = Arc::new(BranchMappingService::new(runner.clone(), contexts.clone()));
         let expiring_stream_switch = Arc::new(StreamSwitchService::with_ttl(
             runner.clone(),
             contexts.clone(),
@@ -274,6 +280,7 @@ mod tests {
                             expiring_rename: &expiring_rename,
                             file_locks: &file_locks,
                             stream_graph: &stream_graph,
+                            branch_mappings: &branch_mappings,
                             stream_switch: &stream_switch,
                             expiring_stream_switch: &expiring_stream_switch,
                         },
@@ -2032,6 +2039,7 @@ mod tests {
         expiring_rename: &'a RenameService,
         file_locks: &'a FileLockService,
         stream_graph: &'a Arc<StreamGraphService>,
+        branch_mappings: &'a Arc<BranchMappingService>,
         stream_switch: &'a Arc<StreamSwitchService>,
         expiring_stream_switch: &'a Arc<StreamSwitchService>,
     }
@@ -2060,6 +2068,7 @@ mod tests {
             expiring_rename,
             file_locks,
             stream_graph,
+            branch_mappings,
             stream_switch,
             expiring_stream_switch,
         } = services;
@@ -2321,6 +2330,7 @@ mod tests {
         exercise_global_search(runner, changelists, search, contexts, context, root).await?;
         exercise_submit_blockers(runner, changelists, submit, sync, files, context, root).await?;
         exercise_submit_permission_blocker(runner, changelists, context, root).await?;
+        exercise_branch_mappings(branch_mappings, runner, contexts, context, root).await?;
         exercise_stream_switch(
             connection,
             runner,
@@ -2331,6 +2341,540 @@ mod tests {
         )
         .await?;
         Ok(())
+    }
+
+    async fn exercise_branch_mappings(
+        service: &BranchMappingService,
+        runner: &P4Runner,
+        contexts: &ContextStore,
+        context: &P4Context,
+        root: &Path,
+    ) -> Result<(), String> {
+        const MAP: &str = "p4deck-e2e-map";
+        const EXTRA: &str = "p4deck-e2e-map-extra";
+        const FOREIGN: &str = "p4deck-e2e-map-foreign";
+        const SOURCE: &str = "//depot/p4deck-branch-source/...";
+        const TARGET: &str = "//depot/p4deck-branch-target/...";
+
+        for name in [MAP, EXTRA, FOREIGN] {
+            let _ = checked_run(
+                runner,
+                context,
+                "branch",
+                vec!["-d".into(), name.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+        for depot in [SOURCE, TARGET] {
+            let _ = checked_run(
+                runner,
+                context,
+                "obliterate",
+                vec!["-y".into(), depot.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+
+        let source_dir = root.join("p4deck-branch-source");
+        let target_dir = root.join("p4deck-branch-target");
+        let scenario = async {
+            std::fs::create_dir_all(&source_dir).map_err(|error| error.to_string())?;
+            std::fs::create_dir_all(&target_dir).map_err(|error| error.to_string())?;
+            let source_file = source_dir.join("source-only.txt");
+            let target_file = target_dir.join("target-only.txt");
+            std::fs::write(&source_file, b"branch source fixture\n")
+                .map_err(|error| error.to_string())?;
+            std::fs::write(&target_file, b"branch target fixture\n")
+                .map_err(|error| error.to_string())?;
+            checked_run(
+                runner,
+                context,
+                "add",
+                vec![
+                    source_file.to_string_lossy().into_owned(),
+                    target_file.to_string_lossy().into_owned(),
+                ],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                runner,
+                context,
+                "submit",
+                vec!["-d".into(), "P4Deck Branch Mapping fixture".into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+
+            let mapping = |description: &str| BranchMappingDraft {
+                name: MAP.into(),
+                owner: FIXTURE_USER.into(),
+                description: description.into(),
+                locked: false,
+                view: vec![BranchViewLine {
+                    modifier: BranchViewModifier::Map,
+                    source: Some(SOURCE.into()),
+                    target: Some(TARGET.into()),
+                    comment: None,
+                    unknown: None,
+                }],
+            };
+            let create = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Create,
+                        name: MAP.into(),
+                        desired: Some(mapping("Branch Mapping fixture Unicode 映射")),
+                        operation_id: Some("branch-e2e-create-preflight".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                create.ready && create.token.is_some() && create.target.is_some(),
+                format!("Branch Mapping create preflight was not ready: {create:?}"),
+            )?;
+            let create_confirmation = BranchMutationConfirmation {
+                token: create.token.clone().expect("checked create token"),
+                target: create.target.clone().expect("checked create target"),
+                preview_digest: create.preview_digest.clone(),
+                acknowledge_dangerous_delete: false,
+                operation_id: Some("branch-e2e-create".into()),
+            };
+            let created = service.confirm(create_confirmation.clone(), None).await;
+            ensure(
+                created.outcome == BranchMutationOutcome::Succeeded,
+                format!("Branch Mapping create did not verify: {created:?}"),
+            )?;
+            let replay = service.confirm(create_confirmation, None).await;
+            ensure(
+                replay.failure == Some(BranchMutationFailureCode::TokenUnknown),
+                format!("Branch Mapping mutation token was replayable: {replay:?}"),
+            )?;
+
+            for (name, owner) in [(EXTRA, FIXTURE_USER), (FOREIGN, READ_ONLY_USER)] {
+                let form = format!(
+                    "Branch: {name}\n\nOwner: {owner}\n\nDescription:\n\tBranch Mapping pagination fixture.\n\nOptions: unlocked\n\nView:\n\t{SOURCE} {TARGET}\n"
+                );
+                checked_run(
+                    runner,
+                    context,
+                    "branch",
+                    vec!["-i".into()],
+                    Some(form),
+                    OutputMode::Text,
+                )
+                .await?;
+            }
+
+            let first = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-list-1".into(),
+                        request_generation: 81,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: None,
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            ensure(
+                first.items.len() == 1 && first.has_more && first.next_cursor.is_some(),
+                format!("Branch Mapping first page was invalid: {first:?}"),
+            )?;
+            let first_cursor = first.next_cursor.clone().expect("checked list cursor");
+            let forged = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-list-forged".into(),
+                        request_generation: 81,
+                        name_filter: Some("different".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: Some(first_cursor.clone()),
+                    },
+                    None,
+                )
+                .await
+                .expect_err("Branch Mapping cursor accepted a changed query");
+            ensure(
+                forged.code == BranchMappingRequestErrorCode::InvalidCursor,
+                format!("forged Branch Mapping cursor was misclassified: {forged:?}"),
+            )?;
+            let second = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-list-2".into(),
+                        request_generation: 81,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: Some(first_cursor.clone()),
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            ensure(
+                second.items.len() == 1,
+                format!("Branch Mapping second page was invalid: {second:?}"),
+            )?;
+            let replayed_cursor = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-list-replay".into(),
+                        request_generation: 81,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: Some(first_cursor),
+                    },
+                    None,
+                )
+                .await
+                .expect_err("Branch Mapping cursor was replayable");
+            ensure(
+                matches!(
+                    replayed_cursor.code,
+                    BranchMappingRequestErrorCode::InvalidCursor
+                        | BranchMappingRequestErrorCode::CursorExpired
+                ),
+                format!("replayed Branch Mapping cursor was misclassified: {replayed_cursor:?}"),
+            )?;
+
+            let detail = service
+                .detail(
+                    BranchMappingDetailQuery {
+                        operation_id: "branch-e2e-detail".into(),
+                        request_generation: 82,
+                        name: MAP.into(),
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            ensure(
+                detail.detail.editable
+                    && detail.detail.description.contains("Unicode")
+                    && detail.detail.view.len() == 1,
+                format!("Branch Mapping detail was not structured: {detail:?}"),
+            )?;
+
+            let foreign_delete = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Delete,
+                        name: FOREIGN.into(),
+                        desired: None,
+                        operation_id: Some("branch-e2e-foreign-delete".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !foreign_delete.ready
+                    && foreign_delete.token.is_none()
+                    && foreign_delete
+                        .blockers
+                        .iter()
+                        .any(|issue| issue.code == BranchIssueCode::OwnerMismatch),
+                format!("non-owner Branch Mapping delete was not blocked: {foreign_delete:?}"),
+            )?;
+
+            let reviewed_edit = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Edit,
+                        name: MAP.into(),
+                        desired: Some(mapping("reviewed edit")),
+                        operation_id: Some("branch-e2e-toctou-preflight".into()),
+                    },
+                    None,
+                )
+                .await;
+            let concurrent_form = format!(
+                "Branch: {MAP}\n\nOwner: {FIXTURE_USER}\n\nDescription:\n\tconcurrent edit\n\nOptions: unlocked\n\nView:\n\t{SOURCE} {TARGET}\n"
+            );
+            checked_run(
+                runner,
+                context,
+                "branch",
+                vec!["-i".into()],
+                Some(concurrent_form),
+                OutputMode::Text,
+            )
+            .await?;
+            let changed = service
+                .confirm(
+                    BranchMutationConfirmation {
+                        token: reviewed_edit.token.ok_or("TOCTOU preflight had no token")?,
+                        target: reviewed_edit.target.ok_or("TOCTOU preflight had no target")?,
+                        preview_digest: reviewed_edit.preview_digest,
+                        acknowledge_dangerous_delete: false,
+                        operation_id: Some("branch-e2e-toctou-confirm".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                changed.failure == Some(BranchMutationFailureCode::PreflightChanged),
+                format!("Branch Mapping TOCTOU was not rejected: {changed:?}"),
+            )?;
+
+            let edit = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Edit,
+                        name: MAP.into(),
+                        desired: Some(mapping("edited and verified")),
+                        operation_id: Some("branch-e2e-edit-preflight".into()),
+                    },
+                    None,
+                )
+                .await;
+            let edited = service
+                .confirm(
+                    BranchMutationConfirmation {
+                        token: edit.token.ok_or("edit preflight had no token")?,
+                        target: edit.target.ok_or("edit preflight had no target")?,
+                        preview_digest: edit.preview_digest,
+                        acknowledge_dangerous_delete: false,
+                        operation_id: Some("branch-e2e-edit".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                edited.outcome == BranchMutationOutcome::Succeeded
+                    && edited
+                        .observed
+                        .as_ref()
+                        .is_some_and(|value| value.description == "edited and verified"),
+                format!("Branch Mapping edit did not verify: {edited:?}"),
+            )?;
+
+            let opened_before = checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-C".into(), E2E_CLIENT.into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+            let source_before = std::fs::read(&source_file).map_err(|error| error.to_string())?;
+            let target_before = std::fs::read(&target_file).map_err(|error| error.to_string())?;
+            for (direction, operation_id) in [
+                (BranchImpactDirection::Forward, "branch-e2e-preview-forward"),
+                (BranchImpactDirection::Reverse, "branch-e2e-preview-reverse"),
+            ] {
+                let preview = service
+                    .preview(
+                        BranchImpactPreviewQuery {
+                            operation_id: operation_id.into(),
+                            request_generation: 83,
+                            name: MAP.into(),
+                            direction,
+                            limit: 20,
+                        },
+                        None,
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+                ensure(
+                    preview.blockers.is_empty()
+                        && !preview.items.is_empty()
+                        && preview.items.iter().all(|item| item.action.is_some()),
+                    format!("Branch Mapping {direction:?} preview was invalid: {preview:?}"),
+                )?;
+            }
+            let opened_after = checked_run(
+                runner,
+                context,
+                "opened",
+                vec!["-C".into(), E2E_CLIENT.into()],
+                None,
+                OutputMode::JsonLines,
+            )
+            .await?;
+            ensure(
+                json_values(&opened_before) == json_values(&opened_after)
+                    && std::fs::read(&source_file).map_err(|error| error.to_string())?
+                        == source_before
+                    && std::fs::read(&target_file).map_err(|error| error.to_string())?
+                        == target_before,
+                "Branch Mapping preview changed opened files or workspace content",
+            )?;
+
+            service.cancel("branch-e2e-cancelled");
+            let cancelled = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-cancelled".into(),
+                        request_generation: 84,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 10,
+                        cursor: None,
+                    },
+                    None,
+                )
+                .await
+                .expect_err("pre-cancelled Branch Mapping list ran");
+            ensure(
+                cancelled.code == BranchMappingRequestErrorCode::Cancelled,
+                format!("Branch Mapping cancellation was misclassified: {cancelled:?}"),
+            )?;
+
+            let delete_without_ack = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Delete,
+                        name: MAP.into(),
+                        desired: None,
+                        operation_id: Some("branch-e2e-delete-preflight-no-ack".into()),
+                    },
+                    None,
+                )
+                .await;
+            let rejected_delete = service
+                .confirm(
+                    BranchMutationConfirmation {
+                        token: delete_without_ack
+                            .token
+                            .ok_or("delete preflight had no token")?,
+                        target: delete_without_ack
+                            .target
+                            .ok_or("delete preflight had no target")?,
+                        preview_digest: delete_without_ack.preview_digest,
+                        acknowledge_dangerous_delete: false,
+                        operation_id: Some("branch-e2e-delete-no-ack".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                rejected_delete.failure
+                    == Some(BranchMutationFailureCode::DangerousConfirmationRequired),
+                format!("Branch Mapping delete did not require acknowledgement: {rejected_delete:?}"),
+            )?;
+            let delete = service
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Delete,
+                        name: MAP.into(),
+                        desired: None,
+                        operation_id: Some("branch-e2e-delete-preflight".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                delete
+                    .warnings
+                    .iter()
+                    .any(|issue| issue.code == BranchIssueCode::DestructiveDelete),
+                format!("Branch Mapping delete warning was missing: {delete:?}"),
+            )?;
+            let deleted = service
+                .confirm(
+                    BranchMutationConfirmation {
+                        token: delete.token.ok_or("delete preflight had no token")?,
+                        target: delete.target.ok_or("delete preflight had no target")?,
+                        preview_digest: delete.preview_digest,
+                        acknowledge_dangerous_delete: true,
+                        operation_id: Some("branch-e2e-delete".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                deleted.outcome == BranchMutationOutcome::Succeeded
+                    && deleted.observed.is_none(),
+                format!("Branch Mapping delete did not verify missing: {deleted:?}"),
+            )?;
+
+            let generation_page = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-generation-page".into(),
+                        request_generation: 85,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: None,
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let generation = contexts.snapshot().1;
+            contexts
+                .advance_generation_if_unchanged(generation)
+                .map_err(|error| error.to_string())?;
+            let stale = service
+                .list(
+                    BranchMappingQuery {
+                        operation_id: "branch-e2e-generation-stale".into(),
+                        request_generation: 85,
+                        name_filter: Some("p4deck-e2e-map".into()),
+                        owner: None,
+                        page_size: 1,
+                        cursor: generation_page.next_cursor,
+                    },
+                    None,
+                )
+                .await
+                .expect_err("generation-bound Branch Mapping cursor survived drift");
+            ensure(
+                matches!(
+                    stale.code,
+                    BranchMappingRequestErrorCode::InvalidCursor
+                        | BranchMappingRequestErrorCode::ConnectionChanged
+                ),
+                format!("Branch Mapping generation drift was misclassified: {stale:?}"),
+            )
+        }
+        .await;
+
+        for name in [MAP, EXTRA, FOREIGN] {
+            let _ = checked_run(
+                runner,
+                context,
+                "branch",
+                vec!["-d".into(), name.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+        for depot in [SOURCE, TARGET] {
+            let _ = checked_run(
+                runner,
+                context,
+                "obliterate",
+                vec!["-y".into(), depot.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await;
+        }
+        if source_dir.exists() {
+            let _ = std::fs::remove_dir_all(&source_dir);
+        }
+        if target_dir.exists() {
+            let _ = std::fs::remove_dir_all(&target_dir);
+        }
+        scenario
     }
 
     fn stream_graph_query(
@@ -6709,6 +7253,42 @@ mod tests {
                 ) && preflight.token.is_none(),
                 format!("write permission denial was not blocked: {preflight:?}"),
             )?;
+            let locked_branch_form = format!(
+                "Branch: p4deck-e2e-permission-map\nOwner: {}\nDescription:\n\tlocked non-owner deletion fixture\nOptions: locked\nView:\n\t//depot/p4deck-submit-e2e/... //depot/p4deck-branch-permission/...\n",
+                context.user
+            );
+            checked_run(
+                runner,
+                context,
+                "branch",
+                vec!["-i".into()],
+                Some(locked_branch_form),
+                OutputMode::Text,
+            )
+            .await?;
+            let permission_branch = BranchMappingService::new(runner.clone(), contexts.clone());
+            let branch_permission = permission_branch
+                .preflight(
+                    BranchMutationPreflightRequest {
+                        mode: BranchMutationMode::Delete,
+                        name: "p4deck-e2e-permission-map".into(),
+                        desired: None,
+                        operation_id: Some("branch-e2e-permission-preflight".into()),
+                    },
+                    None,
+                )
+                .await;
+            ensure(
+                !branch_permission.ready
+                    && branch_permission.token.is_none()
+                    && branch_permission
+                        .blockers
+                        .iter()
+                        .any(|issue| issue.code == BranchIssueCode::OwnerMismatch),
+                format!(
+                    "Branch Mapping non-owner deletion was not blocked: {branch_permission:?}"
+                ),
+            )?;
             let permission_workflow = WorkflowService::new(
                 WorkflowRepository::new(runner.clone()),
                 contexts,
@@ -6766,6 +7346,15 @@ mod tests {
         )
         .await;
         delete_pending_for_client(runner, context, READ_ONLY_USER, READ_ONLY_CLIENT).await;
+        let _ = checked_run(
+            runner,
+            context,
+            "branch",
+            vec!["-d".into(), "p4deck-e2e-permission-map".into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
         let _ = checked_run(
             runner,
             context,

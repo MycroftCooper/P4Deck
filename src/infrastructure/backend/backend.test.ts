@@ -180,6 +180,69 @@ describe("controlled P4 terminal", () => {
     expect(second.partial).toBe(true);
   });
 
+  it("provides an explicitly simulated Branch Mapping read and one-use mutation flow", async () => {
+    const listed = await backend.queryBranchMappings({
+      operationId: "mock-branch-list",
+      requestGeneration: 61,
+      nameFilter: "release",
+      pageSize: 1,
+    });
+    expect(listed.simulated).toBe(true);
+    expect(listed.items[0]?.name).toBe("atlas-release");
+
+    const detail = await backend.getBranchMappingDetail({
+      operationId: "mock-branch-detail",
+      requestGeneration: 61,
+      name: "atlas-release",
+    });
+    expect(detail.detail.simulated).toBe(true);
+    expect(detail.detail.view[0]).toEqual(
+      expect.objectContaining({ modifier: "map" }),
+    );
+
+    const preview = await backend.previewBranchMappingImpact({
+      operationId: "mock-branch-preview",
+      requestGeneration: 61,
+      name: "atlas-release",
+      direction: "reverse",
+      limit: 10,
+    });
+    expect(preview.simulated).toBe(true);
+    expect(preview.items[0]?.source).toBe("//atlas/release/...");
+
+    const desired = {
+      name: "mock-created-map",
+      owner: "fmeng",
+      description: "simulated create",
+      locked: false,
+      view: [
+        {
+          modifier: "map" as const,
+          source: "//atlas/main/...",
+          target: "//atlas/mock-created/...",
+        },
+      ],
+    };
+    const preflight = await backend.preflightBranchMappingMutation({
+      mode: "create",
+      name: desired.name,
+      desired,
+    });
+    expect(preflight.ready).toBe(true);
+    const confirmation = {
+      token: preflight.token!,
+      target: preflight.target!,
+      previewDigest: preflight.previewDigest,
+      acknowledgeDangerousDelete: false,
+    };
+    const created = await backend.confirmBranchMappingMutation(confirmation);
+    expect(created.outcome).toBe("succeeded");
+    expect(created.observed?.simulated).toBe(true);
+    await expect(
+      backend.confirmBranchMappingMutation(confirmation),
+    ).resolves.toEqual(expect.objectContaining({ failure: "tokenUnknown" }));
+  });
+
   it("validates Unicode, whitespace, control and special-character searches", async () => {
     const unicode = await backend.globalSearch({
       operationId: "mock-global-unicode",

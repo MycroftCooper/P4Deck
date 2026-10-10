@@ -159,6 +159,72 @@ it("passes the generation-bound Stream Graph query through unchanged", async () 
   });
 });
 
+it("passes narrow Branch Mapping list, detail, preview, preflight and confirmation payloads unchanged", async () => {
+  const query = {
+    operationId: "branch-list-42",
+    requestGeneration: 8,
+    nameFilter: "release 映射",
+    owner: "alice",
+    pageSize: 25,
+    cursor: "opaque-one-use-branch-cursor",
+  };
+  invoke.mockResolvedValue({ items: [], simulated: false });
+  await tauriBackend.queryBranchMappings(query);
+  expect(invoke).toHaveBeenLastCalledWith("query_branch_mappings", { query });
+
+  const detail = {
+    operationId: "branch-detail-42",
+    requestGeneration: 8,
+    name: "release-map",
+  };
+  await tauriBackend.getBranchMappingDetail(detail);
+  expect(invoke).toHaveBeenLastCalledWith("get_branch_mapping_detail", {
+    query: detail,
+  });
+
+  const preview = {
+    ...detail,
+    direction: "reverse" as const,
+    limit: 100,
+  };
+  await tauriBackend.previewBranchMappingImpact(preview);
+  expect(invoke).toHaveBeenLastCalledWith("preview_branch_mapping_impact", {
+    query: preview,
+  });
+
+  const request = {
+    mode: "delete" as const,
+    name: "release-map",
+    operationId: "branch-preflight-42",
+  };
+  await tauriBackend.preflightBranchMappingMutation(request);
+  expect(invoke).toHaveBeenLastCalledWith("preflight_branch_mapping_mutation", {
+    request,
+  });
+
+  const confirmation = {
+    token: "one-use-token",
+    target: {
+      activeProfileId: "profile-1",
+      contextGeneration: 8,
+      server: "ssl:1666",
+      user: "alice",
+      client: "main",
+      mode: "delete" as const,
+      name: "release-map",
+      currentExists: true,
+      currentDigest: "current-digest",
+    },
+    previewDigest: "preview-digest",
+    acknowledgeDangerousDelete: true,
+    operationId: "branch-confirm-42",
+  };
+  await tauriBackend.confirmBranchMappingMutation(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_branch_mapping_mutation", {
+    confirmation,
+  });
+});
+
 it("passes the typed submitted query and opaque cursor through unchanged", async () => {
   const query = {
     operationId: "submitted-query-42",

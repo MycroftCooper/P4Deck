@@ -93,6 +93,236 @@ export interface StreamGraphRequestError {
   message: string;
 }
 
+export interface BranchMappingQuery {
+  operationId: string;
+  requestGeneration: number;
+  nameFilter?: string;
+  owner?: string;
+  pageSize: number;
+  cursor?: string;
+}
+
+export interface BranchMappingSummary {
+  name: string;
+  owner?: string;
+  update?: string;
+  access?: string;
+  description?: string;
+  options?: string;
+}
+
+export interface BranchMappingScope {
+  activeProfileId?: string;
+  contextGeneration: number;
+  server: string;
+  user: string;
+  client: string;
+}
+
+export interface BranchMappingPage {
+  requestGeneration: number;
+  scope: BranchMappingScope;
+  items: BranchMappingSummary[];
+  hasMore: boolean;
+  nextCursor?: string;
+  partial: boolean;
+  truncated: boolean;
+  stats: {
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    invalidRecordCount: number;
+    safetyLimit: number;
+  };
+  operationIds: string[];
+  simulated: boolean;
+}
+
+export type BranchViewModifier = "map" | "exclude" | "overlay" | "unknown";
+
+export interface BranchViewLine {
+  modifier: BranchViewModifier;
+  source?: string;
+  target?: string;
+  comment?: string;
+  unknown?: string;
+}
+
+export interface BranchUnknownField {
+  name: string;
+  value: string;
+}
+
+export interface BranchMappingDetail {
+  name: string;
+  owner: string;
+  update?: string;
+  access?: string;
+  description: string;
+  locked: boolean;
+  view: BranchViewLine[];
+  unknownFields: BranchUnknownField[];
+  editable: boolean;
+  operationIds: string[];
+  simulated: boolean;
+}
+
+export interface BranchMappingDetailQuery {
+  operationId: string;
+  requestGeneration: number;
+  name: string;
+}
+
+export interface BranchMappingDetailResult {
+  requestGeneration: number;
+  scope: BranchMappingScope;
+  detail: BranchMappingDetail;
+}
+
+export type BranchImpactDirection = "forward" | "reverse";
+
+export interface BranchImpactPreviewQuery {
+  operationId: string;
+  requestGeneration: number;
+  name: string;
+  direction: BranchImpactDirection;
+  limit: number;
+}
+
+export interface BranchImpactItem {
+  file?: string;
+  source?: string;
+  target?: string;
+  action?: string;
+}
+
+export type BranchIssueCode =
+  | "invalidInput"
+  | "notFound"
+  | "alreadyExists"
+  | "ownerMismatch"
+  | "permissionDenied"
+  | "locked"
+  | "destructiveDelete"
+  | "unknownFields"
+  | "workspaceUnmapped"
+  | "previewUnavailable"
+  | "contextChanged"
+  | "cancelled";
+
+export interface BranchIssue {
+  code: BranchIssueCode;
+  message: string;
+}
+
+export interface BranchImpactPreview {
+  requestGeneration: number;
+  name: string;
+  direction: BranchImpactDirection;
+  items: BranchImpactItem[];
+  blockers: BranchIssue[];
+  partial: boolean;
+  truncated: boolean;
+  scannedCount: number;
+  safetyLimit: number;
+  operationIds: string[];
+  simulated: boolean;
+}
+
+export interface BranchMappingDraft {
+  name: string;
+  owner: string;
+  description: string;
+  locked: boolean;
+  view: BranchViewLine[];
+}
+
+export type BranchMutationMode = "create" | "edit" | "delete";
+
+export interface BranchMutationPreflightRequest {
+  mode: BranchMutationMode;
+  name: string;
+  desired?: BranchMappingDraft;
+  operationId?: string;
+}
+
+export interface BranchMutationTarget {
+  activeProfileId?: string;
+  contextGeneration: number;
+  server: string;
+  user: string;
+  client: string;
+  mode: BranchMutationMode;
+  name: string;
+  currentExists: boolean;
+  currentDigest?: string;
+  desired?: BranchMappingDraft;
+  desiredDigest?: string;
+}
+
+export interface BranchMutationPreflight {
+  ready: boolean;
+  mode: BranchMutationMode;
+  name: string;
+  current?: BranchMappingDetail;
+  desired?: BranchMappingDraft;
+  blockers: BranchIssue[];
+  warnings: BranchIssue[];
+  target?: BranchMutationTarget;
+  previewDigest: string;
+  token?: string;
+  expiresAt: number;
+  ttlMs: number;
+  operationIds: string[];
+}
+
+export interface BranchMutationConfirmation {
+  token: string;
+  target: BranchMutationTarget;
+  previewDigest: string;
+  acknowledgeDangerousDelete: boolean;
+  operationId?: string;
+}
+
+export type BranchMutationOutcome =
+  "succeeded" | "rejected" | "failed" | "cancelled" | "unknown";
+
+export type BranchMutationFailureCode =
+  | "tokenUnknown"
+  | "tokenExpired"
+  | "targetMismatch"
+  | "dangerousConfirmationRequired"
+  | "contextChanged"
+  | "preflightChanged"
+  | "permissionDenied"
+  | "commandFailure"
+  | "cancelled"
+  | "uncertainOutcome"
+  | "verificationFailed";
+
+export interface BranchMutationResult {
+  outcome: BranchMutationOutcome;
+  failure?: BranchMutationFailureCode;
+  message: string;
+  observed?: BranchMappingDetail;
+  operationIds: string[];
+  refreshBranchMappings: boolean;
+}
+
+export type BranchMappingRequestErrorCode =
+  | "invalidQuery"
+  | "invalidCursor"
+  | "cursorExpired"
+  | "connectionChanged"
+  | "cancelled"
+  | "notFound"
+  | "queryFailed";
+
+export interface BranchMappingRequestError {
+  code: BranchMappingRequestErrorCode;
+  message: string;
+}
+
 export interface ClientWorkspace {
   name: string;
   owner: string;

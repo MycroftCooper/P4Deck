@@ -43,6 +43,16 @@ import type {
   StreamSwitchResult,
   StreamGraphQuery,
   StreamGraphResult,
+  BranchMappingQuery,
+  BranchMappingPage,
+  BranchMappingDetailQuery,
+  BranchMappingDetailResult,
+  BranchImpactPreviewQuery,
+  BranchImpactPreview,
+  BranchMutationPreflightRequest,
+  BranchMutationPreflight,
+  BranchMutationConfirmation,
+  BranchMutationResult,
   FileHistoryPage,
   FileHistoryRequest,
   GlobalSearchQuery,
@@ -137,6 +147,19 @@ export interface Backend {
     import("../../shared/contracts/types").StreamSummary[]
   >;
   queryStreamGraph(query: StreamGraphQuery): Promise<StreamGraphResult>;
+  queryBranchMappings(query: BranchMappingQuery): Promise<BranchMappingPage>;
+  getBranchMappingDetail(
+    query: BranchMappingDetailQuery,
+  ): Promise<BranchMappingDetailResult>;
+  previewBranchMappingImpact(
+    query: BranchImpactPreviewQuery,
+  ): Promise<BranchImpactPreview>;
+  preflightBranchMappingMutation(
+    request: BranchMutationPreflightRequest,
+  ): Promise<BranchMutationPreflight>;
+  confirmBranchMappingMutation(
+    confirmation: BranchMutationConfirmation,
+  ): Promise<BranchMutationResult>;
   preflightStreamSwitch(
     request: StreamSwitchPreflightRequest,
   ): Promise<StreamSwitchPreflight>;

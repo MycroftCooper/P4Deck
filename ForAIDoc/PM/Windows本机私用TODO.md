@@ -94,11 +94,12 @@
 - 企业 SSO/MFA；仅当本人实际 Server 强制要求时，才升级为 WIN-P0-03 的真实阻塞。
 - 第二 Server、Broker/Proxy、多 P4/P4D 版本、Unicode/non-Unicode Server 兼容矩阵。
 - NVDA/VoiceOver、双平台读屏认证；当前保留键盘/ARIA/axe/对比度自动化基线。
-- Branch Mapping、Label/Job 独立工作台、Stream spec 写入和管理员能力等后续产品功能。
+- Branch Mapping 前端工作台、Label/Job 独立工作台、Stream spec 写入和管理员能力等后续产品功能。Branch Mapping 后端契约已由新增功能批次完成，但不因此进入当前本机私用验收顺序。
 - 菜单台账中 190 个 `phase: later` 项。
 
 ## 新增功能实施批次（不改变上述验收顺序）
 
 - Stream Graph 前后端只读闭环已独立完成：正式全局 panel/Streams 入口、确定性 parent→child 分层、可访问虚拟树、过滤/分页/取消/重试、详情/键盘/390px、复用安全切换对话框，以及强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、scope 复核、一次性分页游标和 Windows localhost fixture 均已落地。
 - Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
-- 本批不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不把 Branch Mapping、Stream spec 写入、force unlock 或管理员能力带入当前范围。
+- Branch Mapping 后端安全闭环已独立完成：有界 list/detail、结构化 View、正反 `integrate -n` 影响预览、安全 create/edit/delete、Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter、明确 simulated 的 Browser Mock 与 Windows localhost fixture 已落地。前端页面未开始，Windows Tauri 原生交互和本人 Server 权限/trigger 行为未验，不能记为用户可见完整功能。
+- 本批不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不把 Branch Mapping 前端工作台、Stream spec 写入、force unlock 或管理员能力带入当前范围。

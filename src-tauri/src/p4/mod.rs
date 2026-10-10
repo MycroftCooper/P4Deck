@@ -1,3 +1,4 @@
+pub mod branches;
 pub mod changelists;
 pub mod connection;
 pub mod context;

@@ -824,6 +824,348 @@ pub struct StreamGraphRequestError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchMappingQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name_filter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    pub page_size: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingSummary {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingScope {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub server: String,
+    pub user: String,
+    pub client: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub returned_count: usize,
+    pub invalid_record_count: usize,
+    pub safety_limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingPage {
+    pub request_generation: u64,
+    pub scope: BranchMappingScope,
+    pub items: Vec<BranchMappingSummary>,
+    pub has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub partial: bool,
+    pub truncated: bool,
+    pub stats: BranchMappingStats,
+    pub operation_ids: Vec<String>,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchViewModifier {
+    Map,
+    Exclude,
+    Overlay,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchViewLine {
+    pub modifier: BranchViewModifier,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchUnknownField {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingDetail {
+    pub name: String,
+    pub owner: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access: Option<String>,
+    pub description: String,
+    pub locked: bool,
+    pub view: Vec<BranchViewLine>,
+    pub unknown_fields: Vec<BranchUnknownField>,
+    pub editable: bool,
+    pub operation_ids: Vec<String>,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchMappingDetailQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMappingDetailResult {
+    pub request_generation: u64,
+    pub scope: BranchMappingScope,
+    pub detail: BranchMappingDetail,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchImpactDirection {
+    Forward,
+    Reverse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchImpactPreviewQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    pub name: String,
+    pub direction: BranchImpactDirection,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchImpactItem {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchIssueCode {
+    InvalidInput,
+    NotFound,
+    AlreadyExists,
+    OwnerMismatch,
+    PermissionDenied,
+    Locked,
+    DestructiveDelete,
+    UnknownFields,
+    WorkspaceUnmapped,
+    PreviewUnavailable,
+    ContextChanged,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchIssue {
+    pub code: BranchIssueCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchImpactPreview {
+    pub request_generation: u64,
+    pub name: String,
+    pub direction: BranchImpactDirection,
+    pub items: Vec<BranchImpactItem>,
+    pub blockers: Vec<BranchIssue>,
+    pub partial: bool,
+    pub truncated: bool,
+    pub scanned_count: usize,
+    pub safety_limit: usize,
+    pub operation_ids: Vec<String>,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchMappingDraft {
+    pub name: String,
+    pub owner: String,
+    pub description: String,
+    pub locked: bool,
+    pub view: Vec<BranchViewLine>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchMutationMode {
+    Create,
+    Edit,
+    Delete,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchMutationPreflightRequest {
+    pub mode: BranchMutationMode,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desired: Option<BranchMappingDraft>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMutationTarget {
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    pub mode: BranchMutationMode,
+    pub name: String,
+    pub current_exists: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desired: Option<BranchMappingDraft>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desired_digest: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMutationPreflight {
+    pub ready: bool,
+    pub mode: BranchMutationMode,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current: Option<BranchMappingDetail>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desired: Option<BranchMappingDraft>,
+    pub blockers: Vec<BranchIssue>,
+    pub warnings: Vec<BranchIssue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<BranchMutationTarget>,
+    pub preview_digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub ttl_ms: u64,
+    pub operation_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BranchMutationConfirmation {
+    pub token: String,
+    pub target: BranchMutationTarget,
+    pub preview_digest: String,
+    #[serde(default)]
+    pub acknowledge_dangerous_delete: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchMutationOutcome {
+    Succeeded,
+    Rejected,
+    Failed,
+    Cancelled,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchMutationFailureCode {
+    TokenUnknown,
+    TokenExpired,
+    TargetMismatch,
+    DangerousConfirmationRequired,
+    ContextChanged,
+    PreflightChanged,
+    PermissionDenied,
+    CommandFailure,
+    Cancelled,
+    UncertainOutcome,
+    VerificationFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchMutationResult {
+    pub outcome: BranchMutationOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure: Option<BranchMutationFailureCode>,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed: Option<BranchMappingDetail>,
+    pub operation_ids: Vec<String>,
+    pub refresh_branch_mappings: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum BranchMappingRequestErrorCode {
+    InvalidQuery,
+    InvalidCursor,
+    CursorExpired,
+    ConnectionChanged,
+    Cancelled,
+    NotFound,
+    QueryFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[serde(rename_all = "camelCase")]
+#[error("{message}")]
+pub struct BranchMappingRequestError {
+    pub code: BranchMappingRequestErrorCode,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",

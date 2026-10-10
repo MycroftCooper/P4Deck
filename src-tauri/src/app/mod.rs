@@ -1,3 +1,4 @@
+pub mod branch_mapping_service;
 pub mod changelist_service;
 pub mod confirmation;
 pub mod connection_service;

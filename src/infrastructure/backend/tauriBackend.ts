@@ -29,6 +29,15 @@ export const tauriBackend: Backend = {
   logout: (request) => invoke("logout", { request }),
   listStreams: () => invoke("list_streams"),
   queryStreamGraph: (query) => invoke("query_stream_graph", { query }),
+  queryBranchMappings: (query) => invoke("query_branch_mappings", { query }),
+  getBranchMappingDetail: (query) =>
+    invoke("get_branch_mapping_detail", { query }),
+  previewBranchMappingImpact: (query) =>
+    invoke("preview_branch_mapping_impact", { query }),
+  preflightBranchMappingMutation: (request) =>
+    invoke("preflight_branch_mapping_mutation", { request }),
+  confirmBranchMappingMutation: (confirmation) =>
+    invoke("confirm_branch_mapping_mutation", { confirmation }),
   preflightStreamSwitch: (request) =>
     invoke("preflight_stream_switch", { request }),
   confirmStreamSwitch: (confirmation) =>

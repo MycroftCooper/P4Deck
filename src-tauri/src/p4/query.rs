@@ -38,8 +38,27 @@ struct StreamGraphCursor {
     connection_generation: u64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BranchMappingCursor {
+    version: u8,
+    snapshot_id: String,
+    cursor_id: String,
+    offset: usize,
+    query_fingerprint: String,
+    connection_fingerprint: String,
+    connection_generation: u64,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct StreamGraphCursorBoundary {
+    pub snapshot_id: String,
+    pub cursor_id: String,
+    pub offset: usize,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct BranchMappingCursorBoundary {
     pub snapshot_id: String,
     pub cursor_id: String,
     pub offset: usize,
@@ -254,6 +273,70 @@ pub fn decode_stream_graph_cursor(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn encode_branch_mapping_cursor(
+    snapshot_id: &str,
+    cursor_id: &str,
+    offset: usize,
+    query_fingerprint: &str,
+    connection_fingerprint: &str,
+    connection_generation: u64,
+) -> Result<String, String> {
+    if snapshot_id.is_empty()
+        || snapshot_id.len() > 128
+        || cursor_id.is_empty()
+        || cursor_id.len() > 128
+        || offset == 0
+    {
+        return Err("invalid Branch Mapping cursor boundary".into());
+    }
+    let bytes = serde_json::to_vec(&BranchMappingCursor {
+        version: CURSOR_VERSION,
+        snapshot_id: snapshot_id.into(),
+        cursor_id: cursor_id.into(),
+        offset,
+        query_fingerprint: query_fingerprint.into(),
+        connection_fingerprint: connection_fingerprint.into(),
+        connection_generation,
+    })
+    .map_err(|error| error.to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+pub fn decode_branch_mapping_cursor(
+    encoded: &str,
+    expected_query_fingerprint: &str,
+    expected_connection_fingerprint: &str,
+    expected_connection_generation: u64,
+) -> Result<BranchMappingCursorBoundary, String> {
+    if encoded.is_empty() || encoded.len() > MAX_CURSOR_BYTES {
+        return Err("invalid Branch Mapping cursor".into());
+    }
+    let bytes = URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| "invalid Branch Mapping cursor")?;
+    if bytes.len() > MAX_CURSOR_BYTES {
+        return Err("invalid Branch Mapping cursor".into());
+    }
+    let cursor: BranchMappingCursor =
+        serde_json::from_slice(&bytes).map_err(|_| "invalid Branch Mapping cursor")?;
+    if cursor.version != CURSOR_VERSION
+        || cursor.snapshot_id.is_empty()
+        || cursor.cursor_id.is_empty()
+        || cursor.offset == 0
+        || cursor.query_fingerprint != expected_query_fingerprint
+        || cursor.connection_fingerprint != expected_connection_fingerprint
+        || cursor.connection_generation != expected_connection_generation
+    {
+        return Err("Branch Mapping cursor does not match this query or connection".into());
+    }
+    Ok(BranchMappingCursorBoundary {
+        snapshot_id: cursor.snapshot_id,
+        cursor_id: cursor.cursor_id,
+        offset: cursor.offset,
+    })
+}
+
 pub fn encode_pending_change_cursor(
     snapshot_id: &str,
     offset: usize,
@@ -448,6 +531,61 @@ mod tests {
             decode_stream_graph_cursor(&cursor, "query-page-size-2", "profile-and-context", 8)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn branch_mapping_cursor_binds_query_profile_context_and_generation() {
+        let cursor = encode_branch_mapping_cursor(
+            "branch-snapshot",
+            "branch-cursor-once",
+            25,
+            "query-page-size-25",
+            "profile-and-full-context",
+            11,
+        )
+        .unwrap();
+        assert_eq!(
+            decode_branch_mapping_cursor(
+                &cursor,
+                "query-page-size-25",
+                "profile-and-full-context",
+                11,
+            )
+            .unwrap(),
+            BranchMappingCursorBoundary {
+                snapshot_id: "branch-snapshot".into(),
+                cursor_id: "branch-cursor-once".into(),
+                offset: 25,
+            }
+        );
+        assert!(decode_branch_mapping_cursor(
+            &cursor,
+            "other-query",
+            "profile-and-full-context",
+            11,
+        )
+        .is_err());
+        assert!(decode_branch_mapping_cursor(
+            &cursor,
+            "query-page-size-25",
+            "other-profile-or-context",
+            11,
+        )
+        .is_err());
+        assert!(decode_branch_mapping_cursor(
+            &cursor,
+            "query-page-size-25",
+            "profile-and-full-context",
+            12,
+        )
+        .is_err());
+        assert!(decode_branch_mapping_cursor(
+            "not-base64",
+            "query-page-size-25",
+            "profile-and-full-context",
+            11,
+        )
+        .is_err());
     }
 
     #[test]

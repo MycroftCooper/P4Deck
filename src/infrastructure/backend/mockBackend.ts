@@ -42,6 +42,55 @@ const mockStreamSwitchTokens = new Map<
     hasWarnings: boolean;
   }
 >();
+const mockBranchDetails = new Map<
+  string,
+  import("../../shared/contracts/types").BranchMappingDetail
+>([
+  [
+    "atlas-release",
+    {
+      name: "atlas-release",
+      owner: "fmeng",
+      update: "1700000000",
+      access: "1700000100",
+      description: "Browser Mock simulated release mapping",
+      locked: false,
+      view: [
+        {
+          modifier: "map",
+          source: "//atlas/main/...",
+          target: "//atlas/release/...",
+        },
+        {
+          modifier: "exclude",
+          source: "//atlas/main/private/...",
+          target: "//atlas/release/private/...",
+        },
+      ],
+      unknownFields: [],
+      editable: true,
+      operationIds: ["browser-mock-seed"],
+      simulated: true,
+    },
+  ],
+]);
+const mockBranchCursors = new Map<
+  string,
+  {
+    items: import("../../shared/contracts/types").BranchMappingSummary[];
+    offset: number;
+    queryKey: string;
+    expiresAt: number;
+  }
+>();
+const mockBranchTokens = new Map<
+  string,
+  {
+    target: import("../../shared/contracts/types").BranchMutationTarget;
+    digest: string;
+    expiresAt: number;
+  }
+>();
 const mockSubmitTokens = new Map<
   string,
   { target: SubmitTargetSnapshot; digest: string; expiresAt: number }
@@ -862,6 +911,319 @@ export const mockBackend: Backend = {
       operationIds: [`${query.operationId}-browser-mock`],
       cacheFreshness: "fresh",
       simulated: true,
+    };
+  },
+  async queryBranchMappings(query) {
+    const queryKey = JSON.stringify({
+      generation: query.requestGeneration,
+      filter: query.nameFilter?.trim().toLocaleLowerCase() ?? "",
+      owner: query.owner?.toLocaleLowerCase() ?? "",
+      pageSize: query.pageSize,
+      profile: mockActiveProfileId,
+      context: mockContext,
+    });
+    let items: import("../../shared/contracts/types").BranchMappingSummary[];
+    let offset = 0;
+    if (query.cursor) {
+      const snapshot = mockBranchCursors.get(query.cursor);
+      mockBranchCursors.delete(query.cursor);
+      if (
+        !snapshot ||
+        snapshot.expiresAt <= Date.now() ||
+        snapshot.queryKey !== queryKey
+      ) {
+        throw {
+          code: "invalidCursor",
+          message: "Browser Mock Branch Mapping cursor is invalid or expired.",
+        };
+      }
+      items = snapshot.items;
+      offset = snapshot.offset;
+    } else {
+      const filter = query.nameFilter?.trim().toLocaleLowerCase();
+      items = [...mockBranchDetails.values()]
+        .filter(
+          (detail) =>
+            (!filter || detail.name.toLocaleLowerCase().includes(filter)) &&
+            (!query.owner ||
+              detail.owner.toLocaleLowerCase() ===
+                query.owner.toLocaleLowerCase()),
+        )
+        .map((detail) => ({
+          name: detail.name,
+          owner: detail.owner,
+          update: detail.update,
+          access: detail.access,
+          description: detail.description,
+          options: detail.locked ? "locked" : "unlocked",
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+    }
+    const end = Math.min(offset + query.pageSize, items.length);
+    const nextCursor =
+      end < items.length ? `mock-branch:${crypto.randomUUID()}` : undefined;
+    if (nextCursor) {
+      mockBranchCursors.set(nextCursor, {
+        items,
+        offset: end,
+        queryKey,
+        expiresAt: Date.now() + 120_000,
+      });
+    }
+    return {
+      requestGeneration: query.requestGeneration,
+      scope: {
+        activeProfileId: mockActiveProfileId,
+        contextGeneration: mockContextGeneration,
+        server: mockContext.server,
+        user: mockContext.user,
+        client: mockContext.client,
+      },
+      items: items.slice(offset, end),
+      hasMore: end < items.length,
+      nextCursor,
+      partial: false,
+      truncated: false,
+      stats: {
+        scannedCount: items.length,
+        matchedCount: items.length,
+        returnedCount: end - offset,
+        invalidRecordCount: 0,
+        safetyLimit: 5000,
+      },
+      operationIds: [`${query.operationId}-browser-mock`],
+      simulated: true,
+    };
+  },
+  async getBranchMappingDetail(query) {
+    const detail = mockBranchDetails.get(query.name);
+    if (!detail) {
+      throw {
+        code: "notFound",
+        message: "Browser Mock Branch Mapping does not exist.",
+      };
+    }
+    return {
+      requestGeneration: query.requestGeneration,
+      scope: {
+        activeProfileId: mockActiveProfileId,
+        contextGeneration: mockContextGeneration,
+        server: mockContext.server,
+        user: mockContext.user,
+        client: mockContext.client,
+      },
+      detail: {
+        ...structuredClone(detail),
+        operationIds: [`${query.operationId}-browser-mock`],
+      },
+    };
+  },
+  async previewBranchMappingImpact(query) {
+    const detail = mockBranchDetails.get(query.name);
+    if (!detail) {
+      throw {
+        code: "notFound",
+        message: "Browser Mock Branch Mapping does not exist.",
+      };
+    }
+    const mappings = detail.view.filter(
+      (line) => line.modifier !== "exclude" && line.source && line.target,
+    );
+    const items = mappings.slice(0, query.limit).map((line) => ({
+      file:
+        query.direction === "forward"
+          ? line.target!.replace("...", "README.md")
+          : line.source!.replace("...", "README.md"),
+      source: query.direction === "forward" ? line.source : line.target,
+      target: query.direction === "forward" ? line.target : line.source,
+      action: "integrate",
+    }));
+    return {
+      requestGeneration: query.requestGeneration,
+      name: query.name,
+      direction: query.direction,
+      items,
+      blockers: [],
+      partial: mappings.length > query.limit,
+      truncated: mappings.length > query.limit,
+      scannedCount: mappings.length,
+      safetyLimit: query.limit,
+      operationIds: [`${query.operationId}-browser-mock-preview-only`],
+      simulated: true,
+    };
+  },
+  async preflightBranchMappingMutation(request) {
+    const current = mockBranchDetails.get(request.name);
+    const blockers: import("../../shared/contracts/types").BranchIssue[] = [];
+    if (request.mode === "create" && current) {
+      blockers.push({
+        code: "alreadyExists",
+        message: "Browser Mock mapping already exists.",
+      });
+    }
+    if (request.mode !== "create" && !current) {
+      blockers.push({
+        code: "notFound",
+        message: "Browser Mock mapping does not exist.",
+      });
+    }
+    if (
+      current &&
+      request.mode !== "create" &&
+      current.owner !== mockContext.user
+    ) {
+      blockers.push({
+        code: "ownerMismatch",
+        message: "Browser Mock enforces owner-only mutation.",
+      });
+    }
+    if (request.mode !== "delete" && !request.desired) {
+      blockers.push({
+        code: "invalidInput",
+        message: "A desired mapping is required.",
+      });
+    }
+    if (
+      request.desired &&
+      (request.desired.name !== request.name ||
+        request.desired.owner !== mockContext.user)
+    ) {
+      blockers.push({
+        code: "ownerMismatch",
+        message: "Browser Mock does not transfer ownership.",
+      });
+    }
+    const warnings =
+      request.mode === "delete"
+        ? [
+            {
+              code: "destructiveDelete" as const,
+              message: "Browser Mock delete requires explicit confirmation.",
+            },
+          ]
+        : [];
+    const target = blockers.length
+      ? undefined
+      : {
+          activeProfileId: mockActiveProfileId,
+          contextGeneration: mockContextGeneration,
+          server: mockContext.server,
+          user: mockContext.user,
+          client: mockContext.client,
+          mode: request.mode,
+          name: request.name,
+          currentExists: !!current,
+          currentDigest: current ? JSON.stringify(current) : undefined,
+          desired: request.desired
+            ? structuredClone(request.desired)
+            : undefined,
+          desiredDigest: request.desired
+            ? JSON.stringify(request.desired)
+            : undefined,
+        };
+    const previewDigest = JSON.stringify({ target, blockers, warnings });
+    const expiresAt = Date.now() + 120_000;
+    const token = target ? crypto.randomUUID() : undefined;
+    if (token && target) {
+      mockBranchTokens.set(token, { target, digest: previewDigest, expiresAt });
+    }
+    return {
+      ready: !!target,
+      mode: request.mode,
+      name: request.name,
+      current: current ? structuredClone(current) : undefined,
+      desired: request.desired ? structuredClone(request.desired) : undefined,
+      blockers,
+      warnings,
+      target,
+      previewDigest,
+      token,
+      expiresAt,
+      ttlMs: 120_000,
+      operationIds: [
+        `${request.operationId ?? "branch-preflight"}-browser-mock`,
+      ],
+    };
+  },
+  async confirmBranchMappingMutation(confirmation) {
+    const record = mockBranchTokens.get(confirmation.token);
+    mockBranchTokens.delete(confirmation.token);
+    const reject = (
+      failure: import("../../shared/contracts/types").BranchMutationFailureCode,
+      message: string,
+    ) => ({
+      outcome: "rejected" as const,
+      failure,
+      message,
+      operationIds: [
+        confirmation.operationId ?? "branch-mutation-browser-mock",
+      ],
+      refreshBranchMappings: false,
+    });
+    if (!record) {
+      return reject(
+        "tokenUnknown",
+        "Browser Mock token is unknown or already used.",
+      );
+    }
+    if (record.expiresAt <= Date.now()) {
+      return reject("tokenExpired", "Browser Mock token expired.");
+    }
+    if (
+      record.digest !== confirmation.previewDigest ||
+      JSON.stringify(record.target) !== JSON.stringify(confirmation.target)
+    ) {
+      return reject(
+        "targetMismatch",
+        "Browser Mock confirmation target changed.",
+      );
+    }
+    if (
+      record.target.contextGeneration !== mockContextGeneration ||
+      record.target.server !== mockContext.server ||
+      record.target.user !== mockContext.user ||
+      record.target.client !== mockContext.client
+    ) {
+      return reject(
+        "contextChanged",
+        "Browser Mock connection changed after preflight.",
+      );
+    }
+    if (
+      record.target.mode === "delete" &&
+      !confirmation.acknowledgeDangerousDelete
+    ) {
+      return reject(
+        "dangerousConfirmationRequired",
+        "Browser Mock delete requires explicit acknowledgement.",
+      );
+    }
+    if (record.target.mode === "delete") {
+      mockBranchDetails.delete(record.target.name);
+    } else {
+      const desired = record.target.desired!;
+      mockBranchDetails.set(desired.name, {
+        ...structuredClone(desired),
+        update: String(Math.floor(Date.now() / 1000)),
+        unknownFields: [],
+        editable: true,
+        operationIds: [
+          confirmation.operationId ?? "branch-mutation-browser-mock",
+        ],
+        simulated: true,
+      });
+    }
+    mockBranchCursors.clear();
+    const observed = mockBranchDetails.get(record.target.name);
+    return {
+      outcome: "succeeded" as const,
+      message:
+        "Browser Mock simulated the Branch Mapping mutation; no real server was accessed.",
+      observed: observed ? structuredClone(observed) : undefined,
+      operationIds: [
+        confirmation.operationId ?? "branch-mutation-browser-mock",
+      ],
+      refreshBranchMappings: true,
     };
   },
   async preflightStreamSwitch(request) {

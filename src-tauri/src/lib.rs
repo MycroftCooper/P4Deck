@@ -12,6 +12,7 @@ pub mod backend_perf;
 #[cfg(test)]
 mod e2e;
 
+use app::branch_mapping_service::BranchMappingService;
 use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
 use app::diagnostics::DiagnosticService;
@@ -50,6 +51,7 @@ pub(crate) struct AppState {
     pub diagnostics: Arc<DiagnosticService>,
     pub search: Arc<GlobalSearchService>,
     pub stream_graph: Arc<StreamGraphService>,
+    pub branch_mappings: Arc<BranchMappingService>,
     pub stream_switch: Arc<StreamSwitchService>,
 }
 
@@ -233,6 +235,8 @@ pub fn run() {
                 contexts.clone(),
             ));
             let stream_graph = Arc::new(StreamGraphService::new(runner.clone(), contexts.clone()));
+            let branch_mappings =
+                Arc::new(BranchMappingService::new(runner.clone(), contexts.clone()));
             let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts));
             app.manage(AppState {
                 runner,
@@ -250,6 +254,7 @@ pub fn run() {
                 diagnostics,
                 search,
                 stream_graph,
+                branch_mappings,
                 stream_switch,
             });
             Ok(())
@@ -259,6 +264,11 @@ pub fn run() {
             ipc::commands::list_user_workspaces,
             ipc::commands::list_streams,
             ipc::commands::query_stream_graph,
+            ipc::commands::query_branch_mappings,
+            ipc::commands::get_branch_mapping_detail,
+            ipc::commands::preview_branch_mapping_impact,
+            ipc::commands::preflight_branch_mapping_mutation,
+            ipc::commands::confirm_branch_mapping_mutation,
             ipc::commands::preflight_stream_switch,
             ipc::commands::confirm_stream_switch,
             ipc::commands::open_panel_window,

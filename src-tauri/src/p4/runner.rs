@@ -789,7 +789,8 @@ fn validate(
 fn is_read_only(command: &str) -> bool {
     matches!(
         command,
-        "changes"
+        "branches"
+            | "changes"
             | "clients"
             | "describe"
             | "diff"
@@ -820,6 +821,11 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
                 .args
                 .first()
                 .is_some_and(|argument| argument == "-o"))
+        || (request.command == "branch"
+            && request
+                .args
+                .first()
+                .is_some_and(|argument| argument == "-o"))
         || (request.command == "client"
             && request
                 .args
@@ -834,6 +840,7 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
             && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "reconcile" && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "sync" && request.args.iter().any(|argument| argument == "-n"))
+        || (request.command == "integrate" && request.args.iter().any(|argument| argument == "-n"))
 }
 
 fn event(id: &str, kind: EventKind, message: Option<String>) -> OperationEvent {
@@ -907,6 +914,41 @@ mod tests {
             input: None,
         };
         assert!(validate(&request, None).is_err());
+    }
+
+    #[test]
+    fn branch_reads_and_preview_are_read_only_but_branch_writes_are_not() {
+        let request = |command: &str, args: &[&str]| P4CommandRequest {
+            operation_id: None,
+            source: OperationSource::Gui,
+            command: command.into(),
+            args: args.iter().map(|value| (*value).into()).collect(),
+            context: P4Context::default(),
+            output_mode: OutputMode::JsonLines,
+            timeout_ms: None,
+            input: None,
+        };
+        assert!(is_read_only_request(&request(
+            "branches",
+            &["-m", "5001", "-t"]
+        )));
+        assert!(is_read_only_request(&request(
+            "branch",
+            &["-o", "release-map"]
+        )));
+        assert!(is_read_only_request(&request(
+            "integrate",
+            &["-n", "-m", "101", "-b", "release-map"],
+        )));
+        assert!(!is_read_only_request(&request("branch", &["-i"])));
+        assert!(!is_read_only_request(&request(
+            "branch",
+            &["-d", "release-map"]
+        )));
+        assert!(!is_read_only_request(&request(
+            "integrate",
+            &["-b", "release-map"],
+        )));
     }
 
     #[test]

@@ -182,6 +182,54 @@ pub async fn query_stream_graph(
 }
 
 #[tauri::command]
+pub async fn query_branch_mappings(
+    query: BranchMappingQuery,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<BranchMappingPage, BranchMappingRequestError> {
+    state.branch_mappings.list(query, Some(&app)).await
+}
+
+#[tauri::command]
+pub async fn get_branch_mapping_detail(
+    query: BranchMappingDetailQuery,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<BranchMappingDetailResult, BranchMappingRequestError> {
+    state.branch_mappings.detail(query, Some(&app)).await
+}
+
+#[tauri::command]
+pub async fn preview_branch_mapping_impact(
+    query: BranchImpactPreviewQuery,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<BranchImpactPreview, BranchMappingRequestError> {
+    state.branch_mappings.preview(query, Some(&app)).await
+}
+
+#[tauri::command]
+pub async fn preflight_branch_mapping_mutation(
+    request: BranchMutationPreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<BranchMutationPreflight, String> {
+    Ok(state.branch_mappings.preflight(request, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn confirm_branch_mapping_mutation(
+    confirmation: BranchMutationConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<BranchMutationResult, String> {
+    Ok(state
+        .branch_mappings
+        .confirm(confirmation, Some(&app))
+        .await)
+}
+
+#[tauri::command]
 pub async fn preflight_stream_switch(
     request: StreamSwitchPreflightRequest,
     state: State<'_, AppState>,
@@ -365,6 +413,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.stream_graph.clear_for_context_switch();
+    state.branch_mappings.clear_for_context_switch();
     state.submit.clear_confirmations();
     state.sync.clear_confirmations();
     state.workflows.clear_confirmations();
@@ -380,6 +429,7 @@ fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.stream_graph.clear_for_context_switch();
+    state.branch_mappings.clear_for_context_switch();
     state.files.clear_review_cache();
     state.file_locks.clear_confirmations();
     state.status_cache.clear_for_context_switch();
@@ -465,21 +515,7 @@ pub async fn run_p4(
     ) {
         return Err("Lock and unlock are blocked in Terminal and generic run_p4; use the dedicated preflight and confirmation workflow".into());
     }
-    if matches!(request.source, OperationSource::Gui)
-        && matches!(
-            request.command.to_ascii_lowercase().as_str(),
-            "submit"
-                | "shelve"
-                | "unshelve"
-                | "resolve"
-                | "sync"
-                | "move"
-                | "reopen"
-                | "client"
-                | "stream"
-                | "switch"
-        )
-    {
+    if generic_gui_requires_dedicated_api(&request.source, &request.command) {
         return Err("GUI mutations, including client/stream changes, must use their dedicated preview/preflight and confirmation APIs".into());
     }
     state
@@ -489,11 +525,30 @@ pub async fn run_p4(
         .map_err(|error| error.to_string())
 }
 
+fn generic_gui_requires_dedicated_api(source: &OperationSource, command: &str) -> bool {
+    matches!(source, OperationSource::Gui)
+        && matches!(
+            command.to_ascii_lowercase().as_str(),
+            "submit"
+                | "shelve"
+                | "unshelve"
+                | "resolve"
+                | "sync"
+                | "move"
+                | "reopen"
+                | "client"
+                | "branch"
+                | "stream"
+                | "switch"
+        )
+}
+
 #[tauri::command]
 pub fn cancel_operation(operation_id: String, state: State<'_, AppState>) {
     state.runner.cancel(&operation_id);
     state.search.cancel(&operation_id);
     state.stream_graph.cancel(&operation_id);
+    state.branch_mappings.cancel(&operation_id);
 }
 
 #[tauri::command]
@@ -1073,7 +1128,27 @@ pub async fn local_path_capabilities(
 
 #[cfg(test)]
 mod tests {
-    use super::{panel_window_kind, panel_window_url, PanelRuntimeBinding};
+    use super::{
+        generic_gui_requires_dedicated_api, panel_window_kind, panel_window_url,
+        PanelRuntimeBinding,
+    };
+    use crate::domain::OperationSource;
+
+    #[test]
+    fn generic_gui_branch_commands_cannot_bypass_the_dedicated_api() {
+        assert!(generic_gui_requires_dedicated_api(
+            &OperationSource::Gui,
+            "branch"
+        ));
+        assert!(!generic_gui_requires_dedicated_api(
+            &OperationSource::Terminal,
+            "branch"
+        ));
+        assert!(!generic_gui_requires_dedicated_api(
+            &OperationSource::Gui,
+            "branches"
+        ));
+    }
 
     #[test]
     fn detached_shelf_panel_is_whitelisted_and_deep_link_safe() {
