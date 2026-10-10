@@ -2,13 +2,17 @@
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness, dialogButton, chooseSelect } from "./testHarness";
-import { useCommandDialogs } from "./useCommandDialogs";
+import {
+  refreshForceUnlockFacts,
+  useCommandDialogs,
+} from "./useCommandDialogs";
 import type {
   PendingChange,
   PendingChangePage,
   WorkspaceNode,
 } from "../../shared/contracts/types";
 import { backend } from "../../infrastructure/backend";
+import { workspaceCache } from "../../features/files/workspaceQueries";
 const harness = dialogHarness();
 const node: WorkspaceNode = {
   id: "a",
@@ -35,7 +39,38 @@ function Harness({ scope = "a" }: { scope?: string }) {
   api = useCommandDialogs(scope, "workspace", true);
   return api.element;
 }
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  workspaceCache.clear();
+  vi.restoreAllMocks();
+});
+
+it("reloads cached workspace and depot lock facts after force unlock", async () => {
+  workspaceCache.setQueryData(["workspace-files", "scope", "/root"], {
+    items: [],
+  });
+  const workspace = vi
+    .spyOn(backend, "listWorkspaceChildren")
+    .mockResolvedValue({
+      items: [],
+      completeness: "complete",
+      errors: [],
+      operationIds: [],
+      truncated: false,
+      safetyLimit: 10_000,
+      cacheFreshness: "fresh",
+    });
+  const depot = vi.spyOn(backend, "listDepotChildren").mockResolvedValue([]);
+  await workspaceCache.fetchQuery({
+    queryKey: ["depot-files", "scope", "//depot"],
+    queryFn: () => backend.listDepotChildren("//depot"),
+  });
+  depot.mockClear();
+
+  await refreshForceUnlockFacts("scope");
+
+  expect(workspace).toHaveBeenCalledWith("/root", true, expect.any(String));
+  expect(depot).toHaveBeenCalledWith("//depot");
+});
 it("serializes command modals and ignores a second preview while one is open", async () => {
   await harness.render(<Harness />);
   await act(async () => {

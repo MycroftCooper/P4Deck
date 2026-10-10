@@ -21,7 +21,10 @@ import {
   type OperationConfirmation,
 } from "./OperationConfirmDialog";
 import { useDialogRequest } from "./useDialogRequest";
-import { workspaceCache } from "../../features/files/workspaceQueries";
+import {
+  workspaceCache,
+  workspaceQuery,
+} from "../../features/files/workspaceQueries";
 
 type Origin = { source: HTMLElement | null };
 type PreviewRequest = Origin &
@@ -39,6 +42,35 @@ type Request =
   | { kind: "revision"; value: RevisionRequest }
   | { kind: "confirm"; value: OperationConfirmation };
 
+/** Force unlock can change facts even when execution is partial or rejected. */
+export async function refreshForceUnlockFacts(connectionKey: string) {
+  const workspacePaths = workspaceCache
+    .getQueryCache()
+    .findAll({ queryKey: ["workspace-files", connectionKey] })
+    .map((query) => {
+      const path = String(query.queryKey[2] ?? "");
+      return workspaceCache.fetchQuery({
+        ...workspaceQuery(connectionKey, path || undefined, true),
+        staleTime: 0,
+      });
+    });
+  await Promise.allSettled([
+    ...workspacePaths,
+    workspaceCache.refetchQueries({
+      queryKey: ["depot-files", connectionKey],
+      type: "all",
+    }),
+  ]);
+  await Promise.allSettled([
+    workspaceCache.invalidateQueries({
+      queryKey: ["global-search", connectionKey],
+    }),
+    workspaceCache.invalidateQueries({
+      queryKey: ["file-review", connectionKey],
+    }),
+  ]);
+}
+
 /** One command modal at a time, across all documents hosted by this app instance. */
 export function useCommandDialogs(
   connectionKey: string,
@@ -46,6 +78,7 @@ export function useCommandDialogs(
   zh: boolean,
   demo = false,
   targetKey = "",
+  onForceUnlockRefresh?: (nodes: WorkspaceNode[]) => Promise<void> | void,
 ) {
   const gateway = useDialogRequest<Request, string | boolean>(
     `${connectionKey}:${targetKey}`,
@@ -112,20 +145,8 @@ export function useCommandDialogs(
             onRefresh={async () => {
               window.dispatchEvent(new Event("p4deck:pending-refresh"));
               window.dispatchEvent(new Event("p4deck:submitted-refresh"));
-              await Promise.all([
-                workspaceCache.invalidateQueries({
-                  queryKey: ["workspace-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["depot-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["global-search", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["file-review", connectionKey],
-                }),
-              ]);
+              await refreshForceUnlockFacts(connectionKey);
+              await onForceUnlockRefresh?.(request.nodes);
             }}
           />
         );

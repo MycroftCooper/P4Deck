@@ -322,6 +322,34 @@ it("never reports replay, TOCTOU, or partial verification as success and refresh
   expect(refresh).toHaveBeenCalledTimes(2);
 });
 
+it("refreshes lock facts when confirmation throws after an ambiguous execution", async () => {
+  const refresh = vi.fn();
+  await harness.render(
+    <ForceUnlockDialog
+      nodes={nodes}
+      source={null}
+      connectionKey="a"
+      zh={false}
+      simulated
+      onDismiss={vi.fn()}
+      onRefresh={refresh}
+      check={vi.fn().mockResolvedValue(ready())}
+      execute={vi.fn().mockRejectedValue(new Error("Transport failed"))}
+    />,
+  );
+  await fill("Origin changelist", "71");
+  await act(async () => dialogButton("High-risk preflight and review").click());
+  await fill("Force unlock acknowledgement", target.expectedAcknowledgement);
+  await act(async () =>
+    dialogButton("Confirm administrator force unlock").click(),
+  );
+  expect(document.body.textContent).toContain("Transport failed");
+  expect(document.body.textContent).not.toContain(
+    "Force unlock completely verified",
+  );
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
 it("aborts an active preflight and isolates its late response", async () => {
   let resolve!: (value: ForceUnlockPreflight) => void;
   const check = vi.fn(

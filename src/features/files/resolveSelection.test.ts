@@ -57,3 +57,26 @@ it("does not pretend an unmapped depot path has a local copy", async () => {
   };
   expect(await resolveSelection([node], "c", "/root")).toEqual([node]);
 });
+
+it("requests authoritative workspace facts when refreshing a selection", async () => {
+  const node: WorkspaceNode = {
+    id: "a",
+    name: "a.txt",
+    kind: "file",
+    depotPath: "//depot/a.txt",
+    absolutePath: "/root/a.txt",
+    relativePath: "a.txt",
+    state: "controlled",
+  };
+  const listing = vi.spyOn(backend, "listWorkspaceChildren").mockResolvedValue({
+    items: [{ ...node }],
+    completeness: "complete",
+    errors: [],
+    operationIds: [],
+    truncated: false,
+    safetyLimit: 10_000,
+    cacheFreshness: "fresh",
+  });
+  await resolveSelection([node], "c", "/root", true);
+  expect(listing).toHaveBeenCalledWith(undefined, true, expect.any(String));
+});

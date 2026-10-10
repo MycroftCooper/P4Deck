@@ -47,6 +47,7 @@ export async function resolveSelection(
             root && pathKey(directory) === pathKey(root)
               ? undefined
               : directory,
+            refresh,
           ),
         );
         const children = listing.items;

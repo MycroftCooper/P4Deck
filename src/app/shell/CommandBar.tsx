@@ -137,12 +137,53 @@ export function CommandBar({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [locating, setLocating] = useState(false);
+  const running = useRef<string | undefined>(undefined);
+  const navigation = useRef(0);
+  const generation = useRef(0);
+  const latest = useRef({ connectionKey, targetPath, targetKey });
+  latest.current = { connectionKey, targetPath, targetKey };
   const dialogs = useCommandDialogs(
     connectionKey,
     runtime.context.client,
     zh,
     runtime.mode === "mock",
     targetKey,
+    async (refreshNodes) => {
+      const epoch = generation.current;
+      const expectedConnection = connectionKey;
+      const expectedTarget = targetKey;
+      try {
+        const updated = await resolveSelection(
+          refreshNodes,
+          connectionKey,
+          runtime.context.cwd,
+          true,
+        );
+        if (
+          epoch !== generation.current ||
+          latest.current.connectionKey !== expectedConnection ||
+          latest.current.targetKey !== expectedTarget
+        )
+          return;
+        const primaryKey =
+          target.type === "file" ? nodeKey(target.node) : undefined;
+        const primary =
+          updated.find((node) => nodeKey(node) === primaryKey) ??
+          updated.at(-1);
+        onFocus(
+          primary
+            ? { type: "file", node: primary, nodes: updated }
+            : { type: "none" },
+        );
+      } catch {
+        if (
+          epoch === generation.current &&
+          latest.current.connectionKey === expectedConnection &&
+          latest.current.targetKey === expectedTarget
+        )
+          onFocus({ type: "none" });
+      }
+    },
   );
   const [operation, setOperation] = useState<{
     id: string;
@@ -154,11 +195,6 @@ export function CommandBar({
     onBusyChange(!!operation || dialogs.pending);
     return () => onBusyChange(false);
   }, [!!operation, dialogs.pending, onBusyChange]);
-  const running = useRef<string | undefined>(undefined);
-  const navigation = useRef(0);
-  const generation = useRef(0);
-  const latest = useRef({ connectionKey, targetPath, targetKey });
-  latest.current = { connectionKey, targetPath, targetKey };
   useEffect(() => {
     setAddress(targetPath);
     setNotice("");
