@@ -1,7 +1,8 @@
 use crate::{
     domain::{
         ConnectionErrorCode, ConnectionUserCandidate, ConnectionWorkspaceCandidate,
-        OperationResult, OperationSource, OutputMode, P4CommandRequest, P4Context,
+        ConnectionWorkspaceRootStatus, OperationResult, OperationSource, OutputMode,
+        P4CommandRequest, P4Context,
     },
     p4::runner::{MutationGuard, P4Runner},
 };
@@ -11,6 +12,16 @@ use tauri::AppHandle;
 
 pub const DIRECTORY_SENTINEL_LIMIT: usize = 501;
 pub const DIRECTORY_RESULT_LIMIT: usize = 500;
+const MAX_ENTITY_NAME: usize = 128;
+
+pub fn valid_entity_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.chars().count() <= MAX_ENTITY_NAME
+        && !value.starts_with('-')
+        && value.chars().all(|c| {
+            !c.is_control() && !c.is_whitespace() && !matches!(c, '*' | '%' | '@' | '#' | '"')
+        })
+}
 
 #[derive(Debug)]
 pub struct DirectoryBatch<T> {
@@ -32,10 +43,17 @@ pub struct ServerIdentity {
 pub struct WorkspaceSpecSnapshot {
     pub name: String,
     pub owner: String,
+    pub host: String,
     pub root: String,
     pub stream: String,
     pub description: String,
     pub view: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceRuntimeIdentity {
+    pub client_name: String,
+    pub client_root: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +152,22 @@ impl ConnectionSetupRepository {
             .into_iter()
             .find_map(parse_identity)
             .ok_or_else(|| "P4 info did not return a verifiable server identity.".to_owned())?;
+        Ok((identity, result.operation_id))
+    }
+
+    pub async fn inspect_workspace_runtime(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<(WorkspaceRuntimeIdentity, String), String> {
+        let result = self
+            .run_read(context, "info", Vec::new(), operation_id, app)
+            .await?;
+        let identity = json_records(&result)?
+            .into_iter()
+            .find_map(parse_workspace_runtime)
+            .ok_or_else(|| "P4 info did not return a verifiable workspace Root.".to_owned())?;
         Ok((identity, result.operation_id))
     }
 
@@ -417,15 +451,20 @@ fn parse_user(value: Value) -> Option<ConnectionUserCandidate> {
 
 fn parse_workspace(value: Value) -> Option<ConnectionWorkspaceCandidate> {
     let name = value_string(&value, &["client", "Client"]);
+    let host = value_string(&value, &["Host", "host"]);
+    let root = value_string(&value, &["Root", "root"]);
+    let (root_status, selectable) = workspace_root_status(&host, &root);
     (!name.is_empty()).then(|| ConnectionWorkspaceCandidate {
         name,
         owner: value_string(&value, &["Owner", "owner"]),
-        host: value_string(&value, &["Host", "host"]),
-        root: value_string(&value, &["Root", "root"]),
+        host,
+        root,
         stream: value_string(&value, &["Stream", "stream"]),
         description: value_string(&value, &["Description", "description"]),
         updated: value_i64(&value, &["Update", "update"]),
         accessed: value_i64(&value, &["Access", "access"]),
+        root_status,
+        selectable,
     })
 }
 
@@ -459,11 +498,67 @@ fn parse_workspace_spec(value: Value) -> Option<WorkspaceSpecSnapshot> {
     Some(WorkspaceSpecSnapshot {
         name,
         owner: value_string(&value, &["Owner", "owner"]),
+        host: value_string(&value, &["Host", "host"]),
         root: value_string(&value, &["Root", "root"]),
         stream: value_string(&value, &["Stream", "stream"]),
         description: value_string(&value, &["Description", "description"]),
         view: view.into_iter().map(|(_, value)| value).collect(),
     })
+}
+
+fn parse_workspace_runtime(value: Value) -> Option<WorkspaceRuntimeIdentity> {
+    let client_name = value_string(&value, &["clientName"]);
+    let client_root = value_string(&value, &["clientRoot"]);
+    (!client_name.is_empty() && !client_root.is_empty()).then_some(WorkspaceRuntimeIdentity {
+        client_name,
+        client_root,
+    })
+}
+
+pub fn workspace_candidate_from_spec(spec: &WorkspaceSpecSnapshot) -> ConnectionWorkspaceCandidate {
+    let (root_status, selectable) = workspace_root_status(&spec.host, &spec.root);
+    ConnectionWorkspaceCandidate {
+        name: spec.name.clone(),
+        owner: spec.owner.clone(),
+        host: spec.host.clone(),
+        root: spec.root.clone(),
+        stream: spec.stream.clone(),
+        description: spec.description.clone(),
+        updated: None,
+        accessed: None,
+        root_status,
+        selectable,
+    }
+}
+
+pub fn workspace_root_status(host: &str, root: &str) -> (ConnectionWorkspaceRootStatus, bool) {
+    if !host.trim().is_empty() {
+        match local_host_name() {
+            Some(local) if local.eq_ignore_ascii_case(host.trim()) => {}
+            Some(_) => return (ConnectionWorkspaceRootStatus::OtherHost, false),
+            None => return (ConnectionWorkspaceRootStatus::Unsupported, false),
+        }
+    }
+    let root = root.trim();
+    if root.is_empty() {
+        return (ConnectionWorkspaceRootStatus::Missing, false);
+    }
+    if root.eq_ignore_ascii_case("null") || !std::path::Path::new(root).is_absolute() {
+        return (ConnectionWorkspaceRootStatus::Unsupported, false);
+    }
+    match std::fs::metadata(root) {
+        Ok(metadata) if metadata.is_dir() => (ConnectionWorkspaceRootStatus::Usable, true),
+        Ok(_) => (ConnectionWorkspaceRootStatus::NotDirectory, false),
+        Err(_) => (ConnectionWorkspaceRootStatus::Missing, false),
+    }
+}
+
+fn local_host_name() -> Option<String> {
+    ["COMPUTERNAME", "HOSTNAME"]
+        .into_iter()
+        .find_map(|name| std::env::var(name).ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 fn prefix_matches(value: &str, prefix: Option<&str>) -> bool {
@@ -513,9 +608,68 @@ mod tests {
     }
 
     #[test]
+    fn classifies_workspace_roots_without_guessing_a_fallback() {
+        let directory =
+            std::env::temp_dir().join(format!("p4deck-workspace-root-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        assert_eq!(
+            workspace_root_status("", &directory.to_string_lossy()),
+            (ConnectionWorkspaceRootStatus::Usable, true)
+        );
+        assert_eq!(
+            workspace_root_status("", ""),
+            (ConnectionWorkspaceRootStatus::Missing, false)
+        );
+        assert_eq!(
+            workspace_root_status("", "null"),
+            (ConnectionWorkspaceRootStatus::Unsupported, false)
+        );
+        assert_eq!(
+            workspace_root_status("", &directory.join("absent").to_string_lossy()),
+            (ConnectionWorkspaceRootStatus::Missing, false)
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn parses_effective_workspace_identity_from_info() {
+        let identity = parse_workspace_runtime(serde_json::json!({
+            "clientName": "fixture-client",
+            "clientRoot": "D:\\fixture root"
+        }))
+        .unwrap();
+        assert_eq!(identity.client_name, "fixture-client");
+        assert_eq!(identity.client_root, "D:\\fixture root");
+        assert!(parse_workspace_runtime(serde_json::json!({
+            "clientName": "fixture-client"
+        }))
+        .is_none());
+    }
+
+    #[test]
     fn existence_name_comparison_is_case_folded() {
         assert!(names_equal("PROJ", "proj"));
         assert!(names_equal("ÄUSER", "äuser"));
+    }
+
+    #[test]
+    fn workspace_identity_is_one_literal_cli_argument() {
+        assert!(valid_entity_name("workspace-01_开发"));
+        for value in [
+            "",
+            "-workspace",
+            "space name",
+            "wild*",
+            "revision@",
+            "label#",
+            "percent%",
+            "line\nname",
+        ] {
+            assert!(
+                !valid_entity_name(value),
+                "accepted unsafe client: {value:?}"
+            );
+        }
     }
 
     #[test]

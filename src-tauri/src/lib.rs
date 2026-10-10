@@ -67,7 +67,6 @@ pub fn run() {
                 ContextStore::load(&data_dir)
                     .map_err(|error| std::io::Error::other(error.to_string()))?,
             );
-            let connection = Arc::new(ConnectionService::new(contexts.clone()));
             let logs = Arc::new(
                 LogStore::open(&data_dir.join("p4deck.sqlite")).map_err(std::io::Error::other)?,
             );
@@ -76,9 +75,16 @@ pub fn run() {
                     .map_err(std::io::Error::other)?,
             );
             let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
-            let connection_setup = Arc::new(ConnectionSetupService::new(
-                p4::connection_setup::ConnectionSetupRepository::new(runner.clone()),
+            let connection_setup_repository =
+                p4::connection_setup::ConnectionSetupRepository::new(runner.clone());
+            let connection = Arc::new(ConnectionService::new(
+                contexts.clone(),
+                connection_setup_repository.clone(),
+                logs.clone(),
+                journal.clone(),
             ));
+            let connection_setup =
+                Arc::new(ConnectionSetupService::new(connection_setup_repository));
             let diagnostics = Arc::new(DiagnosticService::new(
                 data_dir.join("diagnostics"),
                 logs.clone(),

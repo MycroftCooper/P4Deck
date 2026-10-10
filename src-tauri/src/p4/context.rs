@@ -170,6 +170,34 @@ impl ContextStore {
         name: String,
         context: P4Context,
     ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+        self.update_with_generation(expected_revision, None, id, name, context)
+    }
+
+    pub fn update_if_context_unchanged(
+        &self,
+        expected_revision: u64,
+        expected_generation: u64,
+        id: &str,
+        name: String,
+        context: P4Context,
+    ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+        self.update_with_generation(
+            expected_revision,
+            Some(expected_generation),
+            id,
+            name,
+            context,
+        )
+    }
+
+    fn update_with_generation(
+        &self,
+        expected_revision: u64,
+        expected_generation: Option<u64>,
+        id: &str,
+        name: String,
+        context: P4Context,
+    ) -> Result<ConnectionProfiles, ConnectionProfileError> {
         let name = normalize_name(&name)?;
         let context = normalize_context(context)?;
         let mut state = self
@@ -177,6 +205,12 @@ impl ContextStore {
             .write()
             .unwrap_or_else(|error| error.into_inner());
         check_revision(&state.document, expected_revision)?;
+        if expected_generation.is_some_and(|expected| state.generation != expected) {
+            return Err(profile_error(
+                ConnectionProfileErrorCode::ContextChanged,
+                "The active connection changed while its workspace Root was being verified.",
+            ));
+        }
         check_duplicates(&state.document, Some(id), &name, &context)?;
         let mut next = state.document.clone();
         let profile = next
@@ -251,12 +285,28 @@ impl ContextStore {
 
     /// Compatibility path for the existing connection wizard. It updates (or creates) the active
     /// profile but does not assert that the context is connected or authenticated.
+    #[cfg(test)]
     pub fn save(&self, context: P4Context) -> Result<P4Context, ConnectionProfileError> {
+        let expected_generation = self.snapshot().1;
+        self.save_if_unchanged(expected_generation, context)
+    }
+
+    pub fn save_if_unchanged(
+        &self,
+        expected_generation: u64,
+        context: P4Context,
+    ) -> Result<P4Context, ConnectionProfileError> {
         let context = normalize_context(context)?;
         let mut state = self
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
+        if state.generation != expected_generation {
+            return Err(profile_error(
+                ConnectionProfileErrorCode::ContextChanged,
+                "The active connection changed while its workspace Root was being verified.",
+            ));
+        }
         let mut next = state.document.clone();
         if let Some(active_id) = next.active_profile_id.clone() {
             let active_name = next
@@ -294,30 +344,45 @@ impl ContextStore {
         Ok(context)
     }
 
-    pub fn activate_if_unchanged(
+    pub fn activate_context_if_unchanged(
         &self,
         expected_revision: u64,
+        expected_generation: u64,
         id: &str,
+        context: P4Context,
     ) -> Result<P4Context, ConnectionProfileError> {
+        let context = normalize_context(context)?;
         let mut state = self
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
         check_revision(&state.document, expected_revision)?;
-        let context = state
+        if state.generation != expected_generation {
+            return Err(profile_error(
+                ConnectionProfileErrorCode::ContextChanged,
+                "The active connection changed while the target profile was being verified.",
+            ));
+        }
+        let profile_name = state
             .document
             .profiles
             .iter()
             .find(|profile| profile.id == id)
-            .map(|profile| profile.context.clone())
+            .map(|profile| profile.name.clone())
             .ok_or_else(|| {
                 profile_error(
                     ConnectionProfileErrorCode::NotFound,
                     "Connection profile was not found.",
                 )
             })?;
+        check_duplicates(&state.document, Some(id), &profile_name, &context)?;
         let mut next = state.document.clone();
         next.active_profile_id = Some(id.to_owned());
+        next.profiles
+            .iter_mut()
+            .find(|profile| profile.id == id)
+            .expect("profile was checked")
+            .context = context.clone();
         next.revision = next.revision.saturating_add(1);
         persist_document(&self.path, &next)?;
         state.document = next;
@@ -785,9 +850,9 @@ fn environment_context() -> P4Context {
         server: std::env::var("P4PORT").unwrap_or_default(),
         user: std::env::var("P4USER").unwrap_or_default(),
         client: std::env::var("P4CLIENT").unwrap_or_default(),
-        cwd: std::env::current_dir()
-            .ok()
-            .map(|path| path.to_string_lossy().into_owned()),
+        // The process directory is the application binary directory, not proof of a P4
+        // workspace Root. Leave it unresolved until a server-owned client spec is verified.
+        cwd: None,
         charset: std::env::var("P4CHARSET").ok(),
         trust_path: std::env::var("P4TRUST").ok(),
         tickets_path: std::env::var("P4TICKETS").ok(),
@@ -885,6 +950,36 @@ mod tests {
 
     fn directory() -> PathBuf {
         std::env::temp_dir().join(format!("p4deck-context-{}", Uuid::new_v4()))
+    }
+
+    #[test]
+    fn environment_context_never_guesses_the_process_directory_as_workspace_root() {
+        assert!(environment_context().cwd.is_none());
+    }
+
+    #[test]
+    fn active_update_rejects_generation_drift_even_when_revision_is_unchanged() {
+        let directory = directory();
+        let store = ContextStore::load(&directory).unwrap();
+        let created = store
+            .create(0, "Primary".into(), configured("primary"))
+            .unwrap();
+        let id = created.active_profile_id.clone().unwrap();
+        let generation = store.snapshot().1;
+        store.advance_generation_if_unchanged(generation).unwrap();
+        let error = store
+            .update_if_context_unchanged(
+                created.revision,
+                generation,
+                &id,
+                "Primary".into(),
+                configured("replacement"),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, ConnectionProfileErrorCode::ContextChanged);
+        assert_eq!(store.current().client, "primary");
+        assert_eq!(store.profiles().revision, created.revision);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

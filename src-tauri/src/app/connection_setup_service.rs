@@ -4,7 +4,8 @@ use crate::{
     p4::{
         connection::{ConnectionAdapter, ConnectionOperation},
         connection_setup::{
-            ConnectionSetupRepository, ServerIdentity, SpecWriteError, DIRECTORY_RESULT_LIMIT,
+            valid_entity_name, ConnectionSetupRepository, ServerIdentity, SpecWriteError,
+            DIRECTORY_RESULT_LIMIT,
         },
         context::validate_connection_context,
     },
@@ -20,7 +21,6 @@ use uuid::Uuid;
 
 const TOKEN_TTL_MS: i64 = 120_000;
 const MAX_PREFIX: usize = 64;
-const MAX_NAME: usize = 128;
 const MAX_VIEW_LINES: usize = 128;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -468,29 +468,37 @@ impl ConnectionSetupService {
                 };
                 return rejected(kind, &name, failure, message, operation_ids);
             }
-            Err(SpecWriteError::Unknown) => return ConnectionSpecCreateResult { outcome: ConnectionSpecCreateOutcome::Unknown, failure: Some(ConnectionSpecIssueCode::VerificationFailed), kind, name, message: "The server did not provide a verified creation result. Inspect the operation log before retrying.".into(), operation_ids, simulated: false },
+            Err(SpecWriteError::Unknown) => return ConnectionSpecCreateResult { outcome: ConnectionSpecCreateOutcome::Unknown, failure: Some(ConnectionSpecIssueCode::VerificationFailed), kind, name, message: "The server did not provide a verified creation result. Inspect the operation log before retrying.".into(), operation_ids, workspace: None, simulated: false },
         }
         let verified = match &record.plan {
             StoredPlan::UserSelf(plan) => self
                 .repository
                 .read_user(&record.context, &name, &format!("{root}:verify"), app)
                 .await
-                .map(|(observed, id)| (observed.is_some_and(|item| user_matches(plan, &item)), id)),
+                .map(|(observed, id)| {
+                    (
+                        observed.is_some_and(|item| user_matches(plan, &item)),
+                        None,
+                        id,
+                    )
+                }),
             StoredPlan::Workspace(plan) => self
                 .repository
                 .read_workspace(&record.context, &name, &format!("{root}:verify"), app)
                 .await
                 .map(|(observed, id)| {
-                    (
-                        observed.is_some_and(|item| {
-                            workspace_matches(&record.context.user, plan, &item)
-                        }),
-                        id,
-                    )
+                    let workspace = observed.as_ref().and_then(|item| {
+                        workspace_matches(&record.context.user, plan, item)
+                            .then(|| {
+                                crate::p4::connection_setup::workspace_candidate_from_spec(item)
+                            })
+                            .filter(|item| item.selectable)
+                    });
+                    (workspace.is_some(), workspace, id)
                 }),
         };
         match verified {
-            Ok((true, id)) => {
+            Ok((true, workspace, id)) => {
                 operation_ids.push(id);
                 ConnectionSpecCreateResult {
                     outcome: ConnectionSpecCreateOutcome::Created,
@@ -500,10 +508,11 @@ impl ConnectionSetupService {
                     message: "The new P4 spec was written and verified on the target server."
                         .into(),
                     operation_ids,
+                    workspace,
                     simulated: false,
                 }
             }
-            Ok((false, id)) => {
+            Ok((false, _, id)) => {
                 operation_ids.push(id);
                 ConnectionSpecCreateResult {
                     outcome: ConnectionSpecCreateOutcome::Unknown,
@@ -512,6 +521,7 @@ impl ConnectionSetupService {
                     name,
                     message: "The write returned but the new spec could not be verified.".into(),
                     operation_ids,
+                    workspace: None,
                     simulated: false,
                 }
             }
@@ -523,6 +533,7 @@ impl ConnectionSetupService {
                 message: "The write outcome is unknown because post-write verification failed."
                     .into(),
                 operation_ids,
+                workspace: None,
                 simulated: false,
             },
         }
@@ -633,15 +644,6 @@ fn validate_workspace_plan(
         }
     }
     issues
-}
-
-fn valid_entity_name(value: &str) -> bool {
-    !value.is_empty()
-        && value.chars().count() <= MAX_NAME
-        && !value.starts_with('-')
-        && value.chars().all(|c| {
-            !c.is_control() && !c.is_whitespace() && !matches!(c, '*' | '%' | '@' | '#' | '"')
-        })
 }
 
 fn valid_text(value: &str, min: usize, max: usize) -> bool {
@@ -790,6 +792,7 @@ fn rejected(
         name: name.into(),
         message: message.into(),
         operation_ids,
+        workspace: None,
         simulated: false,
     }
 }

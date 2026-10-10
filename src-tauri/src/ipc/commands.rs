@@ -370,10 +370,7 @@ pub async fn create_connection_profile(
 ) -> Result<ConnectionProfiles, ConnectionProfileError> {
     use tauri::Emitter;
     let before = state.connection.context();
-    let connection = state.connection.clone();
-    let profiles = tauri::async_runtime::spawn_blocking(move || connection.create_profile(request))
-        .await
-        .map_err(|error| profile_task_error(error.to_string()))??;
+    let profiles = state.connection.create_profile(request, Some(&app)).await?;
     if before != state.connection.context() {
         invalidate_after_context_change(&state);
         let _ = app.emit("connection-changed", state.connection.runtime_info());
@@ -389,10 +386,7 @@ pub async fn update_connection_profile(
 ) -> Result<ConnectionProfiles, ConnectionProfileError> {
     use tauri::Emitter;
     let before = state.connection.context();
-    let connection = state.connection.clone();
-    let profiles = tauri::async_runtime::spawn_blocking(move || connection.update_profile(request))
-        .await
-        .map_err(|error| profile_task_error(error.to_string()))??;
+    let profiles = state.connection.update_profile(request, Some(&app)).await?;
     if before != state.connection.context() {
         invalidate_after_context_change(&state);
         let _ = app.emit("connection-changed", state.connection.runtime_info());
@@ -418,7 +412,10 @@ pub async fn set_active_connection_profile(
     app: AppHandle,
 ) -> Result<RuntimeInfo, ConnectionProfileError> {
     use tauri::Emitter;
-    let runtime = state.connection.set_active_profile(request).await?;
+    let runtime = state
+        .connection
+        .set_active_profile(request, Some(&app))
+        .await?;
     invalidate_after_context_change(&state);
     let _ = app.emit("connection-changed", &runtime);
     Ok(runtime)
@@ -431,33 +428,9 @@ pub async fn switch_workspace(
     app: AppHandle,
 ) -> Result<RuntimeInfo, ConnectionProfileError> {
     use tauri::Emitter;
-    let workspaces =
-        crate::p4::workspaces::list(&state.runner, state.connection.context(), Some(&app))
-            .await
-            .map_err(|message| {
-                profile_switch_error(
-                    ConnectionProfileErrorCode::ConnectionFailed,
-                    format!("Failed to list workspaces before switching: {message}"),
-                )
-            })?;
-    let workspace = workspaces
-        .into_iter()
-        .find(|workspace| workspace.name == request.client)
-        .ok_or_else(|| {
-            profile_switch_error(
-                ConnectionProfileErrorCode::NotFound,
-                "The selected workspace is not owned by the current user or no longer exists.",
-            )
-        })?;
-    if workspace.root.trim().is_empty() {
-        return Err(profile_switch_error(
-            ConnectionProfileErrorCode::InvalidInput,
-            "The selected workspace has no usable Root.",
-        ));
-    }
     let runtime = state
         .connection
-        .switch_workspace(request, workspace.root)
+        .switch_workspace(request, Some(&app))
         .await?;
     invalidate_after_context_change(&state);
     let _ = app.emit("connection-changed", &runtime);
@@ -471,10 +444,10 @@ pub async fn save_connection(
     app: AppHandle,
 ) -> Result<P4Context, String> {
     use tauri::Emitter;
-    let connection = state.connection.clone();
-    let saved = tauri::async_runtime::spawn_blocking(move || connection.save(context))
+    let saved = state
+        .connection
+        .save(context, Some(&app))
         .await
-        .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
     invalidate_after_context_change(&state);
     let _ = app.emit("connection-changed", state.connection.runtime_info());
@@ -901,11 +874,18 @@ pub async fn get_file_preview(
     } else {
         path
     };
+    let root = context
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or("Workspace Root has not been verified")?
+        .to_owned();
+    if !std::path::Path::new(&root).is_absolute() {
+        return Err("Workspace Root must be an absolute path".into());
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        crate::app::preview::read(
-            std::path::Path::new(context.cwd.as_deref().unwrap_or(".")),
-            &local,
-        )
+        crate::app::preview::read(std::path::Path::new(&root), &local)
     })
     .await
     .map_err(|e| e.to_string())?

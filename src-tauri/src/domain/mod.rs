@@ -255,6 +255,16 @@ pub struct ConnectionUserCandidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub enum ConnectionWorkspaceRootStatus {
+    Usable,
+    Missing,
+    NotDirectory,
+    OtherHost,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionWorkspaceCandidate {
     pub name: String,
     pub owner: String,
@@ -264,6 +274,8 @@ pub struct ConnectionWorkspaceCandidate {
     pub description: String,
     pub updated: Option<i64>,
     pub accessed: Option<i64>,
+    pub root_status: ConnectionWorkspaceRootStatus,
+    pub selectable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -422,6 +434,7 @@ pub struct ConnectionSpecCreateResult {
     pub name: String,
     pub message: String,
     pub operation_ids: Vec<String>,
+    pub workspace: Option<ConnectionWorkspaceCandidate>,
     pub simulated: bool,
 }
 

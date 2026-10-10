@@ -348,7 +348,14 @@ export interface ConnectionUserCandidate {
   accessed?: number;
 }
 
-export interface ConnectionWorkspaceCandidate extends ClientWorkspace {}
+export type ConnectionWorkspaceRootStatus =
+  "usable" | "missing" | "notDirectory" | "otherHost" | "unsupported";
+
+export interface ConnectionWorkspaceCandidate extends ClientWorkspace {
+  /** Local-only hint. Activation always re-reads the server spec and verifies the effective Root. */
+  rootStatus: ConnectionWorkspaceRootStatus;
+  selectable: boolean;
+}
 
 export interface ConnectionDirectoryStats {
   scannedCount: number;
@@ -459,6 +466,8 @@ export interface ConnectionSpecCreateResult {
   name: string;
   message: string;
   operationIds: string[];
+  /** Present only after a workspace create was read back and its local Root was verified. */
+  workspace?: ConnectionWorkspaceCandidate;
   simulated: boolean;
 }
 export type FileState =

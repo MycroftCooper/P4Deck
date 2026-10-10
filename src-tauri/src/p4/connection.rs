@@ -191,6 +191,18 @@ fn invalid_cli(executable: PathBuf) -> CliDiscoveryResult {
 }
 
 fn append_context(command: &mut Command, context: &P4Context) {
+    // Connection probes must use the explicit draft, never a stale active workspace or a
+    // machine-level P4CONFIG/P4ENVIRO value. Explicit credential file paths are restored below.
+    for name in [
+        "P4CONFIG",
+        "P4ENVIRO",
+        "P4PORT",
+        "P4USER",
+        "P4CLIENT",
+        "P4CHARSET",
+    ] {
+        command.env_remove(name);
+    }
     command.args(["-p", &context.server, "-u", &context.user]);
     if !context.client.is_empty() {
         command.args(["-c", &context.client]);

@@ -3020,9 +3020,17 @@ fn now_ms() -> u64 {
 }
 
 fn canonical_root(context: &P4Context) -> Result<PathBuf, String> {
-    PathBuf::from(context.cwd.as_deref().unwrap_or("."))
-        .canonicalize()
-        .map_err(|error| error.to_string())
+    let cwd = context
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "Workspace Root has not been verified".to_owned())?;
+    let root = PathBuf::from(cwd);
+    if !root.is_absolute() {
+        return Err("Workspace Root must be an absolute path".into());
+    }
+    root.canonicalize().map_err(|error| error.to_string())
 }
 fn display_path(path: &Path) -> String {
     let value = path.to_string_lossy();
@@ -3103,6 +3111,22 @@ fn event_text(result: &OperationResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_root_never_falls_back_to_the_process_directory() {
+        for cwd in [
+            None,
+            Some("".into()),
+            Some("   ".into()),
+            Some("relative".into()),
+        ] {
+            assert!(canonical_root(&P4Context {
+                cwd,
+                ..Default::default()
+            })
+            .is_err());
+        }
+    }
 
     fn operation(id: &str, messages: &[&str]) -> OperationResult {
         OperationResult {

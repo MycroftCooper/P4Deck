@@ -39,7 +39,8 @@ mod tests {
             SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
             SwitchWorkspaceRequest, SyncConfirmRequest, SyncFailureCode, SyncOutcome,
             SyncPreviewRequest, SyncRevisionKind, SyncRevisionSpec, UnshelvePreflightRequest,
-            WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
+            UpdateConnectionProfileRequest, WorkflowConfirmation, WorkflowFailureCode,
+            WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
             changelists::ChangelistRepository, connection_setup::ConnectionSetupRepository,
@@ -265,6 +266,78 @@ mod tests {
                 },
             };
             create_fixture_workspace(&service, &draft, 14, classic_plan.clone()).await?;
+            let context_store = Arc::new(
+                ContextStore::load(&config.runtime_root.join("root-resolution"))
+                    .map_err(|error| error.to_string())?,
+            );
+            let connection = ConnectionService::new(
+                context_store.clone(),
+                repository.clone(),
+                logs.clone(),
+                journal.clone(),
+            );
+            let mut wrong_draft = draft.clone();
+            wrong_draft.client = CLASSIC.into();
+            // This directory exists, but it is not the selected client's server-owned Root.
+            wrong_draft.cwd = Some(config.workspace_root.to_string_lossy().into_owned());
+            let created_profiles = connection
+                .create_profile(
+                    CreateConnectionProfileRequest {
+                        expected_revision: 0,
+                        name: "Root resolution fixture".into(),
+                        context: wrong_draft.clone(),
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            let profile = created_profiles
+                .profiles
+                .first()
+                .ok_or("Root resolution profile was not created")?;
+            if PathBuf::from(profile.context.cwd.as_deref().unwrap_or_default())
+                .canonicalize()
+                .map_err(|error| error.to_string())?
+                != classic_root
+                    .canonicalize()
+                    .map_err(|error| error.to_string())?
+            {
+                return Err("first-active create accepted the wrong existing draft cwd".into());
+            }
+            let updated = connection
+                .update_profile(
+                    UpdateConnectionProfileRequest {
+                        expected_revision: created_profiles.revision,
+                        id: profile.id.clone(),
+                        name: profile.name.clone(),
+                        context: wrong_draft.clone(),
+                    },
+                    None,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            if PathBuf::from(updated.profiles[0].context.cwd.as_deref().unwrap_or_default())
+                .canonicalize()
+                .map_err(|error| error.to_string())?
+                != classic_root
+                    .canonicalize()
+                    .map_err(|error| error.to_string())?
+            {
+                return Err("active update accepted the wrong existing draft cwd".into());
+            }
+            let saved = connection
+                .save(wrong_draft, None)
+                .await
+                .map_err(|error| error.to_string())?;
+            if PathBuf::from(saved.cwd.as_deref().unwrap_or_default())
+                .canonicalize()
+                .map_err(|error| error.to_string())?
+                != classic_root
+                    .canonicalize()
+                    .map_err(|error| error.to_string())?
+            {
+                return Err("active save accepted the wrong existing draft cwd".into());
+            }
             let (classic_before_duplicate, _) = repository
                 .read_workspace(
                     &config.context,
@@ -551,16 +624,21 @@ mod tests {
         std::fs::create_dir_all(&config.runtime_root).map_err(|error| error.to_string())?;
         let contexts =
             Arc::new(ContextStore::load(&config.runtime_root).map_err(|error| error.to_string())?);
-        let connection = Arc::new(ConnectionService::new(contexts.clone()));
-        let context = connection
-            .save(config.context.clone())
-            .map_err(|error| error.to_string())?;
-
         let logs = Arc::new(LogStore::open(&config.runtime_root.join("logs.sqlite"))?);
         let journal = Arc::new(OperationJournal::open(
             &config.runtime_root.join("operations.sqlite"),
         )?);
         let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
+        let connection = Arc::new(ConnectionService::new(
+            contexts.clone(),
+            ConnectionSetupRepository::new(runner.clone()),
+            logs.clone(),
+            journal.clone(),
+        ));
+        let context = connection
+            .save(config.context.clone(), None)
+            .await
+            .map_err(|error| error.to_string())?;
         let status_cache = Arc::new(StatusCache::new(15_000, 512, 16 * 1024 * 1024));
         let changelists = Arc::new(ChangelistService::new(
             ChangelistRepository::new(runner.clone()),
@@ -645,7 +723,6 @@ mod tests {
                         &runner,
                         &context,
                         &profile_context,
-                        &config.workspace_root,
                         &profile_root,
                     )
                     .await?;
@@ -715,7 +792,6 @@ mod tests {
         runner: &P4Runner,
         original: &P4Context,
         alternate: &P4Context,
-        original_root: &Path,
         alternate_root: &Path,
     ) -> Result<(), String> {
         let initial = connection.profiles();
@@ -724,11 +800,15 @@ mod tests {
             .clone()
             .ok_or("profile E2E has no active profile")?;
         let created = connection
-            .create_profile(CreateConnectionProfileRequest {
-                expected_revision: initial.revision,
-                name: "Fixture alternate".into(),
-                context: alternate.clone(),
-            })
+            .create_profile(
+                CreateConnectionProfileRequest {
+                    expected_revision: initial.revision,
+                    name: "Fixture alternate".into(),
+                    context: alternate.clone(),
+                },
+                None,
+            )
+            .await
             .map_err(|error| error.to_string())?;
         let alternate_id = created
             .profiles
@@ -739,10 +819,13 @@ mod tests {
             .clone();
         let before_generation = contexts.snapshot().1;
         let active = connection
-            .set_active_profile(SetActiveConnectionProfileRequest {
-                expected_revision: created.revision,
-                id: alternate_id.clone(),
-            })
+            .set_active_profile(
+                SetActiveConnectionProfileRequest {
+                    expected_revision: created.revision,
+                    id: alternate_id.clone(),
+                },
+                None,
+            )
             .await
             .map_err(|error| error.to_string())?;
         ensure(
@@ -761,11 +844,15 @@ mod tests {
         );
         unavailable.client = "unavailable-profile".into();
         let with_bad = connection
-            .create_profile(CreateConnectionProfileRequest {
-                expected_revision: current.revision,
-                name: "Unavailable".into(),
-                context: unavailable,
-            })
+            .create_profile(
+                CreateConnectionProfileRequest {
+                    expected_revision: current.revision,
+                    name: "Unavailable".into(),
+                    context: unavailable,
+                },
+                None,
+            )
+            .await
             .map_err(|error| error.to_string())?;
         let bad_id = with_bad
             .profiles
@@ -775,10 +862,13 @@ mod tests {
             .id
             .clone();
         let failed = connection
-            .set_active_profile(SetActiveConnectionProfileRequest {
-                expected_revision: with_bad.revision,
-                id: bad_id.clone(),
-            })
+            .set_active_profile(
+                SetActiveConnectionProfileRequest {
+                    expected_revision: with_bad.revision,
+                    id: bad_id.clone(),
+                },
+                None,
+            )
             .await;
         ensure(
             failed.is_err(),
@@ -792,10 +882,13 @@ mod tests {
 
         let before_return = connection.profiles();
         connection
-            .set_active_profile(SetActiveConnectionProfileRequest {
-                expected_revision: before_return.revision,
-                id: original_id.clone(),
-            })
+            .set_active_profile(
+                SetActiveConnectionProfileRequest {
+                    expected_revision: before_return.revision,
+                    id: original_id.clone(),
+                },
+                None,
+            )
             .await
             .map_err(|error| error.to_string())?;
         let revision = connection.profiles().revision;
@@ -833,7 +926,7 @@ mod tests {
                     expected_generation: workspace_generation,
                     client: alternate.client.clone(),
                 },
-                alternate_root.to_string_lossy().into_owned(),
+                None,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -849,7 +942,7 @@ mod tests {
                     expected_generation: workspace_generation,
                     client: original.client.clone(),
                 },
-                original_root.to_string_lossy().into_owned(),
+                None,
             )
             .await;
         ensure(stale.is_err(), "stale workspace generation was accepted")?;
@@ -860,7 +953,7 @@ mod tests {
                     expected_generation: switched.context_generation,
                     client: original.client.clone(),
                 },
-                original_root.to_string_lossy().into_owned(),
+                None,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -3601,7 +3694,7 @@ mod tests {
                     expected_generation: generation,
                     client: STREAM_CLIENT.into(),
                 },
-                stream_root.to_string_lossy().into_owned(),
+                None,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -3876,7 +3969,7 @@ mod tests {
                     expected_generation: generation,
                     client: original_context.client.clone(),
                 },
-                original_root.to_string_lossy().into_owned(),
+                None,
             )
             .await
             .map(|_| ())
