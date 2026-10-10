@@ -2,8 +2,9 @@
 
 > 负责人：后端 Agent  
 > 建立日期：2026-09-29  
-> 当前主线：完成“连接 → Workspace → 文件操作 → Changelist → Submit”的真实 P4 闭环  
-> 排序原则：先解除用户闭环阻塞，再做性能与发布质量；不新增 P2 功能面
+> 文档角色：**历史累计实现与验收台账**，不是当前任务队列。
+> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，“连接 → Workspace → 文件操作 → Pending/Shelf/Resolve → Submit”及 Search、Stream、Lock/Unlock 已完成约定实现和 Windows localhost 证据；当前后端只需配合最新 Tauri 原生冒烟、本人 Server 连接/认证、安全写入与恢复演练。
+> 下文各批次的测试数量、P0/P1 标题和平台缺口均为当时快照。旧数字不得解释为最新门禁，remote/macOS/多版本矩阵也不再是当前 Windows 本机私用阻塞。
 
 ## 状态说明
 
@@ -67,7 +68,7 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-010  | 基础 Stream 切换安全闭环                | 强类型 preflight/confirm/result、一次性短期 token、完整 profile/connection/workspace/generation/spec/risk digest 绑定、mutation lane 内 TOCTOU 复检、非 force `client -s -S`、默认不改文件、显式可选非 force `sync #head`、最终 Client spec 验证、结构化恢复和缓存/generation 失效已完成；GUI 通用写旁路已封死；Windows localhost 双 Stream 默认双轮通过，原生 UI/macOS 待验 |
 | BE-011  | 文件 Lock/Unlock 与独占打开安全闭环     | `preflight_file_lock` / `confirm_file_lock` 绑定完整文件集合、映射、opened action、CL、filetype、权限、锁 owner、profile/context generation 与 digest；mutation lane 内逐文件执行并以 tagged `fstat -Ol` 复核，不自动回滚、不提供 force unlock；Workspace/Pending 聚合我方/他方锁、owner、other-open 与 `+l`。泛化 FileAction、Terminal 和 `run_p4` 旁路已关闭；Windows localhost 双用户/双 Client 覆盖冲突、解锁、独占、重放、generation/TOCTOU，原生 UI/macOS 待验。 |
 
-## P0：下一阶段必须完成
+## 历史 P0 实施记录（以下条目按自身状态判断，不是当前任务队列）
 
 ### BE-005R — Diff / File History / Revision Graph 生产闭环（DONE：Windows localhost，原生 UI/macOS 待验）
 
@@ -300,7 +301,7 @@ BE-011 文件 Lock/Unlock 与独占打开      DONE（Windows localhost；原生
 
 BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线已在后续批次完成，原生 UI 证据仍未取得。
 
-## 总体推荐执行顺序
+## 历史总体实施顺序
 
 ```text
 BE-001 连接与认证
@@ -318,7 +319,7 @@ BE-006～008 Alpha 质量
 BE-009 性能与兼容矩阵
 ```
 
-连接与认证排第一，因为后续所有真实 Fixture、Workspace 和 Submit 验收都依赖稳定的 Connection 状态与错误分类。缓存排在真实闭环之后，避免先缓存尚未稳定的领域协议。
+该顺序解释历史依赖关系。连接与认证曾排第一，因为后续所有真实 Fixture、Workspace 和 Submit 验收都依赖稳定的 Connection 状态与错误分类；这些约定实现现已完成。当前执行顺序改看《Windows 本机私用 TODO》。
 
 ## 每项任务统一交付要求
 

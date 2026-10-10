@@ -1,19 +1,19 @@
 # P4Deck Windows 迁移与环境恢复手册
 
-> 适用范围：从当前 macOS 开发机迁移到全新的 Windows 11 x64 设备。  
-> 最后核对：2026-09-30。  
-> 当前结论：Windows 11 x64 的 Node/pnpm/Rust/MSVC/SDK/WebView2/P4 CLI 环境已验收；桌面应用可构建，Rust 单测启动器仍有 Common Controls manifest 兼容问题。
+> 适用范围：Windows 11 x64 的本机恢复，以及未来从其他设备迁入时的参考步骤。
+> 最后核对：2026-10-10。
+> 当前结论：本机 Node/pnpm/Rust/MSVC/SDK/WebView2/P4 CLI、Git LFS、本地 Git 提交和自动化门禁已就绪；Common Controls manifest 问题已修复。仓库仍无 remote，因此不能声明异机恢复，但这不阻塞当前 Windows 本机私用。
 
 ## 1. 迁移前必须先处理的事项
 
 ### 1.1 保存源码基线
 
-当前仓库没有首个 Git Commit，也没有配置 Git Remote，因此现在不能依赖 `git clone` 在新设备恢复项目。迁移前必须选择以下方式之一：
+当前仓库已经有可回退的本地 Git 提交，但没有配置 Git Remote，因此仍不能依赖 `git clone` 在新设备恢复项目。若未来需要迁移，选择以下方式之一：
 
 1. **推荐：建立 Git 基线并推送到私有远端。** 确认 `.env`、P4 Ticket、Trust、证书和内网数据未进入暂存区后再提交、推送。
 2. **临时离线迁移：制作源码归档。** 归档必须包含隐藏文件和 `.git`，排除下面的可重建目录。
 
-当前还有一项 Git LFS 风险：图片等二进制资源已按 LFS 指针暂存，`.git/lfs` 中有 44 个本地对象，但当前 macOS 环境找不到 `git lfs` 命令。选择私有远端方案时，必须先在旧设备恢复 Git LFS，并确认对象完整后再推送：
+本机已安装 Git LFS 3.7.1。选择私有远端方案时，仍必须确认对象完整后再推送：
 
 ```bash
 git lfs install
