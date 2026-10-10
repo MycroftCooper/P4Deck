@@ -42,6 +42,7 @@ export function ReadOnlyPage({
   onTargetChange,
   onRuntime,
   onOpenStreamGraph,
+  onOpenBranchMappings,
   navigation,
   zh,
 }: {
@@ -52,6 +53,7 @@ export function ReadOnlyPage({
   onTargetChange?(path: string): void;
   onRuntime?(runtime: RuntimeInfo): void;
   onOpenStreamGraph?(): void;
+  onOpenBranchMappings?(): void;
   navigation?: { stream: string; nonce: number };
   zh: boolean;
 }) {
@@ -351,10 +353,18 @@ export function ReadOnlyPage({
           </p>
         </div>
         {kind === "streams" && (
-          <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
-            <Network size={15} />
-            {zh ? "打开 Stream 图" : "Open Stream Graph"}
-          </button>
+          <div className="section-title-actions">
+            <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
+              <Network size={15} />
+              {zh ? "打开 Stream 图" : "Open Stream Graph"}
+            </button>
+            <button
+              disabled={!onOpenBranchMappings}
+              onClick={onOpenBranchMappings}
+            >
+              {zh ? "打开 Branch Mappings" : "Open Branch Mappings"}
+            </button>
+          </div>
         )}
         <button
           disabled={loading || (kind === "history" && !queryPath)}

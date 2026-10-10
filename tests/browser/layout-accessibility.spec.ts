@@ -112,6 +112,12 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await expect(page.getByRole("textbox", { name: "Search list" })).toHaveValue(
     "//atlas/main",
   );
+  await page.getByRole("button", { name: "Open Branch Mappings" }).click();
+  await expect(
+    page.getByRole("listbox", { name: "Branch Mappings" }),
+  ).toBeVisible();
+  await expect(page.getByText("Browser Mock simulated data")).toBeVisible();
+  await assertNoPageOverflow(page, "Branch Mappings");
 
   await page.goto("/?panel=search");
   await expect(page.locator(".app-shell.detached-shell")).toBeVisible();
@@ -122,6 +128,12 @@ test("390px shell, navigation, command palette, settings, search and pending sta
     page.getByRole("tree", { name: "Directed stream forest" }),
   ).toBeVisible();
   await assertNoPageOverflow(page, "detached Stream Graph panel");
+  await page.goto("/?panel=branchmappings");
+  await expect(page.locator(".app-shell.detached-shell")).toBeVisible();
+  await expect(
+    page.getByRole("listbox", { name: "Branch Mappings" }),
+  ).toBeVisible();
+  await assertNoPageOverflow(page, "detached Branch Mappings panel");
 });
 
 test("representative app, palette, settings, search and pending surfaces pass axe", async ({
@@ -149,6 +161,82 @@ test("representative app, palette, settings, search and pending surfaces pass ax
     page.getByRole("tree", { name: "Directed stream forest" }),
   ).toBeVisible();
   await assertAxe(page, "Stream Graph");
+  await page
+    .getByRole("button", { name: /^Branch Mappings/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("listbox", { name: "Branch Mappings" }),
+  ).toBeVisible();
+  await assertAxe(page, "Branch Mappings");
+});
+
+test("Branch Mapping simulated create, edit, preview and delete stay safe and keyboard operable", async ({
+  page,
+}) => {
+  await page.goto("/?panel=branchmappings");
+  const list = page.getByRole("listbox", { name: "Branch Mappings" });
+  await expect(list).toBeVisible();
+  const seed = list.getByRole("option", { name: /atlas-release/ });
+  await seed.focus();
+  await expect(seed).toBeFocused();
+  await page.keyboard.press("Enter");
+  const detail = page.getByRole("complementary", {
+    name: "Branch Mapping details",
+  });
+  await expect(detail).toContainText("atlas-release");
+  await detail.getByRole("button", { name: "Run read-only preview" }).click();
+  await expect(detail).toContainText("Browser Mock simulated impact preview");
+  await expect(detail).toContainText("integrate -n only");
+  await detail.getByRole("button", { name: "reverse" }).click();
+  await detail.getByRole("button", { name: "Run read-only preview" }).click();
+  await expect(detail.getByRole("button", { name: "reverse" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: "Create Branch Mapping" });
+  await expect(dialog).toContainText("Browser Mock");
+  const mappingName = `pw-map-${Date.now()}`;
+  await dialog.getByLabel("Branch Mapping name").fill(mappingName);
+  await dialog.getByLabel("View line 1 source").fill("//atlas/main/...");
+  await dialog
+    .getByLabel("View line 1 target")
+    .fill(`//atlas/${mappingName}/...`);
+  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog.getByRole("button", { name: "Confirm save" }).click();
+  await expect(dialog).toContainText("Verified by server");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(detail).toContainText(mappingName);
+
+  await detail.getByRole("button", { name: "Edit", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Edit Branch Mapping" });
+  await dialog
+    .getByLabel("Description")
+    .fill("updated in browser safety fixture");
+  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog.getByRole("button", { name: "Confirm save" }).click();
+  await expect(dialog).toContainText("Verified by server");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(detail).toContainText("updated in browser safety fixture");
+
+  await detail.getByRole("button", { name: "Delete", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Delete Branch Mapping" });
+  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog
+    .getByLabel("I understand this permanently deletes the Branch Mapping")
+    .check();
+  await dialog
+    .getByRole("button", { name: "Confirm permanent delete" })
+    .click();
+  await expect(dialog).toContainText("Verified by server");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(list).toBeFocused();
+  await expect(
+    list.getByRole("option", { name: new RegExp(mappingName) }),
+  ).toHaveCount(0);
+  await assertNoPageOverflow(page, "Branch Mapping mutation workflow");
 });
 
 test("dialog, context menu, and manual merge fixtures fit and pass axe", async ({

@@ -15,6 +15,7 @@
 @import "./styles/activity.css";
 @import "./styles/search.css";
 @import "./styles/stream-graph.css";
+@import "./styles/branch-mappings.css";
 @import "./styles/status.css";
 .runtime-error,
 .tool-error {

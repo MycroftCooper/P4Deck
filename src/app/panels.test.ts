@@ -22,6 +22,7 @@ describe("workspace panels", () => {
       "workspaces",
       "streams",
       "streamgraph",
+      "branchmappings",
       "terminal",
       "p4log",
     ]);
@@ -36,6 +37,7 @@ describe("workspace panels", () => {
       "workspaces",
       "streams",
       "streamgraph",
+      "branchmappings",
       "terminal",
       "p4log",
       "settings",

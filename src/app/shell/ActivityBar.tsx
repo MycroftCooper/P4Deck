@@ -10,6 +10,7 @@ import {
   TerminalSquare,
   ScrollText,
   GitFork,
+  GitMerge,
 } from "lucide-react";
 import { activityPageIds, type PageId } from "../panels";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -23,6 +24,7 @@ const icons = {
   workspaces: Monitor,
   streams: Network,
   streamgraph: GitFork,
+  branchmappings: GitMerge,
   terminal: TerminalSquare,
   p4log: ScrollText,
   settings: Settings,

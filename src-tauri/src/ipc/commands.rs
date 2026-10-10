@@ -149,6 +149,7 @@ fn panel_window_kind(page: &str) -> Result<&str, String> {
         "history",
         "streams",
         "streamgraph",
+        "branchmappings",
         "terminal",
         "p4log",
         "diff",
@@ -1166,6 +1167,7 @@ mod tests {
         assert_eq!(panel_window_kind("terminal"), Ok("terminal"));
         assert_eq!(panel_window_kind("p4log"), Ok("p4log"));
         assert_eq!(panel_window_kind("streamgraph"), Ok("streamgraph"));
+        assert_eq!(panel_window_kind("branchmappings"), Ok("branchmappings"));
         let binding = PanelRuntimeBinding {
             profile_id: Some("team/profile".into()),
             context_generation: 9,

@@ -1,8 +1,16 @@
 # 前端操作流程 TODO
 
 > 文档角色：**历史累计实现与验收台账**，不是当前任务队列。
-> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是最新 Tauri Windows 原生点击与本人实际 Server 验收。
+> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是最新 Tauri Windows 原生点击与本人实际 Server 验收。
 > 下文保留各批次当时的测试数量、平台范围和“待验”描述作为历史快照。旧数字不得解释为最新门禁；“原生待验”表示缺少 Tauri 实机证据，不表示对应 React/后端功能仍未实现。
+
+## 最近完成：Branch Mapping 前端闭环（2026-10-10）
+
+- 新增正式 `branchmappings` 全局 panel，接入 Activity Bar、Dock 新页、Streams 邻近入口与 Tauri popout 白名单；没有增加全局 command，37 项 TS/Rust command parity 保持不变。
+- 页面只消费既有强类型 Branch Mapping 契约：服务端 list/detail 与 View 顺序原样呈现，`map/exclude/overlay/comment/unknown` 不猜测；查询/owner 过滤、opaque cursor 分页、稳定去重、不前进 cursor 保守停止、失效 cursor 首屏重启、刷新/取消/重试，以及 partial/truncated/safety-limit/simulated/stale 状态均已接通。大列表使用窗口化并有 DOM 上限测试。
+- 正反影响预览只调用专用 `integrate -n` 接口，明确“不修改 workspace/不打开文件”，并展示 file/action/source/target、blocker 与部分/截断状态。create/edit/delete 只走专用 preflight→一次性 confirm；View 编辑器保留排序、限制 512 行并逐行校验，unknown/comment/不可往返内容禁止编辑，删除要求独立高危确认，失败/过期/取消/未知结果不冒充成功。
+- Profile/connection/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading；详情/对话框具备键盘、ARIA、Escape 和来源回焦，390px 使用列表/详情上下布局，长路径只在受控内容区换行或滚动。Browser Mock 全程标示 simulated。
+- 本批新增 model/page/mutation 13 项单元/组件测试及第 4 项真实 Edge 测试；最终全量 Web 为 80 文件/466 项，覆盖分页、cursor 重启、迟到隔离、正反 preview/结构化 blocker、unknown 禁止编辑、token/危险删除、大列表 DOM 上限、390px、axe、detached 和 Browser Mock create/edit/delete 闭环。这些证据不替代 Windows Tauri 原生点击或本人 Server 权限/trigger 验收。
 
 ## 最近完成：Stream Graph 前端闭环（2026-10-10）
 
@@ -10,7 +18,7 @@
 - 页面直接消费 `queryStreamGraph` 强类型结果，以确定性 parent→child 分层与虚拟化可访问树表达 root/child/orphan/父节点未加载、unknown/deleted/current/partial/truncated；不存在的父节点不伪造，merge/copy 状态不猜测。
 - depot/text/includeDeleted、刷新/取消/重试、opaque cursor 继续加载、重复/不前进 cursor 保守停止、游标失效首屏重启、cache/simulated/safety-limit 提示均已接通。连接/Profile/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading。
 - 详情展示官方名称、path、owner、type、parent、description、ParentView 与 flow 字段；可定位现有 Streams 页面，切换只打开既有 `StreamSwitchDialog`，图上不直接 mutation。支持缩放/重置/滚动平移、方向/Home/End/Enter/Escape、焦点反馈和 390px 图/详情上下布局。
-- 最新门禁为 Web 77 文件/451 项、真实 Edge 3 项；新增覆盖森林状态、分页去重、cursor 失效、取消/迟到隔离、键盘选择、大图 DOM 上限、390px 与 axe。Windows Tauri 原生 panel/popout/焦点仍并入当前实机验收；Branch Mapping 是下一独立产品项，不属于本批。
+- 当批门禁为 Web 77 文件/451 项、真实 Edge 3 项；新增覆盖森林状态、分页去重、cursor 失效、取消/迟到隔离、键盘选择、大图 DOM 上限、390px 与 axe。该数字是当时快照；Windows Tauri 原生 panel/popout/焦点仍并入当前实机验收。Branch Mapping 已由后续独立批次完成，不再是当前未实现项。
 
 ## 最近完成：深文本冲突 / 手工合并（2026-10-09）
 
@@ -77,11 +85,12 @@
 | FE-19 | Workspace 文件状态聚合呈现 | 消费 `WorkspaceListing` 与强类型正交状态；组合角标、证据/ignore 来源、partial/error、刷新与取消 | 未知不冒充 untracked；目录不推断子项；手动刷新穿透前后端缓存；AbortSignal 取消聚合子命令；大列表保持窗口化 | BE-005 生产契约、Mock/Tauri、55 文件/327 项 Web 测试与 Windows localhost 场景通过；原生 UI/macOS 待验 |
 | FE-20 | 基础 Stream 安全切换 | Streams 右键/详情入口、仅切视图默认项、可选同步、预检风险、确认、执行、验证和恢复 | 无 ready token 不执行；目标/连接/代次漂移拒绝；opened/unresolved 阻断；同步需确认且本地变化阻断；取消不冒充回滚；最终验证后统一刷新 | 生产契约、Mock/Tauri、组件状态机与 Windows localhost 双 Stream E2E 已完成；Windows/macOS 原生点击/焦点/读屏待验 |
 | FE-21 | 文件 Lock/Unlock 与独占状态 | 工具栏/原生菜单/右键统一入口；文件集、action/CL、filetype/`+l`、owner/other-open、权限与逐项结果 | 只接受后端 token；连接变化丢弃迟到结果；partial/取消/未知不回滚不冒充成功；不提供 force unlock | BE-011 生产接线、浏览器状态机与 Windows localhost 双用户/双 Client 已通过；原生 UI/macOS 待验 |
-| FE-22 | Stream Graph 前端闭环 | 强类型只读森林、分页/虚拟化、过滤与状态提示、详情、键盘/390px、Streams 定位和安全切换入口 | 不解析 P4 输出、不伪造父节点/merge/copy；cursor 原样透传并拒绝不前进；旧连接响应不能覆盖；大图 DOM 有上限且有等价树语义 | 生产 panel、Mock/Tauri 契约、组件与真实 Edge 390px/axe 已通过；Windows Tauri 原生 panel/popout/焦点待验，Branch Mapping 后续独立实施 |
+| FE-22 | Stream Graph 前端闭环 | 强类型只读森林、分页/虚拟化、过滤与状态提示、详情、键盘/390px、Streams 定位和安全切换入口 | 不解析 P4 输出、不伪造父节点/merge/copy；cursor 原样透传并拒绝不前进；旧连接响应不能覆盖；大图 DOM 有上限且有等价树语义 | 生产 panel、Mock/Tauri 契约、组件与真实 Edge 390px/axe 已通过；Windows Tauri 原生 panel/popout/焦点待验 |
+| FE-23 | Branch Mapping 前端闭环 | 正式 panel、过滤/虚拟分页、原样 detail/View、正反只读 impact preview、安全 create/edit/delete、键盘/ARIA/390px | 不解析 P4 form/输出；cursor/token 原样透传；只走专用 preview 与 preflight→confirm；unknown/comment 不安全往返时禁改；迟到结果不能覆盖 | 生产 panel、Mock/Tauri 契约、13 项新增组件/模型测试与真实 Edge 390px/axe/模拟增删改通过；Windows Tauri 原生 panel/popout 与本人 Server 权限/trigger 待验 |
 
 ## 历史实施顺序
 
-FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～22。该顺序记录实现演进，当前不得据此重新排队；最新执行顺序见《Windows 本机私用 TODO》。
+FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～23。该顺序记录实现演进，当前不得据此重新排队；最新执行顺序见《Windows 本机私用 TODO》。
 
 每完成一项，更新本表并记录测试证据；不得只做基础框架就将整个批次标为完成。前端可独立完成的交互继续推进；后端依赖单独列出，不混入前端完成声明。
 
@@ -92,7 +101,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～22
 - `StreamSwitchService` 和前端对话框采用同一阶段模型：先冻结目标和模式，再预检并展示风险，确认消费一次性 token，mutation lane 内复检后执行，最后依据 Client spec 返回 verified/failed/cancelled/unknown 与恢复建议。
 - 只切视图为默认值；同步是显式危险选项且只使用非 force `sync #head`。任何 opened/unresolved 都阻断，reconcile 变化对同步阻断、对只切视图警告；没有自动 clean/revert/回滚。
 - 组件自动化覆盖预检前不可执行、blocker/警告确认、连接 owner 变化取消并隔离迟到结果、执行结果延迟 runtime 重绑，以及同步不完整后的恢复入口。Rust 覆盖身份/digest/Unicode 路径/类型/令牌与失败措辞；真实 P4D 覆盖两条 Stream 的视图切换、文件保持、恢复同步和回切。
-- 当时明确非范围：Stream Graph、Branch Mapping、Stream spec 管理和管理员能力留在 P2；其中 Stream Graph 已在后续 FE-22 独立完成，其他项目仍保持后续范围。原生 Windows/macOS 操作与 macOS/多版本 P4 仍是外部验收项，不以浏览器或 localhost 应用层测试替代。
+- 当时明确非范围：Stream Graph、Branch Mapping、Stream spec 管理和管理员能力留在 P2；其中 Stream Graph 与 Branch Mapping 后来分别由 FE-22/FE-23 独立完成，Stream spec 与管理员能力仍保持后续范围。原生 Windows/macOS 操作与 macOS/多版本 P4 仍是外部验收项，不以浏览器或 localhost 应用层测试替代。
 
 ### 第十七批：Diff / History / Revision Graph 生产接线
 

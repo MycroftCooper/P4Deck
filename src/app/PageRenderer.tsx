@@ -54,6 +54,11 @@ const StreamGraphPage = lazy(() =>
     default: m.StreamGraphPage,
   })),
 );
+const BranchMappingsPage = lazy(() =>
+  import("../features/browsers/BranchMappingsPage").then((m) => ({
+    default: m.BranchMappingsPage,
+  })),
+);
 const SettingsPage = lazy(() =>
   import("../features/settings/SettingsPage").then((m) => ({
     default: m.SettingsPage,
@@ -206,6 +211,7 @@ function Content({
           onTargetChange={changeTarget}
           onRuntime={onRuntime}
           onOpenStreamGraph={() => onOpenPage("streamgraph")}
+          onOpenBranchMappings={() => onOpenPage("branchmappings")}
           navigation={page === "streams" ? streamNavigation : undefined}
           zh={zh}
         />
@@ -219,6 +225,10 @@ function Content({
           onLocateStream={onLocateStream}
           zh={zh}
         />
+      );
+    case "branchmappings":
+      return (
+        <BranchMappingsPage key={connectionKey} runtime={runtime} zh={zh} />
       );
     case "preview":
       return (

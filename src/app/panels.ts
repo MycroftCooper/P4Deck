@@ -24,6 +24,12 @@ export const pageDefinitions = {
     scope: "global",
     target: "depot",
   },
+  branchmappings: {
+    zh: "Branch Mappings",
+    en: "Branch Mappings",
+    scope: "global",
+    target: "depot",
+  },
   terminal: {
     zh: "Terminal",
     en: "Terminal",

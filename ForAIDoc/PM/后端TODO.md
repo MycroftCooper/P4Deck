@@ -32,7 +32,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 已完成 Branch Mapping 后端安全闭环，前端页面与 Windows 原生交互仍待独立批次。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成，Windows 原生交互及本人 Server 权限/trigger 仍待验收。
 
 ### BE-012 — 文本三方手工合并（DONE：Windows localhost；原生 UI/macOS 待验）
 
@@ -42,21 +42,21 @@
 - 成功或未知结果精确触发 Workspace/Pending/Search/Review/Resolve 失效；连接切换清除会话/token，operation group 取消覆盖所有 P4 子命令与最终提交边界。generic GUI `run_p4 resolve` 仍被危险命令策略阻断，未增加 Terminal/外部工具旁路。
 - Rust/Web/Windows localhost 覆盖矩阵与未验范围见《手工文本三方合并工作流》；不包含图形/二进制 merge 插件、外部 mergetool 配置、Stream Graph 或管理员能力。
 
-### BE-013 — Stream Graph 后端只读闭环（DONE：Windows localhost；前端页面待实现）
+### BE-013 — Stream Graph 后端只读闭环（DONE：Windows localhost；前端后续已完成）
 
 - `query_stream_graph` 使用强类型 query/result，返回服务端 Stream 节点、真实 parent edge、roots/orphans、partial/truncated/stats、operation ID、scope 与缓存新鲜度；缺父、循环、自父和未知官方字段都显式保守处理，不制造父节点，也不推断 merge/copy 状态。
 - 首次采集只执行参数数组 `p4 streams -T ... -m 5001`，可选 `-a` 与字面 depot/stream prefix；服务端无匹配时仍对每条结果做客户端 scope/text/deleted 复核。最多保留 5,000 条，快照游标绑定 profile、完整 Connection、generation、query、page size 与随机 snapshot/cursor ID，并拒绝篡改、重放、错连接和过期。
-- 服务复用 `P4Runner` operation/cancel/log 边界与 `ContextStore`；返回及缓存写入前复核完整 Connection 和 generation，旧请求不能污染缓存。Browser Mock 明确 `simulated=true`。当前只完成 Rust/IPC/TypeScript/Tauri adapter/Mock 契约，尚无 Stream Graph 前端页面或原生交互。
+- 服务复用 `P4Runner` operation/cancel/log 边界与 `ContextStore`；返回及缓存写入前复核完整 Connection 和 generation，旧请求不能污染缓存。Browser Mock 明确 `simulated=true`。本后端批次当时只完成 Rust/IPC/TypeScript/Tauri adapter/Mock 契约；前端页面后来由 FE-22 完成，Windows 原生交互仍待验。
 - Windows localhost fixture 覆盖 mainline/development/release/virtual/task、deleted、过滤后 orphan、分页/重放、取消、generation 与服务端 no-match 行为；Branch Mapping、Stream spec 写入、force unlock 和管理员能力未纳入。
 
-### BE-014 — Branch Mapping 后端安全闭环（DONE：Windows localhost；前端页面待实现）
+### BE-014 — Branch Mapping 后端安全闭环（DONE：Windows localhost；前端后续已完成）
 
 - `query_branch_mappings/get_branch_mapping_detail/preview_branch_mapping_impact` 返回结构化 list/detail/View/影响文件，不把 form 或 CLI 文本推给前端解析。list 固定 `branches -m 5001 -t`，服务端 filter/owner 下推后仍客户端复核；一次性快照 cursor 绑定 active profile、完整 Context、generation、query/page size 与随机 snapshot/cursor ID。
 - 影响预览只允许参数数组 `integrate -n -m <limit+1> -b <name>`，反向额外 `-r`；执行前用当前 Client 的 `where` 复核所有目标映射，缺失即结构化阻断。preview 结果保留 source/target/client file/action、partial/truncated/stats，绝不执行真实 integrate/copy。
 - create/edit 只经普通文本 form protocol 的 `branch -i`，delete 只经 `branch -d`，从不使用 `-f`。结构化 View 限 1～512 行，校验 modifier、depot syntax、通配符配对、重复/冲突、控制字符和字段注入；未知字段、未知 modifier 或行内 comment 的旧 spec 不可安全 round-trip 时阻断编辑而不是静默丢失。
 - preflight/confirm token 一次消费并绑定 profile、Context/generation、mode/name、存在性、当前/期望 spec digest、owner 与风险；同 Server mutation lane 内重读拒绝 TOCTOU，写后再读验证，未知结果不报成功。删除另需危险确认；P4Deck 不提供非 owner、locked delete、owner transfer 或管理员越权入口。
 - generic GUI `run_p4 branch` 仍整体禁止；runner 只把 `branches`、首参为 `-o` 的 `branch`、含 `-n` 的 `integrate` 认作只读，`branch -i/-d` 与真实 integrate 仍是 mutation。Terminal 既有显式语义未扩大，stdin 仍不能从 generic IPC 进入。
-- Windows localhost fixture 覆盖 create→分页 list/detail→TOCTOU 拒绝→edit→正反 preview→delete、非 owner 拒绝、危险确认、token/cursor 重放、取消、generation 漂移，并比较 preview 前后 opened 与 Workspace 文件内容。Browser Mock 明确 `simulated=true`；当前尚无 Branch Mapping 前端页面、Tauri 原生交互或本人 Server 权限矩阵证据。
+- Windows localhost fixture 覆盖 create→分页 list/detail→TOCTOU 拒绝→edit→正反 preview→delete、非 owner 拒绝、危险确认、token/cursor 重放、取消、generation 漂移，并比较 preview 前后 opened 与 Workspace 文件内容。Browser Mock 明确 `simulated=true`；本后端批次当时尚无前端页面，后续 FE-23 已补齐；Tauri 原生交互与本人 Server 权限矩阵仍无证据。
 - 验收（2026-10-10）：Windows localhost 最终连续两轮通过（123.99 秒、118.52 秒）；`pnpm ci:quick` 通过（Web 77 文件/453 项、Rust 178 项，另 1 项 localhost E2E 默认 ignored），生产 Web build、Prettier、rustfmt、TypeScript/Cargo check 与 Clippy `--all-targets -D warnings` 通过。
 
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
@@ -84,8 +84,8 @@ BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性�
 | BE-008G | 全局搜索生产后端                        | Submitted/Pending CL、Workspace/Depot 文件与 Job 五类窄契约；结果分组、稳定 identity、导航 target、匹配字段与 UTF-16 高亮、facet/stats/partial；首次有界采集后使用版本化不可变快照游标，绑定规范化 query、类别、完整 connection identity 与 generation；P4 参数数组执行，每类最多扫描 1,000 条，Submitted 复用 BE-008Q 的 5,000 扫描/500 结果上限；Windows localhost 连续两轮覆盖五类组合、Unicode/特殊字符、稳定分页、取消、非法/错配 cursor、代次隔离与 partial 上限。Mock 明确 `simulated=true` 且不联网；`SearchPage` 已完成生产接线与浏览器自动化。Stream/Shelf 本批不纳入，原生 UI 待验收 |
 | BE-010  | 基础 Stream 切换安全闭环                | 强类型 preflight/confirm/result、一次性短期 token、完整 profile/connection/workspace/generation/spec/risk digest 绑定、mutation lane 内 TOCTOU 复检、非 force `client -s -S`、默认不改文件、显式可选非 force `sync #head`、最终 Client spec 验证、结构化恢复和缓存/generation 失效已完成；GUI 通用写旁路已封死；Windows localhost 双 Stream 默认双轮通过，原生 UI/macOS 待验                                                                                                                                                                                                                    |
 | BE-011  | 文件 Lock/Unlock 与独占打开安全闭环     | `preflight_file_lock` / `confirm_file_lock` 绑定完整文件集合、映射、opened action、CL、filetype、权限、锁 owner、profile/context generation 与 digest；mutation lane 内逐文件执行并以 tagged `fstat -Ol` 复核，不自动回滚、不提供 force unlock；Workspace/Pending 聚合我方/他方锁、owner、other-open 与 `+l`。泛化 FileAction、Terminal 和 `run_p4` 旁路已关闭；Windows localhost 双用户/双 Client 覆盖冲突、解锁、独占、重放、generation/TOCTOU，原生 UI/macOS 待验。                                                                                                                          |
-| BE-013  | Stream Graph 后端只读闭环               | 强类型森林、官方 Stream/Parent/Type/ParentView/Options 字段、缺父/循环/未知显式状态、有界 `streams -T/-m` 扫描、客户端 scope 复核、连接代次缓存与一次性快照 cursor 已完成；Windows localhost 已验，前端页面待实现。                                                                                                                                                                                                                                                                                                                                                                             |
-| BE-014  | Branch Mapping 后端安全闭环             | 强类型 list/detail/preview/create/edit/delete、结构化 View、`integrate -n` 双向影响预览、一次性快照 cursor 与 mutation token、owner/未知字段/映射/TOCTOU/危险删除阻断已完成；Windows localhost 已验，前端页面和原生交互待实现。                                                                                                                                                                                                                                                                                                                                                                      |
+| BE-013  | Stream Graph 后端只读闭环               | 强类型森林、官方 Stream/Parent/Type/ParentView/Options 字段、缺父/循环/未知显式状态、有界 `streams -T/-m` 扫描、客户端 scope 复核、连接代次缓存与一次性快照 cursor 已完成；Windows localhost 已验，后续 FE-22 页面已完成，原生交互待验。                                                                                                                                                                                                                                                                                                                                                         |
+| BE-014  | Branch Mapping 后端安全闭环             | 强类型 list/detail/preview/create/edit/delete、结构化 View、`integrate -n` 双向影响预览、一次性快照 cursor 与 mutation token、owner/未知字段/映射/TOCTOU/危险删除阻断已完成；Windows localhost 已验，后续 FE-23 页面已完成，原生交互及本人 Server 权限/trigger 待验。                                                                                                                                                                                                                                                                                                                        |
 
 ## 历史 P0 实施记录（以下条目按自身状态判断，不是当前任务队列）
 
@@ -297,8 +297,8 @@ BE-009b 实现结果（2026-10-09）：
 
 ## P2：后置范围
 
-- Branch Mapping 前端页面、Stream spec 写入和管理员能力（Stream Graph 前后端闭环已完成；Branch Mapping 后端契约已由 BE-014 完成；基础当前 Workspace 切换已由 BE-010 完成）。
-- Branch Mapping、Labels、Jobs 独立前端工作台；其中 Branch Mapping 只剩前端与原生验收，不重复实现后端。
+- Stream spec 写入和管理员能力（Stream Graph、Branch Mapping 前后端闭环及基础当前 Workspace 切换均已完成）。
+- Labels、Jobs 独立前端工作台；Branch Mapping 只剩 Windows 原生与本人 Server 权限/trigger 验收，不重复实现前后端。
 - P4API 原生绑定 Adapter。首版继续使用官方 `p4` CLI；引入前需完成 ABI、打包、升级和许可证评估。
 
 ## 最近完成批次
@@ -317,7 +317,7 @@ BE-008 Submitted 详情与可靠合并分类    DONE（Windows localhost；前�
 BE-010 基础 Stream 切换                 DONE（Windows localhost；原生 UI/macOS 待验）
 BE-011 文件 Lock/Unlock 与独占打开      DONE（Windows localhost；原生 UI/macOS 待验）
 BE-013 Stream Graph                    DONE（前后端；原生 UI/macOS 待验）
-BE-014 Branch Mapping 后端             DONE（Windows localhost；前端/原生 UI 待实现）
+BE-014 Branch Mapping 后端             DONE（Windows localhost；FE-23 已接，原生 UI 待验）
 ```
 
 BE-002、BE-003、BE-004a、BE-004b 与 BE-008 已在 Windows localhost Fixture 上完成应用层验收；BE-008 前端页面接线已在后续批次完成，原生 UI 证据仍未取得。

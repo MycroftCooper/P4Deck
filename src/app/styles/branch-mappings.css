@@ -1,0 +1,520 @@
+.branch-mappings-page {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 26px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.branch-mappings-title {
+  flex-wrap: wrap;
+}
+
+.branch-mapping-query {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 0 10px;
+}
+
+.branch-mapping-query > label {
+  display: grid;
+  flex: 1 1 190px;
+  min-width: 0;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.branch-mapping-query input {
+  min-width: 0;
+  width: 100%;
+}
+
+.branch-mapping-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.branch-mapping-status > span,
+.branch-simulated {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.branch-mapping-status .status-warning,
+.branch-simulated {
+  border-color: var(--warning);
+  color: var(--text);
+}
+
+.branch-mapping-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 0 8px;
+  padding: 7px 9px;
+  border-left: 3px solid var(--warning);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.branch-mapping-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  gap: 12px;
+}
+
+.branch-mapping-layout.with-detail {
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
+}
+
+.branch-mapping-list-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.branch-mapping-list {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.branch-mapping-list:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.branch-mapping-list-spacer {
+  position: relative;
+  min-width: 0;
+}
+
+.branch-mapping-window-row {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: 4px 6px;
+}
+
+.branch-mapping-window-row > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  min-width: 0;
+  gap: 2px 8px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.branch-mapping-window-row > button:hover {
+  background: var(--hover);
+}
+
+.branch-mapping-window-row > button.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.branch-mapping-window-row strong,
+.branch-mapping-window-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-mapping-window-row small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.branch-mapping-summary-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.branch-mapping-summary-meta code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-mapping-list-panel > .load-more-button {
+  border-radius: 0;
+  border-width: 1px 0 0;
+}
+
+.branch-mapping-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.branch-mapping-detail > header,
+.branch-impact > header,
+.branch-view-editor-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.branch-mapping-detail > header h2,
+.branch-impact h3,
+.branch-view-section h3 {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.branch-mapping-detail > header > button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.branch-detail-meta {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0;
+}
+
+.branch-detail-meta > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.branch-detail-meta dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.branch-detail-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.branch-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.branch-unknown-fields {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  padding: 9px;
+  border: 1px dashed var(--warning);
+  border-radius: 6px;
+}
+
+.branch-unknown-fields > div {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.branch-unknown-fields span {
+  overflow-wrap: anywhere;
+}
+
+.branch-detail-actions,
+.branch-direction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.branch-detail-actions .danger,
+.branch-preflight-review .danger-check {
+  border-color: var(--danger);
+}
+
+.branch-view-section,
+.branch-impact {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.branch-view-section ol {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.branch-view-section li {
+  display: grid;
+  grid-template-columns: 24px auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  gap: 7px;
+  padding: 7px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-2);
+}
+
+.branch-view-section li.modifier-exclude {
+  border-left-style: double;
+}
+
+.branch-view-section li.modifier-overlay {
+  border-left-style: dashed;
+}
+
+.branch-view-section li.modifier-unknown {
+  border-left-color: var(--warning);
+  border-left-style: dotted;
+}
+
+.branch-view-section code,
+.branch-impact-table-wrap code {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.branch-view-index {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.branch-view-comment {
+  grid-column: 3 / -1;
+  overflow-wrap: anywhere;
+}
+
+.branch-impact > header p {
+  margin: 2px 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.branch-direction button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.branch-impact-result,
+.branch-preview-blockers {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.branch-preview-blockers {
+  padding: 8px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+}
+
+.branch-preview-blockers p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.branch-impact-table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+}
+
+.branch-impact-table-wrap table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.branch-impact-table-wrap th,
+.branch-impact-table-wrap td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.branch-mutation-editor,
+.branch-mutation-fields,
+.branch-preflight-review {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.branch-mutation-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.branch-mutation-fields label,
+.branch-description-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.branch-description-field,
+.branch-view-editor {
+  grid-column: 1 / -1;
+}
+
+.branch-mutation-fields input,
+.branch-mutation-fields textarea,
+.branch-mutation-fields select {
+  min-width: 0;
+  width: 100%;
+}
+
+.branch-view-editor {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.branch-view-editor > li {
+  display: grid;
+  grid-template-columns: 30px 92px minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  align-items: start;
+  min-width: 0;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.branch-view-row-actions {
+  display: flex;
+  gap: 3px;
+}
+
+.branch-view-row-actions button {
+  padding: 4px;
+}
+
+.branch-view-line-error {
+  grid-column: 3 / -1;
+  color: var(--danger);
+  font-size: 10px;
+}
+
+.branch-preflight-review pre {
+  max-width: 100%;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .branch-mappings-page {
+    padding: 14px 12px;
+    overflow-y: auto;
+  }
+
+  .branch-mapping-layout,
+  .branch-mapping-layout.with-detail {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .branch-mapping-list-panel {
+    min-height: 360px;
+  }
+
+  .branch-mapping-detail {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .branch-view-section li {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .branch-view-section li > code,
+  .branch-view-section li > svg,
+  .branch-view-comment {
+    grid-column: 2;
+  }
+
+  .branch-view-editor > li {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+  }
+
+  .branch-view-editor > li > input {
+    grid-column: 2 / -1;
+  }
+
+  .branch-view-line-error {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .branch-mappings-page {
+    padding: 10px 8px;
+  }
+
+  .branch-mapping-query > label,
+  .branch-mapping-query > button,
+  .branch-mappings-title > button,
+  .branch-mutation-fields > label {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .branch-mutation-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .branch-view-editor > li {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .branch-view-row-actions,
+  .branch-view-editor > li > input,
+  .branch-view-line-error {
+    grid-column: 1 / -1;
+  }
+
+  .branch-mapping-summary-meta {
+    flex-wrap: wrap;
+  }
+}
