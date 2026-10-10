@@ -718,6 +718,152 @@ export const mockBackend: Backend = {
       },
     ];
   },
+  async queryStreamGraph(query) {
+    const allNodes: import("../../shared/contracts/types").StreamGraphNode[] = [
+      {
+        stream: "//atlas/main",
+        name: "Atlas Main",
+        owner: "fmeng",
+        kind: "mainline",
+        description: "Browser Mock simulated stable mainline",
+        parentView: "inherit",
+        flowOptions: {
+          toParent: false,
+          fromParent: false,
+          mergeMode: "mergeDown",
+          locked: false,
+          allSubmit: true,
+        },
+      },
+      {
+        stream: "//atlas/dev",
+        name: "Development",
+        owner: "fmeng",
+        parent: "//atlas/main",
+        kind: "development",
+        description: "Browser Mock simulated development stream",
+        parentView: "inherit",
+        flowOptions: {
+          toParent: true,
+          fromParent: true,
+          mergeMode: "mergeDown",
+          locked: false,
+          allSubmit: true,
+        },
+      },
+      {
+        stream: "//atlas/release",
+        name: "Release",
+        owner: "alice",
+        parent: "//atlas/main",
+        kind: "release",
+        description: "Browser Mock simulated release stream",
+        parentView: "noinherit",
+        flowOptions: {
+          toParent: false,
+          fromParent: true,
+          mergeMode: "mergeDown",
+          locked: false,
+          allSubmit: false,
+        },
+      },
+      {
+        stream: "//atlas/task-孤立",
+        name: "Simulated filtered orphan",
+        owner: "fmeng",
+        parent: "//hidden/main",
+        kind: "task",
+        description:
+          "Browser Mock only: the parent is deliberately unavailable.",
+        parentView: "inherit",
+        flowOptions: {
+          toParent: true,
+          fromParent: true,
+          mergeMode: "mergeDown",
+          locked: false,
+          allSubmit: true,
+        },
+      },
+    ];
+    const prefix = query.depotPrefix?.replace(/\/+$/, "");
+    const needle = query.text?.trim().toLocaleLowerCase();
+    const matched = allNodes.filter((node) => {
+      const inScope =
+        !prefix ||
+        node.stream === prefix ||
+        node.stream.startsWith(`${prefix}/`);
+      const text = [
+        node.stream,
+        node.name,
+        node.owner,
+        node.parent,
+        node.kind,
+        node.description,
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .toLocaleLowerCase();
+      return inScope && (!needle || text.includes(needle));
+    });
+    const offset = query.cursor
+      ? Number(/^mock-stream-graph:(\d+)$/.exec(query.cursor)?.[1] ?? NaN)
+      : 0;
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      (query.cursor !== undefined && offset >= matched.length)
+    ) {
+      throw {
+        code: "invalidCursor",
+        message: "Browser Mock Stream Graph cursor is invalid.",
+      };
+    }
+    const end = Math.min(offset + query.pageSize, matched.length);
+    const nodes = matched.slice(offset, end);
+    const known = new Set(matched.map((node) => node.stream));
+    const pagePaths = new Set(nodes.map((node) => node.stream));
+    const roots = nodes
+      .filter((node) => !node.parent)
+      .map((node) => node.stream);
+    const orphans = nodes
+      .filter((node) => node.parent && !known.has(node.parent))
+      .map((node) => node.stream);
+    return {
+      requestGeneration: query.requestGeneration,
+      scope: {
+        activeProfileId: mockActiveProfileId,
+        contextGeneration: mockContextGeneration,
+        server: mockContext.server,
+        user: mockContext.user,
+        client: mockContext.client,
+        depotPrefix: prefix,
+      },
+      nodes,
+      edges: matched
+        .filter(
+          (node) =>
+            node.parent && known.has(node.parent) && pagePaths.has(node.stream),
+        )
+        .map((node) => ({ parent: node.parent!, child: node.stream })),
+      roots,
+      orphans,
+      hasMore: end < matched.length,
+      nextCursor: end < matched.length ? `mock-stream-graph:${end}` : undefined,
+      partial: orphans.length > 0,
+      truncated: false,
+      stats: {
+        scannedCount: allNodes.length,
+        matchedCount: matched.length,
+        returnedCount: nodes.length,
+        duplicateCount: 0,
+        invalidRelationCount: orphans.length,
+        safetyLimit: 5000,
+      },
+      operationIds: [`${query.operationId}-browser-mock`],
+      cacheFreshness: "fresh",
+      simulated: true,
+    };
+  },
   async preflightStreamSwitch(request) {
     const stream = (await this.listStreams()).find(
       (item) => item.stream === request.targetStream,

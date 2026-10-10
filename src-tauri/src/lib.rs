@@ -20,6 +20,7 @@ use app::file_service::FileService;
 use app::rename_service::RenameService;
 use app::search_service::GlobalSearchService;
 use app::status_cache::{shared_default, StatusCache};
+use app::stream_graph_service::StreamGraphService;
 use app::stream_switch_service::StreamSwitchService;
 use app::submit_service::SubmitService;
 use app::sync_service::SyncService;
@@ -48,6 +49,7 @@ pub(crate) struct AppState {
     pub journal: Arc<OperationJournal>,
     pub diagnostics: Arc<DiagnosticService>,
     pub search: Arc<GlobalSearchService>,
+    pub stream_graph: Arc<StreamGraphService>,
     pub stream_switch: Arc<StreamSwitchService>,
 }
 
@@ -230,6 +232,7 @@ pub fn run() {
                 changelists.clone(),
                 contexts.clone(),
             ));
+            let stream_graph = Arc::new(StreamGraphService::new(runner.clone(), contexts.clone()));
             let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts));
             app.manage(AppState {
                 runner,
@@ -246,6 +249,7 @@ pub fn run() {
                 journal,
                 diagnostics,
                 search,
+                stream_graph,
                 stream_switch,
             });
             Ok(())
@@ -254,6 +258,7 @@ pub fn run() {
             ipc::commands::workspace_disk_usage,
             ipc::commands::list_user_workspaces,
             ipc::commands::list_streams,
+            ipc::commands::query_stream_graph,
             ipc::commands::preflight_stream_switch,
             ipc::commands::confirm_stream_switch,
             ipc::commands::open_panel_window,

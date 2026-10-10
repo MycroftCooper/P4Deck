@@ -172,6 +172,15 @@ pub async fn list_streams(
 }
 
 #[tauri::command]
+pub async fn query_stream_graph(
+    query: StreamGraphQuery,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<StreamGraphResult, StreamGraphRequestError> {
+    state.stream_graph.query(query, Some(&app)).await
+}
+
+#[tauri::command]
 pub async fn preflight_stream_switch(
     request: StreamSwitchPreflightRequest,
     state: State<'_, AppState>,
@@ -354,6 +363,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.runner.cancel_all();
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
+    state.stream_graph.clear_for_context_switch();
     state.submit.clear_confirmations();
     state.sync.clear_confirmations();
     state.workflows.clear_confirmations();
@@ -368,6 +378,7 @@ fn invalidate_after_context_change(state: &AppState) {
 fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
+    state.stream_graph.clear_for_context_switch();
     state.files.clear_review_cache();
     state.file_locks.clear_confirmations();
     state.status_cache.clear_for_context_switch();
@@ -481,6 +492,7 @@ pub async fn run_p4(
 pub fn cancel_operation(operation_id: String, state: State<'_, AppState>) {
     state.runner.cancel(&operation_id);
     state.search.cancel(&operation_id);
+    state.stream_graph.cancel(&operation_id);
 }
 
 #[tauri::command]

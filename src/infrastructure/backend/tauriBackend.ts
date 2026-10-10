@@ -28,6 +28,7 @@ export const tauriBackend: Backend = {
   login: (request) => invoke("login", { request }),
   logout: (request) => invoke("logout", { request }),
   listStreams: () => invoke("list_streams"),
+  queryStreamGraph: (query) => invoke("query_stream_graph", { query }),
   preflightStreamSwitch: (request) =>
     invoke("preflight_stream_switch", { request }),
   confirmStreamSwitch: (confirmation) =>

@@ -41,6 +41,8 @@ import type {
   StreamSwitchPreflight,
   StreamSwitchConfirmation,
   StreamSwitchResult,
+  StreamGraphQuery,
+  StreamGraphResult,
   FileHistoryPage,
   FileHistoryRequest,
   GlobalSearchQuery,
@@ -134,6 +136,7 @@ export interface Backend {
   listStreams(): Promise<
     import("../../shared/contracts/types").StreamSummary[]
   >;
+  queryStreamGraph(query: StreamGraphQuery): Promise<StreamGraphResult>;
   preflightStreamSwitch(
     request: StreamSwitchPreflightRequest,
   ): Promise<StreamSwitchPreflight>;

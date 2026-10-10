@@ -10,6 +10,89 @@ export interface StreamSummary {
   description: string;
 }
 
+export interface StreamGraphQuery {
+  operationId: string;
+  requestGeneration: number;
+  depotPrefix?: string;
+  text?: string;
+  includeDeleted: boolean;
+  pageSize: number;
+  cursor?: string;
+  refresh?: boolean;
+}
+
+export interface StreamFlowOptions {
+  toParent?: boolean;
+  fromParent?: boolean;
+  mergeMode?: string;
+  locked?: boolean;
+  allSubmit?: boolean;
+}
+
+export interface StreamGraphNode {
+  stream: string;
+  name?: string;
+  owner?: string;
+  parent?: string;
+  kind?: string;
+  description?: string;
+  parentView?: string;
+  flowOptions: StreamFlowOptions;
+  deleted?: boolean;
+}
+
+export interface StreamGraphEdge {
+  parent: string;
+  child: string;
+}
+
+export interface StreamGraphScope {
+  activeProfileId?: string;
+  contextGeneration: number;
+  server: string;
+  user: string;
+  client: string;
+  depotPrefix?: string;
+}
+
+export interface StreamGraphResult {
+  requestGeneration: number;
+  scope: StreamGraphScope;
+  nodes: StreamGraphNode[];
+  edges: StreamGraphEdge[];
+  roots: string[];
+  orphans: string[];
+  hasMore: boolean;
+  nextCursor?: string;
+  partial: boolean;
+  truncated: boolean;
+  stats: {
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    duplicateCount: number;
+    invalidRelationCount: number;
+    safetyLimit: number;
+  };
+  operationIds: string[];
+  cacheFreshness: "fresh" | "cached";
+  /** True only for Browser Mock responses. */
+  simulated: boolean;
+}
+
+export type StreamGraphRequestErrorCode =
+  | "invalidQuery"
+  | "invalidCursor"
+  | "cursorExpired"
+  | "connectionChanged"
+  | "cancelled"
+  | "queryFailed";
+
+export interface StreamGraphRequestError {
+  code: StreamGraphRequestErrorCode;
+  message: string;
+}
+
 export interface ClientWorkspace {
   name: string;
   owner: string;

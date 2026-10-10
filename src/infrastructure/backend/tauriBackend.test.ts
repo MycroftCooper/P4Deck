@@ -141,6 +141,24 @@ it("passes immutable stream-switch preflight and confirmation payloads unchanged
   });
 });
 
+it("passes the generation-bound Stream Graph query through unchanged", async () => {
+  const query = {
+    operationId: "stream-graph-42",
+    requestGeneration: 5,
+    depotPrefix: "//depot/项目",
+    text: "release 流",
+    includeDeleted: true,
+    pageSize: 50,
+    cursor: "opaque-one-use-stream-cursor",
+    refresh: true,
+  };
+  invoke.mockResolvedValue({ nodes: [], edges: [], simulated: false });
+  await tauriBackend.queryStreamGraph(query);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("query_stream_graph", {
+    query,
+  });
+});
+
 it("passes the typed submitted query and opaque cursor through unchanged", async () => {
   const query = {
     operationId: "submitted-query-42",

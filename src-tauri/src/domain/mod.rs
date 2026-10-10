@@ -693,6 +693,137 @@ pub struct GlobalSearchResult {
     pub stats: GlobalSearchStats,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StreamGraphQuery {
+    pub operation_id: String,
+    pub request_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depot_prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub include_deleted: bool,
+    pub page_size: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamFlowOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_parent: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_parent: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub locked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub all_submit: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamGraphNode {
+    pub stream: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_view: Option<String>,
+    pub flow_options: StreamFlowOptions,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamGraphEdge {
+    pub parent: String,
+    pub child: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamGraphScope {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_profile_id: Option<String>,
+    pub context_generation: u64,
+    pub server: String,
+    pub user: String,
+    pub client: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depot_prefix: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamGraphStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub returned_count: usize,
+    pub duplicate_count: usize,
+    pub invalid_relation_count: usize,
+    pub safety_limit: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamGraphCacheFreshness {
+    Fresh,
+    Cached,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamGraphResult {
+    pub request_generation: u64,
+    pub scope: StreamGraphScope,
+    pub nodes: Vec<StreamGraphNode>,
+    pub edges: Vec<StreamGraphEdge>,
+    pub roots: Vec<String>,
+    pub orphans: Vec<String>,
+    pub has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub partial: bool,
+    pub truncated: bool,
+    pub stats: StreamGraphStats,
+    pub operation_ids: Vec<String>,
+    pub cache_freshness: StreamGraphCacheFreshness,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamGraphRequestErrorCode {
+    InvalidQuery,
+    InvalidCursor,
+    CursorExpired,
+    ConnectionChanged,
+    Cancelled,
+    QueryFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[serde(rename_all = "camelCase")]
+#[error("{message}")]
+pub struct StreamGraphRequestError {
+    pub code: StreamGraphRequestErrorCode,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     tag = "type",

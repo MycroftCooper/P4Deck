@@ -149,6 +149,37 @@ describe("controlled P4 terminal", () => {
     ).rejects.toThrow("does not match");
   });
 
+  it("provides an explicitly simulated Stream Graph forest", async () => {
+    const first = await backend.queryStreamGraph({
+      operationId: "mock-stream-graph-1",
+      requestGeneration: 51,
+      depotPrefix: "//atlas",
+      includeDeleted: false,
+      pageSize: 2,
+      refresh: true,
+    });
+    expect(first.simulated).toBe(true);
+    expect(first.nodes).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeTruthy();
+    expect(first.stats.safetyLimit).toBe(5000);
+
+    const second = await backend.queryStreamGraph({
+      operationId: "mock-stream-graph-2",
+      requestGeneration: 51,
+      depotPrefix: "//atlas",
+      includeDeleted: false,
+      pageSize: 2,
+      cursor: first.nextCursor,
+      refresh: false,
+    });
+    expect(second.nodes.map((node) => node.stream)).not.toEqual(
+      first.nodes.map((node) => node.stream),
+    );
+    expect(second.orphans).toEqual(["//atlas/task-孤立"]);
+    expect(second.partial).toBe(true);
+  });
+
   it("validates Unicode, whitespace, control and special-character searches", async () => {
     const unicode = await backend.globalSearch({
       operationId: "mock-global-unicode",

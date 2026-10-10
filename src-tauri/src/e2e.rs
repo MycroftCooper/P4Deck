@@ -5,9 +5,9 @@ mod tests {
             changelist_service::ChangelistService, connection_service::ConnectionService,
             file_lock_service::FileLockService, file_service::FileService,
             rename_service::RenameService, search_service::GlobalSearchService,
-            status_cache::StatusCache, stream_switch_service::StreamSwitchService,
-            submit_service::SubmitService, sync_service::SyncService,
-            workflow_service::WorkflowService,
+            status_cache::StatusCache, stream_graph_service::StreamGraphService,
+            stream_switch_service::StreamSwitchService, submit_service::SubmitService,
+            sync_service::SyncService, workflow_service::WorkflowService,
         },
         domain::{
             AuthenticationRequest, ConnectionState, CreateConnectionProfileRequest,
@@ -22,6 +22,7 @@ mod tests {
             RenameMovePreflightRequest, ResolveConfirmation, ResolvePreflightRequest,
             ResolveSelection, ResolveStrategy, SetActiveConnectionProfileRequest,
             ShelfDetailRequest, ShelfFilePreviewRequest, ShelfMode, ShelfPreflightRequest,
+            StreamGraphCacheFreshness, StreamGraphQuery, StreamGraphRequestErrorCode,
             StreamSwitchConfirmation, StreamSwitchFailureCode, StreamSwitchIssueCode,
             StreamSwitchMode, StreamSwitchOutcome, StreamSwitchPreflightRequest,
             SubmitConfirmation, SubmitFailureCode, SubmitOutcome, SubmitPreflightRequest,
@@ -61,6 +62,10 @@ mod tests {
     const STREAM_CLIENT: &str = "p4deck-fixture-stream-e2e";
     const MAIN_STREAM: &str = "//p4deck-stream-e2e/main";
     const DEV_STREAM: &str = "//p4deck-stream-e2e/dev";
+    const RELEASE_STREAM: &str = "//p4deck-stream-e2e/release";
+    const VIRTUAL_STREAM: &str = "//p4deck-stream-e2e/virtual";
+    const TASK_STREAM: &str = "//p4deck-stream-e2e/orphan-filter-child";
+    const DELETED_STREAM: &str = "//p4deck-stream-e2e/deleted";
     const LOCK_CLIENT: &str = "p4deck-fixture-lock-other";
     const LOCK_USER: &str = "p4deck-fixture-lock-user";
 
@@ -218,6 +223,7 @@ mod tests {
             1,
         );
         let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts.clone()));
+        let stream_graph = Arc::new(StreamGraphService::new(runner.clone(), contexts.clone()));
         let expiring_stream_switch = Arc::new(StreamSwitchService::with_ttl(
             runner.clone(),
             contexts.clone(),
@@ -267,6 +273,7 @@ mod tests {
                             rename: &rename,
                             expiring_rename: &expiring_rename,
                             file_locks: &file_locks,
+                            stream_graph: &stream_graph,
                             stream_switch: &stream_switch,
                             expiring_stream_switch: &expiring_stream_switch,
                         },
@@ -1721,6 +1728,18 @@ mod tests {
             OutputMode::Text,
         )
         .await?;
+        let release_spec = format!(
+            "Stream: {RELEASE_STREAM}\nOwner: {FIXTURE_USER}\nName: release\nParent: {MAIN_STREAM}\nType: release\nParentView: noinherit\nDescription:\n\tP4Deck Stream Graph release 流.\nOptions: ownersubmit unlocked notoparent fromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(release_spec),
+            OutputMode::Text,
+        )
+        .await?;
         let dev_spec = format!(
             "Stream: {DEV_STREAM}\nOwner: {FIXTURE_USER}\nName: dev\nParent: {MAIN_STREAM}\nType: development\nParentView: inherit\nDescription:\n\tP4Deck stream-switch development stream.\nOptions: allsubmit unlocked toparent fromparent mergedown\nPaths:\n\tshare ...\n"
         );
@@ -1733,7 +1752,51 @@ mod tests {
             OutputMode::Text,
         )
         .await?;
-
+        let virtual_spec = format!(
+            "Stream: {VIRTUAL_STREAM}\nOwner: {FIXTURE_USER}\nName: virtual\nParent: {DEV_STREAM}\nType: virtual\nParentView: inherit\nDescription:\n\tP4Deck Stream Graph virtual stream.\nOptions: allsubmit unlocked notoparent nofromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(virtual_spec),
+            OutputMode::Text,
+        )
+        .await?;
+        let task_spec = format!(
+            "Stream: {TASK_STREAM}\nOwner: {FIXTURE_USER}\nName: orphan-filter-child\nParent: {DEV_STREAM}\nType: task\nParentView: inherit\nDescription:\n\tP4Deck Stream Graph orphan-filter-child Unicode 子流.\nOptions: allsubmit unlocked toparent fromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(task_spec),
+            OutputMode::Text,
+        )
+        .await?;
+        let deleted_spec = format!(
+            "Stream: {DELETED_STREAM}\nOwner: {FIXTURE_USER}\nName: deleted\nParent: {MAIN_STREAM}\nType: development\nParentView: inherit\nDescription:\n\tP4Deck deleted Stream Graph fixture.\nOptions: allsubmit unlocked toparent fromparent mergedown\nPaths:\n\tshare ...\n"
+        );
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-i".into()],
+            Some(deleted_spec),
+            OutputMode::Text,
+        )
+        .await?;
+        checked_run(
+            runner,
+            base,
+            "stream",
+            vec!["-d".into(), DELETED_STREAM.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await?;
         let mut context = base.clone();
         context.client = STREAM_CLIENT.into();
         context.cwd = Some(root.to_string_lossy().into_owned());
@@ -1898,7 +1961,14 @@ mod tests {
             OutputMode::Text,
         )
         .await;
-        for stream in [DEV_STREAM, MAIN_STREAM] {
+        for stream in [
+            TASK_STREAM,
+            VIRTUAL_STREAM,
+            RELEASE_STREAM,
+            DEV_STREAM,
+            DELETED_STREAM,
+            MAIN_STREAM,
+        ] {
             let _ = checked_run(
                 runner,
                 base,
@@ -1961,6 +2031,7 @@ mod tests {
         rename: &'a RenameService,
         expiring_rename: &'a RenameService,
         file_locks: &'a FileLockService,
+        stream_graph: &'a Arc<StreamGraphService>,
         stream_switch: &'a Arc<StreamSwitchService>,
         expiring_stream_switch: &'a Arc<StreamSwitchService>,
     }
@@ -1988,6 +2059,7 @@ mod tests {
             rename,
             expiring_rename,
             file_locks,
+            stream_graph,
             stream_switch,
             expiring_stream_switch,
         } = services;
@@ -2253,8 +2325,7 @@ mod tests {
             connection,
             runner,
             contexts,
-            stream_switch,
-            expiring_stream_switch,
+            (stream_graph, stream_switch, expiring_stream_switch),
             context,
             root,
         )
@@ -2262,15 +2333,280 @@ mod tests {
         Ok(())
     }
 
+    fn stream_graph_query(
+        operation_id: &str,
+        request_generation: u64,
+        depot_prefix: Option<&str>,
+        text: Option<&str>,
+        include_deleted: bool,
+        page: (usize, Option<String>),
+        refresh: bool,
+    ) -> StreamGraphQuery {
+        let (page_size, cursor) = page;
+        StreamGraphQuery {
+            operation_id: operation_id.into(),
+            request_generation,
+            depot_prefix: depot_prefix.map(str::to_owned),
+            text: text.map(str::to_owned),
+            include_deleted,
+            page_size,
+            cursor,
+            refresh,
+        }
+    }
+
+    async fn exercise_stream_graph(
+        service: &StreamGraphService,
+        contexts: &ContextStore,
+    ) -> Result<(), String> {
+        let generation = contexts.snapshot().1;
+        let prefix = format!("//{STREAM_DEPOT}");
+        let first_query = stream_graph_query(
+            "stream-graph-e2e-page-1",
+            71,
+            Some(&prefix),
+            None,
+            false,
+            (2, None),
+            true,
+        );
+        let first = service
+            .query(first_query.clone(), None)
+            .await
+            .map_err(|error| format!("Stream Graph first page: {error}"))?;
+        ensure(
+            first.nodes.len() == 2
+                && first.has_more
+                && first.next_cursor.is_some()
+                && first.cache_freshness == StreamGraphCacheFreshness::Fresh
+                && first.scope.context_generation == generation,
+            format!("Stream Graph first page was invalid: {first:?}"),
+        )?;
+
+        let mut cached_query = first_query.clone();
+        cached_query.operation_id = "stream-graph-e2e-cached".into();
+        cached_query.refresh = false;
+        let cached = service
+            .query(cached_query, None)
+            .await
+            .map_err(|error| format!("Stream Graph cached page: {error}"))?;
+        ensure(
+            cached.cache_freshness == StreamGraphCacheFreshness::Cached,
+            format!("Stream Graph cache freshness was not explicit: {cached:?}"),
+        )?;
+
+        let first_cursor = first
+            .next_cursor
+            .clone()
+            .ok_or("Stream Graph first page returned no cursor")?;
+        let mut paths = first
+            .nodes
+            .iter()
+            .map(|node| node.stream.clone())
+            .collect::<Vec<_>>();
+        let mut cursor = Some(first_cursor.clone());
+        let mut page = 2u64;
+        while let Some(current) = cursor {
+            let next = service
+                .query(
+                    stream_graph_query(
+                        &format!("stream-graph-e2e-page-{page}"),
+                        71,
+                        Some(&prefix),
+                        None,
+                        false,
+                        (2, Some(current)),
+                        false,
+                    ),
+                    None,
+                )
+                .await
+                .map_err(|error| format!("Stream Graph page {page}: {error}"))?;
+            paths.extend(next.nodes.iter().map(|node| node.stream.clone()));
+            cursor = next.next_cursor;
+            page += 1;
+        }
+        for expected in [
+            MAIN_STREAM,
+            DEV_STREAM,
+            RELEASE_STREAM,
+            VIRTUAL_STREAM,
+            TASK_STREAM,
+        ] {
+            ensure(
+                paths.iter().any(|path| path == expected),
+                format!("Stream Graph pagination omitted {expected}: {paths:?}"),
+            )?;
+        }
+        let replay = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-replay",
+                    71,
+                    Some(&prefix),
+                    None,
+                    false,
+                    (2, Some(first_cursor)),
+                    false,
+                ),
+                None,
+            )
+            .await
+            .expect_err("consumed Stream Graph cursor was replayable");
+        ensure(
+            matches!(
+                replay.code,
+                StreamGraphRequestErrorCode::InvalidCursor
+                    | StreamGraphRequestErrorCode::CursorExpired
+            ),
+            format!("cursor replay had the wrong error: {replay:?}"),
+        )?;
+
+        let orphan = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-orphan",
+                    72,
+                    Some(&prefix),
+                    Some("orphan-filter-child"),
+                    false,
+                    (20, None),
+                    true,
+                ),
+                None,
+            )
+            .await
+            .map_err(|error| format!("Stream Graph orphan filter: {error}"))?;
+        ensure(
+            orphan.nodes.len() == 1
+                && orphan.nodes[0].stream == TASK_STREAM
+                && orphan.edges.is_empty()
+                && orphan.orphans == vec![TASK_STREAM]
+                && orphan.partial,
+            format!("filtered parent was not represented as an orphan: {orphan:?}"),
+        )?;
+
+        let deleted = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-deleted",
+                    73,
+                    Some(&prefix),
+                    None,
+                    true,
+                    (20, None),
+                    true,
+                ),
+                None,
+            )
+            .await
+            .map_err(|error| format!("Stream Graph includeDeleted: {error}"))?;
+        ensure(
+            deleted
+                .nodes
+                .iter()
+                .any(|node| node.stream == DELETED_STREAM && node.deleted == Some(true)),
+            format!("includeDeleted did not expose the deleted stream: {deleted:?}"),
+        )?;
+
+        let missing_scope = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-missing-scope",
+                    74,
+                    Some("//p4deck-stream-e2e/no-such-stream"),
+                    None,
+                    false,
+                    (20, None),
+                    true,
+                ),
+                None,
+            )
+            .await
+            .map_err(|error| format!("Stream Graph missing scope: {error}"))?;
+        ensure(
+            missing_scope.nodes.is_empty(),
+            format!("server no-match fallback escaped the client depot scope: {missing_scope:?}"),
+        )?;
+
+        service.cancel("stream-graph-e2e-cancelled");
+        let cancelled = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-cancelled",
+                    75,
+                    Some(&prefix),
+                    None,
+                    false,
+                    (20, None),
+                    true,
+                ),
+                None,
+            )
+            .await
+            .expect_err("pre-cancelled Stream Graph query ran");
+        ensure(
+            cancelled.code == StreamGraphRequestErrorCode::Cancelled,
+            format!("Stream Graph cancellation was misclassified: {cancelled:?}"),
+        )?;
+
+        let generation_page = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-generation-page",
+                    76,
+                    Some(&prefix),
+                    None,
+                    false,
+                    (1, None),
+                    true,
+                ),
+                None,
+            )
+            .await
+            .map_err(|error| format!("Stream Graph generation page: {error}"))?;
+        contexts
+            .advance_generation_if_unchanged(generation)
+            .map_err(|error| error.to_string())?;
+        let stale = service
+            .query(
+                stream_graph_query(
+                    "stream-graph-e2e-generation-stale",
+                    76,
+                    Some(&prefix),
+                    None,
+                    false,
+                    (1, generation_page.next_cursor),
+                    false,
+                ),
+                None,
+            )
+            .await
+            .expect_err("generation-bound Stream Graph cursor survived drift");
+        ensure(
+            matches!(
+                stale.code,
+                StreamGraphRequestErrorCode::InvalidCursor
+                    | StreamGraphRequestErrorCode::ConnectionChanged
+            ),
+            format!("Stream Graph generation drift was misclassified: {stale:?}"),
+        )?;
+        Ok(())
+    }
+
     async fn exercise_stream_switch(
         connection: &ConnectionService,
         runner: &Arc<P4Runner>,
         contexts: &ContextStore,
-        service: &Arc<StreamSwitchService>,
-        expiring_service: &Arc<StreamSwitchService>,
+        services: (
+            &Arc<StreamGraphService>,
+            &Arc<StreamSwitchService>,
+            &Arc<StreamSwitchService>,
+        ),
         original_context: &P4Context,
         original_root: &Path,
     ) -> Result<(), String> {
+        let (stream_graph, service, expiring_service) = services;
         let stream_root = original_root
             .parent()
             .ok_or("fixture workspace has no parent")?
@@ -2291,6 +2627,7 @@ mod tests {
             switched_workspace.context.client == STREAM_CLIENT,
             "stream fixture workspace was not activated",
         )?;
+        exercise_stream_graph(stream_graph, contexts).await?;
 
         let scenario = async {
             let preflight = |target: &str, mode, operation: &str| StreamSwitchPreflightRequest {

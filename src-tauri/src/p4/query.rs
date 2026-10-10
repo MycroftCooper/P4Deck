@@ -28,6 +28,25 @@ struct GlobalSearchCursor {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StreamGraphCursor {
+    version: u8,
+    snapshot_id: String,
+    cursor_id: String,
+    offset: usize,
+    query_fingerprint: String,
+    connection_fingerprint: String,
+    connection_generation: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StreamGraphCursorBoundary {
+    pub snapshot_id: String,
+    pub cursor_id: String,
+    pub offset: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PendingChangeCursor {
     version: u8,
     snapshot_id: String,
@@ -169,6 +188,70 @@ pub fn decode_global_search_cursor(
         return Err("global search cursor does not match this query or connection".into());
     }
     Ok((cursor.snapshot_id, cursor.offset))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn encode_stream_graph_cursor(
+    snapshot_id: &str,
+    cursor_id: &str,
+    offset: usize,
+    query_fingerprint: &str,
+    connection_fingerprint: &str,
+    connection_generation: u64,
+) -> Result<String, String> {
+    if snapshot_id.is_empty()
+        || snapshot_id.len() > 128
+        || cursor_id.is_empty()
+        || cursor_id.len() > 128
+        || offset == 0
+    {
+        return Err("invalid Stream Graph cursor boundary".into());
+    }
+    let bytes = serde_json::to_vec(&StreamGraphCursor {
+        version: CURSOR_VERSION,
+        snapshot_id: snapshot_id.into(),
+        cursor_id: cursor_id.into(),
+        offset,
+        query_fingerprint: query_fingerprint.into(),
+        connection_fingerprint: connection_fingerprint.into(),
+        connection_generation,
+    })
+    .map_err(|error| error.to_string())?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+pub fn decode_stream_graph_cursor(
+    encoded: &str,
+    expected_query_fingerprint: &str,
+    expected_connection_fingerprint: &str,
+    expected_connection_generation: u64,
+) -> Result<StreamGraphCursorBoundary, String> {
+    if encoded.is_empty() || encoded.len() > MAX_CURSOR_BYTES {
+        return Err("invalid Stream Graph cursor".into());
+    }
+    let bytes = URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| "invalid Stream Graph cursor")?;
+    if bytes.len() > MAX_CURSOR_BYTES {
+        return Err("invalid Stream Graph cursor".into());
+    }
+    let cursor: StreamGraphCursor =
+        serde_json::from_slice(&bytes).map_err(|_| "invalid Stream Graph cursor")?;
+    if cursor.version != CURSOR_VERSION
+        || cursor.snapshot_id.is_empty()
+        || cursor.cursor_id.is_empty()
+        || cursor.offset == 0
+        || cursor.query_fingerprint != expected_query_fingerprint
+        || cursor.connection_fingerprint != expected_connection_fingerprint
+        || cursor.connection_generation != expected_connection_generation
+    {
+        return Err("Stream Graph cursor does not match this query or connection".into());
+    }
+    Ok(StreamGraphCursorBoundary {
+        snapshot_id: cursor.snapshot_id,
+        cursor_id: cursor.cursor_id,
+        offset: cursor.offset,
+    })
 }
 
 pub fn encode_pending_change_cursor(
@@ -329,6 +412,42 @@ mod tests {
         assert!(decode_global_search_cursor(&cursor, "other", "connection-一", 7).is_err());
         assert!(decode_global_search_cursor(&cursor, "query-一", "other", 7).is_err());
         assert!(decode_global_search_cursor(&cursor, "query-一", "connection-一", 8).is_err());
+    }
+
+    #[test]
+    fn stream_graph_cursor_binds_page_size_query_connection_and_generation() {
+        let cursor = encode_stream_graph_cursor(
+            "snapshot-graph",
+            "cursor-once",
+            2,
+            "query-page-size-2",
+            "profile-and-context",
+            7,
+        )
+        .unwrap();
+        assert_eq!(
+            decode_stream_graph_cursor(&cursor, "query-page-size-2", "profile-and-context", 7)
+                .unwrap(),
+            StreamGraphCursorBoundary {
+                snapshot_id: "snapshot-graph".into(),
+                cursor_id: "cursor-once".into(),
+                offset: 2,
+            }
+        );
+        assert!(decode_stream_graph_cursor(
+            &cursor,
+            "different-page-size",
+            "profile-and-context",
+            7
+        )
+        .is_err());
+        assert!(
+            decode_stream_graph_cursor(&cursor, "query-page-size-2", "other-profile", 7).is_err()
+        );
+        assert!(
+            decode_stream_graph_cursor(&cursor, "query-page-size-2", "profile-and-context", 8)
+                .is_err()
+        );
     }
 
     #[test]
