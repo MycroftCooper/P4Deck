@@ -4,7 +4,6 @@ import {
   appCommandReason,
   appCommands,
   commandForShortcut,
-  isAppCommand,
   shortcutConflicts,
 } from "./catalog";
 
@@ -61,8 +60,6 @@ describe("application command catalog", () => {
         "openWith",
       ]),
     );
-    expect(isAppCommand("tools.openTerminal")).toBe(true);
-    expect(isAppCommand("tools.openTerminal?<script>")).toBe(false);
   });
 
   it("uses Ctrl on Windows/Linux, Cmd on macOS, and protects editable fields", () => {

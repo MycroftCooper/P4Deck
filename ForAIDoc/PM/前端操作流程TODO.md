@@ -1,7 +1,7 @@
 # 前端操作流程 TODO
 
 > 文档角色：**历史累计实现与验收台账**，不是当前任务队列。
-> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、普通 Lock/Unlock、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是删除管理员 Force Unlock 后的最终构建、剩余 Tauri Windows 原生点击与本人实际 Server 验收。
+> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、普通 Lock/Unlock、390px Web 布局、37 个前端 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据。本人验收后已移除重复且不符合设计的原生 Connection/Changes/Navigate/View 顶栏菜单；连接管理继续位于 Settings。当前缺口是最终构建、剩余 Tauri Windows 原生点击与本人实际 Server 验收。
 > 下文保留各批次当时的测试数量、平台范围和“待验”描述作为历史快照。旧数字不得解释为最新门禁；“原生待验”表示缺少 Tauri 实机证据，不表示对应 React/后端功能仍未实现。
 
 ## 最近完成：Global Search Stream/Shelf 前端闭环（2026-10-10）
@@ -9,7 +9,7 @@
 - `SearchPage` 在原五类状态机上正式加入 Stream 与 Shelf，共七类筛选、facet、分组、图标与结果 badge；空 `kinds` 的后端“全部七类”语义未改变，显式类别、重试、分页与快速输入继续绑定原请求快照。
 - Stream 结果原样呈现 target path、标题及后端提供的 owner/type/parent/description 摘要，点击或 Enter 使用 App 显式 state 定位 Streams；找不到精确节点时目标页显示搜索提示。Shelf 结果展示 numbered CL、owner/client/time/description 与后端已返回的匹配路径摘要/数量/截断文字，点击或 Enter 打开独立 Shelf detail，不把 Pending/Submitted 冒充 Shelf。
 - Shelf 深搜继续由后端执行有界 500 metadata、128 detail 候选、8 批、每 shelf 256/总 20,000 文件和 20 秒预算；UI 显示每类 `partialReason`，单类失败不拖垮其他类别。结果只使用后端 UTF-16 ranges 作为文本节点高亮；不使用 `innerHTML`、不重新请求详情做搜索、同 identity 跨页稳定去重。
-- 快速输入/类别变化取消旧 operation 并隔离迟到响应，cursor 失败可从首屏重搜；390px 七类筛选、长路径、键盘结果 Enter、ARIA group/status、Browser Mock simulated 及 Stream/Shelf 导航返回由组件与真实 Edge/axe 覆盖。没有新增全局 command/menu，37/503/502 parity 不变；Windows Tauri 原生点击和本人 Server 规模/权限/trigger 仍待验收。
+- 快速输入/类别变化取消旧 operation 并隔离迟到响应，cursor 失败可从首屏重搜；390px 七类筛选、长路径、键盘结果 Enter、ARIA group/status、Browser Mock simulated 及 Stream/Shelf 导航返回由组件与真实 Edge/axe 覆盖。该批没有新增全局 command 或右键菜单项，当时的 37/503/502 数量保持不变；Windows Tauri 原生点击和本人 Server 规模/权限/trigger 仍待验收。
 
 ## 历史记录：Force Unlock 前端闭环（2026-10-10，后续已下线）
 
@@ -23,7 +23,7 @@
 
 ## 最近完成：Branch Mapping 前端闭环（2026-10-10）
 
-- 新增正式 `branchmappings` 全局 panel，接入 Activity Bar、Dock 新页、Streams 邻近入口与 Tauri popout 白名单；没有增加全局 command，37 项 TS/Rust command parity 保持不变。
+- 新增正式 `branchmappings` 全局 panel，接入 Activity Bar、Dock 新页、Streams 邻近入口与 Tauri popout 白名单；没有增加全局 command，当时的 37 项 TS/Rust 原生菜单 parity 是历史快照，当前只保留 37 项前端 catalog 完整性校验。
 - 页面只消费既有强类型 Branch Mapping 契约：服务端 list/detail 与 View 顺序原样呈现，`map/exclude/overlay/comment/unknown` 不猜测；查询/owner 过滤、opaque cursor 分页、稳定去重、不前进 cursor 保守停止、失效 cursor 首屏重启、刷新/取消/重试，以及 partial/truncated/safety-limit/simulated/stale 状态均已接通。大列表使用窗口化并有 DOM 上限测试。
 - 正反影响预览只调用专用 `integrate -n` 接口，明确“不修改 workspace/不打开文件”，并展示 file/action/source/target、blocker 与部分/截断状态。create/edit/delete 只走专用 preflight→一次性 confirm；View 编辑器保留排序、限制 512 行并逐行校验，unknown/comment/不可往返内容禁止编辑，删除要求独立高危确认，失败/过期/取消/未知结果不冒充成功。
 - Profile/connection/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading；详情/对话框具备键盘、ARIA、Escape 和来源回焦，390px 使用列表/详情上下布局，长路径只在受控内容区换行或滚动。Browser Mock 全程标示 simulated。
@@ -31,7 +31,7 @@
 
 ## 最近完成：Stream Graph 前端闭环（2026-10-10）
 
-- 新增正式 `streamgraph` 全局 panel，接入 Activity Bar、Dock 新页入口、Streams 页面入口与 Tauri popout 白名单；没有新增全局 command，因此 37 项 TS/Rust 命令 parity 不变。
+- 新增正式 `streamgraph` 全局 panel，接入 Activity Bar、Dock 新页入口、Streams 页面入口与 Tauri popout 白名单；没有新增全局 command。原生顶栏菜单移除后，37 项前端 catalog 仍服务命令面板、快捷键和执行策略。
 - 页面直接消费 `queryStreamGraph` 强类型结果，以确定性 parent→child 分层与虚拟化可访问树表达 root/child/orphan/父节点未加载、unknown/deleted/current/partial/truncated；不存在的父节点不伪造，merge/copy 状态不猜测。
 - depot/text/includeDeleted、刷新/取消/重试、opaque cursor 继续加载、重复/不前进 cursor 保守停止、游标失效首屏重启、cache/simulated/safety-limit 提示均已接通。连接/Profile/generation/query/刷新/卸载变化会取消旧 operation 并隔离迟到 data/error/loading。
 - 详情展示官方名称、path、owner、type、parent、description、ParentView 与 flow 字段；可定位现有 Streams 页面，切换只打开既有 `StreamSwitchDialog`，图上不直接 mutation。支持缩放/重置/滚动平移、方向/Home/End/Enter/Escape、焦点反馈和 390px 图/详情上下布局。
@@ -46,7 +46,7 @@
 
 ## 最近完成：文件 Lock/Unlock 与独占状态（2026-10-09）
 
-- 工具栏、原生 Changes 菜单以及 F01/F02/F07/C04/C05 右键菜单统一打开 `FileLockDialog`，按 `Preflight → Review → Execute → Verify` 展示完整文件集合、opened action、Default/编号 CL、filetype/`+l`、我方/他方锁 owner、other-open、权限、blocker/warning 和逐文件结果。
+- 工具栏、当时的原生 Changes 菜单以及 F01/F02/F07/C04/C05 右键菜单统一打开 `FileLockDialog`，按 `Preflight → Review → Execute → Verify` 展示完整文件集合、opened action、Default/编号 CL、filetype/`+l`、我方/他方锁 owner、other-open、权限、blocker/warning 和逐文件结果。原生 Changes 菜单后续整体退役，工具栏与右键入口继续保留。
 - 对话框固定打开时选择和连接 key；只有 ready、未过期、带一次性 token 且 snapshot/digest 完整匹配时可确认。连接变化丢弃迟到响应；执行支持 operation group 取消，partial/failed/cancelled/unknown 不冒充全成功，不自动回滚，并提供人工重试和刷新原因。
 - Workspace/Depot/Pending 复用强类型状态显示 locked/global lock/exclusive 角标。Browser Mock 明示未连接 P4 Server，仍执行一次性 token、目标绑定和重放拒绝；Tauri 只透传窄契约。Terminal 与 generic FileAction 的 lock/unlock 旁路已关闭。
 - 自动化覆盖完整文件集绑定、blocker、迟到隔离、partial 逐项结果、命令策略、角标、Mock token 重放和安全边界；Windows localhost 覆盖双用户/双 Client、普通锁冲突、解锁、`binary+l`、generation/TOCTOU。Windows/macOS 原生点击、焦点、窄窗口和读屏仍待验收。
@@ -58,15 +58,15 @@
 - 默认“仅切换视图”只改变 Client 的 Stream，不触碰文件；用户显式选择“切换并同步”时才执行非 force `sync #head`，警告必须勾选。本地变化在同步模式下直接阻断；执行中取消不会冒充回滚，Stream 已改变但同步未完成时提供同 Stream 恢复预检。
 - 对话框固定打开时目标并绑定连接 key；连接变化会取消完整 operation group 并丢弃迟到响应。结果页保留到用户关闭，再应用后端已验证的新 runtime 和刷新 Streams/Workspace/Pending/Submitted/Search/Files/Depot，避免 generation 更新提前卸载验证结果。
 - Browser Mock 明示模拟；Tauri 适配只透传窄 preflight/confirmation 契约。Windows localhost 已以真实 main/development Stream 验证状态机；Windows/macOS 原生点击、焦点、390px、读屏和 macOS P4 仍待外部验收。
-- P1 基础 Swarm 链接（2026-10-09）：Connection Profile schema v3 已加入可选规范化 base URL；Submitted/Pending/Shelf/File/Revision 使用官方稳定路由并接入按钮、右键、命令面板和原生菜单。Rust opener 在外部打开前复核活动 profile/generation、同源/部署路径和 route allowlist。无网络探测、Swarm API、登录/凭据、评论或 Review 创建；Windows/macOS 原生浏览器启动与焦点仍待真实设备验收。
+- P1 基础 Swarm 链接（2026-10-09）：Connection Profile schema v3 已加入可选规范化 base URL；Submitted/Pending/Shelf/File/Revision 使用官方稳定路由并接入按钮、右键和命令面板。历史原生菜单入口后续已整体移除。Rust opener 在外部打开前复核活动 profile/generation、同源/部署路径和 route allowlist。无网络探测、Swarm API、登录/凭据、评论或 Review 创建；Windows/macOS 原生浏览器启动与焦点仍待真实设备验收。
 - 2026-10-10 前端收尾门禁：Web 75 文件/443 项、Rust 155 项（另 1 项 localhost E2E 默认 ignored）、真实 Edge 浏览器 3 项、主题对比度与前端契约 validator 通过；`ci:quick`、build 与 `git diff --check` 通过。前端 8 项/后端 5 项性能门禁和 Windows localhost 双轮 134.86 秒/135.57 秒为此前有效证据，本批未重复执行 localhost P4 E2E。
 
 ## 最近完成：统一 Action、失败恢复、自动刷新与通知（2026-10-09）
 
-- `app/commands/catalog.ts` 现为命令面板、Web 快捷键、Tauri 菜单和执行映射的统一 action 目录，覆盖全部现有 `CommandBar` 操作及 Profile、页面、Diagnostics、Terminal/P4 Log、设置和窗口动作；mutation 无直接快捷键且只调用既有状态机。
+- `app/commands/catalog.ts` 现为命令面板、前端快捷键和执行映射的统一 action 目录，覆盖全部现有 `CommandBar` 操作及 Profile、页面、Diagnostics、Terminal/P4 Log、设置和窗口动作；mutation 无直接快捷键且只调用既有状态机。Tauri 原生顶栏菜单及孤立的 `app-command` 事件桥已移除，不再维护虚拟 Rust 命令 ID 镜像。
 - 幂等只读 retry 具有错误分类、指数退避/jitter/硬上限、AbortSignal 与 profile/generation 漂移检查；mutation、Sync、Submit、Shelf 等不进入自动重试。
 - 自动刷新按窗口可见/聚焦/网络恢复和活动页触发，具有前后台/独立窗口节流、旧请求取消、迟到隔离、暂停/恢复、失败与上次更新时间。通知具有偏好、前台抑制、去重冷却与二次脱敏。
-- 全量门禁：Web 71 文件/403 项、Rust 130 项通过/1 项 ignored；`pnpm build/check/format:check`、Clippy `-D warnings`、rustfmt、前后端性能门禁和 `git diff --check` 通过；Windows localhost p4d 两轮通过（88.90 秒、85.51 秒）。Windows/macOS 原生菜单、系统通知、独立窗口焦点/节流、真实网络恢复和读屏仍为外部验收项。
+- 全量门禁：Web 71 文件/403 项、Rust 130 项通过/1 项 ignored；`pnpm build/check/format:check`、Clippy `-D warnings`、rustfmt、前后端性能门禁和 `git diff --check` 通过；Windows localhost p4d 两轮通过（88.90 秒、85.51 秒）。这些是历史快照；当前原生顶栏菜单已移除，外部项改为确认最终 Tauri 窗口不再显示菜单栏，以及系统通知、独立窗口焦点/节流、真实网络恢复和读屏。
 
 历史快照（2026-10-09）：当时以双平台 Alpha 为口径记录“整体未完成”。截至 2026-10-10，上述生产接线及 390px/axe 收尾均已完成自动化验收；当前 Windows 本机私用是否就绪只由新阶段 TODO 判定。
 
@@ -101,7 +101,7 @@
 | FE-18 | 多连接 profile 管理与切换 UI | 设置页 profile 列表、新建/编辑/删除、活动项、revision 冲突/迁移错误/失败回滚；复用既有认证向导 | 不存密码/ticket/fingerprint；删除活动/最后一项明确；切换先显示验证状态，失败保持旧连接；连接代次清理全部依赖视图 | 生产 UI、Mock/Tauri 契约和 Workspace 真切换入口已完成；53 文件/317 项 Web 自动化及 localhost 默认双轮通过。原生焦点/390px/读屏、真实 SSL/SSO/MFA 与成功 Server 切换实机仍待验收 |
 | FE-19 | Workspace 文件状态聚合呈现 | 消费 `WorkspaceListing` 与强类型正交状态；组合角标、证据/ignore 来源、partial/error、刷新与取消 | 未知不冒充 untracked；目录不推断子项；手动刷新穿透前后端缓存；AbortSignal 取消聚合子命令；大列表保持窗口化 | BE-005 生产契约、Mock/Tauri、55 文件/327 项 Web 测试与 Windows localhost 场景通过；原生 UI/macOS 待验 |
 | FE-20 | 基础 Stream 安全切换 | Streams 右键/详情入口、仅切视图默认项、可选同步、预检风险、确认、执行、验证和恢复 | 无 ready token 不执行；目标/连接/代次漂移拒绝；opened/unresolved 阻断；同步需确认且本地变化阻断；取消不冒充回滚；最终验证后统一刷新 | 生产契约、Mock/Tauri、组件状态机与 Windows localhost 双 Stream E2E 已完成；Windows/macOS 原生点击/焦点/读屏待验 |
-| FE-21 | 文件 Lock/Unlock 与独占状态 | 工具栏/原生菜单/右键统一入口；文件集、action/CL、filetype/`+l`、owner/other-open、权限与逐项结果 | 只接受后端 token；连接变化丢弃迟到结果；partial/取消/未知不回滚不冒充成功；不提供 force unlock | BE-011 生产接线、浏览器状态机与 Windows localhost 双用户/双 Client 已通过；原生 UI/macOS 待验 |
+| FE-21 | 文件 Lock/Unlock 与独占状态 | 工具栏/右键统一入口；文件集、action/CL、filetype/`+l`、owner/other-open、权限与逐项结果 | 只接受后端 token；连接变化丢弃迟到结果；partial/取消/未知不回滚不冒充成功；不提供 force unlock | BE-011 生产接线、浏览器状态机与 Windows localhost 双用户/双 Client 已通过；原生 UI/macOS 待验 |
 | FE-22 | Stream Graph 前端闭环 | 强类型只读森林、分页/虚拟化、过滤与状态提示、详情、键盘/390px、Streams 定位和安全切换入口 | 不解析 P4 输出、不伪造父节点/merge/copy；cursor 原样透传并拒绝不前进；旧连接响应不能覆盖；大图 DOM 有上限且有等价树语义 | 生产 panel、Mock/Tauri 契约、组件与真实 Edge 390px/axe 已通过；Windows Tauri 原生 panel/popout/焦点待验 |
 | FE-23 | Branch Mapping 前端闭环 | 正式 panel、过滤/虚拟分页、原样 detail/View、正反只读 impact preview、安全 create/edit/delete、键盘/ARIA/390px | 不解析 P4 form/输出；cursor/token 原样透传；只走专用 preview 与 preflight→confirm；unknown/comment 不安全往返时禁改；迟到结果不能覆盖 | 生产 panel、Mock/Tauri 契约、13 项新增组件/模型测试与真实 Edge 390px/axe/模拟增删改通过；Windows Tauri 原生 panel/popout 与本人 Server 权限/trigger 待验 |
 | FE-24 | Force Unlock（已下线） | 历史上曾完成文件选择上下文独立高危入口、来源预检、typed ack 与逐文件结果；现已删除 | P4Deck 面向普通用户，不提供管理员强制解锁按钮、对话框、专用 API 或旁路；普通 Lock/Unlock 与 other-owner blocker 保留 | 2026-10-10 历史实现/浏览器/一次 Windows 原生操作有证据；后续按用户决定下线，不再安排 Tauri/本人 Server 验收 |
@@ -305,13 +305,13 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～24
 
 ### 第二十批：Terminal / P4 Log 可发现、独立窗口与恢复闭环
 
-- `terminal` / `p4log` 注册为全局单实例 panel；活动栏、页签栏菜单、应用 View 菜单、命令面板、底部既有工具区和状态栏入口共同可达。`app/commands/catalog.ts` 统一命令 ID、双语名称、快捷键、可用条件和禁用原因；快捷键表见 `Designer/Terminal与P4Log工作流.md`。
+- `terminal` / `p4log` 注册为全局单实例 panel；活动栏、页签栏菜单、当时的应用 View 菜单、命令面板、底部既有工具区和状态栏入口共同可达。应用 View 菜单后续整体退役，其余入口保留；`app/commands/catalog.ts` 继续统一命令 ID、双语名称、快捷键、可用条件和禁用原因，快捷键表见 `Designer/Terminal与P4Log工作流.md`。
 - 两个工具沿用既有 Dockview / Tauri `open_panel_window`：Rust 白名单与编码 deep link、已有窗口聚焦、关闭回 dock、主窗口分配页签和启动恢复均不另开旁路。浮窗 URL 绑定 profile/context generation/不透明 connection token，不接受 URL Context 覆盖；连接漂移时取消 Terminal operation、清空旧输入/输出、淘汰迟到结果，Log 请求按 connection key 重建。
 - `nativePanels` 升级为版本化恢复记录并兼容旧数组。新增所有 panel 共用的 Rust `window-placement-v1.json`：普通 bounds + maximized、屏幕交集选择、最小/最大尺寸和越界回主屏均为可单测纯函数；Shelf 等既有 panel 自动复用，未创建 Terminal/Log 专属 bounds hack。
 - 底部工具区恢复 open/selected tab/height；P4 Log 恢复 level/source/follow-tail 和 operation filter。为避免凭据落盘，keyword/command filter、Terminal 输入/输出不持久化，旧 Terminal 历史继续读时清洗。
 - 独立 Terminal 仍走同一个 `runP4` 与 Rust Runner；`login/login2/logout/trust/tickets/passwd/set/configure`、`-P`、敏感长参数和 `P4PASSWD/P4TICKETS` 在 spawn 前拒绝，输出、Log、Journal 与诊断导出继续脱敏。新增独立 panel 组件防绕过、切换连接取消和旧响应隔离测试。
 - 2026-10-09 最终门禁：全量 Web 68 个测试文件、390 项通过；Rust 130 项通过、1 个 localhost E2E 在默认套件中显式 ignored；Windows localhost 应用层 E2E 连续两轮分别 86.01 秒、80.06 秒通过。`pnpm format/format:check/check/build`、Cargo check/test、Clippy `--all-targets -D warnings`、rustfmt、`git diff --check` 通过；前端性能 8 项与后端 5 项 correctness gates 通过。
-- 未执行 Windows/macOS 原生应用菜单、原生窗口位置/大小、单实例焦点、系统快捷键、拖出/dock 和读屏验证；纯函数/浏览器测试不记作原生通过。多屏校正使用 Tauri 当前 monitor 几何，系统任务栏/Stage Manager 等平台工作区细节需实机复核。
+- 未执行移除顶栏菜单后的 Windows Tauri 窗口复验，也未完成原生窗口位置/大小、单实例焦点、前端快捷键、拖出/dock 和读屏验证；纯函数/浏览器测试不记作原生通过。多屏校正使用 Tauri 当前 monitor 几何，系统任务栏/Stage Manager 等平台工作区细节需实机复核。
 
 ## 剩余验收与交接边界
 

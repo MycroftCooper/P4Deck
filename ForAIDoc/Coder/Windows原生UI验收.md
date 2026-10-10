@@ -8,6 +8,8 @@
 >
 > 范围：当前 Windows 机器、真实 Tauri/WebView2 窗口、隔离 `127.0.0.1:16661` fixture。本文不把浏览器 Mock、localhost 服务层或独立 CLI 结果单独冒充为原生 UI 通过。
 
+> 后续人工验收决定：原生窗口顶部的 Connection/Changes/Navigate/View 菜单重复现有 Settings、侧栏与页面操作，且不在设计内，现已退役。本文保留首轮窗口的历史观测，但不再把点击这些旧菜单列为当前验收目标；下一版只验证菜单栏消失、Settings 连接管理仍完整可达，以及命令面板/前端快捷键未回归。
+
 构建、进程、fixture、隔离用户数据及后端交叉复核见 [Windows 原生构建与运行验收](Windows原生构建运行验收.md)。本文只记录实际发生过的原生窗口交互，以及尚未点击或尚未复验的边界。
 
 ## 1. 绑定的原生构建
@@ -22,7 +24,7 @@
 | 数据范围 | 全新隔离 P4Deck profile 数据 + loopback fixture；未连接本人 Server，未读取 ticket 内容 |
 | 历史修复构建 | 源码 `707e51e` 曾重新执行同一 Tauri debug build，exit 0；SHA-256 `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`。该 exe 未启动，随后 Force Unlock 整体下线 |
 
-WIN-P0-01 的首轮构建/启动证据已取得。旧 PID 已正常关闭且无残留进程，fixture 已停止且 `127.0.0.1:16661` 无 listener，原 Roaming/Local 已恢复；测试数据快照保留为同级 `.native-test-snapshot-20261010-194736`。下一轮应构建并启动删除 Force Unlock 后的最终源码，而不是复验 `707e51e`。完整路径、计数和清理记录以 [Windows 原生构建与运行验收](Windows原生构建运行验收.md) 为准。
+WIN-P0-01 的首轮构建/启动证据已取得。旧隔离验收 PID 已正常关闭，fixture 已停止且 `127.0.0.1:16661` 无 listener，原 Roaming/Local 已恢复；测试数据快照保留为同级 `.native-test-snapshot-20261010-194736`。移除 Force Unlock 后的 `3c21d03` 也已成功重建并由本人启动人工验收；本次原生菜单下线决定来自该实际窗口，但完整原生回归尚未完成。本人已授权后端结束标准 exe 的残留 PID 并重建菜单移除版；最新构建状态、hash 与进程证据以 [Windows 原生构建与运行验收](Windows原生构建运行验收.md) 为准。下一步是由本人启动最新产物验证菜单栏消失与 Settings 连接入口，而不是复验 `707e51e`。
 
 ## 2. 已实际通过的原生交互
 
@@ -59,11 +61,11 @@ WIN-P0-01 的首轮构建/启动证据已取得。旧 PID 已正常关闭且无�
 
 以下项目没有在本轮真实窗口中完成，不得按“通过”统计：
 
-1. 构建并启动删除 Force Unlock 后的最终 exe，确认不存在管理员强制解锁入口/API，普通 Lock/Unlock 与 other-owner blocker/提示仍可用。
+1. 构建并启动移除原生顶栏菜单后的新 exe，确认已下线的管理员强制解锁入口/API 仍不存在，且 Connection/Changes/Navigate/View 系统菜单也不再显示；Settings 中 Connection Profiles 的 CRUD、验证、激活与认证入口仍可达，普通 Lock/Unlock 与 other-owner blocker/提示仍可用。
 2. 完成 Shelf 深搜 `deep-path` 的唯一 Shelf 结果 → 独立 Shelf detail 导航、返回与焦点恢复。
 3. 补齐 Workspace/Depot、Preview、Diff、History/Revision Graph、Pending、Submitted、Shelf、Terminal/P4 Log、Operations、Diagnostics 的主要只读入口冒烟；已打开或后端有命令日志不等于这些页面全部通过。
 4. 只在隔离 fixture 完成 Submit、Shelf/Unshelve、Resolve、Stream 切换、普通 Lock/Unlock 等剩余安全写入演练；Branch CRUD 不能替代整套写入验收。
-5. 验证命令面板、原生菜单、主要快捷键、Tab/回焦/Escape。
+5. 验证命令面板、主要前端快捷键、Tab/回焦/Escape；确认已退役原生顶栏菜单不再出现，不再执行旧菜单点击矩阵。
 6. 验证主窗口真实 390px、关键页面无意外页面级横向溢出，以及 dock/popout/关闭归还。
 7. 验证新版正常启动/关闭、再次打开和布局恢复；原用户数据目录已恢复，但为避免自动连接真实 Server，本轮未用其启动应用。
 
@@ -83,5 +85,5 @@ fixture 收尾已精确删除 Shelf 4447/4448、历史 Force target pending CL44
 
 - build `94b5f0c` 已取得真实 Windows Tauri Profile/Workspace、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch list/detail/forward preview/CRUD、Force Unlock preflight/ack/confirm/服务端真解锁证据。
 - 首轮 Force Unlock 的 mutation 和后续自动刷新缺陷属于真实历史；用户已决定将整个管理员功能下线，因此不再作为当前能力、阻塞或待复验项。
-- 390px、dock/popout、菜单/快捷键、完整页面冒烟、重开/布局恢复及完整只读/安全写演练没有通过。
+- 390px、dock/popout、命令面板/前端快捷键、最终构建无原生顶栏菜单、完整页面冒烟、重开/布局恢复及完整只读/安全写演练没有通过。
 - 本人 P4 Server、真实认证/权限/trigger、故障恢复、备份恢复和 2 小时稳定性仍完全属于后续 WIN-P0/P1/P2 验收。

@@ -278,12 +278,6 @@ export const appCommands: readonly AppCommandDefinition[] = [
   ),
 ] as const;
 
-export function isAppCommand(value: unknown): value is AppCommandId {
-  return (
-    typeof value === "string" && appCommands.some(({ id }) => id === value)
-  );
-}
-
 export interface AppCommandEnvironment {
   detached: boolean;
   runtimeReady: boolean;

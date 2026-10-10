@@ -30,24 +30,39 @@ const walk = async (directory) =>
     )
   ).flat();
 
-const [catalog, rust, menuRegistry, design, ledger, actions] =
-  await Promise.all([
-    read("src/app/commands/catalog.ts"),
-    read("src-tauri/src/lib.rs"),
-    read("src/app/context-menu/catalog.ts"),
-    read("ForAIDoc/Designer/右键菜单对象与菜单项总表.md"),
-    read("ForAIDoc/Coder/右键菜单UI逐项验收台账.md"),
-    read("ForAIDoc/Designer/统一Action刷新与通知.md"),
-  ]);
+const [catalog, menuRegistry, design, ledger, actions] = await Promise.all([
+  read("src/app/commands/catalog.ts"),
+  read("src/app/context-menu/catalog.ts"),
+  read("ForAIDoc/Designer/右键菜单对象与菜单项总表.md"),
+  read("ForAIDoc/Coder/右键菜单UI逐项验收台账.md"),
+  read("ForAIDoc/Designer/统一Action刷新与通知.md"),
+]);
 
-const union = catalog.match(/export type AppCommandId =([\s\S]*?);/);
-if (!union) throw new Error("AppCommandId union not found");
-const commandIds = ids(union[1], /"([a-z]+\.[A-Za-z0-9]+)"/g);
-const rustIds = ids(
-  rust,
-  /"((?:app|connection|view|workspace|changelist|file|swarm|operation|tools|refresh|panel)\.[A-Za-z0-9]+)"/g,
-);
-assertSame("TypeScript and Rust command IDs drifted", commandIds, rustIds);
+export const assertCommandCatalog = (source) => {
+  const union = source.match(/export type AppCommandId =([\s\S]*?);/);
+  if (!union) throw new Error("AppCommandId union not found");
+  const commandIds = ids(union[1], /"([a-z]+\.[A-Za-z0-9]+)"/g);
+  const directDefinitionIds = ids(
+    source,
+    /command\(\s*"([a-z]+\.[A-Za-z0-9]+)"/g,
+  );
+  const mappedDefinitionIds = ids(
+    source,
+    /\[\s*"([a-z]+\.[A-Za-z0-9]+)"\s*,\s*"[^"]*"\s*,\s*"[^"]*"\s*,\s*"[^"]+"\s*\]/g,
+  );
+  const productionDefinitionIds = unique([
+    ...directDefinitionIds,
+    ...mappedDefinitionIds,
+  ]);
+  assertSame(
+    "AppCommandId union and production command definitions drifted",
+    commandIds,
+    productionDefinitionIds,
+  );
+  return commandIds;
+};
+
+const commandIds = assertCommandCatalog(catalog);
 
 const registryIds = ids(menuRegistry, /id:\s*"([FCVSWUT]\d{2}-\d{2})"/g);
 const designIds = [];

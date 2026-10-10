@@ -70,7 +70,16 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await page.keyboard.press("Escape");
   await expect(palette).toBeHidden();
 
-  for (const destination of ["Settings", "Search", "Pending"]) {
+  await page.keyboard.press("Control+Shift+P");
+  await palette.getByRole("combobox").fill("Connect / Switch Profile");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".route-view h1")).toHaveText("Settings");
+  await expect(
+    page.getByRole("heading", { name: "Connection profiles" }),
+  ).toBeVisible();
+  await assertNoPageOverflow(page, "Settings connection profiles");
+
+  for (const destination of ["Search", "Pending"]) {
     await page
       .getByRole("button", { name: new RegExp(`^${destination}`) })
       .first()

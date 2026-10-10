@@ -2,7 +2,7 @@
 
 ## Action 目录
 
-`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、Web 快捷键和执行策略共同使用；Tauri 应用菜单镜像同一组 37 个稳定 ID 并把事件交回目录校验/执行。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或原生菜单绕过。`pnpm validate:frontend-contracts` 自动校验 TS/Rust 命令 parity，以及设计菜单、注册表、验收台账和本清单。
+`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的 Connection Profiles 区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
 
 | 分组 | 稳定 ID | 动作 | Windows / Linux | macOS | 风险 / 确认 |
 | --- | --- | --- | --- | --- | --- |
@@ -56,6 +56,6 @@
 
 ## 自动化证据与外部项
 
-Web 单测覆盖 action ID/元数据完整性、跨平台冲突、编辑焦点、禁用原因、全量 CommandBar 映射、mutation 无快捷键且必须回状态机、重试分类/退避/取消/代次漂移、自动刷新可见性/节流/迟到隔离，以及通知去重/脱敏/偏好/前台抑制。Rust 编译覆盖 Tauri 菜单构造。
+Web 单测覆盖 action ID/元数据完整性、跨平台冲突、编辑焦点、禁用原因、全量 CommandBar 映射、mutation 无快捷键且必须回状态机、重试分类/退避/取消/代次漂移、自动刷新可见性/节流/迟到隔离，以及通知去重/脱敏/偏好/前台抑制。前端 contract validator 会在 union、生产定义或文档清单漏掉任一命令时失败；它不再制造已删除的 Rust 原生菜单 ID 镜像。
 
-仍需外部执行：Windows/macOS 原生菜单点击、系统快捷键、输入法/编辑器焦点、独立窗口前后台节流、系统通知权限/展示、真实网络上下线与认证过期、原生读屏。上述事项未由 jsdom 或纯函数测试替代。
+仍需外部执行：Windows Tauri 中确认系统菜单栏已经消失、Settings 连接管理仍可达，并验证前端快捷键、输入法/编辑器焦点、独立窗口前后台节流、系统通知权限/展示、真实网络上下线与认证过期、原生读屏。上述事项未由 jsdom 或纯函数测试替代。

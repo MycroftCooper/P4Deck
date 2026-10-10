@@ -42,14 +42,12 @@ import {
   openSwarmLink,
   type SwarmLinkTarget,
 } from "../features/swarm/swarmLinks";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { CommandPalette } from "./commands/CommandPalette";
 import {
   appCommandReason,
   appCommands,
   commandForShortcut,
-  isAppCommand,
   type AppCommandId,
 } from "./commands/catalog";
 import {
@@ -361,18 +359,7 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     const openSettings = () => openPage("settings");
     window.addEventListener("p4deck:open-settings", openSettings);
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
-    if (isTauri())
-      void listen<unknown>("app-command", ({ payload }) => {
-        if (isAppCommand(payload)) executeAppCommand(payload);
-      }).then((stop) => {
-        if (disposed) stop();
-        else unlisten = stop;
-      });
     return () => {
-      disposed = true;
-      unlisten?.();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("p4deck:open-settings", openSettings);
     };
