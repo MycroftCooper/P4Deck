@@ -5,6 +5,7 @@
 > 修复后最终构建基线：`707e51e0ade13053f1e775c9154a1d973f873de3`
 > 报告提交前仓库 HEAD：`2dd0cb9`（仅追加前端验收文档；应用源码仍对应 `707e51e`）
 > 移除管理员强制解锁后的最终源码构建基线：`3c21d03cc56cbe8ff8eab62082041280bba76853`
+> 移除原生顶栏菜单的生产源码：前端 `48b91a0` + Rust `00bbf34`
 > 范围：debug 原生应用、隔离 localhost P4D、结构化运行证据。本文不把前端点击、安装包、签名、公证或长期稳定性冒充为已验证。
 > 产品边界更新（2026-10-10）：管理员强制解锁已从 P4Deck 完全移除。下文相关内容仅是退役旧构建的历史验收证据，不代表当前产品能力，也不再构成当前原生复验阻塞。
 
@@ -18,12 +19,13 @@
 | Rust / Cargo | `1.97.1` / `1.97.1` |
 | Tauri CLI | `2.11.4` |
 | 构建命令 | `pnpm tauri build --debug --no-bundle` |
-| 构建结果 | 三个记录基线均 exit 0；先执行 `pnpm build` 生成 `dist`，再编译 Tauri debug 应用 |
+| 构建结果 | 四个记录基线均 exit 0；先执行 `pnpm build` 生成 `dist`，再编译 Tauri debug 应用 |
 | 可执行文件 | `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe` |
-| 当前大小 | `32,208,896` bytes（`3c21d03`） |
+| 当前大小 | `32,119,296` bytes（生产源码 `48b91a0` + `00bbf34`） |
 | 首次 build SHA-256 | `D0C3D6D3BA12F750CA49246C4F15561B6101522540EB6F2C9258EC0A0D0C52A2`（`94b5f0c`，用于本轮可见窗口/IPC 验收） |
 | 旧最终 build SHA-256 | `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`（`707e51e`，退役旧功能构建） |
-| 当前 build SHA-256 | `E42333BCE95E46E47BF13755026FC7F98AB0EB1FE3B83C321D4DF397113A5E1B`（`3c21d03`，管理员强制解锁已移除） |
+| 管理员能力移除 build SHA-256 | `E42333BCE95E46E47BF13755026FC7F98AB0EB1FE3B83C321D4DF397113A5E1B`（`3c21d03`） |
+| 当前 build SHA-256 | `F0AE4038C75C00E6AEC3297502C724AEDEF8EB4233AF1833D19BC58E304E0733`（生产源码 `48b91a0` + `00bbf34`） |
 | Authenticode | `NotSigned`，符合本轮 debug / no-bundle 范围；不能据此宣称发布签名通过 |
 
 三次都使用 Tauri 构建入口，不是普通 `cargo build`。构建输出明确执行了前端 production build，因此 exe 嵌入的是对应基线生成的 `dist`。移除功能后的 `3c21d03` 另有 `pnpm ci:quick` 全绿和单轮 localhost fixture 证据；最终构建只有既有的 Vite 大 chunk 提示和 MSVC linker message warning，没有编译错误。该 exe 未启动，构建后确认 P4Deck 进程数为 0、fixture listener 数为 0，未访问个人配置。
@@ -121,3 +123,13 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 - 本轮不覆盖 2 小时稳定性、长期 idle CPU/内存、睡眠唤醒、多屏/缩放或真实本人 Server。
 - debug exe 未签名；不能把 localhost fixture 或 WebView2 窗口存在视为发布就绪。
 - 本轮最终状态是：无 P4Deck 进程、无 fixture listener、原配置已恢复但未启动，测试 snapshot 和已提交的有限 seed 留作下轮复验。
+
+## 6. 原生顶栏菜单移除批次
+
+用户在后续人工验收中确认 Windows 顶部原生 `Connection / Changes / Navigate / View` 菜单不属于当前 UI 设计。当前源码已删除 Tauri `Builder.menu(...)` 以及 `on_menu_event(...)` → `app-command` 桥接，不保留隐藏菜单或仅用于原生菜单的 accelerator；前端页面、Command Palette、应用内快捷键、IPC、独立窗口和文件右键菜单不在此删除范围。连接配置继续由 Settings 页面承载。
+
+源码阶段已通过 `cargo fmt --check`、`cargo check --all-targets`、IPC 定向测试 4/4，以及一次完整 `pnpm ci:quick`（Web 81 文件/474 项；Rust 184 项通过、1 项 localhost fixture 按设计 ignored）。本批没有 P4 逻辑变化，因此没有重复运行 localhost fixture。
+
+准备重建时曾只读观察到 PID `28920` 占用标准 debug exe，路径为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`、启动时间 `2026-10-10 20:12:17 +08:00`。用户随后明确授权只结束该精确残留进程；执行前再次核实时它已自行退出，因此没有调用 Stop/Kill，也没有处理其他进程。再次枚举确认 P4Deck 进程数为 0 后，正式运行 `pnpm tauri build --debug --no-bundle` 并成功覆盖标准生成物。
+
+本次生成物时间为 `2026-10-10 20:23:14 +08:00`，大小 `32,119,296` bytes，SHA-256 为 `F0AE4038C75C00E6AEC3297502C724AEDEF8EB4233AF1833D19BC58E304E0733`，Authenticode 状态仍为 `NotSigned`。构建后 P4Deck 进程数和 `127.0.0.1:16661` listener 数均为 0；没有启动 exe、读取个人配置或连接 P4 Server。构建时使用的生产代码随后原样顺序提交为前端 `48b91a0` 与 Rust `00bbf34`；提交后只更新本报告，因此无需重复构建。当前 build 尚未由用户重新打开并原生点击，不能仅凭构建成功宣称顶栏已在 Windows 窗口中人工确认消失。
