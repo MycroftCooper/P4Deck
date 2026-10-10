@@ -1,7 +1,7 @@
 # 前端操作流程 TODO
 
 > 文档角色：**历史累计实现与验收台账**，不是当前任务队列。
-> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、Force Unlock、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是最新 Tauri Windows 原生点击与本人实际 Server 验收。
+> 当前事实源：先看 [Windows 本机私用 TODO](Windows本机私用TODO.md) 和 [项目状态总览](项目状态总览.md)。截至 2026-10-10，七类 Search、Submit、Pending、Shelf/Unshelve/Resolve、只读 Stream Graph、Branch Mapping 工作台、普通 Lock/Unlock、390px Web 布局、37 commands、503 registry leaves / 502 个自定义项均已实现并有自动化证据；当前缺口是删除管理员 Force Unlock 后的最终构建、剩余 Tauri Windows 原生点击与本人实际 Server 验收。
 > 下文保留各批次当时的测试数量、平台范围和“待验”描述作为历史快照。旧数字不得解释为最新门禁；“原生待验”表示缺少 Tauri 实机证据，不表示对应 React/后端功能仍未实现。
 
 ## 最近完成：Global Search Stream/Shelf 前端闭环（2026-10-10）
@@ -11,7 +11,9 @@
 - Shelf 深搜继续由后端执行有界 500 metadata、128 detail 候选、8 批、每 shelf 256/总 20,000 文件和 20 秒预算；UI 显示每类 `partialReason`，单类失败不拖垮其他类别。结果只使用后端 UTF-16 ranges 作为文本节点高亮；不使用 `innerHTML`、不重新请求详情做搜索、同 identity 跨页稳定去重。
 - 快速输入/类别变化取消旧 operation 并隔离迟到响应，cursor 失败可从首屏重搜；390px 七类筛选、长路径、键盘结果 Enter、ARIA group/status、Browser Mock simulated 及 Stream/Shelf 导航返回由组件与真实 Edge/axe 覆盖。没有新增全局 command/menu，37/503/502 parity 不变；Windows Tauri 原生点击和本人 Server 规模/权限/trigger 仍待验收。
 
-## 最近完成：Force Unlock 前端闭环（2026-10-10）
+## 历史记录：Force Unlock 前端闭环（2026-10-10，后续已下线）
+
+> 用户随后明确决定移除该功能：P4Deck 面向普通用户，管理员强制解锁应在后台执行。下列内容仅记录当时确实完成并验收过的实现，不代表当前产品能力、当前测试或待验任务；当前代码不再提供入口、对话框或专用 API。
 
 - 文件工具栏新增独立“管理员强制解锁”入口，不修改普通 Unlock，也没有新增全局 command/menu；只接受当前选择中保序去重后的 1～128 个精确 depot file，路径不可编辑，目录、本地路径、wildcard 与 revision syntax 在前端先作 UX 阻断，后端仍为权威。
 - 专用高危对话框只调用 `preflightForceUnlock` → `confirmForceUnlock`，展示 server/profile/user/client、numbered origin、每个文件的 lock owner/client/change/action、permission proof、origin proof、risk/warning/blocker；不根据当前用户名推断管理员权限，不提供忽略 blocker、Terminal 或 generic `run_p4` 旁路。
@@ -102,7 +104,7 @@
 | FE-21 | 文件 Lock/Unlock 与独占状态 | 工具栏/原生菜单/右键统一入口；文件集、action/CL、filetype/`+l`、owner/other-open、权限与逐项结果 | 只接受后端 token；连接变化丢弃迟到结果；partial/取消/未知不回滚不冒充成功；不提供 force unlock | BE-011 生产接线、浏览器状态机与 Windows localhost 双用户/双 Client 已通过；原生 UI/macOS 待验 |
 | FE-22 | Stream Graph 前端闭环 | 强类型只读森林、分页/虚拟化、过滤与状态提示、详情、键盘/390px、Streams 定位和安全切换入口 | 不解析 P4 输出、不伪造父节点/merge/copy；cursor 原样透传并拒绝不前进；旧连接响应不能覆盖；大图 DOM 有上限且有等价树语义 | 生产 panel、Mock/Tauri 契约、组件与真实 Edge 390px/axe 已通过；Windows Tauri 原生 panel/popout/焦点待验 |
 | FE-23 | Branch Mapping 前端闭环 | 正式 panel、过滤/虚拟分页、原样 detail/View、正反只读 impact preview、安全 create/edit/delete、键盘/ARIA/390px | 不解析 P4 form/输出；cursor/token 原样透传；只走专用 preview 与 preflight→confirm；unknown/comment 不安全往返时禁改；迟到结果不能覆盖 | 生产 panel、Mock/Tauri 契约、13 项新增组件/模型测试与真实 Edge 390px/axe/模拟增删改通过；Windows Tauri 原生 panel/popout 与本人 Server 权限/trigger 待验 |
-| FE-24 | Force Unlock 前端闭环 | 文件选择上下文独立高危入口、来源预检、权威 owner/origin/permission 展示、typed ack、逐文件结果与刷新 | 不给普通 Unlock 加 force；只接受精确 depot file；不推断 admin；default/`-s`/`-x` blocker 不可绕过；partial/unknown 不冒充成功 | 专用生产契约、Browser Mock、12 项新增 model/组件测试与真实 Edge 390px/axe/模拟完整闭环通过；Windows Tauri、本人的 admin 权限与真实特殊来源待验 |
+| FE-24 | Force Unlock（已下线） | 历史上曾完成文件选择上下文独立高危入口、来源预检、typed ack 与逐文件结果；现已删除 | P4Deck 面向普通用户，不提供管理员强制解锁按钮、对话框、专用 API 或旁路；普通 Lock/Unlock 与 other-owner blocker 保留 | 2026-10-10 历史实现/浏览器/一次 Windows 原生操作有证据；后续按用户决定下线，不再安排 Tauri/本人 Server 验收 |
 
 ## 历史实施顺序
 

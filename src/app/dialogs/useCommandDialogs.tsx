@@ -6,7 +6,6 @@ import { SubmitDialog } from "../../features/changelists/components/SubmitDialog
 import { FileClWorkflow } from "../../features/changelists/components/FileClWorkflow";
 import { RenameDialog } from "../../features/files/components/RenameDialog";
 import { FileLockDialog } from "../../features/files/components/FileLockDialog";
-import { ForceUnlockDialog } from "../../features/files/components/ForceUnlockDialog";
 import { ResolveDialog } from "../../features/files/components/ResolveDialog";
 import {
   SyncDialog,
@@ -31,7 +30,6 @@ type PreviewRequest = Origin &
   (
     | { kind: "rename"; node: WorkspaceNode }
     | { kind: "fileLock"; nodes: WorkspaceNode[]; operation: "lock" | "unlock" }
-    | { kind: "forceUnlock"; nodes: WorkspaceNode[] }
     | { kind: "resolve"; nodes: WorkspaceNode[] }
     | { kind: "fileCl"; nodes: WorkspaceNode[]; mode: "moveFiles" | "shelve" }
     | { kind: "submit"; id: number; count: number }
@@ -42,8 +40,8 @@ type Request =
   | { kind: "revision"; value: RevisionRequest }
   | { kind: "confirm"; value: OperationConfirmation };
 
-/** Force unlock can change facts even when execution is partial or rejected. */
-export async function refreshForceUnlockFacts(connectionKey: string) {
+/** Lock mutations can change both the active listing and current selection facts. */
+export async function refreshFileLockFacts(connectionKey: string) {
   const workspacePaths = workspaceCache
     .getQueryCache()
     .findAll({ queryKey: ["workspace-files", connectionKey] })
@@ -78,7 +76,7 @@ export function useCommandDialogs(
   zh: boolean,
   demo = false,
   targetKey = "",
-  onForceUnlockRefresh?: (nodes: WorkspaceNode[]) => Promise<void> | void,
+  onFileLockRefresh?: (nodes: WorkspaceNode[]) => Promise<void> | void,
 ) {
   const gateway = useDialogRequest<Request, string | boolean>(
     `${connectionKey}:${targetKey}`,
@@ -145,38 +143,8 @@ export function useCommandDialogs(
             onRefresh={async () => {
               window.dispatchEvent(new Event("p4deck:pending-refresh"));
               window.dispatchEvent(new Event("p4deck:submitted-refresh"));
-              await refreshForceUnlockFacts(connectionKey);
-              await onForceUnlockRefresh?.(request.nodes);
-            }}
-          />
-        );
-        break;
-      case "forceUnlock":
-        element = (
-          <ForceUnlockDialog
-            nodes={request.nodes}
-            source={request.source}
-            connectionKey={connectionKey}
-            zh={zh}
-            simulated={demo}
-            onDismiss={close}
-            onRefresh={async () => {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              window.dispatchEvent(new Event("p4deck:submitted-refresh"));
-              await Promise.all([
-                workspaceCache.invalidateQueries({
-                  queryKey: ["workspace-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["depot-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["global-search", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["file-review", connectionKey],
-                }),
-              ]);
+              await refreshFileLockFacts(connectionKey);
+              await onFileLockRefresh?.(request.nodes);
             }}
           />
         );

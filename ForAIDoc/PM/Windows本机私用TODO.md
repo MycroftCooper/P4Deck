@@ -1,18 +1,18 @@
 # Windows 本机私用 TODO
 
 > 当前阶段唯一执行清单。目标是在**当前这台 Windows 机器上供本人私用**，不是公开发布、跨平台交付或企业部署。
-> 建立日期：2026-10-10。事实基线：`94b5f0c` 已取得第一轮 Windows Tauri 原生构建/启动和部分核心点击证据；Force Unlock 自动刷新修复 `707e51e` 已通过定向自动化并重新构建，但新版 exe 尚未启动或做原生复验。本人实际 P4 Server 仍未验证。
+> 建立日期：2026-10-10。事实基线：`94b5f0c` 已取得第一轮 Windows Tauri 原生构建/启动和部分核心点击证据；用户随后决定从面向普通用户的 P4Deck 中移除管理员 Force Unlock，管理员强制解锁改由后台执行。本人实际 P4 Server 仍未验证。
 > 历史实现记录继续保留在《前端操作流程 TODO》和《后端 TODO》，但不再作为当前任务队列。
 
 ## 当前验收快照
 
-- **WIN-P0-01 部分完成**：`94b5f0c` 的 `pnpm tauri build --debug --no-bundle` exit 0，真实 exe、SHA-256、可见响应窗口和隔离 IPC 已绑定留证；`707e51e` 已用同一入口重新构建，exit 0，SHA-256 `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`，但未启动。旧 PID 已正常关闭且无残留，fixture 已停止且 listener 消失，原 Roaming/Local 已恢复，测试 snapshot 已保留。
-- **WIN-P0-02 部分完成**：原生窗口已通过 Profile 保存/验证、Workspace Root 校正、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch Mapping list/detail/forward preview/安全 CRUD、一次隔离 fixture Force Unlock preflight/typed acknowledgement/confirm/服务端真解锁。详见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。
-- **阻塞复验**：首轮 Force Unlock 后服务端已解锁，但 Files/selection 仍显示旧锁，手工刷新才更新。`707e51e` 已修、通过定向 14 项测试并重新构建；仍必须启动新版 exe、重新 seed 同一 fixture lock 后复验自动刷新。
+- **WIN-P0-01 部分完成**：`94b5f0c` 的 `pnpm tauri build --debug --no-bundle` exit 0，真实 exe、SHA-256、可见响应窗口和隔离 IPC 已绑定留证。旧 PID 已正常关闭且无残留，fixture 已停止且 listener 消失，原 Roaming/Local 已恢复，测试 snapshot 已保留；仍需为移除 Force Unlock 后的最终源码重建并启动 exe。
+- **WIN-P0-02 部分完成**：原生窗口已通过 Profile 保存/验证、Workspace Root 校正、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch Mapping list/detail/forward preview/安全 CRUD。首轮 build 还曾真实执行一次后来下线的 Force Unlock；该历史事实保留在验收记录中，但不再是当前能力、阻塞或待复验项。详见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。
+- **当前产品决定**：普通用户界面只保留普通 Lock/Unlock 及 other-owner blocker/提示；不提供 Force Unlock 按钮、对话框或 API 路径。管理员强制解锁由后台按运维流程执行。
 - **尚未通过**：Shelf `deep-path` 结果到独立详情、其余完整只读入口、菜单/命令面板/快捷键、390px、dock/popout/归还、焦点、关闭重开/布局恢复，以及剩余安全写入流程。
 - **未开始/未验**：本人实际 Server（WIN-P0-03）、完整核心读写安全演练（WIN-P0-04）、全部 P1/P2。
 - **控制停止事实**：提交 `707e51e` 后工具返回 “Computer Use was stopped by the user with the physical Escape key.”；随后没有继续原生点击。旧应用、fixture、原配置恢复与临时 seed 清理由后端收尾，不构成新版 UI 复验。
-- **fixture 下轮前置**：临时 Shelf 4447/4448、Force target CL4449 与 owner/client/user、原生测试 branch 已精确清理；下轮必须重新 seed Shelf 与 other-owner lock。CL4446 四个已提交文件、5 个 streams 及历史 permission-map/shelf2 保留。
+- **fixture 下轮前置**：临时 Shelf 4447/4448、历史 Force target CL4449 与 owner/client/user、原生测试 branch 已精确清理；下轮只需为 Shelf 导航等仍在范围内的场景重新 seed，不再创建管理员强制解锁目标。CL4446 四个已提交文件、5 个 streams 及历史 permission-map/shelf2 保留。
 
 ## 安全红线
 
@@ -47,9 +47,9 @@
 
 - **目标**：在 Tauri 原生窗口中确认本人会使用的核心入口可点击、可聚焦、可恢复。
 - **为何阻塞本机私用**：现有 83/487 Web 测试、6 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
-- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、Lock/Unlock 只在测试数据上执行。Force Unlock 只可使用隔离 fixture 中明确创建的另一 User/Client 正数 numbered CL；`default`、`-s`、`-x` 只验证 blocker，不得尝试绕过。记录每一步通过/失败及所用构建。
+- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、普通 Lock/Unlock 只在测试数据上执行。确认其他用户持锁仍显示明确 blocker/owner 提示，且界面不存在管理员强制解锁入口。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
-- **当前证据/缺口**：已通过项和精确边界见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。下一步启动已构建的 `707e51e` exe，重新 seed 精确锁并复验 Force Unlock 自动刷新，再依有限清单补 Shelf 导航、剩余页面、菜单/快捷键、390px、dock/popout、焦点和重开恢复；未实际点击项不得由后端日志或浏览器截图代替。
+- **当前证据/缺口**：已通过项和精确边界见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。下一步构建并启动删除管理员入口后的最终 exe，确认普通 Lock/Unlock 与 other-owner blocker 未受影响，再依有限清单补 Shelf 导航、剩余页面、菜单/快捷键、390px、dock/popout、焦点和重开恢复；未实际点击项不得由后端日志或浏览器截图代替。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
 
 ### WIN-P0-03 — 本人 P4 Server 连接与实际认证（未验）
@@ -64,9 +64,9 @@
 
 - **目标**：证明日常“浏览 → 修改 → Pending/Review → Shelf/Resolve → Submit”链路在安全边界内可用，并能恢复到已知状态。
 - **为何阻塞本机私用**：自动化已验证实现，但首次用于个人数据前仍需确认实际权限、映射、文件类型、trigger 和服务器策略不会产生意外写入。
-- **具体实现/验收步骤**：先在隔离 fixture 完整执行一轮；再仅在本人专用测试 Depot/Client/CL 上执行 Sync、Edit/Add、Move、Revert、Pending 移动、Lock/Unlock（若权限支持）、Shelf/Unshelve、文本 Resolve 和 Submit；Force Unlock 仅当本人确有管理员需求时，另用可删除测试文件、另一测试 User/Client 与正数 numbered CL 演练，逐项核对 owner/origin/admin proof 和写后验证。每个 mutation 先核对预检目标、blocker/warning、operation ID 和刷新建议；包含一次主动取消或失败场景；最终核对 Submitted 结果并删除/归档测试数据。真实生产 Depot 只做只读检查。
+- **具体实现/验收步骤**：先在隔离 fixture 完整执行一轮；再仅在本人专用测试 Depot/Client/CL 上执行 Sync、Edit/Add、Move、Revert、Pending 移动、普通 Lock/Unlock（若权限支持）、Shelf/Unshelve、文本 Resolve 和 Submit。每个 mutation 先核对预检目标、blocker/warning、operation ID 和刷新建议；包含一次主动取消或失败场景；最终核对 Submitted 结果并删除/归档测试数据。真实生产 Depot 只做只读检查；管理员强制解锁不属于 P4Deck UI 演练范围。
 - **完成证据**：脱敏的测试路径标识、操作前后文件/CL 清单、各状态机结果、服务器侧复核、清理结果和任何不支持能力的安全降级说明。
-- **当前证据/缺口**：隔离 fixture 已完成一项 Branch CRUD 和一项精确 Force Unlock，且均有服务端复核；这只证明两个专用流程，不替代 Submit、Shelf/Unshelve、Resolve、Stream 切换、普通 Lock/Unlock 等完整演练，也不证明本人 Server 权限/trigger。
+- **当前证据/缺口**：隔离 fixture 已完成一项 Branch CRUD；历史 build 曾完成一次现已下线的管理员强制解锁并有服务端复核，但它不属于当前完成条件。Submit、Shelf/Unshelve、Resolve、Stream 切换、普通 Lock/Unlock 等完整演练及本人 Server 权限/trigger 仍未验证。
 - **负责端**：前端验证状态机呈现；后端验证命令、token、Journal/Log 与最终状态；PM/本人控制测试范围并确认清理。
 
 ## P1：进入日常使用前完成
@@ -107,7 +107,8 @@
 - 企业 SSO/MFA；仅当本人实际 Server 强制要求时，才升级为 WIN-P0-03 的真实阻塞。
 - 第二 Server、Broker/Proxy、多 P4/P4D 版本、Unicode/non-Unicode Server 兼容矩阵。
 - NVDA/VoiceOver、双平台读屏认证；当前保留键盘/ARIA/axe/对比度自动化基线。
-- Label/Job 独立工作台与 Stream spec 写入等后续产品功能。Force Unlock 前后端专用闭环已完成，但不表示本人 Server 管理权限或特殊锁来源已验证；Branch Mapping 前后端工作台也已完成。两者 Windows 原生点击及真实权限/trigger 行为仍须按本清单安全边界验收。
+- Label/Job 独立工作台与 Stream spec 写入等后续产品功能。Branch Mapping 前后端工作台已完成，Windows 原生点击及真实权限/trigger 行为仍须按本清单安全边界验收。
+- 管理员 Force Unlock：按用户决定不面向普通用户提供，P4Deck 不再包含按钮、对话框或专用 API；需要时由管理员在后台执行，不进入本阶段验收。
 - 菜单台账中 190 个 `phase: later` 项。
 
 ## 新增功能实施批次（不改变上述验收顺序）
@@ -115,6 +116,6 @@
 - Stream Graph 前后端只读闭环已独立完成：正式全局 panel/Streams 入口、确定性 parent→child 分层、可访问虚拟树、过滤/分页/取消/重试、详情/键盘/390px、复用安全切换对话框，以及强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、scope 复核、一次性分页游标和 Windows localhost fixture 均已落地。
 - Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
 - Branch Mapping 前后端安全闭环已独立完成：正式全局 panel、Streams/Dock/Activity 入口、虚拟列表与 opaque cursor、原样详情/View 语义、正反 `integrate -n` 只读影响预览，以及专用 preflight→confirm create/edit/delete 均已接入；Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter 和明确 simulated 的 Browser Mock 均复用后端权威契约。Web 组件与真实 Edge 覆盖 390px、键盘、axe、大列表 DOM 上限、分页/迟到隔离和模拟增删改闭环。
-- Force Unlock 前后端专用闭环已独立完成：文件工具栏提供与普通 Unlock 分离的高危入口，路径只能来自 1～128 个精确 depot file 选择快照；专用对话框展示后端权威 server/profile/user/client、owner/origin/permission proof、blocker/warning，并要求精确 typed acknowledgement。取消/连接变化隔离迟到响应，执行结果逐文件展示并强制刷新；只有 complete + 全部 `unlocked` 才显示验证成功。后端只允许已证明的正数 numbered changelist，完整 Connection/generation、一次性 token、mutation lane/TOCTOU 与写后复核仍由 Rust 权威执行；普通 unlock 没有 force 开关，generic GUI 旁路仍关闭。Browser Mock 明示 simulated。standard localhost 不能证明 distributed `-x`，tagged facts 不能可靠证明 aborted-submit `-s`，均保持 blocker。
+- 历史记录：Force Unlock 曾完成前后端专用闭环并在首轮 Windows 原生验收执行过一次；用户随后明确决定移除该能力，因为 P4Deck 面向普通用户，管理员强制解锁应在后台执行。该历史不再代表当前产品能力或待验任务。
 - Global Search 的 Stream/Shelf 深度搜索前后端闭环已完成：`SearchPage` 正式扩为七类筛选、facet、分组与 badge；Stream 结果显示服务端 path/name/owner/type/parent/description 摘要并显式定位到 Streams，Shelf 结果显示 numbered CL、owner/client/time/description 与后端已给出的匹配路径摘要并打开独立 Shelf detail。Shelf 仍按 500 条列表、128 个 detail 候选、8 个批次、每 shelf 256/总 20,000 文件及 20 秒预算保守截断，UI 会逐类别显示 `partialReason`，不宣称全量。分页保序去重、游标失效重搜、快速输入取消/迟到隔离、390px、键盘与 axe 已有 Web/真实 Edge 证据；Browser Mock 明示 simulated。
-- Stream Graph、Branch Mapping、Force Unlock、Global Search Stream/Shelf 四个用户优先功能至此均已完成代码闭环。上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout/搜索导航、本人 Server 大规模与权限/trigger 已通过；真实 `-s/-x` 仍无可靠证明。它们分别并入 WIN-P0-02 与 WIN-P0-03/04，不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。
+- 当前保留的三个用户优先功能为 Stream Graph、Branch Mapping、Global Search Stream/Shelf，均已完成代码闭环。上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout/搜索导航、本人 Server 大规模与权限/trigger 已通过；它们分别并入 WIN-P0-02 与 WIN-P0-03/04，不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。

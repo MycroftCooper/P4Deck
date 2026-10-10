@@ -2,10 +2,7 @@
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness, dialogButton, chooseSelect } from "./testHarness";
-import {
-  refreshForceUnlockFacts,
-  useCommandDialogs,
-} from "./useCommandDialogs";
+import { refreshFileLockFacts, useCommandDialogs } from "./useCommandDialogs";
 import type {
   PendingChange,
   PendingChangePage,
@@ -44,7 +41,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("reloads cached workspace and depot lock facts after force unlock", async () => {
+it("reloads cached workspace and depot facts after ordinary lock changes", async () => {
   workspaceCache.setQueryData(["workspace-files", "scope", "/root"], {
     items: [],
   });
@@ -66,7 +63,7 @@ it("reloads cached workspace and depot lock facts after force unlock", async () 
   });
   depot.mockClear();
 
-  await refreshForceUnlockFacts("scope");
+  await refreshFileLockFacts("scope");
 
   expect(workspace).toHaveBeenCalledWith("/root", true, expect.any(String));
   expect(depot).toHaveBeenCalledWith("//depot");

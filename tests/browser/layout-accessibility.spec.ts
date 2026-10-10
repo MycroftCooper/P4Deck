@@ -178,8 +178,12 @@ test("Global Search exposes seven filters and navigates Stream and Shelf results
   const search = page.getByRole("textbox", { name: "Search query" });
   const categories = page.getByRole("group", { name: "Categories" });
   await expect(categories.getByRole("checkbox")).toHaveCount(7);
-  await expect(categories.getByRole("checkbox", { name: "Streams" })).toBeChecked();
-  await expect(categories.getByRole("checkbox", { name: "Shelves" })).toBeChecked();
+  await expect(
+    categories.getByRole("checkbox", { name: "Streams" }),
+  ).toBeChecked();
+  await expect(
+    categories.getByRole("checkbox", { name: "Shelves" }),
+  ).toBeChecked();
   await assertNoPageOverflow(page, "seven-kind Global Search");
 
   await search.fill("Atlas Mainline");
@@ -192,7 +196,10 @@ test("Global Search exposes seven filters and navigates Stream and Shelf results
   );
   await expect(page.getByText("Located stream: //atlas/main")).toBeVisible();
 
-  await page.getByRole("button", { name: /^Search/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Search/ })
+    .first()
+    .click();
   for (const name of [
     "Submitted",
     "Pending",
@@ -218,7 +225,10 @@ test("Global Search exposes seven filters and navigates Stream and Shelf results
   );
   await assertNoPageOverflow(page, "Shelf detail opened from Global Search");
 
-  await page.getByRole("button", { name: /^Search/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Search/ })
+    .first()
+    .click();
   await expect(search).toHaveValue("Render pipeline cache improvements");
 });
 
@@ -290,49 +300,25 @@ test("Branch Mapping simulated create, edit, preview and delete stay safe and ke
   await assertNoPageOverflow(page, "Branch Mapping mutation workflow");
 });
 
-test("Force Unlock stays a separate typed-acknowledgement workflow at 390px", async ({
+test("Files keeps ordinary lock controls without an administrator force entry", async ({
   page,
 }) => {
   await page.goto("/#/files");
   const address = page.getByRole("textbox", { name: "Address" });
   await address.fill("//atlas/main/render.ts");
   await address.press("Enter");
-  const trigger = page.getByRole("button", {
-    name: "Administrator force unlock",
-  });
-  await expect(trigger).toBeEnabled();
+
+  await expect(
+    page.getByRole("button", { name: "Lock", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Unlock", exact: true }),
   ).toBeVisible();
-  await trigger.click();
-
-  const dialog = page.getByRole("dialog", {
-    name: "Administrator force unlock",
-  });
-  await expect(dialog).toContainText("Browser Mock");
-  await expect(dialog).toContainText("Dangerous operation");
-  await assertNoPageOverflow(page, "Force Unlock setup");
-  await assertAxe(page, "Force Unlock setup");
-  await dialog.getByLabel("Origin changelist").fill("31821");
-  await dialog
-    .getByRole("button", { name: "High-risk preflight and review" })
-    .click();
-  await expect(dialog).toContainText("other-user@other-client");
-  await expect(dialog).toContainText("admin");
-  const acknowledgement = dialog.locator(".force-unlock-acknowledgement code");
-  await dialog
-    .getByLabel("Force unlock acknowledgement")
-    .fill((await acknowledgement.textContent()) ?? "");
-  const confirm = dialog.getByRole("button", {
-    name: "Confirm administrator force unlock",
-  });
-  await expect(confirm).toBeEnabled();
-  await confirm.click();
-  await expect(dialog).toContainText("Force unlock completely verified");
-  await assertNoPageOverflow(page, "Force Unlock result");
-  await assertAxe(page, "Force Unlock result");
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(trigger).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: /administrator force unlock/i }),
+  ).toHaveCount(0);
+  await assertNoPageOverflow(page, "ordinary lock controls");
+  await assertAxe(page, "ordinary lock controls");
 });
 
 test("dialog, context menu, and manual merge fixtures fit and pass axe", async ({

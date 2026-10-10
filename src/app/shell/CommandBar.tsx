@@ -26,7 +26,6 @@ import {
   Columns2,
   LockKeyhole,
   LockKeyholeOpen,
-  ShieldAlert,
 } from "lucide-react";
 import { selectionRequest } from "../../features/files/selectionCommands";
 import { resolveSelection } from "../../features/files/resolveSelection";
@@ -52,7 +51,6 @@ import {
   type CommandId,
   type CommandTarget,
 } from "./commandPolicy";
-import { exactForceUnlockPaths } from "../../features/files/forceUnlockModel";
 
 const groups: {
   id: CommandId;
@@ -121,13 +119,6 @@ export function CommandBar({
     connectionKey,
   );
   const nodes = target.type === "file" ? (target.nodes ?? [target.node]) : [];
-  const forceUnlockCandidate =
-    target.type === "file"
-      ? exactForceUnlockPaths(nodes)
-      : {
-          paths: [],
-          reason: zh ? "请选择精确 Depot 文件" : "Select exact depot files",
-        };
   const targetPath =
     target.type === "file"
       ? target.node.absolutePath || target.node.depotPath || ""
@@ -688,44 +679,6 @@ export function CommandBar({
               })}
             </div>
           ))}
-          <div className="command-group">
-            <span
-              title={
-                !ready
-                  ? zh
-                    ? "正在连接"
-                    : "Connecting"
-                  : forceUnlockCandidate.reason ||
-                    (zh
-                      ? "独立管理员高危流程；普通解锁不受影响"
-                      : "Separate high-risk administrator flow; ordinary unlock is unchanged")
-              }
-            >
-              <button
-                aria-label={
-                  zh ? "管理员强制解锁" : "Administrator force unlock"
-                }
-                aria-description={forceUnlockCandidate.reason}
-                className="command-danger"
-                disabled={
-                  !ready ||
-                  !!operation ||
-                  dialogs.pending ||
-                  Boolean(forceUnlockCandidate.reason)
-                }
-                onClick={(event) =>
-                  dialogs.open({
-                    kind: "forceUnlock",
-                    nodes: nodes.map((node) => ({ ...node })),
-                    source: event.currentTarget,
-                  })
-                }
-              >
-                <ShieldAlert size={17} />
-                <span>{zh ? "强制解锁…" : "Force unlock…"}</span>
-              </button>
-            </span>
-          </div>
         </div>
       </div>
       {(error || targetError || notice || operation) && (
