@@ -15,6 +15,7 @@ mod e2e;
 use app::branch_mapping_service::BranchMappingService;
 use app::changelist_service::ChangelistService;
 use app::connection_service::ConnectionService;
+use app::connection_setup_service::ConnectionSetupService;
 use app::diagnostics::DiagnosticService;
 use app::file_lock_service::FileLockService;
 use app::file_service::FileService;
@@ -46,6 +47,7 @@ pub(crate) struct AppState {
     pub file_locks: Arc<FileLockService>,
     pub rename: Arc<RenameService>,
     pub connection: Arc<ConnectionService>,
+    pub connection_setup: Arc<ConnectionSetupService>,
     pub status_cache: Arc<StatusCache>,
     pub journal: Arc<OperationJournal>,
     pub diagnostics: Arc<DiagnosticService>,
@@ -74,6 +76,9 @@ pub fn run() {
                     .map_err(std::io::Error::other)?,
             );
             let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
+            let connection_setup = Arc::new(ConnectionSetupService::new(
+                p4::connection_setup::ConnectionSetupRepository::new(runner.clone()),
+            ));
             let diagnostics = Arc::new(DiagnosticService::new(
                 data_dir.join("diagnostics"),
                 logs.clone(),
@@ -136,6 +141,7 @@ pub fn run() {
                 file_locks,
                 rename,
                 connection,
+                connection_setup,
                 status_cache,
                 journal,
                 diagnostics,
@@ -149,6 +155,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ipc::commands::workspace_disk_usage,
             ipc::commands::list_user_workspaces,
+            ipc::commands::browse_connection_users,
+            ipc::commands::browse_connection_workspaces,
+            ipc::commands::preflight_create_connection_user,
+            ipc::commands::preflight_create_connection_workspace,
+            ipc::commands::confirm_create_connection_user,
+            ipc::commands::confirm_create_connection_workspace,
             ipc::commands::list_streams,
             ipc::commands::query_stream_graph,
             ipc::commands::query_branch_mappings,

@@ -235,6 +235,196 @@ pub struct ConnectionStatus {
     pub fingerprint: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDirectoryRequest {
+    pub context: P4Context,
+    pub request_generation: u64,
+    pub operation_id: Option<String>,
+    pub prefix: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionUserCandidate {
+    pub name: String,
+    pub full_name: Option<String>,
+    pub email: Option<String>,
+    pub accessed: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionWorkspaceCandidate {
+    pub name: String,
+    pub owner: String,
+    pub host: String,
+    pub root: String,
+    pub stream: String,
+    pub description: String,
+    pub updated: Option<i64>,
+    pub accessed: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDirectoryStats {
+    pub scanned_count: usize,
+    pub matched_count: usize,
+    pub safety_limit: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionUserDirectoryResult {
+    pub request_generation: u64,
+    pub items: Vec<ConnectionUserCandidate>,
+    pub partial: bool,
+    pub truncated: bool,
+    pub stats: ConnectionDirectoryStats,
+    pub operation_ids: Vec<String>,
+    pub connection: ConnectionStatus,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionWorkspaceDirectoryResult {
+    pub request_generation: u64,
+    pub items: Vec<ConnectionWorkspaceCandidate>,
+    pub partial: bool,
+    pub truncated: bool,
+    pub stats: ConnectionDirectoryStats,
+    pub operation_ids: Vec<String>,
+    pub connection: ConnectionStatus,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionUserCreatePlan {
+    pub name: String,
+    pub full_name: String,
+    pub email: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionClassicViewLine {
+    pub depot_path: String,
+    pub client_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ConnectionWorkspaceMapping {
+    Stream {
+        stream: String,
+    },
+    Classic {
+        view: Vec<ConnectionClassicViewLine>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionWorkspaceCreatePlan {
+    pub name: String,
+    pub root: String,
+    pub description: Option<String>,
+    pub mapping: ConnectionWorkspaceMapping,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionUserCreatePreflightRequest {
+    pub context: P4Context,
+    pub request_generation: u64,
+    pub operation_id: Option<String>,
+    pub plan: ConnectionUserCreatePlan,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionWorkspaceCreatePreflightRequest {
+    pub context: P4Context,
+    pub request_generation: u64,
+    pub operation_id: Option<String>,
+    pub plan: ConnectionWorkspaceCreatePlan,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionSpecIssueCode {
+    InvalidInput,
+    AuthenticationRequired,
+    PermissionDenied,
+    AlreadyExists,
+    ConnectionChanged,
+    Cancelled,
+    VerificationFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSpecIssue {
+    pub code: ConnectionSpecIssueCode,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionSpecKind {
+    UserSelf,
+    Workspace,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSpecCreatePreflight {
+    pub ready: bool,
+    pub kind: ConnectionSpecKind,
+    pub name: String,
+    pub request_generation: u64,
+    pub state_digest: String,
+    pub token: Option<String>,
+    pub expires_at: i64,
+    pub blockers: Vec<ConnectionSpecIssue>,
+    pub warnings: Vec<ConnectionSpecIssue>,
+    pub operation_ids: Vec<String>,
+    pub simulated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSpecCreateConfirmation {
+    pub token: String,
+    pub context: P4Context,
+    pub request_generation: u64,
+    pub state_digest: String,
+    pub confirmed: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionSpecCreateOutcome {
+    Created,
+    Rejected,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSpecCreateResult {
+    pub outcome: ConnectionSpecCreateOutcome,
+    pub failure: Option<ConnectionSpecIssueCode>,
+    pub kind: ConnectionSpecKind,
+    pub name: String,
+    pub message: String,
+    pub operation_ids: Vec<String>,
+    pub simulated: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CliDiscoveryRequest {

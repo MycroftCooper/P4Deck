@@ -1,6 +1,7 @@
 pub mod branches;
 pub mod changelists;
 pub mod connection;
+pub mod connection_setup;
 pub mod context;
 pub mod files;
 pub mod history;

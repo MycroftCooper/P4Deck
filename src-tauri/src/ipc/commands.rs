@@ -273,6 +273,78 @@ pub async fn list_user_workspaces(
 }
 
 #[tauri::command]
+pub async fn browse_connection_users(
+    request: ConnectionDirectoryRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionUserDirectoryResult, String> {
+    Ok(state
+        .connection_setup
+        .browse_users(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn browse_connection_workspaces(
+    request: ConnectionDirectoryRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionWorkspaceDirectoryResult, String> {
+    Ok(state
+        .connection_setup
+        .browse_workspaces(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn preflight_create_connection_user(
+    request: ConnectionUserCreatePreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionSpecCreatePreflight, String> {
+    Ok(state
+        .connection_setup
+        .preflight_user(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn preflight_create_connection_workspace(
+    request: ConnectionWorkspaceCreatePreflightRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionSpecCreatePreflight, String> {
+    Ok(state
+        .connection_setup
+        .preflight_workspace(request, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn confirm_create_connection_user(
+    confirmation: ConnectionSpecCreateConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionSpecCreateResult, String> {
+    Ok(state
+        .connection_setup
+        .confirm(ConnectionSpecKind::UserSelf, confirmation, Some(&app))
+        .await)
+}
+
+#[tauri::command]
+pub async fn confirm_create_connection_workspace(
+    confirmation: ConnectionSpecCreateConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ConnectionSpecCreateResult, String> {
+    Ok(state
+        .connection_setup
+        .confirm(ConnectionSpecKind::Workspace, confirmation, Some(&app))
+        .await)
+}
+
+#[tauri::command]
 pub async fn runtime_info(state: State<'_, AppState>) -> Result<RuntimeInfo, String> {
     let connection = state.connection.clone();
     tauri::async_runtime::spawn_blocking(move || connection.runtime_info())
@@ -539,6 +611,7 @@ fn generic_gui_requires_dedicated_api(source: &OperationSource, command: &str) -
                 | "move"
                 | "reopen"
                 | "client"
+                | "user"
                 | "branch"
                 | "stream"
                 | "switch"
@@ -1149,6 +1222,14 @@ mod tests {
         assert!(!generic_gui_requires_dedicated_api(
             &OperationSource::Gui,
             "branches"
+        ));
+        assert!(generic_gui_requires_dedicated_api(
+            &OperationSource::Gui,
+            "client"
+        ));
+        assert!(generic_gui_requires_dedicated_api(
+            &OperationSource::Gui,
+            "user"
         ));
     }
 

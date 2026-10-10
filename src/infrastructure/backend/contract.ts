@@ -108,6 +108,14 @@ import type {
   RuntimeInfo,
   TrustRequest,
   WorkspaceListing,
+  ConnectionDirectoryRequest,
+  ConnectionUserDirectoryResult,
+  ConnectionWorkspaceDirectoryResult,
+  ConnectionUserCreatePreflightRequest,
+  ConnectionWorkspaceCreatePreflightRequest,
+  ConnectionSpecCreatePreflight,
+  ConnectionSpecCreateConfirmation,
+  ConnectionSpecCreateResult,
 } from "../../shared/contracts/types";
 
 export interface Backend {
@@ -169,6 +177,24 @@ export interface Backend {
   listUserWorkspaces(): Promise<
     import("../../shared/contracts/types").ClientWorkspace[]
   >;
+  browseConnectionUsers(
+    request: ConnectionDirectoryRequest,
+  ): Promise<ConnectionUserDirectoryResult>;
+  browseConnectionWorkspaces(
+    request: ConnectionDirectoryRequest,
+  ): Promise<ConnectionWorkspaceDirectoryResult>;
+  preflightCreateConnectionUser(
+    request: ConnectionUserCreatePreflightRequest,
+  ): Promise<ConnectionSpecCreatePreflight>;
+  preflightCreateConnectionWorkspace(
+    request: ConnectionWorkspaceCreatePreflightRequest,
+  ): Promise<ConnectionSpecCreatePreflight>;
+  confirmCreateConnectionUser(
+    confirmation: ConnectionSpecCreateConfirmation,
+  ): Promise<ConnectionSpecCreateResult>;
+  confirmCreateConnectionWorkspace(
+    confirmation: ConnectionSpecCreateConfirmation,
+  ): Promise<ConnectionSpecCreateResult>;
   listConnectionProfiles(): Promise<ConnectionProfiles>;
   getActiveConnectionProfile(): Promise<ConnectionProfile | null>;
   createConnectionProfile(

@@ -43,6 +43,18 @@ export const tauriBackend: Backend = {
   confirmStreamSwitch: (confirmation) =>
     invoke("confirm_stream_switch", { confirmation }),
   listUserWorkspaces: () => invoke("list_user_workspaces"),
+  browseConnectionUsers: (request) =>
+    invoke("browse_connection_users", { request }),
+  browseConnectionWorkspaces: (request) =>
+    invoke("browse_connection_workspaces", { request }),
+  preflightCreateConnectionUser: (request) =>
+    invoke("preflight_create_connection_user", { request }),
+  preflightCreateConnectionWorkspace: (request) =>
+    invoke("preflight_create_connection_workspace", { request }),
+  confirmCreateConnectionUser: (confirmation) =>
+    invoke("confirm_create_connection_user", { confirmation }),
+  confirmCreateConnectionWorkspace: (confirmation) =>
+    invoke("confirm_create_connection_workspace", { confirmation }),
   listConnectionProfiles: () => invoke("list_connection_profiles"),
   getActiveConnectionProfile: () => invoke("get_active_connection_profile"),
   createConnectionProfile: (request) =>

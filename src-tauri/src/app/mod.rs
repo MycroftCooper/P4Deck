@@ -2,6 +2,7 @@ pub mod branch_mapping_service;
 pub mod changelist_service;
 pub mod confirmation;
 pub mod connection_service;
+pub mod connection_setup_service;
 pub mod diagnostics;
 pub mod file_lock_service;
 pub mod file_service;

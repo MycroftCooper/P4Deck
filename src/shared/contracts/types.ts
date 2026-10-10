@@ -333,6 +333,134 @@ export interface ClientWorkspace {
   updated: number | null;
   accessed: number | null;
 }
+
+export interface ConnectionDirectoryRequest {
+  context: P4Context;
+  requestGeneration: number;
+  operationId?: string;
+  prefix?: string;
+}
+
+export interface ConnectionUserCandidate {
+  name: string;
+  fullName?: string;
+  email?: string;
+  accessed?: number;
+}
+
+export interface ConnectionWorkspaceCandidate extends ClientWorkspace {}
+
+export interface ConnectionDirectoryStats {
+  scannedCount: number;
+  matchedCount: number;
+  safetyLimit: number;
+}
+
+export interface ConnectionUserDirectoryResult {
+  requestGeneration: number;
+  items: ConnectionUserCandidate[];
+  partial: boolean;
+  truncated: boolean;
+  stats: ConnectionDirectoryStats;
+  operationIds: string[];
+  connection: ConnectionStatus;
+  simulated: boolean;
+}
+
+export interface ConnectionWorkspaceDirectoryResult {
+  requestGeneration: number;
+  items: ConnectionWorkspaceCandidate[];
+  partial: boolean;
+  truncated: boolean;
+  stats: ConnectionDirectoryStats;
+  operationIds: string[];
+  connection: ConnectionStatus;
+  simulated: boolean;
+}
+
+export interface ConnectionUserCreatePlan {
+  name: string;
+  fullName: string;
+  email: string;
+}
+
+export interface ConnectionClassicViewLine {
+  depotPath: string;
+  clientPath: string;
+}
+
+export type ConnectionWorkspaceMapping =
+  | { kind: "stream"; stream: string }
+  | { kind: "classic"; view: ConnectionClassicViewLine[] };
+
+export interface ConnectionWorkspaceCreatePlan {
+  name: string;
+  root: string;
+  description?: string;
+  mapping: ConnectionWorkspaceMapping;
+}
+
+export interface ConnectionUserCreatePreflightRequest {
+  context: P4Context;
+  requestGeneration: number;
+  operationId?: string;
+  plan: ConnectionUserCreatePlan;
+}
+
+export interface ConnectionWorkspaceCreatePreflightRequest {
+  context: P4Context;
+  requestGeneration: number;
+  operationId?: string;
+  plan: ConnectionWorkspaceCreatePlan;
+}
+
+export type ConnectionSpecIssueCode =
+  | "invalidInput"
+  | "authenticationRequired"
+  | "permissionDenied"
+  | "alreadyExists"
+  | "connectionChanged"
+  | "cancelled"
+  | "verificationFailed";
+
+export interface ConnectionSpecIssue {
+  code: ConnectionSpecIssueCode;
+  message: string;
+}
+
+export interface ConnectionSpecCreatePreflight {
+  ready: boolean;
+  kind: "userSelf" | "workspace";
+  name: string;
+  requestGeneration: number;
+  stateDigest: string;
+  token?: string;
+  expiresAt: number;
+  blockers: ConnectionSpecIssue[];
+  warnings: ConnectionSpecIssue[];
+  operationIds: string[];
+  simulated: boolean;
+}
+
+export interface ConnectionSpecCreateConfirmation {
+  token: string;
+  context: P4Context;
+  requestGeneration: number;
+  stateDigest: string;
+  confirmed: boolean;
+}
+
+export type ConnectionSpecCreateOutcome = "created" | "rejected" | "unknown";
+
+export interface ConnectionSpecCreateResult {
+  outcome: ConnectionSpecCreateOutcome;
+  failure?: ConnectionSpecIssueCode;
+  kind: "userSelf" | "workspace";
+  name: string;
+  message: string;
+  operationIds: string[];
+  simulated: boolean;
+}
 export type FileState =
   | "untracked"
   | "controlled"

@@ -831,6 +831,11 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
                 .args
                 .first()
                 .is_some_and(|argument| argument == "-o"))
+        || (request.command == "user"
+            && request
+                .args
+                .first()
+                .is_some_and(|argument| argument == "-o"))
         || (request.command == "stream"
             && request
                 .args

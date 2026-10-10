@@ -3,7 +3,8 @@ mod tests {
     use crate::{
         app::{
             branch_mapping_service::BranchMappingService, changelist_service::ChangelistService,
-            connection_service::ConnectionService, file_lock_service::FileLockService,
+            connection_service::ConnectionService,
+            connection_setup_service::ConnectionSetupService, file_lock_service::FileLockService,
             file_service::FileService, rename_service::RenameService,
             search_service::GlobalSearchService, status_cache::StatusCache,
             stream_graph_service::StreamGraphService, stream_switch_service::StreamSwitchService,
@@ -15,7 +16,12 @@ mod tests {
             BranchIssueCode, BranchMappingDetailQuery, BranchMappingDraft, BranchMappingQuery,
             BranchMappingRequestErrorCode, BranchMutationConfirmation, BranchMutationFailureCode,
             BranchMutationMode, BranchMutationOutcome, BranchMutationPreflightRequest,
-            BranchViewLine, BranchViewModifier, ConnectionState, CreateConnectionProfileRequest,
+            BranchViewLine, BranchViewModifier, ConnectionClassicViewLine,
+            ConnectionDirectoryRequest, ConnectionSpecCreateConfirmation,
+            ConnectionSpecCreateOutcome, ConnectionSpecIssueCode, ConnectionState,
+            ConnectionUserCreatePlan, ConnectionUserCreatePreflightRequest,
+            ConnectionWorkspaceCreatePlan, ConnectionWorkspaceCreatePreflightRequest,
+            ConnectionWorkspaceMapping, CreateConnectionProfileRequest,
             DeleteConnectionProfileRequest, FileAction, FileActionRequest, FileLockConfirmation,
             FileLockFailureCode, FileLockIssueCode, FileLockOperation, FileLockOutcome,
             FileLockOwnership, FileLockPreflightRequest, LoginRequest, ManualMergeOpenRequest,
@@ -36,9 +42,9 @@ mod tests {
             WorkflowConfirmation, WorkflowFailureCode, WorkflowIssueCode, WorkflowOutcome,
         },
         p4::{
-            changelists::ChangelistRepository, context::ContextStore, locks::LockRepository,
-            rename::RenameRepository, runner::P4Runner, submit::SubmitRepository,
-            workflows::WorkflowRepository, workspaces,
+            changelists::ChangelistRepository, connection_setup::ConnectionSetupRepository,
+            context::ContextStore, locks::LockRepository, rename::RenameRepository,
+            runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository, workspaces,
         },
         persistence::{
             log_store::LogStore,
@@ -89,6 +95,389 @@ mod tests {
         let result = run_fixture_case(config).await;
         let _ = std::fs::remove_dir_all(&runtime_root);
         result.unwrap_or_else(|error| panic!("BE-002 localhost E2E failed: {error}"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the isolated localhost p4d fixture"]
+    async fn localhost_fixture_connection_setup_uses_explicit_draft_context() {
+        const USER: &str = "p4deck-setup-self-e2e";
+        const CLASSIC: &str = "p4deck-setup-classic-e2e";
+        const STALE: &str = "p4deck-setup-stale-e2e";
+        const STREAM_CLIENT_NAME: &str = "p4deck-setup-stream-e2e";
+        const DEPOT: &str = "p4deck-setup-stream-depot-e2e";
+        const STREAM: &str = "//p4deck-setup-stream-depot-e2e/main";
+
+        let config = FixtureConfig::from_environment()
+            .unwrap_or_else(|error| panic!("connection setup fixture rejected: {error}"));
+        std::fs::create_dir_all(&config.runtime_root).unwrap();
+        let logs =
+            Arc::new(LogStore::open(&config.runtime_root.join("setup-logs.sqlite")).unwrap());
+        let journal = Arc::new(
+            OperationJournal::open(&config.runtime_root.join("setup-operations.sqlite")).unwrap(),
+        );
+        let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
+        let repository = ConnectionSetupRepository::new(runner.clone());
+        let service = ConnectionSetupService::new(repository.clone());
+        let mut draft = config.context.clone();
+        draft.client.clear();
+
+        let classic_root = config.workspace_root.join("connection-setup-classic");
+        let stream_root = config.workspace_root.join("connection-setup-stream");
+        let stale_root = config.workspace_root.join("connection-setup-stale");
+        let _ = cleanup_named_client(&runner, &config.context, CLASSIC, &classic_root).await;
+        let _ =
+            cleanup_named_client(&runner, &config.context, STREAM_CLIENT_NAME, &stream_root).await;
+        let _ = cleanup_named_client(&runner, &config.context, STALE, &stale_root).await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "stream",
+            vec!["-d".into(), STREAM.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "depot",
+            vec!["-d".into(), DEPOT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "user",
+            vec!["-d".into(), "-f".into(), USER.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+
+        let scenario = async {
+            let users = service
+                .browse_users(
+                    ConnectionDirectoryRequest {
+                        context: draft.clone(),
+                        request_generation: 11,
+                        operation_id: Some("setup-users".into()),
+                        prefix: Some("p4deck-fixture".into()),
+                    },
+                    None,
+                )
+                .await;
+            if users.connection.state != ConnectionState::Connected
+                || !users.items.iter().any(|item| item.name == FIXTURE_USER)
+            {
+                return Err("draft User browse did not query the fixture server".into());
+            }
+            let workspaces = service
+                .browse_workspaces(
+                    ConnectionDirectoryRequest {
+                        context: draft.clone(),
+                        request_generation: 12,
+                        operation_id: Some("setup-workspaces".into()),
+                        prefix: Some("p4deck-fixture".into()),
+                    },
+                    None,
+                )
+                .await;
+            if workspaces.connection.state != ConnectionState::Connected {
+                return Err("draft Workspace browse required an existing client unexpectedly".into());
+            }
+
+            let (existed_before, _) = repository
+                .user_exists(&config.context, USER, "setup-user-before", None)
+                .await?;
+            if existed_before {
+                return Err("temporary setup user unexpectedly existed before preflight".into());
+            }
+            let mut user_context = draft.clone();
+            user_context.user = USER.into();
+            let user_preflight = service
+                .preflight_user(
+                    ConnectionUserCreatePreflightRequest {
+                        context: user_context.clone(),
+                        request_generation: 13,
+                        operation_id: Some("setup-user-preflight".into()),
+                        plan: ConnectionUserCreatePlan {
+                            name: USER.into(),
+                            full_name: "P4Deck Setup Self".into(),
+                            email: "p4deck-setup@example.test".into(),
+                        },
+                    },
+                    None,
+                )
+                .await;
+            eprintln!(
+                "connection-setup NewUser preflight ready={} blockers={:?}",
+                user_preflight.ready, user_preflight.blockers
+            );
+            let (exists_after_reads, _) = repository
+                .user_exists(&config.context, USER, "setup-user-after-read", None)
+                .await?;
+            if exists_after_reads {
+                return Err("read-only New User preflight unexpectedly auto-created the user".into());
+            }
+            if user_preflight.ready {
+                let user_result = service
+                    .confirm(
+                        crate::domain::ConnectionSpecKind::UserSelf,
+                        ConnectionSpecCreateConfirmation {
+                            token: user_preflight.token.clone().unwrap(),
+                            context: user_context,
+                            request_generation: 13,
+                            state_digest: user_preflight.state_digest,
+                            confirmed: true,
+                        },
+                        None,
+                    )
+                    .await;
+                eprintln!(
+                    "connection-setup NewUser confirm outcome={:?} failure={:?}",
+                    user_result.outcome, user_result.failure
+                );
+                if !matches!(
+                    user_result.outcome,
+                    ConnectionSpecCreateOutcome::Created | ConnectionSpecCreateOutcome::Rejected
+                ) {
+                    return Err("New User returned an ambiguous result without a transport failure".into());
+                }
+            } else if user_preflight.blockers.iter().any(|issue| {
+                issue.code == ConnectionSpecIssueCode::AlreadyExists
+                    || issue.code == ConnectionSpecIssueCode::InvalidInput
+            }) {
+                return Err("New User was blocked for an unsafe or unexpected reason".into());
+            }
+
+            std::fs::create_dir_all(&classic_root).map_err(|error| error.to_string())?;
+            let classic_plan = ConnectionWorkspaceCreatePlan {
+                name: CLASSIC.into(),
+                root: classic_root.to_string_lossy().into_owned(),
+                description: Some("P4Deck connection setup classic fixture".into()),
+                mapping: ConnectionWorkspaceMapping::Classic {
+                    view: vec![ConnectionClassicViewLine {
+                        depot_path: "//depot/...".into(),
+                        client_path: format!("//{CLASSIC}/..."),
+                    }],
+                },
+            };
+            create_fixture_workspace(&service, &draft, 14, classic_plan.clone()).await?;
+            let (classic_before_duplicate, _) = repository
+                .read_workspace(
+                    &config.context,
+                    CLASSIC,
+                    "setup-classic-before-duplicate",
+                    None,
+                )
+                .await?;
+            let duplicate = service
+                .preflight_workspace(
+                    ConnectionWorkspaceCreatePreflightRequest {
+                        context: draft.clone(),
+                        request_generation: 15,
+                        operation_id: Some("setup-classic-duplicate".into()),
+                        plan: classic_plan,
+                    },
+                    None,
+                )
+                .await;
+            if duplicate.ready
+                || !duplicate
+                    .blockers
+                    .iter()
+                    .any(|issue| issue.code == ConnectionSpecIssueCode::AlreadyExists)
+            {
+                return Err("existing classic workspace was not refused".into());
+            }
+            let (classic_after_duplicate, _) = repository
+                .read_workspace(
+                    &config.context,
+                    CLASSIC,
+                    "setup-classic-after-duplicate",
+                    None,
+                )
+                .await?;
+            if classic_before_duplicate != classic_after_duplicate {
+                return Err("duplicate workspace preflight changed the existing spec".into());
+            }
+
+            std::fs::create_dir_all(&stale_root).map_err(|error| error.to_string())?;
+            let stale_preflight = service
+                .preflight_workspace(
+                    ConnectionWorkspaceCreatePreflightRequest {
+                        context: draft.clone(),
+                        request_generation: 20,
+                        operation_id: Some("setup-stale-preflight".into()),
+                        plan: ConnectionWorkspaceCreatePlan {
+                            name: STALE.into(),
+                            root: stale_root.to_string_lossy().into_owned(),
+                            description: Some("P4Deck stale token fixture".into()),
+                            mapping: ConnectionWorkspaceMapping::Classic {
+                                view: vec![ConnectionClassicViewLine {
+                                    depot_path: "//depot/...".into(),
+                                    client_path: format!("//{STALE}/..."),
+                                }],
+                            },
+                        },
+                    },
+                    None,
+                )
+                .await;
+            if !stale_preflight.ready {
+                return Err("stale-token preflight was unexpectedly blocked".into());
+            }
+            let stale_confirmation = ConnectionSpecCreateConfirmation {
+                token: stale_preflight.token.clone().unwrap(),
+                context: draft.clone(),
+                request_generation: 21,
+                state_digest: stale_preflight.state_digest,
+                confirmed: true,
+            };
+            let stale_result = service
+                .confirm(
+                    crate::domain::ConnectionSpecKind::Workspace,
+                    stale_confirmation.clone(),
+                    None,
+                )
+                .await;
+            if stale_result.outcome != ConnectionSpecCreateOutcome::Rejected
+                || stale_result.failure != Some(ConnectionSpecIssueCode::ConnectionChanged)
+            {
+                return Err("changed draft generation did not invalidate the token".into());
+            }
+            let replay = service
+                .confirm(
+                    crate::domain::ConnectionSpecKind::Workspace,
+                    stale_confirmation,
+                    None,
+                )
+                .await;
+            if replay.outcome != ConnectionSpecCreateOutcome::Rejected {
+                return Err("consumed setup token was replayable".into());
+            }
+            let (stale_exists, _) = repository
+                .workspace_exists(&config.context, STALE, "setup-stale-verify", None)
+                .await?;
+            if stale_exists {
+                return Err("stale or replayed confirmation wrote a workspace".into());
+            }
+
+            checked_run(
+                &runner,
+                &config.context,
+                "depot",
+                vec!["-i".into()],
+                Some(format!("Depot: {DEPOT}\nOwner: {FIXTURE_USER}\nType: stream\nStreamDepth: 1\nMap: {DEPOT}/...\n")),
+                OutputMode::Text,
+            )
+            .await?;
+            checked_run(
+                &runner,
+                &config.context,
+                "stream",
+                vec!["-i".into()],
+                Some(format!("Stream: {STREAM}\nOwner: {FIXTURE_USER}\nName: main\nParent: none\nType: mainline\nParentView: inherit\nOptions: allsubmit unlocked notoparent nofromparent mergedown\nPaths:\n\tshare ...\n")),
+                OutputMode::Text,
+            )
+            .await?;
+            std::fs::create_dir_all(&stream_root).map_err(|error| error.to_string())?;
+            create_fixture_workspace(
+                &service,
+                &draft,
+                16,
+                ConnectionWorkspaceCreatePlan {
+                    name: STREAM_CLIENT_NAME.into(),
+                    root: stream_root.to_string_lossy().into_owned(),
+                    description: Some("P4Deck connection setup stream fixture".into()),
+                    mapping: ConnectionWorkspaceMapping::Stream {
+                        stream: STREAM.into(),
+                    },
+                },
+            )
+            .await?;
+            Ok::<(), String>(())
+        }
+        .await;
+
+        let _ = cleanup_named_client(&runner, &config.context, CLASSIC, &classic_root).await;
+        let _ =
+            cleanup_named_client(&runner, &config.context, STREAM_CLIENT_NAME, &stream_root).await;
+        let _ = cleanup_named_client(&runner, &config.context, STALE, &stale_root).await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "stream",
+            vec!["-d".into(), STREAM.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "depot",
+            vec!["-d".into(), DEPOT.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        let _ = checked_run(
+            &runner,
+            &config.context,
+            "user",
+            vec!["-d".into(), "-f".into(), USER.into()],
+            None,
+            OutputMode::Text,
+        )
+        .await;
+        drop((service, repository, runner, logs, journal));
+        let _ = std::fs::remove_dir_all(&config.runtime_root);
+        scenario.unwrap_or_else(|error| panic!("connection setup fixture failed: {error}"));
+    }
+
+    async fn create_fixture_workspace(
+        service: &ConnectionSetupService,
+        context: &P4Context,
+        generation: u64,
+        plan: ConnectionWorkspaceCreatePlan,
+    ) -> Result<(), String> {
+        let preflight = service
+            .preflight_workspace(
+                ConnectionWorkspaceCreatePreflightRequest {
+                    context: context.clone(),
+                    request_generation: generation,
+                    operation_id: Some(format!("setup-workspace-{generation}")),
+                    plan,
+                },
+                None,
+            )
+            .await;
+        if !preflight.ready {
+            return Err(format!(
+                "workspace preflight blocked: {:?}",
+                preflight.blockers
+            ));
+        }
+        let result = service
+            .confirm(
+                crate::domain::ConnectionSpecKind::Workspace,
+                ConnectionSpecCreateConfirmation {
+                    token: preflight.token.unwrap(),
+                    context: context.clone(),
+                    request_generation: generation,
+                    state_digest: preflight.state_digest,
+                    confirmed: true,
+                },
+                None,
+            )
+            .await;
+        if result.outcome != ConnectionSpecCreateOutcome::Created {
+            return Err(format!("workspace creation was not verified: {result:?}"));
+        }
+        Ok(())
     }
 
     impl FixtureConfig {
