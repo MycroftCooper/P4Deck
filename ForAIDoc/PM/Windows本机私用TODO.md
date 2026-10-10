@@ -35,8 +35,8 @@
 ### WIN-P0-02 — 最新构建的 Windows 原生 UI 冒烟
 
 - **目标**：在 Tauri 原生窗口中确认本人会使用的核心入口可点击、可聚焦、可恢复。
-- **为何阻塞本机私用**：现有 80/469 Web 测试、4 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
-- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、Lock/Unlock 只在测试数据上执行。记录每一步通过/失败及所用构建。
+- **为何阻塞本机私用**：现有 82/481 Web 测试、5 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
+- **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、Lock/Unlock 只在测试数据上执行。Force Unlock 只可使用隔离 fixture 中明确创建的另一 User/Client 正数 numbered CL；`default`、`-s`、`-x` 只验证 blocker，不得尝试绕过。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
 
@@ -52,7 +52,7 @@
 
 - **目标**：证明日常“浏览 → 修改 → Pending/Review → Shelf/Resolve → Submit”链路在安全边界内可用，并能恢复到已知状态。
 - **为何阻塞本机私用**：自动化已验证实现，但首次用于个人数据前仍需确认实际权限、映射、文件类型、trigger 和服务器策略不会产生意外写入。
-- **具体实现/验收步骤**：先在隔离 fixture 完整执行一轮；再仅在本人专用测试 Depot/Client/CL 上执行 Sync、Edit/Add、Move、Revert、Pending 移动、Lock/Unlock（若权限支持）、Shelf/Unshelve、文本 Resolve 和 Submit；每个 mutation 先核对预检目标、blocker/warning、operation ID 和刷新建议；包含一次主动取消或失败场景；最终核对 Submitted 结果并删除/归档测试数据。真实生产 Depot 只做只读检查。
+- **具体实现/验收步骤**：先在隔离 fixture 完整执行一轮；再仅在本人专用测试 Depot/Client/CL 上执行 Sync、Edit/Add、Move、Revert、Pending 移动、Lock/Unlock（若权限支持）、Shelf/Unshelve、文本 Resolve 和 Submit；Force Unlock 仅当本人确有管理员需求时，另用可删除测试文件、另一测试 User/Client 与正数 numbered CL 演练，逐项核对 owner/origin/admin proof 和写后验证。每个 mutation 先核对预检目标、blocker/warning、operation ID 和刷新建议；包含一次主动取消或失败场景；最终核对 Submitted 结果并删除/归档测试数据。真实生产 Depot 只做只读检查。
 - **完成证据**：脱敏的测试路径标识、操作前后文件/CL 清单、各状态机结果、服务器侧复核、清理结果和任何不支持能力的安全降级说明。
 - **负责端**：前端验证状态机呈现；后端验证命令、token、Journal/Log 与最终状态；PM/本人控制测试范围并确认清理。
 
@@ -94,7 +94,7 @@
 - 企业 SSO/MFA；仅当本人实际 Server 强制要求时，才升级为 WIN-P0-03 的真实阻塞。
 - 第二 Server、Broker/Proxy、多 P4/P4D 版本、Unicode/non-Unicode Server 兼容矩阵。
 - NVDA/VoiceOver、双平台读屏认证；当前保留键盘/ARIA/axe/对比度自动化基线。
-- Label/Job 独立工作台、Stream spec 写入，以及 Force Unlock 前端入口等后续产品功能。Force Unlock 后端/共享契约已完成但不表示本人 Server 管理权限或特殊锁来源已验证；Branch Mapping 前后端工作台已经完成，不再列为未实现范围。两者 Windows 原生点击及真实权限/trigger 行为仍须按本清单安全边界验收。
+- Label/Job 独立工作台与 Stream spec 写入等后续产品功能。Force Unlock 前后端专用闭环已完成，但不表示本人 Server 管理权限或特殊锁来源已验证；Branch Mapping 前后端工作台也已完成。两者 Windows 原生点击及真实权限/trigger 行为仍须按本清单安全边界验收。
 - 菜单台账中 190 个 `phase: later` 项。
 
 ## 新增功能实施批次（不改变上述验收顺序）
@@ -102,5 +102,5 @@
 - Stream Graph 前后端只读闭环已独立完成：正式全局 panel/Streams 入口、确定性 parent→child 分层、可访问虚拟树、过滤/分页/取消/重试、详情/键盘/390px、复用安全切换对话框，以及强类型契约、Tauri adapter、明确 simulated 的 Browser Mock、有界 `p4 streams` 采集、scope 复核、一次性分页游标和 Windows localhost fixture 均已落地。
 - Web 组件与真实 Edge 已覆盖分页去重、游标失效重启、迟到隔离、大图 DOM 上限、390px 和 axe；这仍不表示 Windows Tauri 原生 panel/popout 已点击验收，需并入 WIN-P0-02 留证。
 - Branch Mapping 前后端安全闭环已独立完成：正式全局 panel、Streams/Dock/Activity 入口、虚拟列表与 opaque cursor、原样详情/View 语义、正反 `integrate -n` 只读影响预览，以及专用 preflight→confirm create/edit/delete 均已接入；Client mapping/owner/unknown/TOCTOU/危险删除阻断、一次性 cursor/token、Tauri adapter 和明确 simulated 的 Browser Mock 均复用后端权威契约。Web 组件与真实 Edge 覆盖 390px、键盘、axe、大列表 DOM 上限、分页/迟到隔离和模拟增删改闭环。
-- Force Unlock 后端/共享契约已独立完成：只允许精确 depot 文件和已证明的正数 numbered changelist，admin proof、owner/origin、完整 Connection/generation、typed ack、一次性 token、mutation lane/TOCTOU 与逐文件写后验证均由 Rust 权威执行；普通 unlock 没有 force 开关，generic GUI 旁路仍关闭。Browser Mock 明示 simulated。当前无前端入口；standard localhost 不能证明 distributed `-x`，tagged facts 不能可靠证明 aborted-submit `-s`，均保持 blocker。
+- Force Unlock 前后端专用闭环已独立完成：文件工具栏提供与普通 Unlock 分离的高危入口，路径只能来自 1～128 个精确 depot file 选择快照；专用对话框展示后端权威 server/profile/user/client、owner/origin/permission proof、blocker/warning，并要求精确 typed acknowledgement。取消/连接变化隔离迟到响应，执行结果逐文件展示并强制刷新；只有 complete + 全部 `unlocked` 才显示验证成功。后端只允许已证明的正数 numbered changelist，完整 Connection/generation、一次性 token、mutation lane/TOCTOU 与写后复核仍由 Rust 权威执行；普通 unlock 没有 force 开关，generic GUI 旁路仍关闭。Browser Mock 明示 simulated。standard localhost 不能证明 distributed `-x`，tagged facts 不能可靠证明 aborted-submit `-s`，均保持 blocker。
 - 上述浏览器或 fixture 证据不表示 Windows Tauri 原生 panel/popout、Force Unlock UI 或本人 Server 权限/trigger 已通过；分别并入 WIN-P0-02 与 WIN-P0-03/04。新增功能批次不改变 WIN-P0/P1/P2 的本机私用安全顺序，也不带入 Stream spec 写入。

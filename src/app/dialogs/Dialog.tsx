@@ -99,7 +99,13 @@ export function Dialog({
           <X size={18} />
         </button>
       </header>
-      <div className="workflow-dialog-body">{children}</div>
+      <div
+        className="workflow-dialog-body"
+        tabIndex={0}
+        aria-label={zh ? "对话框内容" : "Dialog content"}
+      >
+        {children}
+      </div>
       <footer className="workflow-dialog-footer">{footer}</footer>
     </dialog>,
     origin.owner.body,

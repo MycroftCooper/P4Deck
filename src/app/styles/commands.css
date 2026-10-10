@@ -192,6 +192,9 @@
 .command-group button.command-accent:not(:disabled) {
   color: var(--accent);
 }
+.command-group button.command-danger:not(:disabled) {
+  color: var(--danger);
+}
 .command-group button:hover:not(:disabled),
 .global-address button:hover:not(:disabled) {
   background: var(--accent-soft);

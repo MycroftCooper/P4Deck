@@ -32,7 +32,7 @@
 
 当前可以完整执行：浏览器 Mock、前端构建、TypeScript 检查、前端单测、`cargo test`、`cargo check`、Clippy、Tauri debug 应用构建，以及 Windows localhost 应用层 E2E。Windows libtest 现通过链接器 manifest input 获得 Common Controls v6 依赖，不再以 `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND` 退出。
 
-当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成；BE-015 已完成 Force Unlock 后端/共享契约与 Browser Mock，前端入口、Windows 原生交互及本人 Server 管理权限仍待验收。
+当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索生产后端及 `SearchPage` 前端接线。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成；BE-015 Force Unlock 后端/共享契约、Browser Mock 与后续 FE-24 前端闭环均已完成，Windows 原生交互及本人 Server 管理权限仍待验收。
 
 ### BE-012 — 文本三方手工合并（DONE：Windows localhost；原生 UI/macOS 待验）
 
@@ -59,13 +59,13 @@
 - Windows localhost fixture 覆盖 create→分页 list/detail→TOCTOU 拒绝→edit→正反 preview→delete、非 owner 拒绝、危险确认、token/cursor 重放、取消、generation 漂移，并比较 preview 前后 opened 与 Workspace 文件内容。Browser Mock 明确 `simulated=true`；本后端批次当时尚无前端页面，后续 FE-23 已补齐；Tauri 原生交互与本人 Server 权限矩阵仍无证据。
 - 验收（2026-10-10）：Windows localhost 最终连续两轮通过（123.99 秒、118.52 秒）；`pnpm ci:quick` 通过（Web 77 文件/453 项、Rust 178 项，另 1 项 localhost E2E 默认 ignored），生产 Web build、Prettier、rustfmt、TypeScript/Cargo check 与 Clippy `--all-targets -D warnings` 通过。
 
-### BE-015 — Force Unlock 独立安全后端（DONE：Windows localhost；前端未接）
+### BE-015 — Force Unlock 独立安全后端（DONE：Windows localhost；前端后续已完成）
 
 - 独立 `preflight_force_unlock` / `confirm_force_unlock`，不在普通 Lock/Unlock 上增加 force 开关，也不开放通用管理员命令。只接受 1～128 个精确 depot 文件，拒绝本地/Client 路径、目录、通配符、revision selector、控制字符和参数注入；执行始终为参数数组 `p4 unlock -f` 加且仅加已证明来源与单个精确路径。
 - opened 来源仅接受正数编号 changelist 并执行 `-c N`。真实 P4D 2026.1 probe 证明：他人 default changelist 上的 `-c default` 可返回 0 但不会解除锁，因此 API 明确拒绝 change 0，且从不退化为省略来源参数。当前 standard fixture 不能证明 distributed orphan，tagged facts 也不能可靠区分 aborted `submit -e` shelf lock；`-x` / `-s` 均结构化 fail closed，而不是猜测或伪报成功。
 - preflight 组合 tagged `fstat -Ol`、`opened -a -c N`、`protects -M` 与 `info -s`，逐路径绑定 owner/user/client/change/action/filetype/origin/admin proof。一次性短期 token 绑定 active profile、完整 Context/generation、精确有序路径、事实摘要、风险短语和 digest；confirm 在同 Server mutation lane 内复查全部事实并拒绝 TOCTOU、重放、过期、错连接和错误确认。
 - 命令执行后逐路径再次读取 authoritative facts；仅全部目标明确无锁才成功，still locked/disappeared/unverifiable/failed/cancelled 保持逐项结果，partial 不回滚，超时或歧义不声称成功。普通 owner lock 引导普通 unlock；generic GUI `run_p4 lock/unlock` 继续阻断，Terminal 既有显式边界未扩大。
-- Windows localhost 使用 admin/nonadmin、双 User/Client 和他人编号 changelist 验证权限拒绝、普通/force 分离、ack、token replay/expiry、generation、cancel、TOCTOU、精确 `-c N` 执行及写后复核；同时证明 opened 记录、文件内容和无关锁未改变。Browser Mock 明示 `simulated=true` 并覆盖 permission/origin/replay/TOCTOU。前端 UI、本人 Server 管理权限、distributed `-x`、真实 aborted-submit `-s` 与跨版本行为尚无证据。
+- Windows localhost 使用 admin/nonadmin、双 User/Client 和他人编号 changelist 验证权限拒绝、普通/force 分离、ack、token replay/expiry、generation、cancel、TOCTOU、精确 `-c N` 执行及写后复核；同时证明 opened 记录、文件内容和无关锁未改变。Browser Mock 明示 `simulated=true` 并覆盖 permission/origin/replay/TOCTOU。本后端批次当时没有 UI，后续 FE-24 已完成独立前端入口、typed ack、逐文件结果、取消/迟到隔离及 390px/axe；本人 Server 管理权限、distributed `-x`、真实 aborted-submit `-s` 与跨版本行为仍无证据。
 - 验收（2026-10-10）：Windows localhost 完整应用 fixture 连续两轮通过（121.01 秒、121.24 秒）；`pnpm ci:quick` 通过（Web 80 文件/469 项、Rust 185 项，另 1 项 localhost E2E 默认 ignored），生产 Web build、Cargo build、Prettier、rustfmt、TypeScript/Cargo check 与 Clippy `--all-targets -D warnings` 通过。
 
 BE-002 的 Windows localhost 基线已完成；BE-009b 的本机合成数据性能基准已经建立并通过，BE-009 多版本、双平台、Unicode/non-Unicode、Proxy/Broker 与 SSL 兼容矩阵仍需外部环境。
