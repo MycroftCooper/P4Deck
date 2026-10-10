@@ -1,17 +1,18 @@
 # Windows 本机私用 TODO
 
 > 当前阶段唯一执行清单。目标是在**当前这台 Windows 机器上供本人私用**，不是公开发布、跨平台交付或企业部署。
-> 建立日期：2026-10-10。事实基线：`94b5f0c` 已取得第一轮 Windows Tauri 原生构建/启动和部分核心点击证据；Force Unlock 自动刷新修复 `707e51e` 仅通过定向自动化，尚未重新构建做原生复验。本人实际 P4 Server 仍未验证。
+> 建立日期：2026-10-10。事实基线：`94b5f0c` 已取得第一轮 Windows Tauri 原生构建/启动和部分核心点击证据；Force Unlock 自动刷新修复 `707e51e` 已通过定向自动化并重新构建，但新版 exe 尚未启动或做原生复验。本人实际 P4 Server 仍未验证。
 > 历史实现记录继续保留在《前端操作流程 TODO》和《后端 TODO》，但不再作为当前任务队列。
 
 ## 当前验收快照
 
-- **WIN-P0-01 部分完成**：`94b5f0c` 的 `pnpm tauri build --debug --no-bundle` exit 0，真实 exe、SHA-256、可见响应窗口和隔离 IPC 已绑定留证。旧应用退出、隔离数据快照、原配置恢复及残留进程复核由后端记录补齐；`707e51e` 尚未生成新 exe。
+- **WIN-P0-01 部分完成**：`94b5f0c` 的 `pnpm tauri build --debug --no-bundle` exit 0，真实 exe、SHA-256、可见响应窗口和隔离 IPC 已绑定留证；`707e51e` 已用同一入口重新构建，exit 0，SHA-256 `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`，但未启动。旧 PID 已正常关闭且无残留，fixture 已停止且 listener 消失，原 Roaming/Local 已恢复，测试 snapshot 已保留。
 - **WIN-P0-02 部分完成**：原生窗口已通过 Profile 保存/验证、Workspace Root 校正、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch Mapping list/detail/forward preview/安全 CRUD、一次隔离 fixture Force Unlock preflight/typed acknowledgement/confirm/服务端真解锁。详见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。
-- **阻塞复验**：首轮 Force Unlock 后服务端已解锁，但 Files/selection 仍显示旧锁，手工刷新才更新。`707e51e` 已修并通过定向 14 项测试，仍必须在新 Tauri build 重建同一 fixture lock 后复验自动刷新。
+- **阻塞复验**：首轮 Force Unlock 后服务端已解锁，但 Files/selection 仍显示旧锁，手工刷新才更新。`707e51e` 已修、通过定向 14 项测试并重新构建；仍必须启动新版 exe、重新 seed 同一 fixture lock 后复验自动刷新。
 - **尚未通过**：Shelf `deep-path` 结果到独立详情、其余完整只读入口、菜单/命令面板/快捷键、390px、dock/popout/归还、焦点、关闭重开/布局恢复，以及剩余安全写入流程。
 - **未开始/未验**：本人实际 Server（WIN-P0-03）、完整核心读写安全演练（WIN-P0-04）、全部 P1/P2。
-- **控制停止事实**：提交 `707e51e` 后工具返回 “Computer Use was stopped by the user with the physical Escape key.”；随后没有继续原生点击，前端 Agent 也没有关闭应用。
+- **控制停止事实**：提交 `707e51e` 后工具返回 “Computer Use was stopped by the user with the physical Escape key.”；随后没有继续原生点击。旧应用、fixture、原配置恢复与临时 seed 清理由后端收尾，不构成新版 UI 复验。
+- **fixture 下轮前置**：临时 Shelf 4447/4448、Force target CL4449 与 owner/client/user、原生测试 branch 已精确清理；下轮必须重新 seed Shelf 与 other-owner lock。CL4446 四个已提交文件、5 个 streams 及历史 permission-map/shelf2 保留。
 
 ## 安全红线
 
@@ -39,7 +40,7 @@
 - **为何阻塞本机私用**：`pnpm build`、浏览器 Playwright 和 Rust 单测都不能证明 WebView2/Tauri 进程、资源、IPC 与原生窗口能够在本机正常启动。
 - **具体实现/验收步骤**：记录 commit 与工具版本；执行本地快速门禁；按项目已有 Tauri 入口完成 debug 或 release 构建；从生成物启动主窗口；确认无白屏、panic、资源缺失或立即退出；退出后确认无残留写操作进程。若 build/start 失败，只修复直接阻塞本机启动的问题，另立变更提交。
 - **完成证据**：commit SHA、实际命令与退出码、生成物路径、启动/正常退出时间、主窗口截图或人工验收记录，以及无敏感信息的启动日志。
-- **当前证据/缺口**：`94b5f0c` 构建/启动已通过，exe SHA-256 与 fixture/IPC 见 [Windows 原生构建与运行验收](../Coder/Windows原生构建运行验收.md)；正常退出、恢复原配置和残留进程复核待后端补记。`707e51e` 为原生验收中发现的前端刷新修复，尚无新 build 证据。
+- **当前证据/缺口**：`94b5f0c` 构建/启动已通过；`707e51e` 重新构建也已通过，但新 exe 未启动。旧 PID 正常退出、原配置恢复、测试 snapshot 与 fixture 停止/清理均已留证。完整 hash、路径和计数见 [Windows 原生构建与运行验收](../Coder/Windows原生构建运行验收.md)。
 - **负责端**：前端负责壳/UI 启动；后端负责 Rust/Tauri/IPC 启动错误；PM 核对证据绑定同一 commit。
 
 ### WIN-P0-02 — 最新构建的 Windows 原生 UI 冒烟（部分完成、待阻塞复验）
@@ -48,7 +49,7 @@
 - **为何阻塞本机私用**：现有 83/487 Web 测试、6 项真实 Edge 测试和 localhost 服务层 E2E 没有覆盖原生应用菜单、WebView2 焦点、窗口恢复、系统对话与 IPC 串联。
 - **具体实现/验收步骤**：先连接隔离 fixture；依次检查启动/退出、设置与 Profile、Workspace/Depot、文件预览、Diff/History/Graph、Pending/Submitted、Search、Streams/Stream Graph、Branch Mappings、Shelf、Terminal/P4 Log/Operations/Diagnostics；验证命令面板、菜单、主要快捷键、390px 主窗口、dock/popout/归还、关闭后重开和焦点恢复；对 Submit、Shelf、Resolve、Stream 切换、Branch Mapping create/edit/delete、Lock/Unlock 只在测试数据上执行。Force Unlock 只可使用隔离 fixture 中明确创建的另一 User/Client 正数 numbered CL；`default`、`-s`、`-x` 只验证 blocker，不得尝试绕过。记录每一步通过/失败及所用构建。
 - **完成证据**：按页面/动作列出的原生冒烟表、关键截图或录屏、operation/log ID、窗口恢复前后记录；必须明确写“Windows Tauri 原生”，不能用 Edge 截图替代。
-- **当前证据/缺口**：已通过项和精确边界见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。下一步先重建含 `707e51e` 的 exe 并复验 Force Unlock 自动刷新，再依有限清单补 Shelf 导航、剩余页面、菜单/快捷键、390px、dock/popout、焦点和重开恢复；未实际点击项不得由后端日志或浏览器截图代替。
+- **当前证据/缺口**：已通过项和精确边界见 [Windows Tauri 原生 UI 验收](../Coder/Windows原生UI验收.md)。下一步启动已构建的 `707e51e` exe，重新 seed 精确锁并复验 Force Unlock 自动刷新，再依有限清单补 Shelf 导航、剩余页面、菜单/快捷键、390px、dock/popout、焦点和重开恢复；未实际点击项不得由后端日志或浏览器截图代替。
 - **负责端**：前端主责交互与窗口；后端协查 IPC/operation；PM 执行或见证冒烟并归档结果。
 
 ### WIN-P0-03 — 本人 P4 Server 连接与实际认证（未验）

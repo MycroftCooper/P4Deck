@@ -4,7 +4,7 @@
 >
 > 首轮 UI 基线：`94b5f0c feat(search): add stream and shelf navigation`
 >
-> 修复提交：`707e51e fix: refresh force unlock file facts`（仅自动化通过，尚未重新构建并做原生复验）
+> 修复提交：`707e51e fix: refresh force unlock file facts`（已重新构建，尚未启动或做原生复验）
 >
 > 范围：当前 Windows 机器、真实 Tauri/WebView2 窗口、隔离 `127.0.0.1:16661` fixture。本文不把浏览器 Mock、localhost 服务层或独立 CLI 结果单独冒充为原生 UI 通过。
 
@@ -20,8 +20,9 @@
 | SHA-256 | `D0C3D6D3BA12F750CA49246C4F15561B6101522540EB6F2C9258EC0A0D0C52A2` |
 | 原生窗口 | 标题 `P4Deck`，进程与窗口可见且响应；Windows 11 build 26100 / WebView2 154 |
 | 数据范围 | 全新隔离 P4Deck profile 数据 + loopback fixture；未连接本人 Server，未读取 ticket 内容 |
+| 修复后构建 | 源码 `707e51e` 已重新执行同一 Tauri debug build，exit 0；SHA-256 `C821BA49A564FC1517AB295935B74FEFBC58DFC29E91FD52AEB5C5EB1B4C3602`。该 exe 未启动，不能算原生复验 |
 
-WIN-P0-01 的构建与启动证据已取得；旧应用数据恢复、正常退出和残留进程复核由后端验收记录最终补齐。因为随后产生了前端修复 `707e51e`，该修复对应的新 exe 尚无原生证据。
+WIN-P0-01 的首轮构建/启动和修复后重新构建证据已取得。旧 PID 已正常关闭且无残留进程，fixture 已停止且 `127.0.0.1:16661` 无 listener，原 Roaming/Local 已恢复；测试数据快照保留为同级 `.native-test-snapshot-20261010-194736`。修复后 exe 尚未启动，因此仍无 `707e51e` 原生交互证据。完整路径、计数和清理记录以 [Windows 原生构建与运行验收](Windows原生构建运行验收.md) 为准。
 
 ## 2. 已实际通过的原生交互
 
@@ -52,19 +53,21 @@ WIN-P0-01 的构建与启动证据已取得；旧应用数据恢复、正常退�
 
 `707e51e` 已做最小修复：Force Unlock 的 success、partial/rejected 和 thrown-error 路径会实际重新加载当前 connection 的 Workspace/Depot 锁事实，并把重新解析的节点写回当前 command/selection；`resolveSelection(..., refresh=true)` 也会把 authoritative refresh 透传到后端。定向 3 个测试文件、14 项测试、`pnpm check:web`、Prettier check 和 `git diff --check` 均通过。
 
-真实性边界：`707e51e` 尚未生成新 Tauri exe，也尚未用重建的同一锁 fixture 复验“结果页关闭后无需手动刷新即消除锁标识”。因此 WIN-P0-02 仍为部分完成，不能把自动化修复写成原生通过。
+真实性边界：`707e51e` 已生成新 Tauri exe，但尚未启动，也尚未用重新 seed 的同一锁 fixture 复验“结果页关闭后无需手动刷新即消除锁标识”。因此 WIN-P0-02 仍为部分完成，不能把重新构建或自动化修复写成原生通过。
 
 ## 4. 有限剩余原生验收清单
 
 以下项目没有在本轮真实窗口中完成，不得按“通过”统计：
 
-1. 重建包含 `707e51e` 的 debug exe，重建同一 other-owner numbered CL lock；重复 Force Unlock，确认结果页和 Files/selection 自动更新，并由后端再次独立复核。
+1. 启动已构建的 `707e51e` debug exe，重新 seed 同一 other-owner numbered CL lock；重复 Force Unlock，确认结果页和 Files/selection 自动更新，并由后端再次独立复核。
 2. 完成 Shelf 深搜 `deep-path` 的唯一 Shelf 4448 结果 → 独立 Shelf detail 导航、返回与焦点恢复。
 3. 补齐 Workspace/Depot、Preview、Diff、History/Revision Graph、Pending、Submitted、Shelf、Terminal/P4 Log、Operations、Diagnostics 的主要只读入口冒烟；已打开或后端有命令日志不等于这些页面全部通过。
 4. 只在隔离 fixture 完成 Submit、Shelf/Unshelve、Resolve、Stream 切换、普通 Lock/Unlock 等剩余安全写入演练；Branch CRUD 和一次精确 Force Unlock 不能替代整套写入验收。
 5. 验证命令面板、原生菜单、主要快捷键、Tab/回焦/Escape。
 6. 验证主窗口真实 390px、关键页面无意外页面级横向溢出，以及 dock/popout/关闭归还。
-7. 验证正常关闭、重新打开、布局恢复和旧用户数据恢复；完成前不得覆盖仍在使用的 SQLite/WebView2 数据目录。
+7. 验证新版正常启动/关闭、再次打开和布局恢复；原用户数据目录已恢复，但为避免自动连接真实 Server，本轮未用其启动应用。
+
+fixture 收尾已精确删除 Shelf 4447/4448、Force target pending CL4449 及其临时 owner/client/user、原生测试 branch；下轮 Shelf 与 other-owner lock 必须重新 seed。CL4446 的 4 个已提交文件、5 个 native streams、历史 permission-map/shelf2 仍保留，不能把已清理的编号当成仍可直接复验的数据。
 
 完成以上清单前，不能声明 WIN-P0-02 或整个 Windows 本机私用阶段通过。
 
@@ -74,11 +77,11 @@ WIN-P0-01 的构建与启动证据已取得；旧应用数据恢复、正常退�
 
 > Computer Use was stopped by the user with the physical Escape key.
 
-依工具约束，本轮随后没有继续调用 Computer Use，前端验收 Agent 也没有再点击或关闭应用。应用退出、隔离数据快照、原配置恢复、fixture 清理/保留状态必须以后端构建运行记录的最终补记为准；本文不推断其已完成。
+依工具约束，本轮随后没有继续调用 Computer Use，前端验收 Agent 也没有再点击或关闭应用。后端随后已正常关闭旧 PID、恢复原配置、保留测试 snapshot、精确清理临时 seed 并停止 fixture；这些是构建运行侧证据，不是新增原生 UI 点击。
 
 ## 6. 结论
 
 - build `94b5f0c` 已取得真实 Windows Tauri Profile/Workspace、七类 Search 与 Stream 跳转、Stream Graph 拓扑/详情、Branch list/detail/forward preview/CRUD、Force Unlock preflight/ack/confirm/服务端真解锁证据。
-- 首轮 Force Unlock 的 mutation 正确，但自动刷新 UI 有阻塞缺陷；`707e51e` 已通过定向自动化，仍待新 build 原生复验。
+- 首轮 Force Unlock 的 mutation 正确，但自动刷新 UI 有阻塞缺陷；`707e51e` 已通过定向自动化并重新构建，仍待启动新版 exe 做原生复验。
 - 390px、dock/popout、菜单/快捷键、完整页面冒烟、重开/布局恢复及完整只读/安全写演练没有通过。
 - 本人 P4 Server、真实认证/权限/trigger、故障恢复、备份恢复和 2 小时稳定性仍完全属于后续 WIN-P0/P1/P2 验收。
