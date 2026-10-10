@@ -33,6 +33,32 @@ let mockProfiles: import("../../shared/contracts/types").ConnectionProfile[] = [
 ];
 let mockAuthentication: "connected" | "authRequired" = "connected";
 let mockCurrentStream = "//atlas/main";
+const mockConnectionUsers = new Map([
+  [
+    "fmeng",
+    { name: "fmeng", fullName: "Feng Meng", email: "fmeng@example.invalid" },
+  ],
+  ["buildbot", { name: "buildbot", fullName: "Build Bot", email: "" }],
+  ["reviewer", { name: "reviewer", fullName: "Code Reviewer", email: "" }],
+]);
+const mockConnectionWorkspaces = new Map<
+  string,
+  import("../../shared/contracts/types").ConnectionWorkspaceCandidate
+>();
+const mockConnectionSpecTokens = new Map<
+  string,
+  {
+    kind: "userSelf" | "workspace";
+    name: string;
+    context: import("../../shared/contracts/types").P4Context;
+    requestGeneration: number;
+    stateDigest: string;
+    plan:
+      | import("../../shared/contracts/types").ConnectionUserCreatePlan
+      | import("../../shared/contracts/types").ConnectionWorkspaceCreatePlan;
+    expiresAt: number;
+  }
+>();
 const mockStreamSwitchTokens = new Map<
   string,
   {
@@ -1453,6 +1479,273 @@ export const mockBackend: Backend = {
       updated: Math.floor(now / 1000) - index * 86400,
       accessed: Math.floor(now / 1000) - index * 3600,
     }));
+  },
+  async browseConnectionUsers(request) {
+    if (request.operationId && mockCancelledOperations.has(request.operationId))
+      throw new Error("cancelled: Browser Mock directory query was cancelled.");
+    if (!request.context.server.trim() || !request.context.user.trim())
+      throw new Error(
+        "invalidInput: Server and explicit query user are required.",
+      );
+    const prefix = request.prefix?.trim().toLocaleLowerCase() ?? "";
+    const all = [...mockConnectionUsers.values()].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    const matches = all.filter((item) =>
+      item.name.toLocaleLowerCase().startsWith(prefix),
+    );
+    return {
+      requestGeneration: request.requestGeneration,
+      items: matches.slice(0, 500),
+      partial: matches.length > 500,
+      truncated: matches.length > 500,
+      stats: {
+        scannedCount: all.length,
+        matchedCount: matches.length,
+        safetyLimit: 500,
+      },
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      connection: {
+        state: "connected",
+        message: "Browser Mock simulated directory query.",
+        recovery: "none",
+        server: request.context.server,
+      },
+      simulated: true,
+    };
+  },
+  async browseConnectionWorkspaces(request) {
+    if (request.operationId && mockCancelledOperations.has(request.operationId))
+      throw new Error("cancelled: Browser Mock directory query was cancelled.");
+    if (!request.context.server.trim() || !request.context.user.trim())
+      throw new Error("invalidInput: Server and draft user are required.");
+    const seeded = (await this.listUserWorkspaces()).map((item) => ({
+      ...item,
+      owner: request.context.user,
+    }));
+    const all = [...seeded, ...mockConnectionWorkspaces.values()]
+      .filter(
+        (item, index, values) =>
+          values.findIndex((candidate) => candidate.name === item.name) ===
+          index,
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const prefix = request.prefix?.trim().toLocaleLowerCase() ?? "";
+    const matches = all.filter((item) =>
+      item.name.toLocaleLowerCase().startsWith(prefix),
+    );
+    return {
+      requestGeneration: request.requestGeneration,
+      items: matches.slice(0, 500),
+      partial: matches.length > 500,
+      truncated: matches.length > 500,
+      stats: {
+        scannedCount: all.length,
+        matchedCount: matches.length,
+        safetyLimit: 500,
+      },
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      connection: {
+        state: "connected",
+        message: "Browser Mock simulated directory query.",
+        recovery: "none",
+        server: request.context.server,
+      },
+      simulated: true,
+    };
+  },
+  async preflightCreateConnectionUser(request) {
+    const name = request.plan.name.trim();
+    const blockers: import("../../shared/contracts/types").ConnectionSpecIssue[] =
+      [];
+    if (
+      !request.context.server.trim() ||
+      !name ||
+      request.context.user !== name
+    )
+      blockers.push({
+        code: "invalidInput",
+        message:
+          "Browser Mock requires Server and self-service User ID to match the draft user.",
+      });
+    if (!request.plan.fullName.trim() || !request.plan.email.includes("@"))
+      blockers.push({
+        code: "invalidInput",
+        message: "Browser Mock requires Full name and a valid Email.",
+      });
+    if (mockConnectionUsers.has(name))
+      blockers.push({
+        code: "alreadyExists",
+        message: "Browser Mock user already exists.",
+      });
+    const token = blockers.length ? undefined : crypto.randomUUID();
+    const stateDigest = `mock-user-${request.requestGeneration}-${name}`;
+    const expiresAt = Date.now() + 60_000;
+    if (token)
+      mockConnectionSpecTokens.set(token, {
+        kind: "userSelf",
+        name,
+        context: structuredClone(request.context),
+        requestGeneration: request.requestGeneration,
+        stateDigest,
+        plan: structuredClone(request.plan),
+        expiresAt,
+      });
+    return {
+      ready: blockers.length === 0,
+      kind: "userSelf",
+      name,
+      requestGeneration: request.requestGeneration,
+      stateDigest,
+      token,
+      expiresAt,
+      blockers,
+      warnings: [],
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      simulated: true,
+    };
+  },
+  async preflightCreateConnectionWorkspace(request) {
+    const name = request.plan.name.trim();
+    const blockers: import("../../shared/contracts/types").ConnectionSpecIssue[] =
+      [];
+    if (!request.context.server.trim() || !request.context.user.trim())
+      blockers.push({
+        code: "invalidInput",
+        message: "Browser Mock requires Server and User.",
+      });
+    if (!name || !request.plan.root.trim())
+      blockers.push({
+        code: "invalidInput",
+        message: "Browser Mock requires Workspace name and Root.",
+      });
+    if (
+      (request.plan.mapping.kind === "stream" &&
+        !request.plan.mapping.stream.trim()) ||
+      (request.plan.mapping.kind === "classic" &&
+        request.plan.mapping.view.length === 0)
+    )
+      blockers.push({
+        code: "invalidInput",
+        message: "Browser Mock requires an explicit Stream or Classic View.",
+      });
+    if (
+      mockConnectionWorkspaces.has(name) ||
+      (await this.listUserWorkspaces()).some((item) => item.name === name)
+    )
+      blockers.push({
+        code: "alreadyExists",
+        message: "Browser Mock workspace already exists.",
+      });
+    const token = blockers.length ? undefined : crypto.randomUUID();
+    const stateDigest = `mock-workspace-${request.requestGeneration}-${name}`;
+    const expiresAt = Date.now() + 60_000;
+    if (token)
+      mockConnectionSpecTokens.set(token, {
+        kind: "workspace",
+        name,
+        context: structuredClone(request.context),
+        requestGeneration: request.requestGeneration,
+        stateDigest,
+        plan: structuredClone(request.plan),
+        expiresAt,
+      });
+    return {
+      ready: blockers.length === 0,
+      kind: "workspace",
+      name,
+      requestGeneration: request.requestGeneration,
+      stateDigest,
+      token,
+      expiresAt,
+      blockers,
+      warnings: [],
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      simulated: true,
+    };
+  },
+  async confirmCreateConnectionUser(confirmation) {
+    const record = mockConnectionSpecTokens.get(confirmation.token);
+    mockConnectionSpecTokens.delete(confirmation.token);
+    if (
+      !record ||
+      record.kind !== "userSelf" ||
+      !confirmation.confirmed ||
+      record.expiresAt <= Date.now() ||
+      record.requestGeneration !== confirmation.requestGeneration ||
+      record.stateDigest !== confirmation.stateDigest ||
+      JSON.stringify(record.context) !== JSON.stringify(confirmation.context)
+    )
+      return {
+        outcome: "rejected",
+        failure: "connectionChanged",
+        kind: "userSelf",
+        name: record?.name ?? "",
+        message:
+          "Browser Mock rejected an expired, replayed, or changed confirmation.",
+        operationIds: [],
+        simulated: true,
+      };
+    const plan =
+      record.plan as import("../../shared/contracts/types").ConnectionUserCreatePlan;
+    mockConnectionUsers.set(record.name, {
+      name: record.name,
+      fullName: plan.fullName,
+      email: plan.email,
+    });
+    return {
+      outcome: "created",
+      kind: "userSelf",
+      name: record.name,
+      message:
+        "Browser Mock simulated user creation; no real server was changed.",
+      operationIds: [crypto.randomUUID()],
+      simulated: true,
+    };
+  },
+  async confirmCreateConnectionWorkspace(confirmation) {
+    const record = mockConnectionSpecTokens.get(confirmation.token);
+    mockConnectionSpecTokens.delete(confirmation.token);
+    if (
+      !record ||
+      record.kind !== "workspace" ||
+      !confirmation.confirmed ||
+      record.expiresAt <= Date.now() ||
+      record.requestGeneration !== confirmation.requestGeneration ||
+      record.stateDigest !== confirmation.stateDigest ||
+      JSON.stringify(record.context) !== JSON.stringify(confirmation.context)
+    )
+      return {
+        outcome: "rejected",
+        failure: "connectionChanged",
+        kind: "workspace",
+        name: record?.name ?? "",
+        message:
+          "Browser Mock rejected an expired, replayed, or changed confirmation.",
+        operationIds: [],
+        simulated: true,
+      };
+    const plan =
+      record.plan as import("../../shared/contracts/types").ConnectionWorkspaceCreatePlan;
+    mockConnectionWorkspaces.set(record.name, {
+      name: record.name,
+      owner: record.context.user,
+      host: "",
+      root: plan.root,
+      stream: plan.mapping.kind === "stream" ? plan.mapping.stream : "",
+      description: plan.description ?? "",
+      updated: Math.floor(Date.now() / 1000),
+      accessed: Math.floor(Date.now() / 1000),
+    });
+    return {
+      outcome: "created",
+      kind: "workspace",
+      name: record.name,
+      message:
+        "Browser Mock simulated workspace creation; no real server was changed.",
+      operationIds: [crypto.randomUUID()],
+      simulated: true,
+    };
   },
   async listConnectionProfiles() {
     return {

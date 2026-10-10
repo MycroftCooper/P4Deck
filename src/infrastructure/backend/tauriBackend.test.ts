@@ -49,6 +49,77 @@ it("passes profile activation and workspace switch requests unchanged", async ()
   });
 });
 
+it("passes draft-scoped connection browse and guarded create requests unchanged", async () => {
+  const context = {
+    server: "ssl:p4.example:1666",
+    user: "new-user",
+    client: "",
+    cwd: "C:/work",
+  };
+  const directory = {
+    context,
+    requestGeneration: 7,
+    operationId: "directory-7",
+    prefix: "new",
+  };
+  invoke.mockResolvedValue({ items: [] });
+  await tauriBackend.browseConnectionUsers(directory);
+  expect(invoke).toHaveBeenLastCalledWith("browse_connection_users", {
+    request: directory,
+  });
+  await tauriBackend.browseConnectionWorkspaces(directory);
+  expect(invoke).toHaveBeenLastCalledWith("browse_connection_workspaces", {
+    request: directory,
+  });
+
+  const userRequest = {
+    context,
+    requestGeneration: 7,
+    operationId: "user-preflight-7",
+    plan: {
+      name: "new-user",
+      fullName: "New User",
+      email: "new-user@example.invalid",
+    },
+  };
+  await tauriBackend.preflightCreateConnectionUser(userRequest);
+  expect(invoke).toHaveBeenLastCalledWith("preflight_create_connection_user", {
+    request: userRequest,
+  });
+  const workspaceRequest = {
+    context,
+    requestGeneration: 7,
+    operationId: "workspace-preflight-7",
+    plan: {
+      name: "new-workspace",
+      root: "C:/work/new-workspace",
+      mapping: { kind: "stream" as const, stream: "//depot/main" },
+    },
+  };
+  await tauriBackend.preflightCreateConnectionWorkspace(workspaceRequest);
+  expect(invoke).toHaveBeenLastCalledWith(
+    "preflight_create_connection_workspace",
+    { request: workspaceRequest },
+  );
+
+  const confirmation = {
+    token: "one-use-token",
+    context,
+    requestGeneration: 7,
+    stateDigest: "connection-state-7",
+    confirmed: true,
+  };
+  await tauriBackend.confirmCreateConnectionUser(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_create_connection_user", {
+    confirmation,
+  });
+  await tauriBackend.confirmCreateConnectionWorkspace(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith(
+    "confirm_create_connection_workspace",
+    { confirmation },
+  );
+});
+
 it("passes only the narrow submitted-detail request through the Tauri adapter", async () => {
   const request = { changeId: 42, operationId: "detail-42" };
   invoke.mockResolvedValue({ changeId: 42 });

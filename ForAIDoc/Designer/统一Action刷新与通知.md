@@ -2,7 +2,7 @@
 
 ## Action 目录
 
-`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的 Connection Profiles 区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
+`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的“已保存连接”区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
 
 | 分组 | 稳定 ID | 动作 | Windows / Linux | macOS | 风险 / 确认 |
 | --- | --- | --- | --- | --- | --- |

@@ -48,7 +48,8 @@
   font-size: 12px;
 }
 .settings-grid input,
-.settings-grid select {
+.settings-grid select,
+.profile-connection-name input {
   width: 100%;
   min-width: 0;
   padding: 10px;
@@ -232,6 +233,93 @@
 .profile-name-field {
   grid-column: 1 / -1;
 }
+.profile-connection-name {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.profile-connection-name small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.profile-field-group {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.profile-field-group h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.profile-field-group > p {
+  margin: 7px 0 0;
+}
+.profile-field-group .profile-fields {
+  margin-top: 14px;
+}
+.connection-field {
+  min-width: 0;
+}
+.connection-field > label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.connection-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+.connection-field-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+}
+.connection-directory-list {
+  display: grid;
+  gap: 7px;
+  max-height: 280px;
+  overflow: auto;
+}
+.connection-directory-list > button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+.connection-directory-list > button span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+}
+.connection-directory-list > p {
+  margin: 0;
+}
+.connection-create-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.connection-create-summary > div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.connection-create-summary dt {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.connection-create-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
 .profile-delete-confirm {
   margin-top: 16px;
   padding: 14px;
@@ -410,6 +498,9 @@
     padding: 16px;
   }
   .connection-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .connection-create-summary {
     grid-template-columns: minmax(0, 1fr);
   }
   .connection-status-card,

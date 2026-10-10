@@ -47,8 +47,8 @@ export function SettingsPage({
           <h1>{tr("设置", "Settings")}</h1>
           <p>
             {tr(
-              "全局设置 · 连接 Profile 经验证后切换，外观即时生效。",
-              "Global preferences · Connection profiles switch only after verification; appearance applies instantly.",
+              "全局设置 · 已保存连接经验证后切换，外观即时生效。",
+              "Global preferences · Saved connections switch only after verification; appearance applies instantly.",
             )}
           </p>
         </div>
@@ -241,21 +241,6 @@ export function SettingsPage({
             {tr("恢复外观默认值", "Reset appearance")}
           </button>
         </div>
-      </section>
-      <section className="settings-card">
-        <h2>{tr("页签行为", "Tab behavior")}</h2>
-        <p>
-          {tr(
-            "全局页签（搜索、设置、Files、Pending、Submitted、Workspace、Streams）不可重复打开。文件预览、History、Diff、Rev Graph 可以多开，使用页内“新页签”按钮。",
-            "Global tabs are single-instance. Preview, History, Diff and Rev Graph support multiple instances via New tab.",
-          )}
-        </p>
-        <p>
-          {tr(
-            "文件页签默认跟随所选文件；锁定目标后不再切换。解锁后，下次选择文件时恢复跟随。锁定状态与布局一起保存。",
-            "File tabs follow selection until locked. Unlock to follow subsequent selections. Targets and locks are saved with the layout.",
-          )}
-        </p>
       </section>
     </section>
   );

@@ -90,9 +90,26 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await page.keyboard.press("Enter");
   await expect(page.locator(".route-view h1")).toHaveText("Settings");
   await expect(
-    page.getByRole("heading", { name: "Connection profiles" }),
+    page.getByRole("heading", { name: "Saved connections" }),
   ).toBeVisible();
-  await assertNoPageOverflow(page, "Settings connection profiles");
+  await expect(
+    page.getByRole("heading", { name: "Connection settings" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "P4 settings" }),
+  ).toBeVisible();
+  await expect(page.getByText("Tab behavior")).toHaveCount(0);
+  await assertNoPageOverflow(page, "Settings saved connections");
+  const userField = page
+    .locator(".connection-field")
+    .filter({ has: page.getByLabel("User") });
+  await userField.getByRole("button", { name: "Browse" }).click();
+  const directory = page.getByRole("dialog", { name: "Browse server users" });
+  await expect(directory).toBeVisible();
+  await directory.getByRole("button", { name: "Search" }).click();
+  await expect(directory.getByText(/Browser Mock simulated/)).toBeVisible();
+  await assertNoPageOverflow(page, "Settings user directory");
+  await directory.getByRole("button", { name: "Cancel" }).click();
 
   for (const destination of ["Search", "Pending"]) {
     await page

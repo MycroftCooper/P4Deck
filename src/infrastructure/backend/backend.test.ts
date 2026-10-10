@@ -21,6 +21,91 @@ function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
 }
 
 describe("controlled P4 terminal", () => {
+  it("keeps simulated connection directory and create flows draft-scoped and one-use", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const user = `settings-user-${suffix}`;
+    const workspace = `settings-workspace-${suffix}`;
+    const before = await backend.runtimeInfo();
+    const userContext = { ...before.context, user, client: "" };
+    const userPlan = {
+      name: user,
+      fullName: "Settings Test User",
+      email: `${user}@example.invalid`,
+    };
+    const userPreflight = await backend.preflightCreateConnectionUser({
+      context: userContext,
+      requestGeneration: 501,
+      plan: userPlan,
+    });
+    expect(userPreflight).toMatchObject({
+      ready: true,
+      kind: "userSelf",
+      simulated: true,
+    });
+    const userConfirmation = {
+      token: userPreflight.token!,
+      context: userContext,
+      requestGeneration: 501,
+      stateDigest: userPreflight.stateDigest,
+      confirmed: true,
+    };
+    await expect(
+      backend.confirmCreateConnectionUser(userConfirmation),
+    ).resolves.toMatchObject({ outcome: "created", name: user });
+    await expect(
+      backend.confirmCreateConnectionUser(userConfirmation),
+    ).resolves.toMatchObject({ outcome: "rejected" });
+    await expect(
+      backend.browseConnectionUsers({
+        context: userContext,
+        requestGeneration: 502,
+        prefix: user,
+      }),
+    ).resolves.toMatchObject({
+      requestGeneration: 502,
+      items: [expect.objectContaining({ name: user })],
+      simulated: true,
+    });
+
+    const workspaceContext = { ...before.context, user, client: "" };
+    const workspacePreflight = await backend.preflightCreateConnectionWorkspace(
+      {
+        context: workspaceContext,
+        requestGeneration: 503,
+        plan: {
+          name: workspace,
+          root: `C:/work/${workspace}`,
+          mapping: { kind: "stream", stream: "//atlas/main" },
+        },
+      },
+    );
+    expect(workspacePreflight.ready).toBe(true);
+    await expect(
+      backend.confirmCreateConnectionWorkspace({
+        token: workspacePreflight.token!,
+        context: workspaceContext,
+        requestGeneration: 503,
+        stateDigest: workspacePreflight.stateDigest,
+        confirmed: true,
+      }),
+    ).resolves.toMatchObject({ outcome: "created", name: workspace });
+    await expect(
+      backend.browseConnectionWorkspaces({
+        context: workspaceContext,
+        requestGeneration: 504,
+        prefix: workspace,
+      }),
+    ).resolves.toMatchObject({
+      requestGeneration: 504,
+      items: [expect.objectContaining({ name: workspace, owner: user })],
+      simulated: true,
+    });
+    expect(await backend.runtimeInfo()).toMatchObject({
+      activeProfileId: before.activeProfileId,
+      context: before.context,
+    });
+  });
+
   it("provides revisioned profile CRUD and real mock workspace switching", async () => {
     const initial = await backend.listConnectionProfiles();
     const primaryId = initial.activeProfileId!;
