@@ -861,7 +861,11 @@ button {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-.tool-tabs > button {
+.tool-tab-list {
+  display: contents;
+}
+.tool-tabs > button,
+.tool-tab-list > button {
   height: 100%;
   flex: 0 0 auto;
   display: flex;
@@ -871,7 +875,7 @@ button {
   background: transparent;
   color: var(--muted);
 }
-.tool-tabs > button.active {
+.tool-tab-list > button.active {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
@@ -2071,7 +2075,8 @@ button {
 .tool-tabs {
   padding: 0 14px;
 }
-.tool-tabs > button {
+.tool-tabs > button,
+.tool-tab-list > button {
   font-size: 11px;
   gap: 7px;
   padding: 0 12px;
@@ -2187,6 +2192,101 @@ button {
   }
 }
 
+/* The desktop window can be resized to 390 CSS px. Keep the application shell
+   operable there; wide tables retain their own, intentional scroll regions. */
+@media (max-width: 520px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    padding-inline: 10px;
+  }
+  .brand strong,
+  .titlebar-reserved {
+    display: none;
+  }
+  .connection-picker,
+  .connection {
+    min-width: 0;
+    width: 100%;
+  }
+  .connection-client {
+    max-width: none;
+  }
+  .workbench {
+    position: relative;
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+  .activity-bar {
+    grid-column: 1;
+  }
+  :root[data-activity-bar-text="true"] .activity-bar button {
+    width: 40px;
+    display: grid;
+    padding: 0;
+  }
+  :root[data-activity-bar-text="true"] .activity-text {
+    display: none;
+  }
+  .resource-explorer {
+    position: absolute;
+    z-index: 50;
+    inset: 0 auto 0 44px;
+    width: min(280px, calc(100% - 44px));
+    box-shadow: 8px 0 20px var(--shadow);
+  }
+  .resource-explorer.is-collapsed {
+    width: 28px;
+    box-shadow: none;
+  }
+  .main-stage {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .pending-page,
+  .main-content {
+    padding: 12px;
+  }
+  .section-title,
+  .page-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .section-title > div,
+  .page-header > div,
+  .pending-query-bar,
+  .pending-query-bar input {
+    min-width: 0;
+  }
+  .section-title h1,
+  .page-header h1 {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+  .pending-query-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pending-card > header {
+    height: auto;
+    min-height: 52px;
+    padding: 8px 10px;
+    flex-wrap: wrap;
+  }
+  .pending-body {
+    padding-inline: 10px;
+  }
+  .file-workbench {
+    padding-inline: 10px;
+  }
+  .file-action-progress {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .file-action-progress progress {
+    grid-column: 1 / -1;
+  }
+}
+
 @container submitted-page (max-width: 650px) {
   .submitted-page .main-content {
     padding: 8px;
@@ -2287,7 +2387,8 @@ button {
   .tool-tabs {
     overflow-x: auto;
   }
-  .tool-tabs > button {
+  .tool-tabs > button,
+  .tool-tab-list > button {
     padding-inline: 8px;
   }
   .diagnostic-toolbar {

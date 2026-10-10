@@ -576,7 +576,7 @@ export function SearchPage({
   };
 
   return (
-    <main className="search-page">
+    <section className="search-page">
       <div className="search-live" role="status" aria-live="polite">
         {statusText}
       </div>
@@ -872,6 +872,6 @@ export function SearchPage({
           </button>
         ) : null}
       </section>
-    </main>
+    </section>
   );
 }

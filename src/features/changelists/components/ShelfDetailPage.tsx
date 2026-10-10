@@ -390,7 +390,7 @@ export function ShelfDetailPage({
   );
 
   return (
-    <main className="workspaces-page shelf-detail-page">
+    <section className="workspaces-page shelf-detail-page">
       <header className="section-title">
         <div>
           <span className="workspace-eyebrow">PERFORCE / SHELF</span>
@@ -645,6 +645,6 @@ export function ShelfDetailPage({
           </section>
         </div>
       ) : null}
-    </main>
+    </section>
   );
 }

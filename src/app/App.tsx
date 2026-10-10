@@ -448,7 +448,7 @@ export function App() {
                     directory={directory}
                     onNavigate={navigateFile}
                   />
-                  <section className="main-stage">
+                  <main className="main-stage">
                     <div className="route-view">
                       <DockWorkspace
                         ref={dockRef}
@@ -492,7 +492,7 @@ export function App() {
                         )}
                       />
                     </div>
-                  </section>
+                  </main>
                 </div>
                 <ToolArea
                   ref={toolsRef}

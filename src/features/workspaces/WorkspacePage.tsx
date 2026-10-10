@@ -201,7 +201,7 @@ export function WorkspacePage({
     }
   };
   return (
-    <main className="workspaces-page">
+    <section className="workspaces-page">
       <header className="section-title">
         <div>
           <span className="workspace-eyebrow">
@@ -463,6 +463,6 @@ export function WorkspacePage({
           </aside>
         )}
       </div>
-    </main>
+    </section>
   );
 }

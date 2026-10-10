@@ -70,7 +70,7 @@ pub async fn open_panel_window(
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(route.into()))
             .title(format!("P4Deck · {page}"))
             .inner_size(1100.0, 760.0)
-            .min_inner_size(640.0, 450.0)
+            .min_inner_size(390.0, 450.0)
             .disable_drag_drop_handler();
     if let Some(value) = placement {
         builder = builder

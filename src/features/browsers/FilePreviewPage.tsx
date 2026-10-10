@@ -51,7 +51,7 @@ export function FilePreviewPage({
     overscan: 10,
   });
   return (
-    <main className="file-preview-page" ref={textSelection.surfaceRef}>
+    <section className="file-preview-page" ref={textSelection.surfaceRef}>
       <header className="preview-heading">
         <div>
           <span className="workspace-eyebrow">WORKSPACE / PREVIEW</span>
@@ -245,6 +245,6 @@ export function FilePreviewPage({
           "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · No automatic depot downloads",
         )}
       </footer>
-    </main>
+    </section>
   );
 }

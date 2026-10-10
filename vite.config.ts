@@ -9,6 +9,8 @@ export default defineConfig({
       ...configDefaults.exclude,
       "scripts/release-config.test.mjs",
       "scripts/ci-step-result.test.mjs",
+      "scripts/theme-contrast.test.mjs",
+      "tests/browser/**",
     ],
   },
   build: {

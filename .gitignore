@@ -12,3 +12,5 @@ target/
 artifacts/performance/
 artifacts/ci/
 src-tauri/tauri.release.generated.conf.json
+test-results/
+playwright-report/

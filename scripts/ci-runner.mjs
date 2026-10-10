@@ -31,6 +31,11 @@ for (const secretName of [
 }
 const steps = [
   {
+    name: "frontend-contracts",
+    command: process.execPath,
+    args: ["scripts/validate-frontend-contracts.mjs"],
+  },
+  {
     name: "validate-ci",
     command: process.execPath,
     args: ["scripts/validate-ci.mjs"],
@@ -44,6 +49,11 @@ const steps = [
     name: "ci-step-result-tests",
     command: process.execPath,
     args: ["--test", "scripts/ci-step-result.test.mjs"],
+  },
+  {
+    name: "theme-contrast-tests",
+    command: process.execPath,
+    args: ["--test", "scripts/theme-contrast.test.mjs"],
   },
   pnpmStep("web-format", "format:check"),
   {

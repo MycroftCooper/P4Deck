@@ -417,3 +417,27 @@
     padding: 12px;
   }
 }
+@media (max-width: 520px) {
+  .settings-page {
+    padding: 12px;
+  }
+  .settings-page .section-title h1 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .settings-card {
+    margin: 12px 0;
+    padding: 14px;
+  }
+  .profile-manager,
+  .settings-grid,
+  .connection-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-list-tools {
+    flex-wrap: wrap;
+  }
+  .profile-search {
+    flex: 1 1 100%;
+  }
+}

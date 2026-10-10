@@ -395,7 +395,7 @@ export function FileReviewPage({
       .finally(() => requests.finish(lease));
   };
   return (
-    <main
+    <section
       className="workspaces-page file-review-page"
       ref={textSelection.surfaceRef}
     >
@@ -789,7 +789,7 @@ export function FileReviewPage({
             : queryPath || "—"}
         </footer>
       </section>
-    </main>
+    </section>
   );
 }
 

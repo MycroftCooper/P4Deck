@@ -26,7 +26,9 @@ export function AppControls({ preferences }: { preferences: Preferences }) {
         </select>
       </label>
       <button
+        type="button"
         className="icon-button"
+        aria-label={t.language}
         title={t.language}
         onClick={() =>
           setLocale((value) => (value === "zh-CN" ? "en-US" : "zh-CN"))

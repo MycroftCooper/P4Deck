@@ -137,15 +137,20 @@ export function ContextMenuProvider({
         {children}
         {request &&
           createPortal(
-            <MenuPanel
-              key={request.token}
-              title={request.title}
-              items={request.items}
-              x={request.x}
-              y={request.y}
-              onClose={() => close()}
-              onRun={execute}
-            />,
+            <div
+              role="region"
+              aria-label={zh ? "右键菜单层" : "Context menu layer"}
+            >
+              <MenuPanel
+                key={request.token}
+                title={request.title}
+                items={request.items}
+                x={request.x}
+                y={request.y}
+                onClose={() => close()}
+                onRun={execute}
+              />
+            </div>,
             request.source.ownerDocument.body,
           )}
         {error &&
@@ -228,8 +233,6 @@ function MenuPanel({
         ref={ref}
         className="p4-context-menu"
         style={position}
-        role="menu"
-        aria-label={title}
         data-menu-layer
         onContextMenu={(event) => event.preventDefault()}
         onKeyDown={(event) => {
@@ -266,7 +269,7 @@ function MenuPanel({
         }}
       >
         <div className="menu-caption">{title}</div>
-        <div className="menu-items">
+        <div className="menu-items" role="menu" aria-label={title}>
           {items.map((item, index) => (
             <button
               key={item.id}

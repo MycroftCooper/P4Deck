@@ -362,6 +362,10 @@
   margin: 0 8px 4px 0;
 }
 @media (max-width: 480px) {
+  .workflow-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
   .stream-switch-summary {
     grid-template-columns: 1fr;
   }
@@ -375,5 +379,14 @@
   }
   .workflow-dialog-footer > button {
     flex: 1;
+    min-width: 0;
+  }
+  .manual-merge-toolbar > *,
+  .manual-merge-actions > * {
+    max-width: 100%;
+  }
+  .manual-merge-toolbar input,
+  .manual-merge-actions input {
+    min-width: 0;
   }
 }

@@ -7,6 +7,7 @@ import { UnshelveDialog } from "../../features/changelists/components/UnshelveDi
 import { RevisionDialog } from "../../features/files/components/RevisionDialog";
 import { RenameDialog } from "../../features/files/components/RenameDialog";
 import { ResolveDialog } from "../../features/files/components/ResolveDialog";
+import { ManualMergeEditor } from "../../features/files/components/ManualMergeEditor";
 import { OperationConfirmDialog } from "./OperationConfirmDialog";
 import type { WorkspaceNode } from "../../shared/contracts/types";
 
@@ -27,6 +28,7 @@ export default function WorkflowAuditPage() {
     "shelf",
     "unshelve",
     "resolve",
+    "manual-merge",
   ];
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -183,6 +185,60 @@ export default function WorkflowAuditPage() {
               throw new Error("Synthetic audit: no backend request");
             }}
           />
+        );
+        break;
+      case "manual-merge":
+        dialog = (
+          <section
+            className="workflow-dialog-body"
+            aria-label="Manual merge fixture"
+          >
+            <ManualMergeEditor
+              depotPath="//fixture/main/file.txt"
+              connectionKey="audit"
+              zh={zh}
+              openSession={async () => ({
+                sessionId: "audit-session",
+                target: {
+                  kind: "resolve",
+                  server: "fixture:1666",
+                  user: "fixture",
+                  client: "fixture",
+                  workspace: "/fixture",
+                  contextGeneration: 1,
+                  depotPaths: ["//fixture/main/file.txt"],
+                },
+                depotPath: "//fixture/main/file.txt",
+                localPath: "/fixture/file.txt",
+                baseSource: {
+                  depotPath: "//fixture/main/file.txt",
+                  revision: 1,
+                },
+                theirsSource: {
+                  depotPath: "//fixture/main/file.txt",
+                  revision: 2,
+                },
+                fileSnapshot: {
+                  size: 32,
+                  modifiedMs: 1,
+                  contentDigest: "audit",
+                },
+                resolveDigest: "audit",
+                base: "base\n",
+                theirs: "theirs\n",
+                yours: "yours\n",
+                result:
+                  "<<<<<<< P4DECK YOURS:1\nyours\n======= P4DECK\ntheirs\n>>>>>>> P4DECK THEIRS:1\n",
+                encoding: "UTF-8",
+                lineEnding: "LF",
+                hadBom: false,
+                unresolvedBlocks: 1,
+                expiresAt: Date.now() + 60_000,
+                operationIds: [],
+              })}
+              cancelOperation={async () => undefined}
+            />
+          </section>
         );
         break;
     }

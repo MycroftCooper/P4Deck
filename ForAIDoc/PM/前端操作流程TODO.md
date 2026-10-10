@@ -22,7 +22,7 @@
 - 对话框固定打开时目标并绑定连接 key；连接变化会取消完整 operation group 并丢弃迟到响应。结果页保留到用户关闭，再应用后端已验证的新 runtime 和刷新 Streams/Workspace/Pending/Submitted/Search/Files/Depot，避免 generation 更新提前卸载验证结果。
 - Browser Mock 明示模拟；Tauri 适配只透传窄 preflight/confirmation 契约。Windows localhost 已以真实 main/development Stream 验证状态机；Windows/macOS 原生点击、焦点、390px、读屏和 macOS P4 仍待外部验收。
 - P1 基础 Swarm 链接（2026-10-09）：Connection Profile schema v3 已加入可选规范化 base URL；Submitted/Pending/Shelf/File/Revision 使用官方稳定路由并接入按钮、右键、命令面板和原生菜单。Rust opener 在外部打开前复核活动 profile/generation、同源/部署路径和 route allowlist。无网络探测、Swarm API、登录/凭据、评论或 Review 创建；Windows/macOS 原生浏览器启动与焦点仍待真实设备验收。
-- 最终门禁：Web 74 文件/439 项、Rust 150 项通过（另 1 项 localhost E2E 默认 ignored）；build/check/format、Clippy `--all-targets -D warnings`、rustfmt、前端 8 项与后端 5 项性能正确性门禁、`git diff --check` 通过；Windows localhost 连续两轮分别 134.86 秒、135.57 秒通过。
+- 2026-10-10 前端收尾门禁：Web 75 文件/443 项、Rust 155 项（另 1 项 localhost E2E 默认 ignored）、真实 Edge 浏览器 3 项、主题对比度与前端契约 validator 通过；`ci:quick`、build 与 `git diff --check` 通过。前端 8 项/后端 5 项性能门禁和 Windows localhost 双轮 134.86 秒/135.57 秒为此前有效证据，本批未重复执行 localhost P4 E2E。
 
 ## 最近完成：统一 Action、失败恢复、自动刷新与通知（2026-10-09）
 
@@ -175,7 +175,7 @@ FE-01 → FE-02～04 → FE-05～07 → FE-08～10 → FE-11～14 → FE-15～21
 ### 第八批整合：跨页面 CL 操作与主题/键盘验收
 
 - `FileClWorkflow` 接通 Files/工作区/Depot 单文件、多文件的移到 CL/Shelf 入口，复用原弹窗。仅显式打开时读取一次 Pending 快照；缺失或重复归属阻塞全部选择，不静默丢弃未知目标。跨 CL 移动支持明确跳过已在目标 CL 的文件；跨 CL Shelf 要先选择来源分组，支持返回组选择。
-- 菜单总表与注册表追加 `F01-37`、`F02-36` 单文件 Shelf 项（保留旧 ID），菜单叶子从上一批基线 492 增至 494。清单一致性测试通过。
+- 菜单总表与注册表追加 `F01-37`、`F02-36` 单文件 Shelf 项（保留旧 ID）；后续 Swarm 增量完成后，当前事实源为注册表 503 leaves、排除 U07 后 502 个自定义项。190 个 `phase: later` 项保持延期，不计为当前实现任务。自动 parity validator 校验设计总表、TS 注册表与台账 ID。
 - 终端多行粘贴使用统一 Dialog，明确只填入不执行；预览截断有说明，取消不改变输入。`src` 已无浏览器原生 prompt/confirm；异步弹窗在卸载/连接变化后拒绝旧请求。
 - 暗色英文检查发现主按钮浅绿底白字对比不足，新增 `--on-accent` 主题变量修复。390px 窄屏检查：弹窗左 16px、右 374px，内部没有横向溢出，正文独立滚动、页脚可见；测试后恢复原亮色中文和窗口尺寸。
 - 实测发现原生 Tab 在末尾可离开弹窗，补显式 Tab/Shift+Tab 循环。浏览器验证正向从末按钮返回关闭按钮、反向回末按钮，焦点均留在弹窗；自动化测试覆盖此行为。

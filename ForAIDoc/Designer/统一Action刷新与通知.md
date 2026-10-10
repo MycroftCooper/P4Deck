@@ -2,7 +2,7 @@
 
 ## Action 目录
 
-`src/app/commands/catalog.ts` 是命令面板、Web 快捷键和执行策略的单一目录；Tauri 应用菜单只镜像稳定 ID 并把事件交回同一目录校验/执行。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或原生菜单绕过。
+`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、Web 快捷键和执行策略共同使用；Tauri 应用菜单镜像同一组 37 个稳定 ID 并把事件交回目录校验/执行。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或原生菜单绕过。`pnpm validate:frontend-contracts` 自动校验 TS/Rust 命令 parity，以及设计菜单、注册表、验收台账和本清单。
 
 | 分组 | 稳定 ID | 动作 | Windows / Linux | macOS | 风险 / 确认 |
 | --- | --- | --- | --- | --- | --- |
@@ -13,13 +13,16 @@
 | Changes | `changelist.submit` | Submit 所选 CL | — | — | mutation；既有 Submit preflight/confirm |
 | Changes | `changelist.shelf` / `changelist.moveFiles` | Shelf / 移动到 CL | — | — | mutation；既有工作流状态机 |
 | Changes | `file.rename` / `file.resolve` | Rename/Move / Resolve | — | — | mutation；既有 preflight/confirm |
+| Changes | `file.lock` / `file.unlock` | Lock / Unlock | — | — | mutation；既有完整文件集预检与确认 |
 | Changes | `file.checkout` / `file.add` / `file.delete` / `file.revert` | 文件写操作 | — | — | mutation；既有目标策略与适用确认 |
 | Navigation | `view.pending` / `view.submitted` | Pending / Submitted | — | — | 只读导航 |
 | Navigation | `view.search` | Global Search | Ctrl+Shift+F | Cmd+Shift+F | 只读导航 |
 | Navigation | `view.workspaces` | Workspace | — | — | 只读导航；切换仍走验证/CAS |
+| Navigation | `view.streams` | Streams | — | — | 只读导航；切换动作仍走验证/CAS |
 | Tools | `view.diagnostics` | Diagnostics | — | — | 只读 |
 | File | `file.diff` / `file.history` / `file.revgraph` / `file.preview` | 文件查看工具 | — | — | 只读；要求适用的单文件上下文 |
 | File | `file.reveal` / `file.openWith` | 系统定位 / Open With | — | — | 本地系统能力检查 |
+| Navigation | `swarm.open` | 在 Swarm 中打开 | — | — | 只读外链；活动 profile/context CAS 与 URL allowlist |
 | App | `operation.cancel` | 取消当前操作 | — | — | 仅在现有状态机允许时可用 |
 | Tools | `tools.openTerminal` | Terminal | Ctrl+Alt+T | Cmd+Option+T | sensitive；继续受 Terminal 双层安全策略约束 |
 | Tools | `tools.openP4Log` | P4 Log | Ctrl+Alt+L | Cmd+Option+L | 只读 |

@@ -324,7 +324,7 @@ export function ReadOnlyPage({
     overscan: 8,
   });
   return (
-    <main className="workspaces-page">
+    <section className="workspaces-page">
       <header className="section-title">
         <div>
           <span className="workspace-eyebrow">
@@ -769,6 +769,6 @@ export function ReadOnlyPage({
             (zh ? "无差异" : "No differences")}
         </pre>
       )}
-    </main>
+    </section>
   );
 }

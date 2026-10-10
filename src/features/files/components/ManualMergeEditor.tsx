@@ -3,6 +3,7 @@ import { backend } from "../../../infrastructure/backend";
 import type {
   ManualMergeSaveResult,
   ManualMergeSession,
+  ManualMergeOpenRequest,
   ManualMergeValidation,
   WorkflowResult,
 } from "../../../shared/contracts/types";
@@ -16,6 +17,11 @@ interface ConflictBlock {
   yours: string;
   theirs: string;
 }
+
+const defaultOpenSession = (request: ManualMergeOpenRequest) =>
+  backend.openManualMerge(request);
+const defaultCancelOperation = (operationId: string) =>
+  backend.cancelOperation(operationId);
 
 const blocks = (value: string): ConflictBlock[] => {
   const pattern =
@@ -50,11 +56,15 @@ export function ManualMergeEditor({
   connectionKey,
   zh,
   onFinished,
+  openSession = defaultOpenSession,
+  cancelOperation = defaultCancelOperation,
 }: {
   depotPath: string;
   connectionKey: string;
   zh: boolean;
   onFinished?(result: WorkflowResult): void;
+  openSession?(request: ManualMergeOpenRequest): Promise<ManualMergeSession>;
+  cancelOperation?(operationId: string): Promise<unknown>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [session, setSession] = useState<ManualMergeSession>();
@@ -91,11 +101,10 @@ export function ManualMergeEditor({
     setAcknowledge(false);
     setMessage("");
     setBusy(true);
-    void backend
-      .openManualMerge({
-        depotPath,
-        operationId: `${currentOperationRoot}:open`,
-      })
+    void openSession({
+      depotPath,
+      operationId: `${currentOperationRoot}:open`,
+    })
       .then((value) => {
         if (
           currentEpoch !== epoch.current ||
@@ -123,9 +132,9 @@ export function ManualMergeEditor({
       });
     return () => {
       ++epoch.current;
-      void backend.cancelOperation(currentOperationRoot);
+      void cancelOperation(currentOperationRoot);
     };
-  }, [connectionKey, depotPath]);
+  }, [cancelOperation, connectionKey, depotPath, openSession]);
 
   const commit = (value: string) => {
     const next = [...history.slice(0, historyIndex + 1), value];

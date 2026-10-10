@@ -268,11 +268,7 @@ export function ToolDrawer(props: Props) {
           }}
         />
       )}
-      <header
-        className="tool-tabs"
-        role="tablist"
-        aria-label={props.zh ? "工具视图" : "Tool views"}
-      >
+      <header className="tool-tabs">
         {!props.embedded && (
           <button
             className="drawer-toggle"
@@ -282,23 +278,31 @@ export function ToolDrawer(props: Props) {
             {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
           </button>
         )}
-        {tabs
-          .filter(
-            (tab) => !props.visibleTabs || props.visibleTabs.includes(tab.id),
-          )
-          .map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={props.active === tab.id}
-              className={props.active === tab.id ? "active" : ""}
-              onClick={() => props.onActiveChange(tab.id)}
-            >
-              {tab.icon}
-              {tab.label}
-              {tab.id === "logs" && props.unread ? <b>{props.unread}</b> : null}
-            </button>
-          ))}
+        <div
+          className="tool-tab-list"
+          role="tablist"
+          aria-label={props.zh ? "工具视图" : "Tool views"}
+        >
+          {tabs
+            .filter(
+              (tab) => !props.visibleTabs || props.visibleTabs.includes(tab.id),
+            )
+            .map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={props.active === tab.id}
+                className={props.active === tab.id ? "active" : ""}
+                onClick={() => props.onActiveChange(tab.id)}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.id === "logs" && props.unread ? (
+                  <b>{props.unread}</b>
+                ) : null}
+              </button>
+            ))}
+        </div>
       </header>
       {textSelection.dialog}
       {pasteDialog.request && (

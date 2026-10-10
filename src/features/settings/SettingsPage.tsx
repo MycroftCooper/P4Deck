@@ -40,7 +40,7 @@ export function SettingsPage({
   const zh = locale === "zh-CN";
   const tr = (a: string, b: string) => (zh ? a : b);
   return (
-    <main className="settings-page">
+    <section className="settings-page">
       <header className="section-title">
         <div>
           <span className="workspace-eyebrow">P4DECK / PREFERENCES</span>
@@ -257,6 +257,6 @@ export function SettingsPage({
           )}
         </p>
       </section>
-    </main>
+    </section>
   );
 }

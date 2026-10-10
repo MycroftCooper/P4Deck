@@ -159,7 +159,7 @@ export function ChangelistPage(props: Props) {
     );
 
   return (
-    <main className="main-content">
+    <section className="main-content">
       {createSource && (
         <ChangelistFormDialog
           mode="create"
@@ -543,6 +543,6 @@ export function ChangelistPage(props: Props) {
           )}
         </aside>
       </section>
-    </main>
+    </section>
   );
 }

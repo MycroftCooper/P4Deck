@@ -612,7 +612,7 @@ export function PendingPage({
       },
     );
   return (
-    <main className="pending-page" ref={surface}>
+    <section className="pending-page" ref={surface}>
       {shelfRequest &&
         (shelfRequest.unshelve ? (
           <UnshelveDialog
@@ -1039,6 +1039,6 @@ export function PendingPage({
           </button>
         ) : null}
       </div>
-    </main>
+    </section>
   );
 }
