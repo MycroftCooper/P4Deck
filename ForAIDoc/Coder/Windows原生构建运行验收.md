@@ -5,6 +5,7 @@
 > 修复后最终构建基线：`707e51e0ade13053f1e775c9154a1d973f873de3`
 > 报告提交前仓库 HEAD：`2dd0cb9`（仅追加前端验收文档；应用源码仍对应 `707e51e`）
 > 范围：debug 原生应用、隔离 localhost P4D、结构化运行证据。本文不把前端点击、安装包、签名、公证或长期稳定性冒充为已验证。
+> 产品边界更新（2026-10-10）：管理员强制解锁已从 P4Deck 完全移除。下文相关内容仅是退役旧构建的历史验收证据，不代表当前产品能力，也不再构成当前原生复验阻塞。
 
 ## 1. 本机环境与构建产物
 
@@ -65,7 +66,7 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 - Branch：`p4deck-native-branch`，View 为 `//depot/main/... //depot/p4deck-native-branch-target/...`，源侧有已提交的 README，可用于只读正反影响预览。
 - 有界提交：CL `4446`，只新增 4 个文件。
 - Shelf：CL `4447` 通过描述 `Native metadata searchable shelf Ω` 命中；CL `4448` 描述为 `Opaque native shelf`，含 `deep-path-alpha.txt`、`deep-path-beta.txt` 两个文件，可验文件路径深搜与 shelf 去重。
-- Force Unlock：`//depot/p4deck-native-lock/other-owner.txt`，owner `p4deck-native-owner`，client `p4deck-native-owner-client`，numbered CL `4449`。创建后用 tagged `opened -a` 与 `fstat -Ol` 复核为 other-owner / other-client / other-change 锁事实。
+- 退役旧构建的强制解锁 seed：`//depot/p4deck-native-lock/other-owner.txt`，owner `p4deck-native-owner`，client `p4deck-native-owner-client`，numbered CL `4449`。创建后用 tagged `opened -a` 与 `fstat -Ol` 复核为 other-owner / other-client / other-change 锁事实；当前产品不再包含该入口。
 
 收尾只回收临时、未提交对象：
 
@@ -96,8 +97,8 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 原生交互期间的后端交叉复核还确认：
 
 - Branch 影响预览只执行 `p4 integrate -n -m 201 -b p4deck-native-branch`，没有真实 integrate。UI 创建、编辑、删除 `p4deck-native-ui-branch` 时，mutation 只有两次 `p4 branch -i` 和一次 `p4 branch -d`，每轮 recheck/write/verify 都为 `succeeded`。最终用 `p4 branches -E p4deck-native-ui-branch -m 10 -t` 复核无保存记录；不能用 `p4 branch -o` 判断不存在，因为官方 CLI 会为不存在的名字返回未保存模板。seed branch 与既有 locked permission branch 均仍存在，目标没有文件或 opened 记录。
-- Force Unlock 唯一 mutation 是 `p4 unlock -f -c 4449 //depot/p4deck-native-lock/other-owner.txt`。执行后的独立 `opened -a` 仍保留 owner/client/change（符合 unlock 不改变 opened record），`fstat -Ol` 已无 `otherLock`/`ourLock`，证明精确目标已解锁；recheck、mutation、verify journal 全为 `succeeded` 且无 failure。
-- Force Unlock 结果页关闭后，Files 行没有自动刷新，短时间仍显示旧锁；用户手动点击 Files“刷新”约 1 秒后锁标识消失，与独立 CLI 一致。这是本轮发现的原生 UI 刷新阻塞；前端以最小改动修复并提交 `707e51e`，其定向 14 个 tests、`check:web`、format 和 diff 检查由前端交接为通过。后端已从该 commit 重新完成 Tauri build，但因 Computer Use 被物理 Escape 停止，本轮没有继续点击新版 exe，不能宣称新版原生 UI 已复验。
+- 退役旧构建中，管理员强制解锁唯一 mutation 是 `p4 unlock -f -c 4449 //depot/p4deck-native-lock/other-owner.txt`。执行后的独立 `opened -a` 仍保留 owner/client/change（符合 unlock 不改变 opened record），`fstat -Ol` 已无 `otherLock`/`ourLock`；这些只作为历史审计证据保留，当前源码和生成物不得提供同类入口。
+- 退役旧构建曾发现结果页关闭后 Files 行未自动刷新，手工刷新后恢复；`707e51e` 当时修复了该问题。由于管理员强制解锁能力现已整体移除，此项不再是当前产品阻塞，也无需针对当前产品复验该 UI。
 
 首次打开、profile 尚未激活时，前端曾观察到 cwd 落在 debug exe 目录并提示“not client root”。激活 `p4deck-fixture` 后，后端日志中的 workspace 与扫描根已切换为 `D:\GitCode\P4Deck\.tools\p4d-fixture\workspace`，因此该现象属于环境上下文尚未被 profile 替换的启动阶段，不是本轮继续修改代码的证据。最终 UI 展示仍由前端验收记录确认。
 
@@ -112,8 +113,8 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 
 仍需或另行记录：
 
-- 前端逐项点击、布局、弹窗、导航、Branch CRUD 与 Force Unlock 的交互结论，以前端原生验收文件为准；本文只提供后端/CLI/日志交叉证据。
-- Force Unlock 与 Branch CRUD 的首轮服务端事实已由独立 tagged CLI 复核；`707e51e` 的 Force 自动刷新修复仍需下一轮新 build 原生点击复验。
+- 前端逐项点击、布局、弹窗、导航与 Branch CRUD 的交互结论，以前端原生验收文件为准；本文只提供后端/CLI/日志交叉证据。退役管理员功能的旧交互记录不代表当前能力。
+- Branch CRUD 的首轮服务端事实已由独立 tagged CLI 复核。退役管理员强制解锁的旧 tagged CLI 证据只保留作历史审计，不再要求新 build 原生点击复验。
 - 本轮不是安装包验收，未覆盖 MSI/NSIS、签名、公证、自动更新、升级或回滚。
 - 本轮不覆盖 2 小时稳定性、长期 idle CPU/内存、睡眠唤醒、多屏/缩放或真实本人 Server。
 - debug exe 未签名；不能把 localhost fixture 或 WebView2 窗口存在视为发布就绪。

@@ -29,10 +29,6 @@ import type {
   FileLockPreflight,
   FileLockConfirmation,
   FileLockResult,
-  ForceUnlockPreflightRequest,
-  ForceUnlockPreflight,
-  ForceUnlockConfirmation,
-  ForceUnlockResult,
   RenameMovePreflightRequest,
   RenameMovePreflight,
   RenameMoveConfirmation,
@@ -216,12 +212,6 @@ export interface Backend {
     request: FileLockPreflightRequest,
   ): Promise<FileLockPreflight>;
   confirmFileLock(confirmation: FileLockConfirmation): Promise<FileLockResult>;
-  preflightForceUnlock(
-    request: ForceUnlockPreflightRequest,
-  ): Promise<ForceUnlockPreflight>;
-  confirmForceUnlock(
-    confirmation: ForceUnlockConfirmation,
-  ): Promise<ForceUnlockResult>;
   preflightRenameMove(
     request: RenameMovePreflightRequest,
   ): Promise<RenameMovePreflight>;

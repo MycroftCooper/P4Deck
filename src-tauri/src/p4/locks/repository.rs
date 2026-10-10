@@ -244,7 +244,7 @@ fn snapshot(
             (FileLockOperation::Lock, FileLockOwnership::Ours) => (false, Some("The file is already locked by this workspace.".into())),
             (FileLockOperation::Unlock, FileLockOwnership::Ours) => (true, None),
             (FileLockOperation::Unlock, FileLockOwnership::Unlocked) => (false, Some("The file is not locked by this workspace.".into())),
-            (_, FileLockOwnership::Other) => (false, Some("Another user or workspace owns the lock; administrator force unlock is intentionally unavailable.".into())),
+            (_, FileLockOwnership::Other) => (false, Some("Another user or workspace owns the lock; contact an administrator because P4Deck cannot unlock it.".into())),
             (_, FileLockOwnership::Unknown) => (false, Some("Lock ownership is unknown.".into())),
         }
     };

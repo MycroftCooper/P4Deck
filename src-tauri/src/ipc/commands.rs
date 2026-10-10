@@ -422,7 +422,6 @@ fn invalidate_after_context_change(state: &AppState) {
     state.files.clear_review_cache();
     state.rename.clear_confirmations();
     state.file_locks.clear_confirmations();
-    state.force_unlocks.clear_confirmations();
     state.stream_switch.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
@@ -434,7 +433,6 @@ fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.branch_mappings.clear_for_context_switch();
     state.files.clear_review_cache();
     state.file_locks.clear_confirmations();
-    state.force_unlocks.clear_confirmations();
     state.status_cache.clear_for_context_switch();
 }
 
@@ -512,10 +510,7 @@ pub async fn run_p4(
     if request.input.is_some() {
         return Err("Generic IPC commands cannot provide stdin".into());
     }
-    if matches!(
-        request.command.to_ascii_lowercase().as_str(),
-        "lock" | "unlock"
-    ) {
+    if generic_lock_command_blocked(&request.command) {
         return Err("Lock and unlock are blocked in Terminal and generic run_p4; use the dedicated preflight and confirmation workflow".into());
     }
     if generic_gui_requires_dedicated_api(&request.source, &request.command) {
@@ -526,6 +521,10 @@ pub async fn run_p4(
         .run(request, Some(&app))
         .await
         .map_err(|error| error.to_string())
+}
+
+fn generic_lock_command_blocked(command: &str) -> bool {
+    matches!(command.to_ascii_lowercase().as_str(), "lock" | "unlock")
 }
 
 fn generic_gui_requires_dedicated_api(source: &OperationSource, command: &str) -> bool {
@@ -756,30 +755,6 @@ pub async fn confirm_file_lock(
         result.outcome,
         FileLockOutcome::Succeeded | FileLockOutcome::Partial | FileLockOutcome::Unknown
     ) {
-        state.changelists.invalidate_pending_pages();
-        state.search.clear_for_context_switch();
-        state.files.clear_review_cache();
-    }
-    Ok(result)
-}
-
-#[tauri::command]
-pub async fn preflight_force_unlock(
-    request: ForceUnlockPreflightRequest,
-    state: State<'_, AppState>,
-    app: AppHandle,
-) -> Result<ForceUnlockPreflight, String> {
-    Ok(state.force_unlocks.preflight(request, Some(&app)).await)
-}
-
-#[tauri::command]
-pub async fn confirm_force_unlock(
-    confirmation: ForceUnlockConfirmation,
-    state: State<'_, AppState>,
-    app: AppHandle,
-) -> Result<ForceUnlockResult, String> {
-    let result = state.force_unlocks.confirm(confirmation, Some(&app)).await;
-    if result.outcome != ForceUnlockOutcome::Rejected {
         state.changelists.invalidate_pending_pages();
         state.search.clear_for_context_switch();
         state.files.clear_review_cache();
@@ -1156,8 +1131,8 @@ pub async fn local_path_capabilities(
 #[cfg(test)]
 mod tests {
     use super::{
-        generic_gui_requires_dedicated_api, panel_window_kind, panel_window_url,
-        PanelRuntimeBinding,
+        generic_gui_requires_dedicated_api, generic_lock_command_blocked, panel_window_kind,
+        panel_window_url, PanelRuntimeBinding,
     };
     use crate::domain::OperationSource;
 
@@ -1175,6 +1150,13 @@ mod tests {
             &OperationSource::Gui,
             "branches"
         ));
+    }
+
+    #[test]
+    fn generic_runner_cannot_bypass_the_dedicated_lock_workflow() {
+        assert!(generic_lock_command_blocked("lock"));
+        assert!(generic_lock_command_blocked("UNLOCK"));
+        assert!(!generic_lock_command_blocked("opened"));
     }
 
     #[test]

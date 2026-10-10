@@ -168,6 +168,15 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_unlock_builder_never_adds_force() {
+        let invocation = mutate(FileLockOperation::Unlock, "//depot/locked.bin").unwrap();
+        assert_eq!(invocation.command, "unlock");
+        assert_eq!(invocation.args, ["//depot/locked.bin"]);
+        assert!(invocation.argument_input.is_none());
+        assert!(!invocation.args.iter().any(|arg| arg == "-f"));
+    }
+
+    #[test]
     fn status_fstat_streams_large_explicit_sets() {
         let invocation =
             fstat_status(&["//depot/a.txt".into(), "//depot/空 格@.txt".into()]).unwrap();

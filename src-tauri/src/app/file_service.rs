@@ -2512,7 +2512,10 @@ fn lock_capability(
         FileLockOwnership::Other => (
             false,
             false,
-            Some("Another user or workspace owns the lock; force unlock is not available".into()),
+            Some(
+                "Another user or workspace owns the lock; contact an administrator because P4Deck cannot unlock it"
+                    .into(),
+            ),
         ),
         FileLockOwnership::Unknown => (false, false, Some("Lock ownership is unknown".into())),
     }
