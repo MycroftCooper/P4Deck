@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidateRange(1, 10)]
-    [int]$Repeat = 2
+    [int]$Repeat = 2,
+    [switch]$RequireFixture,
+    [string]$ResultFile = $env:P4DECK_E2E_RESULT_FILE
 )
 
 Set-StrictMode -Version Latest
@@ -19,10 +21,76 @@ $Workspace = Join-Path $FixtureRoot "e2e-workspace"
 $Server = "127.0.0.1:16661"
 $User = "p4deck-fixture-admin"
 $Client = "p4deck-fixture-e2e"
+$RequireFixtureRequested = $RequireFixture.IsPresent -or $env:P4DECK_CI_RUN_P4D -eq "1"
+$ResultSchemaVersion = 1
 
-if (-not (Test-Path -LiteralPath $P4 -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $P4d -PathType Leaf)) {
-    Write-Warning "SKIP BE-002 localhost E2E: pinned p4/p4d fixture tools are missing. Run 'pnpm fixture:setup:win'."
+function Write-E2EResult {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("passed", "failed", "skipped")]
+        [string]$Status,
+        [Parameter(Mandatory = $true)]
+        [string]$Reason,
+        [string[]]$Missing = @(),
+        [int]$CompletedRuns = 0
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ResultFile)) {
+        return
+    }
+
+    $resolvedResultFile = [IO.Path]::GetFullPath($ResultFile)
+    $resultDirectory = [IO.Path]::GetDirectoryName($resolvedResultFile)
+    if (-not [string]::IsNullOrWhiteSpace($resultDirectory)) {
+        [IO.Directory]::CreateDirectory($resultDirectory) | Out-Null
+    }
+    $result = [ordered]@{
+        schemaVersion = $ResultSchemaVersion
+        suite = "localhost-p4d-e2e"
+        status = $Status
+        reason = $Reason
+        required = $RequireFixtureRequested
+        repeat = $Repeat
+        completedRuns = $CompletedRuns
+        missing = @($Missing)
+    }
+    $json = $result | ConvertTo-Json -Depth 3 -Compress
+    [IO.File]::WriteAllText(
+        $resolvedResultFile,
+        "$json`n",
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
+$missingPrerequisites = @()
+if (-not (Test-Path -LiteralPath $FixtureScript -PathType Leaf)) {
+    $missingPrerequisites += "fixture-script"
+}
+if (-not (Test-Path -LiteralPath $P4 -PathType Leaf)) {
+    $missingPrerequisites += "p4"
+}
+if (-not (Test-Path -LiteralPath $P4d -PathType Leaf)) {
+    $missingPrerequisites += "p4d"
+}
+if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot "src-tauri\Cargo.toml") -PathType Leaf)) {
+    $missingPrerequisites += "cargo-manifest"
+}
+if ($null -eq (Get-Command cargo -ErrorAction SilentlyContinue)) {
+    $missingPrerequisites += "cargo"
+}
+
+if ($missingPrerequisites.Count -gt 0) {
+    if ($RequireFixtureRequested) {
+        Write-E2EResult -Status "failed" -Reason "fixture-prerequisite-missing" -Missing $missingPrerequisites
+        [Console]::Error.WriteLine(
+            "FAIL BE-002 localhost E2E: required fixture prerequisites are missing ({0}). Run 'pnpm fixture:setup:win' where appropriate." -f ($missingPrerequisites -join ", ")
+        )
+        exit 78
+    }
+    Write-E2EResult -Status "skipped" -Reason "fixture-prerequisite-missing" -Missing $missingPrerequisites
+    Write-Warning (
+        "SKIP BE-002 localhost E2E: fixture prerequisites are missing ({0}). Run 'pnpm fixture:setup:win'." -f ($missingPrerequisites -join ", ")
+    )
     exit 0
 }
 
@@ -40,12 +108,6 @@ function Test-FixturePort {
     }
 }
 
-$wasRunning = Test-FixturePort
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $FixtureScript start
-if ($LASTEXITCODE -ne 0) {
-    throw "Could not start the verified localhost p4d fixture."
-}
-
 $environmentNames = @(
     "P4PORT", "P4USER", "P4CLIENT", "P4CHARSET", "P4CONFIG", "P4TICKETS", "P4TRUST",
     "P4ENVIRO", "P4PASSWD", "P4DECK_E2E", "P4DECK_E2E_P4", "P4DECK_E2E_SERVER",
@@ -58,7 +120,17 @@ foreach ($name in $environmentNames) {
     $previous[$name] = if ($null -eq $item) { $null } else { $item.Value }
 }
 
+$wasRunning = Test-FixturePort
+$fixtureStartAttempted = $false
+$completedRuns = 0
+$failureReason = $null
 try {
+    $fixtureStartAttempted = $true
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $FixtureScript start
+    if ($LASTEXITCODE -ne 0) {
+        throw "fixture-start-failed"
+    }
+
     $env:P4PORT = $Server
     $env:P4USER = $User
     $env:P4CLIENT = $Client
@@ -84,9 +156,13 @@ try {
             "e2e::tests::localhost_fixture_exercises_application_services" -- `
             --ignored --exact --nocapture --test-threads=1
         if ($LASTEXITCODE -ne 0) {
-            throw "BE-002 localhost application E2E run $run failed."
+            throw "test-run-failed"
         }
+        $completedRuns = $run
     }
+}
+catch {
+    $failureReason = "execution-failed"
 }
 finally {
     foreach ($name in $environmentNames) {
@@ -97,7 +173,18 @@ finally {
             Set-Item -LiteralPath "Env:$name" -Value $previous[$name]
         }
     }
-    if (-not $wasRunning) {
+    if ($fixtureStartAttempted -and -not $wasRunning) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $FixtureScript stop
+        if ($LASTEXITCODE -ne 0) {
+            $failureReason = "fixture-cleanup-failed"
+        }
     }
 }
+
+if ($null -ne $failureReason) {
+    Write-E2EResult -Status "failed" -Reason $failureReason -CompletedRuns $completedRuns
+    [Console]::Error.WriteLine("FAIL BE-002 localhost E2E: $failureReason.")
+    exit 1
+}
+
+Write-E2EResult -Status "passed" -Reason "completed" -CompletedRuns $completedRuns

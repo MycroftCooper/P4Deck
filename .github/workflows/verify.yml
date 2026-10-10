@@ -83,6 +83,9 @@ jobs:
     if: inputs.run_p4d
     runs-on: windows-2022
     timeout-minutes: 30
+    env:
+      P4DECK_CI_RUN_P4D: "1"
+      P4DECK_E2E_RESULT_FILE: artifacts/ci/p4d-e2e-workflow.json
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

@@ -20,6 +20,7 @@
     "test:perf": "node --expose-gc node_modules/vitest/vitest.mjs run --config vitest.perf.config.ts",
     "test:perf:backend": "cargo run --release --manifest-path src-tauri/Cargo.toml --features backend-perf --bin backend-perf",
     "test:release-config": "node --test scripts/release-config.test.mjs",
+    "test:ci-protocol": "node --test scripts/ci-step-result.test.mjs",
     "validate:ci": "node scripts/validate-ci.mjs",
     "validate:release": "node scripts/release-config.mjs validate",
     "release:prepare": "node scripts/release-config.mjs prepare",

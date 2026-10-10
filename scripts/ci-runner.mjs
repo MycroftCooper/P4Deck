@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { classifyStepResult, summarySucceeded } from "./ci-step-result.mjs";
 
 const mode = process.argv[2] ?? "quick";
 if (!new Set(["quick", "local"]).has(mode)) {
@@ -15,11 +16,11 @@ if (!process.env.npm_execpath) {
   process.exit(2);
 }
 const packageManager = [process.execPath, [process.env.npm_execpath]];
-const pnpmStep = (name, script) => [
+const pnpmStep = (name, script) => ({
   name,
-  packageManager[0],
-  [...packageManager[1], script],
-];
+  command: packageManager[0],
+  args: [...packageManager[1], script],
+});
 const childEnvironment = { ...process.env };
 for (const secretName of [
   "P4PASSWD",
@@ -29,28 +30,37 @@ for (const secretName of [
   delete childEnvironment[secretName];
 }
 const steps = [
-  ["validate-ci", process.execPath, ["scripts/validate-ci.mjs"]],
-  [
-    "release-config-tests",
-    process.execPath,
-    ["--test", "scripts/release-config.test.mjs"],
-  ],
+  {
+    name: "validate-ci",
+    command: process.execPath,
+    args: ["scripts/validate-ci.mjs"],
+  },
+  {
+    name: "release-config-tests",
+    command: process.execPath,
+    args: ["--test", "scripts/release-config.test.mjs"],
+  },
+  {
+    name: "ci-step-result-tests",
+    command: process.execPath,
+    args: ["--test", "scripts/ci-step-result.test.mjs"],
+  },
   pnpmStep("web-format", "format:check"),
-  [
-    "rust-format",
-    "cargo",
-    ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"],
-  ],
+  {
+    name: "rust-format",
+    command: "cargo",
+    args: ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"],
+  },
   pnpmStep("web-check", "check:web"),
-  [
-    "rust-check",
-    "cargo",
-    ["check", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets"],
-  ],
-  [
-    "rust-clippy",
-    "cargo",
-    [
+  {
+    name: "rust-check",
+    command: "cargo",
+    args: ["check", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets"],
+  },
+  {
+    name: "rust-clippy",
+    command: "cargo",
+    args: [
       "clippy",
       "--manifest-path",
       "src-tauri/Cargo.toml",
@@ -59,9 +69,13 @@ const steps = [
       "-D",
       "warnings",
     ],
-  ],
+  },
   pnpmStep("web-test", "test:web"),
-  ["rust-test", "cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml"]],
+  {
+    name: "rust-test",
+    command: "cargo",
+    args: ["test", "--manifest-path", "src-tauri/Cargo.toml"],
+  },
 ];
 
 if (mode === "local") {
@@ -77,30 +91,56 @@ if (mode === "local") {
       );
       process.exit(2);
     }
-    steps.push(pnpmStep("localhost-p4d-e2e", "test:e2e:p4d:win"));
+    steps.push({
+      ...pnpmStep("localhost-p4d-e2e", "test:e2e:p4d:win"),
+      required: true,
+      protocol: "p4d-e2e-v1",
+      resultFile: path.resolve("artifacts", "ci", "p4d-e2e-latest.json"),
+    });
   }
 }
 
 const results = [];
-for (const [name, command, args] of steps) {
+for (const step of steps) {
+  const { name, command, args } = step;
+  if (step.resultFile) {
+    await rm(step.resultFile, { force: true });
+  }
   const startedAt = new Date().toISOString();
   const start = performance.now();
   const exitCode = await new Promise((resolve) => {
     const child = spawn(command, args, {
       stdio: "inherit",
       shell: false,
-      env: childEnvironment,
+      env: {
+        ...childEnvironment,
+        ...(step.resultFile ? { P4DECK_E2E_RESULT_FILE: step.resultFile } : {}),
+      },
     });
     child.once("error", () => resolve(127));
     child.once("exit", (code, signal) => resolve(signal ? 128 : (code ?? 1)));
+  });
+  let protocolResult;
+  if (step.resultFile) {
+    try {
+      protocolResult = JSON.parse(await readFile(step.resultFile, "utf8"));
+    } catch {
+      protocolResult = undefined;
+    }
+  }
+  const classified = classifyStepResult({
+    exitCode,
+    required: step.required ?? true,
+    protocol: step.protocol ?? "exit-code",
+    protocolResult,
   });
   results.push({
     name,
     startedAt,
     durationMs: Math.round(performance.now() - start),
-    exitCode,
+    ...classified,
   });
-  if (exitCode !== 0) break;
+  if (!classified.accepted) break;
 }
 
 const summary = {
@@ -108,9 +148,7 @@ const summary = {
   mode,
   platform: process.platform,
   architecture: process.arch,
-  ok:
-    results.length === steps.length &&
-    results.every((result) => result.exitCode === 0),
+  ok: summarySucceeded(results, steps.length),
   results,
 };
 await mkdir(path.resolve("artifacts", "ci"), { recursive: true });
