@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { HardDrive, Pause, RefreshCw } from "lucide-react";
+import { ChevronUp, HardDrive, Pause, RefreshCw } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import { workspaceCache } from "../../features/files/workspaceQueries";
 import { subscribeSafely } from "../../shared/lib/subscription";
@@ -9,6 +9,7 @@ import {
   progressSummary,
   updateProgress,
   type ActiveOperations,
+  type ActiveTask,
 } from "./statusProgress";
 
 import { TaskList } from "./TaskList";
@@ -37,7 +38,22 @@ export function StatusBar({
 }) {
   const menu = useContextMenu();
   const [tasksOpen, setTasksOpen] = useState(false);
-  const [tasks, setTasks] = useState<[string, number | undefined][]>([]);
+  const [tasks, setTasks] = useState<ActiveTask[]>([]);
+  const active = useRef<ActiveOperations>(new Map());
+  const pending = useRef(new Set<string>());
+  const [cancelling, setCancelling] = useState<ReadonlySet<string>>(new Set());
+  const [cancellingAll, setCancellingAll] = useState(false);
+  const allPending = useRef(false);
+  const [cancelError, setCancelError] = useState("");
+  const live = useRef(true);
+  const operations = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const tasksId = useId();
+  const progress = progressSummary(tasks);
+  const closeTasks = () => {
+    setTasksOpen(false);
+    trigger.current?.focus();
+  };
   const disk = useQuery(
     {
       queryKey: ["workspace-disk", connectionKey],
@@ -50,17 +66,14 @@ export function StatusBar({
     workspaceCache,
   );
   const metrics = disk.data ? diskMetrics(disk.data) : undefined;
-  const [progress, setProgress] = useState({
-    count: 0,
-    percent: undefined as number | undefined,
-  });
   const [eventError, setEventError] = useState(false);
   useEffect(() => {
-    const active: ActiveOperations = new Map();
+    live.current = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stop = subscribeSafely(
       () =>
         backend.subscribeOperationEvents((event) => {
+          if (!live.current) return;
           if (
             ![
               "queued",
@@ -71,21 +84,83 @@ export function StatusBar({
             ].includes(event.type)
           )
             return;
-          updateProgress(active, event);
+          updateProgress(active.current, event);
           if (timer === undefined)
             timer = setTimeout(() => {
               timer = undefined;
-              setProgress(progressSummary(active));
-              setTasks([...active]);
+              setTasks([...active.current.values()]);
+              for (const id of pending.current) {
+                if (!active.current.has(id)) pending.current.delete(id);
+              }
+              setCancelling(new Set(pending.current));
             }, 100);
         }),
       () => setEventError(true),
     );
     return () => {
+      live.current = false;
       stop();
       clearTimeout(timer);
     };
   }, []);
+  useEffect(() => {
+    if (!tasksOpen) return;
+    operations.current
+      ?.querySelector<HTMLButtonElement>(".task-list header button")
+      ?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!operations.current?.contains(event.target as Node))
+        setTasksOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [tasksOpen]);
+  const cancelTask = async (id: string) => {
+    if (!active.current.has(id) || pending.current.has(id)) return;
+    trigger.current?.focus();
+    pending.current.add(id);
+    setCancelling(new Set(pending.current));
+    setCancelError("");
+    try {
+      await backend.cancelOperation(id);
+    } catch {
+      if (!live.current) return;
+      pending.current.delete(id);
+      setCancelling(new Set(pending.current));
+      setCancelError(
+        zh
+          ? "取消请求失败，请重试或查看日志。"
+          : "Cancellation failed. Retry or inspect the logs.",
+      );
+      setTasksOpen(true);
+    }
+  };
+  const cancelAllTasks = async () => {
+    if (!active.current.size || allPending.current) return;
+    trigger.current?.focus();
+    const ids = [...active.current.keys()];
+    ids.forEach((id) => pending.current.add(id));
+    setCancelling(new Set(pending.current));
+    allPending.current = true;
+    setCancellingAll(true);
+    setCancelError("");
+    try {
+      await backend.cancelAllOperations();
+    } catch {
+      if (!live.current) return;
+      ids.forEach((id) => pending.current.delete(id));
+      setCancelling(new Set(pending.current));
+      setCancelError(
+        zh
+          ? "取消全部任务的请求失败，请重试或逐项取消。"
+          : "Cancelling all tasks failed. Retry or cancel tasks individually.",
+      );
+      setTasksOpen(true);
+    } finally {
+      allPending.current = false;
+      if (live.current) setCancellingAll(false);
+    }
+  };
   return (
     <footer className="statusbar status-meters">
       <div
@@ -119,45 +194,68 @@ export function StatusBar({
         </span>
       </div>
       <div
-        className="p4-status"
-        tabIndex={0}
-        {...menu("U06", () => ({ 打开日志栏: action(() => onOpenLogs()) }))}
-        title={
-          zh
-            ? "P4 操作进度；并发任务取平均值，无可量化进度时显示运行状态"
-            : "P4 progress; concurrent operations averaged, unknown progress is indeterminate"
-        }
+        className="p4-operations"
+        ref={operations}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && tasksOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeTasks();
+          }
+        }}
       >
-        <span>
-          {eventError
-            ? zh
-              ? "进度不可用"
-              : "Progress unavailable"
-            : progress.count
-              ? `P4 · ${progress.count} ${zh ? "项执行中" : "running"}`
-              : zh
-                ? "P4 空闲"
-                : "P4 idle"}
-        </span>
-        <progress
-          aria-label={zh ? "P4 操作进度" : "P4 operation progress"}
-          max={100}
-          value={progress.count ? progress.percent : 0}
-        />
-        <span>
-          {progress.count && progress.percent !== undefined
-            ? `${Math.round(progress.percent)}%`
-            : ""}
-        </span>
+        <button
+          ref={trigger}
+          className="p4-status"
+          aria-haspopup="dialog"
+          aria-expanded={tasksOpen}
+          aria-controls={tasksOpen ? tasksId : undefined}
+          onClick={() => setTasksOpen((value) => !value)}
+          {...menu("U06", () => ({ 打开日志栏: action(() => onOpenLogs()) }))}
+          title={
+            zh
+              ? "P4 操作进度；并发任务取平均值，无可量化进度时显示运行状态"
+              : "P4 progress; concurrent operations averaged, unknown progress is indeterminate"
+          }
+        >
+          <span>
+            {eventError
+              ? zh
+                ? "进度不可用"
+                : "Progress unavailable"
+              : progress.count
+                ? `P4 · ${progress.count} ${zh ? "项执行中" : "running"}`
+                : zh
+                  ? "P4 空闲"
+                  : "P4 idle"}
+          </span>
+          <progress
+            aria-label={zh ? "P4 操作进度" : "P4 operation progress"}
+            max={100}
+            value={progress.count ? progress.percent : 0}
+          />
+          <span>
+            {progress.count && progress.percent !== undefined
+              ? `${Math.round(progress.percent)}%`
+              : ""}
+          </span>
+          <ChevronUp size={12} />
+        </button>
+        {tasksOpen && (
+          <TaskList
+            id={tasksId}
+            tasks={tasks}
+            onClose={closeTasks}
+            onLogs={onOpenLogs}
+            onCancel={cancelTask}
+            onCancelAll={cancelAllTasks}
+            cancellingAll={cancellingAll}
+            cancelling={cancelling}
+            error={cancelError}
+            zh={zh}
+          />
+        )}
       </div>
-      {tasksOpen && (
-        <TaskList
-          tasks={tasks}
-          onClose={() => setTasksOpen(false)}
-          onLogs={onOpenLogs}
-          zh={zh}
-        />
-      )}
       <button
         className="auto-refresh-status"
         onClick={onToggleAutoRefresh}

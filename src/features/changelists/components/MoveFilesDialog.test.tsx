@@ -112,46 +112,56 @@ function button(text: string) {
   )!;
 }
 
-it("preflights the frozen, deduplicated numbered-to-Default snapshot", async () => {
+it("moves a frozen deduplicated drop immediately without mounting a dialog", async () => {
   const check = vi.fn().mockResolvedValue(ready());
-  await render(undefined, { check });
-  const select = document.querySelector("select")!;
-  await act(async () => {
-    select.value = "0";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await act(async () => button("预检（不执行）").click());
+  const execute = vi.fn().mockResolvedValue(success());
+  await render(
+    { from: 10, target: 0, paths: ["//depot/a", "//depot/a"], source: null },
+    { check, execute },
+  );
+  expect(document.querySelector("dialog")).toBeNull();
   expect(check).toHaveBeenCalledOnce();
   expect(check.mock.calls[0][0]).toMatchObject({
     targetChangeId: 0,
     depotPaths: ["//depot/a"],
   });
-  expect(document.body.textContent).toContain("预检通过：1 个文件");
-  expect(dismiss).not.toHaveBeenCalled();
-});
-
-it("confirms only the returned token/target and closes on verified success", async () => {
-  const execute = vi.fn().mockResolvedValue(success());
-  await render(
-    { from: 10, target: 0, paths: ["//depot/a"], source: null },
-    { execute },
-  );
-  await act(async () => button("预检（不执行）").click());
-  await act(async () => button("确认移动").click());
   expect(execute).toHaveBeenCalledOnce();
   expect(execute.mock.calls[0][0]).toMatchObject({ token: "token", target });
   expect(dismiss).toHaveBeenCalledOnce();
 });
 
-it("keeps partial failures visible and never presents them as full success", async () => {
+it("returns success before a background refresh finishes", async () => {
+  const onResult = vi.fn(
+    () => new Promise<void>(() => {}),
+  );
+  await render(
+    { from: 10, target: 0, paths: ["//depot/a"], source: null },
+    { onResult },
+  );
+  expect(onResult).toHaveBeenCalledOnce();
+  expect(dismiss).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("menu entry only asks for a destination, then moves on one click", async () => {
+  const execute = vi.fn().mockResolvedValue(success());
+  await render(undefined, { execute });
+  expect(document.querySelector("dialog")).not.toBeNull();
+  expect(document.body.textContent).not.toContain("预检");
+  expect(document.body.textContent).not.toContain("确认移动");
+  await act(async () => button("DefaultChange 0").click());
+  expect(execute).toHaveBeenCalledOnce();
+  expect(dismiss).toHaveBeenCalledOnce();
+});
+
+it("reports partial failures without presenting them as full success or opening a dialog", async () => {
   const execute = vi.fn().mockResolvedValue(
     success({
       outcome: "partial",
-      message: "Moved 1 file(s); 1 file(s) were not confirmed moved.",
+      message: "Some files were not confirmed moved.",
       files: [
-        success().files[0],
         {
-          depotPath: "//depot/b",
+          depotPath: "//depot/a",
           state: "failed",
           message: "Target rejected this file",
         },
@@ -162,67 +172,77 @@ it("keeps partial failures visible and never presents them as full success", asy
     { from: 10, target: 0, paths: ["//depot/a"], source: null },
     { execute },
   );
-  await act(async () => button("预检（不执行）").click());
-  await act(async () => button("确认移动").click());
-  expect(document.body.textContent).toContain("not confirmed moved");
-  expect(document.body.textContent).toContain("Target rejected this file");
+  expect(document.querySelector("dialog")).toBeNull();
+  expect(document.querySelector('[role="alert"]')!.textContent).toContain(
+    "Target rejected this file",
+  );
   expect(dismiss).not.toHaveBeenCalled();
 });
 
-it("invalidates an old preview when target or connection changes", async () => {
-  await render({ from: 0, target: 10, paths: ["//depot/a"], source: null });
-  await act(async () => button("预检（不执行）").click());
-  expect(document.body.textContent).toContain("确认移动");
-  await act(async () => {
-    const select = document.querySelector("select")!;
-    select.value = "20";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(document.body.textContent).not.toContain("确认移动");
-  await render(
-    { from: 0, target: 10, paths: ["//depot/a"], source: null },
-    { connectionKey: "connection-b" },
+it("stops before writing when automatic checks reject the selected files", async () => {
+  const execute = vi.fn();
+  const check = vi.fn().mockResolvedValue(
+    ready({
+      ready: false,
+      token: undefined,
+      blockers: [
+        {
+          code: "lockedFile",
+          certainty: "confirmed",
+          message: "File is locked",
+          paths: ["//depot/a"],
+        },
+      ],
+    }),
   );
-  expect(document.body.textContent).toContain("连接或 Workspace 已改变");
-});
-
-it("blocks empty and repeated same-target drops before preflight", async () => {
-  await render({ from: 10, target: 10, paths: ["//depot/a"], source: null });
-  expect(button("预检（不执行）").disabled).toBe(true);
-  expect(document.body.textContent).toContain("已跳过本来就在目标 CL");
-});
-
-it("accepts a stable off-screen target ID for the keyboard alternative", async () => {
-  const check = vi.fn().mockResolvedValue(ready());
-  await render(undefined, { check });
-  await act(async () => {
-    const input = document.querySelector<HTMLInputElement>(
-      'input[type="number"]',
-    )!;
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, "999");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => button("预检（不执行）").click());
-  expect(check.mock.calls[0][0]).toMatchObject({ targetChangeId: 999 });
-  expect(document.body.textContent).toContain("未挂载的 CL 编号");
-});
-
-it("cancels the active grouped operation instead of dismissing a busy dialog", async () => {
-  const check = vi.fn().mockReturnValue(new Promise(() => undefined));
-  const cancel = vi
-    .spyOn(backend, "cancelOperation")
-    .mockResolvedValue(undefined);
   await render(
     { from: 10, target: 0, paths: ["//depot/a"], source: null },
-    { check },
+    { check, execute },
   );
-  await act(async () => button("预检（不执行）").click());
-  const operationId = check.mock.calls[0][0].operationId;
-  await act(async () => button("取消操作").click());
-  expect(cancel).toHaveBeenCalledWith(operationId);
-  expect(dismiss).not.toHaveBeenCalled();
+  expect(execute).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("File is locked");
+});
+
+it("does not execute a delayed check after the connection changes", async () => {
+  let finish!: (value: MoveFilesPreflight) => void;
+  const check = vi.fn(
+    () =>
+      new Promise<MoveFilesPreflight>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const execute = vi.fn();
+  const cancel = vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  const request = { from: 10, target: 0, paths: ["//depot/a"], source: null };
+  await render(request, { check, execute });
+  await render(request, { check, execute, connectionKey: "connection-b" });
+  await act(async () => finish(ready()));
+  expect(execute).not.toHaveBeenCalled();
+  expect(cancel).toHaveBeenCalled();
+  expect(document.body.textContent).toContain("连接或工作区已改变");
   cancel.mockRestore();
+});
+
+it("treats a repeated same-target drop as a no-op without checking or writing", async () => {
+  const check = vi.fn();
+  const execute = vi.fn();
+  await render(
+    { from: 10, target: 10, paths: ["//depot/a"], source: null },
+    { check, execute },
+  );
+  expect(check).not.toHaveBeenCalled();
+  expect(execute).not.toHaveBeenCalled();
+  expect(document.querySelector("dialog")).toBeNull();
+  expect(dismiss).toHaveBeenCalledOnce();
+});
+
+it("blocks duplicate destination clicks while moving", async () => {
+  const check = vi.fn().mockReturnValue(new Promise(() => {}));
+  await render(undefined, { check });
+  await act(async () => {
+    button("DefaultChange 0").click();
+    button("DefaultChange 0").click();
+  });
+  expect(check).toHaveBeenCalledOnce();
+  expect(button("DefaultChange 0").disabled).toBe(true);
 });

@@ -34,6 +34,7 @@ export function useCommandTarget(
           .then((nodes) => {
             if (generation === serial.current)
               setTarget({
+                ...value,
                 type: "file",
                 node:
                   nodes.find((n) => nodeKey(n) === nodeKey(value.node)) ??
@@ -64,6 +65,11 @@ export function useCommandTarget(
   const onTarget = useCallback(
     (page: PageId | null, params: PanelTarget, reason?: "parameters") => {
       const node = selectedRef.current;
+      if (page === "history") {
+        focus({ type: "history", path: params.target, revisions: [] });
+        return;
+      }
+
       if (
         reason === "parameters" &&
         selectionRef.current.length > 1 &&

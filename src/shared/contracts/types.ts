@@ -334,6 +334,8 @@ export interface ClientWorkspace {
   accessed: number | null;
 }
 
+export type WorkspaceSyncMode = "standard" | "virtual" | "unknown";
+
 export interface ConnectionDirectoryRequest {
   context: P4Context;
   requestGeneration: number;
@@ -355,6 +357,7 @@ export interface ConnectionWorkspaceCandidate extends ClientWorkspace {
   /** Local-only hint. Activation always re-reads the server spec and verifies the effective Root. */
   rootStatus: ConnectionWorkspaceRootStatus;
   selectable: boolean;
+  syncMode?: WorkspaceSyncMode;
 }
 
 export interface ConnectionDirectoryStats {
@@ -405,6 +408,7 @@ export interface ConnectionWorkspaceCreatePlan {
   root: string;
   description?: string;
   mapping: ConnectionWorkspaceMapping;
+  syncMode: WorkspaceSyncMode;
 }
 
 export interface ConnectionUserCreatePreflightRequest {
@@ -471,6 +475,7 @@ export interface ConnectionSpecCreateResult {
   simulated: boolean;
 }
 export type FileState =
+  | "loading"
   | "untracked"
   | "controlled"
   | "openedEdit"
@@ -674,6 +679,25 @@ export interface RuntimeInfo {
   connection: ConnectionStatus;
 }
 
+export interface P4VfsInspectRequest {
+  expectedContextGeneration: number;
+  operationId?: string;
+}
+
+export interface P4VfsStatus {
+  contextGeneration: number;
+  workspace: string;
+  mode: WorkspaceSyncMode;
+  ready: boolean;
+  serverVersion?: string;
+  serverSupported: boolean;
+  clientVersion?: string;
+  clientSupported: boolean;
+  agentConfigured: boolean;
+  reason?: string;
+  operationIds: string[];
+}
+
 export type ConnectionState =
   | "cliMissing"
   | "notTested"
@@ -803,9 +827,10 @@ export interface ClQuery {
   clients: string[];
   depotPath?: string;
   stream?: string;
+  streams?: string[];
   from: string;
   to: string;
-  jobs: string[];
+  jobs?: string[];
   hasJob?: boolean;
   mergeClassifications: MergeClassification[];
   hideReliableMerges: boolean;
@@ -1067,6 +1092,64 @@ export interface DiagnosticAlert {
   level: "warning" | "error";
 }
 
+export interface ConfigBackupLocalStorageEntry {
+  key: string;
+  value: string;
+}
+
+export interface ConfigBackupSummary {
+  fileName: string;
+  createdAt: string;
+  sizeBytes: number;
+  kind: "manual" | "preRestore";
+  includesConnection: boolean;
+  includesWindowPlacement: boolean;
+  localStorageKeys: string[];
+}
+
+export interface ConfigBackupRestoreStatus {
+  state: "pending" | "succeeded" | "failed";
+  sourceFileName: string;
+  rollbackFileName?: string;
+  completedAt?: string;
+  message?: string;
+}
+
+export interface ConfigBackupPendingRestore {
+  sourceFileName: string;
+  rollbackFileName: string;
+  stagedAt: string;
+}
+
+export interface ConfigBackupOverview {
+  directory: string;
+  backups: ConfigBackupSummary[];
+  pendingRestore?: ConfigBackupPendingRestore;
+  lastRestore?: ConfigBackupRestoreStatus;
+}
+
+export interface ConfigBackupCreateRequest {
+  localStorage: ConfigBackupLocalStorageEntry[];
+}
+
+export interface ConfigBackupCreateResult {
+  backup: ConfigBackupSummary;
+  omittedLocalStorageKeys: string[];
+}
+
+export interface ConfigBackupRestoreRequest {
+  fileName: string;
+  /** Captures the current layout so the generated rollback backup is complete. */
+  localStorage: ConfigBackupLocalStorageEntry[];
+}
+
+export interface ConfigBackupRestoreResult {
+  sourceFileName: string;
+  rollbackFileName: string;
+  localStorage: ConfigBackupLocalStorageEntry[];
+  restartRequired: boolean;
+}
+
 export interface CacheDiagnostics {
   hits: number;
   misses: number;
@@ -1097,7 +1180,8 @@ export type OperationFailureKind =
   | "permissionDenied"
   | "commandFailure"
   | "cancelled"
-  | "interrupted";
+  | "interrupted"
+  | "unknown";
 export interface OperationRecord {
   operationId: string;
   connectionId: string;
@@ -1149,7 +1233,7 @@ export interface WorkspaceListing {
   operationIds: string[];
   truncated: boolean;
   safetyLimit: number;
-  cacheFreshness: "fresh" | "stale" | "offlineFallback";
+  cacheFreshness: "fresh" | "stale" | "offlineFallback" | "local";
 }
 
 export type OpenLocalPathMode = "reveal" | "openWith";
@@ -1196,6 +1280,8 @@ export interface FileActionRequest {
   targetPath?: string;
   resolveMethod?: "am" | "as" | "at" | "ay" | "af" | "n";
   label?: string;
+  /** Explicitly revert the changelist named by changelistId as one P4 operation. */
+  revertWholeChangelist?: boolean;
   /** Opt-in P4-native parallel transfer threads; currently restricted to 2–4. */
   parallelThreads?: number;
 }
@@ -1702,6 +1788,9 @@ export interface DiffResult {
   left: DiffSide;
   right: DiffSide;
   unified: string;
+  /** Complete, bounded text already loaded for the comparison; absent for partial output. */
+  leftText?: string;
+  rightText?: string;
   stats: { additions: number; deletions: number; hunks: number };
   binary: boolean;
   unsupported: boolean;
@@ -2285,4 +2374,20 @@ export interface FilePreview {
   encoding?: string | null;
   width?: number | null;
   height?: number | null;
+}
+
+export interface UndoTarget {
+  depotPath: string;
+  revision: number;
+  changelistId: number;
+}
+export interface UndoPreview {
+  target: UndoTarget;
+  token: string;
+  expiresAt: number;
+  messages: string[];
+}
+export interface UndoConfirmation {
+  target: UndoTarget;
+  token: string;
 }

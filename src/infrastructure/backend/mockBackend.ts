@@ -1,5 +1,6 @@
 import type {
   ChangelistSummary,
+  ConfigBackupSummary,
   FileState,
   GlobalSearchItem,
   GlobalSearchKind,
@@ -17,6 +18,7 @@ import type {
 } from "../../shared/contracts/types";
 import type { Backend } from "./contract";
 import { inspectTerminalCommand } from "../../features/tools/terminalSecurity";
+import { isBackupLocalStorageKey } from "../../features/settings/backupState";
 
 let mockContext: import("../../shared/contracts/types").P4Context = {
   server: "ssl:p4.company.dev:1666",
@@ -27,12 +29,17 @@ let mockContext: import("../../shared/contracts/types").P4Context = {
 };
 let mockContextGeneration = 1;
 let mockProfileRevision = 1;
-let mockActiveProfileId = "mock-primary-profile";
+let mockActiveProfileId: string | undefined = "mock-primary-profile";
 let mockProfiles: import("../../shared/contracts/types").ConnectionProfile[] = [
   { id: mockActiveProfileId, name: "Primary", context: { ...mockContext } },
 ];
 let mockAuthentication: "connected" | "authRequired" = "connected";
 let mockCurrentStream = "//atlas/main";
+const mockConfigBackups: ConfigBackupSummary[] = [];
+const mockConfigBackupStorage = new Map<
+  string,
+  import("../../shared/contracts/types").ConfigBackupLocalStorageEntry[]
+>();
 const mockConnectionUsers = new Map([
   [
     "fmeng",
@@ -253,10 +260,16 @@ try {
 }
 const now = Date.now();
 const mockLogs: LogEntry[] = [];
+const logsClearedSubscribers = new Set<() => void>();
 const operationSubscribers = new Set<(event: OperationEvent) => void>();
+const mockActiveOperations = new Set<string>();
 const diagnosticSubscribers = new Set<(event: DiagnosticAlert) => void>();
 let mockPendingChanges: PendingChange[] | undefined;
 function emitOperation(event: OperationEvent) {
+  if (event.type === "queued" || event.type === "started")
+    mockActiveOperations.add(event.operationId);
+  if (event.type === "completed" || event.type === "cancelled")
+    mockActiveOperations.delete(event.operationId);
   operationSubscribers.forEach((subscriber) => subscriber(event));
 }
 const mockChanges: ChangelistSummary[] = Array.from(
@@ -385,9 +398,10 @@ function submittedQuerySignature(
     clients: [...query.clients].sort(),
     depotPath: query.depotPath?.trim(),
     stream: query.stream?.trim(),
+    streams: [...new Set(query.streams ?? [])].sort(),
     from: query.from,
     to: query.to,
-    jobs: [...query.jobs].sort(),
+    jobs: [...(query.jobs ?? [])].sort(),
     hasJob: query.hasJob,
     mergeClassifications: [...query.mergeClassifications].sort(),
     hideReliableMerges: query.hideReliableMerges,
@@ -628,6 +642,56 @@ function assertMockProfile(
 }
 
 export const mockBackend: Backend = {
+  async createConfigBackup(request) {
+    const createdAt = new Date().toISOString();
+    const fileName = `p4deck-config-manual-${Date.now()}.json`;
+    const allowedKeys = request.localStorage
+      .map((entry) => entry.key)
+      .filter(isBackupLocalStorageKey)
+      .sort();
+    const retainedEntries = request.localStorage
+      .filter((entry) => isBackupLocalStorageKey(entry.key))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    const backup: ConfigBackupSummary = {
+      fileName,
+      createdAt,
+      sizeBytes: 2048,
+      kind: "manual",
+      includesConnection: true,
+      includesWindowPlacement: true,
+      localStorageKeys: allowedKeys,
+    };
+    mockConfigBackups.unshift(backup);
+    mockConfigBackupStorage.set(fileName, retainedEntries);
+    return {
+      backup,
+      omittedLocalStorageKeys: request.localStorage
+        .map((entry) => entry.key)
+        .filter((key) => !allowedKeys.includes(key))
+        .sort(),
+    };
+  },
+  async listConfigBackups() {
+    return {
+      directory: "browser-mock://backups",
+      backups: [...mockConfigBackups],
+    };
+  },
+  async restoreConfigBackup(request) {
+    const source = mockConfigBackups.find(
+      (backup) => backup.fileName === request.fileName,
+    );
+    if (!source) throw new Error("backupNotFound");
+    return {
+      sourceFileName: source.fileName,
+      rollbackFileName: `p4deck-config-pre-restore-${Date.now()}.json`,
+      localStorage: mockConfigBackupStorage.get(source.fileName) ?? [],
+      restartRequired: true,
+    };
+  },
+  async openConfigBackupsFolder() {
+    throw new Error("Opening the backup folder requires the desktop app.");
+  },
   async statusCacheDiagnostics() {
     return {
       hits: 0,
@@ -705,6 +769,17 @@ export const mockBackend: Backend = {
       retentionDays: 14,
       maxMib: 50,
     };
+  },
+  async openLogsFolder() {
+    throw new Error("Opening the log folder requires the desktop app.");
+  },
+  async deleteAllLogs() {
+    mockLogs.length = 0;
+    logsClearedSubscribers.forEach((callback) => callback());
+  },
+  async subscribeLogsCleared(callback) {
+    logsClearedSubscribers.add(callback);
+    return () => logsClearedSubscribers.delete(callback);
   },
   async setLogPolicy(policy) {
     return {
@@ -1740,6 +1815,7 @@ export const mockBackend: Backend = {
       accessed: Math.floor(Date.now() / 1000),
       rootStatus: "usable",
       selectable: true,
+      syncMode: plan.syncMode,
     });
     const workspace = mockConnectionWorkspaces.get(record.name)!;
     return {
@@ -1779,6 +1855,12 @@ export const mockBackend: Backend = {
     };
     mockProfiles = [...mockProfiles, profile];
     mockProfileRevision += 1;
+    if (!mockActiveProfileId) {
+      mockActiveProfileId = profile.id;
+      mockContext = { ...request.context };
+      mockContextGeneration += 1;
+      mockCurrentStream = "//atlas/main";
+    }
     return this.listConnectionProfiles();
   },
   async updateConnectionProfile(request) {
@@ -1809,19 +1891,22 @@ export const mockBackend: Backend = {
   },
   async deleteConnectionProfile(request) {
     assertMockRevision(request.expectedRevision);
-    if (
-      mockProfiles.length === 1 &&
-      mockProfiles.some((profile) => profile.id === request.id)
-    )
-      throw new Error("lastProfileDelete: The last profile cannot be deleted.");
-    if (request.id === mockActiveProfileId)
-      throw new Error(
-        "activeProfileDelete: Switch profiles before deleting the active profile.",
-      );
     if (!mockProfiles.some((profile) => profile.id === request.id))
       throw new Error("notFound: Connection profile was not found.");
     mockProfiles = mockProfiles.filter((profile) => profile.id !== request.id);
     mockProfileRevision += 1;
+    if (request.id === mockActiveProfileId) {
+      mockActiveProfileId = undefined;
+      mockContext = { server: "", user: "", client: "" };
+      mockContextGeneration += 1;
+      mockCurrentStream = "";
+      mockStreamSwitchTokens.clear();
+      mockGlobalSearchSnapshots.clear();
+      mockShelfSnapshots.clear();
+      mockSyncTokens.clear();
+      mockRenameTokens.clear();
+      mockLockTokens.clear();
+    }
     return this.listConnectionProfiles();
   },
   async setActiveConnectionProfile(request) {
@@ -1907,11 +1992,38 @@ export const mockBackend: Backend = {
       contextGeneration: mockContextGeneration,
       context: { ...mockContext },
       connection: {
-        state: "notTested",
-        message: "Browser mock does not contact a server.",
-        recovery: "retry",
+        state: mockContext.server ? "notTested" : "disconnected",
+        message: mockContext.server
+          ? "Browser mock does not contact a server."
+          : "No active connection. Create or select a saved connection in Settings.",
+        recovery: mockContext.server ? "retry" : "editConfig",
         server: mockContext.server,
       },
+    };
+  },
+  async inspectP4Vfs(request) {
+    if (request.expectedContextGeneration !== mockContextGeneration)
+      throw new Error(
+        "contextChanged: The active connection changed before VFS inspection.",
+      );
+    const workspace = mockConnectionWorkspaces.get(mockContext.client);
+    const mode = workspace?.syncMode ?? "standard";
+    return {
+      contextGeneration: mockContextGeneration,
+      workspace: mockContext.cwd ?? "",
+      mode,
+      ready:
+        mode === "virtual" && mockContext.server.startsWith("ssl:p4.company"),
+      serverVersion: "P4D/NTX64/2026.1/MOCK",
+      serverSupported: true,
+      clientVersion: "Rev. P4/NTX64/2026.1/MOCK",
+      clientSupported: true,
+      agentConfigured: true,
+      reason:
+        mode === "virtual"
+          ? undefined
+          : "This workspace uses standard sync. Create a new virtual workspace to use P4VFS.",
+      operationIds: [request.operationId ?? "mock-vfs-inspect"],
     };
   },
   async runP4(request) {
@@ -1951,7 +2063,27 @@ export const mockBackend: Backend = {
         ? request.args
         : [request.command, ...request.args];
     const command = `p4 ${args.join(" ")}`;
+    emitOperation({
+      operationId,
+      type: "started",
+      message: command,
+      timestamp: started,
+    });
     await new Promise((resolve) => setTimeout(resolve, 180));
+    if (mockCancelledOperations.delete(operationId)) {
+      const cancelled: OperationEvent = {
+        operationId,
+        type: "cancelled",
+        timestamp: new Date().toISOString(),
+      };
+      emitOperation(cancelled);
+      return {
+        operationId,
+        exitCode: -1,
+        durationMs: 180,
+        events: [cancelled],
+      };
+    }
     const joined = args.join(" ").toLowerCase();
     const isError =
       joined.includes("fail") ||
@@ -1970,6 +2102,12 @@ export const mockBackend: Backend = {
       operationId,
       180,
     );
+    emitOperation({
+      operationId,
+      type: "completed",
+      message: String(isError ? 1 : 0),
+      timestamp: new Date().toISOString(),
+    });
     return {
       operationId,
       exitCode: isError ? 1 : 0,
@@ -1993,6 +2131,9 @@ export const mockBackend: Backend = {
   },
   async cancelOperation(operationId) {
     mockCancelledOperations.add(operationId);
+  },
+  async cancelAllOperations() {
+    mockActiveOperations.forEach((id) => mockCancelledOperations.add(id));
   },
   async globalSearch(query) {
     if (
@@ -2251,14 +2392,14 @@ export const mockBackend: Backend = {
     if (
       query.users.length > 16 ||
       query.clients.length > 16 ||
-      query.jobs.length > 16
+      (query.jobs ?? []).length > 16
     )
       throw new Error("Too many submitted query filters.");
     const from = Date.parse(query.from);
     const to = Date.parse(query.to);
     if (!Number.isFinite(from) || !Number.isFinite(to) || from > to)
       throw new Error("Submitted query time range is invalid.");
-    if (query.jobs.length && query.hasJob === false)
+    if ((query.jobs ?? []).length && query.hasJob === false)
       throw new Error("A Job filter cannot be combined with hasJob=false.");
     const signature = submittedQuerySignature(query);
     const upperChangeId = query.cursor
@@ -2274,7 +2415,17 @@ export const mockBackend: Backend = {
         return false;
       if (query.clients.length && !query.clients.includes(change.client))
         return false;
-      if (query.stream && change.stream !== query.stream) return false;
+      const selectedStreams = [
+        ...new Set([
+          ...(query.streams ?? []),
+          ...(query.stream ? [query.stream] : []),
+        ]),
+      ];
+      if (
+        selectedStreams.length &&
+        !selectedStreams.includes(change.stream ?? "")
+      )
+        return false;
       const depotPath = `//atlas/${change.stream?.split("/").pop() ?? "main"}/mock/${change.id}.txt`;
       if (
         query.depotPath &&
@@ -2286,8 +2437,8 @@ export const mockBackend: Backend = {
       if (query.hasJob != null && Boolean(change.jobs.length) !== query.hasJob)
         return false;
       if (
-        query.jobs.length &&
-        !query.jobs.some((job) => change.jobs.includes(job))
+        (query.jobs ?? []).length &&
+        !(query.jobs ?? []).some((job) => change.jobs.includes(job))
       )
         return false;
       if (
@@ -2445,28 +2596,41 @@ export const mockBackend: Backend = {
     operationSubscribers.add(callback);
     return () => operationSubscribers.delete(callback);
   },
-  async listWorkspaceChildren(path, _refresh, _operationId) {
+  async listWorkspaceChildren(path, _refresh, _operationId, localOnly) {
     return {
-      items: mockWorkspace.map((node) =>
-        path
-          ? {
-              ...node,
-              id: `${path}-${node.id}`,
-              relativePath:
-                `${path.replace(/^\/workspace\/atlas\/?/, "")}/${node.name}`.replace(
-                  /^\//,
-                  "",
-                ),
-              absolutePath: `${path.startsWith("/") ? path : `/workspace/atlas/${path}`}/${node.name}`,
-            }
-          : node,
-      ),
+      items: mockWorkspace
+        .map((node) =>
+          path
+            ? {
+                ...node,
+                id: `${path}-${node.id}`,
+                relativePath:
+                  `${path.replace(/^\/workspace\/atlas\/?/, "")}/${node.name}`.replace(
+                    /^\//,
+                    "",
+                  ),
+                absolutePath: `${path.startsWith("/") ? path : `/workspace/atlas/${path}`}/${node.name}`,
+              }
+            : node,
+        )
+        .map((node) =>
+          localOnly
+            ? {
+                ...node,
+                state: "loading" as const,
+                depotPath: undefined,
+                revision: undefined,
+                headRevision: undefined,
+                status: undefined,
+              }
+            : node,
+        ),
       completeness: "complete",
       errors: [],
       operationIds: [],
       truncated: false,
       safetyLimit: 10_000,
-      cacheFreshness: "fresh",
+      cacheFreshness: localOnly ? "local" : "fresh",
     };
   },
   async listDepotChildren(path = "//atlas/main") {
@@ -2514,6 +2678,8 @@ export const mockBackend: Backend = {
       throw new Error(
         "Rename/move must use preflightRenameMove and confirmRenameMove",
       );
+    if (request.action === "undo")
+      throw new Error("Undo must use previewUndo and confirmUndo");
     if ((request.action as string) === "submit")
       throw new Error("Submit must use preflightSubmit and confirmSubmit");
     if (["shelve", "resolve", "lock", "unlock"].includes(request.action))
@@ -2534,14 +2700,30 @@ export const mockBackend: Backend = {
       operationId,
       type,
       progress,
+      message:
+        type === "queued" || type === "started"
+          ? `p4 ${request.action}`
+          : undefined,
       timestamp: new Date().toISOString(),
     });
+    const checkCancellation = () => {
+      if (!mockCancelledOperations.delete(operationId)) return;
+      emitOperation({
+        operationId,
+        type: "cancelled",
+        timestamp: new Date().toISOString(),
+      });
+      throw new Error("Mock P4 operation was cancelled.");
+    };
     emitOperation(event("queued", 0));
     await new Promise((resolve) => setTimeout(resolve, 30));
+    checkCancellation();
     emitOperation(event("started", 2));
     await new Promise((resolve) => setTimeout(resolve, 45));
+    checkCancellation();
     emitOperation(event("progress", 55));
     await new Promise((resolve) => setTimeout(resolve, 45));
+    checkCancellation();
     emitOperation(event("completed", 100));
     emitMockLog(
       "info",
@@ -2952,6 +3134,14 @@ export const mockBackend: Backend = {
       refresh,
     };
   },
+  async previewUndo() {
+    throw new Error(
+      "Demo backend cannot preview real revision Undo. Use a verified local fixture for integration testing.",
+    );
+  },
+  async confirmUndo() {
+    throw new Error("Demo backend cannot execute revision Undo.");
+  },
   async previewSync(request) {
     const operationId = request.operationId ?? crypto.randomUUID();
     const target: import("../../shared/contracts/types").SyncTargetSnapshot = {
@@ -3150,8 +3340,11 @@ export const mockBackend: Backend = {
       partial: false,
       stats: { additions: 2, deletions: 1, hunks: 1 },
       operationIds: [request.operationId ?? "mock-diff"],
+      leftText: "export const quality = 'high';\nconst cache = false;\n",
+      rightText:
+        "export const quality = 'high';\nconst cache = true;\nconst virtualized = true;\n",
       unified:
-        "@@ -1,4 +1,5 @@\n export const quality = 'high';\n-const cache = false;\n+const cache = true;\n+const virtualized = true;",
+        "@@ -1,2 +1,3 @@\n export const quality = 'high';\n-const cache = false;\n+const cache = true;\n+const virtualized = true;\n",
     };
   },
   async getFileHistory(request) {

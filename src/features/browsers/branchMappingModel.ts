@@ -5,6 +5,49 @@ import type {
   BranchViewModifier,
 } from "../../shared/contracts/types";
 
+/** Validate persisted list rows before rendering or merging another page. */
+export function isBranchMappingSnapshot(
+  value: unknown,
+): value is BranchMappingPage {
+  const page = value as BranchMappingPage | undefined;
+  return (
+    !!page &&
+    Number.isSafeInteger(page.requestGeneration) &&
+    !!page.scope &&
+    Number.isSafeInteger(page.scope.contextGeneration) &&
+    ["server", "user", "client"].every(
+      (field) =>
+        typeof page.scope[field as keyof typeof page.scope] === "string",
+    ) &&
+    Array.isArray(page.items) &&
+    page.items.every(
+      (item) =>
+        !!item &&
+        typeof item.name === "string" &&
+        ["owner", "update", "access", "description", "options"].every(
+          (field) =>
+            item[field as keyof typeof item] === undefined ||
+            typeof item[field as keyof typeof item] === "string",
+        ),
+    ) &&
+    Array.isArray(page.operationIds) &&
+    page.operationIds.every((id) => typeof id === "string") &&
+    [page.hasMore, page.partial, page.truncated, page.simulated].every(
+      (flag) => typeof flag === "boolean",
+    ) &&
+    !!page.stats &&
+    [
+      "scannedCount",
+      "matchedCount",
+      "returnedCount",
+      "invalidRecordCount",
+      "safetyLimit",
+    ].every((field) =>
+      Number.isFinite(page.stats[field as keyof typeof page.stats]),
+    )
+  );
+}
+
 export interface BranchViewLineIssue {
   index: number;
   messages: string[];

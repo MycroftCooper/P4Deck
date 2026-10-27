@@ -44,8 +44,9 @@
   --panel-3: #28332e;
   --border: #2b3630;
   --text: #e1eae5;
-  --muted: #9aaea2;
-  --faint: #75887d;
+  --muted: #b4c4ba;
+  --faint: #a0b2a6;
+  --disabled-opacity: 0.65;
   --accent: #88d6b0;
   --on-accent: #14211b;
   --accent-soft: #243d31;
@@ -56,4 +57,11 @@
   --danger: #ed9990;
   --terminal: #111713;
   --shadow: #00000030;
+}
+
+/* Explicit opacity avoids the browser dimming already-secondary placeholder text. */
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
 }

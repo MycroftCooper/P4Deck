@@ -5,6 +5,23 @@ import type {
 import { pathKey } from "./address";
 import { nodeKey } from "./selection";
 
+/**
+ * P4 usually reports depot paths, while Workspace cache keys use local paths.
+ * Add the selected nodes' local aliases so scoped invalidation reaches both.
+ */
+export function affectedPathAliases(
+  affectedPaths: readonly string[] | undefined,
+  nodes: readonly WorkspaceNode[],
+) {
+  if (!affectedPaths?.length) return affectedPaths;
+  const paths = new Set(affectedPaths);
+  for (const node of nodes) {
+    if (node.depotPath) paths.add(node.depotPath);
+    if (node.absolutePath) paths.add(node.absolutePath);
+  }
+  return [...paths];
+}
+
 /** Collapse child targets covered by an explicitly selected ancestor, using both path namespaces. */
 export function compactTargets(nodes: WorkspaceNode[]) {
   const unique = [...new Map(nodes.map((n) => [nodeKey(n), n])).values()];
@@ -58,9 +75,16 @@ function filespec(node: WorkspaceNode, localOnly = false) {
 }
 export function selectionRequest(
   action:
-    "getLatest" | "getRevision" | "checkout" | "add" | "delete" | "revert",
+    | "getLatest"
+    | "getRevision"
+    | "checkout"
+    | "add"
+    | "delete"
+    | "revert"
+    | "revertUnchanged",
   nodes: WorkspaceNode[],
   operationId?: string,
+  wholeChangelistId?: number,
 ): FileActionRequest {
   const targets = compactTargets(nodes);
   if (!targets.length) throw new Error("No selected targets");
@@ -79,5 +103,15 @@ export function selectionRequest(
         : filespec(n, recursiveAdd),
     ),
     states: targets.map((n) => n.state),
+    ...(action === "revert" && wholeChangelistId !== undefined
+      ? {
+          changelistId: wholeChangelistId,
+          revertWholeChangelist: true,
+        }
+      : action === "revertUnchanged" &&
+          targets[0].changelistId !== undefined &&
+          targets.every((n) => n.changelistId === targets[0].changelistId)
+        ? { changelistId: targets[0].changelistId }
+        : {}),
   };
 }

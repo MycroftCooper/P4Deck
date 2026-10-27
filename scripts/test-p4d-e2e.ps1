@@ -95,24 +95,17 @@ if ($missingPrerequisites.Count -gt 0) {
 }
 
 function Test-FixturePort {
-    $socket = [Net.Sockets.TcpClient]::new()
-    try {
-        $task = $socket.ConnectAsync("127.0.0.1", 16661)
-        return $task.Wait(300) -and $socket.Connected
-    }
-    catch {
-        return $false
-    }
-    finally {
-        $socket.Dispose()
-    }
+    # Cleanup bookkeeping only. The fixture script verifies ownership before
+    # any P4 call. A denied OS query must stop this wrapper, never mean stopped.
+    $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object LocalPort -EQ 16661)
+    return $listeners.Count -gt 0
 }
 
 $environmentNames = @(
     "P4PORT", "P4USER", "P4CLIENT", "P4CHARSET", "P4CONFIG", "P4TICKETS", "P4TRUST",
     "P4ENVIRO", "P4PASSWD", "P4DECK_E2E", "P4DECK_E2E_P4", "P4DECK_E2E_SERVER",
     "P4DECK_E2E_USER", "P4DECK_E2E_CLIENT", "P4DECK_E2E_TICKETS", "P4DECK_E2E_TRUST",
-    "P4DECK_E2E_ROOT"
+    "P4DECK_E2E_ROOT", "RUST_MIN_STACK"
 )
 $previous = @{}
 foreach ($name in $environmentNames) {
@@ -149,6 +142,9 @@ try {
     $env:P4DECK_E2E_TICKETS = $Tickets
     $env:P4DECK_E2E_TRUST = $Trust
     $env:P4DECK_E2E_ROOT = $Workspace
+    # The fixture case is a large debug-build future. Windows' default test
+    # thread stack overflows while polling it, before any application assertion.
+    $env:RUST_MIN_STACK = "67108864"
 
     for ($run = 1; $run -le $Repeat; $run++) {
         Write-Host "BE-002 localhost application E2E run $run/$Repeat"

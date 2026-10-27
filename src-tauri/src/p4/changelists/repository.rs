@@ -41,6 +41,90 @@ impl ChangelistRepository {
         known_details: &HashMap<i64, SubmittedChangeDetail>,
         app: Option<&AppHandle>,
     ) -> Result<ClQueryResult, String> {
+        let query = normalize_query(query)?;
+        if query.streams.is_empty() {
+            return self
+                .query_single(context, query, connection_generation, known_details, app)
+                .await;
+        }
+        let fingerprint = semantic_query_fingerprint(&query)?;
+        let connection = stable_query::fingerprint(&context)?;
+        let upper = query
+            .cursor
+            .as_deref()
+            .map(|cursor| {
+                stable_query::decode_change_cursor(
+                    cursor,
+                    &fingerprint,
+                    &connection,
+                    connection_generation,
+                )
+            })
+            .transpose()?;
+        let mut pages = Vec::new();
+        for stream in &query.streams {
+            let mut child = query.clone();
+            child.streams.clear();
+            child.stream = Some(stream.clone());
+            if child.depot_path.as_ref().is_some_and(|path| {
+                path.ends_with("...") && stream.starts_with(path.trim_end_matches("..."))
+            }) {
+                child.depot_path = None;
+            }
+            child.cursor = upper
+                .map(|bound| {
+                    stable_query::encode_change_cursor(
+                        bound,
+                        &semantic_query_fingerprint(&child)?,
+                        &connection,
+                        connection_generation,
+                    )
+                })
+                .transpose()?;
+            let page = self
+                .query_single(
+                    context.clone(),
+                    child,
+                    connection_generation,
+                    known_details,
+                    app,
+                )
+                .await?;
+            if page.stats.truncated_by_safety_limit {
+                return Err("Stream union scan is incomplete; narrow the date range or stream selection before retrying.".into());
+            }
+            pages.push(page);
+        }
+        let mut result = merge_stream_pages(pages, query.page_size, query.request_generation);
+        if result.has_more {
+            let bound = result
+                .items
+                .last()
+                .and_then(|item| item.id.checked_sub(1))
+                .filter(|id| *id > 0);
+            result.next_cursor = bound
+                .map(|bound| {
+                    stable_query::encode_change_cursor(
+                        bound,
+                        &fingerprint,
+                        &connection,
+                        connection_generation,
+                    )
+                })
+                .transpose()?;
+            result.has_more = result.next_cursor.is_some();
+        }
+        Ok(result)
+    }
+
+    async fn query_single(
+        &self,
+        context: P4Context,
+        query: ClQuery,
+        connection_generation: u64,
+        known_details: &HashMap<i64, SubmittedChangeDetail>,
+        app: Option<&AppHandle>,
+    ) -> Result<ClQueryResult, String> {
         const MAX_SCAN: usize = 5_000;
         const MAX_FIXES: usize = 5_000;
         let query = normalize_query(query)?;
@@ -273,36 +357,47 @@ impl ChangelistRepository {
         operation_id: Option<String>,
         app: Option<&AppHandle>,
     ) -> Result<PendingScan, String> {
+        let _group = operation_id
+            .as_ref()
+            .map(|id| self.runner.begin_operation_group(id.clone()));
+        let child_operation = |step: &str| operation_id.as_ref().map(|id| format!("{id}:{step}"));
         let pending_invocation = match limits {
             Some((max_changes, _)) => {
                 command::pending_changes_bounded_invocation(&context, max_changes + 1)?
             }
             None => command::pending_changes_invocation(&context)?,
         };
-        let pending = self
-            .run(&context, pending_invocation, operation_id.clone(), app)
-            .await?;
         let opened_invocation = match limits {
             Some((_, max_files)) => command::opened_bounded_invocation(&context, max_files + 1)?,
             None => command::opened_invocation(&context)?,
         };
-        let opened = self
-            .run_allow_empty_opened_with_operation(
-                &context,
-                opened_invocation,
-                operation_id.clone(),
-                app,
-            )
-            .await?;
         let shelved_invocation = match limits {
             Some((max_changes, _)) => {
                 command::shelved_changes_bounded_invocation(&context, max_changes + 1)?
             }
             None => command::shelved_changes_invocation(&context)?,
         };
-        let shelved = self
-            .run(&context, shelved_invocation, operation_id.clone(), app)
-            .await?;
+        let (pending, opened, shelved) = tokio::join!(
+            self.run(
+                &context,
+                pending_invocation,
+                child_operation("changes"),
+                app
+            ),
+            self.run_allow_empty_opened_with_operation(
+                &context,
+                opened_invocation,
+                child_operation("opened"),
+                app,
+            ),
+            self.run(
+                &context,
+                shelved_invocation,
+                child_operation("shelves"),
+                app
+            ),
+        );
+        let (pending, opened, shelved) = (pending?, opened?, shelved?);
 
         let mut parsed_changes = parser::parse_pending_changes(
             &pending.events,
@@ -373,29 +468,33 @@ impl ChangelistRepository {
             .copied()
             .filter(|id| *id > 0)
             .collect::<Vec<_>>();
-        for change_id in numbered_ids {
+        for (index, batch) in numbered_ids.chunks(100).enumerate() {
             let result = self
                 .run(
                     &context,
-                    command::change_spec_invocation(change_id)?,
-                    operation_id.clone(),
+                    command::pending_metadata_invocation(batch)?,
+                    child_operation(&format!("metadata-{index}")),
                     app,
                 )
                 .await?;
-            let spec = parser::parse_change_spec(&result.events)
-                .ok_or_else(|| format!("p4 change -o {change_id} returned no specification"))?;
-            if spec.id != change_id
-                || spec.user != context.user
-                || spec.client != context.client
-                || spec.status != "pending"
-            {
-                return Err(format!(
-                    "changelist {change_id} is outside the current user/client scope"
-                ));
-            }
-            if let Some(change) = changes.get_mut(&change_id) {
-                change.description = spec.description;
-                change.jobs = spec.jobs;
+            let mut metadata = parser::parse_pending_metadata(&result.events);
+            for change_id in batch {
+                let spec = metadata
+                    .remove(change_id)
+                    .ok_or_else(|| format!("p4 describe omitted changelist {change_id}"))?;
+                if spec.id != *change_id
+                    || spec.user != context.user
+                    || spec.client != context.client
+                    || spec.status != "pending"
+                {
+                    return Err(format!(
+                        "changelist {change_id} is outside the current user/client scope"
+                    ));
+                }
+                if let Some(change) = changes.get_mut(change_id) {
+                    change.description = spec.description;
+                    change.jobs = spec.jobs;
+                }
             }
         }
 
@@ -427,7 +526,7 @@ impl ChangelistRepository {
                 .run(
                     &context,
                     command::describe_shelves_invocation(&shelved_ids)?,
-                    operation_id.clone(),
+                    child_operation("describe-shelves"),
                     app,
                 )
                 .await?;
@@ -736,6 +835,41 @@ impl ChangelistRepository {
     }
 }
 
+// Every branch supplies its newest page. Sort/dedup BEFORE truncation; the union
+// cursor resumes below the last emitted CL, never below a branch's fetched tail.
+fn merge_stream_pages(
+    pages: Vec<ClQueryResult>,
+    page_size: usize,
+    generation: u64,
+) -> ClQueryResult {
+    let mut items = Vec::new();
+    let mut scanned = 0;
+    let mut hidden = 0;
+    let mut more = false;
+    for page in pages {
+        scanned += page.stats.scanned_count;
+        hidden += page.stats.hidden_reliable_merge_count;
+        more |= page.has_more;
+        items.extend(page.items);
+    }
+    items.sort_by_key(|item| std::cmp::Reverse(item.id));
+    items.dedup_by_key(|item| item.id);
+    more |= items.len() > page_size;
+    items.truncate(page_size);
+    ClQueryResult {
+        request_generation: generation,
+        stats: ClQueryStats {
+            scanned_count: scanned,
+            matched_count: items.len(),
+            hidden_reliable_merge_count: hidden,
+            truncated_by_safety_limit: false,
+        },
+        items,
+        has_more: more,
+        next_cursor: None,
+    }
+}
+
 pub(crate) fn normalize_query(mut query: ClQuery) -> Result<ClQuery, String> {
     if query.operation_id.trim().is_empty()
         || query.operation_id.len() > 128
@@ -772,6 +906,37 @@ pub(crate) fn normalize_query(mut query: ClQuery) -> Result<ClQuery, String> {
     }
     if !query.jobs.is_empty() && query.has_job == Some(false) {
         return Err("a Job filter cannot be combined with hasJob=false".into());
+    }
+    query.streams = normalize_tokens(query.streams, "stream", 16)?
+        .into_iter()
+        .map(|value| value.trim_end_matches('/').to_owned())
+        .collect();
+    if !query.streams.is_empty() {
+        if let Some(stream) = query.stream.take() {
+            query.streams.push(stream.trim_end_matches('/').to_owned());
+        }
+        query.streams.sort();
+        query.streams.dedup();
+        if query.streams.len() > 16 {
+            return Err("At most 16 streams may be selected.".into());
+        }
+        for stream in &query.streams {
+            let mut check = query.clone();
+            check.stream = Some(stream.clone());
+            check.depot_path = None;
+            command::query_invocation(&check, 1, None)?;
+        }
+        if let Some(path) = &query.depot_path {
+            let prefix = path.strip_suffix("...");
+            query.streams.retain(|stream| {
+                path == stream
+                    || path.starts_with(&format!("{stream}/"))
+                    || prefix.is_some_and(|prefix| stream.starts_with(prefix))
+            });
+            if query.streams.is_empty() {
+                return Err("Depot path does not intersect the selected streams.".into());
+            }
+        }
     }
     // Force validation before any cursor content can affect a command boundary.
     command::query_invocation(&query, 1, None)?;
@@ -813,6 +978,7 @@ pub(crate) fn semantic_query_fingerprint(query: &ClQuery) -> Result<String, Stri
         "clients": query.clients,
         "depotPath": query.depot_path,
         "stream": query.stream,
+        "streams": query.streams,
         "from": query.from,
         "to": query.to,
         "jobs": query.jobs,
@@ -878,6 +1044,112 @@ fn event_text(result: &OperationResult) -> String {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    #[ignore = "read-only regression; requires explicit isolated fixture contexts"]
+    async fn fixture_pending_metadata_batches_match_change_specs() {
+        use crate::persistence::{log_store::LogStore, operation_journal::OperationJournal};
+        let contexts: Vec<P4Context> = serde_json::from_str(
+            &std::env::var("P4DECK_PENDING_PROBE_CONTEXTS")
+                .expect("explicit fixture contexts required"),
+        )
+        .unwrap();
+        assert!(!contexts.is_empty());
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../artifacts/qa-20261021")
+            .join(format!("pending-read-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("probe.sqlite")).unwrap());
+        let runner = Arc::new(P4Runner::new(
+            logs.clone(),
+            Arc::new(OperationJournal::open(&directory.join("journal.sqlite")).unwrap()),
+        ));
+        let repository = ChangelistRepository::new(runner);
+        for (index, context) in contexts.iter().enumerate() {
+            assert_eq!(context.server, "127.0.0.1:16661");
+            assert!(context.client.starts_with("p4deck-"));
+            let operation = format!("pending-batch-probe-{index}");
+            let started = std::time::Instant::now();
+            let scan = repository
+                .query_pending_bounded(context.clone(), 500, 100_000, Some(operation.clone()), None)
+                .await
+                .unwrap();
+            assert!(!scan.truncated_by_safety_limit);
+            let numbered = scan
+                .changes
+                .iter()
+                .filter(|change| change.id > 0)
+                .collect::<Vec<_>>();
+            let calls = logs.query(&LogQuery {
+                limit: Some(500),
+                ..Default::default()
+            });
+            let metadata_calls = calls
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .operation_id
+                        .starts_with(&format!("{operation}:metadata-"))
+                })
+                .map(|entry| &entry.operation_id)
+                .collect::<HashSet<_>>();
+            assert_eq!(metadata_calls.len(), numbered.len().div_ceil(100));
+            assert!(calls
+                .iter()
+                .filter(|entry| entry.operation_id.starts_with(&operation))
+                .all(|entry| !entry.command.starts_with("change ")));
+            for change in numbered {
+                assert_eq!(change.user, context.user);
+                assert_eq!(change.client, context.client);
+                let reference = repository
+                    .run(
+                        context,
+                        command::P4Invocation {
+                            command: "change",
+                            args: vec!["-o".into(), change.id.to_string()],
+                            input: None,
+                        },
+                        None,
+                        None,
+                    )
+                    .await
+                    .unwrap();
+                let spec: serde_json::Value = reference
+                    .events
+                    .iter()
+                    .filter_map(|event| event.message.as_deref())
+                    .filter_map(|message| serde_json::from_str::<serde_json::Value>(message).ok())
+                    .find(|value| value.get("Change").is_some())
+                    .expect("change spec");
+                assert_eq!(
+                    change.description,
+                    spec["Description"]
+                        .as_str()
+                        .unwrap()
+                        .replace("\r\n", "\n")
+                        .trim_end_matches('\n')
+                );
+                let mut jobs = Vec::new();
+                for index in 0.. {
+                    let Some(job) = spec
+                        .get(format!("Jobs{index}"))
+                        .and_then(|value| value.as_str())
+                    else {
+                        break;
+                    };
+                    jobs.push(job.to_owned());
+                }
+                assert_eq!(change.jobs, jobs);
+            }
+            println!(
+                "{}: {} CLs, {} metadata batches, {} ms",
+                context.client,
+                scan.changes.len(),
+                metadata_calls.len(),
+                started.elapsed().as_millis()
+            );
+        }
+    }
+
     fn query() -> ClQuery {
         ClQuery {
             operation_id: "submitted-query".into(),
@@ -887,6 +1159,7 @@ mod tests {
             clients: Vec::new(),
             depot_path: Some("//depot/main/...".into()),
             stream: Some("//depot/main".into()),
+            streams: Vec::new(),
             from: "2026-10-01T00:00:00Z".into(),
             to: "2026-10-09T00:00:00Z".into(),
             jobs: Vec::new(),
@@ -896,6 +1169,63 @@ mod tests {
             page_size: 50,
             cursor: None,
         }
+    }
+
+    #[test]
+    fn stream_union_normalizes_and_binds_cursor_scope() {
+        let mut value = query();
+        value.depot_path = None;
+        value.stream = None;
+        value.streams = vec!["//d/dev".into(), "//d/main/".into(), "//d/main".into()];
+        let normalized = normalize_query(value).unwrap();
+        assert_eq!(normalized.streams, ["//d/dev", "//d/main"]);
+        let fingerprint = semantic_query_fingerprint(&normalized).unwrap();
+        let mut changed = normalized.clone();
+        changed.streams.pop();
+        assert_ne!(fingerprint, semantic_query_fingerprint(&changed).unwrap());
+        changed.streams = vec!["//d/main#4".into()];
+        assert!(normalize_query(changed).is_err());
+    }
+
+    #[test]
+    fn stream_union_merges_interleaved_pages_without_skipping_or_duplicates() {
+        fn page(ids: &[i64], more: bool) -> ClQueryResult {
+            let items = ids.iter().map(|id| serde_json::from_value(serde_json::json!({
+                "id":id,"description":"test","user":"alice","client":"test","status":"submitted",
+                "time":"2026-10-27T00:00:00Z","fileCount":0,"hasShelf":false,"jobs":[],"mergeClassification":"unknown"
+            })).unwrap()).collect();
+            ClQueryResult {
+                request_generation: 1,
+                items,
+                has_more: more,
+                next_cursor: None,
+                stats: ClQueryStats {
+                    scanned_count: ids.len(),
+                    matched_count: ids.len(),
+                    hidden_reliable_merge_count: 0,
+                    truncated_by_safety_limit: false,
+                },
+            }
+        }
+        let first = merge_stream_pages(
+            vec![page(&[100, 70, 40], true), page(&[90, 80, 70], true)],
+            3,
+            1,
+        );
+        assert_eq!(
+            first.items.iter().map(|row| row.id).collect::<Vec<_>>(),
+            [100, 90, 80]
+        );
+        assert!(first.has_more);
+        let bound = first.items.last().unwrap().id - 1;
+        assert_eq!(bound, 79);
+        let second = merge_stream_pages(vec![page(&[70, 40], false), page(&[70, 60], false)], 3, 1);
+        assert_eq!(
+            second.items.iter().map(|row| row.id).collect::<Vec<_>>(),
+            [70, 60, 40]
+        );
+        assert!(!second.has_more);
+        assert_eq!(second.stats.matched_count, 3);
     }
 
     #[test]

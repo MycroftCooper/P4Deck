@@ -7,6 +7,11 @@ import type {
 import type { Backend } from "./contract";
 
 export const tauriBackend: Backend = {
+  createConfigBackup: (request) => invoke("create_config_backup", { request }),
+  listConfigBackups: () => invoke("list_config_backups"),
+  restoreConfigBackup: (request) =>
+    invoke("restore_config_backup", { request }),
+  openConfigBackupsFolder: () => invoke("open_config_backups_folder"),
   statusCacheDiagnostics: () => invoke("status_cache_diagnostics"),
   queryOperationJournal: (query) =>
     invoke("query_operation_journal", { query }),
@@ -15,6 +20,9 @@ export const tauriBackend: Backend = {
   queryLogPage: (query) => invoke("query_log_page", { query }),
   getLogPolicy: () => invoke("get_log_policy"),
   setLogPolicy: (policy) => invoke("set_log_policy", { policy }),
+  openLogsFolder: () => invoke("open_logs_folder"),
+  deleteAllLogs: () => invoke("delete_all_logs"),
+  subscribeLogsCleared: (callback) => listen("logs-cleared", callback),
   exportDiagnostics: (request) => invoke("export_diagnostics", { request }),
   subscribeDiagnosticAlerts: (callback) =>
     listen<DiagnosticAlert>("diagnostic-alert", (event) =>
@@ -68,8 +76,10 @@ export const tauriBackend: Backend = {
   switchWorkspace: (request) => invoke("switch_workspace", { request }),
   saveConnection: (context) => invoke("save_connection", { context }),
   runtimeInfo: () => invoke("runtime_info"),
+  inspectP4Vfs: (request) => invoke("inspect_p4vfs", { request }),
   runP4: (request) => invoke("run_p4", { request }),
   cancelOperation: (operationId) => invoke("cancel_operation", { operationId }),
+  cancelAllOperations: () => invoke("cancel_all_operations"),
   globalSearch: (query) => invoke("global_search", { query }),
   queryChangelists: (query) => invoke("query_changelists", { query }),
   getSubmittedChangeDetail: (request) =>
@@ -80,8 +90,13 @@ export const tauriBackend: Backend = {
     listen<OperationEvent>("operation-event", (event) =>
       callback(event.payload),
     ),
-  listWorkspaceChildren: (path, refresh, operationId) =>
-    invoke("list_workspace_children", { path, refresh, operationId }),
+  listWorkspaceChildren: (path, refresh, operationId, localOnly) =>
+    invoke("list_workspace_children", {
+      path,
+      refresh,
+      operationId,
+      localOnly,
+    }),
   listDepotChildren: (path) => invoke("list_depot_children", { path }),
   resolvePath: (request) => invoke("resolve_path", { request }),
   openLocalPath: (request) => invoke("open_local_path", { request }),
@@ -95,6 +110,8 @@ export const tauriBackend: Backend = {
     invoke("preflight_rename_move", { request }),
   confirmRenameMove: (confirmation) =>
     invoke("confirm_rename_move", { confirmation }),
+  previewUndo: (request) => invoke("preview_undo", { request }),
+  confirmUndo: (confirmation) => invoke("confirm_undo", { confirmation }),
   previewSync: (request) => invoke("preview_sync", { request }),
   confirmSync: (confirmation) => invoke("confirm_sync", { confirmation }),
   getFilePreview: (path) => invoke("get_file_preview", { path }),

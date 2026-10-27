@@ -333,16 +333,26 @@ pub fn parse_pending_changes(
         .collect()
 }
 
-pub fn parse_change_spec(events: &[OperationEvent]) -> Option<PendingChangeSpec> {
-    let value = json_values(events).into_iter().next()?;
-    Some(PendingChangeSpec {
-        id: number_option(&value, "Change")?,
-        description: normalized_multiline(&text(&value, "Description")),
-        user: text(&value, "User"),
-        client: text(&value, "Client"),
-        status: text(&value, "Status"),
-        jobs: indexed_text(&value, "Jobs"),
-    })
+pub fn parse_pending_metadata(
+    events: &[OperationEvent],
+) -> std::collections::HashMap<i64, PendingChangeSpec> {
+    json_values(events)
+        .into_iter()
+        .filter_map(|value| {
+            let id = number_option(&value, "change")?;
+            Some((
+                id,
+                PendingChangeSpec {
+                    id,
+                    description: normalized_multiline(&text(&value, "desc")),
+                    user: text(&value, "user"),
+                    client: text(&value, "client"),
+                    status: text(&value, "status"),
+                    jobs: indexed_text(&value, "job"),
+                },
+            ))
+        })
+        .collect()
 }
 
 pub fn parse_opened_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)> {
@@ -564,6 +574,27 @@ mod tests {
     }
 
     #[test]
+    fn submitted_summary_preserves_full_report_source() {
+        let description = format!(
+            "[CODE][DOC] {}\n第二行完整内容\n--> Task [project:story:123]\n提交人: original",
+            "x".repeat(350)
+        );
+        let raw = serde_json::json!({
+            "change":"4242", "status":"submitted", "user":"alice",
+            "client":"alice_v2d1", "desc":description, "time":"1700000000"
+        })
+        .to_string();
+        let rows = parse_change_events(&[event(&raw)]);
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.id, 4242);
+        assert_eq!(row.description, description);
+        assert_eq!(row.user, "alice");
+        assert_eq!(row.client, "alice_v2d1");
+        assert_eq!(row.time, "2023-11-14T22:13:20+00:00");
+    }
+
+    #[test]
     fn summary_text_can_only_raise_suspicion() {
         assert_eq!(
             classify_summary("Merge dev"),
@@ -667,5 +698,28 @@ mod tests {
         assert_eq!(parsed[0].0, 42);
         assert_eq!(parsed[0].1.state.as_deref(), Some("openedEdit"));
         assert_eq!(parsed[0].1.revision, Some(3));
+    }
+
+    #[test]
+    fn batched_pending_metadata_preserves_full_descriptions_jobs_and_scope() {
+        let events = [
+            event(
+                r#"{"change":"41","status":"pending","user":"alice","client":"ws","desc":"Line one\nJobs:\nChange: still description\n","job0":"JOB-A","job1":"JOB-B"}"#,
+            ),
+            event(
+                r#"{"change":"42","status":"pending","user":"alice","client":"other","desc":"Other workspace\n"}"#,
+            ),
+            event(r#"{"code":"error","data":"not found"}"#),
+        ];
+        let metadata = parse_pending_metadata(&events);
+        assert_eq!(metadata.len(), 2);
+        assert_eq!(
+            metadata[&41].description,
+            "Line one\nJobs:\nChange: still description"
+        );
+        assert_eq!(metadata[&41].jobs, ["JOB-A", "JOB-B"]);
+        assert_eq!(metadata[&41].user, "alice");
+        assert_eq!(metadata[&41].client, "ws");
+        assert_eq!(metadata[&42].client, "other");
     }
 }

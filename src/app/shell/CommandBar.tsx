@@ -1,8 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useChangeDetails } from "../../features/changelists/components/ChangeDetailsDialog";
+import { historyDiffTarget } from "./commandPolicy";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { fileActionFeedback } from "./fileActionFeedback";
-import { useCommandDialogs } from "../dialogs/useCommandDialogs";
+import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
+import {
+  cachedPendingChanges,
+  pendingSnapshotKey,
+} from "../../features/changelists/pendingCache";
+import { invalidateData } from "../../shared/cache/dataEffects";
+import { isFresh } from "../../shared/cache/snapshots";
+import { commandActions } from "../actions/actionCatalog";
+import {
+  refreshFileLockFacts,
+  useCommandDialogs,
+} from "../dialogs/useCommandDialogs";
 import type { OperationConfirmation } from "../dialogs/OperationConfirmDialog";
 import {
+  Settings,
   ArrowRight,
   AlertCircle,
   Check,
@@ -20,14 +34,16 @@ import {
   RefreshCw,
   RotateCcw,
   Send,
-  Square,
   SquarePen,
   AppWindow,
   Columns2,
   LockKeyhole,
   LockKeyholeOpen,
 } from "lucide-react";
-import { selectionRequest } from "../../features/files/selectionCommands";
+import {
+  affectedPathAliases,
+  selectionRequest,
+} from "../../features/files/selectionCommands";
 import { resolveSelection } from "../../features/files/resolveSelection";
 import { nodeKey } from "../../features/files/selection";
 import { backend } from "../../infrastructure/backend";
@@ -81,10 +97,12 @@ const groups: {
     { id: "reveal", icon: FolderOpen, zh: "系统中定位", en: "Reveal" },
     { id: "openWith", icon: AppWindow, zh: "其他软件打开", en: "Open with…" },
   ],
-  [{ id: "cancel", icon: Square, zh: "取消", en: "Cancel" }],
 ];
 interface Props {
+  navigationActions?: ReactNode;
+  settingsActive?: boolean;
   onBusyChange(value: boolean): void;
+  onOpenOperations(): void;
   registerCommand(
     handler:
       | ((id: CommandId, target?: CommandTarget, source?: HTMLElement) => void)
@@ -97,9 +115,12 @@ interface Props {
   targetError: string;
   onNavigate(node: WorkspaceNode): void;
   onFocus(target: CommandTarget): void;
+  onHistoryDiff?(path: string, left: number, right: number): void;
   onReview(page: FilePageId, node: WorkspaceNode): void;
 }
 export function CommandBar({
+  navigationActions,
+  settingsActive,
   zh,
   runtime,
   connectionKey,
@@ -108,21 +129,25 @@ export function CommandBar({
   onNavigate,
   onFocus,
   onReview,
+  onHistoryDiff,
   registerCommand,
   onBusyChange,
+  onOpenOperations,
 }: Props) {
   const menu = useContextMenu();
+  const openChangeDetails = useChangeDetails();
   const { preferences, openPage } = useMenuEnvironment();
   const localCapabilities = useLocalPathCapabilities(
     target,
     runtime.mode === "tauri",
     connectionKey,
   );
-  const nodes = target.type === "file" ? (target.nodes ?? [target.node]) : [];
   const targetPath =
     target.type === "file"
       ? target.node.absolutePath || target.node.depotPath || ""
-      : "";
+      : target.type === "history"
+        ? target.path
+        : "";
   const targetKey = commandTargetKey(target);
   const [address, setAddress] = useState(targetPath);
   const [error, setError] = useState("");
@@ -188,8 +213,6 @@ export function CommandBar({
   }, [!!operation, dialogs.pending, onBusyChange]);
   useEffect(() => {
     setAddress(targetPath);
-    setNotice("");
-    setError("");
     navigation.current++;
     setLocating(false);
   }, [targetPath, targetKey]);
@@ -298,6 +321,11 @@ export function CommandBar({
       capabilities,
     );
     if (reason) throw new Error(reason);
+    if (id === "diff" && target.type === "history") {
+      const pair = historyDiffTarget(target);
+      if (pair) onHistoryDiff?.(pair.path, pair.left, pair.right);
+      return;
+    }
     if ((id === "moveFiles" || id === "shelve") && target.type === "file") {
       dialogs.open({
         kind: "fileCl",
@@ -390,7 +418,53 @@ export function CommandBar({
     }
     const actionEpoch = generation.current;
     const folders = nodes.some((n) => n.kind === "directory");
-    const mutation = ["checkout", "add", "delete", "revert"].includes(id);
+    let checkoutChangeId = 0;
+    if (id === "checkout" && !preferences.ui.checkoutUseDefault) {
+      const selectionKey = latest.current.targetKey;
+      // The picker opens from the Pending snapshot. P4 is read first only when
+      // there is no snapshot, or a stale one would skip the picker entirely.
+      let changes = await cachedPendingChanges(runtime);
+      const stale = !isFresh(pendingSnapshotKey(runtime));
+      if (!changes || (stale && !changes.some((change) => change.id > 0))) {
+        const queryOperationId = crypto.randomUUID();
+        running.current = queryOperationId;
+        setOperation({
+          id: queryOperationId,
+          label: zh ? "读取待提交 CL" : "Loading pending changelists",
+          cancellable: true,
+        });
+        try {
+          changes = await queryAllPendingChanges(queryOperationId);
+        } finally {
+          running.current = undefined;
+          setOperation(undefined);
+        }
+      }
+      if (
+        actionEpoch !== generation.current ||
+        latest.current.connectionKey !== connectionKey ||
+        latest.current.targetKey !== selectionKey
+      )
+        return;
+      if (changes.some((change) => change.id > 0)) {
+        const choice = await dialogs.checkout({
+          changes,
+          count: nodes.length,
+          recursive: folders,
+          source: source ?? (document.activeElement as HTMLElement | null),
+        });
+        if (
+          !choice ||
+          actionEpoch !== generation.current ||
+          latest.current.connectionKey !== connectionKey
+        )
+          return;
+        checkoutChangeId = choice.changelistId;
+        if (choice.alwaysUseDefault)
+          preferences.setUi((ui) => ({ ...ui, checkoutUseDefault: true }));
+      }
+    }
+    const mutation = ["add", "delete", "revert"].includes(id);
     if (
       ["delete", "revert"].includes(id) ||
       (mutation && (folders || nodes.length > 1))
@@ -417,49 +491,68 @@ export function CommandBar({
     const operationId = crypto.randomUUID();
     const epoch = generation.current;
     running.current = operationId;
-    const entry = groups.flat().find((item) => item.id === id) ?? {
-      zh: "获取指定版本",
-      en: "Get revision",
-    };
+    const entry =
+      groups.flat().find((item) => item.id === id) ??
+      (id === "revertUnchanged"
+        ? {
+            zh: "还原未更改",
+            en: "Revert unchanged",
+          }
+        : {
+            zh: "获取指定版本",
+            en: "Get revision",
+          });
     setOperation({
       id: operationId,
       label: zh ? entry.zh : entry.en,
       cancellable: id !== "refresh",
     });
     let completionMessage = zh ? "刷新完成" : "Refresh completed";
+    let affectedPaths: readonly string[] | undefined;
+    let feedbackCompleted = false;
     try {
       if (id !== "refresh") {
         if (
           target.type === "file" &&
-          ["checkout", "add", "delete", "revert"].includes(id)
+          ["checkout", "add", "delete", "revert", "revertUnchanged"].includes(
+            id,
+          )
         ) {
           const result = await backend.performFileAction({
             ...selectionRequest(
-              id as "checkout" | "add" | "delete" | "revert",
+              id as
+                "checkout" | "add" | "delete" | "revert" | "revertUnchanged",
               nodes,
               operationId,
+              id === "revert" ? target.wholeChangelistId : undefined,
             ),
+            ...(id === "checkout" ? { changelistId: checkoutChangeId } : {}),
           });
+          affectedPaths = affectedPathAliases(result.affectedPaths, nodes);
           const feedback = fileActionFeedback(result, zh);
           if (feedback.failed) throw new Error(feedback.message);
           completionMessage = feedback.message;
         }
       }
-      await workspaceCache.invalidateQueries({
-        queryKey: ["workspace-files", connectionKey],
-      });
-      await workspaceCache.invalidateQueries({
-        queryKey: ["depot-files", connectionKey],
-      });
-      window.dispatchEvent(new Event("p4deck:pending-refresh"));
-      if (epoch !== generation.current) return;
-      if (target.type === "file" && latest.current.targetKey === targetKey) {
-        try {
+      if (id === "refresh") await refreshFileLockFacts(connectionKey);
+
+      // The mutation is now confirmed. Return the toolbar to its idle state
+      // before cache invalidation and reconciliation, which are background work.
+      if (epoch === generation.current) setNotice(completionMessage);
+      running.current = undefined;
+      setOperation(undefined);
+      feedbackCompleted = true;
+      void (async () => {
+        await invalidateData(commandActions[id].effects, {
+          connectionKey,
+          affectedPaths,
+        });
+        if (epoch !== generation.current) return;
+        if (target.type === "file" && latest.current.targetKey === targetKey) {
           const updated = await resolveSelection(
             nodes,
             connectionKey,
             runtime.context.cwd,
-            true,
           );
           if (
             epoch === generation.current &&
@@ -472,30 +565,26 @@ export function CommandBar({
                 updated.at(-1)!,
               nodes: updated,
             });
-        } catch {
-          if (
-            epoch === generation.current &&
-            latest.current.targetKey === targetKey
-          )
-            onFocus({ type: "none" });
-        }
-      } else if (
-        target.type === "pending" &&
-        latest.current.targetKey === targetKey
-      )
-        onFocus({ type: "none" });
-      if (epoch === generation.current) setNotice(completionMessage);
+        } else if (
+          target.type === "pending" &&
+          latest.current.targetKey === targetKey
+        )
+          onFocus({ type: "none" });
+      })().catch(() => {
+        // A failed background refresh must not turn a confirmed P4 mutation
+        // into a failed action. The visible query retains its prior data.
+      });
+      void workspaceCache
+        .invalidateQueries({
+          queryKey: ["local-path-capabilities", connectionKey],
+        })
+        .catch(() => undefined);
     } catch (cause) {
       // A batch can partially succeed before P4 reports an error or cancellation.
-      await Promise.all([
-        workspaceCache.invalidateQueries({
-          queryKey: ["workspace-files", connectionKey],
-        }),
-        workspaceCache.invalidateQueries({
-          queryKey: ["depot-files", connectionKey],
-        }),
-      ]);
-      window.dispatchEvent(new Event("p4deck:pending-refresh"));
+      void invalidateData(commandActions[id].effects, {
+        connectionKey,
+        affectedPaths,
+      }).catch(() => undefined);
       if (
         epoch === generation.current &&
         latest.current.targetKey === targetKey
@@ -505,11 +594,15 @@ export function CommandBar({
         `${String(cause)}${id !== "refresh" ? "\n" + (zh ? "此操作可能已部分执行；失败或取消不会自动回滚，请检查日志和文件状态。" : "This operation may have partially applied. Failure or cancellation does not roll back changes; inspect logs and file state.") : ""}`,
       );
     } finally {
-      running.current = undefined;
-      setOperation(undefined);
-      void workspaceCache.invalidateQueries({
-        queryKey: ["local-path-capabilities", connectionKey],
-      });
+      if (!feedbackCompleted) {
+        running.current = undefined;
+        setOperation(undefined);
+        void workspaceCache
+          .invalidateQueries({
+            queryKey: ["local-path-capabilities", connectionKey],
+          })
+          .catch(() => undefined);
+      }
     }
   }
   useEffect(() => {
@@ -534,13 +627,6 @@ export function CommandBar({
       aria-label={zh ? "地址和操作" : "Address and actions"}
     >
       {dialogs.element}
-      {nodes.length > 1 && (
-        <div className="selection-summary" role="status">
-          {zh
-            ? `已选择 ${nodes.length} 项 · 文件 ${nodes.filter((n) => n.kind === "file").length} / 目录 ${nodes.filter((n) => n.kind === "directory").length} · 地址栏显示主目标`
-            : `${nodes.length} selected · Address shows primary target`}
-        </div>
-      )}
       <form
         className="global-address"
         onSubmit={(event) => {
@@ -627,6 +713,24 @@ export function CommandBar({
           role="toolbar"
           aria-label={zh ? "对象操作" : "Object actions"}
         >
+          {openChangeDetails &&
+            (target.type === "pending" || target.type === "submitted") && (
+              <div className="command-group">
+                <button
+                  title={zh ? "查看 CL 详情" : "View changelist details"}
+                  aria-label={zh ? "查看 CL 详情" : "View changelist details"}
+                  onClick={(event) =>
+                    openChangeDetails(
+                      { kind: target.type, changeId: target.id },
+                      event.currentTarget,
+                    )
+                  }
+                >
+                  <Eye size={17} />
+                  <span>{zh ? "CL 详情" : "CL details"}</span>
+                </button>
+              </div>
+            )}
           {groups.map((group, index) => (
             <div className="command-group" key={index}>
               {group.map(({ id, icon: Icon, zh: cn, en }) => {
@@ -634,18 +738,14 @@ export function CommandBar({
                   ? zh
                     ? "正在连接"
                     : "Connecting"
-                  : id === "cancel" && !operation?.cancellable
-                    ? zh
-                      ? "没有可取消的工具栏 P4 任务"
-                      : "No cancellable toolbar P4 operation"
-                    : commandReason(
-                        id,
-                        target,
-                        !!operation,
-                        runtime.mode === "tauri",
-                        zh,
-                        localCapabilities,
-                      );
+                  : commandReason(
+                      id,
+                      target,
+                      !!operation,
+                      runtime.mode === "tauri",
+                      zh,
+                      localCapabilities,
+                    );
                 return (
                   <span
                     key={id}
@@ -680,40 +780,58 @@ export function CommandBar({
             </div>
           ))}
         </div>
-      </div>
-      {(error || targetError || notice || operation) && (
-        <div
-          className={`command-feedback ${error || targetError ? "is-error" : ""}`}
-          role={error || targetError ? "alert" : "status"}
-        >
-          {operation ? (
-            <>
-              <LoaderCircle size={13} className="spin" />
-              {operation.label}
-              <progress max={100} value={operation.progress} />
-            </>
-          ) : (
-            <>
-              {error || targetError ? (
-                <AlertCircle size={13} />
-              ) : (
-                <Check size={13} />
-              )}
-              <span className="command-feedback-message">
-                {error || targetError || notice}
-              </span>
-            </>
-          )}
-          {error && (
+        <div className="command-status-slot">
+          {(error || targetError || notice || operation) && (
             <button
-              aria-label={zh ? "关闭错误提示" : "Dismiss error"}
-              onClick={() => setError("")}
+              type="button"
+              className={`command-status ${operation ? "is-running" : error || targetError ? "is-error" : "is-success"}`}
+              title={operation?.label || error || targetError || notice}
+              aria-label={
+                operation
+                  ? zh
+                    ? "操作进行中，查看操作记录"
+                    : "Operation in progress, view operations"
+                  : error || targetError
+                    ? zh
+                      ? "操作失败，查看操作记录"
+                      : "Operation failed, view operations"
+                    : zh
+                      ? "操作完成，查看操作记录"
+                      : "Operation completed, view operations"
+              }
+              onClick={onOpenOperations}
             >
-              ×
+              {operation ? (
+                <LoaderCircle size={17} className="spin" />
+              ) : error || targetError ? (
+                <AlertCircle size={17} />
+              ) : (
+                <Check size={17} />
+              )}
+              <span
+                className="sr-only"
+                role={error || targetError ? "alert" : "status"}
+              >
+                {operation?.label || error || targetError || notice}
+              </span>
             </button>
           )}
         </div>
-      )}
+        {navigationActions && (
+          <div className="command-navigation-slot">{navigationActions}</div>
+        )}
+        <button
+          type="button"
+          className="command-settings"
+          aria-current={settingsActive ? "page" : undefined}
+          title={zh ? "设置" : "Settings"}
+          aria-label={zh ? "设置" : "Settings"}
+          onClick={() => openPage("settings")}
+        >
+          <Settings size={17} aria-hidden="true" />
+          <span>{zh ? "设置" : "Settings"}</span>
+        </button>
+      </div>
     </section>
   );
 }

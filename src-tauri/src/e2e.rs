@@ -100,6 +100,140 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires the isolated localhost p4d fixture"]
+    async fn localhost_fixture_diff_returns_complete_navigation_sources() {
+        let config = FixtureConfig::from_environment()
+            .unwrap_or_else(|error| panic!("Diff fixture configuration rejected: {error}"));
+        let nonce = Uuid::new_v4().simple().to_string();
+        let client = format!("p4deck-fixture-diff-{nonce}");
+        let root = config
+            .workspace_root
+            .parent()
+            .expect("validated fixture workspace parent")
+            .join(format!("diff-tools-{nonce}"));
+        std::fs::create_dir_all(&config.runtime_root).unwrap();
+        let contexts = Arc::new(ContextStore::load(&config.runtime_root).unwrap());
+        let logs = Arc::new(LogStore::open(&config.runtime_root.join("logs.sqlite")).unwrap());
+        let journal = Arc::new(
+            OperationJournal::open(&config.runtime_root.join("operations.sqlite")).unwrap(),
+        );
+        let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
+        let files = FileService::new(
+            runner.clone(),
+            Arc::new(StatusCache::new(15_000, 32, 1024 * 1024)),
+            journal.clone(),
+            contexts.clone(),
+        );
+        let scenario = async {
+            let context = setup_named_client(&runner, &config.context, &client, &root).await?;
+            contexts
+                .save(context.clone())
+                .map_err(|error| error.to_string())?;
+            const DEPOT: &str = "//depot/main/README.txt";
+            checked_run(
+                &runner,
+                &context,
+                "sync",
+                vec![DEPOT.into()],
+                None,
+                OutputMode::Text,
+            )
+            .await?;
+            let local = root.join("main/README.txt");
+            make_writable(&local)?;
+            let baseline = std::fs::read_to_string(&local).map_err(|error| error.to_string())?;
+            let normalized = baseline.replace("\r\n", "\n");
+            ensure(
+                normalized.ends_with('\n'),
+                "fixture seed must end in a newline",
+            )?;
+            let scope = crate::domain::FileReviewScope {
+                server: context.server.clone(),
+                user: context.user.clone(),
+                client: client.clone(),
+                workspace: context.cwd.clone().unwrap(),
+                active_profile_id: contexts.active_profile_id(),
+                context_generation: contexts.snapshot().1,
+                file_identity: DEPOT.into(),
+            };
+            let mut canonical_left = None;
+            let mut last = None;
+            for (index, (contents, additions, deletions)) in [
+                (baseline, 0, 0),
+                (normalized.clone(), 0, 0),
+                (normalized.replace('\n', "\r\n"), 0, 0),
+                (format!("{normalized}local navigation tools\n"), 1, 0),
+                (normalized.strip_suffix('\n').unwrap().to_owned(), 1, 1),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                std::fs::write(&local, &contents).map_err(|error| error.to_string())?;
+                let result = files
+                    .diff(
+                        crate::domain::DiffRequest {
+                            scope: scope.clone(),
+                            left: crate::domain::RevisionReference::Have,
+                            right: crate::domain::RevisionReference::Workspace,
+                            refresh: true,
+                            operation_id: Some(format!("diff-tools-{index}")),
+                        },
+                        None,
+                    )
+                    .await?;
+                ensure(
+                    result
+                        .left_text
+                        .as_deref()
+                        .is_some_and(|text| text.replace("\r\n", "\n") == normalized)
+                        && result.right_text.as_deref() == Some(contents.as_str())
+                        && result.stats.additions == additions
+                        && result.stats.deletions == deletions
+                        && result.identical == (additions == 0 && deletions == 0)
+                        && !result.partial
+                        && !result.truncated,
+                    format!("complete diff text or newline semantics failed for case {index}"),
+                )?;
+                if let Some(left) = &canonical_left {
+                    ensure(
+                        result.left_text.as_ref() == Some(left),
+                        "revision source changed",
+                    )?;
+                } else {
+                    canonical_left = result.left_text.clone();
+                }
+                last = Some(result);
+            }
+            let cached = files
+                .diff(
+                    crate::domain::DiffRequest {
+                        scope,
+                        left: crate::domain::RevisionReference::Have,
+                        right: crate::domain::RevisionReference::Workspace,
+                        refresh: false,
+                        operation_id: Some("diff-tools-cached".into()),
+                    },
+                    None,
+                )
+                .await?;
+            let last = last.unwrap();
+            ensure(
+                cached.left_text == last.left_text
+                    && cached.right_text == last.right_text
+                    && cached.operation_ids == last.operation_ids,
+                "cached diff lost its sources or repeated P4 operations",
+            )
+        }
+        .await;
+        let cleanup = cleanup_named_client(&runner, &config.context, &client, &root).await;
+        drop((files, runner, logs, journal, contexts));
+        let _ = std::fs::remove_dir_all(&config.runtime_root);
+        scenario
+            .and(cleanup)
+            .unwrap_or_else(|error| panic!("Diff fixture failed: {error}"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the isolated localhost p4d fixture"]
     async fn localhost_fixture_connection_setup_uses_explicit_draft_context() {
         const USER: &str = "p4deck-setup-self-e2e";
         const CLASSIC: &str = "p4deck-setup-classic-e2e";
@@ -264,6 +398,7 @@ mod tests {
                         client_path: format!("//{CLASSIC}/..."),
                     }],
                 },
+                sync_mode: crate::domain::WorkspaceSyncMode::Standard,
             };
             create_fixture_workspace(&service, &draft, 14, classic_plan.clone()).await?;
             let context_store = Arc::new(
@@ -394,6 +529,7 @@ mod tests {
                                     client_path: format!("//{STALE}/..."),
                                 }],
                             },
+                            sync_mode: crate::domain::WorkspaceSyncMode::Standard,
                         },
                     },
                     None,
@@ -468,6 +604,7 @@ mod tests {
                     mapping: ConnectionWorkspaceMapping::Stream {
                         stream: STREAM.into(),
                     },
+                    sync_mode: crate::domain::WorkspaceSyncMode::Standard,
                 },
             )
             .await?;
@@ -635,10 +772,7 @@ mod tests {
             logs.clone(),
             journal.clone(),
         ));
-        let context = connection
-            .save(config.context.clone(), None)
-            .await
-            .map_err(|error| error.to_string())?;
+        let context = config.context.clone();
         let status_cache = Arc::new(StatusCache::new(15_000, 512, 16 * 1024 * 1024));
         let changelists = Arc::new(ChangelistService::new(
             ChangelistRepository::new(runner.clone()),
@@ -714,6 +848,12 @@ mod tests {
         let scenario = match setup {
             Ok(()) => {
                 async {
+                    // Saving resolves the server-owned Root, so the client must
+                    // exist before the connection can be persisted.
+                    connection
+                        .save(context.clone(), None)
+                        .await
+                        .map_err(|error| error.to_string())?;
                     let profile_context =
                         setup_named_client(&runner, &context, PROFILE_CLIENT, &profile_root)
                             .await?;
@@ -933,7 +1073,13 @@ mod tests {
         ensure(
             switched.context.client == alternate.client
                 && switched.context.cwd.as_deref()
-                    == Some(alternate_root.to_string_lossy().as_ref()),
+                    == Some(
+                        alternate_root
+                            .canonicalize()
+                            .map_err(|error| error.to_string())?
+                            .to_string_lossy()
+                            .as_ref(),
+                    ),
             "workspace switch did not update both Client and Root",
         )?;
         let stale = connection
@@ -2681,6 +2827,11 @@ mod tests {
             "application repository did not list the E2E workspace",
         )?;
 
+        let depots = files.depot_children(context.clone(), None, None).await?;
+        ensure(
+            depots.iter().any(|node| node.depot_path == "//depot"),
+            "Depot browser did not return the depot root",
+        )?;
         let depot_root = files
             .depot_children(context.clone(), Some("//depot".into()), None)
             .await?;
@@ -5085,6 +5236,7 @@ mod tests {
             clients: Vec::new(),
             depot_path: Some("//depot/p4deck-submit-e2e/...".into()),
             stream: None,
+            streams: Vec::new(),
             from: "2000-01-01T00:00:00Z".into(),
             to: "2100-01-01T00:00:00Z".into(),
             jobs: Vec::new(),
@@ -5317,7 +5469,8 @@ mod tests {
         let empty_local = review_dir.join("empty.txt");
         let binary_local = review_dir.join("binary.bin");
         let large_local = review_dir.join("large.txt");
-        std::fs::write(&special_local, b"special baseline\n").map_err(|error| error.to_string())?;
+        let special_baseline = "special baseline\n// 世界\nunchanged\n";
+        std::fs::write(&special_local, special_baseline).map_err(|error| error.to_string())?;
         std::fs::write(&empty_local, b"").map_err(|error| error.to_string())?;
         std::fs::write(&binary_local, [0_u8, 1, 2, 3, 0xff]).map_err(|error| error.to_string())?;
         std::fs::write(&large_local, vec![b'x'; 4 * 1024 * 1024 + 1])
@@ -5455,6 +5608,49 @@ mod tests {
             format!("special filespec history failed: {special_history:?}"),
         )?;
         make_writable(&special_local)?;
+        for (index, (contents, additions, deletions)) in [
+            (special_baseline, 0, 0),
+            ("special baseline\r\n// 世界\r\nunchanged\r\n", 0, 0),
+            ("special baseline\r\n// 世界\nunchanged\r\n", 0, 0),
+            ("special edited\r\n// 世界\r\nunchanged\r\n", 1, 1),
+            ("special baseline\r\n// 世界\r\nunchanged", 1, 1),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            std::fs::write(&special_local, contents).map_err(|error| error.to_string())?;
+            let diff = files
+                .diff(
+                    crate::domain::DiffRequest {
+                        scope: review_scope(special_depot),
+                        left: crate::domain::RevisionReference::Have,
+                        right: crate::domain::RevisionReference::Workspace,
+                        refresh: true,
+                        operation_id: Some(format!("review-line-endings-{index}")),
+                    },
+                    None,
+                )
+                .await?;
+            ensure(
+                diff.stats.additions == additions
+                    && diff.stats.deletions == deletions
+                    && diff.identical == (additions == 0 && deletions == 0)
+                    && diff.unified.is_empty() == diff.identical,
+                format!("CRLF/LF comparison created false changes in case {index}: {diff:?}"),
+            )?;
+            ensure(
+                diff.left_text.as_deref() == Some(special_baseline)
+                    && diff.right_text.as_deref() == Some(contents),
+                format!("complete diff sources were missing or changed in case {index}"),
+            )?;
+            if !contents.ends_with('\n') {
+                ensure(
+                    diff.unified.contains("\\ No newline at end of file"),
+                    "workspace EOF newline difference was lost by P4 print",
+                )?;
+            }
+        }
+        std::fs::write(&special_local, special_baseline).map_err(|error| error.to_string())?;
         std::fs::OpenOptions::new()
             .append(true)
             .open(&special_local)
@@ -8258,6 +8454,7 @@ mod tests {
                     target_path: None,
                     resolve_method: None,
                     label: None,
+                    revert_whole_changelist: false,
                     parallel_threads: None,
                 },
                 None,

@@ -56,7 +56,7 @@
   outline-offset: -1px;
 }
 .p4-context-menu button[aria-disabled="true"] {
-  opacity: 0.45;
+  opacity: var(--disabled-opacity, 0.45);
   cursor: not-allowed;
 }
 .p4-context-menu button.danger:not([aria-disabled="true"]) {
@@ -112,40 +112,6 @@
   color: var(--text);
   background: var(--panel-2);
   font-family: monospace;
-}
-.task-list {
-  position: fixed;
-  z-index: 200;
-  bottom: 32px;
-  right: 20px;
-  width: min(480px, 90vw);
-  max-height: 50vh;
-  overflow: auto;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  box-shadow: 0 12px 40px #0003;
-  border-radius: 8px;
-}
-.task-list header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.task-list .task-row {
-  width: 100%;
-  display: flex;
-  gap: 10px;
-  padding: 10px 2px;
-  font: inherit;
-}
-.task-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.task-list p {
-  overflow-wrap: anywhere;
-  line-height: 1.6;
 }
 .log-filter {
   display: flex;

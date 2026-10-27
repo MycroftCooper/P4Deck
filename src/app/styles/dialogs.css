@@ -52,7 +52,7 @@
   outline-offset: 2px;
 }
 .workflow-dialog button:disabled {
-  opacity: 0.5;
+  opacity: var(--disabled-opacity, 0.5);
   cursor: not-allowed;
 }
 .workflow-dialog .primary {
@@ -389,4 +389,31 @@
   .manual-merge-actions input {
     min-width: 0;
   }
+}
+
+.change-details-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+}
+.change-details-meta div {
+  min-width: 0;
+}
+.change-details-meta dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.change-details-meta dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.change-details-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
+.change-details-dialog .revision-file-list {
+  height: 260px;
+  min-height: 120px;
 }

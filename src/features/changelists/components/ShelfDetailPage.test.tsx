@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RuntimeInfo, ShelfDetail } from "../../../shared/contracts/types";
 import { ShelfDetailPage } from "./ShelfDetailPage";
+import { PageRefreshSlotContext } from "../../../app/docking/chrome";
 
 const backend = vi.hoisted(() => ({
   getShelfDetail: vi.fn(),
@@ -110,6 +111,32 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+});
+
+it("puts an icon-only shelf refresh in the shared target slot", async () => {
+  const slot = document.createElement("span");
+  document.body.append(slot);
+  try {
+    await act(async () =>
+      root.render(
+        <PageRefreshSlotContext.Provider value={slot}>
+          <ShelfDetailPage target="42" runtime={runtime} zh={false} />
+        </PageRefreshSlotContext.Provider>,
+      ),
+    );
+    const refresh = slot.querySelector<HTMLButtonElement>(
+      'button[aria-label="Refresh"]',
+    )!;
+    expect(refresh.title).toBe("Refresh");
+    expect(refresh.textContent).toBe("");
+    expect(host.querySelector('button[aria-label="Refresh"]')).toBeNull();
+    expect(host.textContent).toContain("Cancel");
+    const before = backend.getShelfDetail.mock.calls.length;
+    await act(async () => refresh.click());
+    expect(backend.getShelfDetail.mock.calls.length).toBe(before + 1);
+  } finally {
+    slot.remove();
+  }
 });
 
 it("loads an independent shelf, selects an encoded path, and previews authoritative content", async () => {

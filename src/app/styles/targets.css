@@ -12,21 +12,77 @@
   height: auto;
 }
 .target-controls {
+  container: target-controls / inline-size;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 14px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--panel-2);
+  background: var(--panel);
   font-size: 11px;
   flex-shrink: 0;
 }
-.target-controls > span {
+.target-controls > .target-page-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  overflow: visible;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.target-controls > .target-page-title > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+.target-controls > .target-page-title > h1 {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+.page-title-controls > .target-page-title {
+  margin-right: auto;
+}
+.target-controls > .target-control-value {
+  display: flex;
+  align-items: center;
   flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+.target-controls .target-path-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  font: inherit;
+}
+.target-controls .target-path-input:hover,
+.target-controls .target-path-input:focus {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
 }
 .target-controls button {
   display: flex;
@@ -41,4 +97,216 @@
 .target-controls button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--accent);
+}
+.diff-path-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.diff-path-field:focus-within {
+  border-color: var(--accent);
+}
+.diff-path-field > svg {
+  flex-shrink: 0;
+}
+.diff-path-field .target-path-input,
+.diff-path-field .target-path-input:hover,
+.diff-path-field .target-path-input:focus {
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+.target-refresh-slot {
+  display: contents;
+}
+.diff-path-field > .target-refresh-slot,
+.target-control-value > .target-refresh-slot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-right: -6px;
+}
+.diff-path-field > .target-refresh-slot > button,
+.target-control-value > .target-refresh-slot > button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.target-refresh-slot > button:disabled {
+  opacity: var(--disabled-opacity, 0.55);
+  cursor: not-allowed;
+}
+.target-refresh-slot > button:focus-visible,
+.target-controls > .target-icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.target-controls > button,
+.target-refresh-slot > button {
+  height: 32px;
+  border-color: transparent;
+  color: var(--muted);
+}
+.target-controls > .target-icon-button {
+  flex: 0 0 32px;
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.target-control-text {
+  flex: 1;
+  min-width: 0;
+  margin-right: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.target-controls > button:hover,
+.target-refresh-slot > button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--accent);
+}
+.diff-path-error {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 5px);
+  left: 0;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+@container target-controls (max-width: 700px) {
+  .target-controls > button,
+  .target-refresh-slot > button {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+  .target-controls > button > span,
+  .target-refresh-slot > button > span {
+    display: none;
+  }
+}
+
+/* Fixed tabs share Pending's compact chrome; their content keeps its own tools. */
+.fixed-page > section,
+.fixed-page > .tool-panel-page {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.fixed-page
+  > :is(
+    .settings-page,
+    .search-page,
+    .workspaces-page,
+    .stream-graph-page,
+    .branch-mappings-page
+  ) {
+  padding: 12px 18px 18px;
+}
+.fixed-page > .settings-page > .settings-card:first-of-type {
+  margin-top: 0;
+}
+.fixed-page > .file-workbench {
+  display: flex;
+  flex-direction: column;
+  padding: 0 18px 18px;
+}
+.fixed-page > .file-workbench > .file-content {
+  flex: 1;
+  min-height: 0;
+}
+.fixed-page > .file-workbench > :not(.file-content) {
+  flex-shrink: 0;
+}
+.page-title-controls {
+  flex-wrap: wrap;
+}
+.page-title-controls .section-title-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.page-title-controls .tool-tabs {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.fixed-page-meta {
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.fixed-page-help {
+  position: relative;
+  color: var(--muted);
+}
+.fixed-page-help > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 5px;
+}
+.fixed-page-help > summary::-webkit-details-marker {
+  display: none;
+}
+.fixed-page-help > summary:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.fixed-page-help > summary:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.fixed-page-help > p {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  top: 100%;
+  width: min(320px, 70vw);
+  margin: 4px 0 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fixed-page .tool-drawer.embedded {
+  grid-template-rows: minmax(0, 1fr);
+}
+.page-title-controls .tool-tab-list > button {
+  height: 32px;
 }

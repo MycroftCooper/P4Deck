@@ -9,7 +9,7 @@ const leaves = (items: MenuItem[]): MenuItem[] =>
 
 const documented = spec
   .split("\n")
-  .filter((line) => /^\| [FCVSW TU]\d{2} \|/.test(line));
+  .filter((line) => /^\| [FHCVSW TU]\d{2} \|/.test(line));
 
 it("registers every object and every leaf from the product inventory in order", () => {
   expect(documented).toHaveLength(Object.keys(menuCatalog).length);

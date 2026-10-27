@@ -532,15 +532,29 @@ fn mapped_to_context(context: &P4Context, mapping: &RenameMoveMapping) -> bool {
 
 fn path_starts_with(path: &Path, root: &Path) -> bool {
     if cfg!(windows) {
-        let path = path
+        if path
             .to_string_lossy()
-            .replace('/', "\\")
-            .to_ascii_lowercase();
-        let root = root
-            .to_string_lossy()
-            .replace('/', "\\")
-            .trim_end_matches('\\')
-            .to_ascii_lowercase();
+            .split(['/', '\\'])
+            .any(|part| part == ".." || part == ".")
+        {
+            return false;
+        }
+        let normalize = |path: &Path| {
+            let path = path
+                .to_string_lossy()
+                .replace('/', "\\")
+                .to_ascii_lowercase();
+            // canonicalize() returns verbatim Windows roots, while p4 where
+            // returns ordinary DOS/UNC paths for the same workspace.
+            let path = if let Some(unc) = path.strip_prefix(r"\\?\unc\") {
+                format!(r"\\{unc}")
+            } else {
+                path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
+            };
+            path.trim_end_matches('\\').to_owned()
+        };
+        let path = normalize(path);
+        let root = normalize(root);
         path == root || path.starts_with(&format!("{root}\\"))
     } else {
         path.starts_with(root)
@@ -662,6 +676,33 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn canonical_windows_roots_accept_p4_mapping_paths_without_weakening_boundaries() {
+        let root = Path::new(r"\\?\C:\work");
+        assert!(path_starts_with(Path::new("c:/work/sub/file.txt"), root));
+        assert!(path_starts_with(
+            Path::new(r"\\?\C:\work\sub\file.txt"),
+            root
+        ));
+        assert!(!path_starts_with(
+            Path::new(r"C:\work-other\file.txt"),
+            root
+        ));
+        assert!(!path_starts_with(
+            Path::new(r"\\?\C:\work\..\outside.txt"),
+            root
+        ));
+        assert!(path_starts_with(
+            Path::new(r"\\server\share\work\file.txt"),
+            Path::new(r"\\?\UNC\server\share\work")
+        ));
+        assert!(!path_starts_with(
+            Path::new(r"\\other\share\work\file.txt"),
+            Path::new(r"\\?\UNC\server\share\work")
+        ));
+    }
 
     fn mapping(local: &str, depot: &str) -> RenameMoveMapping {
         RenameMoveMapping {

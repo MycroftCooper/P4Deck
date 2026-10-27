@@ -5,6 +5,7 @@ import { backend } from "../../../infrastructure/backend";
 import type {
   JournalState,
   OperationCategory,
+  OperationFailureKind,
   OperationRecord,
 } from "../../../shared/contracts/types";
 
@@ -34,6 +35,61 @@ function iso(value: string) {
     : timestamp.toISOString();
 }
 
+export interface RecoveryGuidance {
+  title: string;
+  steps: string;
+  tone: "warning" | "danger";
+}
+
+export function operationRecoveryGuidance(
+  record: OperationRecord,
+  zh: boolean,
+): RecoveryGuidance | undefined {
+  const failure: OperationFailureKind | undefined =
+    record.failure ??
+    (record.state === "interrupted" ? "interrupted" : undefined);
+  if (!failure) return undefined;
+  if (failure === "unknown" || failure === "interrupted") {
+    return {
+      tone: "danger",
+      title: zh ? "结果未知，必须人工核对" : "Unknown result: verify manually",
+      steps: zh
+        ? "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。"
+        : "Do not immediately retry a mutation. Open related logs, refresh Pending and Workspace, then verify the server-side result. P4Deck never replays automatically.",
+    };
+  }
+  if (failure === "cancelled") {
+    return {
+      tone: "warning",
+      title: zh
+        ? "已请求取消，执行范围可能不完整"
+        : "Cancel requested; execution may be partial",
+      steps: zh
+        ? "刷新 Pending 和 Workspace 后再决定是否继续。取消只停止剩余工作，不会撤销已完成部分。"
+        : "Refresh Pending and Workspace before continuing. Cancel stops remaining work and does not undo completed work.",
+    };
+  }
+  if (failure === "authExpired") {
+    return {
+      tone: "warning",
+      title: zh ? "认证已失效" : "Authentication expired",
+      steps: zh
+        ? "重新登录后先刷新。若中断的是写操作，请先从服务器侧核对，再明确决定是否重试。"
+        : "Log in again and refresh first. If a mutation was interrupted, verify it server-side before explicitly retrying.",
+    };
+  }
+  if (failure === "offline" || failure === "serverUnreachable") {
+    return {
+      tone: "warning",
+      title: zh ? "连接已中断" : "Connection interrupted",
+      steps: zh
+        ? "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。"
+        : "Reconnect and refresh after the network or server returns. Reads may retry; mutations are not replayed automatically.",
+    };
+  }
+  return undefined;
+}
+
 export function OperationJournalView({
   zh,
   connectionKey,
@@ -55,7 +111,7 @@ export function OperationJournalView({
   const virtualizer = useVirtualizer({
     count: records.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 62,
+    estimateSize: () => 96,
     overscan: 8,
     initialRect: { width: 900, height: 480 },
   });
@@ -65,16 +121,19 @@ export function OperationJournalView({
     : Array.from({ length: Math.min(records.length, 24) }, (_, index) => ({
         index,
         key: records[index].operationId,
-        start: index * 62,
-        size: 62,
-        end: (index + 1) * 62,
+        start: index * 96,
+        size: 96,
+        end: (index + 1) * 96,
         lane: 0,
       }));
-  const totalSize = virtualizer.getTotalSize() || records.length * 62;
+  const totalSize = virtualizer.getTotalSize() || records.length * 96;
   const paddingTop = virtualRows.length ? virtualRows[0].start : 0;
   const paddingBottom = virtualRows.length
     ? totalSize - virtualRows.at(-1)!.end
     : 0;
+  const recoveryRecords = records.filter((record) =>
+    operationRecoveryGuidance(record, zh),
+  );
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -211,6 +270,20 @@ export function OperationJournalView({
         </button>
       </div>
 
+      {recoveryRecords.length > 0 && (
+        <div className="journal-recovery-banner" role="alert">
+          <strong>
+            {zh
+              ? `${recoveryRecords.length} 条操作需要人工恢复`
+              : `${recoveryRecords.length} operation(s) need manual recovery`}
+          </strong>
+          <span>
+            {zh
+              ? "先核对日志和服务器实际状态，再决定是否重试；写操作不会自动重放。"
+              : "Verify logs and server state before retrying. Mutations are never replayed automatically."}
+          </span>
+        </div>
+      )}
       <div
         ref={scrollRef}
         className="diagnostic-scroll"
@@ -229,7 +302,7 @@ export function OperationJournalView({
               <th>{zh ? "操作摘要" : "Summary"}</th>
               <th>{zh ? "开始 / 结束" : "Started / finished"}</th>
               <th>{zh ? "耗时" : "Duration"}</th>
-              <th>{zh ? "错误" : "Error"}</th>
+              <th>{zh ? "错误 / 恢复" : "Error / recovery"}</th>
               <th>{zh ? "关联日志" : "Logs"}</th>
             </tr>
           </thead>
@@ -271,7 +344,21 @@ export function OperationJournalView({
                     </span>
                   </td>
                   <td>{duration(record)}</td>
-                  <td>{record.failure ?? "—"}</td>
+                  <td>
+                    <span>{record.failure ?? "—"}</span>
+                    {(() => {
+                      const guidance = operationRecoveryGuidance(record, zh);
+                      return guidance ? (
+                        <div
+                          className={`journal-recovery ${guidance.tone}`}
+                          data-testid={`recovery-${record.operationId}`}
+                        >
+                          <strong>{guidance.title}</strong>
+                          <small>{guidance.steps}</small>
+                        </div>
+                      ) : null;
+                    })()}
+                  </td>
                   <td>
                     <button
                       className="link-button"

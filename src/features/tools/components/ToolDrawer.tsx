@@ -1,3 +1,4 @@
+import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Ban,
@@ -132,6 +133,7 @@ export function ToolDrawer(props: Props) {
   }, [props.operationEvents, running]);
 
   async function execute() {
+    if (!props.context.server.trim() || !props.context.user.trim()) return;
     const generation = terminalGeneration.current;
     const raw = input.trim();
     if (!raw || running) return;
@@ -219,11 +221,6 @@ export function ToolDrawer(props: Props) {
   }
 
   const tabs: Array<{ id: ToolTab; label: string; icon: ReactNode }> = [
-    {
-      id: "terminal",
-      label: props.t.terminal,
-      icon: <TerminalSquare size={14} />,
-    },
     { id: "logs", label: props.t.logs, icon: <CircleAlert size={14} /> },
     {
       id: "journal",
@@ -235,7 +232,65 @@ export function ToolDrawer(props: Props) {
       label: props.zh ? "诊断" : "Diagnostics",
       icon: <Wrench size={14} />,
     },
+    {
+      id: "terminal",
+      label: props.t.terminal,
+      icon: <TerminalSquare size={14} />,
+    },
   ];
+
+  const toolTabs = (
+    <header className="tool-tabs">
+      {!props.embedded && (
+        <button
+          className="drawer-toggle"
+          aria-label={props.open ? props.t.close : props.t.openTools}
+          onClick={() => props.onOpenChange(!props.open)}
+        >
+          {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
+      )}
+      <div
+        className="tool-tab-list"
+        role="tablist"
+        aria-label={props.zh ? "工具视图" : "Tool views"}
+      >
+        {tabs
+          .filter(
+            (tab) => !props.visibleTabs || props.visibleTabs.includes(tab.id),
+          )
+          .map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              data-tool-tab={tab.id}
+              aria-selected={props.active === tab.id}
+              className={props.active === tab.id ? "active" : ""}
+              onClick={() => props.onActiveChange(tab.id)}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.id === "logs" && props.unread ? (
+                <span
+                  className="tool-unread-dot"
+                  title={
+                    props.zh
+                      ? `${props.unread} 个未查看的新错误`
+                      : `${props.unread} new unviewed errors`
+                  }
+                >
+                  <span className="sr-only">
+                    {props.zh
+                      ? `${props.unread} 个未查看的新错误`
+                      : `${props.unread} new unviewed errors`}
+                  </span>
+                </span>
+              ) : null}
+            </button>
+          ))}
+      </div>
+    </header>
+  );
 
   return (
     <section
@@ -266,55 +321,11 @@ export function ToolDrawer(props: Props) {
           }}
         />
       )}
-      <header className="tool-tabs">
-        {!props.embedded && (
-          <button
-            className="drawer-toggle"
-            aria-label={props.open ? props.t.close : props.t.openTools}
-            onClick={() => props.onOpenChange(!props.open)}
-          >
-            {props.open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-          </button>
-        )}
-        <div
-          className="tool-tab-list"
-          role="tablist"
-          aria-label={props.zh ? "工具视图" : "Tool views"}
-        >
-          {tabs
-            .filter(
-              (tab) => !props.visibleTabs || props.visibleTabs.includes(tab.id),
-            )
-            .map((tab) => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={props.active === tab.id}
-                className={props.active === tab.id ? "active" : ""}
-                onClick={() => props.onActiveChange(tab.id)}
-              >
-                {tab.icon}
-                {tab.label}
-                {tab.id === "logs" && props.unread ? (
-                  <span
-                    className="tool-unread-dot"
-                    title={
-                      props.zh
-                        ? `${props.unread} 个未查看的新错误`
-                        : `${props.unread} new unviewed errors`
-                    }
-                  >
-                    <span className="sr-only">
-                      {props.zh
-                        ? `${props.unread} 个未查看的新错误`
-                        : `${props.unread} new unviewed errors`}
-                    </span>
-                  </span>
-                ) : null}
-              </button>
-            ))}
-        </div>
-      </header>
+      {props.embedded ? (
+        <FixedPageHeader>{toolTabs}</FixedPageHeader>
+      ) : (
+        toolTabs
+      )}
       {textSelection.dialog}
       {pasteDialog.request && (
         <Dialog
@@ -383,6 +394,9 @@ export function ToolDrawer(props: Props) {
             <span>p4&gt;</span>
             <input
               value={input}
+              disabled={
+                !props.context.server.trim() || !props.context.user.trim()
+              }
               autoFocus
               placeholder={props.t.commandPlaceholder}
               onChange={(event) => setInput(event.target.value)}
@@ -398,7 +412,14 @@ export function ToolDrawer(props: Props) {
                 }
               }}
             />
-            <button onClick={() => void execute()} disabled={Boolean(running)}>
+            <button
+              onClick={() => void execute()}
+              disabled={
+                Boolean(running) ||
+                !props.context.server.trim() ||
+                !props.context.user.trim()
+              }
+            >
               <Play size={14} />
               {props.t.run}
             </button>

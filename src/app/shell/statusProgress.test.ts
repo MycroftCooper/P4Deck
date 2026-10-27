@@ -20,11 +20,45 @@ it("tracks concurrency and clears completed/cancelled operations", () => {
   send("a", "started", 2);
   send("b", "queued");
   send("a", "progress", 50);
-  expect(progressSummary(active)).toEqual({ count: 2, percent: undefined });
+  expect(progressSummary(active.values())).toEqual({
+    count: 2,
+    percent: undefined,
+  });
   send("b", "progress", 30);
-  expect(progressSummary(active).percent).toBe(40);
+  expect(progressSummary(active.values()).percent).toBe(40);
   send("a", "completed");
   send("b", "cancelled");
   send("a", "progress", 90);
-  expect(progressSummary(active).count).toBe(0);
+  expect(progressSummary(active.values()).count).toBe(0);
+});
+
+it("keeps the command and queued/running phase without retaining output", () => {
+  const active: ActiveOperations = new Map();
+  updateProgress(active, {
+    operationId: "query",
+    type: "queued",
+    message: "p4 fstat //depot/...",
+    timestamp: "",
+  });
+  expect(active.get("query")).toMatchObject({
+    label: "p4 fstat //depot/...",
+    phase: "queued",
+  });
+  updateProgress(active, {
+    operationId: "query",
+    type: "started",
+    timestamp: "",
+  });
+  updateProgress(active, {
+    operationId: "query",
+    type: "stdout",
+    message: "large output",
+    timestamp: "",
+  });
+  expect(active.get("query")).toEqual({
+    id: "query",
+    label: "p4 fstat //depot/...",
+    phase: "running",
+    progress: undefined,
+  });
 });

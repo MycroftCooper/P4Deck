@@ -9,6 +9,11 @@ import type {
   CacheDiagnostics,
   CliDiscoveryRequest,
   CliDiscoveryResult,
+  ConfigBackupCreateRequest,
+  ConfigBackupCreateResult,
+  ConfigBackupOverview,
+  ConfigBackupRestoreRequest,
+  ConfigBackupRestoreResult,
   ConnectionStatus,
   ConnectionProfiles,
   ConnectionProfile,
@@ -69,6 +74,8 @@ import type {
   OperationJournalPage,
   OperationJournalQuery,
   OperationRecord,
+  P4VfsInspectRequest,
+  P4VfsStatus,
   P4CommandRequest,
   PathResolveRequest,
   PathResolveResult,
@@ -119,6 +126,14 @@ import type {
 } from "../../shared/contracts/types";
 
 export interface Backend {
+  createConfigBackup(
+    request: ConfigBackupCreateRequest,
+  ): Promise<ConfigBackupCreateResult>;
+  listConfigBackups(): Promise<ConfigBackupOverview>;
+  restoreConfigBackup(
+    request: ConfigBackupRestoreRequest,
+  ): Promise<ConfigBackupRestoreResult>;
+  openConfigBackupsFolder(): Promise<void>;
   statusCacheDiagnostics(): Promise<CacheDiagnostics>;
   queryOperationJournal(
     query: OperationJournalQuery,
@@ -127,6 +142,9 @@ export interface Backend {
   queryLogPage(query: LogQuery): Promise<LogPage>;
   getLogPolicy(): Promise<LogPolicy>;
   setLogPolicy(policy: LogPolicy): Promise<LogPolicy>;
+  openLogsFolder(): Promise<void>;
+  deleteAllLogs(): Promise<void>;
+  subscribeLogsCleared(callback: () => void): Promise<() => void>;
   exportDiagnostics(
     request: DiagnosticExportRequest,
   ): Promise<DiagnosticExportResult>;
@@ -214,8 +232,10 @@ export interface Backend {
     context: import("../../shared/contracts/types").P4Context,
   ): Promise<import("../../shared/contracts/types").P4Context>;
   runtimeInfo(): Promise<RuntimeInfo>;
+  inspectP4Vfs(request: P4VfsInspectRequest): Promise<P4VfsStatus>;
   runP4(request: P4CommandRequest): Promise<OperationResult>;
   cancelOperation(operationId: string): Promise<void>;
+  cancelAllOperations(): Promise<void>;
   globalSearch(query: GlobalSearchQuery): Promise<GlobalSearchResult>;
   queryChangelists(query: ClQuery): Promise<ClQueryResult>;
   getSubmittedChangeDetail(
@@ -230,6 +250,7 @@ export interface Backend {
     path?: string,
     refresh?: boolean,
     operationId?: string,
+    localOnly?: boolean,
   ): Promise<WorkspaceListing>;
   listDepotChildren(path?: string): Promise<DepotNode[]>;
   resolvePath(request: PathResolveRequest): Promise<PathResolveResult>;
@@ -244,6 +265,12 @@ export interface Backend {
   confirmRenameMove(
     confirmation: RenameMoveConfirmation,
   ): Promise<RenameMoveResult>;
+  previewUndo(
+    request: import("../../shared/contracts/types").UndoTarget,
+  ): Promise<import("../../shared/contracts/types").UndoPreview>;
+  confirmUndo(
+    confirmation: import("../../shared/contracts/types").UndoConfirmation,
+  ): Promise<OperationResult>;
   previewSync(request: SyncPreviewRequest): Promise<SyncPreviewPlan>;
   confirmSync(confirmation: SyncConfirmRequest): Promise<SyncResult>;
   getFilePreview(

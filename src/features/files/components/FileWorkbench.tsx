@@ -1,9 +1,10 @@
+import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useObjectSelection } from "../SelectionContext";
 import {
   useWorkspaceFiles,
   useDepotFiles,
-  workspaceCache,
-  workspaceQuery,
+  canListWorkspace,
+  refreshWorkspaceDirectory,
 } from "../workspaceQueries";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -14,6 +15,7 @@ import { TableHeader } from "../../../app/context-menu/TableHeader";
 import { useDirectoryMenu } from "../../../app/context-menu/useDirectoryMenu";
 import { useContext } from "react";
 import { SelectionContext } from "../SelectionContext";
+import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import type { WorkspaceNode } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
 import {
@@ -48,12 +50,18 @@ export function FileWorkbench({
   ): void;
 }) {
   const isDepot = !!directory?.startsWith("//");
+  const env = useMenuEnvironment();
   const local = useWorkspaceFiles(
     connectionKey,
-    workspaceReady && !isDepot,
+    canListWorkspace(env.runtime) && !isDepot,
+    directory,
+    workspaceReady,
+  );
+  const depot = useDepotFiles(
+    connectionKey,
+    ready && isDepot && env.runtime.connection.state === "connected",
     directory,
   );
-  const depot = useDepotFiles(connectionKey, ready && isDepot, directory);
   const listing = isDepot ? depot : local;
   const nodes: WorkspaceNode[] = useMemo(
     () =>
@@ -63,6 +71,7 @@ export function FileWorkbench({
     [isDepot, depot.data, local.data],
   );
   const busy = listing.isFetching;
+  const refreshing = listing.refreshing;
   const [filter, setFilter] = useState<WorkspaceFileFilter>("all");
   const [compact, setCompact] = useState(density ?? false);
   useEffect(() => setCompact(density ?? false), [density]);
@@ -72,6 +81,7 @@ export function FileWorkbench({
   const error = operationError || (listing.error ? String(listing.error) : "");
   const zh = t.files === "文件";
   const labels: Record<string, string> = {
+    loading: zh ? "状态待检查" : "Status pending",
     controlled: zh ? "受版本控制" : "Controlled",
     openedEdit: zh ? "已签出编辑" : "Open for edit",
     openedAdd: zh ? "待添加" : "Added",
@@ -88,7 +98,10 @@ export function FileWorkbench({
     unknown: zh ? "状态未知" : "Unknown",
   };
   const statusNotice =
-    !isDepot && local.data && local.data.completeness !== "complete"
+    !isDepot &&
+    local.data &&
+    local.data.cacheFreshness !== "local" &&
+    local.data.completeness !== "complete"
       ? local.data.errors.map((item) => item.message).join(" · ") ||
         (local.data.truncated
           ? zh
@@ -146,10 +159,7 @@ export function FileWorkbench({
     setError("");
     if (isDepot) await depot.refetch();
     else
-      await workspaceCache.fetchQuery({
-        ...workspaceQuery(connectionKey, directory, true),
-        staleTime: 0,
-      });
+      await refreshWorkspaceDirectory(connectionKey, directory, workspaceReady);
   };
 
   const blankMenu = useDirectoryMenu(
@@ -160,23 +170,21 @@ export function FileWorkbench({
   );
   return (
     <section className="file-workbench">
-      <header className="workspace-heading">
-        <div>
-          <h1>
-            {directory?.split(/[\\/]/).filter(Boolean).pop() ||
-              (zh ? "工作区文件" : "Workspace files")}
-            <span className="heading-count">{nodes.length}</span>
-          </h1>
-        </div>
+      <FixedPageHeader>
+        <span className="fixed-page-meta">
+          {directory?.split(/[\\/]/).filter(Boolean).pop() ||
+            (zh ? "工作区文件" : "Workspace files")}
+          <span className="heading-count">{nodes.length}</span>
+        </span>
         <button
           className="secondary"
-          disabled={busy}
+          disabled={busy || refreshing}
           onClick={() => void load()}
         >
-          <RefreshCw size={15} className={busy ? "spin" : ""} />
-          {busy ? (zh ? "刷新中" : "Refreshing") : t.refresh}
+          <RefreshCw size={15} className={busy || refreshing ? "spin" : ""} />
+          {t.refresh}
         </button>
-      </header>
+      </FixedPageHeader>
       <div className="file-filterbar">
         <div className="segmented">
           {[

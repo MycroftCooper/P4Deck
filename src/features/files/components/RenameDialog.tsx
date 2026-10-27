@@ -146,12 +146,12 @@ export function RenameDialog({
       setResult(value);
       setPhase("result");
       if (value.refresh.workspaceStatus || value.refresh.pendingChanges)
-        await onRefresh?.();
+        void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } catch (cause) {
       if (epoch !== generation.current) return;
       setFailure(String(cause));
       setPhase("result");
-      await onRefresh?.();
+      void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
       if (activeOperation.current === operationId)
         activeOperation.current = undefined;

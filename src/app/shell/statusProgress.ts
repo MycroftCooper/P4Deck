@@ -13,32 +13,45 @@ export function diskMetrics(disk: DiskUsage) {
     low: available / disk.total < 0.05,
   };
 }
-export type ActiveOperations = Map<string, number | undefined>;
-/** Only retain active operation counters, never stdout or event history. */
+export interface ActiveTask {
+  id: string;
+  label: string;
+  phase: "queued" | "running";
+  progress?: number;
+}
+export type ActiveOperations = Map<string, ActiveTask>;
+/** Retain only active command metadata and counters, never stdout or event history. */
 export function updateProgress(
   active: ActiveOperations,
   event: OperationEvent,
 ) {
   if (event.type === "completed" || event.type === "cancelled")
     active.delete(event.operationId);
-  else if (event.type === "queued" || event.type === "started")
-    active.set(event.operationId, undefined);
-  else if (
+  else if (event.type === "queued" || event.type === "started") {
+    const previous = active.get(event.operationId);
+    active.set(event.operationId, {
+      id: event.operationId,
+      label: event.message || previous?.label || "P4",
+      phase: event.type === "queued" ? "queued" : "running",
+      progress: previous?.progress,
+    });
+  } else if (
     event.type === "progress" &&
     active.has(event.operationId) &&
     Number.isFinite(event.progress)
   ) {
-    active.set(
-      event.operationId,
-      Math.max(
-        active.get(event.operationId) ?? 0,
+    const task = active.get(event.operationId)!;
+    active.set(event.operationId, {
+      ...task,
+      progress: Math.max(
+        task.progress ?? 0,
         Math.min(100, Math.max(0, event.progress!)),
       ),
-    );
+    });
   }
 }
-export function progressSummary(active: ActiveOperations) {
-  const values = [...active.values()];
+export function progressSummary(tasks: Iterable<ActiveTask>) {
+  const values = [...tasks].map((task) => task.progress);
   return {
     count: values.length,
     percent:

@@ -1,7 +1,11 @@
 import { expect, it } from "vitest";
 import type { WorkspaceNode } from "../../shared/contracts/types";
 import { containsNode, nodeKey, selectionKeys, selectRange } from "./selection";
-import { compactTargets, selectionRequest } from "./selectionCommands";
+import {
+  affectedPathAliases,
+  compactTargets,
+  selectionRequest,
+} from "./selectionCommands";
 const make = (
   name: string,
   kind: WorkspaceNode["kind"] = "file",
@@ -75,6 +79,14 @@ it("collapses nested selections without matching sibling prefixes", () => {
     ]),
   ).toEqual([folder, make("src-other/a")]);
 });
+it("adds local aliases to confirmed depot paths for scoped cache invalidation", () => {
+  expect(affectedPathAliases(["//depot/a"], [rows[0]])).toEqual([
+    "//depot/a",
+    "/root/a",
+  ]);
+  expect(affectedPathAliases([], rows)).toEqual([]);
+  expect(affectedPathAliases(undefined, rows)).toBeUndefined();
+});
 it("builds one batch with recursive folder filespecs and never locally deletes an untracked folder", () => {
   const folder = { ...make("src", "directory"), state: "untracked" as const };
   const request = selectionRequest(
@@ -85,6 +97,41 @@ it("builds one batch with recursive folder filespecs and never locally deletes a
   expect(request.action).toBe("markForDelete");
   expect(request.paths).toEqual(["//depot/src/...", "//depot/a"]);
   expect(request.operationId).toBe("operation");
+});
+it("scopes revert unchanged to its CL and retains every explicit file", () => {
+  const targets = [make("a"), make("b")].map((item) => ({
+    ...item,
+    state: "openedEdit" as const,
+    changelistId: 0,
+  }));
+  expect(selectionRequest("revertUnchanged", targets)).toMatchObject({
+    action: "revertUnchanged",
+    changelistId: 0,
+    paths: ["//depot/a", "//depot/b"],
+  });
+  expect(
+    selectionRequest(
+      "revertUnchanged",
+      targets.map((item) => ({ ...item, changelistId: 202 })),
+    ).changelistId,
+  ).toBe(202);
+});
+it("marks a whole-changelist revert only when the caller proves the full scope", () => {
+  const partial = selectionRequest("revert", rows.slice(0, 2), "operation");
+  expect(partial).not.toHaveProperty("revertWholeChangelist");
+  expect(partial).not.toHaveProperty("changelistId");
+
+  expect(selectionRequest("revert", rows, "operation", 202)).toMatchObject({
+    action: "revert",
+    changelistId: 202,
+    revertWholeChangelist: true,
+    paths: ["//depot/a", "//depot/b", "//depot/c", "//depot/d"],
+  });
+  expect(selectionRequest("revert", rows, "operation", 0)).toMatchObject({
+    action: "revert",
+    changelistId: 0,
+    revertWholeChangelist: true,
+  });
 });
 it("adds folders with add-only reconciliation and escapes local reserved characters", () => {
   const request = selectionRequest("add", [

@@ -1,17 +1,26 @@
+import { classifySubmission, submissionKindLabel } from "../submittedReport";
+import { SubmittedChangeFiles } from "./SubmittedChangeFiles";
+import { useChangeDetails } from "./ChangeDetailsDialog";
 import { useCommandFocus } from "../../../app/shell/CommandContext";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  ChevronDown,
+  ChevronRight,
   GitMerge,
-  MoreHorizontal,
-  Plus,
   RefreshCw,
   ShieldAlert,
   ShieldQuestion,
 } from "lucide-react";
 import type {
   ChangelistSummary,
-  ChangeStatus,
   ClAction,
   SubmittedChangeDetail,
 } from "../../../shared/contracts/types";
@@ -22,18 +31,19 @@ import { TableHeader } from "../../../app/context-menu/TableHeader";
 import { action, copy } from "../../../app/context-menu/bindings";
 import { useRecordSelection } from "../../../app/context-menu/useRecordSelection";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
-import { RevisionFileList } from "./RevisionFileList";
-import { ChangelistFormDialog } from "./ChangelistFormDialog";
-import { backend } from "../../../infrastructure/backend";
-import { SwarmAction, swarmMenuAction } from "../../swarm/SwarmAction";
+import { swarmMenuAction } from "../../swarm/SwarmAction";
+import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 type Copy = (typeof messages)[keyof typeof messages];
 
 interface Props {
+  expansionScope: string;
   t: Copy;
   changes: ChangelistSummary[];
   loading: boolean;
   loadingMore: boolean;
   queryControls: ReactNode;
+  resultSummary?: ReactNode;
+  pageActions?: ReactNode;
   hiddenMergeCount: number;
   hasMore: boolean;
   partial: boolean;
@@ -41,69 +51,89 @@ interface Props {
   stats: { scannedCount: number; matchedCount: number; pageCount: number };
   pageError: string;
   selected: number | null;
-  detail: SubmittedDetailViewState;
-  mock: boolean;
   onRefresh(): void;
   onLoadMore(): void;
   onAction(action: ClAction): void;
   onSelectedChange(value: number | null): void;
-  onRetryDetail(): void;
+  onDetailLoaded(value: SubmittedChangeDetail): void;
 }
-
-export type SubmittedDetailViewState =
-  | { phase: "idle" }
-  | { phase: "loading"; changeId: number }
-  | { phase: "error"; changeId: number; message: string }
-  | { phase: "success"; changeId: number; value: SubmittedChangeDetail };
 
 export function ChangelistPage(props: Props) {
   const { t, changes } = props;
   const scrollRef = useRef<HTMLDivElement>(null);
   const menu = useContextMenu();
+  const openChangeDetails = useChangeDetails();
+  const inspect = (id: number, source?: HTMLElement | null) =>
+    openChangeDetails?.(
+      { kind: "submitted", changeId: id, onLoaded: props.onDetailLoaded },
+      source,
+    );
   const env = useMenuEnvironment();
+  const [expansion, setExpansion] = useState<{
+    scope: string;
+    ids: Set<number>;
+  }>({ scope: props.expansionScope, ids: new Set() });
+  const expanded =
+    expansion.scope === props.expansionScope
+      ? expansion.ids
+      : new Set<number>();
+  const fileCache = useRef({
+    scope: props.expansionScope,
+    entries: new Map<number, SubmittedChangeDetail>(),
+  });
+  if (fileCache.current.scope !== props.expansionScope)
+    fileCache.current = { scope: props.expansionScope, entries: new Map() };
+  const toggle = (id: number) =>
+    setExpansion((previous) => {
+      const ids = new Set(
+        previous.scope === props.expansionScope ? previous.ids : [],
+      );
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      return { scope: props.expansionScope, ids };
+    });
+
   const selection = useRecordSelection(
     changes,
     (change) => String(change.id),
     env.connectionKey,
   );
   const focus = useCommandFocus();
-  const [createSource, setCreateSource] = useState<HTMLElement>();
+  const headerTarget = useContext(PageHeaderActionsContext);
   const virtualizer = useVirtualizer({
     count: changes.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 64,
+    getItemKey: (index) => changes[index].id,
+    estimateSize: (index) => (expanded.has(changes[index].id) ? 324 : 64),
     overscan: 10,
     initialRect: { width: 800, height: 480 },
   });
+  // Both sections have fixed CSS heights. Never cache a zero DOM measurement
+  // from a hidden dock tab; it would give every subsequent row the same start.
+  useLayoutEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, expansion, props.expansionScope, changes]);
   const measuredRows = virtualizer.getVirtualItems();
   const visibleRows = measuredRows.length
     ? measuredRows
     : Array.from({ length: Math.min(changes.length, 18) }, (_, index) => ({
         index,
         key: changes[index].id,
-        start: index * 64,
-        size: 64,
-        end: (index + 1) * 64,
+        start: changes
+          .slice(0, index)
+          .reduce(
+            (height, change) => height + (expanded.has(change.id) ? 324 : 64),
+            0,
+          ),
+        size: expanded.has(changes[index].id) ? 324 : 64,
+        end: changes
+          .slice(0, index + 1)
+          .reduce(
+            (height, change) => height + (expanded.has(change.id) ? 324 : 64),
+            0,
+          ),
         lane: 0,
       }));
-  const selectedChange = useMemo(
-    () => changes.find((change) => change.id === props.selected),
-    [changes, props.selected],
-  );
-
-  const detailValue =
-    props.detail.phase === "success" &&
-    props.detail.changeId === selectedChange?.id
-      ? props.detail.value
-      : undefined;
-
-  const statusLabel = (status: ChangeStatus) =>
-    status === "pending"
-      ? t.pending
-      : status === "shelved"
-        ? t.shelved
-        : t.submitted;
-
   const changeMenu = (change: ChangelistSummary) =>
     menu(
       selection.targets(change).length > 1
@@ -117,12 +147,8 @@ export function ChangelistPage(props: Props) {
               ? "C02"
               : "C03",
       () => ({
-        查看详情: action(() => props.onSelectedChange(change.id)),
-        "展开/折叠": action(() =>
-          props.onSelectedChange(
-            props.selected === change.id ? null : change.id,
-          ),
-        ),
+        查看详情: action((source) => inspect(change.id, source)),
+        "展开/折叠": action(() => toggle(change.id)),
         "复制 CL 编号": copy(change.id),
         "复制来源 CL 编号": copy(change.id),
         复制描述: copy(change.description),
@@ -160,61 +186,42 @@ export function ChangelistPage(props: Props) {
 
   return (
     <section className="main-content">
-      {createSource && (
-        <ChangelistFormDialog
-          mode="create"
-          client={env.runtime.context.client}
-          zh={env.preferences.zh}
-          source={createSource}
-          onDismiss={() => setCreateSource(undefined)}
-          onSubmit={async (draft) => {
-            try {
-              const result = await backend.mutatePendingChange({
-                type: "create",
-                description: draft.description,
-                jobs: draft.jobs,
-                operationId: crypto.randomUUID(),
-              });
-              if (result.refreshError) {
-                window.dispatchEvent(new Event("p4deck:pending-refresh"));
-                throw new Error(
-                  `${env.preferences.zh ? "CL 可能已创建，但刷新失败；请关闭并刷新后确认，不要直接重试。" : "The changelist may have been created, but refresh failed. Close and refresh before retrying."} ${result.refreshError}`,
-                );
-              }
-              window.dispatchEvent(
-                new CustomEvent("p4deck:pending-mutation", { detail: result }),
-              );
-            } catch (cause) {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              throw cause;
-            }
-          }}
-        />
+      {headerTarget &&
+        createPortal(
+          <>
+            {props.pageActions}
+            <button
+              title={t.refresh}
+              aria-label={t.refresh}
+              onClick={props.onRefresh}
+            >
+              <RefreshCw
+                size={15}
+                aria-hidden="true"
+                className={props.loading ? "spin" : ""}
+              />
+              <span>{t.refresh}</span>
+            </button>
+          </>,
+          headerTarget,
+        )}
+
+      {!headerTarget && props.pageActions && (
+        <div className="submitted-page-actions target-controls">
+          {props.pageActions}
+        </div>
       )}
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">{t.defaultScope}</p>
-          <h1>{t.title}</h1>
-          <p>{t.subtitle}</p>
-        </div>
-        <div className="header-actions">
-          <button className="secondary" onClick={props.onRefresh}>
-            <RefreshCw size={15} className={props.loading ? "spin" : ""} />
-            {t.refresh}
-          </button>
-          <button
-            className="primary"
-            onClick={(event) => setCreateSource(event.currentTarget)}
-          >
-            <Plus size={16} />
-            {t.create}
-          </button>
-        </div>
-      </header>
-
       {props.queryControls}
+      {props.resultSummary && (
+        <div className="submitted-result-summary" role="status">
+          {props.resultSummary}
+        </div>
+      )}
 
-      <section className="cl-layout">
+      <section
+        className="cl-layout"
+        style={{ gridTemplateColumns: "minmax(0, 1fr)" }}
+      >
         <div className="cl-panel">
           <TableHeader
             className="cl-table-head"
@@ -237,14 +244,17 @@ export function ChangelistPage(props: Props) {
               清除选择: action(selection.clear),
             }))}
           >
-            {changes.length === 0 && props.loading ? (
+            {changes.length === 0 &&
+            props.loading &&
+            props.stats.pageCount === 0 ? (
               <div className="empty-state" role="status">
                 {env.preferences.zh
                   ? "正在查询 Submitted…"
                   : "Loading submitted changes…"}
               </div>
             ) : null}
-            {changes.length === 0 && !props.loading ? (
+            {changes.length === 0 &&
+            (!props.loading || props.stats.pageCount > 0) ? (
               <div className="empty-state">{t.empty}</div>
             ) : null}
             <div
@@ -256,66 +266,130 @@ export function ChangelistPage(props: Props) {
               {visibleRows.map((row) => {
                 const change = changes[row.index];
                 return (
-                  <button
+                  <div
                     key={change.id}
-                    className={`cl-row ${selection.isSelected(change) || props.selected === change.id ? "selected" : ""}`}
+                    data-index={row.index}
+                    className="submitted-change-row"
                     style={{
                       transform: `translateY(${row.start}px)`,
-                      height: `${row.size}px`,
+                      height: expanded.has(change.id) ? 324 : 64,
                     }}
-                    onFocus={() => focus({ type: "submitted", id: change.id })}
-                    {...changeMenu(change)}
-                    onClick={(event) => {
-                      selection.select(change, event);
-                      props.onSelectedChange(change.id);
-                      focus({ type: "submitted", id: change.id });
-                    }}
-                    aria-expanded={props.selected === change.id}
                   >
-                    <span className="cl-description">
-                      <strong>{change.id}</strong>
-                      <span>{change.description}</span>
-                      {change.mergeClassification === "reliableMerge" ? (
-                        <em className="merge-tag">
-                          <GitMerge size={11} />
-                          {t.merge}
-                        </em>
-                      ) : null}
-                      {change.mergeClassification === "suspectedMerge" ? (
+                    <button
+                      className={`cl-row ${selection.isSelected(change) || props.selected === change.id ? "selected" : ""}`}
+                      onFocus={() =>
+                        focus({ type: "submitted", id: change.id })
+                      }
+                      {...changeMenu(change)}
+                      onClick={(event) => {
+                        selection.select(change, event);
+                        props.onSelectedChange(change.id);
+                        focus({ type: "submitted", id: change.id });
+                      }}
+                      onDoubleClick={(event) =>
+                        inspect(change.id, event.currentTarget)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          inspect(change.id, event.currentTarget);
+                        }
+                      }}
+                    >
+                      <span className="cl-description">
+                        <strong>{change.id}</strong>
                         <em
-                          className="merge-tag suspected"
-                          title={t.suspectedHint}
+                          className="submission-kind-tag"
+                          title={`${submissionKindLabel(classifySubmission(change.description).kind, env.preferences.zh)} · ${classifySubmission(change.description).reason}`}
                         >
-                          <ShieldAlert size={11} />
-                          {t.suspected}
+                          {submissionKindLabel(
+                            classifySubmission(change.description).kind,
+                            env.preferences.zh,
+                          )}
                         </em>
-                      ) : null}
-                      {change.mergeClassification === "unknown" ? (
-                        <em className="merge-tag unknown" title={t.unknownHint}>
-                          <ShieldQuestion size={11} />
-                          {t.unknownClassification}
-                        </em>
-                      ) : null}
-                    </span>
-                    <span>
-                      <i className={`status-pill ${change.status}`}>
-                        {statusLabel(change.status)}
-                      </i>
-                    </span>
-                    <span className="muted-cell">
-                      {change.user}
-                      <small>{change.client}</small>
-                    </span>
-                    <span className="count-cell">{change.fileCount}</span>
-                    <time>
-                      {new Intl.DateTimeFormat(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }).format(new Date(change.time))}
-                    </time>
-                  </button>
+                        <span>{change.description}</span>
+                        {change.mergeClassification === "reliableMerge" ? (
+                          <em className="merge-tag">
+                            <GitMerge size={11} />
+                            {t.merge}
+                          </em>
+                        ) : null}
+                        {change.mergeClassification === "suspectedMerge" ? (
+                          <em
+                            className="merge-tag suspected"
+                            title={t.suspectedHint}
+                          >
+                            <ShieldAlert size={11} />
+                            {t.suspected}
+                          </em>
+                        ) : null}
+                        {change.mergeClassification === "unknown" ? (
+                          <em
+                            className="merge-tag unknown"
+                            title={t.unknownHint}
+                          >
+                            <ShieldQuestion size={11} />
+                            {t.unknownClassification}
+                          </em>
+                        ) : null}
+                      </span>
+                      <span>
+                        <i className={`status-pill ${change.status}`}>
+                          {change.status === "submitted"
+                            ? t.submitted
+                            : change.status === "pending"
+                              ? t.pending
+                              : t.shelved}
+                        </i>
+                      </span>
+                      <span
+                        className="muted-cell"
+                        title={`${change.user} · ${change.client}`}
+                      >
+                        {change.user}
+                        <small>{change.client}</small>
+                      </span>
+                      <span className="count-cell">{change.fileCount}</span>
+                      <time>
+                        {new Intl.DateTimeFormat(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(new Date(change.time))}
+                      </time>
+                    </button>
+                    <button
+                      className="secondary submitted-expand"
+                      aria-expanded={expanded.has(change.id)}
+                      aria-label={`${env.preferences.zh ? (expanded.has(change.id) ? "收起文件" : "展开文件") : expanded.has(change.id) ? "Collapse files" : "Expand files"} · CL ${change.id}`}
+                      title={
+                        env.preferences.zh
+                          ? "展开/收起改动文件"
+                          : "Expand/collapse changed files"
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggle(change.id);
+                      }}
+                    >
+                      {expanded.has(change.id) ? (
+                        <ChevronDown size={15} aria-hidden="true" />
+                      ) : (
+                        <ChevronRight size={15} aria-hidden="true" />
+                      )}
+                    </button>
+                    {expanded.has(change.id) && (
+                      <SubmittedChangeFiles
+                        key={`${props.expansionScope}:${change.id}`}
+                        changeId={change.id}
+                        scope={props.expansionScope}
+                        cache={fileCache.current.entries}
+                        runtime={env.runtime}
+                        zh={env.preferences.zh}
+                      />
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -355,7 +429,7 @@ export function ChangelistPage(props: Props) {
             {props.hasMore || props.pageError ? (
               <button
                 className="secondary submitted-load-more"
-                disabled={props.loadingMore || !props.hasMore}
+                disabled={props.loading || props.loadingMore || !props.hasMore}
                 onClick={props.onLoadMore}
               >
                 {props.loadingMore
@@ -373,175 +447,6 @@ export function ChangelistPage(props: Props) {
             ) : null}
           </footer>
         </div>
-
-        <aside className={`detail-panel ${selectedChange ? "visible" : ""}`}>
-          {selectedChange ? (
-            <>
-              <header>
-                <div>
-                  <small>CHANGE</small>
-                  <h2>{selectedChange.id}</h2>
-                </div>
-                <button
-                  className="icon-button"
-                  aria-label={t.more}
-                  onClick={(event) =>
-                    changeMenu(selectedChange).onContextMenu(event)
-                  }
-                >
-                  <MoreHorizontal size={18} />
-                </button>
-                <SwarmAction
-                  runtime={env.runtime}
-                  zh={env.preferences.zh}
-                  target={{
-                    kind: "submittedChange",
-                    changeId: selectedChange.id,
-                  }}
-                />
-              </header>
-              <p className="detail-description">{selectedChange.description}</p>
-              <dl>
-                <div>
-                  <dt>{t.user}</dt>
-                  <dd>{selectedChange.user}</dd>
-                </div>
-                <div>
-                  <dt>{t.workspace}</dt>
-                  <dd>{selectedChange.client}</dd>
-                </div>
-                <div>
-                  <dt>{t.status}</dt>
-                  <dd>{statusLabel(selectedChange.status)}</dd>
-                </div>
-                <div>
-                  <dt>{t.files}</dt>
-                  <dd>{selectedChange.fileCount}</dd>
-                </div>
-              </dl>
-              {props.mock ? (
-                <p className="mock-detail-notice">{t.mockDetailNotice}</p>
-              ) : null}
-              {props.detail.phase === "loading" &&
-              props.detail.changeId === selectedChange.id ? (
-                <div className="submitted-detail-state" role="status">
-                  <RefreshCw className="spin" size={16} />
-                  {t.detailLoading}
-                </div>
-              ) : null}
-              {props.detail.phase === "error" &&
-              props.detail.changeId === selectedChange.id ? (
-                <div className="submitted-detail-state error" role="alert">
-                  <strong>{t.detailError}</strong>
-                  <span>{props.detail.message}</span>
-                  <button className="secondary" onClick={props.onRetryDetail}>
-                    {t.retry}
-                  </button>
-                </div>
-              ) : null}
-              {detailValue ? (
-                <div className="submitted-detail-content">
-                  <dl>
-                    <div>
-                      <dt>{t.classification}</dt>
-                      <dd
-                        className={`classification ${detailValue.mergeClassification}`}
-                      >
-                        {detailValue.mergeClassification === "reliableMerge"
-                          ? t.merge
-                          : detailValue.mergeClassification === "suspectedMerge"
-                            ? t.suspected
-                            : detailValue.mergeClassification === "normal"
-                              ? t.normalChange
-                              : t.unknownClassification}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t.inspection}</dt>
-                      <dd>
-                        {detailValue.inspectionStatus === "complete"
-                          ? t.inspectionComplete
-                          : detailValue.inspectionStatus === "partial"
-                            ? t.inspectionPartial
-                            : t.inspectionUnavailable}
-                      </dd>
-                    </div>
-                  </dl>
-                  {detailValue.message ? (
-                    <p className="inspection-message">{detailValue.message}</p>
-                  ) : null}
-                  <p className="classification-hint">
-                    {detailValue.mergeClassification === "reliableMerge"
-                      ? t.reliableEvidenceHint
-                      : detailValue.mergeClassification === "suspectedMerge"
-                        ? t.suspectedHint
-                        : detailValue.mergeClassification === "unknown"
-                          ? t.unknownHint
-                          : t.noIntegrationEvidence}
-                  </p>
-                  <section className="submitted-detail-section">
-                    <h3>{t.jobs}</h3>
-                    {detailValue.jobs.length ? (
-                      <ul className="submitted-jobs">
-                        {detailValue.jobs.map((job) => (
-                          <li key={job}>{job}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="detail-empty">{t.noJobs}</p>
-                    )}
-                  </section>
-                  <section className="submitted-detail-section">
-                    <h3>{t.integrationEvidence}</h3>
-                    {detailValue.integrationEvidence.length ? (
-                      <ul className="integration-evidence">
-                        {detailValue.integrationEvidence.map(
-                          (evidence, index) => (
-                            <li
-                              key={`${evidence.source}:${evidence.depotPath}:${index}`}
-                            >
-                              <strong>
-                                {evidence.source === "describeAction"
-                                  ? "describe action"
-                                  : "filelog"}
-                              </strong>
-                              <span>{evidence.depotPath}</span>
-                              <code>{evidence.relationship}</code>
-                              {evidence.relatedPath ? (
-                                <span>→ {evidence.relatedPath}</span>
-                              ) : null}
-                            </li>
-                          ),
-                        )}
-                      </ul>
-                    ) : (
-                      <p className="detail-empty">{t.noIntegrationEvidence}</p>
-                    )}
-                  </section>
-                  <section className="submitted-detail-section submitted-files-section">
-                    <h3>
-                      {t.submittedFiles} · {detailValue.files.length}
-                    </h3>
-                    <RevisionFileList
-                      scope={`${selectedChange.id}:${props.mock ? "mock" : "tauri"}`}
-                      demo={props.mock}
-                      files={detailValue.files.map((file) => ({
-                        ...file,
-                        changeId: selectedChange.id,
-                      }))}
-                    />
-                  </section>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="detail-placeholder">
-              {env.preferences.zh
-                ? "选择一个 CL 查看详情与可用操作。"
-                : "Select a changelist to inspect and act."}
-            </div>
-          )}
-        </aside>
       </section>
     </section>
   );

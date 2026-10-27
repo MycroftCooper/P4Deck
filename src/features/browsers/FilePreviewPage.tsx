@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PageRefreshSlotContext } from "../../app/docking/chrome";
 import { useFilePreview } from "./useFilePreview";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FileText, Image, Minus, Plus, RefreshCw } from "lucide-react";
@@ -9,8 +11,6 @@ import { action, copy } from "../../app/context-menu/bindings";
 import { useFullTextSelection } from "../../app/context-menu/FullTextSelection";
 export function FilePreviewPage({
   target,
-  locked,
-  onTargetChange,
   runtime,
   zh,
 }: {
@@ -23,8 +23,8 @@ export function FilePreviewPage({
   const menu = useContentMenu();
   const textSelection = useFullTextSelection();
   const tr = (a: string, b: string) => (zh ? a : b);
-  const [path, setPath] = useState(target),
-    [zoom, setZoom] = useState<number | null>(null),
+  const refreshSlot = useContext(PageRefreshSlotContext);
+  const [zoom, setZoom] = useState<number | null>(null),
     [imageError, setImageError] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
   const { data, error, loading, reload } = useFilePreview(target, runtime);
@@ -32,7 +32,6 @@ export function FilePreviewPage({
     if (loading) setImageError(false);
   }, [loading]);
   useEffect(() => {
-    setPath(target);
     setZoom(null);
     setImageError(false);
     scroll.current?.scrollTo(0, 0);
@@ -50,49 +49,26 @@ export function FilePreviewPage({
     estimateSize: () => 24,
     overscan: 10,
   });
+  const refreshButton = (
+    <button
+      type="button"
+      title={tr("刷新", "Refresh")}
+      aria-label={tr("刷新", "Refresh")}
+      aria-busy={loading}
+      disabled={!target || loading}
+      onClick={reload}
+    >
+      <RefreshCw
+        size={14}
+        className={loading ? "spin" : ""}
+        aria-hidden="true"
+      />
+      {!refreshSlot && <span>{tr("刷新", "Refresh")}</span>}
+    </button>
+  );
   return (
     <section className="file-preview-page" ref={textSelection.surfaceRef}>
-      <header className="preview-heading">
-        <div>
-          <span className="workspace-eyebrow">WORKSPACE / PREVIEW</span>
-          <h1>{tr("文件预览", "File preview")}</h1>
-          <p>
-            {tr(
-              "本地当前内容 · 只读 · 文本 / 图片",
-              "Local working copy · Read-only · Text / images",
-            )}
-          </p>
-        </div>
-        <button
-          className="secondary"
-          disabled={!target || loading}
-          onClick={reload}
-        >
-          <RefreshCw size={14} />
-          {tr("刷新", "Refresh")}
-        </button>
-      </header>
-      <form
-        className="history-path"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (locked || !path.trim()) return;
-          if (path.trim() === target) reload();
-          else onTargetChange(path.trim());
-        }}
-      >
-        <input
-          aria-label={tr("预览文件路径", "Preview file path")}
-          disabled={locked}
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          placeholder={tr(
-            "本地路径，或已同步文件的 Depot 路径",
-            "Local path, or depot path of a synced file",
-          )}
-        />
-        <button disabled={locked || !path.trim()}>{tr("查看", "Load")}</button>
-      </form>
+      {refreshSlot ? createPortal(refreshButton, refreshSlot) : refreshButton}
       {runtime.mode === "mock" && (
         <div className="preview-note">
           {tr(

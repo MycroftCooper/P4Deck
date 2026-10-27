@@ -12,6 +12,41 @@ beforeEach(() => {
   listen.mockReset();
 });
 
+it("uses fixed native log commands and subscribes to log deletion across windows", async () => {
+  await tauriBackend.openLogsFolder();
+  expect(invoke).toHaveBeenLastCalledWith("open_logs_folder");
+  await tauriBackend.deleteAllLogs();
+  expect(invoke).toHaveBeenLastCalledWith("delete_all_logs");
+  const callback = vi.fn();
+  await tauriBackend.subscribeLogsCleared(callback);
+  expect(listen).toHaveBeenLastCalledWith("logs-cleared", callback);
+});
+
+it("routes cancel-all to the runner instead of a particular task", async () => {
+  await tauriBackend.cancelAllOperations();
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("cancel_all_operations");
+});
+
+it("routes configuration backup commands through narrow native commands", async () => {
+  const create = {
+    localStorage: [{ key: "p4deck.ui", value: '{"compact":true}' }],
+  };
+  invoke.mockResolvedValue({ backup: { fileName: "safe.json" } });
+  await tauriBackend.createConfigBackup(create);
+  expect(invoke).toHaveBeenLastCalledWith("create_config_backup", {
+    request: create,
+  });
+  await tauriBackend.listConfigBackups();
+  expect(invoke).toHaveBeenLastCalledWith("list_config_backups");
+  const restore = { fileName: "safe.json", localStorage: create.localStorage };
+  await tauriBackend.restoreConfigBackup(restore);
+  expect(invoke).toHaveBeenLastCalledWith("restore_config_backup", {
+    request: restore,
+  });
+  await tauriBackend.openConfigBackupsFolder();
+  expect(invoke).toHaveBeenLastCalledWith("open_config_backups_folder");
+});
+
 it("passes profile activation and workspace switch requests unchanged", async () => {
   invoke.mockResolvedValue({ profiles: [] });
   await tauriBackend.listConnectionProfiles();
@@ -94,6 +129,7 @@ it("passes draft-scoped connection browse and guarded create requests unchanged"
       name: "new-workspace",
       root: "C:/work/new-workspace",
       mapping: { kind: "stream" as const, stream: "//depot/main" },
+      syncMode: "standard" as const,
     },
   };
   await tauriBackend.preflightCreateConnectionWorkspace(workspaceRequest);
@@ -171,6 +207,18 @@ it("passes typed sync preview and confirmation requests through narrow commands"
   };
   await tauriBackend.confirmSync(confirmation);
   expect(invoke).toHaveBeenLastCalledWith("confirm_sync", { confirmation });
+});
+
+it("passes a generation-bound P4VFS inspection request through its narrow command", async () => {
+  const request = {
+    expectedContextGeneration: 7,
+    operationId: "vfs-inspect-7",
+  };
+  invoke.mockResolvedValue({ mode: "virtual", ready: true });
+  await tauriBackend.inspectP4Vfs(request);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("inspect_p4vfs", {
+    request,
+  });
 });
 
 it("passes immutable stream-switch preflight and confirmation payloads unchanged", async () => {
@@ -365,4 +413,18 @@ it("passes diagnostic filters unchanged and listens to the narrow alert event", 
     operationId: "op-safe",
     level: "error",
   });
+});
+
+it("routes single-revision Undo preview and confirmation through dedicated commands", async () => {
+  const request = {
+    depotPath: "//depot/f.txt",
+    revision: 17,
+    changelistId: 901,
+  };
+  invoke.mockResolvedValue({});
+  await tauriBackend.previewUndo(request);
+  expect(invoke).toHaveBeenLastCalledWith("preview_undo", { request });
+  const confirmation = { target: request, token: "reviewed" };
+  await tauriBackend.confirmUndo(confirmation);
+  expect(invoke).toHaveBeenLastCalledWith("confirm_undo", { confirmation });
 });

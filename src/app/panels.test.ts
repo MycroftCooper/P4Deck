@@ -139,3 +139,27 @@ it("maps every global search target only to an existing destination page", () =>
   ).toBe("streams");
   expect(pageForSearchTarget({ type: "shelf", changeId: 44 })).toBe("shelf");
 });
+
+it("localizes fixed and multi-instance page titles using the current locale", () => {
+  expect(pageLabels(true).history).toBe("历史记录");
+  expect(pageLabels(false).history).toBe("History");
+  expect(pageLabels(true).pending).toBe("待提交");
+  expect(pageLabels(true).submitted).toBe("已提交");
+  expect(pageLabels(true).diff).toBe("差异");
+});
+it("retains valid persisted revision pairs and rejects malformed operands", () => {
+  expect(
+    normalizePanelTarget({
+      target: "//mock/config.toml",
+      locked: true,
+      comparison: { left: 7, right: 8 },
+    }).comparison,
+  ).toEqual({ left: 7, right: 8 });
+  for (const comparison of [
+    { left: 8, right: 7 },
+    { left: 7, right: 7 },
+    { left: 0, right: 1 },
+    { left: "7", right: 8 },
+  ])
+    expect(normalizePanelTarget({ comparison }).comparison).toBeUndefined();
+});

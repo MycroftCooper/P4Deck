@@ -277,7 +277,9 @@ it("restarts an expired cursor and isolates late detail responses across connect
     host.querySelector<HTMLButtonElement>('[role="option"]')!.click(),
   );
   await click("Load more");
-  expect(host.textContent).toContain("restarted from the first page");
+  expect(host.textContent).not.toContain("restarted from the first page");
+  expect(host.textContent).toContain("fresh");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
 
   await render({
     ...runtime,
@@ -306,4 +308,32 @@ it("caps a large list to the virtual window DOM budget", async () => {
   );
   await render();
   expect(host.querySelectorAll('[role="option"]')).toHaveLength(18);
+});
+
+it("keeps the list visible during silent cursor recovery and reports a real refresh failure once", async () => {
+  let fail!: (reason: unknown) => void;
+  backend.queryBranchMappings
+    .mockImplementationOnce(async (query: BranchMappingQuery) =>
+      page(query, ["cached-mapping"], { hasMore: true, nextCursor: "invalid" }),
+    )
+    .mockRejectedValueOnce({ code: "invalidCursor", message: "invalid cursor" })
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+  await render();
+  await click("Load more");
+  expect(backend.queryBranchMappings).toHaveBeenCalledTimes(3);
+  expect(backend.queryBranchMappings.mock.calls[2][0].cursor).toBeUndefined();
+  expect(host.textContent).toContain("cached-mapping");
+  expect(host.textContent).not.toMatch(
+    /invalid cursor|restarted from the first page/i,
+  );
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => fail(new Error("Server unavailable")));
+  expect(host.textContent).toContain("cached-mapping");
+  expect(host.textContent).toContain("Server unavailable");
+  expect(backend.queryBranchMappings).toHaveBeenCalledTimes(3);
 });

@@ -1,10 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import {
+  SyncDialog,
+  type SyncDialogRequest,
+} from "../files/components/SyncDialog";
+import {
+  UndoDialog,
+  type UndoDialogRequest,
+} from "../files/components/UndoDialog";
+import { useChangeDetails } from "../changelists/components/ChangeDetailsDialog";
+import { commandActions } from "../../app/actions/actionCatalog";
+import {
+  CommandExecutionContext,
+  useCommandFocus,
+} from "../../app/shell/CommandContext";
+import { PageActiveContext } from "../../app/docking/chrome";
+import { HistoryTable } from "./HistoryTable";
+import { FixedPageHeader } from "../../app/docking/chrome";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PageRefreshSlotContext } from "../../app/docking/chrome";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Network, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
-  DiffResult,
   FileHistoryPage,
   FileRevision,
   RuntimeInfo,
@@ -17,6 +34,7 @@ import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
 import {
   historyDiffPair,
+  historyMenuQueue,
   makeReviewScope,
   mergeHistoryRows,
 } from "./reviewModel";
@@ -28,19 +46,52 @@ import {
   useReviewRequestOwner,
 } from "./reviewRequests";
 import { StreamSwitchDialog } from "./StreamSwitchDialog";
-import { SwarmAction, swarmMenuAction } from "../swarm/SwarmAction";
-const cache = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
-  },
-});
+import { swarmMenuAction } from "../swarm/SwarmAction";
+import { appCache } from "../../shared/cache/appCache";
+import {
+  CACHE_POLICY,
+  serverScope,
+  snapshotKey,
+} from "../../shared/cache/policy";
+import { isFresh, writeSnapshot } from "../../shared/cache/snapshots";
+import { useSnapshotQuery } from "../../shared/cache/useSnapshotQuery";
+import { useViewRefresh } from "../../shared/cache/useViewRefresh";
+import { invalidateData } from "../../shared/cache/dataEffects";
+import { pageActions } from "../../app/actions/actionCatalog";
+
+export function isStreamList(value: unknown): value is StreamSummary[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        !!item &&
+        typeof item.stream === "string" &&
+        typeof item.name === "string" &&
+        typeof item.parent === "string" &&
+        typeof item.kind === "string",
+    )
+  );
+}
+
+function historyNoticeFor(page: FileHistoryPage, zh: boolean) {
+  return page.truncated
+    ? zh
+      ? "历史结果达到安全上限，当前结果已截断。"
+      : "History reached its safety limit and was truncated."
+    : page.partial
+      ? zh
+        ? "历史结果不完整。"
+        : "History results are partial."
+      : "";
+}
+
 export function ReadOnlyPage({
   kind,
   runtime,
   target = "",
-  locked = false,
-  onTargetChange,
+  locked,
   onRuntime,
+  onPreviewChange,
   onOpenStreamGraph,
   onOpenBranchMappings,
   navigation,
@@ -52,21 +103,26 @@ export function ReadOnlyPage({
   locked?: boolean;
   onTargetChange?(path: string): void;
   onRuntime?(runtime: RuntimeInfo): void;
+  onPreviewChange?(changeId: number): void | Promise<void>;
   onOpenStreamGraph?(): void;
   onOpenBranchMappings?(): void;
   navigation?: { stream: string; nonce: number };
   zh: boolean;
 }) {
-  const [path, setPath] = useState(target);
+  const remoteReady =
+    runtime.p4Version !== "loading" && runtime.connection.state === "connected";
+  const refreshSlot = useContext(PageRefreshSlotContext);
   const [queryPath, setQueryPath] = useState(target);
   useEffect(() => {
-    setPath(target);
     setQueryPath(target);
   }, [target]);
   const [search, setSearch] = useState("");
+  const [undoRequest, setUndoRequest] = useState<UndoDialogRequest>();
+  const [syncRequest, setSyncRequest] = useState<SyncDialogRequest>();
   const [ownedRows, setOwnedRows] = useState<{
     owner: string;
     value: (FileRevision | StreamSummary)[];
+    loaded?: boolean;
   }>();
   const [selected, setSelected] = useState<FileRevision | StreamSummary>();
   const [loadingOwner, setLoadingOwner] = useState("");
@@ -81,12 +137,6 @@ export function ReadOnlyPage({
     owner: string;
     message: string;
   }>();
-  const [ownedHistoryDiff, setOwnedHistoryDiff] = useState<{
-    owner: string;
-    pair: string;
-    value: DiffResult;
-  }>();
-  const [historyDiffLoadingOwner, setHistoryDiffLoadingOwner] = useState("");
   const [streamSwitch, setStreamSwitch] = useState<{
     stream: StreamSummary;
     source: HTMLElement | null;
@@ -122,115 +172,186 @@ export function ReadOnlyPage({
     runtime.context,
   ]);
   const viewOwner = kind === "history" ? historyOwner : streamOwner;
+  useEffect(() => {
+    setSyncRequest(undefined);
+    setUndoRequest(undefined);
+  }, [viewOwner]);
   const currentOwner = useRef(viewOwner);
   currentOwner.current = viewOwner;
   const requests = useReviewRequestOwner(historySession);
-  const displayCurrent =
-    (kind !== "history" || target === queryPath) &&
-    runtime.p4Version !== "loading";
+  const displayCurrent = kind !== "history" || target === queryPath;
+  // Streams are a server snapshot shared by every Streams tab and restarts.
+  const streamKey = useMemo(
+    () => snapshotKey("streams", serverScope(runtime)),
+    [
+      runtime.mode,
+      runtime.activeProfileId,
+      runtime.context.server,
+      runtime.context.user,
+    ],
+  );
+  const streams = useSnapshotQuery({
+    key: streamKey,
+    enabled: kind === "streams" && remoteReady,
+    fetch: () => backend.listStreams(),
+    persist: kind === "streams" ? isStreamList : undefined,
+  });
+  // History is target data: fresh pages are shown without asking P4.
+  const historyKey = useMemo(
+    () => ["target", "history", historyOwner],
+    [historyOwner],
+  );
+  const key = kind === "history" ? historyKey : streamKey;
+  const refreshSeen = useRef(refresh);
   const rows =
-    displayCurrent && ownedRows?.owner === viewOwner ? ownedRows.value : [];
-  const loading = displayCurrent && loadingOwner === viewOwner;
+    kind === "streams"
+      ? displayCurrent
+        ? (streams.data ?? [])
+        : []
+      : displayCurrent && ownedRows?.owner === viewOwner
+        ? ownedRows.value
+        : [];
+  const rowsLoaded =
+    kind === "streams"
+      ? streams.data !== undefined
+      : ownedRows?.owner === viewOwner && !!ownedRows.loaded;
+  const loading =
+    displayCurrent &&
+    (kind === "streams"
+      ? streams.initialLoading || streams.refreshing
+      : loadingOwner === viewOwner);
   const error =
-    displayCurrent && ownedError?.owner === viewOwner ? ownedError.message : "";
+    displayCurrent && ownedError?.owner === viewOwner
+      ? ownedError.message
+      : displayCurrent && kind === "streams"
+        ? streams.error
+        : "";
   const historyNotice =
     displayCurrent && ownedHistoryNotice?.owner === viewOwner
       ? ownedHistoryNotice.message
       : "";
-  const historyDiff =
-    displayCurrent && ownedHistoryDiff?.owner === historyOwner
-      ? ownedHistoryDiff.value
-      : undefined;
-  const historyDiffLoading =
-    displayCurrent && historyDiffLoadingOwner === historyOwner;
-  const key = useMemo(() => ["read-only", viewOwner], [viewOwner]);
   useEffect(() => {
-    if (runtime.p4Version === "loading" || (kind === "history" && !queryPath)) {
+    if (kind !== "history") return;
+    if (kind === "history" && !queryPath) {
       requests.cancelAll();
       setOwnedRows(undefined);
       setSelected(undefined);
       setHistoryCursor(undefined);
       setHistoryHasMore(false);
       setOwnedHistoryNotice(undefined);
-      setOwnedHistoryDiff(undefined);
-      setHistoryDiffLoadingOwner("");
+
+      setLoadingOwner("");
+      return;
+    }
+    const forced = refreshSeen.current !== refresh;
+    refreshSeen.current = refresh;
+    const cached = appCache.getQueryData<FileHistoryPage>(historyKey);
+    if (
+      cached &&
+      !forced &&
+      isFresh(historyKey, CACHE_POLICY.target.staleTime)
+    ) {
+      if (ownedRows?.owner !== viewOwner) {
+        setSelected(undefined);
+
+        consumedHistoryCursors.current.clear();
+        pendingHistoryCursors.current.clear();
+        setOwnedRows({ owner: viewOwner, value: cached.items, loaded: true });
+        setHistoryCursor(cached.nextCursor);
+        setHistoryHasMore(cached.hasMore);
+        setOwnedHistoryNotice({
+          owner: viewOwner,
+          message: historyNoticeFor(cached, zh),
+        });
+      }
+      setOwnedError(undefined);
+      setLoadingOwner("");
+      return;
+    }
+    if (!remoteReady) {
+      setOwnedRows((previous) =>
+        previous?.owner === viewOwner
+          ? previous
+          : {
+              owner: viewOwner,
+              value: cached?.items ?? [],
+              loaded: cached !== undefined,
+            },
+      );
+      if (cached && ownedRows?.owner !== viewOwner) {
+        setSelected(undefined);
+
+        setHistoryCursor(cached.nextCursor);
+        setHistoryHasMore(cached.hasMore);
+        setOwnedHistoryNotice({
+          owner: viewOwner,
+          message: historyNoticeFor(cached, zh),
+        });
+      }
+      setOwnedError(undefined);
       setLoadingOwner("");
       return;
     }
     let live = true;
-    const lease =
-      kind === "history"
-        ? requests.start("primary", historyIdentity)
-        : undefined;
+    const lease = requests.start("primary", historyIdentity);
     setLoadingOwner(viewOwner);
     setOwnedError(undefined);
-    setSelected(undefined);
-    setOwnedHistoryDiff(undefined);
-    setHistoryDiffLoadingOwner("");
+    if (ownedRows?.owner !== viewOwner) {
+      setSelected(undefined);
+    }
     consumedHistoryCursors.current.clear();
     pendingHistoryCursors.current.clear();
-    const cached = cache.getQueryData<FileHistoryPage | StreamSummary[]>(key);
-    const cachedRows =
-      kind === "history"
-        ? ((cached as FileHistoryPage | undefined)?.items ?? [])
-        : ((cached as StreamSummary[] | undefined) ?? []);
-    setOwnedRows({ owner: viewOwner, value: cachedRows });
-    const request =
-      kind === "history"
-        ? backend.getFileHistory({
-            scope,
-            pageSize: 100,
-            refresh: refresh > 0,
-            operationId: lease!.operationId,
-          })
-        : backend.listStreams();
-    void request
-      .then((data) => {
+    // Stale rows stay visible while the replacement page loads.
+    setOwnedRows((previous) =>
+      previous?.owner === viewOwner
+        ? previous
+        : {
+            owner: viewOwner,
+            value: cached?.items ?? [],
+            loaded: cached !== undefined,
+          },
+    );
+    void backend
+      .getFileHistory({
+        scope,
+        pageSize: 100,
+        refresh: refresh > 0,
+        operationId: lease.operationId,
+      })
+      .then((page) => {
         if (
           !live ||
           currentOwner.current !== viewOwner ||
-          (lease && !requests.isCurrent(lease))
+          !requests.isCurrent(lease)
         )
           return;
-        cache.setQueryData(key, data);
-        if (kind === "history") {
-          const page = data as FileHistoryPage;
-          setOwnedRows({ owner: viewOwner, value: page.items });
-          setHistoryCursor(page.nextCursor);
-          setHistoryHasMore(page.hasMore);
-          setOwnedHistoryNotice({
-            owner: viewOwner,
-            message: page.truncated
-              ? zh
-                ? "历史结果达到安全上限，当前结果已截断。"
-                : "History reached its safety limit and was truncated."
-              : page.partial
-                ? zh
-                  ? "历史结果不完整。"
-                  : "History results are partial."
-                : "",
-          });
-        } else
-          setOwnedRows({ owner: viewOwner, value: data as StreamSummary[] });
+        writeSnapshot(historyKey, page);
+        setOwnedRows({ owner: viewOwner, value: page.items, loaded: true });
+        setHistoryCursor(page.nextCursor);
+        setHistoryHasMore(page.hasMore);
+        setOwnedHistoryNotice({
+          owner: viewOwner,
+          message: historyNoticeFor(page, zh),
+        });
       })
       .catch((cause) => {
         if (
           live &&
           currentOwner.current === viewOwner &&
-          (!lease || requests.isCurrent(lease)) &&
+          requests.isCurrent(lease) &&
           !isCancellation(cause)
         )
           setOwnedError({ owner: viewOwner, message: String(cause) });
       })
       .finally(() => {
-        const finished = lease ? requests.finish(lease) : live;
-        if (finished && currentOwner.current === viewOwner) setLoadingOwner("");
+        if (requests.finish(lease) && currentOwner.current === viewOwner)
+          setLoadingOwner("");
       });
     return () => {
       live = false;
-      if (kind === "history") requests.cancelAll();
+      requests.cancelAll();
     };
-  }, [viewOwner, kind, queryPath, refresh, runtime.p4Version]);
+  }, [viewOwner, kind, queryPath, refresh, remoteReady]);
   const filtered = useMemo(
     () =>
       rows.filter((row) =>
@@ -252,117 +373,251 @@ export function ReadOnlyPage({
           : `Searching Streams for ${navigation.stream}; the current list has no exact match.`
       : "";
   const visibleSelected =
-    displayCurrent && selected && rows.includes(selected)
+    kind === "streams" && displayCurrent && selected && rows.includes(selected)
       ? selected
       : undefined;
   const menu = useContextMenu();
+  const openChangeDetails = useChangeDetails();
   const selection = useRecordSelection(
     filtered,
-    (item) => ("stream" in item ? item.stream : String(item.revision)),
+    (item) =>
+      "stream" in item ? item.stream : `${item.depotPath}#${item.revision}`,
     JSON.stringify(key),
+    kind === "history" ? 2 : Infinity,
   );
-  const compareHistory = async (items: (FileRevision | StreamSummary)[]) => {
+  const focus = useCommandFocus();
+  const execute = useContext(CommandExecutionContext);
+  const active = useContext(PageActiveContext);
+  const selectedHistory = selection.selected.filter(
+    (item): item is FileRevision => "revision" in item,
+  );
+  const selectionKey = selectedHistory
+    .map((item) => `${item.depotPath}#${item.revision}`)
+    .join(",");
+  useEffect(() => {
+    if (kind !== "history" || !active) return;
+    const path = selectedHistory[0]?.depotPath ?? queryPath;
+    focus({
+      type: "history",
+      path: selectedHistory.every((item) => item.depotPath === path)
+        ? path
+        : "",
+      revisions: selectedHistory.map((item) => item.revision),
+    });
+  }, [active, kind, historyOwner, selectionKey, locked, focus]);
+  const compareHistory = (items: (FileRevision | StreamSummary)[]) => {
     const revisions = items.filter(
       (item): item is FileRevision => "revision" in item,
     );
-    const pair = historyDiffPair(revisions);
-    if (!pair) return;
-    const pairIdentity = JSON.stringify(pair);
-    const diffScope = makeReviewScope(runtime, revisions[0].depotPath);
-    const identity = reviewRequestIdentity(
-      runtime,
-      diffScope,
-      "history",
-      "history-diff",
-      { ...pair },
-    );
-    const lease = requests.start("history-diff", identity);
-    const ownerAtStart = historyOwner;
-    setHistoryDiffLoadingOwner(ownerAtStart);
-    setOwnedHistoryDiff(undefined);
-    setOwnedError(undefined);
-    try {
-      const result = await backend.getDiff({
-        scope: diffScope,
-        ...pair,
-        operationId: lease.operationId,
+    if (historyDiffPair(revisions))
+      execute("diff", {
+        type: "history",
+        path: revisions[0].depotPath,
+        revisions: revisions.map((item) => item.revision),
       });
-      if (requests.isCurrent(lease) && currentOwner.current === ownerAtStart)
-        setOwnedHistoryDiff({
-          owner: ownerAtStart,
-          pair: pairIdentity,
-          value: result,
-        });
-    } catch (cause) {
-      if (
-        requests.isCurrent(lease) &&
-        currentOwner.current === ownerAtStart &&
-        !isCancellation(cause)
-      )
-        setOwnedError({ owner: ownerAtStart, message: String(cause) });
-    } finally {
-      if (requests.finish(lease) && currentOwner.current === ownerAtStart)
-        setHistoryDiffLoadingOwner("");
-    }
   };
   const reload = async () => {
-    await cache.invalidateQueries({ queryKey: key });
+    if (!remoteReady) return;
+    if (kind === "streams") {
+      await streams.refresh();
+      return;
+    }
+    await appCache.invalidateQueries({ queryKey: historyKey });
     setRefresh((v) => v + 1);
   };
   const refreshAfterStreamSwitch = () => {
-    for (const activePage of [
-      "streams",
-      "workspaces",
-      "pending",
-      "submitted",
-      "search",
-      "files",
-      "depot",
-    ])
-      window.dispatchEvent(
-        new CustomEvent("p4deck:auto-refresh", { detail: { activePage } }),
-      );
-    window.dispatchEvent(new Event("p4deck:pending-refresh"));
+    // A stream switch is a barrier: every snapshot may describe the old view.
+    void invalidateData(pageActions.switchStream.effects);
     void reload();
   };
-  useEffect(() => {
-    const autoRefresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
-      if (detail?.activePage === kind) void reload();
-    };
-    window.addEventListener("p4deck:auto-refresh", autoRefresh);
-    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
-  }, [kind, viewOwner]);
+  // Auto-refresh and stale tab activation revalidate without clearing rows.
+  useViewRefresh(
+    kind,
+    key,
+    () => {
+      if (remoteReady && !loading && (kind === "streams" || queryPath))
+        void reload();
+    },
+    kind === "history" ? CACHE_POLICY.target.staleTime : undefined,
+  );
   useEffect(() => {
     if (kind !== "streams" || !navigation) return;
     setSearch(navigation.stream);
     scroll.current?.scrollTo?.(0, 0);
   }, [kind, navigation]);
+  const historyMenu = (item: FileRevision) =>
+    menu(
+      "H01",
+      () => {
+        const queue = historyMenuQueue(selectedHistory, item);
+        const newest = queue.at(-1)!;
+        const valid =
+          Number.isSafeInteger(newest.revision) &&
+          newest.revision > 0 &&
+          newest.depotPath.startsWith("//");
+        return {
+          "预览 CL": action(
+            (source) =>
+              openChangeDetails
+                ? openChangeDetails(
+                    { kind: "submitted", changeId: item.changelistId },
+                    source,
+                  )
+                : onPreviewChange?.(item.changelistId),
+            item.changelistId > 0 && (openChangeDetails || onPreviewChange)
+              ? undefined
+              : zh
+                ? "此记录没有可预览的 CL"
+                : "No submitted CL is available",
+          ),
+          获取这个版本: action(
+            (source) =>
+              setSyncRequest({
+                nodes: [
+                  {
+                    id: newest.depotPath,
+                    name: newest.depotPath.split("/").pop() || newest.depotPath,
+                    kind: "file",
+                    absolutePath: "",
+                    relativePath: newest.depotPath,
+                    depotPath: newest.depotPath,
+                    state: "controlled",
+                  },
+                ],
+                revisionMode: "choose",
+                fixedRevision: newest.revision,
+                scopeLabel: `${zh ? "后选版本" : "Most recently selected"}: ${newest.depotPath}#${newest.revision}`,
+                source: source ?? null,
+              }),
+            remoteReady && valid
+              ? undefined
+              : zh
+                ? "连接或文件修订无效"
+                : "Connection or file revision is invalid",
+          ),
+          Undo: action(
+            (source) =>
+              setUndoRequest({
+                depotPath: item.depotPath,
+                revision: item.revision,
+                changelistId: item.changelistId,
+                source: source ?? null,
+              }),
+            remoteReady
+              ? undefined
+              : zh
+                ? "连接不可用"
+                : "Connection unavailable",
+          ),
+          Diff: action(
+            () => compareHistory(queue),
+            historyDiffPair(queue)
+              ? undefined
+              : zh
+                ? "请选择同一文件的两个有效修订"
+                : "Select two valid revisions of the same file",
+          ),
+        };
+      },
+      {
+        title: `${item.depotPath}#${item.revision} · ${zh ? "获取目标：后选" : "Get target: latest selection"} #${historyMenuQueue(selectedHistory, item).at(-1)!.revision}`,
+        onOpen: () => selection.context(item),
+      },
+    );
+  const recordMenu = (item: StreamSummary) =>
+    menu(
+      selection.targets(item).length > 1 ? "W05" : "W04",
+      () => ({
+        查看详情: action(() => setSelected(item)),
+        "复制 Stream 路径": copy(item.stream),
+        复制名称: copy(item.name),
+        "复制父 Stream 路径": copy(item.parent),
+        "切换当前工作区到此 Stream": action(() =>
+          setStreamSwitch({ stream: item, source: null }),
+        ),
+        刷新: action(reload),
+        "复制 Stream 路径列表": copy(
+          selection
+            .targets(item)
+            .map((value) => ("stream" in value ? value.stream : ""))
+            .join("\n"),
+        ),
+        复制名称列表: copy(
+          selection
+            .targets(item)
+            .map((value) => ("stream" in value ? value.name : ""))
+            .join("\n"),
+        ),
+      }),
+      {
+        onOpen: () => {
+          selection.context(item);
+          setSelected(item);
+        },
+      },
+    );
   const virtual = useVirtualizer({
-    count: filtered.length,
+    enabled: kind === "streams",
+    count: kind === "streams" ? filtered.length : 0,
     getScrollElement: () => scroll.current,
     estimateSize: () => 52,
     overscan: 8,
   });
+  const refreshButton = (
+    <button
+      type="button"
+      title={zh ? "刷新" : "Refresh"}
+      aria-label={zh ? "刷新" : "Refresh"}
+      aria-busy={loading}
+      disabled={loading || !remoteReady || (kind === "history" && !queryPath)}
+      onClick={() => void reload()}
+    >
+      <RefreshCw
+        size={15}
+        className={loading ? "spin" : ""}
+        aria-hidden="true"
+      />
+      {kind === "streams" || !refreshSlot ? (
+        <span>{zh ? "刷新" : "Refresh"}</span>
+      ) : null}
+    </button>
+  );
   return (
-    <section className="workspaces-page">
-      <header className="section-title">
-        <div>
-          <span className="workspace-eyebrow">
-            PERFORCE / {kind.toUpperCase()}
-          </span>
-          <h1>{kind === "history" ? "History" : "Streams"}</h1>
-          <p>
-            {kind === "history"
-              ? zh
-                ? "查看所选文件的版本、提交记录与作者。"
-                : "Revisions, changelists and authors for a file."
-              : zh
-                ? "查看服务器上的分支流、类型和父子关系。"
-                : "Streams, types and parent relationships on this server."}
-          </p>
-        </div>
-        {kind === "streams" && (
+    <section
+      className={`workspaces-page${kind === "history" ? " history-page" : ""}`}
+    >
+      {undoRequest && (
+        <UndoDialog
+          request={undoRequest}
+          zh={zh}
+          onDismiss={() => setUndoRequest(undefined)}
+          onRefresh={() => invalidateData(commandActions.getRevision.effects)}
+        />
+      )}
+      {syncRequest && (
+        <SyncDialog
+          request={syncRequest}
+          connectionKey={viewOwner}
+          demo={runtime.mode === "mock"}
+          zh={zh}
+          onDismiss={() => setSyncRequest(undefined)}
+          onRefresh={() => invalidateData(commandActions.getRevision.effects)}
+        />
+      )}
+      {kind === "history" ? (
+        refreshSlot ? (
+          createPortal(refreshButton, refreshSlot)
+        ) : (
+          refreshButton
+        )
+      ) : (
+        <FixedPageHeader
+          description={
+            zh
+              ? "查看服务器上的分支流、类型和父子关系。"
+              : "Streams, types and parent relationships on this server."
+          }
+        >
           <div className="section-title-actions">
             <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
               <Network size={15} />
@@ -375,48 +630,8 @@ export function ReadOnlyPage({
               {zh ? "打开 Branch Mappings" : "Open Branch Mappings"}
             </button>
           </div>
-        )}
-        <button
-          disabled={loading || (kind === "history" && !queryPath)}
-          onClick={() => {
-            void cache
-              .invalidateQueries({ queryKey: key })
-              .then(() => setRefresh((v) => v + 1));
-          }}
-        >
-          <RefreshCw size={15} className={loading ? "spin" : ""} />
-          {zh ? "刷新" : "Refresh"}
-        </button>
-        {kind === "history" && (
-          <SwarmAction
-            runtime={runtime}
-            zh={zh}
-            target={{ kind: "file", depotPath: queryPath }}
-          />
-        )}
-      </header>
-      {kind === "history" && (
-        <form
-          className="history-path"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (path.trim() && !locked) {
-              setQueryPath(path.trim());
-              onTargetChange?.(path.trim());
-            }
-          }}
-        >
-          <input
-            disabled={locked}
-            aria-label="Depot path"
-            placeholder="//depot/project/file"
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-          />
-          <button type="submit" disabled={locked}>
-            {zh ? "查看历史" : "Show history"}
-          </button>
-        </form>
+          {refreshButton}
+        </FixedPageHeader>
       )}
       <div className="query-bar">
         <label className="search-field">
@@ -434,33 +649,6 @@ export function ReadOnlyPage({
         <span className="filter-count">
           {filtered.length} {zh ? "条记录" : "records"}
         </span>
-        {kind === "history" && (
-          <button
-            disabled={
-              historyDiffLoading ||
-              !historyDiffPair(selection.selected as FileRevision[])
-            }
-            onClick={() => void compareHistory(selection.selected)}
-          >
-            {historyDiffLoading
-              ? zh
-                ? "比较中…"
-                : "Comparing…"
-              : zh
-                ? "比较所选两个版本"
-                : "Compare two selected revisions"}
-          </button>
-        )}
-        {historyDiffLoading && (
-          <button
-            onClick={() => {
-              requests.cancel("history-diff");
-              setHistoryDiffLoadingOwner("");
-            }}
-          >
-            {zh ? "取消比较" : "Cancel comparison"}
-          </button>
-        )}
       </div>
       {kind === "history" && historyHasMore && (
         <button
@@ -507,6 +695,7 @@ export function ReadOnlyPage({
                     consumedHistoryCursors.current.has(page.nextCursor));
                 setOwnedRows((current) => ({
                   owner: ownerAtStart,
+                  loaded: true,
                   value: mergeHistoryRows(
                     current?.owner === ownerAtStart
                       ? (current.value as FileRevision[])
@@ -599,144 +788,75 @@ export function ReadOnlyPage({
               清除选择: action(selection.clear),
             }))}
           >
-            <TableHeader
-              className="browser-columns workspace-head"
-              columns={
-                kind === "history"
-                  ? [
-                      { id: "revision", label: "Revision / CL" },
-                      { id: "user", label: "User" },
-                      { id: "description", label: zh ? "描述" : "Description" },
-                    ]
-                  : [
-                      { id: "stream", label: "Stream" },
-                      { id: "parent", label: "Type / Parent" },
-                      { id: "description", label: zh ? "描述" : "Description" },
-                    ]
-              }
-            />
-            <div
-              className="virtual-spacer"
-              style={{ height: virtual.getTotalSize(), minWidth: 620 }}
-            >
-              {virtual.getVirtualItems().map((row) => {
-                const item = filtered[row.index];
-                return (
-                  <button
-                    key={"stream" in item ? item.stream : item.revision}
-                    className={`browser-columns workspace-row ${selection.isSelected(item) ? "selected" : ""}`}
-                    style={{
-                      height: row.size,
-                      transform: `translateY(${row.start}px)`,
-                    }}
-                    onClick={(event) => {
-                      if (kind === "history") {
-                        requests.cancel("history-diff");
-                        setHistoryDiffLoadingOwner("");
-                        setOwnedHistoryDiff(undefined);
-                      }
-                      selection.select(item, event);
-                      setSelected(item);
-                    }}
-                    {...menu(
-                      "stream" in item
-                        ? selection.targets(item).length > 1
-                          ? "W05"
-                          : "W04"
-                        : selection.targets(item).length > 2
-                          ? "V03"
-                          : selection.targets(item).length === 2
-                            ? "V02"
-                            : "V01",
-                      () =>
-                        "stream" in item
-                          ? {
-                              查看详情: action(() => setSelected(item)),
-                              "复制 Stream 路径": copy(item.stream),
-                              复制名称: copy(item.name),
-                              "复制父 Stream 路径": copy(item.parent),
-                              "切换当前工作区到此 Stream": action(() =>
-                                setStreamSwitch({ stream: item, source: null }),
-                              ),
-                              刷新: action(reload),
-                              "复制 Stream 路径列表": copy(
-                                selection
-                                  .targets(item)
-                                  .map((v) => ("stream" in v ? v.stream : ""))
-                                  .join("\n"),
-                              ),
-                              复制名称列表: copy(
-                                selection
-                                  .targets(item)
-                                  .map((v) => ("stream" in v ? v.name : ""))
-                                  .join("\n"),
-                              ),
-                            }
-                          : {
-                              ...(historyDiffPair(
-                                selection.targets(item) as FileRevision[],
-                              )
-                                ? {
-                                    比较所选两个版本: action(
-                                      () =>
-                                        void compareHistory(
-                                          selection.targets(item),
-                                        ),
-                                    ),
-                                  }
-                                : {}),
-                              "复制 Depot 路径": copy(queryPath),
-                              复制精确修订标识: copy(
-                                `${queryPath}#${item.revision}`,
-                              ),
-                              "复制 CL 编号": copy(item.changelistId),
-                              "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
-                                kind: "file",
-                                depotPath: queryPath,
-                                revision: item.revision,
-                              }),
-                              复制所选修订标识: copy(
-                                selection
-                                  .targets(item)
-                                  .map((v) =>
-                                    "revision" in v
-                                      ? `${queryPath}#${v.revision}`
-                                      : "",
-                                  )
-                                  .join("\n"),
-                              ),
-                            },
-                      {
-                        onOpen: () => {
-                          if (kind === "history") {
-                            requests.cancel("history-diff");
-                            setHistoryDiffLoadingOwner("");
-                            setOwnedHistoryDiff(undefined);
-                          }
-                          selection.context(item);
+            {kind === "history" ? (
+              <HistoryTable
+                key={historyOwner}
+                rows={filtered as FileRevision[]}
+                scroll={scroll}
+                zh={zh}
+                isSelected={selection.isSelected}
+                selectionOrder={(item) =>
+                  selectedHistory.findIndex(
+                    (selected) =>
+                      selected.depotPath === item.depotPath &&
+                      selected.revision === item.revision,
+                  ) + 1
+                }
+                rowMenu={historyMenu}
+                onSelect={(item, event) => {
+                  selection.select(item, event);
+                }}
+              />
+            ) : (
+              <>
+                <TableHeader
+                  className="browser-columns workspace-head"
+                  columns={[
+                    { id: "stream", label: "Stream" },
+                    { id: "parent", label: "Type / Parent" },
+                    { id: "description", label: zh ? "描述" : "Description" },
+                  ]}
+                />
+                <div
+                  className="virtual-spacer"
+                  style={{ height: virtual.getTotalSize(), minWidth: 620 }}
+                >
+                  {virtual.getVirtualItems().map((row) => {
+                    const item = filtered[row.index];
+                    return (
+                      <button
+                        key={"stream" in item ? item.stream : item.revision}
+                        className={`browser-columns workspace-row ${selection.isSelected(item) ? "selected" : ""}`}
+                        style={{
+                          height: row.size,
+                          transform: `translateY(${row.start}px)`,
+                        }}
+                        onClick={(event) => {
+                          selection.select(item, event);
                           setSelected(item);
-                        },
-                      },
-                    )}
-                  >
-                    <span>
-                      {"stream" in item
-                        ? item.stream
-                        : `#${item.revision} · CL ${item.changelistId}`}
-                    </span>
-                    <span>
-                      {"stream" in item
-                        ? `${item.kind} · ${item.parent}`
-                        : item.user}
-                    </span>
-                    <span>{item.description}</span>
-                  </button>
-                );
-              })}
-            </div>
+                        }}
+                        {...recordMenu(item as StreamSummary)}
+                      >
+                        <span>
+                          {"stream" in item
+                            ? item.stream
+                            : `#${item.revision} · CL ${item.changelistId}`}
+                        </span>
+                        <span>
+                          {"stream" in item
+                            ? `${item.kind} · ${item.parent}`
+                            : item.user}
+                        </span>
+                        <span>{item.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
             {!filtered.length && (
               <div className="workspace-empty">
-                {loading
+                {loading && !rowsLoaded
                   ? zh
                     ? "加载中…"
                     : "Loading…"
@@ -799,16 +919,6 @@ export function ReadOnlyPage({
           </aside>
         )}
       </div>
-      {historyDiff && (
-        <pre
-          className="graph-node-diff"
-          aria-label={zh ? "历史版本差异" : "History revision diff"}
-        >
-          {historyDiff.unified ||
-            historyDiff.reason ||
-            (zh ? "无差异" : "No differences")}
-        </pre>
-      )}
     </section>
   );
 }

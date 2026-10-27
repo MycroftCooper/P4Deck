@@ -16,7 +16,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 async function render(
-  description = "",
+  description: string | undefined = undefined,
   onSubmit?: (draft: ChangelistDraft) => Promise<void>,
 ) {
   await act(async () =>
@@ -25,7 +25,9 @@ async function render(
         mode="create"
         client="test-workspace"
         zh
-        initial={{ description, jobs: [] }}
+        initial={
+          description === undefined ? undefined : { description, jobs: [] }
+        }
         onDismiss={dismiss}
         onSubmit={onSubmit}
       />,
@@ -40,7 +42,7 @@ async function submit() {
   });
 }
 it("labels its modal and prevents empty descriptions", async () => {
-  await render();
+  await render("");
   await submit();
   const dialog = document.querySelector("dialog")!;
   expect(
@@ -144,14 +146,30 @@ it("protects a changed draft on Escape and permits explicit discard", async () =
   await click("放弃修改并关闭");
   expect(dismiss).toHaveBeenCalledOnce();
 });
-it("normalizes the draft and deduplicates Jobs before an adapter receives it", async () => {
+it("creates a CL with its prefilled description in one click and no Jobs field", async () => {
+  const adapter = vi.fn(async () => {});
+  await render(undefined, adapter);
+  expect(document.querySelectorAll("textarea")).toHaveLength(1);
+  expect(document.querySelector("textarea")!.value).toBe("新ChangeList");
+  expect(document.body.textContent).not.toContain("Jobs");
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (item) => item.textContent === "新建",
+    ),
+  ).toBe(true);
+  await submit();
+  expect(adapter).toHaveBeenCalledWith({
+    description: "新ChangeList",
+    jobs: [],
+  });
+});
+it("normalizes the description before an adapter receives it", async () => {
   const adapter = vi.fn(async () => {});
   await render("  Description  ", adapter);
-  await input(1, " job001 \njob002\njob001\n\n");
   await submit();
   expect(adapter).toHaveBeenCalledWith({
     description: "Description",
-    jobs: ["job001", "job002"],
+    jobs: [],
   });
 });
 it("does not dismiss a later workflow when a disposed request completes", async () => {
@@ -202,7 +220,8 @@ it("preserves and submits the complete Jobs list while editing", async () => {
       />,
     ),
   );
-  expect(document.querySelectorAll("textarea")[1].value).toBe("JOB-1\nJOB-2");
+  expect(document.querySelectorAll("textarea")).toHaveLength(1);
+  expect(document.body.textContent).not.toContain("Jobs");
   await submit();
   expect(adapter).toHaveBeenCalledWith({
     description: "Existing",

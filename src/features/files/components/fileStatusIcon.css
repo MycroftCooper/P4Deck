@@ -10,7 +10,7 @@
   max-width: 24px;
   overflow: visible;
   vertical-align: middle;
-  color: var(--text-secondary, #64748b);
+  color: var(--muted);
 }
 .file-status-icon .file-badge {
   position: absolute;

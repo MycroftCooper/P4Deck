@@ -19,7 +19,9 @@ export function RevisionFileList({
   files,
   scope,
   demo,
+  showFileType = false,
 }: {
+  showFileType?: boolean;
   files: RevisionFileTarget[];
   scope: string;
   demo: boolean;
@@ -169,7 +171,16 @@ export function RevisionFileList({
                 }}
               >
                 <FileStatusIcon facts={{ scope: "revision" }} zh={zh} />
-                <span title={file.depotPath}>{file.depotPath}</span>
+                <span
+                  title={`${file.depotPath}${file.fileType ? ` · ${file.fileType}` : ""}`}
+                >
+                  {file.depotPath}
+                </span>
+                {showFileType && (
+                  <small title={zh ? "文件类型" : "File type"}>
+                    {file.fileType || "—"}
+                  </small>
+                )}
                 {file.action ? <small>{file.action}</small> : null}
                 <small>
                   {file.revision === undefined ? "#?" : `#${file.revision}`}

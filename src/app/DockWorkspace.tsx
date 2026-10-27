@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle } from "react";
 import { DockviewReact } from "dockview-react";
 import {
   Actions,
+  CloseAllContext,
   Empty,
   LanguageContext,
   OpenContext,
@@ -67,52 +68,56 @@ export const DockWorkspace = forwardRef<DockHandle, DockProps>(
       popoutPage: controller.popoutPage,
     }));
     return (
-      <LanguageContext.Provider value={props.zh}>
-        <OpenContext.Provider value={controller.open}>
-          <RenderContext.Provider value={props.render}>
-            <PopoutContext.Provider
-              value={(panel) => void controller.popout(panel)}
-            >
-              <div
-                className="dock-host"
-                onContextMenu={(event) => {
-                  if (
-                    (event.target as Element).closest(
-                      ".dv-tabs-and-actions-container, .closed-pages",
-                    )
-                  )
-                    tabbarMenu(event.target as Element).onContextMenu(event);
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    (event.target as Element).closest(
-                      ".dock-actions, .closed-pages",
-                    )
-                  )
-                    tabbarMenu(event.target as Element).onKeyDown(event);
-                }}
+      <CloseAllContext.Provider
+        value={{ run: controller.closeAll, enabled: props.pages.length > 0 }}
+      >
+        <LanguageContext.Provider value={props.zh}>
+          <OpenContext.Provider value={controller.open}>
+            <RenderContext.Provider value={props.render}>
+              <PopoutContext.Provider
+                value={(panel) => void controller.popout(panel)}
               >
-                {controller.error && (
-                  <div className="dock-error" role="alert">
-                    {controller.error}
-                    <button onClick={() => controller.setError("")}>×</button>
-                  </div>
-                )}
-                <DockviewReact
-                  theme={dockTheme}
-                  className="dockview-theme-p4deck"
-                  components={components}
-                  defaultTabComponent={TabMenu}
-                  rightHeaderActionsComponent={Actions}
-                  watermarkComponent={Empty}
-                  disableFloatingGroups
-                  onReady={({ api }) => controller.ready(api)}
-                />
-              </div>
-            </PopoutContext.Provider>
-          </RenderContext.Provider>
-        </OpenContext.Provider>
-      </LanguageContext.Provider>
+                <div
+                  className="dock-host"
+                  onContextMenu={(event) => {
+                    if (
+                      (event.target as Element).closest(
+                        ".dv-tabs-and-actions-container, .closed-pages",
+                      )
+                    )
+                      tabbarMenu(event.target as Element).onContextMenu(event);
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.target as Element).closest(
+                        ".dock-actions, .closed-pages",
+                      )
+                    )
+                      tabbarMenu(event.target as Element).onKeyDown(event);
+                  }}
+                >
+                  {controller.error && (
+                    <div className="dock-error" role="alert">
+                      {controller.error}
+                      <button onClick={() => controller.setError("")}>×</button>
+                    </div>
+                  )}
+                  <DockviewReact
+                    theme={dockTheme}
+                    className="dockview-theme-p4deck"
+                    components={components}
+                    defaultTabComponent={TabMenu}
+                    rightHeaderActionsComponent={Actions}
+                    watermarkComponent={Empty}
+                    disableFloatingGroups
+                    onReady={({ api }) => controller.ready(api)}
+                  />
+                </div>
+              </PopoutContext.Provider>
+            </RenderContext.Provider>
+          </OpenContext.Provider>
+        </LanguageContext.Provider>
+      </CloseAllContext.Provider>
     );
   },
 );

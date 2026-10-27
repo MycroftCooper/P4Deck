@@ -9,7 +9,7 @@ import { TargetList } from "../../../app/dialogs/TargetList";
 import { MoveFilesDialog } from "./MoveFilesDialog";
 import { ShelfDialog } from "./ShelfDialog";
 import { fileClScope } from "../fileClScope";
-import { workspaceCache } from "../../files/workspaceQueries";
+import { invalidateData } from "../../../shared/cache/dataEffects";
 
 /** Read once on explicit opening; no per-row queries; delegates writes to typed workflows. */
 export function FileClWorkflow({
@@ -68,17 +68,14 @@ export function FileClWorkflow({
           connectionKey={connectionKey}
           zh={zh}
           onDismiss={onDismiss}
-          onResult={async (result) => {
-            window.dispatchEvent(new Event("p4deck:pending-refresh"));
-            if (result.refreshError) throw new Error(result.refreshError);
-            await Promise.all([
-              workspaceCache.invalidateQueries({
-                queryKey: ["workspace-files", connectionKey],
-              }),
-              workspaceCache.invalidateQueries({
-                queryKey: ["depot-files", connectionKey],
-              }),
-            ]);
+          onResult={(result) => {
+            void invalidateData(
+              ["pending", "workspaceStatus", "depot"],
+              {
+                connectionKey,
+                affectedPaths: result.refresh.depotPaths,
+              },
+            ).catch(() => undefined);
           }}
         />
       );

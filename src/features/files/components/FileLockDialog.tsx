@@ -137,12 +137,12 @@ export function FileLockDialog({
         return;
       setResult(value);
       setPhase("result");
-      await onRefresh?.();
+      void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } catch (cause) {
       if (epoch !== generation.current) return;
       setError(String(cause));
       setPhase("result");
-      await onRefresh?.();
+      void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
       if (activeOperation.current === operationId)
         activeOperation.current = undefined;

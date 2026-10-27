@@ -82,6 +82,7 @@ export function useFileMenu() {
       onOpen?: () => void;
       refresh?: () => void | Promise<unknown>;
       bindings?: MenuBindings;
+      wholeChangelistId?: number;
     } = {},
   ) => {
     const object =
@@ -117,6 +118,9 @@ export function useFileMenu() {
           object === "F05"
             ? "整个工作区（配置根目录） / Entire configured workspace"
             : undefined,
+        ...(options.wholeChangelistId !== undefined
+          ? { wholeChangelistId: options.wholeChangelistId }
+          : {}),
       };
       const bindings: MenuBindings = {};
       bindings["复制工作区根路径"] = copy(node.absolutePath);

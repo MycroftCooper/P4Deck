@@ -1,0 +1,38 @@
+import {
+  Files,
+  Search,
+  ListTodo,
+  ListChecks,
+  Monitor,
+  Network,
+  History,
+  GitBranch,
+  GitCompareArrows,
+  Terminal,
+  ScrollText,
+  Columns2,
+  FolderArchive,
+  Settings,
+  Eye,
+  type LucideIcon,
+} from "lucide-react";
+import type { PageId } from "./panels";
+
+export const pageIcons: Record<PageId, LucideIcon> = {
+  files: Files,
+  search: Search,
+  pending: ListTodo,
+  submitted: ListChecks,
+  workspaces: Monitor,
+  history: History,
+  streams: Network,
+  streamgraph: GitBranch,
+  branchmappings: GitCompareArrows,
+  terminal: Terminal,
+  p4log: ScrollText,
+  diff: Columns2,
+  shelf: FolderArchive,
+  revgraph: GitBranch,
+  settings: Settings,
+  preview: Eye,
+};

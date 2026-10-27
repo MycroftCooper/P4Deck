@@ -1,5 +1,12 @@
 import { useRef } from "react";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type {
+  PendingChange,
+  WorkspaceNode,
+} from "../../shared/contracts/types";
+import {
+  CheckoutChangelistDialog,
+  type CheckoutDestination,
+} from "../../features/files/components/CheckoutChangelistDialog";
 import { backend } from "../../infrastructure/backend";
 import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 import { SubmitDialog } from "../../features/changelists/components/SubmitDialog";
@@ -21,9 +28,12 @@ import {
 } from "./OperationConfirmDialog";
 import { useDialogRequest } from "./useDialogRequest";
 import {
+  refreshWorkspaceDirectory,
   workspaceCache,
-  workspaceQuery,
 } from "../../features/files/workspaceQueries";
+import { invalidateData } from "../../shared/cache/dataEffects";
+import { stableConnectionKey } from "../../shared/cache/connectionKey";
+import { commandActions } from "../actions/actionCatalog";
 
 type Origin = { source: HTMLElement | null };
 type PreviewRequest = Origin &
@@ -37,25 +47,29 @@ type PreviewRequest = Origin &
   );
 type Request =
   | PreviewRequest
+  | {
+      kind: "checkout";
+      changes: PendingChange[];
+      count: number;
+      recursive: boolean;
+      source: HTMLElement | null;
+    }
   | { kind: "revision"; value: RevisionRequest }
   | { kind: "confirm"; value: OperationConfirmation };
 
 /** Lock mutations can change both the active listing and current selection facts. */
 export async function refreshFileLockFacts(connectionKey: string) {
+  const stableKey = stableConnectionKey(connectionKey);
   const workspacePaths = workspaceCache
     .getQueryCache()
-    .findAll({ queryKey: ["workspace-files", connectionKey] })
-    .map((query) => {
-      const path = String(query.queryKey[2] ?? "");
-      return workspaceCache.fetchQuery({
-        ...workspaceQuery(connectionKey, path || undefined, true),
-        staleTime: 0,
-      });
-    });
+    .findAll({ queryKey: ["workspace-files", stableKey] })
+    .map((query) => String(query.queryKey[2] ?? ""));
   await Promise.allSettled([
-    ...workspacePaths,
+    ...workspacePaths.map((path) =>
+      refreshWorkspaceDirectory(connectionKey, path || undefined, true),
+    ),
     workspaceCache.refetchQueries({
-      queryKey: ["depot-files", connectionKey],
+      queryKey: ["depot-files", stableKey],
       type: "all",
     }),
   ]);
@@ -63,9 +77,8 @@ export async function refreshFileLockFacts(connectionKey: string) {
     workspaceCache.invalidateQueries({
       queryKey: ["global-search", connectionKey],
     }),
-    workspaceCache.invalidateQueries({
-      queryKey: ["file-review", connectionKey],
-    }),
+    // History, Diff and Rev Graph data can show the old lock owner.
+    workspaceCache.invalidateQueries({ queryKey: ["target"] }),
   ]);
 }
 
@@ -78,9 +91,10 @@ export function useCommandDialogs(
   targetKey = "",
   onFileLockRefresh?: (nodes: WorkspaceNode[]) => Promise<void> | void,
 ) {
-  const gateway = useDialogRequest<Request, string | boolean>(
-    `${connectionKey}:${targetKey}`,
-  );
+  const gateway = useDialogRequest<
+    Request,
+    string | boolean | CheckoutDestination
+  >(`${connectionKey}:${targetKey}`);
   const latest = useRef(connectionKey);
   latest.current = connectionKey;
   const close = () => gateway.answer(null);
@@ -88,6 +102,19 @@ export function useCommandDialogs(
   let element = null;
   if (request)
     switch (request.kind) {
+      case "checkout":
+        element = (
+          <CheckoutChangelistDialog
+            changes={request.changes}
+            count={request.count}
+            recursive={request.recursive}
+            source={request.source}
+            client={client}
+            zh={zh}
+            onClose={gateway.answer}
+          />
+        );
+        break;
       case "sync":
         element = (
           <SyncDialog
@@ -96,17 +123,11 @@ export function useCommandDialogs(
             demo={demo}
             zh={zh}
             onDismiss={close}
-            onRefresh={async () => {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              await Promise.all([
-                workspaceCache.invalidateQueries({
-                  queryKey: ["workspace-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["depot-files", connectionKey],
-                }),
-              ]);
-            }}
+            onRefresh={() =>
+              void invalidateData(commandActions.getLatest.effects, {
+                connectionKey,
+              }).catch(() => undefined)
+            }
           />
         );
         break;
@@ -117,17 +138,15 @@ export function useCommandDialogs(
             source={request.source}
             zh={zh}
             onDismiss={close}
-            onRefresh={async () => {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              await Promise.all([
-                workspaceCache.invalidateQueries({
-                  queryKey: ["workspace-files", connectionKey],
-                }),
-                workspaceCache.invalidateQueries({
-                  queryKey: ["depot-files", connectionKey],
-                }),
-              ]);
-            }}
+            onRefresh={() =>
+              void invalidateData(commandActions.rename.effects, {
+                connectionKey,
+                affectedPaths: [
+                  request.node.depotPath,
+                  request.node.absolutePath,
+                ].filter((path): path is string => !!path),
+              }).catch(() => undefined)
+            }
           />
         );
         break;
@@ -140,11 +159,19 @@ export function useCommandDialogs(
             connectionKey={connectionKey}
             zh={zh}
             onDismiss={close}
-            onRefresh={async () => {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              window.dispatchEvent(new Event("p4deck:submitted-refresh"));
-              await refreshFileLockFacts(connectionKey);
-              await onFileLockRefresh?.(request.nodes);
+            onRefresh={() => {
+              void invalidateData(["pending", "submitted"], {
+                connectionKey,
+                affectedPaths: request.nodes.flatMap((node) =>
+                  [node.depotPath, node.absolutePath].filter(
+                    (path): path is string => !!path,
+                  ),
+                ),
+              }).catch(() => undefined);
+              void refreshFileLockFacts(connectionKey).catch(() => undefined);
+              void Promise.resolve(onFileLockRefresh?.(request.nodes)).catch(
+                () => undefined,
+              );
             }}
           />
         );
@@ -213,32 +240,28 @@ export function useCommandDialogs(
             }}
             check={(changeId) => backend.preflightSubmit({ changeId })}
             submit={async (confirmation) => {
-              const refreshWorkspace = async () => {
-                window.dispatchEvent(new Event("p4deck:pending-refresh"));
-                await Promise.all([
-                  workspaceCache.invalidateQueries({
-                    queryKey: ["workspace-files", connectionKey],
-                  }),
-                  workspaceCache.invalidateQueries({
-                    queryKey: ["depot-files", connectionKey],
-                  }),
-                ]);
-              };
+              const refreshWorkspace = (affectedPaths?: readonly string[]) =>
+                invalidateData(["pending", "workspaceStatus", "depot"], {
+                  connectionKey,
+                  affectedPaths,
+                });
               let result;
               try {
                 result = await backend.confirmSubmit(confirmation);
               } catch (cause) {
-                await refreshWorkspace();
+                void refreshWorkspace().catch(() => undefined);
                 throw cause;
               }
               if (
                 result.refresh.pendingChanges ||
                 result.refresh.workspaceStatus
               ) {
-                await refreshWorkspace();
+                void refreshWorkspace(result.refresh.depotPaths).catch(
+                  () => undefined,
+                );
               }
               if (result.refresh.submittedChanges)
-                window.dispatchEvent(new Event("p4deck:submitted-refresh"));
+                void invalidateData(["submitted"]).catch(() => undefined);
               return result;
             }}
           />
@@ -257,5 +280,11 @@ export function useCommandDialogs(
     },
     confirm: async (value: OperationConfirmation) =>
       (await gateway.ask({ kind: "confirm", value })) === true,
+    checkout: async (
+      value: Omit<Extract<Request, { kind: "checkout" }>, "kind">,
+    ) => {
+      const answer = await gateway.ask({ kind: "checkout", ...value });
+      return typeof answer === "object" ? answer : null;
+    },
   };
 }

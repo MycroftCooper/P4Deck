@@ -3,7 +3,7 @@ import type {
   WorkflowResult,
   WorkflowTargetSnapshot,
 } from "../../shared/contracts/types";
-import { workspaceCache } from "../files/workspaceQueries";
+import { invalidateData } from "../../shared/cache/dataEffects";
 
 export interface WorkflowRefreshDetail {
   result: WorkflowResult;
@@ -57,25 +57,12 @@ export async function publishWorkflowResult(
       }),
     );
   if (result.refresh.workspaceStatus)
-    await Promise.all([
-      workspaceCache.invalidateQueries({
-        queryKey: ["workspace-files", connectionKey],
-      }),
-      workspaceCache.invalidateQueries({
-        queryKey: ["depot-files", connectionKey],
-      }),
-    ]);
+    await invalidateData(["workspaceStatus", "depot"], { connectionKey });
 }
 
 /** IPC failure can hide a partial mutation, so refresh every related local view. */
 export async function publishWorkflowFailure(connectionKey: string) {
-  window.dispatchEvent(new Event("p4deck:pending-refresh"));
-  await Promise.allSettled([
-    workspaceCache.invalidateQueries({
-      queryKey: ["workspace-files", connectionKey],
-    }),
-    workspaceCache.invalidateQueries({
-      queryKey: ["depot-files", connectionKey],
-    }),
-  ]);
+  await invalidateData(["pending", "workspaceStatus", "depot"], {
+    connectionKey,
+  }).catch(() => undefined);
 }

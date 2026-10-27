@@ -1,3 +1,4 @@
+import { FixedPageHeader } from "../../app/docking/chrome";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { QueryKey } from "@tanstack/react-query";
 import { backend } from "../../infrastructure/backend";
 import type {
   BranchImpactDirection,
@@ -21,9 +23,19 @@ import type {
   BranchMutationResult,
   RuntimeInfo,
 } from "../../shared/contracts/types";
+import { invalidateData } from "../../shared/cache/dataEffects";
+import { serverScope, snapshotKey } from "../../shared/cache/policy";
+import {
+  hydrateSnapshot,
+  isFresh,
+  readSnapshot,
+  writePagedSnapshot,
+} from "../../shared/cache/snapshots";
+import { useViewRefresh } from "../../shared/cache/useViewRefresh";
 import { BranchMappingMutationDialog } from "./BranchMappingMutationDialog";
 import {
   branchMappingError,
+  isBranchMappingSnapshot,
   mergeBranchMappingPages,
 } from "./branchMappingModel";
 
@@ -31,6 +43,12 @@ const PAGE_SIZE = 100;
 const PREVIEW_LIMIT = 200;
 type ListPhase = "idle" | "loading" | "loadingMore" | "ready" | "error";
 type DetailPhase = "idle" | "loading" | "ready" | "error";
+type ListQuery = Pick<BranchMappingQuery, "nameFilter" | "owner" | "pageSize">;
+
+/** Loaded pages per filter; disk copies omit the session-bound cursor. */
+export function branchMappingsKey(scope: string, query: ListQuery) {
+  return snapshotKey("branchMappings", scope, JSON.stringify(query));
+}
 
 function operationId(kind: string) {
   return `branch-mapping-${kind}-${crypto.randomUUID()}`;
@@ -44,6 +62,8 @@ export function BranchMappingsPage({
   zh: boolean;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
+  const remoteReady =
+    runtime.p4Version !== "loading" && runtime.connection.state === "connected";
   const [nameInput, setNameInput] = useState("");
   const [ownerInput, setOwnerInput] = useState("");
   const [filters, setFilters] = useState({ nameFilter: "", owner: "" });
@@ -79,11 +99,25 @@ export function BranchMappingsPage({
     | {
         sequence: number;
         generation: number;
-        query: Pick<BranchMappingQuery, "nameFilter" | "owner" | "pageSize">;
+        query: ListQuery;
+        key: QueryKey;
       }
     | undefined
   >(undefined);
   const listRef = useRef<HTMLDivElement>(null);
+  const scope = serverScope(runtime);
+  const query = useMemo<ListQuery>(
+    () => ({
+      nameFilter: filters.nameFilter || undefined,
+      owner: filters.owner || undefined,
+      pageSize: PAGE_SIZE,
+    }),
+    [filters.nameFilter, filters.owner],
+  );
+  const listKey = useMemo(
+    () => branchMappingsKey(scope, query),
+    [scope, query],
+  );
   const connectionOwner = useMemo(
     () =>
       JSON.stringify([
@@ -133,30 +167,29 @@ export function BranchMappingsPage({
   }, []);
 
   const startFresh = useCallback(
-    async (preserveSelection: boolean, restartNotice = "") => {
+    async (preserveSelection: boolean) => {
+      if (!remoteReady) {
+        setListPhase((current) => (current === "ready" ? "ready" : "idle"));
+        return;
+      }
       cancelAll();
       detailSequence.current += 1;
       previewSequence.current += 1;
       const sequence = ++listSequence.current;
       const generation = ++requestGeneration.current;
       const id = operationId("list");
-      const query = {
-        nameFilter: filters.nameFilter || undefined,
-        owner: filters.owner || undefined,
-        pageSize: PAGE_SIZE,
-      } satisfies Pick<BranchMappingQuery, "nameFilter" | "owner" | "pageSize">;
-      listSession.current = { sequence, generation, query };
+      listSession.current = { sequence, generation, query, key: listKey };
       consumedCursors.current.clear();
       pendingCursors.current.clear();
       activeOperations.current.add(id);
       setListPhase("loading");
       setListError("");
-      setNotice(restartNotice);
-      setPage(undefined);
-      setPreview(undefined);
-      setPreviewError("");
-      setPreviewPhase("idle");
+      setNotice("");
       if (!preserveSelection) {
+        setPage(undefined);
+        setPreview(undefined);
+        setPreviewError("");
+        setPreviewPhase("idle");
         setSelectedName(undefined);
         setDetail(undefined);
         setDetailError("");
@@ -174,6 +207,7 @@ export function BranchMappingsPage({
           !scopeMatches(result.scope)
         )
           return;
+        writePagedSnapshot(listKey, result);
         setPage(result);
         setListPhase("ready");
       } catch (cause) {
@@ -189,23 +223,96 @@ export function BranchMappingsPage({
         activeOperations.current.delete(id);
       }
     },
-    [cancelAll, filters.nameFilter, filters.owner, scopeMatches],
+    [cancelAll, listKey, query, remoteReady, scopeMatches],
+  );
+
+  /** Shows cached pages and resumes their paging session without P4. */
+  const restore = useCallback(
+    (cached: BranchMappingPage) => {
+      cancelAll();
+      requestGeneration.current = Math.max(
+        requestGeneration.current,
+        cached.requestGeneration,
+      );
+      listSession.current = {
+        sequence: ++listSequence.current,
+        generation: cached.requestGeneration,
+        query,
+        key: listKey,
+      };
+      consumedCursors.current.clear();
+      pendingCursors.current.clear();
+      setPage(cached);
+      setListPhase("ready");
+      setListError("");
+      setNotice("");
+    },
+    [cancelAll, listKey, query],
   );
 
   useEffect(() => {
-    if (runtime.p4Version !== "loading") void startFresh(false);
+    let live = true;
+    const showSnapshot = () => {
+      if (!live) return;
+      const cached = readSnapshot<BranchMappingPage>(listKey);
+      if (!cached && remoteReady) void startFresh(false);
+      else if (!cached) setListPhase("idle");
+      else {
+        restore(cached.data);
+        // Stale pages, or pages from another connection, refresh behind the list.
+        if (
+          remoteReady &&
+          (!scopeMatches(cached.data.scope) || !isFresh(listKey))
+        )
+          void startFresh(true);
+      }
+    };
+    if (runtime.p4Version !== "loading") {
+      if (readSnapshot(listKey)) showSnapshot();
+      else {
+        setPage(undefined);
+        setListPhase("loading");
+        void hydrateSnapshot(
+          listKey,
+          (value): value is BranchMappingPage =>
+            isBranchMappingSnapshot(value) &&
+            value.scope.server === runtime.context.server &&
+            value.scope.user === runtime.context.user &&
+            value.scope.activeProfileId === runtime.activeProfileId,
+          { revalidate: true },
+        ).then(showSnapshot);
+      }
+    }
     return () => {
+      live = false;
       listSequence.current += 1;
       detailSequence.current += 1;
       previewSequence.current += 1;
       cancelAll();
     };
-  }, [connectionOwner, runtime.p4Version, startFresh, cancelAll]);
+  }, [
+    connectionOwner,
+    listKey,
+    runtime.p4Version,
+    remoteReady,
+    restore,
+    scopeMatches,
+    startFresh,
+    cancelAll,
+  ]);
+
+  useViewRefresh("branchmappings", listKey, () => {
+    if (remoteReady && listPhase !== "loading" && listPhase !== "loadingMore")
+      void startFresh(true);
+  });
 
   const loadMore = useCallback(async () => {
     const cursor = page?.nextCursor;
     const session = listSession.current;
     if (
+      !remoteReady ||
+      listPhase === "loading" ||
+      listPhase === "loadingMore" ||
       !cursor ||
       !page?.hasMore ||
       !session ||
@@ -238,11 +345,11 @@ export function BranchMappingsPage({
           next.nextCursor === cursor ||
           consumedCursors.current.has(next.nextCursor));
       const merged = mergeBranchMappingPages(page, next);
-      setPage(
-        nonProgressing
-          ? { ...merged, hasMore: false, nextCursor: undefined }
-          : merged,
-      );
+      const value = nonProgressing
+        ? { ...merged, hasMore: false, nextCursor: undefined }
+        : merged;
+      writePagedSnapshot(session.key, value);
+      setPage(value);
       setListPhase("ready");
       if (nonProgressing)
         setNotice(
@@ -258,13 +365,8 @@ export function BranchMappingsPage({
         failure.code === "invalidCursor" ||
         failure.code === "cursorExpired"
       ) {
-        void startFresh(
-          false,
-          tr(
-            "分页快照已失效，已从首屏重新加载。",
-            "The paging snapshot expired and was restarted from the first page.",
-          ),
-        );
+        // Restored pages can outlive the backend paging snapshot (120 s).
+        void startFresh(true);
         return;
       }
       if (failure.code !== "cancelled") setListError(failure.message);
@@ -273,10 +375,17 @@ export function BranchMappingsPage({
       pendingCursors.current.delete(cursor);
       activeOperations.current.delete(id);
     }
-  }, [page, scopeMatches, startFresh, tr]);
+  }, [listPhase, page, remoteReady, scopeMatches, startFresh, tr]);
 
   const loadDetail = useCallback(
     async (name: string) => {
+      if (!remoteReady) {
+        setSelectedName(name);
+        setDetail(undefined);
+        setDetailError("");
+        setDetailPhase("idle");
+        return;
+      }
       if (detailOperation.current) {
         activeOperations.current.delete(detailOperation.current);
         void backend
@@ -327,12 +436,12 @@ export function BranchMappingsPage({
         if (detailOperation.current === id) detailOperation.current = undefined;
       }
     },
-    [scopeMatches],
+    [remoteReady, scopeMatches],
   );
 
   const loadPreview = useCallback(
     async (direction = previewDirection) => {
-      if (!selectedName) return;
+      if (!selectedName || !remoteReady) return;
       if (previewOperation.current) {
         activeOperations.current.delete(previewOperation.current);
         void backend
@@ -375,7 +484,7 @@ export function BranchMappingsPage({
           previewOperation.current = undefined;
       }
     },
-    [previewDirection, selectedName],
+    [previewDirection, remoteReady, selectedName],
   );
 
   const cancel = () => {
@@ -479,17 +588,12 @@ export function BranchMappingsPage({
 
   return (
     <section className="branch-mappings-page">
-      <header className="section-title branch-mappings-title">
-        <div>
-          <span className="workspace-eyebrow">PERFORCE / BRANCH MAPPINGS</span>
-          <h1>Branch Mappings</h1>
-          <p>
-            {tr(
-              "查看、预览并通过专用安全状态机维护 Branch Mapping。",
-              "Inspect, preview, and maintain Branch Mappings through dedicated safety workflows.",
-            )}
-          </p>
-        </div>
+      <FixedPageHeader
+        description={tr(
+          "查看、预览并通过专用安全状态机维护 Branch Mapping。",
+          "Inspect, preview, and maintain Branch Mappings through dedicated safety workflows.",
+        )}
+      >
         <button
           onClick={(event) => {
             setClearSelectionOnDismiss(false);
@@ -499,7 +603,7 @@ export function BranchMappingsPage({
           <Plus size={15} /> {tr("新建", "Create")}
         </button>
         <button
-          disabled={busy}
+          disabled={busy || !remoteReady}
           onClick={() => {
             void startFresh(true);
             if (selectedName) void loadDetail(selectedName);
@@ -511,7 +615,7 @@ export function BranchMappingsPage({
           />
           {tr("刷新", "Refresh")}
         </button>
-      </header>
+      </FixedPageHeader>
 
       <form
         className="branch-mapping-query"
@@ -562,11 +666,6 @@ export function BranchMappingsPage({
       </form>
 
       <div className="branch-mapping-status" aria-live="polite">
-        <span>{tr("直接服务端查询", "Direct server query")}</span>
-        <span>
-          Generation {runtime.contextGeneration} ·{" "}
-          {tr("旧响应会被丢弃", "stale responses are ignored")}
-        </span>
         {page?.simulated && (
           <span className="status-warning">Browser Mock simulated data</span>
         )}
@@ -601,7 +700,9 @@ export function BranchMappingsPage({
         <div className="workspace-load-error" role="alert">
           <span>{listError}</span>
           <button
-            onClick={() => (page ? void loadMore() : void startFresh(false))}
+            onClick={() =>
+              listPhase === "error" ? void startFresh(!!page) : void loadMore()
+            }
           >
             {tr("重试", "Retry")}
           </button>
@@ -702,7 +803,11 @@ export function BranchMappingsPage({
           {page?.hasMore && (
             <button
               className="load-more-button"
-              disabled={listPhase === "loadingMore" || !page.nextCursor}
+              disabled={
+                listPhase === "loading" ||
+                listPhase === "loadingMore" ||
+                !page.nextCursor
+              }
               onClick={() => void loadMore()}
             >
               <ChevronDown size={14} /> {tr("继续加载", "Load more")}
@@ -1013,6 +1118,8 @@ export function BranchMappingsPage({
             setClearSelectionOnDismiss(false);
           }}
           onResult={(result: BranchMutationResult, nextSelection) => {
+            // Every cached filter may list the changed mapping.
+            void invalidateData(["branchMappings"]);
             void startFresh(true);
             if (nextSelection) void loadDetail(nextSelection);
             else if (

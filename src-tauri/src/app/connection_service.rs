@@ -124,7 +124,17 @@ impl ConnectionService {
     pub fn runtime_info(&self) -> RuntimeInfo {
         let (context, context_generation) = self.contexts.snapshot();
         let cli = ConnectionAdapter::discover(context.executable.as_deref());
-        let connection = if cli.state == ConnectionState::CliMissing {
+        let connection = if context.server.is_empty() && context.user.is_empty() {
+            ConnectionStatus {
+                state: ConnectionState::Disconnected,
+                error_code: Some(ConnectionErrorCode::Disconnected),
+                message: "No active connection. Create or select a saved connection in Settings."
+                    .into(),
+                recovery: RecoveryAction::EditConfig,
+                server: String::new(),
+                fingerprint: None,
+            }
+        } else if cli.state == ConnectionState::CliMissing {
             connection_error(
                 ConnectionState::CliMissing,
                 ConnectionErrorCode::CliMissing,
@@ -746,6 +756,7 @@ mod tests {
             root: server_root.to_string_lossy().into_owned(),
             stream: String::new(),
             description: String::new(),
+            options: "noallwrite noclobber noaltsync normdir".into(),
             view: vec!["//depot/... //fixture-client/...".into()],
         };
         let runtime = crate::p4::connection_setup::WorkspaceRuntimeIdentity {

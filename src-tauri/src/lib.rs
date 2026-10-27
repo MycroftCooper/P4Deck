@@ -26,13 +26,18 @@ use app::stream_graph_service::StreamGraphService;
 use app::stream_switch_service::StreamSwitchService;
 use app::submit_service::SubmitService;
 use app::sync_service::SyncService;
+use app::undo_service::UndoService;
+use app::vfs_service::VfsService;
 use app::workflow_service::WorkflowService;
 use p4::context::ContextStore;
 use p4::{
     changelists::ChangelistRepository, locks::LockRepository, rename::RenameRepository,
-    runner::P4Runner, submit::SubmitRepository, workflows::WorkflowRepository,
+    runner::P4Runner, submit::SubmitRepository, vfs::P4VfsRepository,
+    workflows::WorkflowRepository,
 };
-use persistence::{log_store::LogStore, operation_journal::OperationJournal};
+use persistence::{
+    backup::ConfigBackupService, log_store::LogStore, operation_journal::OperationJournal,
+};
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -42,6 +47,7 @@ pub(crate) struct AppState {
     pub changelists: Arc<ChangelistService>,
     pub submit: Arc<SubmitService>,
     pub sync: Arc<SyncService>,
+    pub undo: Arc<UndoService>,
     pub workflows: Arc<WorkflowService>,
     pub files: Arc<FileService>,
     pub file_locks: Arc<FileLockService>,
@@ -51,10 +57,12 @@ pub(crate) struct AppState {
     pub status_cache: Arc<StatusCache>,
     pub journal: Arc<OperationJournal>,
     pub diagnostics: Arc<DiagnosticService>,
+    pub backups: Arc<ConfigBackupService>,
     pub search: Arc<GlobalSearchService>,
     pub stream_graph: Arc<StreamGraphService>,
     pub branch_mappings: Arc<BranchMappingService>,
     pub stream_switch: Arc<StreamSwitchService>,
+    pub vfs: Arc<VfsService>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -63,6 +71,9 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
+            let backups = Arc::new(ConfigBackupService::new(data_dir.clone()));
+            // A staged restore must be applied before the connection store is loaded.
+            let _ = backups.apply_pending();
             let contexts = Arc::new(
                 ContextStore::load(&data_dir)
                     .map_err(|error| std::io::Error::other(error.to_string()))?,
@@ -106,6 +117,11 @@ pub fn run() {
                 contexts.clone(),
                 status_cache.clone(),
             ));
+            let undo = Arc::new(UndoService::new(
+                runner.clone(),
+                contexts.clone(),
+                status_cache.clone(),
+            ));
             let workflows = Arc::new(WorkflowService::new(
                 WorkflowRepository::new(runner.clone()),
                 contexts.clone(),
@@ -135,6 +151,10 @@ pub fn run() {
             let stream_graph = Arc::new(StreamGraphService::new(runner.clone(), contexts.clone()));
             let branch_mappings =
                 Arc::new(BranchMappingService::new(runner.clone(), contexts.clone()));
+            let vfs = Arc::new(VfsService::new(
+                P4VfsRepository::new(runner.clone()),
+                contexts.clone(),
+            ));
             let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts));
             app.manage(AppState {
                 runner,
@@ -142,6 +162,7 @@ pub fn run() {
                 changelists,
                 submit,
                 sync,
+                undo,
                 workflows,
                 files,
                 file_locks,
@@ -151,10 +172,12 @@ pub fn run() {
                 status_cache,
                 journal,
                 diagnostics,
+                backups,
                 search,
                 stream_graph,
                 branch_mappings,
                 stream_switch,
+                vfs,
             });
             Ok(())
         })
@@ -194,12 +217,19 @@ pub fn run() {
             ipc::commands::logout,
             ipc::commands::run_p4,
             ipc::commands::cancel_operation,
+            ipc::commands::cancel_all_operations,
             ipc::commands::global_search,
             ipc::commands::query_logs,
             ipc::commands::query_log_page,
             ipc::commands::get_log_policy,
             ipc::commands::set_log_policy,
+            ipc::commands::open_logs_folder,
+            ipc::commands::delete_all_logs,
             ipc::commands::export_diagnostics,
+            ipc::commands::create_config_backup,
+            ipc::commands::list_config_backups,
+            ipc::commands::restore_config_backup,
+            ipc::commands::open_config_backups_folder,
             ipc::commands::status_cache_diagnostics,
             ipc::commands::query_operation_journal,
             ipc::commands::get_operation_record,
@@ -217,6 +247,9 @@ pub fn run() {
             ipc::commands::confirm_rename_move,
             ipc::commands::preflight_file_lock,
             ipc::commands::confirm_file_lock,
+            ipc::commands::inspect_p4vfs,
+            ipc::commands::preview_undo,
+            ipc::commands::confirm_undo,
             ipc::commands::preview_sync,
             ipc::commands::confirm_sync,
             ipc::commands::get_diff,

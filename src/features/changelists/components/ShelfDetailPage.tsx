@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PageRefreshSlotContext } from "../../../app/docking/chrome";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
@@ -53,6 +62,7 @@ export function ShelfDetailPage({
   runtime: RuntimeInfo;
   zh: boolean;
 }) {
+  const refreshSlot = useContext(PageRefreshSlotContext);
   const [changeText, encodedInitialPath] = target.split("::", 2);
   const changeId = Number(changeText);
   const initialPath = encodedInitialPath
@@ -389,12 +399,37 @@ export function ShelfDetailPage({
     [],
   );
 
+  const refreshButton = (
+    <button
+      type="button"
+      title={zh ? "刷新" : "Refresh"}
+      aria-label={zh ? "刷新" : "Refresh"}
+      aria-busy={loading}
+      disabled={loading}
+      onClick={() => {
+        supersedeOperations();
+        setCancelled(false);
+        setRefresh((value) => value + 1);
+      }}
+    >
+      <RefreshCw
+        size={15}
+        className={loading ? "spin" : ""}
+        aria-hidden="true"
+      />
+      {!refreshSlot && <span>{zh ? "刷新" : "Refresh"}</span>}
+    </button>
+  );
   return (
     <section className="workspaces-page shelf-detail-page">
+      {refreshSlot && createPortal(refreshButton, refreshSlot)}
       <header className="section-title">
         <div>
           <span className="workspace-eyebrow">PERFORCE / SHELF</span>
-          <h1>Shelf CL {Number.isFinite(changeId) ? changeId : target}</h1>
+          <h1>
+            {zh ? "搁置 CL" : "Shelf CL"}{" "}
+            {Number.isFinite(changeId) ? changeId : target}
+          </h1>
           <p>
             {detail?.description ||
               (zh
@@ -402,17 +437,7 @@ export function ShelfDetailPage({
                 : "Shelf detail and content preview")}
           </p>
         </div>
-        <button
-          disabled={loading}
-          onClick={() => {
-            supersedeOperations();
-            setCancelled(false);
-            setRefresh((value) => value + 1);
-          }}
-        >
-          <RefreshCw size={15} className={loading ? "spin" : ""} />
-          {zh ? "刷新" : "Refresh"}
-        </button>
+        {!refreshSlot && refreshButton}
         <button
           disabled={!loading && !loadingMore && !contentLoading}
           onClick={cancel}

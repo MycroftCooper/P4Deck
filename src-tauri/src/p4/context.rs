@@ -246,24 +246,6 @@ impl ContextStore {
             .write()
             .unwrap_or_else(|error| error.into_inner());
         check_revision(&state.document, expected_revision)?;
-        if state.document.profiles.len() == 1
-            && state
-                .document
-                .profiles
-                .iter()
-                .any(|profile| profile.id == id)
-        {
-            return Err(profile_error(
-                ConnectionProfileErrorCode::LastProfileDelete,
-                "The last connection profile cannot be deleted.",
-            ));
-        }
-        if state.document.active_profile_id.as_deref() == Some(id) {
-            return Err(profile_error(
-                ConnectionProfileErrorCode::ActiveProfileDelete,
-                "Switch to another profile before deleting the active profile.",
-            ));
-        }
         if !state
             .document
             .profiles
@@ -277,9 +259,17 @@ impl ContextStore {
         }
         let mut next = state.document.clone();
         next.profiles.retain(|profile| profile.id != id);
+        let active = next.active_profile_id.as_deref() == Some(id);
+        if active {
+            next.active_profile_id = None;
+        }
         next.revision = next.revision.saturating_add(1);
         persist_document(&self.path, &next)?;
         state.document = next;
+        if active {
+            state.runtime_context = P4Context::default();
+            state.generation = state.generation.saturating_add(1);
+        }
         Ok(public_document(&state.document))
     }
 
@@ -515,7 +505,8 @@ fn load_document(
         } else {
             validate_document(&document)?;
         }
-        let runtime = active_context(&document).unwrap_or_else(environment_context);
+        // An explicitly disconnected store must stay disconnected after restart.
+        let runtime = active_context(&document).unwrap_or_default();
         return Ok((document, runtime));
     }
 
@@ -548,6 +539,36 @@ fn load_document(
     Ok((document, legacy))
 }
 
+pub(crate) fn validate_backup_document(bytes: &[u8]) -> Result<(), String> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    if value.get("schemaVersion").is_some() {
+        let mut document: PersistedProfiles =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        if ![
+            PREVIOUS_CONNECTION_SCHEMA_VERSION,
+            CONNECTION_SCHEMA_VERSION,
+        ]
+        .contains(&document.schema_version)
+        {
+            return Err("unsupported connection schema version".into());
+        }
+        if serde_json::to_value(&document).map_err(|error| error.to_string())? != value {
+            return Err("connection metadata contains unsupported fields".into());
+        }
+        for profile in &mut document.profiles {
+            profile.context =
+                normalize_context(profile.context.clone()).map_err(|error| error.message)?;
+        }
+        validate_document(&document).map_err(|error| error.message)?;
+        return Ok(());
+    }
+    let legacy: P4Context = serde_json::from_value(value).map_err(|error| error.to_string())?;
+    normalize_context(legacy)
+        .map(|_| ())
+        .map_err(|error| error.message)
+}
+
 fn validate_document(document: &PersistedProfiles) -> Result<(), ConnectionProfileError> {
     let mut ids = std::collections::HashSet::new();
     for profile in &document.profiles {
@@ -573,11 +594,6 @@ fn validate_document(document: &PersistedProfiles) -> Result<(), ConnectionProfi
                 "The active connection profile is missing.",
             ));
         }
-    } else if !document.profiles.is_empty() {
-        return Err(profile_error(
-            ConnectionProfileErrorCode::CorruptStore,
-            "A non-empty connection store requires an active profile.",
-        ));
     }
     for (index, profile) in document.profiles.iter().enumerate() {
         if document.profiles[..index].iter().any(|other| {
@@ -783,7 +799,7 @@ fn persist_document(
 }
 
 #[cfg(windows)]
-fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
@@ -813,7 +829,7 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(windows))]
-fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     std::fs::rename(source, destination)
 }
 
@@ -1095,7 +1111,6 @@ mod tests {
         assert!(store.create(1, "Other".into(), configured("one")).is_err());
         let second = store.create(1, "Other".into(), configured("two")).unwrap();
         let active = second.active_profile_id.clone().unwrap();
-        assert!(store.delete(second.revision, &active).is_err());
         let other = second
             .profiles
             .iter()
@@ -1105,13 +1120,58 @@ mod tests {
             .clone();
         let third = store.delete(second.revision, &other).unwrap();
         assert_eq!(third.profiles.len(), 1);
-        assert_eq!(
-            store.delete(third.revision, &active).unwrap_err().code,
-            ConnectionProfileErrorCode::LastProfileDelete
-        );
+        let generation = store.snapshot().1;
+        let empty = store.delete(third.revision, &active).unwrap();
+        assert!(empty.profiles.is_empty());
+        assert!(empty.active_profile_id.is_none());
+        assert_eq!(store.current(), P4Context::default());
+        assert!(store.snapshot().1 > generation);
+        let reloaded = ContextStore::load(&directory).unwrap();
+        assert_eq!(reloaded.current(), P4Context::default());
+        assert!(reloaded.profiles().profiles.is_empty());
+        let recreated = reloaded
+            .create(empty.revision, "Recreated".into(), configured("new"))
+            .unwrap();
+        assert!(recreated.active_profile_id.is_some());
+        assert_eq!(reloaded.current().client, "new");
         let persisted = std::fs::read_to_string(directory.join("connection.json")).unwrap();
         assert!(!persisted.contains("password"));
         assert!(!persisted.contains("fingerprint"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn deleting_active_profile_leaves_other_profiles_disconnected_after_reload() {
+        let directory = directory();
+        let store = ContextStore::load(&directory).unwrap();
+        let first = store
+            .create(0, "Primary".into(), configured("one"))
+            .unwrap();
+        let active = first.active_profile_id.unwrap();
+        let second = store
+            .create(first.revision, "Other".into(), configured("two"))
+            .unwrap();
+        let before = store.snapshot().1;
+        assert!(store.delete(0, &active).is_err());
+        assert_eq!(store.snapshot().1, before);
+        let deleted = store.delete(second.revision, &active).unwrap();
+        assert_eq!(deleted.profiles.len(), 1);
+        assert!(deleted.active_profile_id.is_none());
+        assert_eq!(store.current(), P4Context::default());
+        assert_eq!(
+            ContextStore::load(&directory).unwrap().current(),
+            P4Context::default()
+        );
+        let other = deleted.profiles[0].id.clone();
+        store
+            .activate_context_if_unchanged(
+                deleted.revision,
+                store.snapshot().1,
+                &other,
+                configured("two"),
+            )
+            .unwrap();
+        assert_eq!(store.current().client, "two");
         std::fs::remove_dir_all(directory).unwrap();
     }
 
@@ -1124,6 +1184,12 @@ mod tests {
             .unwrap();
         std::fs::remove_file(directory.join("connection.json")).unwrap();
         std::fs::create_dir(directory.join("connection.json")).unwrap();
+        let generation = store.snapshot().1;
+        let active = store.active_profile_id().unwrap();
+        assert!(store.delete(1, &active).is_err());
+        assert_eq!(store.active_profile_id().as_deref(), Some(active.as_str()));
+        assert_eq!(store.current().client, "one");
+        assert_eq!(store.snapshot().1, generation);
         assert!(store.create(1, "Other".into(), configured("two")).is_err());
         assert_eq!(store.profiles().profiles.len(), 1);
         std::fs::remove_dir_all(directory).unwrap();

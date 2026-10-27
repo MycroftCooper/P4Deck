@@ -10,6 +10,7 @@ import {
   reusablePanel,
   targetForPage,
   type PageId,
+  type RevisionComparison,
 } from "../panels";
 import { storage } from "../../shared/lib/storage";
 import { deferredTask } from "../../shared/lib/deferredTask";
@@ -72,7 +73,17 @@ export function useDockController(props: DockProps) {
         params,
       });
   };
-  const open: DockHandle["open"] = (page, target, newInstance = false) => {
+  const open: DockHandle["open"] = (
+    page,
+    target,
+    newInstance = false,
+    comparison,
+  ) => {
+    comparison =
+      page === "diff"
+        ? normalizePanelTarget({ comparison }).comparison
+        : undefined;
+    if (comparison) newInstance = true;
     const dock = api.current;
     if (!dock) return;
     if (isTauri() && detachedPage) {
@@ -80,6 +91,7 @@ export function useDockController(props: DockProps) {
         page,
         target,
         newInstance,
+        comparison,
       }).catch((e) => setError(String(e)));
       return;
     }
@@ -113,6 +125,7 @@ export function useDockController(props: DockProps) {
         params: {
           target: path ?? "",
           locked: newInstance && isMultiPage(page),
+          ...(comparison ? { comparison } : {}),
         },
       });
   };
@@ -120,13 +133,20 @@ export function useDockController(props: DockProps) {
     if (!isTauri() || detachedPage) return;
     let off: (() => void) | undefined;
     let dead = false;
-    void listen<{ page: PageId; target?: string; newInstance?: boolean }>(
-      "panel-open-request",
-      ({ payload }) => {
-        if (isPage(payload.page))
-          open(payload.page, payload.target, payload.newInstance);
-      },
-    ).then((fn) => {
+    void listen<{
+      page: PageId;
+      target?: string;
+      newInstance?: boolean;
+      comparison?: RevisionComparison;
+    }>("panel-open-request", ({ payload }) => {
+      if (isPage(payload.page))
+        open(
+          payload.page,
+          payload.target,
+          payload.newInstance,
+          payload.comparison,
+        );
+    }).then((fn) => {
       if (dead) fn();
       else off = fn;
     });

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { SelectionContext } from "../features/files/SelectionContext";
 import { ResourceExplorer } from "../features/files/components/ResourceExplorer";
 import { resolveAddress } from "../features/files/resolveAddress";
@@ -8,8 +16,13 @@ import type {
   WorkspaceNode,
 } from "../shared/contracts/types";
 import { storage } from "../shared/lib/storage";
-import { DockWorkspace, detachedPage } from "./DockWorkspace";
-import { PageRenderer } from "./PageRenderer";
+import { detachedPage } from "./docking/types";
+const DockWorkspace = lazy(() =>
+  import("./DockWorkspace").then((m) => ({ default: m.DockWorkspace })),
+);
+const PageRenderer = lazy(() =>
+  import("./PageRenderer").then((m) => ({ default: m.PageRenderer })),
+);
 import {
   pageForSearchTarget,
   pageLabels,
@@ -36,6 +49,7 @@ import {
 import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { StatusBar } from "./shell/StatusBar";
 import { ActivityBar } from "./shell/ActivityBar";
+import { SidebarResizeHandle } from "./shell/SidebarResizeHandle";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   buildSwarmLink,
@@ -58,12 +72,35 @@ import {
 import { useAutoRefresh } from "./refresh/autoRefresh";
 import { useDesktopNotifications } from "./notifications/notifications";
 import { canScanWorkspace } from "../features/files/workspaceQueries";
+import { toggleAutoRefresh } from "../features/settings/preferences";
+import { usePendingCacheSync } from "../features/changelists/pendingCache";
+
+import {
+  ChangeDetailsContext,
+  useChangeDetailsDialog,
+} from "../features/changelists/components/ChangeDetailsDialog";
 
 export function App() {
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (!performance.getEntriesByName("p4deck:shell-visible").length)
+        performance.mark("p4deck:shell-visible");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const preferences = usePreferences();
   const { t, zh, ui } = preferences;
-  const { runtime, applyRuntime, applyConnection, connectionKey, error } =
-    useRuntime();
+  const {
+    runtime,
+    applyRuntime,
+    applyConnection,
+    connectionKey,
+    error,
+    checkingConnection,
+  } = useRuntime();
+  const changeDetails = useChangeDetailsDialog(runtime, connectionKey, zh);
+  // Hydrate locally and keep mutations coherent even while Pending is closed.
+  usePendingCacheSync(runtime, connectionKey);
   const navigation = usePageNavigation();
   const { dockRef, route, pages, setPages, onActive, openPage } = navigation;
   const commandExecutor = useRef<
@@ -99,6 +136,7 @@ export function App() {
   const [leftOpen, setLeftOpen] = useState(
     () => storage.getItem("p4deck.leftOpen") !== "false",
   );
+  const [sidebarPreview, setSidebarPreview] = useState<number>();
   const [treeMode, setTreeMode] = useState<"workspace" | "depot">("workspace");
   const openFiles = useCallback(() => openPage("files"), [openPage]);
   const {
@@ -112,7 +150,6 @@ export function App() {
     target: GlobalSearchTarget;
     nonce: number;
   }>();
-  const searchNavigationNonce = useRef(0);
   const [streamNavigation, setStreamNavigation] = useState<{
     stream: string;
     nonce: number;
@@ -147,9 +184,10 @@ export function App() {
         target.type === "submittedChange" ||
         target.type === "pendingChange"
       ) {
-        searchNavigationNonce.current += 1;
-        setSearchNavigation({ target, nonce: searchNavigationNonce.current });
-        dockRef.current?.open(page);
+        changeDetails.open({
+          kind: target.type === "submittedChange" ? "submitted" : "pending",
+          changeId: target.changeId,
+        });
         return;
       }
       const path =
@@ -165,6 +203,7 @@ export function App() {
     },
     [
       connectionKey,
+      changeDetails.open,
       dockRef,
       locateStream,
       navigateFile,
@@ -189,12 +228,16 @@ export function App() {
   const afterOperation = useCallback(async (warnings: string[]) => {
     await toolsRef.current?.afterOperation(warnings);
   }, []);
+  const autoRefreshPaused = !ui.autoRefresh || ui.autoRefreshMinutes === 0;
   const autoRefresh = useAutoRefresh(
     runtime,
     connectionKey,
-    !ui.autoRefresh,
+    autoRefreshPaused ||
+      !runtime.context.server.trim() ||
+      !runtime.context.user.trim(),
     !!detachedPage,
     route,
+    ui.autoRefreshMinutes,
   );
   useDesktopNotifications(
     runtime,
@@ -327,10 +370,7 @@ export function App() {
           void dockRef.current?.popoutPage("p4log");
           break;
         case "refresh.toggleAuto":
-          preferences.setUi((value) => ({
-            ...value,
-            autoRefresh: !value.autoRefresh,
-          }));
+          preferences.setUi(toggleAutoRefresh);
           break;
         case "panel.dockBack":
           if (isTauri()) void getCurrentWindow().close();
@@ -392,167 +432,199 @@ export function App() {
           preferences,
         }}
       >
-        <SelectionContext.Provider value={selectionContext}>
-          <CommandExecutionContext.Provider value={executeCommand}>
-            <CommandContext.Provider value={command.focus}>
-              <div
-                className={`app-shell ${toolOpen ? "with-tools" : ""} ${detachedPage ? "detached-shell" : ""}`}
-              >
-                <TopBar
-                  runtime={runtime}
-                  onSettings={() => openPage("settings")}
-                />
-                {detachedPage && (
-                  <button
-                    className="detached-dock-back"
-                    onClick={() => executeAppCommand("panel.dockBack")}
-                  >
-                    Dock back / 停靠回主窗口 <kbd>Ctrl+Alt+D</kbd>
-                  </button>
-                )}
-                <CommandBar
-                  zh={zh}
-                  runtime={runtime}
-                  connectionKey={connectionKey}
-                  registerCommand={registerCommand}
-                  onBusyChange={setCommandBusy}
-                  target={command.target}
-                  targetError={command.targetError}
-                  onFocus={command.focus}
-                  onNavigate={navigateFile}
-                  onReview={openReview}
-                />
-                {error && (
-                  <div className="runtime-error" role="alert">
-                    {error}
-                  </div>
-                )}
-                {detachedRebound && (
-                  <div className="runtime-rebound" role="status">
-                    {zh
-                      ? "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。"
-                      : "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection."}
-                  </div>
-                )}
+        <ChangeDetailsContext.Provider value={changeDetails.open}>
+          {changeDetails.dialog}
+          <SelectionContext.Provider value={selectionContext}>
+            <CommandExecutionContext.Provider value={executeCommand}>
+              <CommandContext.Provider value={command.focus}>
                 <div
-                  className={`workbench ${hasSidebar ? "" : "left-collapsed"}`}
-                  style={
-                    hasSidebar
-                      ? {
-                          gridTemplateColumns: `var(--activity-bar-width, 48px) ${ui.sidebarWidth}px minmax(0,1fr)`,
-                        }
-                      : undefined
-                  }
+                  className={`app-shell ${toolOpen ? "with-tools" : ""} ${detachedPage ? "detached-shell" : ""}`}
                 >
-                  <ActivityBar
-                    active={route}
+                  <TopBar
+                    runtime={runtime}
                     zh={zh}
-                    labels={labels}
-                    pages={pages}
-                    onOpenPage={(page) => dockRef.current?.open(page)}
-                    onCloseAll={() => dockRef.current?.closeAll()}
+                    onRuntime={applyRuntime}
+                    onSettings={() => openPage("settings")}
                   />
-                  <ResourceExplorer
-                    collapsed={!leftOpen}
-                    onToggle={() => setLeftOpen(!leftOpen)}
-                    zh={zh}
-                    key={connectionKey}
-                    clientName={runtime.context.client}
-                    connectionKey={connectionKey}
-                    ready={runtime.p4Version !== "loading"}
-                    workspaceReady={canScanWorkspace(runtime)}
-                    mode={treeMode}
-                    onModeChange={setTreeMode}
-                    t={t}
-                    directory={directory}
-                    onNavigate={navigateFile}
-                  />
-                  <main className="main-stage">
-                    <div className="route-view">
-                      <DockWorkspace
-                        ref={dockRef}
-                        pages={pages}
+                  {detachedPage && (
+                    <button
+                      className="detached-dock-back"
+                      onClick={() => executeAppCommand("panel.dockBack")}
+                    >
+                      Dock back / 停靠回主窗口 <kbd>Ctrl+Alt+D</kbd>
+                    </button>
+                  )}
+                  <CommandBar
+                    navigationActions={
+                      <ActivityBar
                         active={route}
                         zh={zh}
-                        selectedLocalPath={
-                          selectedFile?.kind === "file"
-                            ? selectedFile.absolutePath
-                            : undefined
-                        }
-                        selectedPath={
-                          selectedFile?.kind === "file"
-                            ? (selectedFile.depotPath ??
-                              selectedFile.absolutePath)
-                            : undefined
-                        }
                         labels={labels}
-                        runtimeBinding={runtimeBinding}
-                        onPages={setPages}
-                        onActive={onActive}
-                        onTarget={command.onTarget}
-                        render={(page, target, changeTarget) => (
-                          <PageRenderer
-                            page={page}
-                            target={target}
-                            changeTarget={changeTarget}
-                            preferences={preferences}
-                            runtime={runtime}
-                            connectionKey={connectionKey}
-                            selectedFile={selectedFile}
-                            directory={directory}
-                            onNavigate={navigateFile}
-                            onReview={openReview}
-                            onConnection={applyConnection}
-                            onRuntime={applyRuntime}
-                            onOpenPage={openPage}
-                            streamNavigation={streamNavigation}
-                            onLocateStream={locateStream}
-                            onOperation={afterOperation}
-                            searchNavigation={searchNavigation}
-                            onSearchNavigate={navigateSearchTarget}
-                          />
-                        )}
+                        pages={pages}
+                        onOpenPage={openPage}
                       />
+                    }
+                    settingsActive={route === "settings"}
+                    zh={zh}
+                    runtime={runtime}
+                    connectionKey={connectionKey}
+                    registerCommand={registerCommand}
+                    onBusyChange={setCommandBusy}
+                    onOpenOperations={() => toolsRef.current?.open("journal")}
+                    target={command.target}
+                    targetError={command.targetError}
+                    onFocus={command.focus}
+                    onNavigate={navigateFile}
+                    onHistoryDiff={(path, left, right) =>
+                      dockRef.current?.open("diff", path, true, { left, right })
+                    }
+                    onReview={openReview}
+                  />
+                  {error && (
+                    <div className="runtime-error" role="alert">
+                      {error}
                     </div>
-                  </main>
+                  )}
+                  {detachedRebound && (
+                    <div className="runtime-rebound" role="status">
+                      {zh
+                        ? "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。"
+                        : "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection."}
+                    </div>
+                  )}
+                  <div
+                    className={`workbench ${hasSidebar ? "" : "left-collapsed"}`}
+                    style={
+                      {
+                        "--resource-sidebar-width": `${sidebarPreview ?? ui.sidebarWidth}px`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <ResourceExplorer
+                      resizeHandle={
+                        <SidebarResizeHandle
+                          width={sidebarPreview ?? ui.sidebarWidth}
+                          collapsed={!leftOpen}
+                          zh={zh}
+                          onPreview={setSidebarPreview}
+                          onCommit={(sidebarWidth) =>
+                            preferences.setUi((value) => ({
+                              ...value,
+                              sidebarWidth,
+                            }))
+                          }
+                          onCollapsedChange={(collapsed) =>
+                            setLeftOpen(!collapsed)
+                          }
+                        />
+                      }
+                      collapsed={!leftOpen}
+                      onToggle={() => setLeftOpen(!leftOpen)}
+                      zh={zh}
+                      key={connectionKey}
+                      clientName={runtime.context.client}
+                      connectionKey={connectionKey}
+                      ready={
+                        runtime.p4Version !== "loading" &&
+                        !!runtime.context.server.trim() &&
+                        !!runtime.context.user.trim()
+                      }
+                      workspaceReady={canScanWorkspace(runtime)}
+                      checkingConnection={checkingConnection}
+                      mode={treeMode}
+                      onModeChange={setTreeMode}
+                      t={t}
+                      onNavigate={navigateFile}
+                    />
+                    <main className="main-stage">
+                      <div className="route-view">
+                        <Suspense fallback={null}>
+                          <DockWorkspace
+                            ref={dockRef}
+                            pages={pages}
+                            active={route}
+                            zh={zh}
+                            selectedLocalPath={
+                              selectedFile?.kind === "file"
+                                ? selectedFile.absolutePath
+                                : undefined
+                            }
+                            selectedPath={
+                              selectedFile?.kind === "file"
+                                ? (selectedFile.depotPath ??
+                                  selectedFile.absolutePath)
+                                : undefined
+                            }
+                            labels={labels}
+                            runtimeBinding={runtimeBinding}
+                            onPages={setPages}
+                            onActive={onActive}
+                            onTarget={command.onTarget}
+                            render={(page, target, changeTarget) => (
+                              <Suspense fallback={null}>
+                                <PageRenderer
+                                  page={page}
+                                  target={target}
+                                  changeTarget={changeTarget}
+                                  preferences={preferences}
+                                  runtime={runtime}
+                                  checkingConnection={checkingConnection}
+                                  connectionKey={connectionKey}
+                                  selectedFile={selectedFile}
+                                  directory={directory}
+                                  onNavigate={navigateFile}
+                                  onReview={openReview}
+                                  onConnection={applyConnection}
+                                  onRuntime={applyRuntime}
+                                  onOpenPage={openPage}
+                                  streamNavigation={streamNavigation}
+                                  onLocateStream={locateStream}
+                                  onOperation={afterOperation}
+                                  searchNavigation={searchNavigation}
+                                  onSearchNavigate={navigateSearchTarget}
+                                />
+                              </Suspense>
+                            )}
+                          />
+                        </Suspense>
+                      </div>
+                    </main>
+                  </div>
+                  <ToolArea
+                    ref={toolsRef}
+                    t={t}
+                    zh={zh}
+                    native={runtime.mode === "tauri"}
+                    connectionKey={connectionKey}
+                    context={runtime.context}
+                    onOpenChange={setToolOpen}
+                    onOpenSettings={() => openPage("settings")}
+                  />
+                  <StatusBar
+                    onOpenLogs={(id) => toolsRef.current?.open("logs", id)}
+                    connectionKey={connectionKey}
+                    native={runtime.mode === "tauri"}
+                    zh={zh}
+                    autoRefresh={autoRefresh.status}
+                    autoRefreshPaused={autoRefreshPaused}
+                    onToggleAutoRefresh={() =>
+                      preferences.setUi(toggleAutoRefresh)
+                    }
+                  >
+                    <AppControls preferences={preferences} />
+                  </StatusBar>
                 </div>
-                <ToolArea
-                  ref={toolsRef}
-                  t={t}
+                <CommandPalette
+                  open={paletteOpen}
                   zh={zh}
-                  native={runtime.mode === "tauri"}
-                  connectionKey={connectionKey}
-                  context={runtime.context}
-                  onOpenChange={setToolOpen}
-                  onOpenSettings={() => openPage("settings")}
+                  environment={commandEnvironment}
+                  onClose={() => setPaletteOpen(false)}
+                  onExecute={executeAppCommand}
                 />
-                <StatusBar
-                  onOpenLogs={(id) => toolsRef.current?.open("logs", id)}
-                  connectionKey={connectionKey}
-                  native={runtime.mode === "tauri"}
-                  zh={zh}
-                  autoRefresh={autoRefresh.status}
-                  autoRefreshPaused={!ui.autoRefresh}
-                  onToggleAutoRefresh={() =>
-                    preferences.setUi((value) => ({
-                      ...value,
-                      autoRefresh: !value.autoRefresh,
-                    }))
-                  }
-                >
-                  <AppControls preferences={preferences} />
-                </StatusBar>
-              </div>
-              <CommandPalette
-                open={paletteOpen}
-                zh={zh}
-                environment={commandEnvironment}
-                onClose={() => setPaletteOpen(false)}
-                onExecute={executeAppCommand}
-              />
-            </CommandContext.Provider>
-          </CommandExecutionContext.Provider>
-        </SelectionContext.Provider>
+              </CommandContext.Provider>
+            </CommandExecutionContext.Provider>
+          </SelectionContext.Provider>
+        </ChangeDetailsContext.Provider>
       </MenuEnvironment.Provider>
     </ContextMenuProvider>
   );

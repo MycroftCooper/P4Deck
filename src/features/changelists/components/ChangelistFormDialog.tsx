@@ -27,8 +27,10 @@ export function ChangelistFormDialog({
   onSubmit,
 }: Props) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [jobs, setJobs] = useState(initial?.jobs.join("\n") ?? "");
+  const initialDescription =
+    initial?.description ??
+    (mode === "create" ? tr("新ChangeList", "New changelist") : "");
+  const [description, setDescription] = useState(initialDescription);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [discard, setDiscard] = useState(false);
@@ -42,9 +44,7 @@ export function ChangelistFormDialog({
   }, []);
   const formId = useId(),
     errorId = useId();
-  const dirty =
-    description !== (initial?.description ?? "") ||
-    jobs !== (initial?.jobs.join("\n") ?? "");
+  const dirty = description !== initialDescription;
   const dismiss = () => {
     if (!busy) dirty ? setDiscard(true) : onDismiss();
   };
@@ -64,14 +64,7 @@ export function ChangelistFormDialog({
     }
     const draft = {
       description: description.trim(),
-      jobs: [
-        ...new Set(
-          jobs
-            .split(/\r?\n/)
-            .map((value) => value.trim())
-            .filter(Boolean),
-        ),
-      ],
+      jobs: mode === "edit" ? [...(initial?.jobs ?? [])] : [],
     };
     if (!onSubmit) {
       setNotice(
@@ -122,10 +115,14 @@ export function ChangelistFormDialog({
             disabled={busy}
           >
             {busy
-              ? tr("正在保存…", "Saving…")
+              ? mode === "create"
+                ? tr("正在新建…", "Creating…")
+                : tr("正在保存…", "Saving…")
               : !onSubmit
                 ? tr("检查表单（不提交）", "Check form (no submission)")
-                : tr("保存", "Save")}
+                : mode === "create"
+                  ? tr("新建", "Create")
+                  : tr("保存", "Save")}
           </button>
         </>
       }
@@ -161,20 +158,6 @@ export function ChangelistFormDialog({
               onChange={(event) => {
                 setDescription(event.target.value);
                 setError("");
-                setNotice("");
-              }}
-            />
-          </label>
-          <label>
-            Jobs{" "}
-            <span className="workflow-field-hint">
-              {tr("可选，每行一个 Job ID", "Optional, one Job ID per line")}
-            </span>
-            <textarea
-              rows={3}
-              value={jobs}
-              onChange={(event) => {
-                setJobs(event.target.value);
                 setNotice("");
               }}
             />

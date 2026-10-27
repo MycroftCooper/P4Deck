@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
 import { backend } from "../../infrastructure/backend";
 import type { FilePreview, RuntimeInfo } from "../../shared/contracts/types";
-const cache = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 3_000, gcTime: 60_000, retry: false },
-  },
-});
+import { appCache } from "../../shared/cache/appCache";
+
+/** Previews can hold large images, so only the most recent few are kept. */
+const PREVIEW_PREFIX = ["local", "preview"] as const;
+const KEEP_PREVIEWS = 3;
+
+function evictOldPreviews() {
+  appCache
+    .getQueryCache()
+    .findAll({ queryKey: PREVIEW_PREFIX })
+    .filter((query) => query.state.fetchStatus === "idle")
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)
+    .slice(KEEP_PREVIEWS)
+    .forEach((query) =>
+      appCache.removeQueries({ queryKey: query.queryKey, exact: true }),
+    );
+}
 
 export function useFilePreview(target: string, runtime: RuntimeInfo) {
   const [result, setResult] = useState<{ key: string; data: FilePreview }>();
@@ -14,7 +25,7 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const identity = JSON.stringify([runtime.mode, runtime.context, target]);
-  const key = useMemo(() => ["file-preview", identity], [identity]);
+  const key = useMemo(() => [...PREVIEW_PREFIX, identity], [identity]);
   const data = result?.key === identity ? result.data : undefined;
   useEffect(() => {
     let live = true;
@@ -24,12 +35,16 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
       return;
     }
     setLoading(true);
+    // Local reads are cheap: show the last copy at once, then re-read it.
+    const cached = appCache.getQueryData<FilePreview>(key);
+    if (cached) setResult({ key: identity, data: cached });
     // Debounce selection changes; identical instances share one in-flight request.
     const timer = setTimeout(() => {
-      void cache
+      void appCache
         .fetchQuery({
           queryKey: key,
           queryFn: () => backend.getFilePreview(target),
+          staleTime: 3_000,
         })
         .then((value) => {
           if (live) setResult({ key: identity, data: value });
@@ -42,16 +57,7 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
         })
         .finally(() => {
           if (live) setLoading(false);
-          const entries = cache
-            .getQueryCache()
-            .getAll()
-            .filter((q) => q.state.fetchStatus === "idle")
-            .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
-          entries
-            .slice(3)
-            .forEach((q) =>
-              cache.removeQueries({ queryKey: q.queryKey, exact: true }),
-            );
+          evictOldPreviews();
         });
     }, 150);
     return () => {
@@ -60,7 +66,7 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
     };
   }, [identity, key, target, runtime.p4Version, refresh]);
   const reload = () => {
-    void cache
+    void appCache
       .invalidateQueries({ queryKey: key, exact: true })
       .then(() => setRefresh((n) => n + 1));
   };

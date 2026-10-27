@@ -16,6 +16,7 @@ type Phase = "preview" | "review" | "confirming" | "result";
 export interface SyncDialogRequest {
   nodes: WorkspaceNode[];
   revisionMode: "head" | "choose";
+  fixedRevision?: number;
   scopeLabel?: string;
   source: HTMLElement | null;
 }
@@ -33,15 +34,19 @@ export function SyncDialog({
   demo: boolean;
   zh: boolean;
   onDismiss(): void;
-  onRefresh(result?: SyncResult): Promise<void>;
+  onRefresh(result?: SyncResult): void | Promise<void>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     ...request,
     nodes: compactTargets(request.nodes).map((node) => ({ ...node })),
   }));
-  const [kind, setKind] = useState<SyncRevisionSpec["kind"]>("head");
-  const [value, setValue] = useState("");
+  const [kind, setKind] = useState<SyncRevisionSpec["kind"]>(
+    request.fixedRevision === undefined ? "head" : "revision",
+  );
+  const [value, setValue] = useState(
+    request.fixedRevision === undefined ? "" : String(request.fixedRevision),
+  );
   const [force, setForce] = useState(false);
   const [forceAck, setForceAck] = useState(false);
   const [phase, setPhase] = useState<Phase>("preview");
@@ -52,7 +57,13 @@ export function SyncDialog({
   const sequence = useRef(0);
   const operation = useRef<string | undefined>(undefined);
   const mounted = useRef(true);
-  const revision = useMemo(() => revisionSpec(kind, value), [kind, value]);
+  const revision = useMemo(
+    () =>
+      snapshot.fixedRevision === undefined
+        ? revisionSpec(kind, value)
+        : revisionSpec("revision", String(snapshot.fixedRevision)),
+    [kind, value, snapshot.fixedRevision],
+  );
   const paths = useMemo(
     () => selectionRequest("getLatest", snapshot.nodes).paths,
     [snapshot.nodes],
@@ -142,12 +153,12 @@ export function SyncDialog({
       if (!mounted.current || seq !== sequence.current) return;
       setResult(next);
       setPhase("result");
-      await onRefresh(next);
+      void Promise.resolve(onRefresh(next)).catch(() => undefined);
     } catch (cause) {
       if (!mounted.current || seq !== sequence.current) return;
       setError(String(cause));
       setPhase("result");
-      await onRefresh();
+      void Promise.resolve(onRefresh()).catch(() => undefined);
     } finally {
       if (seq === sequence.current) {
         operation.current = undefined;
@@ -272,6 +283,7 @@ export function SyncDialog({
             {tr("目标版本", "Target revision")}
             <select
               value={kind}
+              disabled={snapshot.fixedRevision !== undefined}
               onChange={(event) => {
                 setKind(event.target.value as SyncRevisionSpec["kind"]);
                 setValue("");
@@ -299,6 +311,7 @@ export function SyncDialog({
                     : undefined
                 }
                 value={value}
+                readOnly={snapshot.fixedRevision !== undefined}
                 aria-invalid={!!value && !revision}
                 onChange={(event) => setValue(event.target.value)}
               />

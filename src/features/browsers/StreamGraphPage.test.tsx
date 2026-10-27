@@ -347,7 +347,8 @@ it("restarts an expired cursor and isolates cancelled late responses after conte
     expect.objectContaining({ cursor: "expired-token" }),
   );
   expect(backend.queryStreamGraph.mock.calls[2][0].cursor).toBeUndefined();
-  expect(host.textContent).toContain("restarted from the first page");
+  expect(host.textContent).not.toContain("restarted from the first page");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
   expect(host.textContent).toContain("//streams/restarted");
 });
 
@@ -364,4 +365,65 @@ it("keeps a large graph DOM-bounded through virtualization", async () => {
   await render();
   expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(18);
   expect(host.textContent).toContain("1000 / 1000");
+});
+
+it("keeps the graph visible during silent cursor recovery and reports a real refresh failure once", async () => {
+  const replacement = deferred<StreamGraphResult>();
+  backend.queryStreamGraph
+    .mockImplementationOnce(async (query: StreamGraphQuery) =>
+      graphResult(query, [node("//streams/cached")], {
+        hasMore: true,
+        nextCursor: "invalid",
+      }),
+    )
+    .mockRejectedValueOnce({ code: "invalidCursor", message: "invalid cursor" })
+    .mockImplementationOnce(() => replacement.promise);
+  await render();
+  await clickButton("Load more streams");
+  expect(backend.queryStreamGraph).toHaveBeenCalledTimes(3);
+  expect(backend.queryStreamGraph.mock.calls[2][0].cursor).toBeUndefined();
+  expect(host.textContent).toContain("//streams/cached");
+  expect(host.textContent).not.toMatch(
+    /invalid cursor|restarted from the first page/i,
+  );
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => replacement.reject(new Error("Server unavailable")));
+  expect(host.textContent).toContain("//streams/cached");
+  expect(host.textContent).toContain("Server unavailable");
+  expect(backend.queryStreamGraph).toHaveBeenCalledTimes(3);
+});
+
+it("reopens from the cached graph without P4 and refreshes stale pages behind it", async () => {
+  backend.queryStreamGraph.mockImplementation(async (query: StreamGraphQuery) =>
+    graphResult(query, [node("//streams/main")]),
+  );
+  await render();
+  expect(backend.queryStreamGraph).toHaveBeenCalledTimes(1);
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(backend.queryStreamGraph).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("//streams/main");
+
+  // A stale snapshot stays on screen while the replacement is read.
+  const { appCache } = await import("../../shared/cache/appCache");
+  await act(async () => {
+    await appCache.invalidateQueries({
+      queryKey: ["snapshot", "streamGraph"],
+      refetchType: "none",
+    });
+  });
+  const next = deferred<StreamGraphResult>();
+  backend.queryStreamGraph.mockImplementationOnce(() => next.promise);
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(backend.queryStreamGraph).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain("//streams/main");
+  const query = backend.queryStreamGraph.mock.calls[1][0] as StreamGraphQuery;
+  expect(query.refresh).toBe(true);
+  await act(async () =>
+    next.resolve(graphResult(query, [node("//streams/refreshed")])),
+  );
+  expect(host.textContent).toContain("//streams/refreshed");
 });

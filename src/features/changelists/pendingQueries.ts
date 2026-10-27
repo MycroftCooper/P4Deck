@@ -3,21 +3,41 @@ import type {
   PendingChange,
   PendingChangePage,
   PendingChangeQuery,
+  PendingChangeMutationResult,
 } from "../../shared/contracts/types";
 
 export const PENDING_PAGE_SIZE = 100;
+
+export function mergePendingMutation(
+  current: PendingChange[],
+  result: PendingChangeMutationResult,
+) {
+  if (result.refreshError) return current;
+  const affected = new Set(result.affectedChanges);
+  const refreshed = new Map(
+    result.refreshedChanges.map((change) => [change.id, change]),
+  );
+  const next = current
+    .filter((change) => !affected.has(change.id) || refreshed.has(change.id))
+    .map((change) => refreshed.get(change.id) ?? change);
+  for (const change of refreshed.values())
+    if (!next.some((item) => item.id === change.id)) next.push(change);
+  return next.sort((left, right) =>
+    left.id === 0 ? -1 : right.id === 0 ? 1 : right.id - left.id,
+  );
+}
 
 export function filterPendingChanges(
   changes: readonly PendingChange[],
   keyword: string,
 ): PendingChange[] {
+  const pending = changes.filter((change) => change.status === "pending");
   const needle = keyword.trim().toLocaleLowerCase();
-  if (!needle) return [...changes];
-  return changes.filter(
+  if (!needle) return pending;
+  return pending.filter(
     (change) =>
-      String(change.id).includes(needle) ||
+      (change.id === 0 ? "default" : String(change.id)).includes(needle) ||
       change.description.toLocaleLowerCase().includes(needle) ||
-      change.jobs.some((job) => job.toLocaleLowerCase().includes(needle)) ||
       [...change.files, ...change.shelvedFiles].some((file) =>
         file.depotPath.toLocaleLowerCase().includes(needle),
       ),
@@ -65,7 +85,18 @@ export async function queryAllPendingChanges(
   const changes = page.defaultChange ? [page.defaultChange] : [];
   changes.push(...page.items);
   const seen = new Set(changes.map((change) => change.id));
-  while (page.hasMore && page.nextCursor) {
+  const cursors = new Set<string>();
+  while (true) {
+    if (
+      page.partial ||
+      page.stats.truncatedBySafetyLimit ||
+      (page.hasMore && (!page.nextCursor || cursors.has(page.nextCursor)))
+    )
+      throw new Error(
+        "待提交 CL 列表不完整，请刷新后重试 / Pending changelists are incomplete; refresh and retry",
+      );
+    if (!page.hasMore || !page.nextCursor) break;
+    cursors.add(page.nextCursor);
     page = await backend.queryPendingChanges(
       pendingQuery(0, operationId, "", page.nextCursor),
     );

@@ -5,6 +5,7 @@ import type {
 } from "../../shared/contracts/types";
 import {
   branchMappingError,
+  isBranchMappingSnapshot,
   mergeBranchMappingPages,
   validateBranchDraft,
   validateBranchView,
@@ -55,6 +56,21 @@ const page = (
 });
 
 describe("Branch Mapping view model", () => {
+  it("rejects malformed persisted rows and metadata", () => {
+    const valid = page(["mapping"]);
+    expect(isBranchMappingSnapshot(valid)).toBe(true);
+    for (const value of [
+      null,
+      {},
+      { ...valid, items: [null] },
+      { ...valid, items: [{ name: "mapping", owner: {} }] },
+      { ...valid, operationIds: [null] },
+      { ...valid, stats: {} },
+      { ...valid, scope: { server: "other" } },
+    ])
+      expect(isBranchMappingSnapshot(value)).toBe(false);
+  });
+
   it("accepts an ordered map/exclude/overlay View without rewriting it", () => {
     const view: BranchMappingDraft["view"] = [
       {

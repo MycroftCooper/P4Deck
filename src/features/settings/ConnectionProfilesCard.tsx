@@ -27,10 +27,13 @@ import {
   contextIdentity,
   notTestedStatus,
   probeConnection,
+  sameOperationalContext,
 } from "./connectionWizard";
 import { normalizeSwarmBaseUrl } from "../swarm/swarmLinks";
 import { ConnectionDirectoryDialog } from "./ConnectionDirectoryDialog";
 import { ConnectionSpecCreateDialog } from "./ConnectionSpecCreateDialog";
+import { pathKey } from "../files/address";
+import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 
 interface Props {
   runtime: RuntimeInfo;
@@ -56,7 +59,6 @@ type ContextField = [
   placeholder: string,
 ];
 
-type SwitchPhase = "idle" | "verifying" | "committing" | "success" | "error";
 type ResourceDialog = {
   kind: "user" | "workspace";
   mode: "browse" | "create";
@@ -149,7 +151,6 @@ function workspaceRootIdentity(context: P4Context) {
     charset: context.charset ?? "",
     trustPath: context.trustPath ?? "",
     ticketsPath: context.ticketsPath ?? "",
-    swarmBaseUrl: context.swarmBaseUrl ?? "",
   });
 }
 
@@ -158,16 +159,6 @@ function savedRootResolution(context: P4Context): RootResolution {
     ? {
         identity: workspaceRootIdentity(context),
         phase: "saved",
-        root: context.cwd.trim(),
-      }
-    : { identity: workspaceRootIdentity(context), phase: "idle" };
-}
-
-function verifiedRootResolution(context: P4Context): RootResolution {
-  return context.client.trim() && context.cwd?.trim()
-    ? {
-        identity: workspaceRootIdentity(context),
-        phase: "resolved",
         root: context.cwd.trim(),
       }
     : { identity: workspaceRootIdentity(context), phase: "idle" };
@@ -286,11 +277,11 @@ export function ConnectionProfilesCard({
   const [operation, setOperation] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [switchPhase, setSwitchPhase] = useState<SwitchPhase>("idle");
   const [password, setPassword] = useState("");
   const [trustConfirmed, setTrustConfirmed] = useState(false);
   const [profileSearch, setProfileSearch] = useState("");
   const [deleteId, setDeleteId] = useState("");
+  const deleteSource = useRef<HTMLButtonElement | null>(null);
   const [resourceDialog, setResourceDialog] = useState<ResourceDialog>();
   const [rootResolution, setRootResolution] = useState<RootResolution>(() =>
     savedRootResolution(runtime.context),
@@ -324,10 +315,9 @@ export function ConnectionProfilesCard({
     draftIdentity({ ...draft, context: current }) !== draftIdentity(baseline);
   selectedIdRef.current = selectedId;
   dirtyRef.current = dirty;
-  const selectedProfile = profiles?.profiles.find(
-    (item) => item.id === selectedId,
-  );
   const isActive = !!draft.id && profiles?.activeProfileId === draft.id;
+  const activeContextMatches =
+    isActive && sameOperationalContext(current, runtime.context);
   const savedName = draft.name.trim() || suggestedConnectionName(current);
   const rootIdentity = workspaceRootIdentity(current);
   const rootResolved =
@@ -377,7 +367,6 @@ export function ConnectionProfilesCard({
       setCliVersion(runtimeRef.current.p4Version);
       setNotice("");
       setError("");
-      setSwitchPhase("idle");
       setPassword("");
       setTrustConfirmed(false);
       setDeleteId("");
@@ -455,11 +444,17 @@ export function ConnectionProfilesCard({
   }, [chooseDocumentProfile, runtime.contextGeneration]);
 
   useEffect(() => {
-    if (isActive && !dirty) {
+    if ((isActive && !dirty) || activeContextMatches) {
       setConnection(runtime.connection);
       setCliVersion(runtime.p4Version);
     }
-  }, [dirty, isActive, runtime.connection, runtime.p4Version]);
+  }, [
+    isActive,
+    dirty,
+    activeContextMatches,
+    runtime.connection,
+    runtime.p4Version,
+  ]);
 
   useEffect(() => {
     if (!busy && restoreFocusRef.current) {
@@ -469,9 +464,9 @@ export function ConnectionProfilesCard({
   }, [busy]);
 
   useEffect(() => {
-    if (!error) return;
+    if (!error || deleteId) return;
     requestAnimationFrame(() => actionFeedbackRef.current?.focus());
-  }, [error]);
+  }, [error, deleteId]);
 
   useEffect(() => {
     if (rootRequestRevision === 0) return;
@@ -559,7 +554,20 @@ export function ConnectionProfilesCard({
               context: { ...value.context, cwd: candidate.root },
             };
           });
-          if (candidate.root !== current.cwd) {
+          setBaseline((value) => {
+            if (
+              workspaceRootIdentity(normalizeContext(value.context)) !==
+                identity ||
+              !value.context.cwd ||
+              pathKey(value.context.cwd) !== pathKey(candidate.root)
+            )
+              return value;
+            return {
+              ...value,
+              context: { ...value.context, cwd: candidate.root },
+            };
+          });
+          if (pathKey(candidate.root) !== pathKey(current.cwd || "")) {
             setConnection(notTestedStatus(current.server));
             setPassword("");
             setTrustConfirmed(false);
@@ -625,12 +633,12 @@ export function ConnectionProfilesCard({
     setConnection(status);
     setTrustConfirmed(false);
     setCliVersion(version);
+    const active = runtimeRef.current;
     if (
-      isActive &&
-      !dirty &&
-      contextIdentity(current) === contextIdentity(runtime.context)
+      draft.id === active.activeProfileId &&
+      sameOperationalContext(current, active.context)
     )
-      onConnection(current, status, version);
+      onConnection(active.context, status, version);
   }
 
   function clientValidation() {
@@ -704,15 +712,23 @@ export function ConnectionProfilesCard({
       // returned Root as a hint and independently re-resolve the exact draft.
       setRootResolution(savedRootResolution(saved.context));
       setRootRequestRevision((revision) => revision + 1);
-      const status = notTestedStatus(saved.context.server);
+      const status =
+        wasActive && sameOperationalContext(saved.context, runtime.context)
+          ? runtime.connection
+          : notTestedStatus(saved.context.server);
       setConnection(status);
       setPassword("");
       setTrustConfirmed(false);
       setNotice(
-        tr(
-          "连接已保存；状态仍为“尚未验证”，保存不会冒充已连接。",
-          "Connection saved. It remains Not tested; saving never pretends the connection is active.",
-        ),
+        status.state === "connected"
+          ? tr(
+              "连接配置已保存；实际连接参数未变，验证状态已保留。",
+              "Profile saved. P4 connection settings are unchanged; verification is preserved.",
+            )
+          : tr(
+              "连接已保存；状态仍为“尚未验证”，保存不会冒充已连接。",
+              "Connection saved. It remains Not tested; saving never pretends the connection is active.",
+            ),
       );
       if (wasActive || document.activeProfileId === saved.id) {
         const nextRuntime = await backend.runtimeInfo();
@@ -773,10 +789,15 @@ export function ConnectionProfilesCard({
                 "浏览器 Mock：仅模拟验证，未发起真实网络连接；此操作不会切换当前连接。",
                 "Browser Mock: validation was simulated with no real network connection. This does not activate the saved connection.",
               )
-            : tr(
-                "当前未保存设置的连接与登录已验证；验证不会保存或切换当前连接。",
-                "The current unsaved settings are connected and authenticated. Validation does not save or switch the current connection.",
-              ),
+            : activeContextMatches
+              ? tr(
+                  "当前连接与登录已验证，文件树已可加载。",
+                  "The active connection and login are verified. The file tree is ready.",
+                )
+              : tr(
+                  "当前未保存设置的连接与登录已验证；验证不会保存或切换当前连接。",
+                  "The current unsaved settings are connected and authenticated. Validation does not save or switch the current connection.",
+                ),
         );
     } catch {
       if (isCurrent(token))
@@ -910,12 +931,7 @@ export function ConnectionProfilesCard({
 
   function selectProfile(profile: ConnectionProfile) {
     if (dirty) {
-      setError(
-        tr(
-          "请先保存或撤销当前修改。",
-          "Save or discard the current changes first.",
-        ),
-      );
+      setError(tr("请先保存当前修改。", "Save the current changes first."));
       return;
     }
     setSelectedId(profile.id);
@@ -929,12 +945,7 @@ export function ConnectionProfilesCard({
 
   function createProfile() {
     if (dirty) {
-      setError(
-        tr(
-          "请先保存或撤销当前修改。",
-          "Save or discard the current changes first.",
-        ),
-      );
+      setError(tr("请先保存当前修改。", "Save the current changes first."));
       return;
     }
     setSelectedId("new");
@@ -943,6 +954,12 @@ export function ConnectionProfilesCard({
 
   function updateContext(key: keyof P4Context, value: string) {
     generation.current += 1;
+    if (key === "swarmBaseUrl") {
+      setDraft({ ...draft, context: { ...draft.context, [key]: value } });
+      setNotice("");
+      setError("");
+      return;
+    }
     setResourceDialog(undefined);
     const next = { ...draft.context, [key]: value, cwd: undefined };
     setDraft({ ...draft, context: next });
@@ -1011,69 +1028,9 @@ export function ConnectionProfilesCard({
     });
   }
 
-  async function switchProfile(source: HTMLButtonElement) {
-    if (
-      !profiles ||
-      !draft.id ||
-      dirty ||
-      draft.id === profiles.activeProfileId
-    )
-      return;
-    const token = begin("switch");
-    if (token == null) return;
-    setSwitchPhase("verifying");
-    try {
-      const next = await backend.setActiveConnectionProfile({
-        expectedRevision: profiles.revision,
-        id: draft.id,
-      });
-      if (!isCurrent(token)) return;
-      setSwitchPhase("committing");
-      setProfiles({
-        ...profiles,
-        revision: profiles.revision + 1,
-        activeProfileId: draft.id,
-      });
-      skipRuntimeGeneration.current = next.contextGeneration;
-      onRuntime(next);
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      if (!isCurrent(token)) return;
-      setConnection(next.connection);
-      setCliVersion(next.p4Version);
-      // Activation performs the same authoritative Root validation as save.
-      setRootResolution(verifiedRootResolution(next.context));
-      setSwitchPhase("success");
-      setNotice(
-        runtime.mode === "mock"
-          ? tr(
-              "浏览器 Mock：模拟切换成功；未访问真实网络。",
-              "Browser Mock: switch simulated successfully; no real network was accessed.",
-            )
-          : tr(
-              "当前连接已切换；旧选择、详情、搜索和日志视图已安全清理。",
-              "Current connection switched. Old selections, details, search, and log views were safely cleared.",
-            ),
-      );
-    } catch (cause) {
-      if (!isCurrent(token)) return;
-      const failure = localizedError(cause, zh);
-      setSwitchPhase("error");
-      setError(failure.message);
-      if (failure.code === "revisionConflict") {
-        try {
-          await reloadProfiles(true);
-        } catch {
-          /* The original conflict remains actionable. */
-        }
-      }
-      restoreFocusRef.current = source;
-    } finally {
-      finish(token);
-    }
-  }
-
   async function deleteProfile(source: HTMLButtonElement) {
     if (!profiles || !deleteId) return;
+    const wasActive = profiles.activeProfileId === deleteId;
     const token = begin("delete");
     if (token == null) return;
     try {
@@ -1082,6 +1039,12 @@ export function ConnectionProfilesCard({
         id: deleteId,
       });
       if (!isCurrent(token)) return;
+      if (wasActive) {
+        const next = await backend.runtimeInfo();
+        if (!isCurrent(token)) return;
+        skipRuntimeGeneration.current = next.contextGeneration;
+        onRuntime(next);
+      }
       setProfiles(document);
       setDeleteId("");
       chooseDocumentProfile(document);
@@ -1104,6 +1067,30 @@ export function ConnectionProfilesCard({
     }
   }
 
+  async function connectSavedProfile() {
+    if (!profiles || !draft.id || dirty) return;
+    const token = begin("connect");
+    if (token == null) return;
+    try {
+      const next = await backend.setActiveConnectionProfile({
+        expectedRevision: profiles.revision,
+        id: draft.id,
+      });
+      if (!isCurrent(token)) return;
+      const document = await backend.listConnectionProfiles();
+      if (!isCurrent(token)) return;
+      skipRuntimeGeneration.current = next.contextGeneration;
+      onRuntime(next);
+      setProfiles(document);
+      setConnection(next.connection);
+      setNotice(tr("连接已启用。", "Connection is now active."));
+    } catch (cause) {
+      if (isCurrent(token)) setError(localizedError(cause, zh).message);
+    } finally {
+      finish(token);
+    }
+  }
+
   const filteredProfiles = useMemo(() => {
     const term = profileSearch.trim().toLocaleLowerCase();
     if (!term) return profiles?.profiles ?? [];
@@ -1120,30 +1107,17 @@ export function ConnectionProfilesCard({
     );
   }, [profileSearch, profiles]);
 
-  const switchMessage = {
-    idle: "",
-    verifying: tr("正在验证目标连接…", "Verifying target connection…"),
-    committing: tr(
-      "验证通过，正在切换当前连接…",
-      "Verified; switching the current connection…",
-    ),
-    success: tr("连接切换成功。", "Connection switch succeeded."),
-    error: tr(
-      "连接切换失败，原连接保持不变。",
-      "Connection switch failed; the previous connection remains active.",
-    ),
-  }[switchPhase];
-  const operationMessage =
-    operation && operation !== "switch"
-      ? {
-          save: tr("正在保存连接…", "Saving connection…"),
-          test: tr("正在验证 Server 与 User…", "Verifying Server and User…"),
-          trust: tr("正在写入已确认的 Trust…", "Writing confirmed Trust…"),
-          login: tr("正在验证登录…", "Checking login…"),
-          logout: tr("正在退出登录…", "Logging out…"),
-          delete: tr("正在删除已保存连接…", "Deleting saved connection…"),
-        }[operation]
-      : "";
+  const operationMessage = operation
+    ? {
+        save: tr("正在保存连接…", "Saving connection…"),
+        test: tr("正在验证 Server 与 User…", "Verifying Server and User…"),
+        trust: tr("正在写入已确认的 Trust…", "Writing confirmed Trust…"),
+        login: tr("正在验证登录…", "Checking login…"),
+        logout: tr("正在退出登录…", "Logging out…"),
+        delete: tr("正在删除已保存连接…", "Deleting saved connection…"),
+        connect: tr("正在连接…", "Connecting…"),
+      }[operation]
+    : "";
   const sharedDisabledReason = loading
     ? tr("正在加载已保存连接。", "Saved connections are loading.")
     : busy
@@ -1169,21 +1143,6 @@ export function ConnectionProfilesCard({
       : !current.user
         ? tr("请先填写 User。", "Enter User first.")
         : "";
-  const connectDisabledReason = sharedDisabledReason
-    ? sharedDisabledReason
-    : !draft.id
-      ? tr(
-          "请先保存这个连接，再将它设为当前连接。",
-          "Save this connection before making it current.",
-        )
-      : isActive
-        ? tr("此连接当前正在使用。", "This connection is already current.")
-        : dirty
-          ? tr(
-              "请先保存或撤销修改，再连接并使用。",
-              "Save or discard edits before connecting.",
-            )
-          : "";
   const connectionFailureNearActions = !["connected", "notTested"].includes(
     connection.state,
   );
@@ -1239,7 +1198,6 @@ export function ConnectionProfilesCard({
           <div className="profile-list" role="list" aria-busy={loading}>
             {filteredProfiles.map((profile) => {
               const active = profile.id === profiles?.activeProfileId;
-              const last = profiles?.profiles.length === 1;
               return (
                 <div
                   className={`profile-list-item ${profile.id === selectedId ? "selected" : ""}`}
@@ -1269,18 +1227,13 @@ export function ConnectionProfilesCard({
                       `删除 ${profile.name}`,
                       `Delete ${profile.name}`,
                     )}
-                    title={
-                      active
-                        ? tr("请先切换当前连接", "Switch connections first")
-                        : last
-                          ? tr(
-                              "不能删除最后一个已保存连接",
-                              "The last saved connection cannot be deleted",
-                            )
-                          : tr("删除已保存连接", "Delete saved connection")
-                    }
-                    disabled={busy || active || last}
-                    onClick={() => setDeleteId(profile.id)}
+                    title={tr("删除已保存连接", "Delete saved connection")}
+                    disabled={busy}
+                    onClick={(event) => {
+                      deleteSource.current = event.currentTarget;
+                      setError("");
+                      setDeleteId(profile.id);
+                    }}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -1350,7 +1303,6 @@ export function ConnectionProfilesCard({
                   onChange={(event) => {
                     generation.current += 1;
                     setDraft({ ...draft, name: event.target.value });
-                    setConnection(notTestedStatus(current.server));
                     setNotice("");
                     setError("");
                     setPassword("");
@@ -1532,6 +1484,16 @@ export function ConnectionProfilesCard({
                 </p>
               </section>
               <div className="settings-actions">
+                {!profiles?.activeProfileId && draft.id && (
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={dirty || busy || loading}
+                    onClick={() => void connectSavedProfile()}
+                  >
+                    {tr("使用此连接", "Use this connection")}
+                  </button>
+                )}
                 <button
                   className="primary"
                   type="submit"
@@ -1566,43 +1528,6 @@ export function ConnectionProfilesCard({
                     ? tr("正在验证…", "Checking…")
                     : tr("验证这些设置", "Verify these settings")}
                 </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!dirty}
-                  onClick={() => {
-                    setDraft(baseline);
-                    setRootResolution(savedRootResolution(baseline.context));
-                    setRootRequestRevision((revision) => revision + 1);
-                    setConnection(
-                      isActive
-                        ? runtime.connection
-                        : notTestedStatus(baseline.context.server),
-                    );
-                    setNotice("");
-                    setError("");
-                    setPassword("");
-                    setTrustConfirmed(false);
-                  }}
-                >
-                  {tr("撤销修改", "Discard edits")}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!draft.id || isActive || dirty || busy}
-                  aria-describedby={
-                    connectDisabledReason
-                      ? "activate-connection-reason"
-                      : undefined
-                  }
-                  title={connectDisabledReason || undefined}
-                  onClick={(event) => void switchProfile(event.currentTarget)}
-                >
-                  {operation === "switch"
-                    ? tr("正在切换…", "Switching…")
-                    : tr("连接并使用", "Connect and use")}
-                </button>
               </div>
             </fieldset>
           </form>
@@ -1612,9 +1537,9 @@ export function ConnectionProfilesCard({
             className="connection-action-feedback"
             tabIndex={-1}
           >
-            {(operationMessage || switchMessage) && (
+            {operationMessage && (
               <p role="status" aria-live="polite">
-                {operationMessage || switchMessage}
+                {operationMessage}
               </p>
             )}
             {notice && (
@@ -1640,17 +1565,19 @@ export function ConnectionProfilesCard({
             {verifyDisabledReason && (
               <p id="verify-connection-reason">{verifyDisabledReason}</p>
             )}
-            {connectDisabledReason && (
-              <p id="activate-connection-reason">{connectDisabledReason}</p>
-            )}
           </div>
 
           {dirty && (
             <p role="status" className="settings-unsaved-note">
-              {tr(
-                "有未保存修改。验证和认证只针对这些设置；保存后状态仍为“尚未验证”。",
-                "There are unsaved changes. Validation and authentication target only these settings; after saving they still remain Not tested.",
-              )}
+              {activeContextMatches
+                ? tr(
+                    "有未保存的配置修改；当前使用的连接参数未变，验证状态仍有效。",
+                    "There are unsaved profile changes. The active P4 connection settings are unchanged and its verification remains valid.",
+                  )
+                : tr(
+                    "有未保存修改。验证和认证只针对这些设置；保存后状态仍为“尚未验证”。",
+                    "There are unsaved changes. Validation and authentication target only these settings; after saving they still remain Not tested.",
+                  )}
             </p>
           )}
 
@@ -1822,47 +1749,54 @@ export function ConnectionProfilesCard({
       </div>
 
       {deleteId && profiles && (
-        <div
-          className="profile-delete-confirm"
-          role="alertdialog"
-          aria-modal="false"
-          aria-labelledby="delete-profile-title"
+        <Dialog
+          title={tr("确认删除已保存连接？", "Delete this saved connection?")}
+          description={
+            profiles.activeProfileId === deleteId
+              ? tr(
+                  "删除当前连接后会断开连接并清空相关视图。",
+                  "Deleting the current connection will disconnect it and clear related views.",
+                )
+              : tr("删除这条已保存连接？", "Delete this saved connection?")
+          }
+          source={deleteSource.current}
+          zh={zh}
+          danger
+          busy={busy}
+          onRequestClose={() => setDeleteId("")}
+          footer={
+            <>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                data-dialog-autofocus
+                onClick={() => setDeleteId("")}
+              >
+                {tr("取消", "Cancel")}
+              </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={busy}
+                onClick={(event) => void deleteProfile(event.currentTarget)}
+              >
+                {tr("确认删除", "Delete connection")}
+              </button>
+            </>
+          }
         >
-          <strong id="delete-profile-title">
-            {tr("确认删除已保存连接？", "Delete this saved connection?")}
+          <strong>
+            {profiles.profiles.find((profile) => profile.id === deleteId)?.name}
           </strong>
           <p>
             {tr(
-              "此操作删除已保存的非敏感连接设置，不能撤销。当前连接和最后一个已保存连接始终受保护。",
-              "This permanently deletes the saved non-secret connection settings. The current and last saved connections are always protected.",
+              "只删除本机保存的连接配置，不删除服务器上的 Workspace 或文件。",
+              "This removes the saved connection settings only. Server workspaces and files are kept.",
             )}
           </p>
-          <div className="settings-actions">
-            <button
-              type="button"
-              className="danger"
-              onClick={(event) => void deleteProfile(event.currentTarget)}
-            >
-              {tr("确认删除", "Delete connection")}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setDeleteId("")}
-            >
-              {tr("取消", "Cancel")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {selectedProfile && isActive && profiles?.profiles.length === 1 && (
-        <p className="settings-note">
-          {tr(
-            "这是当前且唯一的已保存连接，不能删除。请先新建并连接到另一个连接。",
-            "This is the current and only saved connection. Create and connect to another connection before deleting it.",
-          )}
-        </p>
+          {error && <DialogNotice error>{error}</DialogNotice>}
+        </Dialog>
       )}
       {resourceDialog?.mode === "browse" && (
         <ConnectionDirectoryDialog

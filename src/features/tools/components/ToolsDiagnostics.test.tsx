@@ -7,10 +7,14 @@ import type {
   LogEntry,
   LogPolicy,
   OperationEvent,
+  OperationRecord,
 } from "../../../shared/contracts/types";
 import { DiagnosticsView } from "./DiagnosticsView";
 import { LogView } from "./LogView";
-import { OperationJournalView } from "./OperationJournalView";
+import {
+  OperationJournalView,
+  operationRecoveryGuidance,
+} from "./OperationJournalView";
 import { ToolArea, type ToolHandle } from "../ToolArea";
 import { ToolPanel } from "../ToolPanel";
 import { messages } from "../../../shared/i18n";
@@ -20,6 +24,7 @@ const backend = vi.hoisted(() => ({
   queryLogPage: vi.fn(),
   getLogPolicy: vi.fn(),
   setLogPolicy: vi.fn(),
+  subscribeLogsCleared: vi.fn(),
   queryOperationJournal: vi.fn(),
   statusCacheDiagnostics: vi.fn(),
   exportDiagnostics: vi.fn(),
@@ -82,6 +87,7 @@ beforeEach(() => {
   backend.getLogPolicy.mockResolvedValue(policy);
   backend.setLogPolicy.mockResolvedValue(policy);
   backend.queryLogPage.mockResolvedValue({ entries: [] });
+  backend.subscribeLogsCleared.mockResolvedValue(() => undefined);
   backend.queryOperationJournal.mockResolvedValue({ records: [] });
   backend.cancelOperation.mockResolvedValue(undefined);
   backend.statusCacheDiagnostics.mockResolvedValue({
@@ -203,6 +209,40 @@ it("applies real log filters, cursor retry, stale isolation, and accessible narr
   );
 });
 
+it("clears visible logs immediately and ignores stale loads after all logs are deleted", async () => {
+  let cleared!: () => void;
+  backend.subscribeLogsCleared.mockImplementation(
+    async (callback: () => void) => {
+      cleared = callback;
+      return () => undefined;
+    },
+  );
+  const props: ComponentProps<typeof LogView> = {
+    zh: false,
+    connectionKey: "active",
+    refreshKey: 0,
+    onOperationFilter: vi.fn(),
+    onOpenJournal: vi.fn(),
+  };
+  backend.queryLogPage.mockResolvedValueOnce({
+    entries: [log("before-delete")],
+  });
+  await act(async () => root.render(<LogView {...props} />));
+  expect(host.textContent).toContain("safe message before-delete");
+  let stale!: (value: { entries: LogEntry[] }) => void;
+  backend.queryLogPage.mockReturnValueOnce(
+    new Promise((resolve) => {
+      stale = resolve;
+    }),
+  );
+  await act(async () => root.render(<LogView {...props} refreshKey={1} />));
+  backend.queryLogPage.mockResolvedValueOnce({ entries: [] });
+  await act(async () => cleared());
+  await act(async () => stale({ entries: [log("stale-deleted")] }));
+  expect(host.textContent).not.toContain("safe message");
+  expect(host.textContent).toContain("No matching logs");
+});
+
 it("validates policy and rolls the form back after a failed save", async () => {
   backend.setLogPolicy.mockRejectedValueOnce(new Error("disk full"));
   await act(async () =>
@@ -292,6 +332,8 @@ it("never auto-expands logs and only marks unviewed errors", async () => {
   );
   expect(host.textContent).not.toContain("op-error");
   expect(document.activeElement).toBe(focused);
+  await act(async () => backend.subscribeLogsCleared.mock.calls[0][0]());
+  expect(host.querySelector(".tool-unread-dot")).toBeNull();
   await act(async () => button("日志").click());
   await flush();
   expect(
@@ -654,6 +696,67 @@ it("filters and paginates the journal and jumps back to related logs", async () 
   await flush();
   expect(backend.queryOperationJournal).toHaveBeenLastCalledWith(
     expect.objectContaining({ state: "failed", category: "submit" }),
+  );
+});
+
+it("warns that unknown interrupted and cancelled writes require manual verification", async () => {
+  const records: OperationRecord[] = [
+    {
+      operationId: "op-unknown",
+      connectionId: "c",
+      workspace: "ws",
+      source: "gui",
+      category: "fileMutation",
+      state: "failed",
+      failure: "unknown",
+      startedAt: "2026-10-09T01:00:00Z",
+      finishedAt: "2026-10-09T01:00:05Z",
+    },
+    {
+      operationId: "op-interrupted",
+      connectionId: "c",
+      workspace: "ws",
+      source: "gui",
+      category: "submit",
+      state: "interrupted",
+      failure: "interrupted",
+      startedAt: "2026-10-09T01:01:00Z",
+    },
+    {
+      operationId: "op-cancelled",
+      connectionId: "c",
+      workspace: "ws",
+      source: "gui",
+      category: "fileMutation",
+      state: "cancelled",
+      failure: "cancelled",
+      startedAt: "2026-10-09T01:02:00Z",
+      finishedAt: "2026-10-09T01:02:01Z",
+    },
+  ];
+  backend.queryOperationJournal.mockResolvedValueOnce({ records });
+  await act(async () =>
+    root.render(
+      <OperationJournalView
+        zh={false}
+        connectionKey="recovery"
+        onOpenLogs={vi.fn()}
+      />,
+    ),
+  );
+  await flush();
+  expect(host.textContent).toContain("3 operation(s) need manual recovery");
+  expect(
+    host.querySelector('[data-testid="recovery-op-unknown"]')?.textContent,
+  ).toContain("verify the server-side result");
+  expect(
+    host.querySelector('[data-testid="recovery-op-interrupted"]')?.textContent,
+  ).toContain("never replays automatically");
+  expect(
+    host.querySelector('[data-testid="recovery-op-cancelled"]')?.textContent,
+  ).toContain("does not undo completed work");
+  expect(operationRecoveryGuidance(records[0], true)?.steps).toContain(
+    "不会自动重放",
   );
 });
 

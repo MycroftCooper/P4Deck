@@ -1,4 +1,5 @@
 import type { Backend } from "../../infrastructure/backend/contract";
+import { pathKey } from "../files/address";
 import type {
   CliDiscoveryResult,
   ConnectionState,
@@ -106,11 +107,11 @@ const stateCopy: Record<
   invalidConfig: {
     zh: [
       "连接配置无效",
-      "检查必填项、CLI 路径和凭证文件路径，然后保存并重新验证。",
+      "检查必填项、字符集、CLI 路径和凭证文件路径，然后保存并重新验证。",
     ],
     en: [
       "Invalid connection configuration",
-      "Check required fields, CLI path, and credential-file paths, then save and test again.",
+      "Check required fields, charset, CLI path, and credential-file paths, then save and test again.",
     ],
     tone: "danger",
   },
@@ -136,11 +137,11 @@ const stateCopy: Record<
   unknown: {
     zh: [
       "无法确定连接状态",
-      "未把未知结果当作成功；请重试或查看脱敏诊断日志。",
+      "连接检查失败，暂时无法识别具体原因。请重试或查看操作日志。",
     ],
     en: [
       "Connection state unknown",
-      "The unknown result was not treated as success. Retry or inspect sanitized diagnostics.",
+      "The connection check failed without a recognized cause. Retry or check the operation log.",
     ],
     tone: "danger",
   },
@@ -237,6 +238,18 @@ export async function probeConnection(
       ? await api.queryLoginStatus(context)
       : connection;
   return { discovery, status, stale: !active() };
+}
+
+/** Compare the actual P4 connection, independent of profile labels and Windows path spelling. */
+export function sameOperationalContext(left: P4Context, right: P4Context) {
+  const normalize = (context: P4Context) => ({
+    ...context,
+    executable: context.executable ? pathKey(context.executable) : undefined,
+    cwd: context.cwd ? pathKey(context.cwd) || "/" : undefined,
+    trustPath: context.trustPath ? pathKey(context.trustPath) : undefined,
+    ticketsPath: context.ticketsPath ? pathKey(context.ticketsPath) : undefined,
+  });
+  return contextIdentity(normalize(left)) === contextIdentity(normalize(right));
 }
 
 export function contextIdentity(context: P4Context) {

@@ -56,7 +56,11 @@ export class ReviewRequestOwner {
       backend.cancelOperation(operationId),
   ) {}
 
-  start(channel: string, identity: ReviewRequestIdentity): ReviewRequestLease {
+  start(
+    channel: string,
+    identity: ReviewRequestIdentity,
+    cancelBackend = true,
+  ): ReviewRequestLease {
     this.cancel(channel);
     const controller = new AbortController();
     const lease: ReviewRequestLease = {
@@ -68,7 +72,10 @@ export class ReviewRequestOwner {
     };
     controller.signal.addEventListener(
       "abort",
-      () => void this.cancelOperation(lease.operationId).catch(() => undefined),
+      () => {
+        if (cancelBackend)
+          void this.cancelOperation(lease.operationId).catch(() => undefined);
+      },
       { once: true },
     );
     this.requests.set(channel, { lease, controller });

@@ -105,6 +105,7 @@ const stateBadges: Partial<Record<FileState, FileBadgeId>> = {
   ignored: "ignored",
 };
 export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
+  if (facts.state === "loading") return [{ id: "loading" }];
   const badges: FileBadge[] = [...(facts.badges ?? [])];
   const scope = facts.scope ?? "workspace";
   const status = facts.status;

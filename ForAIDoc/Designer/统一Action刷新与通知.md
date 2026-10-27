@@ -42,10 +42,10 @@
 
 ## 自动刷新
 
-- 默认开启，可在 Settings、状态栏或 `refresh.toggleAuto` 暂停/恢复；状态栏显示刷新中、失败和上次更新时间。
-- 应用初次可见、重新聚焦、从隐藏恢复、网络恢复及前台 30 秒轮询会请求刷新。前台触发至少间隔 15 秒，后台/独立窗口至少间隔 60 秒，独立窗口轮询为 120 秒。
-- 只刷新当前活动的 Pending、Submitted、Workspace、History/Streams、Diff/Rev Graph，以及共享 Workspace/Depot 活跃查询；Search 仍由用户明确提交查询，写工作流中的快照页不会后台刷新。
-- 新刷新先取消共享旧查询；页面继续使用原有 request owner / generation 保护。失败状态保留并提供 `view.refresh` 人工恢复，不以无限重试掩盖 partial/truncated。
+- 默认开启，间隔为 `UiPreferences.autoRefreshMinutes`（默认 5 分钟，0 关闭，对应 P4V 的 “Check server for updates every n minutes”）；可在 Settings、状态栏或 `refresh.toggleAuto` 暂停/恢复，状态栏显示刷新中、失败和上次更新时间。
+- 计时器每分钟检查一次是否到期；重新聚焦、从隐藏恢复、网络恢复也只在距上次刷新满足配置间隔时才触发。隐藏、离线或暂停时不刷新；进行中的刷新合并重复触发；手动刷新不受间隔限制。
+- 每轮先 `markSnapshotsStale()` 把全部服务器快照标记为过期但不发请求，再只向当前活动页（Pending、Submitted、Workspaces、Streams、Stream Graph、Branch Mappings、History/Diff/Rev Graph）和共享 Workspace/Depot 活跃查询广播刷新；其他页在切回时发现过期才后台重验。Search 仍由用户明确提交查询，写工作流中的快照页不会后台刷新。
+- 刷新期间页面保留旧行，只显示角落转圈；失败状态保留并提供 `view.refresh` 人工恢复，不以无限重试掩盖 partial/truncated。操作后的定向刷新走 `invalidateData(effects)`，详见 [数据缓存与操作架构](../Coder/数据缓存与操作架构.md)。
 
 ## 桌面通知
 

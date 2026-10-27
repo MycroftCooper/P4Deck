@@ -5,6 +5,7 @@ import type {
   ConnectionSpecCreatePreflight,
   ConnectionSpecCreateResult,
   ConnectionWorkspaceCandidate,
+  ConnectionWorkspaceCreatePlan,
   ConnectionWorkspaceMapping,
   P4Context,
 } from "../../shared/contracts/types";
@@ -61,6 +62,8 @@ export function ConnectionSpecCreateDialog({
   );
   const [stream, setStream] = useState("");
   const [classicView, setClassicView] = useState("");
+  const [syncMode, setSyncMode] =
+    useState<ConnectionWorkspaceCreatePlan["syncMode"]>("standard");
   const [preflight, setPreflight] = useState<ConnectionSpecCreatePreflight>();
   const [result, setResult] = useState<ConnectionSpecCreateResult>();
   const [confirmed, setConfirmed] = useState(false);
@@ -160,6 +163,7 @@ export function ConnectionSpecCreateDialog({
                 root: root.trim(),
                 description: description.trim() || undefined,
                 mapping: mapping!,
+                syncMode,
               },
             });
       if (seq !== sequence.current) return;
@@ -431,6 +435,29 @@ export function ConnectionSpecCreateDialog({
                   </small>
                 </label>
               )}
+              <label className="workflow-checkbox">
+                <input
+                  type="checkbox"
+                  checked={syncMode === "virtual"}
+                  onChange={(event) =>
+                    setSyncMode(event.target.checked ? "virtual" : "standard")
+                  }
+                />
+                <span>
+                  {tr(
+                    "启用 P4VFS 虚拟同步（只同步元数据，首次读取时按需下载）",
+                    "Enable P4VFS virtual sync (metadata first, download on first read)",
+                  )}
+                </span>
+              </label>
+              {syncMode === "virtual" && (
+                <DialogNotice>
+                  {tr(
+                    "需要 Windows、P4 Server 2023.1+、P4 CLI 2023.1+ 和已安装的 P4VFS 客户端代理。创建后文件只保留占位，首次访问才会占用实际磁盘空间。",
+                    "Requires Windows, P4 Server 2023.1+, P4 CLI 2023.1+, and the P4VFS client agent. Files remain placeholders until first access.",
+                  )}
+                </DialogNotice>
+              )}
             </>
           )}
         </fieldset>
@@ -481,6 +508,14 @@ export function ConnectionSpecCreateDialog({
                     {mappingKind === "stream"
                       ? `Stream · ${stream.trim()}`
                       : `Classic View · ${classicView.trim()}`}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{tr("同步方式", "Sync mode")}</dt>
+                  <dd>
+                    {syncMode === "virtual"
+                      ? tr("P4VFS 虚拟同步", "P4VFS virtual sync")
+                      : tr("标准同步", "Standard sync")}
                   </dd>
                 </div>
               </>

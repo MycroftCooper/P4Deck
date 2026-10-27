@@ -3,7 +3,11 @@ import type {
   StreamGraphNode,
   StreamGraphResult,
 } from "../../shared/contracts/types";
-import { layoutStreamGraph, mergeStreamGraphResults } from "./streamGraphModel";
+import {
+  isStreamGraphSnapshot,
+  layoutStreamGraph,
+  mergeStreamGraphResults,
+} from "./streamGraphModel";
 
 const node = (
   stream: string,
@@ -51,6 +55,22 @@ const page = (
 });
 
 describe("stream graph view projection", () => {
+  it("rejects malformed disk snapshots before graph layout reads them", () => {
+    const valid = page([node("//streams/main")]);
+    expect(isStreamGraphSnapshot(valid)).toBe(true);
+    for (const value of [
+      null,
+      {},
+      { ...valid, nodes: [null] },
+      { ...valid, nodes: [{ stream: "//streams/main" }] },
+      { ...valid, edges: [null] },
+      { ...valid, roots: [null] },
+      { ...valid, stats: {} },
+      { ...valid, scope: { server: "other" } },
+    ])
+      expect(isStreamGraphSnapshot(value)).toBe(false);
+  });
+
   it("lays out roots, children and explicit or unloaded orphans deterministically", () => {
     const nodes = [
       node("//depot/release", "//depot/main", { kind: "release" }),

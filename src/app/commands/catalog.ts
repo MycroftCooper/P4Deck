@@ -148,11 +148,11 @@ export const appCommands: readonly AppCommandDefinition[] = [
       execution: { kind: "shell", command: "moveFiles" },
     },
   ),
-  command("view.pending", "navigation", "打开 Pending", "Open Pending", {
+  command("view.pending", "navigation", "打开待提交", "Open Pending", {
     requires: "mainWindow",
     execution: { kind: "page", page: "pending" },
   }),
-  command("view.submitted", "navigation", "打开 Submitted", "Open Submitted", {
+  command("view.submitted", "navigation", "打开已提交", "Open Submitted", {
     requires: "mainWindow",
     execution: { kind: "page", page: "submitted" },
   }),
@@ -165,22 +165,22 @@ export const appCommands: readonly AppCommandDefinition[] = [
     requires: "mainWindow",
     execution: { kind: "page", page: "workspaces" },
   }),
-  command("view.streams", "navigation", "打开 Streams", "Open Streams", {
+  command("view.streams", "navigation", "打开分支流", "Open Streams", {
     requires: "mainWindow",
     execution: { kind: "page", page: "streams" },
   }),
   command("view.diagnostics", "tools", "打开诊断", "Open Diagnostics", {
     execution: { kind: "tool", tool: "diagnostics" },
   }),
-  command("file.diff", "file", "打开 Diff", "Open Diff", {
+  command("file.diff", "file", "打开差异", "Open Diff", {
     requires: "file",
     execution: { kind: "shell", command: "diff" },
   }),
-  command("file.history", "file", "打开 History", "Open History", {
+  command("file.history", "file", "打开历史记录", "Open History", {
     requires: "file",
     execution: { kind: "shell", command: "history" },
   }),
-  command("file.revgraph", "file", "打开 Rev Graph", "Open Rev Graph", {
+  command("file.revgraph", "file", "打开修订图", "Open Rev Graph", {
     requires: "file",
     execution: { kind: "shell", command: "revgraph" },
   }),
@@ -283,7 +283,7 @@ export interface AppCommandEnvironment {
   runtimeReady: boolean;
   connected?: boolean;
   busy?: boolean;
-  target?: "none" | "file" | "pending" | "submitted";
+  target?: "none" | "file" | "pending" | "submitted" | "history";
   pendingCount?: number;
   pendingId?: number;
   shellReasons?: Partial<Record<CommandId, string | undefined>>;

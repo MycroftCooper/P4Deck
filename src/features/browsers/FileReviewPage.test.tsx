@@ -1,5 +1,7 @@
+import { appCache } from "../../shared/cache/appCache";
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ComponentProps } from "react";
+import { PageRenderer } from "../../app/PageRenderer";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
@@ -8,6 +10,7 @@ import type {
   RuntimeInfo,
 } from "../../shared/contracts/types";
 import { FileReviewPage, type ReviewKind } from "./FileReviewPage";
+import { PageRefreshSlotContext } from "../../app/docking/chrome";
 
 const backend = vi.hoisted(() => ({
   getDiff: vi.fn(),
@@ -18,6 +21,7 @@ vi.mock("../../infrastructure/backend", () => ({ backend }));
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 24,
+    scrollToIndex: vi.fn(),
     getVirtualItems: () =>
       Array.from({ length: count }, (_, index) => ({
         index,
@@ -95,7 +99,7 @@ function diff(text: string): DiffResult {
     path: "//depot/file.txt",
     left: side("left"),
     right: side("right"),
-    unified: text,
+    unified: `@@ -0,0 +1 @@\n+${text}\n`,
     stats: { additions: 1, deletions: 0, hunks: 1 },
     binary: false,
     unsupported: false,
@@ -142,6 +146,7 @@ async function click(element: Element) {
 }
 
 beforeEach(() => {
+  appCache.clear();
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -156,6 +161,121 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+});
+
+it.each(["diff", "revgraph"] as const)(
+  "renders an accessible icon-only %s refresh in the path slot",
+  async (kind) => {
+    const slot = document.createElement("span");
+    document.body.append(slot);
+    backend.getDiff.mockResolvedValue(diff("content"));
+    backend.getRevisionGraph.mockResolvedValue(graph(["file"]));
+    try {
+      await act(async () => {
+        root.render(
+          <PageRefreshSlotContext.Provider value={slot}>
+            <FileReviewPage
+              kind={kind}
+              target="//depot/file.txt"
+              locked={false}
+              onTargetChange={() => undefined}
+              runtime={runtime}
+              zh={false}
+            />
+          </PageRefreshSlotContext.Provider>,
+        );
+      });
+      const refresh = slot.querySelector<HTMLButtonElement>(
+        'button[aria-label="Refresh"]',
+      )!;
+      expect(refresh.title).toBe("Refresh");
+      expect(refresh.textContent).toBe("");
+      expect(refresh.disabled).toBe(false);
+      const read = kind === "diff" ? backend.getDiff : backend.getRevisionGraph;
+      const before = read.mock.calls.length;
+      await click(refresh);
+      expect(read.mock.calls.length).toBe(before + 1);
+    } finally {
+      slot.remove();
+    }
+  },
+);
+
+it("renders source lines on their own side and synchronizes scrolling without reading P4 again", async () => {
+  const result = diff("");
+  result.unified =
+    "@@ -8,3 +8,4 @@\n shared before\n-old value\n+new value\n+extra line\n shared after\n";
+  backend.getDiff.mockResolvedValue(result);
+  await render("diff", "//depot/file.txt");
+  const left = host.querySelector<HTMLElement>('.diff-pane[data-side="left"]')!;
+  const right = host.querySelector<HTMLElement>(
+    '.diff-pane[data-side="right"]',
+  )!;
+  expect(left.textContent).toContain("old value");
+  expect(left.textContent).not.toContain("new value");
+  expect(left.textContent).not.toContain("extra line");
+  expect(right.textContent).toContain("new value");
+  expect(right.textContent).toContain("extra line");
+  expect(right.textContent).not.toContain("old value");
+  expect(
+    [...left.querySelectorAll(".diff-line-number")].map(
+      (line) => line.textContent,
+    ),
+  ).toEqual(["", "8", "9", "", "10"]);
+  expect(
+    [...right.querySelectorAll(".diff-line-number")].map(
+      (line) => line.textContent,
+    ),
+  ).toEqual(["", "8", "9", "10", "11"]);
+  expect(left.querySelector(".empty")?.textContent).toBe("");
+  const leftScroll = left.querySelector<HTMLDivElement>(".diff-side-scroll")!;
+  const rightScroll = right.querySelector<HTMLDivElement>(".diff-side-scroll")!;
+  await act(async () => {
+    leftScroll.scrollTop = 240;
+    leftScroll.dispatchEvent(new Event("scroll"));
+  });
+  expect(rightScroll.scrollTop).toBe(240);
+  await act(async () => {
+    rightScroll.scrollTop = 96;
+    rightScroll.dispatchEvent(new Event("scroll"));
+  });
+  expect(leftScroll.scrollTop).toBe(96);
+  expect(backend.getDiff).toHaveBeenCalledTimes(1);
+});
+
+it("shows missing final newlines on the affected side", async () => {
+  const result = diff("");
+  result.unified = "@@ -1 +1 @@\n-same\n+same\n\\ No newline at end of file\n";
+  backend.getDiff.mockResolvedValue(result);
+  await render("diff", "//depot/file.txt");
+  expect(
+    host.querySelector('.diff-pane[data-side="left"] .diff-eof-marker'),
+  ).toBeNull();
+  expect(
+    host.querySelector('.diff-pane[data-side="right"] .diff-eof-marker')
+      ?.textContent,
+  ).toBe("No newline at end of file");
+});
+
+it("keeps identical and binary results out of the text panes", async () => {
+  backend.getDiff.mockResolvedValueOnce({
+    ...diff(""),
+    unified: "",
+    identical: true,
+  });
+  await render("diff", "//depot/same.txt");
+  expect(host.textContent).toContain("Both sides are identical");
+  expect(host.querySelector(".diff-split")).toBeNull();
+
+  backend.getDiff.mockResolvedValueOnce({
+    ...diff(""),
+    unified: "",
+    binary: true,
+    reason: "Binary file",
+  });
+  await render("diff", "//depot/image.bin");
+  expect(host.textContent).toContain("Binary file");
+  expect(host.querySelector(".diff-split")).toBeNull();
 });
 
 it("hides an old path immediately, cancels it, and ignores its late graph result", async () => {
@@ -185,6 +305,11 @@ it("lets only the latest node diff own result, error and loading", async () => {
     .mockImplementationOnce(() => second.promise);
   await render("revgraph", "//depot/root.txt");
   await act(async () => Promise.resolve());
+  for (const checkbox of host.querySelectorAll<HTMLInputElement>(
+    '.graph-lane-picker input[type="checkbox"]',
+  )) {
+    if (!checkbox.checked) await click(checkbox);
+  }
   const nodes = host.querySelectorAll<SVGGElement>('g[role="button"]');
   await click(nodes[0]);
   await click(button("Diff selected"));
@@ -234,7 +359,7 @@ it("cancels load-more on path drift and preserves trusted graph on failure or re
   expect(button("Expand more")).toBeUndefined();
 });
 
-it("merges concurrent graph page and placeholder expansion without duplicates", async () => {
+it("serializes page and placeholder expansion without duplicates", async () => {
   const pageRequest = deferred<RevisionGraph>();
   const expandRequest = deferred<RevisionGraph>();
   const initial = graph(["BASE"], { hasMore: true, nextCursor: "cursor-1" });
@@ -256,11 +381,18 @@ it("merges concurrent graph page and placeholder expansion without duplicates", 
     .mockImplementationOnce(() => expandRequest.promise);
   await render("revgraph", "//depot/root.txt");
   await act(async () => Promise.resolve());
+  for (const checkbox of host.querySelectorAll<HTMLInputElement>(
+    '.graph-lane-picker input[type="checkbox"]',
+  )) {
+    if (!checkbox.checked) await click(checkbox);
+  }
   const placeholder = [
     ...host.querySelectorAll<SVGGElement>('g[role="button"]'),
   ].find((node) => node.textContent?.includes("PLACEHOLDER"))!;
   await click(placeholder);
   await click(button("Expand more"));
+  expect(button("Expand selected reference").disabled).toBe(true);
+  await act(async () => pageRequest.resolve(graph(["BASE", "PAGE"])));
   await click(button("Expand selected reference"));
   const expanded = graph(["EXPANDED"]);
   expanded.nodes.push({
@@ -268,7 +400,6 @@ it("merges concurrent graph page and placeholder expansion without duplicates", 
     missing: false,
     changelistId: 33,
   });
-  await act(async () => pageRequest.resolve(graph(["BASE", "PAGE"])));
   await act(async () => expandRequest.resolve(expanded));
   expect(host.textContent).toContain("BASE");
   expect(host.textContent).toContain("PAGE");
@@ -333,4 +464,111 @@ it("cancels the active backend operation when unmounted", async () => {
   await act(async () => root.unmount());
   expect(backend.cancelOperation).toHaveBeenCalledWith(operationId);
   root = createRoot(host);
+});
+
+it("initializes a historical Diff with the supplied revisions, never have/workspace", async () => {
+  backend.getDiff.mockResolvedValue(diff("HISTORY PAIR"));
+  await act(async () =>
+    root.render(
+      <FileReviewPage
+        kind="diff"
+        target="//depot/file.txt"
+        comparison={{ left: 7, right: 8 }}
+        locked
+        onTargetChange={() => undefined}
+        runtime={runtime}
+        zh={false}
+      />,
+    ),
+  );
+  expect(backend.getDiff).toHaveBeenCalled();
+  for (const [request] of backend.getDiff.mock.calls) {
+    expect(request.left).toEqual({ kind: "revision", revision: 7 });
+    expect(request.right).toEqual({ kind: "revision", revision: 8 });
+  }
+});
+
+it("passes explicit historical revisions through the real PageRenderer to backend and controls", async () => {
+  backend.getDiff.mockResolvedValue(diff("EXPLICIT 17 TO 42"));
+  const props = {
+    page: "diff",
+    target: {
+      target: "//depot/exact.txt",
+      locked: true,
+      comparison: { left: 17, right: 42 },
+    },
+    runtime,
+    connectionKey: "fixture-connection",
+    preferences: { zh: false },
+    changeTarget: vi.fn(),
+  } as unknown as ComponentProps<typeof PageRenderer>;
+  await act(async () => root.render(<PageRenderer {...props} />));
+  expect(backend.getDiff).toHaveBeenCalled();
+  for (const [request] of backend.getDiff.mock.calls) {
+    expect(request.scope.fileIdentity).toBe("//depot/exact.txt");
+    expect(request.left).toEqual({ kind: "revision", revision: 17 });
+    expect(request.right).toEqual({ kind: "revision", revision: 42 });
+  }
+  expect(
+    [...host.querySelectorAll<HTMLInputElement>('input[type="number"]')].map(
+      (input) => input.value,
+    ),
+  ).toContain("17");
+  expect(
+    [...host.querySelectorAll<HTMLInputElement>('input[type="number"]')].map(
+      (input) => input.value,
+    ),
+  ).toContain("42");
+  await act(async () =>
+    root.render(
+      <PageRenderer
+        {...props}
+        selectedFile={{ depotPath: "//depot/unrelated.txt" } as never}
+      />,
+    ),
+  );
+  for (const [request] of backend.getDiff.mock.calls)
+    expect(request.scope.fileIdentity).toBe("//depot/exact.txt");
+});
+
+it("focus mode and lane controls never fetch; explicit target reads share cache", async () => {
+  const initial = graph(["source"]);
+  const target = graph(["target"]);
+  backend.getRevisionGraph
+    .mockResolvedValueOnce(initial)
+    .mockResolvedValueOnce(target);
+  await render("revgraph", "//depot/source.txt");
+  expect(backend.getRevisionGraph).toHaveBeenCalledTimes(1);
+  const mode = host.querySelector<HTMLSelectElement>(
+    ".graph-focus-controls select",
+  )!;
+  await act(async () => {
+    mode.value = "sources";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await click(button("Solo"));
+  await click(button("Restore query focus"));
+  expect(backend.getRevisionGraph).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    mode.value = "target";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const input = host.querySelector<HTMLInputElement>(
+    ".graph-target-input input",
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, "//depot/target.txt");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click(button("Read target"));
+  expect(backend.getRevisionGraph).toHaveBeenCalledTimes(2);
+  expect(backend.getRevisionGraph.mock.calls[1][0].scope.fileIdentity).toBe(
+    "//depot/target.txt",
+  );
+  await click(button("Read target"));
+  expect(backend.getRevisionGraph).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain("does not prove absence");
 });

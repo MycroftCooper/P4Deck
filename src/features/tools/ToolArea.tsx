@@ -99,10 +99,20 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
         }),
       (cause) => setError(String(cause)),
     );
+    const stopCleared = subscribeSafely(
+      () =>
+        backend.subscribeLogsCleared(() => {
+          if (!live) return;
+          seenAlerts.current.clear();
+          setUnread(0);
+        }),
+      (cause) => setError(String(cause)),
+    );
     return () => {
       live = false;
       stopOperations();
       stopAlerts();
+      stopCleared();
     };
   }, []);
 

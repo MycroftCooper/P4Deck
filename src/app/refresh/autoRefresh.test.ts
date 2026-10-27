@@ -12,7 +12,7 @@ const foreground: AutoRefreshEnvironment = {
 };
 
 describe("automatic refresh coordinator", () => {
-  it("refreshes on visibility and throttles foreground and detached windows", async () => {
+  it("uses the configured interval for foreground and detached windows", async () => {
     let now = 20_000;
     let environment = foreground;
     const refresh = vi.fn(async () => undefined);
@@ -23,17 +23,54 @@ describe("automatic refresh coordinator", () => {
       refresh,
       update: vi.fn(),
       now: () => now,
-      foregroundThrottleMs: 10_000,
-      backgroundThrottleMs: 60_000,
+      intervalMs: () => 10_000,
     });
+    expect(await coordinator.trigger("visible")).toBe(false);
+    now += 10_000;
     expect(await coordinator.trigger("visible")).toBe(true);
     now += 5_000;
     expect(await coordinator.trigger("focus")).toBe(false);
     environment = { ...foreground, detached: true };
-    now += 10_000;
+    now += 4_000;
     expect(await coordinator.trigger("interval")).toBe(false);
-    now += 50_000;
+    now += 1_000;
     expect(await coordinator.trigger("interval")).toBe(true);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits five minutes and coalesces triggers without aborting an active read", async () => {
+    let now = 0;
+    let finish!: () => void;
+    let signal!: AbortSignal;
+    const refresh = vi.fn((activeSignal: AbortSignal) => {
+      signal = activeSignal;
+      return new Promise<void>((resolve) => (finish = resolve));
+    });
+    const coordinator = new AutoRefreshCoordinator({
+      binding: () => "a:1",
+      environment: () => foreground,
+      paused: () => false,
+      refresh,
+      update: vi.fn(),
+      now: () => now,
+    });
+    now = 299_999;
+    expect(await coordinator.trigger("focus")).toBe(false);
+    now = 300_000;
+    const pending = coordinator.trigger("interval");
+    now += 300_000;
+    expect(await coordinator.trigger("visible")).toBe(false);
+    expect(await coordinator.trigger("manual")).toBe(false);
+    expect(signal.aborted).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    finish();
+    expect(await pending).toBe(true);
+    now += 299_999;
+    expect(await coordinator.trigger("online")).toBe(false);
+    now += 1;
+    const next = coordinator.trigger("focus");
+    finish();
+    expect(await next).toBe(true);
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
@@ -68,7 +105,7 @@ describe("automatic refresh coordinator", () => {
       paused: () => false,
       refresh: () => new Promise<void>((resolve) => (finish = resolve)),
       update: updates,
-      foregroundThrottleMs: 0,
+      intervalMs: () => 0,
     });
     const pending = coordinator.trigger("manual");
     binding = "b:2";

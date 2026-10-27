@@ -1,32 +1,158 @@
+.workbench {
+  grid-template-columns:
+    min(var(--resource-sidebar-width, 240px), max(200px, calc(100% - 280px)))
+    minmax(0, 1fr);
+}
 .workbench.left-collapsed {
-  grid-template-columns: var(--activity-bar-width, 48px) 28px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
 }
 .main-stage {
   grid-template-rows: minmax(0, 1fr);
 }
 .resource-explorer {
   position: relative;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
 }
 .resource-explorer .resource-tabs {
-  margin-right: 32px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.resource-collapse {
-  position: absolute;
-  right: 2px;
-  top: 16px;
-  width: 26px;
-  height: 28px;
-  display: grid;
-  place-items: center;
+.resource-tab {
+  min-width: 0;
+}
+.resource-tab button {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-explorer .tree-search,
+.resource-explorer .tree-search input,
+.resource-explorer .tree-root {
+  min-width: 0;
+}
+.resource-explorer .tree-root strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-explorer .tree-root svg,
+.resource-explorer .tree-search svg {
+  flex-shrink: 0;
+}
+.tree-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.tree-content .tree-list {
+  flex: 1;
+}
+.resource-tree-row,
+.resource-tree-notice {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  padding-right: 8px;
+  font-size: 11px;
+  cursor: default;
+}
+.resource-tree-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.resource-explorer .tree-toggle,
+.tree-toggle-spacer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 20px;
   padding: 0;
   border: 0;
   border-radius: 4px;
-  color: var(--muted);
   background: transparent;
+  color: inherit;
 }
-.resource-collapse:hover {
+.resource-explorer .tree-toggle:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+.tree-chevron-open {
+  transform: rotate(90deg);
+}
+.resource-tree-name {
+  min-width: 0;
+}
+.resource-tree-notice {
+  color: var(--muted);
+}
+.resource-tree-notice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-tree-notice button {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--accent);
+  border: 0;
+  background: transparent;
+}
+.tree-notice {
+  padding: 6px 14px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  max-height: 50%;
+  overflow: auto;
+}
+.tree-notice p {
+  margin: 0 0 8px;
+}
+.tree-notice button {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+.resource-collapse {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px 0 0 6px;
+  color: var(--muted);
+  background: var(--panel-3);
+  overflow: hidden;
+  transition:
+    width 140ms ease,
+    background-color 140ms ease;
+}
+.resource-collapse svg {
+  opacity: 0;
+}
+.resource-collapse:hover,
+.resource-collapse:focus-visible {
+  width: 28px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.resource-collapse:hover svg,
+.resource-collapse:focus-visible svg {
+  opacity: 1;
 }
 .resource-collapse:focus-visible {
   outline: 2px solid var(--accent);
@@ -35,8 +161,52 @@
 .left-collapsed > .resource-explorer.is-collapsed {
   display: block;
 }
-.resource-explorer.is-collapsed > :not(.resource-collapse) {
+.resource-explorer.is-collapsed
+  > :not(.resource-collapse):not(.resource-resize-handle) {
   display: none;
+}
+.resource-resize-handle {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 0 auto;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.resource-resize-handle:hover,
+.resource-resize-handle:focus-visible,
+.resource-resize-handle.is-resizing {
+  background: var(--accent-soft);
+  box-shadow: inset -2px 0 var(--accent);
+  outline: none;
+}
+.resource-explorer.is-collapsed > .resource-resize-handle:not(.is-resizing) {
+  display: none;
+}
+body:has(.resource-resize-handle.is-resizing),
+body:has(.resource-resize-handle.is-resizing) * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+@media (max-width: 520px) {
+  .resource-explorer {
+    position: absolute;
+    width: min(var(--resource-sidebar-width, 240px), calc(100% - 44px));
+  }
+  .workbench.left-collapsed > .main-stage {
+    margin-left: 28px;
+  }
+}
+@media (hover: none) {
+  .resource-collapse {
+    width: 28px;
+  }
+  .resource-collapse svg {
+    opacity: 1;
+  }
+}
+:root[data-reduced-motion="true"] .resource-collapse {
+  transition: none;
 }
 .resource-explorer.is-collapsed .resource-collapse {
   right: 1px;
@@ -88,7 +258,7 @@
   box-shadow: inset 2px 0 var(--accent);
 }
 .activity-bar button:disabled {
-  opacity: 0.35;
+  opacity: var(--disabled-opacity, 0.35);
   cursor: default;
 }
 .activity-bar button:focus-visible {
@@ -136,4 +306,71 @@
 }
 .activity-bar button > svg {
   flex-shrink: 0;
+}
+@media (max-width: 520px) {
+  :root[data-activity-bar-text="true"] .activity-bar button {
+    width: 40px;
+    display: grid;
+    padding: 0;
+  }
+  :root[data-activity-bar-text="true"] .activity-text {
+    display: none;
+  }
+}
+
+/* Page navigation shares the toolbar, not a workspace grid column. */
+.toolbar-navigation.activity-bar {
+  flex-direction: row;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+}
+.toolbar-navigation .activity-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+}
+.toolbar-navigation .activity-group {
+  flex-direction: row;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  width: max-content;
+}
+.toolbar-navigation.activity-bar button,
+:root[data-activity-bar-text="true"] .toolbar-navigation.activity-bar button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: var(--toolbar-tool-size, 49px);
+  height: var(--toolbar-tool-size, 49px);
+  padding: var(--toolbar-tool-padding, 5px 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  white-space: nowrap;
+}
+.toolbar-navigation.activity-bar .activity-text,
+:root[data-activity-bar-text="true"]
+  .toolbar-navigation.activity-bar
+  .activity-text {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  overflow-wrap: normal;
+}
+.toolbar-navigation.activity-bar button[aria-current="page"] {
+  box-shadow: inset 0 -2px var(--accent);
+}
+@media (max-width: 520px) {
+  .app-shell:not(.detached-shell) .workbench {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .app-shell:not(.detached-shell) .workbench > .main-stage {
+    grid-column: 1;
+  }
+  .app-shell:not(.detached-shell) .resource-explorer {
+    left: 0;
+  }
 }

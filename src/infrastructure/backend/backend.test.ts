@@ -21,6 +21,44 @@ function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
 }
 
 describe("controlled P4 terminal", () => {
+  it("cancels all active mock processes while leaving subsequent requests usable", async () => {
+    const context = (await backend.runtimeInfo()).context;
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    const ended: string[] = [];
+    const stop = await backend.subscribeOperationEvents((event) => {
+      if (event.type === "cancelled") ended.push(event.operationId);
+    });
+    try {
+      const requests = ids.map((operationId) =>
+        backend.runP4({
+          operationId,
+          command: "info",
+          args: [],
+          context,
+          source: "terminal",
+          outputMode: "text",
+        }),
+      );
+      await backend.cancelAllOperations();
+      expect(
+        (await Promise.all(requests)).map((result) => result.exitCode),
+      ).toEqual([-1, -1]);
+      expect(ended.sort()).toEqual([...ids].sort());
+      expect(
+        (
+          await backend.runP4({
+            command: "info",
+            args: [],
+            context,
+            source: "terminal",
+            outputMode: "text",
+          })
+        ).exitCode,
+      ).toBe(0);
+    } finally {
+      stop();
+    }
+  });
   it("keeps simulated connection directory and create flows draft-scoped and one-use", async () => {
     const suffix = crypto.randomUUID().slice(0, 8);
     const user = `settings-user-${suffix}`;
@@ -76,6 +114,7 @@ describe("controlled P4 terminal", () => {
           name: workspace,
           root: `C:/work/${workspace}`,
           mapping: { kind: "stream", stream: "//atlas/main" },
+          syncMode: "standard",
         },
       },
     );
@@ -895,5 +934,25 @@ describe("controlled P4 terminal", () => {
       simulated: true,
       sizeBytes: 0,
     });
+  });
+
+  it("backs up only allowlisted layout state in the browser mock", async () => {
+    const result = await backend.createConfigBackup({
+      localStorage: [
+        { key: "p4deck.ui", value: '{"compact":true}' },
+        {
+          key: "p4deck.terminalHistory",
+          value: '["p4 print //depot/secret"]',
+        },
+      ],
+    });
+    expect(result.backup.localStorageKeys).toEqual(["p4deck.ui"]);
+    expect(result.omittedLocalStorageKeys).toEqual(["p4deck.terminalHistory"]);
+    expect(JSON.stringify(result)).not.toContain("p4 print");
+    expect(
+      (await backend.listConfigBackups()).backups.map(
+        (backup) => backup.fileName,
+      ),
+    ).toContain(result.backup.fileName);
   });
 });

@@ -1,0 +1,75 @@
+/* Native fallback also follows the app theme on older WebView runtimes. */
+select {
+  color-scheme: inherit;
+  accent-color: var(--accent);
+  color: var(--text);
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+select option,
+select optgroup {
+  color: var(--text);
+  background-color: var(--panel);
+}
+select option:checked {
+  color: var(--text);
+  background-color: var(--selected);
+}
+select:disabled,
+select option:disabled {
+  color: var(--muted);
+}
+
+/* Keep native select behavior while styling the opened picker as well. */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+  select::picker(select) {
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 4px;
+    font: inherit;
+    max-block-size: min(360px, 70vh);
+    overflow-y: auto;
+  }
+  select::picker-icon {
+    color: var(--muted);
+    margin-inline-start: 8px;
+  }
+  select option {
+    min-block-size: 28px;
+    padding: 5px 8px;
+    gap: 8px;
+    border: 0;
+    border-radius: 4px;
+    font: inherit;
+    font-size: max(12px, 1em);
+    cursor: pointer;
+  }
+  select option:checked {
+    background: var(--selected);
+  }
+  select option:not(:disabled):hover,
+  select option:not(:disabled):focus {
+    color: var(--text);
+    background: var(--hover);
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+  select option::checkmark {
+    color: var(--accent);
+  }
+  select option:checked:hover,
+  select option:checked:focus {
+    background: var(--selected);
+  }
+  select option:disabled {
+    cursor: not-allowed;
+  }
+}

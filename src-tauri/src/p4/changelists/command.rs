@@ -29,7 +29,7 @@ pub fn query_invocation(
         return Err("submitted query batch size must be between 1 and 1000".into());
     }
     let mut args = vec![
-        "-L".into(),
+        "-l".into(),
         "-t".into(),
         "-s".into(),
         "submitted".into(),
@@ -65,6 +65,23 @@ pub fn query_describe_invocation(change_ids: &[i64]) -> Result<P4Invocation, Str
         return Err("submitted metadata batches must contain 1 to 100 changelists".into());
     }
     let mut args = vec!["-s".into(), "-m".into(), "64".into()];
+    for change_id in change_ids {
+        ensure_numbered_change(*change_id)?;
+        args.push(change_id.to_string());
+    }
+    Ok(P4Invocation {
+        command: "describe",
+        args,
+        input: None,
+    })
+}
+
+pub fn pending_metadata_invocation(change_ids: &[i64]) -> Result<P4Invocation, String> {
+    if change_ids.is_empty() || change_ids.len() > 100 {
+        return Err("pending metadata batches must contain 1 to 100 changelists".into());
+    }
+    // Only descriptions, scope and Jobs are needed; opened supplies the files.
+    let mut args = vec!["-s".into(), "-m".into(), "1".into()];
     for change_id in change_ids {
         ensure_numbered_change(*change_id)?;
         args.push(change_id.to_string());
@@ -233,15 +250,6 @@ pub fn shelved_changes_bounded_invocation(
         .args
         .extend(["-m".into(), max_results.to_string()]);
     Ok(invocation)
-}
-
-pub fn change_spec_invocation(change_id: i64) -> Result<P4Invocation, String> {
-    ensure_numbered_change(change_id)?;
-    Ok(P4Invocation {
-        command: "change",
-        args: vec!["-o".into(), change_id.to_string()],
-        input: None,
-    })
 }
 
 pub fn describe_shelves_invocation(change_ids: &[i64]) -> Result<P4Invocation, String> {
@@ -500,7 +508,9 @@ fn query_scope(query: &ClQuery) -> Result<String, String> {
         }
         (Some(path), None) => Ok(path),
         (None, Some(stream)) => Ok(format!("{}/...", stream.trim_end_matches('/'))),
-        (None, None) => Ok("//...".into()),
+        // A bare revision range is resolved from changelist metadata. Adding
+        // `//...` makes large servers scan file revisions and hit maxscanrows.
+        (None, None) => Ok(String::new()),
     }
 }
 
@@ -558,6 +568,7 @@ mod tests {
             clients: vec!["工作区".into()],
             depot_path: Some("//depot/项目/...".into()),
             stream: Some("//depot/项目".into()),
+            streams: Vec::new(),
             from: "2026-10-01T00:00:00+08:00".into(),
             to: "2026-10-09T23:59:59+08:00".into(),
             jobs: vec!["JOB-1".into()],
@@ -567,6 +578,23 @@ mod tests {
             page_size: 50,
             cursor: None,
         }
+    }
+
+    #[test]
+    fn submitted_scope_distinguishes_literal_path_and_stream_directory() {
+        let mut query = submitted_query();
+        query.stream = None;
+        query.depot_path = Some("//fixture.audio".into());
+        assert_eq!(query_scope(&query).unwrap(), "//fixture.audio");
+        query.depot_path = None;
+        query.stream = Some("//fixture/audio".into());
+        assert_eq!(query_scope(&query).unwrap(), "//fixture/audio/...");
+        let invocation = query_invocation(&query, 200, None).unwrap();
+        assert!(invocation
+            .args
+            .last()
+            .unwrap()
+            .starts_with("//fixture/audio/...@"));
     }
 
     #[test]
@@ -585,7 +613,7 @@ mod tests {
         assert_eq!(
             invocation.args,
             [
-                "-L",
+                "-l",
                 "-t",
                 "-s",
                 "submitted",
@@ -602,6 +630,22 @@ mod tests {
             job_fixes_invocation("JOB-1", 5001).unwrap().args,
             ["-j", "JOB-1", "-m", "5001"]
         );
+    }
+
+    #[test]
+    fn unscoped_submitted_query_uses_a_bare_revision_range() {
+        let mut query = submitted_query();
+        query.depot_path = None;
+        query.stream = None;
+        query.users.clear();
+        query.clients.clear();
+        let first = query_invocation(&query, 100, None).unwrap();
+        let range = first.args.last().unwrap();
+        assert!(range.starts_with('@') && range.contains(','), "{range}");
+        assert!(!range.contains("//"));
+        let next = query_invocation(&query, 100, Some(42)).unwrap();
+        assert!(next.args.last().unwrap().ends_with(",@42"));
+        assert!(next.args.iter().all(|arg| !arg.starts_with("//")));
     }
 
     #[test]
@@ -722,5 +766,15 @@ mod tests {
         );
         assert!(pending_changes_bounded_invocation(&context, 5_002).is_err());
         assert!(opened_bounded_invocation(&context, 100_002).is_err());
+    }
+
+    #[test]
+    fn pending_metadata_is_batched_without_loading_entire_file_lists() {
+        let invocation = pending_metadata_invocation(&[41, 42]).unwrap();
+        assert_eq!(invocation.command, "describe");
+        assert_eq!(invocation.args, ["-s", "-m", "1", "41", "42"]);
+        assert!(pending_metadata_invocation(&[]).is_err());
+        assert!(pending_metadata_invocation(&[0]).is_err());
+        assert!(pending_metadata_invocation(&vec![1; 101]).is_err());
     }
 }

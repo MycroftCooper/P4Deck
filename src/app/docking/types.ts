@@ -1,9 +1,17 @@
 import type { ReactNode } from "react";
-import type { PageId, PanelTarget } from "../panels";
+import type { PageId, PanelTarget, RevisionComparison } from "../panels";
 import type { PanelRuntimeBinding } from "./floatingPanels";
-export const detachedPage = new URLSearchParams(location.search).get("panel");
+export const detachedPage =
+  typeof location === "undefined"
+    ? null
+    : new URLSearchParams(location.search).get("panel");
 export interface DockHandle {
-  open(page: PageId, target?: string, newInstance?: boolean): void;
+  open(
+    page: PageId,
+    target?: string,
+    newInstance?: boolean,
+    comparison?: RevisionComparison,
+  ): void;
   closeAll(): void;
   popoutPage(page: PageId): Promise<void>;
 }

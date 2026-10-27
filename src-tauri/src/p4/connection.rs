@@ -63,80 +63,105 @@ impl ConnectionAdapter {
         value: Option<&str>,
         secret_stdin: Option<&str>,
     ) -> ConnectionStatus {
-        let Some(executable) = resolve_executable(context.executable.as_deref()) else {
-            return status(
-                ConnectionState::CliMissing,
-                Some(ConnectionErrorCode::CliMissing),
-                RecoveryAction::ConfigureCli,
-                &context.server,
-                None,
-            );
-        };
-
-        let mut command = Command::new(executable);
-        append_context(&mut command, context);
-        append_operation(&mut command, operation, value);
-        command
-            .env_remove("P4PASSWD")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(_) => {
+        let mut automatic_unicode = false;
+        loop {
+            let Some(executable) = resolve_executable(context.executable.as_deref()) else {
                 return status(
                     ConnectionState::CliMissing,
                     Some(ConnectionErrorCode::CliMissing),
                     RecoveryAction::ConfigureCli,
                     &context.server,
                     None,
-                )
+                );
+            };
+
+            let mut command = Command::from(super::process::command(executable));
+            append_context(&mut command, context);
+            if automatic_unicode {
+                command.env("P4CHARSET", "auto");
             }
-        };
-        if let Some(secret) = secret_stdin {
-            if let Some(mut stdin) = child.stdin.take() {
-                if stdin.write_all(secret.as_bytes()).await.is_err()
-                    || stdin.write_all(b"\n").await.is_err()
-                    || stdin.shutdown().await.is_err()
-                {
+            append_operation(&mut command, operation, value);
+            command
+                .env_remove("P4PASSWD")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true);
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(_) => {
                     return status(
-                        ConnectionState::Disconnected,
-                        Some(ConnectionErrorCode::Disconnected),
-                        RecoveryAction::Retry,
-                        &context.server,
-                        None,
-                    );
-                }
-            }
-        } else {
-            drop(child.stdin.take());
-        }
-        let output =
-            match tokio::time::timeout(Duration::from_secs(20), child.wait_with_output()).await {
-                Ok(Ok(output)) => output,
-                _ => {
-                    return status(
-                        ConnectionState::NetworkError,
-                        Some(ConnectionErrorCode::NetworkError),
-                        RecoveryAction::Retry,
+                        ConnectionState::CliMissing,
+                        Some(ConnectionErrorCode::CliMissing),
+                        RecoveryAction::ConfigureCli,
                         &context.server,
                         None,
                     )
                 }
             };
-        classify(
-            operation,
-            output.status.success(),
-            &String::from_utf8_lossy(&output.stdout),
-            &String::from_utf8_lossy(&output.stderr),
-            &context.server,
-        )
+            let mut input_failed = false;
+            if let Some(secret) = secret_stdin {
+                if let Some(mut stdin) = child.stdin.take() {
+                    if stdin.write_all(secret.as_bytes()).await.is_err()
+                        || stdin.write_all(b"\n").await.is_err()
+                        || stdin.shutdown().await.is_err()
+                    {
+                        // A server can reject the charset before consuming stdin.
+                        // Read its error before deciding whether this was a pipe failure.
+                        input_failed = true;
+                    }
+                }
+            } else {
+                drop(child.stdin.take());
+            }
+            let output =
+                match tokio::time::timeout(Duration::from_secs(20), child.wait_with_output()).await
+                {
+                    Ok(Ok(output)) => output,
+                    _ => {
+                        return status(
+                            ConnectionState::NetworkError,
+                            Some(ConnectionErrorCode::NetworkError),
+                            RecoveryAction::Retry,
+                            &context.server,
+                            None,
+                        )
+                    }
+                };
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !output.status.success()
+                && !automatic_unicode
+                && context.charset.as_deref().is_none_or(str::is_empty)
+                && requires_unicode(&format!("{stdout}\n{stderr}"))
+            {
+                // Only negotiate when the server explicitly rejects non-Unicode mode.
+                // An explicit charset (including `none`) is never overridden.
+                automatic_unicode = true;
+                continue;
+            }
+            if input_failed && output.status.success() {
+                return status(
+                    ConnectionState::Disconnected,
+                    Some(ConnectionErrorCode::Disconnected),
+                    RecoveryAction::Retry,
+                    &context.server,
+                    None,
+                );
+            }
+            return classify(
+                operation,
+                output.status.success(),
+                &stdout,
+                &stderr,
+                &context.server,
+            );
+        }
     }
 }
 
 fn bounded_version_output(executable: &std::path::Path) -> Option<std::process::Output> {
-    let mut child = std::process::Command::new(executable)
+    let mut child = super::process::command(executable)
         .arg("-V")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -203,6 +228,16 @@ fn append_context(command: &mut Command, context: &P4Context) {
     ] {
         command.env_remove(name);
     }
+    // Removing P4CHARSET exposes the Windows registry fallback. An omitted
+    // draft charset must not turn a non-Unicode connection into a Unicode one.
+    command.env(
+        "P4CHARSET",
+        context
+            .charset
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .unwrap_or("none"),
+    );
     command.args(["-p", &context.server, "-u", &context.user]);
     if !context.client.is_empty() {
         command.args(["-c", &context.client]);
@@ -387,6 +422,9 @@ fn classify(
         &lower,
         &[
             "client unknown",
+            "unicode server permits only unicode enabled clients",
+            "unicode clients require a unicode enabled server",
+            "invalid character set",
             "client name is required",
             "p4port unset",
             "usage:",
@@ -412,6 +450,12 @@ fn classify(
 
 fn contains_any(value: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| value.contains(needle))
+}
+
+fn requires_unicode(value: &str) -> bool {
+    value
+        .to_ascii_lowercase()
+        .contains("unicode server permits only unicode enabled clients")
 }
 
 pub fn classify_connection_error(value: &str) -> ConnectionErrorCode {
@@ -475,6 +519,24 @@ fn status(
 mod tests {
     use super::*;
 
+    #[test]
+    fn draft_charset_overrides_registry_and_environment_defaults() {
+        for (charset, expected) in [(None, "none"), (Some(""), "none"), (Some("utf8"), "utf8")] {
+            let context = P4Context {
+                charset: charset.map(str::to_owned),
+                ..P4Context::default()
+            };
+            let mut command = Command::new("p4");
+            append_context(&mut command, &context);
+            let value = command
+                .as_std()
+                .get_envs()
+                .find(|(name, _)| *name == "P4CHARSET")
+                .and_then(|(_, value)| value);
+            assert_eq!(value, Some(std::ffi::OsStr::new(expected)));
+        }
+    }
+
     fn classified(message: &str) -> ConnectionStatus {
         classify(
             ConnectionOperation::Info,
@@ -495,6 +557,8 @@ mod tests {
             ("Partner exited unexpectedly", ConnectionState::Disconnected),
             ("Permission denied by protections table", ConnectionState::PermissionDenied),
             ("Client unknown", ConnectionState::InvalidConfig),
+            ("Unicode server permits only unicode enabled clients.", ConnectionState::InvalidConfig),
+            ("Unicode clients require a unicode enabled server.", ConnectionState::InvalidConfig),
             ("Run SSO and open your browser", ConnectionState::ExternalAuthRequired),
             ("totally novel failure secret-value", ConnectionState::Unknown),
         ];
@@ -534,6 +598,22 @@ mod tests {
         let missing = ConnectionAdapter::discover(Some("/definitely/missing/p4"));
         assert_eq!(missing.state, ConnectionState::CliMissing);
         assert_eq!(missing.error_code, Some(ConnectionErrorCode::CliMissing));
+    }
+
+    #[tokio::test]
+    #[ignore = "Requires P4DECK_CHARSET_PROBE_CASES with read-only login-status contexts"]
+    async fn live_charset_login_status_regression() {
+        let cases: Vec<(P4Context, ConnectionState)> = serde_json::from_str(
+            &std::env::var("P4DECK_CHARSET_PROBE_CASES").expect("explicit probe cases required"),
+        )
+        .unwrap();
+        assert!(!cases.is_empty());
+        for (context, expected) in cases {
+            let result =
+                ConnectionAdapter::execute(&context, ConnectionOperation::LoginStatus, None, None)
+                    .await;
+            assert_eq!(result.state, expected);
+        }
     }
 
     #[test]

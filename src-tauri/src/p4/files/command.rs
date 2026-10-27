@@ -21,6 +21,9 @@ const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
 pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
     validate_parallel(request)?;
     validate_paths(&request.paths)?;
+    if request.revert_whole_changelist && !matches!(request.action, FileAction::Revert) {
+        return Err("revertWholeChangelist is only valid for revert".into());
+    }
 
     if matches!(request.action, FileAction::DeleteLocal)
         || (matches!(request.action, FileAction::Delete) && only_untracked(request))
@@ -69,7 +72,16 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
             changelist_args(request.changelist_id),
             OutputMode::JsonLines,
         ),
-        FileAction::RevertUnchanged => ("revert", vec!["-a".into()], OutputMode::JsonLines),
+        FileAction::RevertUnchanged => {
+            let mut args = vec!["-a".into()];
+            args.extend(changelist_args(request.changelist_id));
+            ("revert", args, OutputMode::JsonLines)
+        }
+        FileAction::Revert if request.revert_whole_changelist => {
+            let change = required_change(request.changelist_id)?;
+            paths = vec!["//...".into()];
+            ("revert", vec!["-c".into(), change], OutputMode::JsonLines)
+        }
         FileAction::Revert => ("revert", vec![], OutputMode::JsonLines),
         FileAction::MoveToChangelist => {
             let change = required_change(request.changelist_id)?;
@@ -118,11 +130,11 @@ pub fn plan(request: &FileActionRequest) -> Result<ActionPlan, String> {
                 OutputMode::JsonLines,
             )
         }
-        FileAction::Undo => (
-            "undo",
-            changelist_args(request.changelist_id),
-            OutputMode::JsonLines,
-        ),
+        FileAction::Undo => {
+            return Err(
+                "Undo requires preview_undo and confirm_undo for an explicit file revision.".into(),
+            )
+        }
         FileAction::Clean => ("clean", vec![], OutputMode::JsonLines),
         FileAction::TagWithLabel => {
             let label = required(&request.label, "label")?;
@@ -284,6 +296,7 @@ mod tests {
             target_path: None,
             resolve_method: None,
             label: None,
+            revert_whole_changelist: false,
             parallel_threads: None,
         }
     }
@@ -350,6 +363,46 @@ mod tests {
     }
 
     #[test]
+    fn revert_unchanged_is_scoped_to_the_selected_changelist() {
+        for (change, expected) in [(0, "default"), (123, "123")] {
+            let mut value = request(FileAction::RevertUnchanged);
+            value.changelist_id = Some(change);
+            let planned = invocation(&value);
+            assert_eq!(planned.command, "revert");
+            assert_eq!(
+                planned.args,
+                vec!["-a", "-c", expected, "//depot/main/a b.txt"]
+            );
+        }
+    }
+
+    #[test]
+    fn full_changelist_revert_uses_one_changelist_scoped_command() {
+        for (change, expected) in [(0, "default"), (123, "123")] {
+            let mut value = request(FileAction::Revert);
+            value.changelist_id = Some(change);
+            value.revert_whole_changelist = true;
+            assert_eq!(invocation(&value).args, vec!["-c", expected, "//..."]);
+        }
+
+        let mut partial = request(FileAction::Revert);
+        partial.changelist_id = Some(123);
+        partial.paths = vec!["//depot/main/a.txt".into(), "//depot/main/b.txt".into()];
+        assert_eq!(
+            invocation(&partial).args,
+            vec!["//depot/main/a.txt", "//depot/main/b.txt"]
+        );
+
+        let mut missing_change = request(FileAction::Revert);
+        missing_change.revert_whole_changelist = true;
+        assert!(plan(&missing_change).is_err());
+
+        let mut wrong_action = request(FileAction::Checkout);
+        wrong_action.revert_whole_changelist = true;
+        assert!(plan(&wrong_action).is_err());
+    }
+
+    #[test]
     fn plans_reconcile_and_rejects_resolve_shelve_bypasses() {
         let add_only = invocation(&request(FileAction::AddRecursive));
         assert_eq!(add_only.command, "reconcile");
@@ -401,10 +454,7 @@ mod tests {
     fn plans_undo_and_label() {
         let mut undo = request(FileAction::Undo);
         undo.changelist_id = Some(99);
-        assert_eq!(
-            invocation(&undo).args,
-            vec!["-c", "99", "//depot/main/a b.txt"]
-        );
+        assert!(plan(&undo).unwrap_err().contains("preview_undo"));
 
         let mut tag = request(FileAction::TagWithLabel);
         tag.label = Some("release-2026.1".into());

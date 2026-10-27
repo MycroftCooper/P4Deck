@@ -35,6 +35,224 @@
   justify-content: center;
   padding: 3px 7px;
 }
+.dock-page .workspaces-page.diff-page {
+  padding: 0;
+}
+.diff-view {
+  --diff-control-height: 28px;
+  --diff-control-gap: 6px;
+  container: diff / inline-size;
+  border: 0;
+  border-radius: 0;
+}
+.diff-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 7px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+.diff-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.diff-toolbar button {
+  display: grid;
+  place-items: center;
+  width: var(--diff-control-height);
+  height: var(--diff-control-height);
+  min-height: var(--diff-control-height);
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  flex-shrink: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+.diff-toolbar button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--accent);
+}
+.diff-toolbar button:disabled {
+  opacity: var(--disabled-opacity, 0.3);
+  cursor: default;
+}
+.diff-hunk-count {
+  padding-right: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.diff-toolbar select,
+.diff-toolbar input,
+.diff-pane-header select,
+.diff-pane-header input {
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--diff-control-height);
+  min-height: var(--diff-control-height);
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  line-height: 20px;
+  vertical-align: middle;
+}
+/* base-select needs an explicit content alignment; native fallback keeps its own arrow. */
+@supports (appearance: base-select) {
+  .diff-view .diff-pane-header > select,
+  .diff-view .diff-line-tools > select {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.diff-toolbar select {
+  width: 60px;
+}
+.diff-search-group,
+.diff-line-tools {
+  height: 32px;
+  padding: 0 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.diff-search-group:focus-within,
+.diff-line-tools:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+.diff-search-input {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding-left: 6px;
+}
+.diff-search-input svg {
+  flex-shrink: 0;
+}
+.diff-toolbar .diff-search-input input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: 0;
+  box-shadow: none;
+}
+.diff-match-count {
+  padding: 0 4px;
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.diff-line-tools {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 52px var(--diff-control-height);
+  align-items: center;
+  gap: var(--diff-control-gap);
+  margin: 0;
+}
+.diff-line-tools > :is(select, input, button) {
+  align-self: center;
+  flex: none;
+}
+.diff-line-tools select,
+.diff-toolbar .diff-line-input {
+  border: 0;
+  background: transparent;
+}
+.diff-toolbar .diff-line-input {
+  width: 52px;
+  outline: 0;
+  box-shadow: none;
+}
+.diff-line-error {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  right: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--danger);
+  white-space: nowrap;
+}
+.diff-summary-tools {
+  gap: 8px;
+}
+.diff-stats {
+  display: flex;
+  gap: 6px;
+  font:
+    11px ui-monospace,
+    Consolas,
+    monospace;
+}
+.diff-additions {
+  color: var(--success);
+}
+.diff-deletions {
+  color: var(--danger);
+}
+.diff-partial {
+  color: var(--warning);
+  font-size: 11px;
+}
+.diff-reference-headers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex-shrink: 0;
+}
+.diff-reference-headers > :last-child {
+  border-left: 1px solid var(--border);
+}
+.diff-pane-header select {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.diff-pane-header select:hover,
+.diff-pane-header select:focus-visible {
+  border-color: var(--border);
+  background: var(--panel);
+}
+.diff-pane-header input {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.diff-side-line.diff-target-row {
+  box-shadow:
+    inset 0 1px var(--accent),
+    inset 0 -1px var(--accent);
+}
+.diff-side-line mark {
+  background: var(--warning);
+  color: var(--panel);
+  border-radius: 2px;
+}
+.diff-side-line mark[data-active="true"] {
+  background: var(--accent);
+  outline: 1px solid var(--text);
+}
 .graph-legend {
   flex: 1;
   font-size: 10px;
@@ -83,6 +301,121 @@
   background: color-mix(in srgb, var(--danger) 12%, var(--panel));
 }
 .diff-line.meta {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.diff-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.diff-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.diff-pane + .diff-pane {
+  border-left: 1px solid var(--border);
+}
+.diff-pane-header {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) 5rem;
+  align-items: center;
+  gap: var(--diff-control-gap);
+  min-height: calc(var(--diff-control-height) + 12px);
+  min-width: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 12px;
+}
+.diff-pane-header > span {
+  display: flex;
+  align-items: center;
+  min-height: var(--diff-control-height);
+  color: var(--muted);
+  white-space: nowrap;
+}
+@container diff (max-width: 760px) {
+  .diff-toolbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .diff-search-group {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .diff-hunk-tools {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .diff-line-tools {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .diff-summary-tools {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .diff-stats,
+  .diff-partial {
+    display: none;
+  }
+}
+@container diff (max-width: 520px) {
+  .diff-pane-header {
+    grid-template-columns: minmax(0, 1fr) 4rem;
+    padding-inline: 6px;
+  }
+  .diff-pane-header > span {
+    grid-column: 1 / -1;
+  }
+}
+.diff-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: scroll;
+  contain: strict;
+}
+.diff-side-line {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  white-space: pre;
+  font:
+    12px/24px ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  tab-size: 4;
+}
+.diff-side-line code {
+  padding-right: 24px;
+  font: inherit;
+}
+.diff-eof-marker {
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+  user-select: none;
+}
+.diff-side-line.added {
+  background: color-mix(in srgb, var(--success) 12%, var(--panel));
+}
+.diff-side-line.removed {
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+}
+.diff-side-line.empty {
+  background: var(--panel-2);
+}
+.diff-side-line.meta {
   color: var(--accent);
   background: var(--accent-soft);
 }
@@ -144,30 +477,6 @@
 .review-surface > .workspace-empty {
   flex: 1;
 }
-.review-selectors {
-  display: flex;
-  align-items: end;
-  gap: 10px;
-  padding: 0 18px 12px;
-}
-
-.review-selectors label {
-  display: grid;
-  gap: 4px;
-  min-width: 150px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.review-selectors select,
-.review-selectors input {
-  min-height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--text-primary);
-}
-
 .graph-actions {
   position: sticky;
   left: 12px;
@@ -251,5 +560,112 @@
   .shelf-detail-layout {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);
+  }
+}
+
+/* Focus controls stay compact; evidence and lane lists scroll independently. */
+.graph-focus-panel {
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  max-height: 45%;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.graph-focus-controls {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(200px, 1fr) minmax(
+      240px,
+      1.3fr
+    );
+  gap: 8px;
+}
+.graph-focus-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.graph-focus-controls select,
+.graph-focus-controls input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  color: var(--text);
+  background: var(--panel);
+}
+.graph-target-input {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+}
+.graph-target-input button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.graph-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.graph-evidence strong {
+  color: var(--text);
+}
+.graph-evidence ul {
+  max-height: 140px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding-left: 18px;
+}
+.graph-lane-picker {
+  margin-top: 6px;
+  font-size: 11px;
+}
+.graph-lane-picker > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.graph-lane-picker label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.graph-lane-picker input {
+  width: auto;
+}
+.review-graph .graph-track {
+  cursor: default;
+}
+.review-graph .graph-track line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.review-graph .graph-track text {
+  fill: var(--muted);
+}
+.review-graph line.is-evidence {
+  stroke-width: 4;
+  stroke: var(--accent);
+}
+.review-graph .graph-lane-1 circle {
+  stroke: var(--success);
+}
+.review-graph .graph-lane-2 circle {
+  stroke: var(--warning);
+}
+.review-graph .graph-lane-3 circle {
+  stroke: var(--text);
+}
+@media (max-width: 850px) {
+  .graph-focus-controls {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

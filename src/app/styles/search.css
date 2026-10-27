@@ -99,7 +99,7 @@
   background: var(--accent-soft);
 }
 .search-page button:disabled {
-  opacity: 0.55;
+  opacity: var(--disabled-opacity, 0.55);
   cursor: not-allowed;
 }
 .search-page :is(button, input):focus-visible {

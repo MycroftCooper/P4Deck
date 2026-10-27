@@ -22,19 +22,16 @@ if [[ ! -d node_modules/.pnpm ]]; then
   pnpm install --frozen-lockfile || { read -r -p "安装失败，按回车关闭..." _; exit 1; }
 fi
 
-echo
-echo "1) 浏览器预览（默认，Mock Backend）"
-echo "2) 桌面客户端（Tauri + 本机 p4）"
-read -r -p "请选择 [1/2，直接回车选 1]：" mode
-
-if [[ "${mode:-1}" == "2" ]]; then
+if [[ "${1:-desktop}" != "browser" ]]; then
   if ! command -v cargo >/dev/null 2>&1; then
     echo "缺少 Rust/Cargo。请先运行 scripts/setup-macos.sh。"
     read -r -p "按回车关闭..." _
     exit 1
   fi
-  echo "正在启动 P4Deck 桌面客户端..."
-  exec pnpm tauri dev
+  echo "正在启动 P4Deck 桌面开发模式..."
+  echo "前端修改会热更新；Rust 修改会自动重编译并重启。"
+  echo "请保持此窗口运行，按 Ctrl+C 停止。"
+  exec pnpm dev:desktop
 else
   echo "正在启动浏览器预览：http://localhost:1420/"
   (sleep 1; open "http://localhost:1420/") &

@@ -1,52 +1,78 @@
+import { messages } from "../shared/i18n";
 import type { GlobalSearchTarget } from "../shared/contracts/types";
 
 export const pageDefinitions = {
-  files: { zh: "文件", en: "Files", scope: "global", target: "depot" },
+  files: {
+    zh: messages["zh-CN"].files,
+    en: messages["en-US"].files,
+    scope: "global",
+    target: "depot",
+  },
   search: { zh: "搜索", en: "Search", scope: "global", target: "depot" },
-  pending: { zh: "Pending", en: "Pending", scope: "global", target: "depot" },
+  pending: {
+    zh: messages["zh-CN"].pending,
+    en: messages["en-US"].pending,
+    scope: "global",
+    target: "depot",
+  },
   submitted: {
-    zh: "Submitted",
-    en: "Submitted",
+    zh: messages["zh-CN"].submitted,
+    en: messages["en-US"].submitted,
     scope: "global",
     target: "depot",
   },
   workspaces: {
-    zh: "Workspace",
-    en: "Workspace",
+    zh: messages["zh-CN"].workspace,
+    en: messages["en-US"].workspace,
     scope: "global",
     target: "depot",
   },
-  history: { zh: "History", en: "History", scope: "file", target: "depot" },
-  streams: { zh: "Streams", en: "Streams", scope: "global", target: "depot" },
+  history: {
+    zh: messages["zh-CN"].history,
+    en: messages["en-US"].history,
+    scope: "file",
+    target: "depot",
+  },
+  streams: {
+    zh: messages["zh-CN"].streams,
+    en: messages["en-US"].streams,
+    scope: "global",
+    target: "depot",
+  },
   streamgraph: {
-    zh: "Stream 图",
+    zh: "分支流图",
     en: "Stream Graph",
     scope: "global",
     target: "depot",
   },
   branchmappings: {
-    zh: "Branch Mappings",
+    zh: "分支映射",
     en: "Branch Mappings",
     scope: "global",
     target: "depot",
   },
   terminal: {
-    zh: "Terminal",
-    en: "Terminal",
+    zh: messages["zh-CN"].terminal,
+    en: messages["en-US"].terminal,
     scope: "global",
     target: "depot",
   },
   p4log: { zh: "P4 日志", en: "P4 Log", scope: "global", target: "depot" },
-  diff: { zh: "Diff", en: "Diff", scope: "file", target: "depot" },
+  diff: {
+    zh: messages["zh-CN"].diff,
+    en: messages["en-US"].diff,
+    scope: "file",
+    target: "depot",
+  },
   shelf: {
-    zh: "Shelf 详情",
+    zh: "搁置详情",
     en: "Shelf Detail",
     scope: "file",
     target: "depot",
   },
   revgraph: {
-    zh: "Rev Graph",
-    en: "Rev Graph",
+    zh: messages["zh-CN"].revGraph,
+    en: messages["en-US"].revGraph,
     scope: "file",
     target: "depot",
   },
@@ -70,7 +96,12 @@ export function targetForPage(page: PageId, depot?: string, local?: string) {
     ? (local ?? depot)
     : (depot ?? local);
 }
+export interface RevisionComparison {
+  left: number;
+  right: number;
+}
 export interface PanelTarget {
+  comparison?: RevisionComparison;
   target: string;
   locked: boolean;
 }
@@ -80,6 +111,18 @@ export function normalizePanelTarget(value: unknown): PanelTarget {
   return {
     target: typeof params.target === "string" ? params.target : "",
     locked: params.locked === true,
+    ...(params.comparison &&
+    Number.isSafeInteger(params.comparison.left) &&
+    Number.isSafeInteger(params.comparison.right) &&
+    params.comparison.left > 0 &&
+    params.comparison.right > params.comparison.left
+      ? {
+          comparison: {
+            left: params.comparison.left,
+            right: params.comparison.right,
+          },
+        }
+      : {}),
   };
 }
 export const isMultiPage = (page: PageId): page is FilePageId =>

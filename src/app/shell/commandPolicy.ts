@@ -19,6 +19,7 @@ export type CommandId =
   | "add"
   | "delete"
   | "revert"
+  | "revertUnchanged"
   | "diff"
   | "history"
   | "revgraph"
@@ -32,14 +33,38 @@ export type CommandTarget =
       node: WorkspaceNode;
       nodes?: WorkspaceNode[];
       scopeLabel?: string;
+      /** Set only when the snapshot is the complete file set of this CL. */
+      wholeChangelistId?: number;
     }
   | { type: "pending"; id: number; count: number }
   | { type: "submitted"; id: number }
+  | { type: "history"; path: string; revisions: number[] }
   | { type: "none" };
+/** Explicit revision operands for the toolbar; never reinterpret them as workspace files. */
+export function historyDiffTarget(target: CommandTarget) {
+  if (
+    target.type !== "history" ||
+    !target.path ||
+    target.revisions.length !== 2 ||
+    new Set(target.revisions).size !== 2 ||
+    !target.revisions.every(
+      (revision) => Number.isSafeInteger(revision) && revision > 0,
+    )
+  )
+    return undefined;
+  const [left, right] = [...target.revisions].sort((a, b) => a - b);
+  return { path: target.path, left, right };
+}
 /** Identity for stale-response guards; derived from the explicit execution snapshot. */
 export function commandTargetKey(target: CommandTarget): string {
+  if (target.type === "history")
+    return `history:${target.path}:${target.revisions.join(",")}`;
   return target.type === "file"
-    ? `file:${(target.nodes ?? [target.node]).map(nodeKey).join("\n")}`
+    ? `file:${(target.nodes ?? [target.node]).map(nodeKey).join("\n")}${
+        target.wholeChangelistId === undefined
+          ? ""
+          : `\nwhole-changelist:${target.wholeChangelistId}`
+      }`
     : target.type === "none"
       ? "none"
       : `${target.type}:${target.id}`;
@@ -63,6 +88,19 @@ export function commandReason(
       "Wait for or cancel the current operation",
     );
   if (id === "refresh") return undefined;
+  if (target.type === "history") {
+    if (id === "diff")
+      return historyDiffTarget(target)
+        ? undefined
+        : msg(
+            "请选择两个历史版本（最多两条）",
+            "Select two historical revisions (maximum two)",
+          );
+    return msg(
+      "此操作不适用于历史版本",
+      "This action is unavailable for historical revisions",
+    );
+  }
   if (id === "submit")
     return target.type === "pending" && target.id > 0 && target.count > 0
       ? undefined
@@ -203,7 +241,22 @@ export function commandReason(
     checkout: ["controlled", "outOfDate"],
     add: ["untracked"],
     delete: ["controlled", "outOfDate", "openedEdit"],
-    revert: ["openedEdit", "openedAdd", "openedDelete", "conflicted"],
+    revert: [
+      "openedEdit",
+      "openedAdd",
+      "openedDelete",
+      "openedMoveAdd",
+      "openedMoveDelete",
+      "conflicted",
+    ],
+    revertUnchanged: [
+      "openedEdit",
+      "openedAdd",
+      "openedDelete",
+      "openedMoveAdd",
+      "openedMoveDelete",
+      "conflicted",
+    ],
     diff: ["controlled", "outOfDate", "openedEdit", "conflicted"],
     history: [
       "controlled",

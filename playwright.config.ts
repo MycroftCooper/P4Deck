@@ -5,6 +5,8 @@ const requestedChannel = process.env.P4DECK_BROWSER_CHANNEL?.trim() || "msedge";
 export default defineConfig({
   testDir: "./tests/browser",
   fullyParallel: false,
+  // Each worker starts a desktop browser; bound concurrency on developer PCs.
+  workers: 2,
   retries: 0,
   reporter: "list",
   webServer: {

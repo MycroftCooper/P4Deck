@@ -1,11 +1,11 @@
-import { useObjectSelection } from "../SelectionContext";
 import {
-  useWorkspaceFiles,
-  useDepotFiles,
-  workspaceCache,
-  workspaceQuery,
-} from "../workspaceQueries";
-import { useMemo, useRef, useState, useContext } from "react";
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronRight,
@@ -19,16 +19,16 @@ import type { WorkspaceNode } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
 import { useFileMenu } from "../../../app/context-menu/useFileMenu";
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
-import { SelectionContext } from "../SelectionContext";
+import { SelectionContext, useObjectSelection } from "../SelectionContext";
 import { useDirectoryMenu } from "../../../app/context-menu/useDirectoryMenu";
 import { action } from "../../../app/context-menu/bindings";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
-import { resourceScope } from "../resourceScope";
 import { FileStatusIcon } from "./FileStatusIcon";
-import {
-  depotNodeAsWorkspaceNode,
-  searchWorkspaceNodes,
-} from "../fileListModel";
+import { useResourceTree } from "../useResourceTree";
+import type { ResourceTreeRow } from "../resourceTree";
+import { connectionPresentation } from "../../settings/connectionWizard";
+import { canListWorkspace } from "../workspaceQueries";
+
 type T = (typeof messages)[keyof typeof messages];
 
 export function ResourceExplorer({
@@ -42,9 +42,11 @@ export function ResourceExplorer({
   connectionKey,
   ready,
   workspaceReady,
-  directory,
+  checkingConnection = false,
   onNavigate,
+  resizeHandle,
 }: {
+  resizeHandle?: ReactNode;
   collapsed: boolean;
   onToggle(): void;
   zh: boolean;
@@ -53,104 +55,162 @@ export function ResourceExplorer({
   connectionKey: string;
   ready: boolean;
   workspaceReady: boolean;
-  directory?: string;
+  checkingConnection?: boolean;
   onNavigate(node: WorkspaceNode): void;
   mode: "workspace" | "depot";
   onModeChange(mode: "workspace" | "depot"): void;
 }) {
-  const workspace = useWorkspaceFiles(
-    connectionKey,
-    workspaceReady && !collapsed && mode === "workspace",
-    directory?.startsWith("//") ? undefined : directory,
-  );
-  const depot = useDepotFiles(
-    connectionKey,
-    ready && !collapsed && mode === "depot",
-    directory?.startsWith("//") ? directory : undefined,
-  );
   const [filter, setFilter] = useState("");
-  const query = mode === "workspace" ? workspace : depot;
-  const error = query.error ? String(query.error) : "";
-  const items = useMemo(() => {
-    const nodes =
-      mode === "workspace"
-        ? (workspace.data?.items ?? [])
-        : (depot.data ?? []).map(depotNodeAsWorkspaceNode);
-    return searchWorkspaceNodes(nodes, filter);
-  }, [mode, workspace.data, depot.data, filter]);
-  const partial =
-    mode === "workspace" &&
-    workspace.data &&
-    workspace.data.completeness !== "complete"
-      ? workspace.data.errors.map((item) => item.message).join(" · ") ||
-        (zh ? "状态证据不完整" : "Partial status evidence")
-      : "";
+  const [rootOpen, setRootOpen] = useState({ workspace: true, depot: true });
+  const [activePath, setActivePath] = useState("");
+  const env = useMenuEnvironment();
+  const blocked =
+    mode === "workspace"
+      ? !canListWorkspace(env.runtime)
+      : env.runtime.connection.state !== "connected";
+  const tree = useResourceTree(
+    connectionKey,
+    mode,
+    !collapsed && rootOpen[mode] && ready && !blocked,
+    filter,
+    mode === "workspace" ? workspaceReady : !blocked,
+  );
+  useEffect(() => {
+    if (!tree.root.loaded || !tree.rows.length) return;
+    const frame = requestAnimationFrame(() => {
+      if (!performance.getEntriesByName("p4deck:tree-visible").length)
+        performance.mark("p4deck:tree-visible");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tree.root.loaded, tree.rows.length]);
+  const nodeRows = tree.rows.filter((row) => row.kind === "node");
+  const items = nodeRows.map((row) => row.node);
   const selection = useObjectSelection(items);
   const { select } = useContext(SelectionContext);
   const fileMenu = useFileMenu();
   const menu = useContextMenu();
-  const env = useMenuEnvironment();
-  const refresh = () =>
-    mode === "workspace"
-      ? workspaceCache.fetchQuery({
-          ...workspaceQuery(
-            connectionKey,
-            directory?.startsWith("//") ? undefined : directory,
-            true,
-          ),
-          staleTime: 0,
-        })
-      : depot.refetch();
-  const scope = resourceScope(mode, directory, env.runtime.context.cwd);
-  const blankMenu = useDirectoryMenu(
-    scope.current,
-    refresh,
-    () => select(items),
-    () => select([]),
-  );
-  // The tree root is stable while browsing subfolders; never make a Depot
-  // address or the currently viewed child the local workspace root.
-  const rootPath = scope.root;
   const root: WorkspaceNode = {
-    id: rootPath,
-    name: mode === "workspace" ? clientName : scope.depot || "//",
-    absolutePath: mode === "workspace" ? rootPath : "",
-    depotPath: scope.depot || undefined,
+    id: mode === "workspace" ? env.runtime.context.cwd || "" : "//",
+    name: mode === "workspace" ? clientName : "//",
+    absolutePath: mode === "workspace" ? env.runtime.context.cwd || "" : "",
+    depotPath: mode === "depot" ? "//" : undefined,
     relativePath: "",
     state: "controlled",
     kind: "directory",
   };
+  const refresh = () => tree.refresh();
+  const blankMenu = useDirectoryMenu(
+    mode === "workspace" ? undefined : "",
+    refresh,
+    () => select(items),
+    () => select([]),
+  );
+  const connectionNotice = checkingConnection
+    ? zh
+      ? "正在自动检查连接与登录状态…"
+      : "Checking connection and login automatically…"
+    : !ready
+      ? env.runtime.p4Version === "loading"
+        ? zh
+          ? "正在初始化连接…"
+          : "Initializing connection…"
+        : zh
+          ? "未连接，请在设置中添加或选择连接。"
+          : "Not connected. Add or select a connection in Settings."
+      : blocked || (ready && env.runtime.connection.state !== "connected")
+        ? mode === "workspace" && !env.runtime.context.cwd?.trim()
+          ? zh
+            ? "未配置工作区根目录，请先选择工作区。"
+            : "No workspace root configured. Select a workspace."
+          : connectionPresentation(env.runtime.connection, zh).detail
+        : "";
+  const notice =
+    connectionNotice ||
+    (!tree.root.loaded
+      ? tree.root.loading
+        ? zh
+          ? "正在加载文件…"
+          : "Loading files…"
+        : ""
+      : rootOpen[mode] && !tree.rows.length
+        ? filter
+          ? zh
+            ? "已展开目录中没有匹配项"
+            : "No matches in expanded folders"
+          : zh
+            ? "此目录为空"
+            : "This folder is empty"
+        : "");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rows = rootOpen[mode] ? tree.rows : [];
   const virtual = useVirtualizer({
-    count: items.length,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 33,
     overscan: 8,
+    getItemKey: (index) => rows[index].key,
   });
+  const focusedPath = nodeRows.some((row) => row.key === activePath)
+    ? activePath
+    : nodeRows[0]?.key;
+  const focusRow = (row: ResourceTreeRow | undefined) => {
+    if (!row || row.kind !== "node") return;
+    setActivePath(row.key);
+    virtual.scrollToIndex(rows.indexOf(row), { align: "auto" });
+    requestAnimationFrame(() => {
+      const targets = scrollRef.current?.querySelectorAll<HTMLElement>(
+        "[data-resource-path]",
+      );
+      [...(targets || [])]
+        .find((target) => target.dataset.resourcePath === row.key)
+        ?.focus();
+    });
+  };
+  const onTreeKey = (
+    event: KeyboardEvent,
+    row: ResourceTreeRow & { kind: "node" },
+  ) => {
+    if (event.defaultPrevented) return;
+    const index = nodeRows.findIndex((item) => item.key === row.key);
+    if (event.key === "ArrowDown") focusRow(nodeRows[index + 1]);
+    else if (event.key === "ArrowUp") focusRow(nodeRows[index - 1]);
+    else if (event.key === "Home") focusRow(nodeRows[0]);
+    else if (event.key === "End") focusRow(nodeRows.at(-1));
+    else if (event.key === "ArrowRight" && row.node.kind === "directory") {
+      if (!tree.expanded.has(row.key)) tree.toggle(row.key, true);
+      else if (nodeRows[index + 1]?.parent === row.key)
+        focusRow(nodeRows[index + 1]);
+    } else if (event.key === "ArrowLeft") {
+      if (row.node.kind === "directory" && tree.expanded.has(row.key))
+        tree.toggle(row.key, false);
+      else focusRow(nodeRows.find((item) => item.key === row.parent));
+    } else if (event.key === "Enter") {
+      if (row.node.kind === "directory") tree.toggle(row.key);
+      else onNavigate(row.node);
+    } else if (event.key === " ") selection.choose(row.node, event);
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const title = zh
+    ? collapsed
+      ? "展开资源侧栏"
+      : "折叠资源侧栏"
+    : collapsed
+      ? "Expand resource sidebar"
+      : "Collapse resource sidebar";
   return (
-    <aside className={`resource-explorer ${collapsed ? "is-collapsed" : ""}`}>
+    <aside
+      id="resource-explorer"
+      className={`resource-explorer ${collapsed ? "is-collapsed" : ""}`}
+    >
+      {resizeHandle}
       <button
         className="resource-collapse"
         onClick={onToggle}
         aria-expanded={!collapsed}
-        aria-label={
-          zh
-            ? collapsed
-              ? "展开资源侧栏"
-              : "折叠资源侧栏"
-            : collapsed
-              ? "Expand resource sidebar"
-              : "Collapse resource sidebar"
-        }
-        title={
-          zh
-            ? collapsed
-              ? "展开资源侧栏"
-              : "折叠资源侧栏"
-            : collapsed
-              ? "Expand resource sidebar"
-              : "Collapse resource sidebar"
-        }
+        aria-label={title}
+        title={title}
       >
         {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
       </button>
@@ -176,9 +236,14 @@ export function ResourceExplorer({
       <label className="tree-search">
         <Search size={13} />
         <input
+          aria-label={zh ? "筛选资源文件" : "Filter resource files"}
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder={t.search}
+          placeholder={
+            zh
+              ? "筛选已展开的文件和目录…"
+              : "Filter expanded files and folders…"
+          }
         />
       </label>
       <div
@@ -186,81 +251,193 @@ export function ResourceExplorer({
         tabIndex={0}
         {...(mode === "workspace"
           ? fileMenu([root], root, { object: "F05", refresh })
-          : scope.depot
-            ? fileMenu([root], root, { depot: true, refresh })
-            : menu("F10", () => ({
-                "刷新 Depot 列表": action(refresh),
-                全选当前可见结果: action(() => select(items)),
-                清除选择: action(() => select([])),
-              })))}
+          : menu("F10", () => ({
+              "刷新 Depot 列表": action(refresh),
+              全选当前可见结果: action(() => select(items)),
+              清除选择: action(() => select([])),
+            })))}
       >
-        <FolderOpen size={15} />
-        <strong>{root.name}</strong>
+        <button
+          className="tree-toggle"
+          aria-label={`${rootOpen[mode] ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${root.name}`}
+          aria-expanded={rootOpen[mode]}
+          onClick={() => setRootOpen((old) => ({ ...old, [mode]: !old[mode] }))}
+        >
+          <ChevronRight
+            size={12}
+            className={rootOpen[mode] ? "tree-chevron-open" : ""}
+          />
+        </button>
+        {rootOpen[mode] ? <FolderOpen size={15} /> : <Folder size={15} />}
+        <strong title={root.name}>{root.name}</strong>
       </div>
-      <div
-        className="tree-list"
-        ref={scrollRef}
-        role="listbox"
-        aria-label={mode === "depot" ? "Depot" : t.workspaceTree}
-        aria-multiselectable="true"
-        {...blankMenu}
-        onKeyDown={(event) => {
-          blankMenu.onKeyDown(event);
-          if (!event.defaultPrevented) selection.onKeyDown(event);
-        }}
-      >
-        {error && <p role="alert">{error}</p>}
-        {partial && (
-          <p className="workspace-warning" role="status" title={partial}>
-            {zh ? "部分状态" : "Partial status"}
-          </p>
+      <div className="tree-content">
+        {(notice || tree.root.error || tree.root.warning) && (
+          <div className="tree-notice">
+            {tree.root.error ? (
+              <p role="alert">{tree.root.error}</p>
+            ) : (
+              notice && <p role="status">{notice}</p>
+            )}
+            {tree.root.warning && (
+              <p className="workspace-warning" role="status">
+                {tree.root.warning}
+              </p>
+            )}
+            {(blocked || env.runtime.connection.state !== "connected") &&
+              ready &&
+              !checkingConnection && (
+                <button onClick={() => env.openPage("settings")}>
+                  {zh ? "连接设置" : "Connection settings"}
+                </button>
+              )}
+            {tree.root.error && (
+              <button onClick={() => void refresh().catch(() => undefined)}>
+                {zh ? "重试" : "Retry"}
+              </button>
+            )}
+          </div>
         )}
         <div
-          className="virtual-spacer"
-          style={{ height: virtual.getTotalSize() }}
+          className="tree-list"
+          ref={scrollRef}
+          role="tree"
+          aria-label={mode === "depot" ? "Depot" : t.workspaceTree}
+          aria-multiselectable="true"
+          aria-busy={tree.root.loading}
+          {...blankMenu}
+          onKeyDown={(event) => {
+            blankMenu.onKeyDown(event);
+            if (!event.defaultPrevented) selection.onKeyDown(event);
+          }}
         >
-          {virtual.getVirtualItems().map((row) => {
-            const node = items[row.index];
-            return (
-              <button
-                key={node.id}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  transform: `translateY(${row.start}px)`,
-                  height: row.size,
-                }}
-                role="option"
-                aria-selected={selection.isSelected(node)}
-                className={selection.isSelected(node) ? "selected" : ""}
-                onDoubleClick={() => {
-                  if (node.kind === "directory")
-                    onNavigate(node as WorkspaceNode);
-                }}
-                onClick={(event) => selection.choose(node, event)}
-                {...fileMenu(
-                  selection.isSelected(node) ? selection.nodes : [node],
-                  node,
-                  {
-                    depot: mode === "depot",
-                    onOpen: () => selection.context(node),
-                    refresh,
-                  },
-                )}
-              >
-                <ChevronRight
-                  size={12}
-                  className={node.kind === "file" ? "hidden" : ""}
-                />
-                {node.kind === "directory" ? (
-                  <Folder size={14} />
-                ) : (
-                  <FileStatusIcon facts={{ ...node, scope: mode }} zh={zh} />
-                )}
-                <span>{node.name}</span>
-              </button>
-            );
-          })}
+          <div
+            className="virtual-spacer"
+            style={{ height: virtual.getTotalSize() }}
+          >
+            {virtual.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              const style = {
+                position: "absolute" as const,
+                top: 0,
+                transform: `translateY(${virtualRow.start}px)`,
+                height: virtualRow.size,
+                paddingLeft: 8 + row.depth * 16,
+                minWidth: 160 + row.depth * 16,
+              };
+              if (row.kind === "notice")
+                return (
+                  <div
+                    key={row.key}
+                    role="treeitem"
+                    aria-level={row.depth + 1}
+                    aria-label={row.state === "error" ? row.message : row.state}
+                    className={`resource-tree-notice ${row.state}`}
+                    style={style}
+                    title={row.message}
+                  >
+                    <span>
+                      {row.state === "loading"
+                        ? zh
+                          ? "正在加载…"
+                          : "Loading…"
+                        : row.state === "empty"
+                          ? zh
+                            ? "空目录"
+                            : "Empty folder"
+                          : row.message}
+                    </span>
+                    {row.state === "error" && (
+                      <button
+                        onClick={() =>
+                          void tree.refresh(row.parent).catch(() => undefined)
+                        }
+                      >
+                        {zh ? "重试" : "Retry"}
+                      </button>
+                    )}
+                  </div>
+                );
+              const node = row.node;
+              const expanded = tree.expanded.has(row.key);
+              const menuProps = fileMenu(
+                selection.isSelected(node) ? selection.nodes : [node],
+                node,
+                {
+                  depot: mode === "depot",
+                  onOpen: () => selection.context(node),
+                  refresh: () =>
+                    tree.refresh(
+                      node.kind === "directory" ? row.key : row.parent,
+                    ),
+                },
+              );
+              return (
+                <div
+                  key={row.key}
+                  style={style}
+                  className={`resource-tree-row ${selection.isSelected(node) ? "selected" : ""}`}
+                  data-resource-path={row.key}
+                  role="treeitem"
+                  aria-label={node.name}
+                  aria-level={row.depth + 1}
+                  aria-posinset={row.position}
+                  aria-setsize={row.siblings}
+                  aria-selected={selection.isSelected(node)}
+                  aria-expanded={
+                    node.kind === "directory" ? expanded : undefined
+                  }
+                  tabIndex={row.key === focusedPath ? 0 : -1}
+                  {...menuProps}
+                  onFocus={() => setActivePath(row.key)}
+                  onKeyDown={(event) => {
+                    menuProps.onKeyDown(event);
+                    onTreeKey(event, row);
+                  }}
+                  onDoubleClick={() => {
+                    if (node.kind === "file") onNavigate(node);
+                  }}
+                  onClick={(event) => selection.choose(node, event)}
+                >
+                  {node.kind === "directory" ? (
+                    <button
+                      className="tree-toggle"
+                      tabIndex={-1}
+                      aria-label={`${expanded ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${node.name}`}
+                      aria-expanded={expanded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        tree.toggle(row.key);
+                        event.currentTarget.parentElement?.focus();
+                      }}
+                    >
+                      <ChevronRight
+                        size={12}
+                        className={expanded ? "tree-chevron-open" : ""}
+                      />
+                    </button>
+                  ) : (
+                    <i className="tree-toggle-spacer" />
+                  )}
+                  {node.kind === "directory" ? (
+                    expanded ? (
+                      <FolderOpen size={14} />
+                    ) : (
+                      <Folder size={14} />
+                    )
+                  ) : (
+                    <FileStatusIcon facts={{ ...node, scope: mode }} zh={zh} />
+                  )}
+                  <span
+                    className="resource-tree-name"
+                    title={node.absolutePath || node.depotPath}
+                  >
+                    {node.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </aside>

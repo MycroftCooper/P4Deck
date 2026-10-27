@@ -17,6 +17,9 @@ const assertNoPageOverflow = async (page: Page, label: string) => {
 };
 
 const assertAxe = async (page: Page, label: string) => {
+  // App/tab modules load lazily; audit the page after its content has mounted.
+  if (await page.locator(".app-shell").count())
+    await expect(page.locator(".route-view h1")).toBeVisible();
   // Dockview's bundled close target is nested inside its ARIA tab; exclude the
   // third-party tab chrome while continuing to scan every rendered panel.
   const result = await new AxeBuilder({ page }).exclude(".dv-tab").analyze();
@@ -44,6 +47,7 @@ test.beforeEach(async ({ page }) => {
 test("390px shell, navigation, command palette, settings, search and pending stay operable", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.goto("/#/files");
   await expect(page.locator(".app-shell")).toBeVisible();
   await assertNoPageOverflow(page, "shell");

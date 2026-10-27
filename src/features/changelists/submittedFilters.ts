@@ -1,31 +1,27 @@
-import type {
-  ClQuery,
-  MergeClassification,
-} from "../../shared/contracts/types";
+import type { ClQuery } from "../../shared/contracts/types";
+import { submissionKinds, type SubmissionKind } from "./submittedReport";
 import { storage } from "../../shared/lib/storage";
 
 export const SUBMITTED_FILTERS_STORAGE_KEY = "p4deck.submitted.filters";
-export const SUBMITTED_FILTERS_SCHEMA_VERSION = 1;
+export const SUBMITTED_FILTERS_SCHEMA_VERSION = 4;
 export const SUBMITTED_PAGE_SIZE = 100;
 
 export interface SubmittedFilterDraft {
   keyword: string;
   users: string;
-  clients: string;
+  streams: string[];
   depotPath: string;
-  stream: string;
+  currentStreamOnly: boolean;
   from: string;
   to: string;
-  jobs: string;
-  hasJob: "any" | "yes" | "no";
-  mergeClassifications: MergeClassification[];
-  hideReliableMerges: boolean;
+  submissionKind: SubmissionKind | "all";
 }
 
 export interface SavedSubmittedFilter {
   id: string;
   name: string;
   updatedAt: string;
+  migrated?: boolean;
   filter: SubmittedFilterDraft;
 }
 
@@ -33,13 +29,6 @@ export interface SubmittedFilterValidation {
   query?: Omit<ClQuery, "operationId" | "requestGeneration" | "cursor">;
   errors: Partial<Record<keyof SubmittedFilterDraft, string>>;
 }
-
-const mergeClassifications: readonly MergeClassification[] = [
-  "normal",
-  "reliableMerge",
-  "suspectedMerge",
-  "unknown",
-];
 
 function toLocalDateTime(value: Date): string {
   const offset = value.getTimezoneOffset() * 60_000;
@@ -56,48 +45,21 @@ export function createDefaultSubmittedFilter(
   return {
     keyword: "",
     users: "",
-    clients: "",
+    streams: [],
     depotPath: "",
-    stream: "",
+    currentStreamOnly: false,
     from: toLocalDateTime(new Date(now.getTime() - 30 * 86_400_000)),
     to: toLocalDateTime(now),
-    jobs: "",
-    hasJob: "any",
-    mergeClassifications: [],
-    hideReliableMerges: false,
+    submissionKind: "all",
   };
 }
 
-function parseTokens(
-  value: string,
-  field: "users" | "clients" | "jobs",
-  errors: SubmittedFilterValidation["errors"],
-): string[] {
-  const values = [
-    ...new Set(
-      value
-        .split(/[\n,;]/)
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  ];
-  if (values.length > 16) {
-    errors[field] = "最多 16 项 / Maximum 16 values";
-    return [];
-  }
-  if (
-    values.some(
-      (item) =>
-        byteLength(item) > 1024 ||
-        /\s/.test(item) ||
-        [...item].some((character) => /[\u0000-\u001f\u007f]/.test(character)),
-    )
-  ) {
-    errors[field] =
-      "每项不得包含空白/控制字符，且不超过 1024 字符 / No whitespace or control characters; 1024 characters maximum";
-    return [];
-  }
-  return values;
+export function parseChangeNumber(value: string): number | undefined {
+  const text = value.trim();
+  const number = Number(text);
+  return /^\d+$/.test(text) && Number.isSafeInteger(number) && number > 0
+    ? number
+    : undefined;
 }
 
 function optionalTrimmed(value: string): string | undefined {
@@ -107,16 +69,45 @@ function optionalTrimmed(value: string): string | undefined {
 
 export function validateSubmittedFilter(
   draft: SubmittedFilterDraft,
+  context: { client?: string; stream?: string } = {},
 ): SubmittedFilterValidation {
   const errors: SubmittedFilterValidation["errors"] = {};
   const keyword = draft.keyword.trim();
   if (byteLength(keyword) > 512 || keyword.includes("\0"))
     errors.keyword = "最多 512 字符 / Maximum 512 characters";
-  const users = parseTokens(draft.users, "users", errors);
-  const clients = parseTokens(draft.clients, "clients", errors);
-  const jobs = parseTokens(draft.jobs, "jobs", errors);
+  const user = draft.users.trim();
+  if (
+    /[,;\r\n]/.test(draft.users) ||
+    /\s|[\u0000-\u001f\u007f]/.test(user) ||
+    byteLength(user) > 1024
+  )
+    errors.users = "请输入单一用户名 / Enter one username";
+  const users = user ? [user] : [];
+  const clients: string[] = [];
+  const streams = [
+    ...new Set(
+      [
+        ...draft.streams,
+        ...(draft.currentStreamOnly && context.stream ? [context.stream] : []),
+      ].map((value) => value.trim().replace(/\/+$/, "")),
+    ),
+  ].sort();
+  if (draft.currentStreamOnly && !context.stream)
+    errors.currentStreamOnly =
+      "当前 Stream 不可用 / Current stream unavailable";
+  if (
+    streams.length > 16 ||
+    streams.some(
+      (stream) =>
+        !stream.startsWith("//") ||
+        stream.length > 1024 ||
+        /[\s\0@#*]/.test(stream) ||
+        stream.includes("..."),
+    )
+  )
+    errors.streams =
+      "请选择有效 Stream（最多16项） / Select valid streams (maximum 16)";
   const depotPath = optionalTrimmed(draft.depotPath);
-  const stream = optionalTrimmed(draft.stream)?.replace(/\/+$/, "");
   if (
     depotPath &&
     (!depotPath.startsWith("//") ||
@@ -126,20 +117,18 @@ export function validateSubmittedFilter(
     errors.depotPath =
       "请输入有效的 //depot 路径（不可含 @ 或 #） / Enter a valid //depot path without @ or #";
   if (
-    stream &&
-    (!stream.startsWith("//") ||
-      byteLength(stream) > 1024 ||
-      /[\r\n\0@#*]/.test(stream))
-  )
-    errors.stream = "请输入有效的 Stream 路径 / Enter a valid Stream path";
-  if (
     depotPath &&
-    stream &&
-    depotPath !== stream &&
-    !depotPath.startsWith(`${stream}/`)
+    streams.length &&
+    !streams.some(
+      (stream) =>
+        depotPath === stream ||
+        depotPath.startsWith(`${stream}/`) ||
+        (depotPath.endsWith("...") &&
+          stream.startsWith(depotPath.slice(0, -3))),
+    )
   )
     errors.depotPath =
-      "Depot Path 必须位于所选 Stream 内 / Depot path must be inside the selected stream";
+      "Depot Path 与所选 Stream 无交集 / Depot path does not intersect selected streams";
   const fromDate = new Date(draft.from);
   const toDate = new Date(draft.to);
   if (!draft.from || !Number.isFinite(fromDate.getTime()))
@@ -149,15 +138,11 @@ export function validateSubmittedFilter(
   if (!errors.from && !errors.to && fromDate > toDate)
     errors.to =
       "结束时间不得早于起始时间 / End time must not be before start time";
-  if (jobs.length && draft.hasJob === "no")
-    errors.hasJob =
-      "指定 Job 时不能选择“无 Job” / Job values cannot be combined with No job";
   if (
-    draft.mergeClassifications.some(
-      (value) => !mergeClassifications.includes(value),
-    )
+    draft.submissionKind !== "all" &&
+    !submissionKinds.includes(draft.submissionKind)
   )
-    errors.mergeClassifications = "无效分类 / Invalid classification";
+    errors.submissionKind = "无效提交类型 / Invalid submission type";
   if (Object.keys(errors).length) return { errors };
   return {
     errors,
@@ -166,13 +151,11 @@ export function validateSubmittedFilter(
       users,
       clients,
       depotPath,
-      stream,
+      streams,
       from: fromDate.toISOString(),
       to: toDate.toISOString(),
-      jobs,
-      hasJob: draft.hasJob === "any" ? undefined : draft.hasJob === "yes",
-      mergeClassifications: [...new Set(draft.mergeClassifications)],
-      hideReliableMerges: draft.hideReliableMerges,
+      mergeClassifications: [],
+      hideReliableMerges: false,
       pageSize: SUBMITTED_PAGE_SIZE,
     },
   };
@@ -182,29 +165,19 @@ function isSafeDraft(value: unknown): value is SubmittedFilterDraft {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
   return (
-    [
-      "keyword",
-      "users",
-      "clients",
-      "depotPath",
-      "stream",
-      "from",
-      "to",
-      "jobs",
-    ].every(
+    ["keyword", "users", "depotPath", "from", "to"].every(
       (key) =>
         typeof item[key] === "string" &&
         byteLength(item[key] as string) <= 4096,
     ) &&
-    ["any", "yes", "no"].includes(String(item.hasJob)) &&
-    Array.isArray(item.mergeClassifications) &&
-    item.mergeClassifications.length <= mergeClassifications.length &&
-    item.mergeClassifications.every(
-      (entry) =>
-        typeof entry === "string" &&
-        mergeClassifications.includes(entry as MergeClassification),
+    Array.isArray(item.streams) &&
+    item.streams.length <= 16 &&
+    item.streams.every(
+      (value) => typeof value === "string" && value.length <= 1024,
     ) &&
-    typeof item.hideReliableMerges === "boolean"
+    typeof item.currentStreamOnly === "boolean" &&
+    (item.submissionKind === "all" ||
+      submissionKinds.includes(item.submissionKind as SubmissionKind))
   );
 }
 
@@ -212,15 +185,12 @@ function copyDraft(value: SubmittedFilterDraft): SubmittedFilterDraft {
   return {
     keyword: value.keyword,
     users: value.users,
-    clients: value.clients,
+    streams: [...value.streams],
     depotPath: value.depotPath,
-    stream: value.stream,
+    currentStreamOnly: value.currentStreamOnly,
     from: value.from,
     to: value.to,
-    jobs: value.jobs,
-    hasJob: value.hasJob,
-    mergeClassifications: [...value.mergeClassifications],
-    hideReliableMerges: value.hideReliableMerges,
+    submissionKind: value.submissionKind,
   };
 }
 
@@ -232,11 +202,59 @@ export function readSavedSubmittedFilters(): SavedSubmittedFilter[] {
     if (!value || typeof value !== "object") return [];
     const store = value as { version?: unknown; filters?: unknown };
     if (
-      store.version !== SUBMITTED_FILTERS_SCHEMA_VERSION ||
+      (store.version !== 1 &&
+        store.version !== 2 &&
+        store.version !== 3 &&
+        store.version !== SUBMITTED_FILTERS_SCHEMA_VERSION) ||
       !Array.isArray(store.filters)
     )
       return [];
-    return store.filters
+    // Never replay saved arbitrary client/stream names or Job filters.
+    // Keep legacy user text intact: multiple users must be corrected before querying.
+    const contextEntries =
+      store.version === 1
+        ? store.filters.map((entry) => {
+            if (
+              !entry ||
+              typeof entry !== "object" ||
+              !entry.filter ||
+              typeof entry.filter !== "object" ||
+              Array.isArray(entry.filter) ||
+              typeof entry.filter.clients !== "string" ||
+              typeof entry.filter.stream !== "string"
+            )
+              return undefined;
+            return {
+              ...entry,
+              migrated: true,
+              filter: {
+                ...entry.filter,
+                currentClientOnly: Boolean(entry.filter.clients.trim()),
+                currentStreamOnly: Boolean(entry.filter.stream.trim()),
+              },
+            };
+          })
+        : store.filters;
+    // Integration evidence cannot be mapped to automation identity. Remove old
+    // hidden constraints; keep every unrelated field and default to all types.
+    const entries =
+      store.version === SUBMITTED_FILTERS_SCHEMA_VERSION
+        ? contextEntries
+        : contextEntries.map((entry) =>
+            entry?.filter
+              ? {
+                  ...entry,
+                  migrated: true,
+                  filter: {
+                    ...entry.filter,
+                    streams: [],
+                    submissionKind:
+                      store.version === 3 ? entry.filter.submissionKind : "all",
+                  },
+                }
+              : entry,
+          );
+    return entries
       .filter((entry): entry is SavedSubmittedFilter => {
         if (!entry || typeof entry !== "object") return false;
         const item = entry as Partial<SavedSubmittedFilter>;
@@ -255,6 +273,7 @@ export function readSavedSubmittedFilters(): SavedSubmittedFilter[] {
         id: entry.id,
         name: entry.name.trim(),
         updatedAt: entry.updatedAt,
+        migrated: entry.migrated === true,
         filter: copyDraft(entry.filter),
       }));
   } catch {
@@ -272,6 +291,7 @@ export function writeSavedSubmittedFilters(
       id: entry.id.slice(0, 128),
       name: entry.name.trim().slice(0, 80),
       updatedAt: entry.updatedAt,
+      migrated: entry.migrated === true,
       filter: copyDraft(entry.filter),
     }));
   storage.setItem(

@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Bookmark, RotateCcw, Save, Trash2 } from "lucide-react";
-import type { MergeClassification } from "../../../shared/contracts/types";
+import { useState, type ReactNode } from "react";
+import { Bookmark, ChevronDown, RotateCcw, Save, Trash2 } from "lucide-react";
 import type {
   SavedSubmittedFilter,
   SubmittedFilterDraft,
@@ -8,8 +7,14 @@ import type {
 } from "../submittedFilters";
 
 interface Props {
+  typeControl?: ReactNode;
   zh: boolean;
   mock: boolean;
+  streamOptions: string[];
+  streamLoading: boolean;
+  streamError: string;
+  onLoadStreams(): void;
+  currentStream?: string;
   draft: SubmittedFilterDraft;
   errors: SubmittedFilterValidation["errors"];
   savedFilters: SavedSubmittedFilter[];
@@ -17,13 +22,6 @@ interface Props {
   onReset(): void;
   onSavedFiltersChange(value: SavedSubmittedFilter[]): void;
 }
-
-const mergeValues: MergeClassification[] = [
-  "normal",
-  "reliableMerge",
-  "suspectedMerge",
-  "unknown",
-];
 
 export function SubmittedFilterPanel(props: Props) {
   const [selectedId, setSelectedId] = useState("");
@@ -34,31 +32,17 @@ export function SubmittedFilterPanel(props: Props) {
   >();
   const text = props.zh
     ? {
-        title: "Submitted 组合筛选",
+        title: "已提交组合筛选",
         mock: "模拟数据 · 查询不会访问真实 P4 Server 或网络",
-        semantics: "同一字段内多值为 OR；不同筛选条件之间为 AND。",
+
         keyword: "关键词",
-        users: "User（逗号/换行分隔）",
-        clients: "Client（逗号/换行分隔）",
+        users: "用户",
         depotPath: "Depot Path",
-        stream: "Stream",
         from: "起始时间",
         to: "结束时间",
-        jobs: "Job（逗号/换行分隔）",
-        hasJob: "Job 状态",
-        any: "不限",
-        yes: "有 Job",
-        no: "无 Job",
-        classification: "Merge 分类（多选为 OR）",
-        normal: "普通",
-        reliableMerge: "可靠合并",
-        suspectedMerge: "疑似合并",
-        unknown: "未知",
-        hideReliable: "仅隐藏 reliable merge",
         reset: "重置为默认过滤器",
         saved: "保存的过滤器",
         none: "未选择",
-        apply: "应用",
         name: "过滤器名称",
         save: "保存",
         remove: "删除",
@@ -71,29 +55,15 @@ export function SubmittedFilterPanel(props: Props) {
     : {
         title: "Submitted filters",
         mock: "Mock data · this query does not access a real P4 Server or network",
-        semantics: "Values within a field use OR; separate conditions use AND.",
+
         keyword: "Keyword",
-        users: "User (comma/newline separated)",
-        clients: "Client (comma/newline separated)",
+        users: "User",
         depotPath: "Depot Path",
-        stream: "Stream",
         from: "Start time",
         to: "End time",
-        jobs: "Job (comma/newline separated)",
-        hasJob: "Job state",
-        any: "Any",
-        yes: "Has job",
-        no: "No job",
-        classification: "Merge classification (OR)",
-        normal: "Normal",
-        reliableMerge: "Reliable merge",
-        suspectedMerge: "Suspected merge",
-        unknown: "Unknown",
-        hideReliable: "Hide reliable merges only",
         reset: "Reset to default filter",
         saved: "Saved filters",
         none: "None selected",
-        apply: "Apply",
         name: "Filter name",
         save: "Save",
         remove: "Delete",
@@ -167,7 +137,7 @@ export function SubmittedFilterPanel(props: Props) {
   }
 
   const field = (
-    key: "keyword" | "users" | "clients" | "depotPath" | "stream" | "jobs",
+    key: "keyword" | "users" | "depotPath",
     label: string,
     placeholder?: string,
   ) => (
@@ -199,167 +169,229 @@ export function SubmittedFilterPanel(props: Props) {
             {text.mock}
           </p>
         ) : null}
-        <p className="submitted-filter-semantics">{text.semantics}</p>
         <div className="submitted-filter-grid">
+          {props.typeControl}
           {field("keyword", text.keyword)}
-          {field("users", text.users, "alice, buildbot")}
-          {field("clients", text.clients, "workspace-a, workspace-b")}
-          {field("depotPath", text.depotPath, "//depot/main/...")}
-          {field("stream", text.stream, "//depot/main")}
-          {field("jobs", text.jobs, "JOB-1, JOB-2")}
-          <label className="submitted-filter-field">
-            <span>{text.from}</span>
-            <input
-              type="datetime-local"
-              value={props.draft.from}
-              aria-invalid={Boolean(props.errors.from)}
-              aria-describedby={
-                props.errors.from ? "submitted-from-error" : undefined
-              }
-              onChange={(event) => update("from", event.target.value)}
-            />
-            {props.errors.from ? (
-              <small id="submitted-from-error" role="alert">
-                {props.errors.from}
-              </small>
-            ) : null}
-          </label>
-          <label className="submitted-filter-field">
-            <span>{text.to}</span>
-            <input
-              type="datetime-local"
-              value={props.draft.to}
-              aria-invalid={Boolean(props.errors.to)}
-              aria-describedby={
-                props.errors.to ? "submitted-to-error" : undefined
-              }
-              onChange={(event) => update("to", event.target.value)}
-            />
-            {props.errors.to ? (
-              <small id="submitted-to-error" role="alert">
-                {props.errors.to}
-              </small>
-            ) : null}
-          </label>
-          <label className="submitted-filter-field">
-            <span>{text.hasJob}</span>
+          {field("users", text.users)}
+          <div className="submitted-scope-row">
+            {field("depotPath", text.depotPath, "//depot/main/...")}
+            <div className="submitted-filter-field">
+              <span>Stream</span>
+              <details
+                className="submitted-stream-picker"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.currentTarget.open = false;
+                    event.currentTarget.querySelector("summary")?.focus();
+                  }
+                }}
+              >
+                <summary>
+                  <span>
+                    {[
+                      ...(props.draft.currentStreamOnly
+                        ? [props.zh ? "当前 Stream" : "Current stream"]
+                        : []),
+                      ...props.draft.streams,
+                    ].join(", ") || (props.zh ? "不限 Stream" : "All streams")}
+                  </span>
+                  <ChevronDown size={14} aria-hidden="true" />
+                </summary>
+                <div className="submitted-stream-options">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={props.draft.currentStreamOnly}
+                      disabled={
+                        !props.currentStream && !props.draft.currentStreamOnly
+                      }
+                      onChange={(event) =>
+                        update("currentStreamOnly", event.target.checked)
+                      }
+                    />
+                    {props.zh ? "当前 Stream" : "Current stream"}:{" "}
+                    {props.currentStream ||
+                      (props.zh ? "不可用" : "Unavailable")}
+                  </label>
+                  {[
+                    ...new Set([
+                      ...props.streamOptions,
+                      ...props.draft.streams,
+                    ]),
+                  ]
+                    .sort()
+                    .map((stream) => (
+                      <label key={stream} title={stream}>
+                        <input
+                          type="checkbox"
+                          checked={props.draft.streams.includes(stream)}
+                          onChange={(event) =>
+                            update(
+                              "streams",
+                              event.target.checked
+                                ? [...props.draft.streams, stream]
+                                : props.draft.streams.filter(
+                                    (value) => value !== stream,
+                                  ),
+                            )
+                          }
+                        />
+                        {stream}
+                      </label>
+                    ))}
+                  {props.streamLoading && (
+                    <small role="status">
+                      {props.zh ? "正在读取…" : "Loading…"}
+                    </small>
+                  )}
+                  {props.streamError && (
+                    <small role="alert">{props.streamError}</small>
+                  )}
+                  {!props.streamLoading && !props.streamOptions.length && (
+                    <small>
+                      {props.zh
+                        ? "暂无缓存的 Stream 选项"
+                        : "No cached stream options"}
+                    </small>
+                  )}
+                  <div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={props.streamLoading}
+                      onClick={props.onLoadStreams}
+                    >
+                      {props.zh ? "读取列表" : "Load list"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        props.onDraftChange({
+                          ...props.draft,
+                          streams: [],
+                          currentStreamOnly: false,
+                        })
+                      }
+                    >
+                      {props.zh ? "清空" : "Clear"}
+                    </button>
+                  </div>
+                </div>
+              </details>
+              {(props.errors.streams || props.errors.currentStreamOnly) && (
+                <small role="alert">
+                  {props.errors.streams || props.errors.currentStreamOnly}
+                </small>
+              )}
+            </div>
+          </div>
+          <div className="submitted-date-range">
+            <label className="submitted-filter-field">
+              <span>{text.from}</span>
+              <input
+                type="datetime-local"
+                value={props.draft.from}
+                aria-invalid={Boolean(props.errors.from)}
+                aria-describedby={
+                  props.errors.from ? "submitted-from-error" : undefined
+                }
+                onChange={(event) => update("from", event.target.value)}
+              />
+              {props.errors.from ? (
+                <small id="submitted-from-error" role="alert">
+                  {props.errors.from}
+                </small>
+              ) : null}
+            </label>
+            <label className="submitted-filter-field">
+              <span>{text.to}</span>
+              <input
+                type="datetime-local"
+                value={props.draft.to}
+                aria-invalid={Boolean(props.errors.to)}
+                aria-describedby={
+                  props.errors.to ? "submitted-to-error" : undefined
+                }
+                onChange={(event) => update("to", event.target.value)}
+              />
+              {props.errors.to ? (
+                <small id="submitted-to-error" role="alert">
+                  {props.errors.to}
+                </small>
+              ) : null}
+            </label>
+          </div>
+        </div>
+        <div className="submitted-saved-filters" aria-label={text.saved}>
+          <div className="submitted-preset-group">
+            <Bookmark size={16} aria-hidden="true" />
             <select
-              value={props.draft.hasJob}
-              aria-invalid={Boolean(props.errors.hasJob)}
-              aria-describedby={
-                props.errors.hasJob ? "submitted-has-job-error" : undefined
-              }
-              onChange={(event) =>
-                update(
-                  "hasJob",
-                  event.target.value as SubmittedFilterDraft["hasJob"],
-                )
+              aria-label={text.saved}
+              value={selectedId}
+              onChange={(event) => {
+                const id = event.target.value;
+                setSelectedId(id);
+                setConfirmation(undefined);
+                const item = props.savedFilters.find(
+                  (entry) => entry.id === id,
+                );
+                setName(item?.name ?? "");
+                setNameError("");
+                if (item && id !== selectedId) {
+                  props.onDraftChange({ ...item.filter });
+                }
+              }}
+            >
+              <option value="">{text.none}</option>
+              {props.savedFilters.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="submitted-preset-group">
+            <input
+              className="submitted-filter-name"
+              value={name}
+              maxLength={80}
+              placeholder={text.name}
+              aria-label={text.name}
+              aria-invalid={Boolean(nameError)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setNameError("");
+                setConfirmation(undefined);
+              }}
+            />
+            <button className="secondary" onClick={requestSave}>
+              <Save size={14} aria-hidden="true" />
+              {text.save}
+            </button>
+            <button
+              className="secondary"
+              disabled={!selected}
+              onClick={() =>
+                selected && setConfirmation({ type: "delete", id: selected.id })
               }
             >
-              <option value="any">{text.any}</option>
-              <option value="yes">{text.yes}</option>
-              <option value="no">{text.no}</option>
-            </select>
-            {props.errors.hasJob ? (
-              <small id="submitted-has-job-error" role="alert">
-                {props.errors.hasJob}
-              </small>
-            ) : null}
-          </label>
-        </div>
-        <fieldset className="submitted-merge-filters">
-          <legend>{text.classification}</legend>
-          {mergeValues.map((value) => (
-            <label key={value}>
-              <input
-                type="checkbox"
-                checked={props.draft.mergeClassifications.includes(value)}
-                onChange={(event) =>
-                  update(
-                    "mergeClassifications",
-                    event.target.checked
-                      ? [...props.draft.mergeClassifications, value]
-                      : props.draft.mergeClassifications.filter(
-                          (item) => item !== value,
-                        ),
-                  )
-                }
-              />
-              {text[value]}
-            </label>
-          ))}
-          <label>
-            <input
-              type="checkbox"
-              checked={props.draft.hideReliableMerges}
-              onChange={(event) =>
-                update("hideReliableMerges", event.target.checked)
-              }
-            />
-            {text.hideReliable}
-          </label>
-        </fieldset>
-        <div className="submitted-saved-filters" aria-label={text.saved}>
-          <Bookmark size={16} aria-hidden="true" />
-          <select
-            aria-label={text.saved}
-            value={selectedId}
-            onChange={(event) => {
-              const id = event.target.value;
-              setSelectedId(id);
-              setConfirmation(undefined);
-              const item = props.savedFilters.find((entry) => entry.id === id);
-              setName(item?.name ?? "");
-            }}
-          >
-            <option value="">{text.none}</option>
-            {props.savedFilters.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <button
-            className="secondary"
-            disabled={!selected}
-            onClick={() =>
-              selected && props.onDraftChange({ ...selected.filter })
-            }
-          >
-            {text.apply}
-          </button>
-          <input
-            className="submitted-filter-name"
-            value={name}
-            maxLength={80}
-            placeholder={text.name}
-            aria-label={text.name}
-            aria-invalid={Boolean(nameError)}
-            onChange={(event) => {
-              setName(event.target.value);
-              setNameError("");
-              setConfirmation(undefined);
-            }}
-          />
-          <button className="secondary" onClick={requestSave}>
-            <Save size={14} aria-hidden="true" />
-            {text.save}
-          </button>
-          <button
-            className="secondary"
-            disabled={!selected}
-            onClick={() =>
-              selected && setConfirmation({ type: "delete", id: selected.id })
-            }
-          >
-            <Trash2 size={14} aria-hidden="true" />
-            {text.remove}
-          </button>
+              <Trash2 size={14} aria-hidden="true" />
+              {text.remove}
+            </button>
+          </div>
           <button className="secondary" onClick={props.onReset}>
             <RotateCcw size={14} aria-hidden="true" />
             {text.reset}
           </button>
         </div>
+        {selected?.migrated && (
+          <p role="note">
+            {props.zh
+              ? "旧过滤器已迁移：移除旧 Client/Merge/Job 条件，旧当前 Stream 保留为快捷项；已按迁移后的条件应用。"
+              : "Migrated filter: legacy Client/Merge/Job conditions removed; the current-stream shortcut is preserved. Applied with the migrated conditions."}
+          </p>
+        )}
         {nameError ? (
           <p className="submitted-filter-error" role="alert">
             {nameError}

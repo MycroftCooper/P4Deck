@@ -8,7 +8,52 @@ import {
   cliStatus,
   connectionPresentation,
   probeConnection,
+  sameOperationalContext,
 } from "./connectionWizard";
+
+it("matches equivalent Windows contexts while isolating different connections, roots and credential files", () => {
+  const context = {
+    server: "p4:1666",
+    user: "tester",
+    client: "workspace",
+    cwd: "C:\\work\\project",
+    executable: "C:\\tools\\p4.exe",
+    trustPath: "C:\\work\\trust",
+    ticketsPath: "C:\\work\\tickets",
+  };
+  expect(
+    sameOperationalContext(context, {
+      ...context,
+      cwd: "c:/WORK/project/",
+      swarmBaseUrl: "https://swarm.example.com",
+    }),
+  ).toBe(true);
+  for (const field of [
+    "server",
+    "user",
+    "client",
+    "cwd",
+    "executable",
+    "trustPath",
+    "ticketsPath",
+  ] as const) {
+    expect(
+      sameOperationalContext(context, { ...context, [field]: "different" }),
+    ).toBe(false);
+  }
+  expect(
+    sameOperationalContext(
+      { ...context, cwd: "/work/project" },
+      { ...context, cwd: "/Work/project" },
+    ),
+  ).toBe(false);
+  expect(
+    sameOperationalContext(
+      { ...context, cwd: "/" },
+      { ...context, cwd: undefined },
+    ),
+  ).toBe(false);
+});
 
 const recoveries: Record<ConnectionState, RecoveryAction> = {
   cliMissing: "configureCli",

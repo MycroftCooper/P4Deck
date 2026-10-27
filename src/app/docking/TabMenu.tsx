@@ -6,6 +6,7 @@ import {
 import { useContextMenu } from "../context-menu/ContextMenu";
 import { action, copy } from "../context-menu/bindings";
 import { isMultiPage, panelKind } from "../panels";
+import { pageIcons } from "../pageIcons";
 import { OpenContext, PopoutContext } from "./chrome";
 import { detachedPage } from "./types";
 
@@ -15,6 +16,7 @@ export function TabMenu(props: IDockviewPanelHeaderProps) {
     popout = useContext(PopoutContext);
   const panel = props.containerApi.getPanel(props.api.id);
   const kind = panelKind(props.api.id);
+  const Icon = kind ? pageIcons[kind] : undefined;
   const root = useRef<HTMLDivElement>(null);
   const binding =
     panel && kind
@@ -98,6 +100,7 @@ export function TabMenu(props: IDockviewPanelHeaderProps) {
   });
   return (
     <div ref={root} className="tab-context-target">
+      {Icon && <Icon className="dock-tab-icon" size={14} aria-hidden="true" />}
       <DockviewDefaultTab {...props} onContextMenu={binding?.onContextMenu} />
     </div>
   );

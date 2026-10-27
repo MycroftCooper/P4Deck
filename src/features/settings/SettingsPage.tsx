@@ -1,4 +1,6 @@
-import { Bell, Palette, RefreshCw } from "lucide-react";
+import { FixedPageHeader } from "../../app/docking/chrome";
+import { Bell, Palette, RefreshCw, SquarePen } from "lucide-react";
+import { useEffect, useState } from "react";
 import type {
   ConnectionStatus,
   Locale,
@@ -7,6 +9,8 @@ import type {
   ThemeMode,
 } from "../../shared/contracts/types";
 import { ConnectionProfilesCard } from "./ConnectionProfilesCard";
+import { BackupSettingsCard } from "./BackupSettingsCard";
+import { LogSettingsCard } from "./LogSettingsCard";
 import { defaultUi, type UiPreferences } from "./preferences";
 import { requestDesktopNotificationPermission } from "../../app/notifications/notifications";
 
@@ -39,46 +43,101 @@ export function SettingsPage({
 }: Props) {
   const zh = locale === "zh-CN";
   const tr = (a: string, b: string) => (zh ? a : b);
+  const refreshMinutes = ui.autoRefresh ? ui.autoRefreshMinutes : 0;
+  const [refreshDraft, setRefreshDraft] = useState(String(refreshMinutes));
+  useEffect(() => setRefreshDraft(String(refreshMinutes)), [refreshMinutes]);
   return (
     <section className="settings-page">
-      <header className="section-title">
-        <div>
-          <span className="workspace-eyebrow">P4DECK / PREFERENCES</span>
-          <h1>{tr("设置", "Settings")}</h1>
-          <p>
-            {tr(
-              "全局设置 · 已保存连接经验证后切换，外观即时生效。",
-              "Global preferences · Saved connections switch only after verification; appearance applies instantly.",
-            )}
-          </p>
-        </div>
-      </header>
+      <FixedPageHeader
+        description={tr(
+          "全局设置 · 已保存连接经验证后切换，外观即时生效。",
+          "Global preferences · Saved connections switch only after verification; appearance applies instantly.",
+        )}
+      ></FixedPageHeader>
       <ConnectionProfilesCard
         runtime={runtime}
         onConnection={onConnection}
         onRuntime={onRuntime}
         locale={locale}
       />
+      <BackupSettingsCard zh={zh} native={runtime.mode === "tauri"} />
+      <LogSettingsCard zh={zh} native={runtime.mode === "tauri"} />
+      <section className="settings-card">
+        <h2>
+          <SquarePen size={18} />
+          {tr("签出", "Checkout")}
+        </h2>
+        <div className="settings-grid">
+          <label>
+            {tr("签出时始终使用默认 CL", "Always check out to Default CL")}
+            <select
+              value={String(ui.checkoutUseDefault)}
+              onChange={(event) =>
+                onUi({
+                  ...ui,
+                  checkoutUseDefault: event.target.value === "true",
+                })
+              }
+            >
+              <option value="false">
+                {tr(
+                  "关闭 · 多个 CL 时询问",
+                  "Off · Ask when multiple CLs exist",
+                )}
+              </option>
+              <option value="true">
+                {tr("开启 · 始终使用 Default", "On · Always use Default")}
+              </option>
+            </select>
+          </label>
+        </div>
+        <p>
+          {tr(
+            "关闭时，签出前可选择目标 CL；只有 Default 时直接签出。",
+            "When off, choose a destination before checkout. If only Default exists, checkout starts directly.",
+          )}
+        </p>
+      </section>
       <section className="settings-card">
         <h2>
           <RefreshCw size={18} />
           {tr("刷新与通知", "Refresh & notifications")}
         </h2>
-        <div className="settings-grid">
+        <div className="settings-grid refresh-settings-grid">
           <label>
-            {tr("只读视图自动刷新", "Auto-refresh read-only views")}
-            <select
-              value={String(ui.autoRefresh)}
-              onChange={(event) =>
-                onUi({ ...ui, autoRefresh: event.target.value === "true" })
-              }
-            >
-              <option value="true">{tr("开启", "On")}</option>
-              <option value="false">{tr("暂停", "Paused")}</option>
-            </select>
+            <span className="settings-field-label">
+              {tr("自动刷新间隔（分钟）", "Auto-refresh interval (minutes)")}
+            </span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={refreshDraft}
+              aria-describedby="refresh-interval-help"
+              onChange={(event) => {
+                setRefreshDraft(event.target.value);
+                const minutes = event.target.valueAsNumber;
+                if (Number.isSafeInteger(minutes) && minutes >= 0)
+                  onUi({
+                    ...ui,
+                    autoRefreshMinutes: minutes,
+                    autoRefresh: minutes > 0,
+                  });
+              }}
+              onBlur={() => setRefreshDraft(String(refreshMinutes))}
+            />
+            <small id="refresh-interval-help">
+              {tr(
+                "默认 5 分钟；设为 0 关闭自动刷新。",
+                "Default: 5 minutes. Set to 0 to turn off automatic refresh.",
+              )}
+            </small>
           </label>
           <label>
-            <Bell size={14} /> {tr("桌面通知", "Desktop notifications")}
+            <span className="settings-field-label">
+              <Bell size={14} aria-hidden="true" />
+              {tr("桌面通知", "Desktop notifications")}
+            </span>
             <select
               value={String(ui.desktopNotifications)}
               onChange={(event) => {
@@ -97,7 +156,9 @@ export function SettingsPage({
             </select>
           </label>
           <label>
-            {tr("通知范围", "Notification scope")}
+            <span className="settings-field-label">
+              {tr("通知范围", "Notification scope")}
+            </span>
             <select
               value={String(ui.notifyOnlyFailures)}
               disabled={!ui.desktopNotifications}
@@ -171,6 +232,9 @@ export function SettingsPage({
                 onUi({ ...ui, sidebarWidth: Number(event.target.value) })
               }
             >
+              {![200, 240, 280, 320].includes(ui.sidebarWidth) && (
+                <option value={ui.sidebarWidth}>{ui.sidebarWidth} px</option>
+              )}
               {[200, 240, 280, 320].map((value) => (
                 <option key={value} value={value}>
                   {value} px

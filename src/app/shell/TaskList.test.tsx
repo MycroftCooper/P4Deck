@@ -20,7 +20,7 @@ it("routes log and cancel actions to the explicit task, not an aggregate or the 
   const open = async (id: string) =>
     act(async () => {
       [...host.querySelectorAll<HTMLButtonElement>(".task-row")]
-        .find((row) => row.textContent === id)!
+        .find((row) => row.querySelector("strong")?.textContent === id)!
         .dispatchEvent(
           new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
         );
@@ -36,10 +36,16 @@ it("routes log and cancel actions to the explicit task, not an aggregate or the 
       root.render(
         <ContextMenuProvider scope="test" zh>
           <TaskList
+            id="tasks"
             tasks={[
-              ["first", 20],
-              ["second", undefined],
+              { id: "first", label: "first", phase: "running", progress: 20 },
+              { id: "second", label: "second", phase: "queued" },
             ]}
+            cancelling={new Set()}
+            error=""
+            onCancel={backend.cancelOperation}
+            onCancelAll={async () => {}}
+            cancellingAll={false}
             zh
             onClose={() => {}}
             onLogs={logs}

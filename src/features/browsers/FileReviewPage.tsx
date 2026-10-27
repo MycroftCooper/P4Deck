@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { GraphFocusPanel } from "./GraphFocusPanel";
+import {
+  focusEvidence,
+  projectGraph,
+  GRAPH_BUDGET,
+  validGraphPath,
+  type GraphFocusMode,
+} from "./graphFocus";
+import { graphReadKey, readGraph } from "./graphReads";
+import { useChangeDetails } from "../changelists/components/ChangeDetailsDialog";
+import type { RevisionComparison } from "../../app/panels";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { RefreshCw, Minus, Plus } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import type {
@@ -13,7 +23,8 @@ import type {
 import { useContextMenu } from "../../app/context-menu/ContextMenu";
 import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
-import { useFullTextSelection } from "../../app/context-menu/FullTextSelection";
+import { PageRefreshSlotContext } from "../../app/docking/chrome";
+import { DiffView } from "./DiffView";
 import { graphNodeDiffPair, makeReviewScope } from "./reviewModel";
 import { mergeRevisionGraphs } from "./reviewModel";
 import {
@@ -23,31 +34,50 @@ import {
   reviewSessionIdentity,
   useReviewRequestOwner,
 } from "./reviewRequests";
-import { SwarmAction, swarmMenuAction } from "../swarm/SwarmAction";
+import { swarmMenuAction } from "../swarm/SwarmAction";
+import { appCache } from "../../shared/cache/appCache";
+import { CACHE_POLICY } from "../../shared/cache/policy";
+import { isFresh, writeSnapshot } from "../../shared/cache/snapshots";
+import { useViewRefresh } from "../../shared/cache/useViewRefresh";
 export type ReviewKind = "diff" | "revgraph";
-const cache = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, gcTime: 120_000, retry: false },
-  },
-});
+
+/**
+ * Fixed revisions never change; have/head/shelf move with syncs and submits;
+ * the local working copy can change at any time, so it is always revalidated
+ * (the cached diff is still shown at once).
+ */
+export function reviewStaleTime(
+  kind: ReviewKind,
+  left: RevisionReference,
+  right: RevisionReference,
+) {
+  if (kind === "revgraph") return CACHE_POLICY.target.staleTime;
+  if (left.kind === "workspace" || right.kind === "workspace") return 0;
+  if (left.kind === "revision" && right.kind === "revision")
+    return CACHE_POLICY.immutable.staleTime;
+  return CACHE_POLICY.target.staleTime;
+}
 
 export function FileReviewPage({
   kind,
+  comparison,
   target,
-  locked,
-  onTargetChange,
   runtime,
   zh,
 }: {
   kind: ReviewKind;
+  comparison?: RevisionComparison;
   target: string;
+  // Path editing lives in the dock target bar; these stay for caller parity.
   locked: boolean;
   onTargetChange(path: string): void;
   runtime: RuntimeInfo;
   zh: boolean;
 }) {
-  const [path, setPath] = useState(() => target);
-  const [queryPath, setQueryPath] = useState(path);
+  const remoteReady =
+    runtime.p4Version !== "loading" && runtime.connection.state === "connected";
+  const [queryPath, setQueryPath] = useState(target);
+  const refreshSlot = useContext(PageRefreshSlotContext);
   const [ownedData, setOwnedData] = useState<{
     owner: string;
     value: DiffResult | RevisionGraph;
@@ -59,13 +89,24 @@ export function FileReviewPage({
   }>();
   const [refresh, setRefresh] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [focusMode, setFocusMode] = useState<GraphFocusMode>("target");
+  const [graphTarget, setGraphTarget] = useState("");
+  const [laneOverride, setLaneOverride] = useState<Set<string>>();
+  const graphReads = useRef(0);
+  const [readCount, setReadCount] = useState(0);
+  const [snapshotTime, setSnapshotTime] = useState(0);
+
   const [selectedNode, setSelectedNode] = useState("");
-  const [leftReference, setLeftReference] = useState<RevisionReference>({
-    kind: "have",
-  });
-  const [rightReference, setRightReference] = useState<RevisionReference>({
-    kind: "workspace",
-  });
+  const [leftReference, setLeftReference] = useState<RevisionReference>(
+    comparison
+      ? { kind: "revision", revision: comparison.left }
+      : { kind: "have" },
+  );
+  const [rightReference, setRightReference] = useState<RevisionReference>(
+    comparison
+      ? { kind: "revision", revision: comparison.right }
+      : { kind: "workspace" },
+  );
   const [graphCursor, setGraphCursor] = useState<string>();
   const [ownedNodeDiff, setOwnedNodeDiff] = useState<{
     owner: string;
@@ -74,7 +115,6 @@ export function FileReviewPage({
   }>();
   const consumedGraphCursors = useRef(new Set<string>());
   const pendingGraphCursors = useRef(new Set<string>());
-  const scroll = useRef<HTMLDivElement>(null);
   const scope = useMemo(
     () => makeReviewScope(runtime, queryPath),
     [
@@ -102,7 +142,23 @@ export function FileReviewPage({
   const currentOwner = useRef(primaryOwner);
   currentOwner.current = primaryOwner;
   const requests = useReviewRequestOwner(sessionIdentity);
-  const key = useMemo(() => ["file-review", primaryOwner], [primaryOwner]);
+  const key = useMemo(
+    () =>
+      kind === "revgraph"
+        ? graphReadKey({ scope, revisionLimit: 100 }, runtime.mode)
+        : ["target", "review", primaryOwner],
+    [primaryOwner, kind, runtime.mode],
+  );
+  const staleTime = reviewStaleTime(kind, leftReference, rightReference);
+  const refreshSeen = useRef(refresh);
+  useEffect(() => {
+    setGraphTarget("");
+    setLaneOverride(undefined);
+    setFocusMode("target");
+    graphReads.current = 0;
+    setReadCount(0);
+    setSnapshotTime(0);
+  }, [primaryOwner]);
   const displayCurrent =
     target === queryPath && runtime.p4Version !== "loading";
   const data =
@@ -115,7 +171,6 @@ export function FileReviewPage({
       ? ownedError.message
       : "";
   useEffect(() => {
-    setPath(target);
     setQueryPath(target);
   }, [target]);
   useEffect(() => {
@@ -129,15 +184,75 @@ export function FileReviewPage({
     requests.cancel("graph-page");
     requests.cancel("graph-expand");
     requests.cancel("node-diff");
-    const lease = requests.start("primary", primaryIdentity);
+    const forced = refreshSeen.current !== refresh;
+    refreshSeen.current = refresh;
+    const cached = appCache.getQueryData<DiffResult | RevisionGraph>(key);
+    setSnapshotTime(appCache.getQueryState(key)?.dataUpdatedAt ?? 0);
+    if (cached && !forced && isFresh(key, staleTime)) {
+      // Fresh target data: show it without asking P4.
+      if (ownedData?.owner !== primaryOwner) {
+        setSelectedNode("");
+        setOwnedNodeDiff(undefined);
+        consumedGraphCursors.current.clear();
+        pendingGraphCursors.current.clear();
+        setOwnedData({ owner: primaryOwner, value: cached });
+        if ("nodes" in cached) setGraphCursor(cached.nextCursor);
+      }
+      setOwnedError(undefined);
+      setLoadingOwner("");
+      return;
+    }
+    if (!remoteReady) {
+      setOwnedData((previous) =>
+        previous?.owner === primaryOwner
+          ? previous
+          : cached
+            ? { owner: primaryOwner, value: cached }
+            : undefined,
+      );
+      setOwnedError(undefined);
+      setLoadingOwner("");
+      return;
+    }
+    if (
+      kind === "revgraph" &&
+      (/[\r\n\0*]/.test(queryPath) ||
+        queryPath.includes("...") ||
+        graphReads.current >= GRAPH_BUDGET)
+    ) {
+      setOwnedError({
+        owner: primaryOwner,
+        message: zh
+          ? "请选择单个文件；读取预算已达上限时请手动刷新。"
+          : "Select a single file; refresh manually when the read budget is exhausted.",
+      });
+      return;
+    }
+    const lease = requests.start(
+      "primary",
+      primaryIdentity,
+      kind !== "revgraph",
+    );
     setLoadingOwner(primaryOwner);
     setOwnedError(undefined);
-    setSelectedNode("");
-    setOwnedNodeDiff(undefined);
+    if (ownedData?.owner !== primaryOwner) {
+      setSelectedNode("");
+      setOwnedNodeDiff(undefined);
+    }
     consumedGraphCursors.current.clear();
     pendingGraphCursors.current.clear();
-    const cached = cache.getQueryData<DiffResult | RevisionGraph>(key);
-    setOwnedData(cached ? { owner: primaryOwner, value: cached } : undefined);
+    // Stale data stays visible while the replacement loads.
+    setOwnedData((previous) =>
+      previous?.owner === primaryOwner
+        ? previous
+        : cached
+          ? { owner: primaryOwner, value: cached }
+          : undefined,
+    );
+    if (kind === "revgraph") {
+      graphReads.current++;
+      setReadCount(graphReads.current);
+    }
     const request =
       kind === "diff"
         ? backend.getDiff({
@@ -147,17 +262,19 @@ export function FileReviewPage({
             refresh: refresh > 0,
             operationId: lease.operationId,
           })
-        : backend.getRevisionGraph({
-            scope,
-            revisionLimit: 100,
-            refresh: refresh > 0,
-            operationId: lease.operationId,
-          });
+        : readGraph(
+            { scope, revisionLimit: 100, refresh: forced },
+            runtime.mode,
+            lease.signal,
+          );
     void request
       .then((result) => {
         if (!requests.isCurrent(lease) || currentOwner.current !== primaryOwner)
           return;
-        cache.setQueryData(key, result);
+        if (kind === "diff") writeSnapshot(key, result);
+        setSnapshotTime(
+          appCache.getQueryState(key)?.dataUpdatedAt ?? Date.now(),
+        );
         setOwnedData({ owner: primaryOwner, value: result });
         if ("nodes" in result) setGraphCursor(result.nextCursor);
       })
@@ -174,22 +291,35 @@ export function FileReviewPage({
           setLoadingOwner("");
       });
     return () => requests.cancel("primary");
-  }, [primaryOwner, kind, queryPath, runtime.p4Version, refresh]);
+  }, [primaryOwner, kind, queryPath, remoteReady, refresh]);
   const diff = data && "unified" in data ? data : undefined;
-  const graph = data && "nodes" in data ? data : undefined;
-  const lines = useMemo(
-    () => (diff?.unified ? diff.unified.split("\n") : []),
-    [diff],
+  const rawGraph = data && "nodes" in data ? data : undefined;
+  const sourceId =
+    selectedNode ||
+    rawGraph?.nodes
+      .filter((n) => !n.missing)
+      .sort(
+        (a, b) =>
+          (b.depotPath === queryPath ? 1 : 0) -
+            (a.depotPath === queryPath ? 1 : 0) || b.revision - a.revision,
+      )[0]?.id ||
+    "";
+  const evidence = useMemo(
+    () =>
+      rawGraph
+        ? focusEvidence(rawGraph, sourceId, graphTarget, focusMode)
+        : undefined,
+    [rawGraph, sourceId, graphTarget, focusMode],
   );
-  const virtual = useVirtualizer({
-    count: lines.length,
-    getScrollElement: () => scroll.current,
-    estimateSize: () => 24,
-    overscan: 15,
-  });
+  const visiblePaths =
+    laneOverride ?? evidence?.relevantPaths ?? new Set<string>();
+  const graph = useMemo(
+    () => (rawGraph ? projectGraph(rawGraph, visiblePaths) : undefined),
+    [rawGraph, visiblePaths],
+  );
   const graphIndex = useMemo(
-    () => new Map(graph?.nodes.map((node) => [node.id, node]) ?? []),
-    [graph],
+    () => new Map(rawGraph?.nodes.map((node) => [node.id, node]) ?? []),
+    [rawGraph],
   );
   const bounds = useMemo(
     () =>
@@ -209,25 +339,51 @@ export function FileReviewPage({
       ? ownedNodeDiff.value
       : undefined;
   const menu = useContextMenu();
-  const textSelection = useFullTextSelection();
+  const openChangeDetails = useChangeDetails();
   const selection = useRecordSelection(
     graph?.nodes ?? [],
     (n) => n.id,
     queryPath,
   );
   const reload = () => {
-    void cache
-      .invalidateQueries({ queryKey: key })
+    if (kind === "revgraph") {
+      graphReads.current = 0;
+      setReadCount(0);
+      setLaneOverride(undefined);
+      setSelectedNode("");
+      setOwnedNodeDiff(undefined);
+    }
+    void appCache
+      .invalidateQueries(
+        kind === "revgraph"
+          ? {
+              predicate: (query) => {
+                const [category, domain, mode, candidate] = query.queryKey;
+                return (
+                  category === "target" &&
+                  domain === "focused-graph" &&
+                  mode === runtime.mode &&
+                  !!candidate &&
+                  typeof candidate === "object" &&
+                  JSON.stringify({ ...candidate, fileIdentity: "" }) ===
+                    JSON.stringify({ ...scope, fileIdentity: "" })
+                );
+              },
+            }
+          : { queryKey: key },
+      )
       .then(() => setRefresh((v) => v + 1));
   };
-  useEffect(() => {
-    const autoRefresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
-      if (detail?.activePage === kind) reload();
-    };
-    window.addEventListener("p4deck:auto-refresh", autoRefresh);
-    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
-  }, [kind, primaryOwner]);
+  // Auto-refresh and stale tab activation revalidate in the background.
+  useViewRefresh(
+    kind,
+    key,
+    () => {
+      if (kind === "diff" && !loading && queryPath) reload();
+    },
+    staleTime,
+    { automatic: kind !== "revgraph" },
+  );
   const compareGraphNode = () => {
     if (!selected) return;
     const pair = graphNodeDiffPair(selected);
@@ -272,7 +428,10 @@ export function FileReviewPage({
     const cursor = graphCursor;
     if (
       !cursor ||
-      !graph ||
+      !rawGraph ||
+      loading ||
+      !remoteReady ||
+      graphReads.current >= GRAPH_BUDGET ||
       consumedGraphCursors.current.has(cursor) ||
       pendingGraphCursors.current.has(cursor)
     )
@@ -285,17 +444,17 @@ export function FileReviewPage({
       "graph-page",
       { cursor },
     );
-    const lease = requests.start("graph-page", identity);
+    const lease = requests.start("graph-page", identity, false);
+    graphReads.current++;
+    setReadCount(graphReads.current);
     const ownerAtStart = primaryOwner;
     setLoadingOwner(ownerAtStart);
     setOwnedError(undefined);
-    void backend
-      .getRevisionGraph({
-        scope,
-        revisionLimit: 100,
-        cursor,
-        operationId: lease.operationId,
-      })
+    void readGraph(
+      { scope, revisionLimit: 100, cursor },
+      runtime.mode,
+      lease.signal,
+    )
       .then((result) => {
         if (!requests.isCurrent(lease) || currentOwner.current !== ownerAtStart)
           return;
@@ -309,7 +468,7 @@ export function FileReviewPage({
           const base =
             current?.owner === ownerAtStart && "nodes" in current.value
               ? current.value
-              : graph;
+              : rawGraph;
           const merged = mergeRevisionGraphs(base, result);
           return {
             owner: ownerAtStart,
@@ -320,7 +479,7 @@ export function FileReviewPage({
                   nextCursor: undefined,
                   partial: true,
                 }
-              : merged,
+              : { ...merged, partial: merged.partial || base.partial },
           };
         });
         setGraphCursor(nonProgressing ? undefined : result.nextCursor);
@@ -346,38 +505,61 @@ export function FileReviewPage({
           setLoadingOwner("");
       });
   };
-  const expandGraphNode = () => {
-    if (!selected?.missing || selected.revision < 1 || !graph) return;
-    const expandScope = makeReviewScope(runtime, selected.depotPath);
+  const expandGraphNode = (path = selected?.depotPath) => {
+    if (
+      !path ||
+      !validGraphPath(path) ||
+      !rawGraph ||
+      loading ||
+      !remoteReady ||
+      graphReads.current >= GRAPH_BUDGET
+    )
+      return;
+    const expandScope = makeReviewScope(runtime, path);
     const identity = reviewRequestIdentity(
       runtime,
       expandScope,
       "revgraph",
       "graph-expand",
-      { nodeId: selected.id, expandTarget: selected.depotPath },
+      { expandTarget: path },
     );
-    const lease = requests.start("graph-expand", identity);
+    const lease = requests.start("graph-expand", identity, false);
     const ownerAtStart = primaryOwner;
+    graphReads.current++;
+    setReadCount(graphReads.current);
+    setLoadingOwner(ownerAtStart);
     setOwnedError(undefined);
-    void backend
-      .getRevisionGraph({
-        scope: expandScope,
-        revisionLimit: 100,
-        operationId: lease.operationId,
-      })
+    void readGraph(
+      { scope: expandScope, revisionLimit: 100 },
+      runtime.mode,
+      lease.signal,
+    )
       .then((result) => {
         if (!requests.isCurrent(lease) || currentOwner.current !== ownerAtStart)
           return;
+        const stamp =
+          appCache.getQueryState(
+            graphReadKey(
+              { scope: expandScope, revisionLimit: 100 },
+              runtime.mode,
+            ),
+          )?.dataUpdatedAt ?? 0;
+        setSnapshotTime((previous) => Math.min(previous, stamp));
         setOwnedData((current) => {
           const base =
             current?.owner === ownerAtStart && "nodes" in current.value
               ? current.value
-              : graph;
+              : rawGraph;
           const merged = mergeRevisionGraphs(base, result);
           return {
             owner: ownerAtStart,
             value: {
               ...merged,
+              partial:
+                merged.partial ||
+                base.partial ||
+                result.partial ||
+                result.hasMore,
               nextCursor: base.nextCursor,
               hasMore: base.hasMore,
             },
@@ -392,84 +574,53 @@ export function FileReviewPage({
         )
           setOwnedError({ owner: ownerAtStart, message: String(cause) });
       })
-      .finally(() => requests.finish(lease));
+      .finally(() => {
+        if (requests.finish(lease) && currentOwner.current === ownerAtStart)
+          setLoadingOwner("");
+      });
   };
-  return (
-    <section
-      className="workspaces-page file-review-page"
-      ref={textSelection.surfaceRef}
-    >
-      <header className="section-title">
-        <div>
-          <span className="workspace-eyebrow">PERFORCE / FILE REVIEW</span>
-          <h1>{kind === "diff" ? "Diff" : "Rev Graph"}</h1>
-          <p>
-            {kind === "diff"
-              ? zh
-                ? "查看文件差异，新增与删除逐行高亮。"
-                : "Inspect file differences with highlighted additions and deletions."
-              : zh
-                ? "查看文件版本与分支、合并关系。"
-                : "Explore file revisions, branches and integration relationships."}
-          </p>
-        </div>
-        <button disabled={loading || !queryPath} onClick={reload}>
-          <RefreshCw size={15} className={loading ? "spin" : ""} />
-          {zh ? "刷新" : "Refresh"}
-        </button>
-        <SwarmAction
+  const refreshButton =
+    refreshSlot &&
+    createPortal(
+      <button
+        type="button"
+        title={zh ? "刷新" : "Refresh"}
+        aria-label={zh ? "刷新" : "Refresh"}
+        aria-busy={loading}
+        disabled={loading || !queryPath || !remoteReady}
+        onClick={reload}
+      >
+        <RefreshCw
+          size={14}
+          className={loading ? "spin" : ""}
+          aria-hidden="true"
+        />
+      </button>,
+      refreshSlot,
+    );
+  if (kind === "diff")
+    return (
+      <section className="workspaces-page file-review-page diff-page">
+        {refreshButton}
+        <DiffView
+          key={primaryOwner}
+          diff={diff}
+          path={queryPath}
+          loading={loading}
+          error={error}
+          left={leftReference}
+          right={rightReference}
+          onLeftChange={setLeftReference}
+          onRightChange={setRightReference}
+          onRefresh={reload}
           runtime={runtime}
           zh={zh}
-          target={{ kind: "file", depotPath: queryPath }}
         />
-      </header>
-      <form
-        className="history-path"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const value = path.trim();
-          if (!value || locked) return;
-          onTargetChange(value);
-          if (value === queryPath) reload();
-          else {
-            setQueryPath(value);
-            scroll.current?.scrollTo(0, 0);
-          }
-        }}
-      >
-        <input
-          disabled={locked}
-          aria-label={kind === "diff" ? "Diff 文件路径" : "Rev Graph 文件路径"}
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          placeholder={
-            zh
-              ? "输入 Depot 或本地文件路径"
-              : "Enter a depot or local file path"
-          }
-        />
-        <button type="submit" disabled={locked || !path.trim() || loading}>
-          {zh ? "查看" : "Load"}
-        </button>
-      </form>
-      {kind === "diff" && (
-        <div
-          className="review-selectors"
-          aria-label={zh ? "差异版本选择" : "Diff references"}
-        >
-          <ReferenceSelector
-            label={zh ? "左侧" : "Left"}
-            value={leftReference}
-            onChange={setLeftReference}
-          />
-          <span aria-hidden="true">↔</span>
-          <ReferenceSelector
-            label={zh ? "右侧" : "Right"}
-            value={rightReference}
-            onChange={setRightReference}
-          />
-        </div>
-      )}
+      </section>
+    );
+  return (
+    <section className="workspaces-page file-review-page">
+      {refreshButton}
       {error && (
         <div role="alert" className="workspace-load-error">
           {error}
@@ -489,55 +640,98 @@ export function FileReviewPage({
           修订图重置缩放: action(() => setZoom(1)),
         }))}
       >
+        {rawGraph && evidence && (
+          <GraphFocusPanel
+            graph={rawGraph}
+            sourceId={sourceId}
+            onSource={(id) => {
+              setSelectedNode(id);
+              setLaneOverride(undefined);
+            }}
+            target={graphTarget}
+            onTarget={(value) => {
+              setGraphTarget(value);
+              setLaneOverride(undefined);
+            }}
+            mode={focusMode}
+            onMode={(value) => {
+              setFocusMode(value);
+              setLaneOverride(undefined);
+            }}
+            evidence={evidence}
+            paths={[...new Set(rawGraph.nodes.map((n) => n.depotPath))].sort()}
+            visible={visiblePaths}
+            toggle={(path) =>
+              setLaneOverride((previous) => {
+                const next = new Set(previous ?? visiblePaths);
+                if (next.has(path)) next.delete(path);
+                else next.add(path);
+                return next;
+              })
+            }
+            solo={(path) => setLaneOverride(path ? new Set([path]) : undefined)}
+            onRead={() => expandGraphNode(graphTarget)}
+            loading={loading || !remoteReady}
+            reads={readCount}
+            updatedAt={snapshotTime}
+            stale={
+              !remoteReady ||
+              !snapshotTime ||
+              Date.now() - snapshotTime >= staleTime ||
+              !isFresh(key, staleTime)
+            }
+            zh={zh}
+          />
+        )}
+        {loading && kind === "revgraph" && (
+          <button
+            onClick={() => {
+              requests.cancel("primary");
+              requests.cancel("graph-page");
+              requests.cancel("graph-expand");
+              setLoadingOwner("");
+            }}
+          >
+            {zh ? "取消读取" : "Cancel read"}
+          </button>
+        )}
         <div className="review-toolbar">
-          {kind === "diff" ? (
-            <>
-              <span>{diff?.left.label ?? "—"}</span>
-              <span>→</span>
-              <span>{diff?.right.label ?? "—"}</span>
-              <span className="filter-count">
-                +{diff?.stats.additions ?? 0} / -{diff?.stats.deletions ?? 0} ·{" "}
-                {diff?.stats.hunks ?? 0} {zh ? "个区块" : "hunks"}
+          <>
+            <span>
+              {graph?.nodes.length ?? 0} {zh ? "个版本" : "revisions"}
+            </span>
+            <span className="graph-legend">
+              {zh
+                ? "实线：版本 / 分支　虚线：合并 / 复制"
+                : "Solid: revision / branch · Dashed: merge / copy"}
+            </span>
+            {(graph?.partial || graph?.truncated) && (
+              <span role="status" className="filter-count">
+                {graph.truncated
+                  ? zh
+                    ? "已达到 2,000 版本安全上限"
+                    : "2,000-revision safety limit reached"
+                  : zh
+                    ? "记录不完整或存在尚未展开的引用节点"
+                    : "Records are incomplete or references remain unexpanded"}
               </span>
-            </>
-          ) : (
-            <>
-              <span>
-                {graph?.nodes.length ?? 0} {zh ? "个版本" : "revisions"}
-              </span>
-              <span className="graph-legend">
-                {zh
-                  ? "实线：版本 / 分支　虚线：合并 / 复制"
-                  : "Solid: revision / branch · Dashed: merge / copy"}
-              </span>
-              {(graph?.partial || graph?.truncated) && (
-                <span role="status" className="filter-count">
-                  {graph.truncated
-                    ? zh
-                      ? "已达到 2,000 节点安全上限"
-                      : "2,000-node safety limit reached"
-                    : zh
-                      ? "存在尚未展开的引用节点"
-                      : "Some referenced nodes are not expanded"}
-                </span>
-              )}
-              <button
-                aria-label="缩小"
-                onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
-              >
-                <Minus size={14} />
-              </button>
-              <button onClick={() => setZoom(1)}>
-                {Math.round(zoom * 100)}%
-              </button>
-              <button
-                aria-label="放大"
-                onClick={() => setZoom((v) => Math.min(3, v + 0.25))}
-              >
-                <Plus size={14} />
-              </button>
-            </>
-          )}
+            )}
+            <button
+              aria-label={zh ? "缩小" : "Zoom out"}
+              onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
+            >
+              <Minus size={14} />
+            </button>
+            <button onClick={() => setZoom(1)}>
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              aria-label={zh ? "放大" : "Zoom in"}
+              onClick={() => setZoom((v) => Math.min(3, v + 0.25))}
+            >
+              <Plus size={14} />
+            </button>
+          </>
         </div>
         {!queryPath ? (
           <div className="workspace-empty">
@@ -549,99 +743,6 @@ export function FileReviewPage({
           <div className="workspace-empty" role="status">
             {zh ? "正在加载…" : "Loading…"}
           </div>
-        ) : kind === "diff" ? (
-          diff?.binary || diff?.unsupported ? (
-            <div className="workspace-empty">
-              <strong>
-                {diff.reason ??
-                  (zh ? "无法显示文本差异" : "Text diff unavailable")}
-              </strong>
-              <div>
-                {diff.left.label}: {diff.left.fileType ?? "unknown"} ·{" "}
-                {diff.left.size ?? 0} bytes · {diff.left.digest ?? "no digest"}
-              </div>
-              <div>
-                {diff.right.label}: {diff.right.fileType ?? "unknown"} ·{" "}
-                {diff.right.size ?? 0} bytes ·{" "}
-                {diff.right.digest ?? "no digest"}
-              </div>
-            </div>
-          ) : !lines.length ? (
-            <div className="workspace-empty">
-              {error
-                ? zh
-                  ? "加载失败，请重试。"
-                  : "Loading failed. Retry."
-                : zh
-                  ? diff?.identical
-                    ? "两侧内容相同"
-                    : "没有文本差异"
-                  : diff?.identical
-                    ? "Both sides are identical"
-                    : "No text differences"}
-            </div>
-          ) : (
-            <div
-              ref={scroll}
-              className="diff-scroll"
-              tabIndex={0}
-              {...menu(
-                "V04",
-                () => ({
-                  复制所选文本: copy(textSelection.selectedText()),
-                  全选当前侧: {
-                    ...action(() =>
-                      textSelection.selectAll(diff?.unified ?? ""),
-                    ),
-                    label: zh ? "全选差异文本" : "Select all diff text",
-                  },
-                  "复制当前侧文件/修订标识": {
-                    ...copy(`${diff?.left.label} ↔ ${diff?.right.label}`),
-                    label: zh
-                      ? "复制两侧文件/修订标识"
-                      : "Copy both file/revision identifiers",
-                  },
-                  "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
-                    kind: "file",
-                    depotPath: queryPath,
-                  }),
-                }),
-                { title: "统一差异 / Unified diff" },
-              )}
-            >
-              <div
-                className="virtual-spacer"
-                style={{ height: virtual.getTotalSize() }}
-              >
-                {virtual.getVirtualItems().map((row) => {
-                  const line = lines[row.index];
-                  const style =
-                    line.startsWith("@@") ||
-                    line.startsWith("+++") ||
-                    line.startsWith("---")
-                      ? "meta"
-                      : line.startsWith("+")
-                        ? "added"
-                        : line.startsWith("-")
-                          ? "removed"
-                          : "context";
-                  return (
-                    <div
-                      key={row.index}
-                      className={`diff-line ${style}`}
-                      style={{
-                        height: row.size,
-                        transform: `translateY(${row.start}px)`,
-                      }}
-                    >
-                      <span className="diff-line-number">{row.index + 1}</span>
-                      <code>{line || " "}</code>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )
         ) : !graph?.nodes.length ? (
           <div className="workspace-empty">
             {error
@@ -661,9 +762,22 @@ export function FileReviewPage({
               height={bounds.height * zoom}
               viewBox={`0 0 ${bounds.width} ${bounds.height}`}
             >
+              {graph.lanes.map((path, lane) => (
+                <g key={path} className="graph-track">
+                  <line
+                    x1={0}
+                    x2={bounds.width}
+                    y1={80 + lane * 130}
+                    y2={80 + lane * 130}
+                  />
+                  <text x={8} y={24 + lane * 130}>
+                    {path}
+                  </text>
+                </g>
+              ))}
               {graph.edges.map((edge) => {
-                const a = graphIndex.get(edge.source),
-                  b = graphIndex.get(edge.target);
+                const a = graph.nodes.find((n) => n.id === edge.source),
+                  b = graph.nodes.find((n) => n.id === edge.target);
                 return a && b ? (
                   <line
                     key={edge.id}
@@ -671,7 +785,7 @@ export function FileReviewPage({
                     y1={a.y}
                     x2={b.x}
                     y2={b.y}
-                    className={edge.kind}
+                    className={`${edge.kind} ${evidence?.edges.some((e) => e.id === edge.id) ? "is-evidence" : ""}`}
                   >
                     <title>{edge.relationship}</title>
                   </line>
@@ -683,7 +797,7 @@ export function FileReviewPage({
                   role="button"
                   tabIndex={0}
                   aria-label={`${node.label}, CL ${node.changelistId}`}
-                  className={selection.isSelected(node) ? "selected" : ""}
+                  className={`${node.id === sourceId ? "selected" : ""} graph-lane-${graph.lanes.indexOf(node.depotPath) % 4}`}
                   transform={`translate(${node.x},${node.y})`}
                   onClick={(event) => {
                     if (node.id !== selectedNode) {
@@ -714,6 +828,12 @@ export function FileReviewPage({
                       "复制 Depot 路径": copy(node.depotPath),
                       复制精确修订标识: copy(
                         `${node.depotPath}#${node.revision}`,
+                      ),
+                      "打开所属 CL": action((source) =>
+                        openChangeDetails?.(
+                          { kind: "submitted", changeId: node.changelistId },
+                          source,
+                        ),
                       ),
                       "复制 CL 编号": copy(node.changelistId),
                       "在 Swarm 中打开": swarmMenuAction(runtime, zh, {
@@ -747,7 +867,7 @@ export function FileReviewPage({
                     {node.label}
                   </text>
                   <text className="graph-label" textAnchor="middle" y={46}>
-                    CL {node.changelistId}
+                    CL {node.changelistId || "?"}
                   </text>
                 </g>
               ))}
@@ -760,12 +880,22 @@ export function FileReviewPage({
                 {zh ? "比较所选版本与上一版" : "Diff selected against previous"}
               </button>
               {selected?.missing && selected.revision > 0 && (
-                <button onClick={expandGraphNode}>
+                <button
+                  disabled={
+                    loading || !remoteReady || readCount >= GRAPH_BUDGET
+                  }
+                  onClick={() => expandGraphNode()}
+                >
                   {zh ? "展开所选引用节点" : "Expand selected reference"}
                 </button>
               )}
               {graph.hasMore && graphCursor && (
-                <button disabled={loading} onClick={loadMoreGraph}>
+                <button
+                  disabled={
+                    loading || !remoteReady || readCount >= GRAPH_BUDGET
+                  }
+                  onClick={loadMoreGraph}
+                >
                   {zh ? "展开更多版本" : "Expand more revisions"}
                 </button>
               )}
@@ -782,85 +912,12 @@ export function FileReviewPage({
             )}
           </div>
         )}
-        {textSelection.dialog}
         <footer className="review-footer">
           {selected
-            ? `${selected.depotPath}#${selected.revision} · CL ${selected.changelistId}`
+            ? `${selected.depotPath}#${selected.revision} · CL ${selected.changelistId || "?"} · ${selected.action} · ${selected.fileType || "—"}`
             : queryPath || "—"}
         </footer>
       </section>
     </section>
-  );
-}
-
-function ReferenceSelector({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: RevisionReference;
-  onChange(value: RevisionReference): void;
-}) {
-  return (
-    <label>
-      <span>{label}</span>
-      <select
-        aria-label={`${label} reference`}
-        value={value.kind}
-        onChange={(event) => {
-          const kind = event.target.value as RevisionReference["kind"];
-          onChange(
-            kind === "revision"
-              ? {
-                  kind,
-                  revision: value.kind === "revision" ? value.revision : 1,
-                }
-              : kind === "shelf"
-                ? {
-                    kind,
-                    changeId: value.kind === "shelf" ? value.changeId : 1,
-                  }
-                : { kind },
-          );
-        }}
-      >
-        <option value="workspace">Workspace</option>
-        <option value="have">Have</option>
-        <option value="head">Head</option>
-        <option value="revision">Revision</option>
-        <option value="shelf">Shelf</option>
-      </select>
-      {value.kind === "revision" && (
-        <input
-          aria-label={`${label} revision number`}
-          type="number"
-          min={1}
-          step={1}
-          value={value.revision}
-          onChange={(event) =>
-            onChange({
-              kind: "revision",
-              revision: Math.max(1, Number(event.target.value) || 1),
-            })
-          }
-        />
-      )}
-      {value.kind === "shelf" && (
-        <input
-          aria-label={`${label} shelf changelist`}
-          type="number"
-          min={1}
-          step={1}
-          value={value.changeId}
-          onChange={(event) =>
-            onChange({
-              kind: "shelf",
-              changeId: Math.max(1, Number(event.target.value) || 1),
-            })
-          }
-        />
-      )}
-    </label>
   );
 }

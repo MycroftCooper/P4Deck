@@ -4,6 +4,62 @@ import type {
   StreamGraphResult,
 } from "../../shared/contracts/types";
 
+/** Validate persisted display data before it reaches the graph renderer. */
+export function isStreamGraphSnapshot(
+  value: unknown,
+): value is StreamGraphResult {
+  const page = value as StreamGraphResult | undefined;
+  return (
+    !!page &&
+    Number.isSafeInteger(page.requestGeneration) &&
+    !!page.scope &&
+    Number.isSafeInteger(page.scope.contextGeneration) &&
+    ["server", "user", "client"].every(
+      (field) =>
+        typeof page.scope[field as keyof typeof page.scope] === "string",
+    ) &&
+    Array.isArray(page.nodes) &&
+    page.nodes.every(
+      (node) =>
+        !!node &&
+        typeof node.stream === "string" &&
+        !!node.flowOptions &&
+        typeof node.flowOptions === "object" &&
+        ["name", "owner", "parent", "kind", "description", "parentView"].every(
+          (field) =>
+            node[field as keyof typeof node] === undefined ||
+            typeof node[field as keyof typeof node] === "string",
+        ),
+    ) &&
+    Array.isArray(page.edges) &&
+    page.edges.every(
+      (edge) =>
+        !!edge &&
+        typeof edge.parent === "string" &&
+        typeof edge.child === "string",
+    ) &&
+    [page.roots, page.orphans, page.operationIds].every(
+      (items) =>
+        Array.isArray(items) && items.every((item) => typeof item === "string"),
+    ) &&
+    [page.hasMore, page.partial, page.truncated, page.simulated].every(
+      (flag) => typeof flag === "boolean",
+    ) &&
+    !!page.stats &&
+    [
+      "scannedCount",
+      "matchedCount",
+      "returnedCount",
+      "duplicateCount",
+      "invalidRelationCount",
+      "safetyLimit",
+    ].every((field) =>
+      Number.isFinite(page.stats[field as keyof typeof page.stats]),
+    ) &&
+    (page.cacheFreshness === "fresh" || page.cacheFreshness === "cached")
+  );
+}
+
 export type StreamGraphRelation =
   "root" | "child" | "orphan" | "unloadedParent";
 

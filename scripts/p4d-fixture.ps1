@@ -204,6 +204,10 @@ function Invoke-FixtureP4 {
         [switch]$AllowFailure
     )
 
+    Assert-NoAmbientP4Configuration
+    if (-not (Test-PortOpen)) {
+        throw "Fixture listener is not available. No P4 command was started."
+    }
     $result = Invoke-WithFixtureEnvironment {
         $allArguments = @("-p", $ServerAddress, "-u", $FixtureUser, "-c", $FixtureClient) + $Arguments
         $quotedArguments = $allArguments | ForEach-Object {
@@ -276,18 +280,55 @@ function Get-FixtureServerId {
     return $null
 }
 
-function Test-PortOpen {
-    $client = [Net.Sockets.TcpClient]::new()
-    try {
-        $task = $client.ConnectAsync("127.0.0.1", $Port)
-        return $task.Wait(300) -and $client.Connected
+function Assert-NoAmbientP4Configuration {
+    # Reject rather than silently remove inherited settings or touch global state.
+    # Only P4Deck's own test metadata is exempt; values are never printed.
+    $ambient = @(Get-ChildItem Env: | Where-Object {
+        $_.Name -like "P4*" -and $_.Name -notlike "P4DECK_*"
+    })
+    if ($ambient.Count -gt 0) {
+        throw "Inherited P4 settings are present. Fixture execution is blocked."
     }
-    catch {
+    foreach ($key in @("HKCU:\Software\Perforce\Environment", "HKLM:\Software\Perforce\Environment")) {
+        if (Test-Path -LiteralPath $key -ErrorAction Stop) {
+            $settings = @((Get-Item -LiteralPath $key -ErrorAction Stop).GetValueNames() | Where-Object {
+                $_ -like "P4*" -and $_ -ne "P4INSTROOT"
+            })
+            if ($settings.Count -gt 0) {
+                throw "Global P4 settings are present. Fixture execution is blocked."
+            }
+        }
+    }
+    if ((Test-Path -LiteralPath $EnviroFile -ErrorAction Stop) -and
+        (Get-Item -LiteralPath $EnviroFile -ErrorAction Stop).Length -gt 0) {
+        throw "Fixture P4ENVIRO is not empty. Fixture execution is blocked."
+    }
+}
+
+function Test-PortOpen {
+    # OS metadata only: never probe an unverified loopback service over TCP.
+    # Enumerate first so an empty result is distinct from a denied CIM query.
+    $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object LocalPort -EQ $Port)
+    if ($listeners.Count -eq 0) {
         return $false
     }
-    finally {
-        $client.Dispose()
+    if ($listeners.Count -ne 1 -or $listeners[0].LocalAddress -ne "127.0.0.1") {
+        throw "Fixture port has an unexpected listener. No connection was attempted."
     }
+    $ownerId = [int]$listeners[0].OwningProcess
+    $owners = @(Get-CimInstance Win32_Process -Filter "ProcessId = $ownerId" -ErrorAction Stop)
+    if ($owners.Count -ne 1 -or $owners[0].ExecutablePath -ne $P4dBin) {
+        throw "Fixture listener owner could not be verified. No connection was attempted."
+    }
+    $expectedArguments = '-r "{0}" -p {1} -L "{2}" -J "{3}"' -f $ServerRoot, $ServerAddress, $LogFile, $JournalFile
+    $executablePattern = '^(?:"{0}"|{0})\s+' -f [regex]::Escape($P4dBin)
+    $commandLine = [string]$owners[0].CommandLine
+    if ($commandLine -notmatch $executablePattern -or
+        ($commandLine -replace $executablePattern, '') -cne $expectedArguments) {
+        throw "Fixture listener arguments could not be verified. No connection was attempted."
+    }
+    Assert-FixtureTools
+    return $true
 }
 
 function Assert-RunningServerIsFixture {
@@ -413,12 +454,16 @@ Description:
 }
 
 function Start-Fixture {
+    Assert-NoAmbientP4Configuration
     Assert-FixtureTools
+    # Check ownership before initializing files or spawning any P4 executable.
+    $alreadyRunning = Test-PortOpen
     New-Item -ItemType Directory -Path $ServerRoot, $ClientRoot -Force | Out-Null
     Initialize-FixtureServerId
 
-    if (Test-PortOpen) {
+    if ($alreadyRunning) {
         Assert-RunningServerIsFixture
+        Initialize-FixtureLogin
         Write-Host "Fixture already running at $ServerAddress."
         Write-FixtureEnvironmentFile
         return

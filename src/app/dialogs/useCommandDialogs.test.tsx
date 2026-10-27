@@ -89,6 +89,22 @@ it("cancels awaited revisions on connection change without leaking a later modal
   expect(await result).toBeNull();
   expect(document.querySelector("dialog")).toBeNull();
 });
+it("cancels a checkout destination selection when the workspace changes", async () => {
+  await harness.render(<Harness />);
+  let result!: ReturnType<typeof api.checkout>;
+  await act(async () => {
+    result = api.checkout({
+      changes: [],
+      count: 1,
+      recursive: false,
+      source: null,
+    });
+  });
+  expect(document.body.textContent).toContain("选择签出目标 CL");
+  await harness.render(<Harness scope="new-workspace" />);
+  expect(await result).toBeNull();
+  expect(document.querySelector("dialog")).toBeNull();
+});
 it("connects the shared submit dialog to preflight and confirmation adapters", async () => {
   const change = {
     id: 10,

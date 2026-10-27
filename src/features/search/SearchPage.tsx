@@ -1,3 +1,4 @@
+import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   AlertTriangle,
   ArrowDown,
@@ -622,17 +623,12 @@ export function SearchPage({
       <div className="search-live" role="status" aria-live="polite">
         {statusText}
       </div>
-      <header className="search-heading">
-        <div>
-          <span className="search-eyebrow">P4DECK / SEARCH</span>
-          <h1>{tr("全局搜索", "Global search")}</h1>
-          <p>
-            {tr(
-              "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
-              "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
-            )}
-          </p>
-        </div>
+      <FixedPageHeader
+        description={tr(
+          "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
+          "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
+        )}
+      >
         {mock ? (
           <span className="search-ui-badge">
             {tr("模拟结果 · 未访问 P4", "Simulated · No P4 access")}
@@ -642,7 +638,7 @@ export function SearchPage({
             {tr("真实 P4 搜索", "Live P4 search")}
           </span>
         )}
-      </header>
+      </FixedPageHeader>
 
       {mock ? (
         <div className="search-ui-note">

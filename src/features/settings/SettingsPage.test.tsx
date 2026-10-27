@@ -12,6 +12,10 @@ import { defaultUi } from "./preferences";
 import { SettingsPage } from "./SettingsPage";
 
 const backend = vi.hoisted(() => ({
+  listConfigBackups: vi.fn(),
+  createConfigBackup: vi.fn(),
+  restoreConfigBackup: vi.fn(),
+  openConfigBackupsFolder: vi.fn(),
   listConnectionProfiles: vi.fn(),
   createConnectionProfile: vi.fn(),
   updateConnectionProfile: vi.fn(),
@@ -175,6 +179,13 @@ function dialogInput(label: string) {
   return owner.querySelector<HTMLInputElement>("input")!;
 }
 
+function dialogCheckbox(labelText: string) {
+  const owner = [
+    ...document.querySelectorAll<HTMLLabelElement>("dialog label"),
+  ].find((item) => item.textContent?.includes(labelText))!;
+  return owner.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+}
+
 async function change(control: HTMLInputElement, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -219,6 +230,11 @@ beforeEach(() => {
   onRuntime.mockReset();
   for (const mock of Object.values(backend)) mock.mockReset();
   backend.listConnectionProfiles.mockResolvedValue(profilesDocument());
+  backend.listConfigBackups.mockResolvedValue({
+    directory: "C:\\app-data\\backups",
+    backups: [],
+  });
+  backend.openConfigBackupsFolder.mockResolvedValue(undefined);
   backend.discoverP4Cli.mockResolvedValue({
     state: "notTested",
     executable: "C:\\fixture\\p4.exe",
@@ -317,6 +333,62 @@ it("renders saved connections with friendly current and status labels while hidi
     expect(host.textContent).not.toContain("structured backend status");
     expect(host.textContent).not.toContain("页签行为");
   }
+});
+
+it("creates and stages the non-secret layout backup while preserving terminal history", async () => {
+  const backup = {
+    fileName: "p4deck-config-manual-safe.json",
+    createdAt: "2026-10-22T10:00:00Z",
+    sizeBytes: 4096,
+    kind: "manual" as const,
+    includesConnection: true,
+    includesWindowPlacement: true,
+    localStorageKeys: ["p4deck.ui"],
+  };
+  backend.listConfigBackups.mockResolvedValue({
+    directory: "C:\\app-data\\backups",
+    backups: [backup],
+  });
+  backend.createConfigBackup.mockResolvedValue({
+    backup,
+    omittedLocalStorageKeys: ["p4deck.terminalHistory"],
+  });
+  backend.restoreConfigBackup.mockResolvedValue({
+    sourceFileName: backup.fileName,
+    rollbackFileName: "p4deck-config-pre-restore-safe.json",
+    localStorage: [
+      { key: "p4deck.ui", value: '{"compact":true}' },
+      { key: "p4deck.panel.diff", value: '{"target":"//depot/a"}' },
+    ],
+    restartRequired: true,
+  });
+  localStorage.setItem("p4deck.ui", '{"compact":false}');
+  localStorage.setItem("p4deck.terminalHistory", '["p4 print //depot/secret"]');
+  localStorage.setItem("p4deck.fileSelection", '{"path":"//depot/private"}');
+
+  await render();
+  await act(async () => button("创建本地备份").click());
+  expect(backend.createConfigBackup).toHaveBeenCalledWith({
+    localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+  });
+  expect(host.textContent).toContain("已创建 p4deck-config-manual-safe.json");
+  expect(host.textContent).toContain("1 个临时/敏感键");
+
+  await act(async () => button("恢复").click());
+  expect(backend.restoreConfigBackup).toHaveBeenCalledWith({
+    fileName: backup.fileName,
+    localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+  });
+  expect(localStorage.getItem("p4deck.ui")).toBe('{"compact":true}');
+  expect(localStorage.getItem("p4deck.panel.diff")).toBe(
+    '{"target":"//depot/a"}',
+  );
+  expect(localStorage.getItem("p4deck.terminalHistory")).toContain("secret");
+  expect(localStorage.getItem("p4deck.fileSelection")).toContain("private");
+  expect(host.textContent).toContain("完全退出并重新打开 P4Deck");
+
+  await act(async () => button("打开备份文件夹").click());
+  expect(backend.openConfigBackupsFolder).toHaveBeenCalledOnce();
 });
 
 it("re-resolves an existing saved Workspace Root instead of trusting its stored cwd", async () => {
@@ -802,11 +874,7 @@ it("preflights and confirms self-service user creation before filling without sa
     "userSelf",
   );
   expect(input("用户").value).toBe("tester");
-  await act(async () =>
-    document
-      .querySelector<HTMLInputElement>('dialog input[type="checkbox"]')!
-      .click(),
-  );
+  await act(async () => dialogCheckbox("我确认在").click());
   await act(async () => dialogButton("确认创建").click());
   expect(backend.confirmCreateConnectionUser).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -820,6 +888,102 @@ it("preflights and confirms self-service user creation before filling without sa
   expect(input("用户").value).toBe("new-user");
   expect(backend.createConnectionProfile).not.toHaveBeenCalled();
   expect(backend.setActiveConnectionProfile).not.toHaveBeenCalled();
+});
+
+it("sends virtual sync when P4VFS is explicitly selected", async () => {
+  backend.preflightCreateConnectionWorkspace.mockImplementation(
+    async (request: { requestGeneration: number; plan: { name: string } }) => ({
+      ready: true,
+      kind: "workspace",
+      name: request.plan.name,
+      requestGeneration: request.requestGeneration,
+      stateDigest: "workspace-state",
+      token: "workspace-token",
+      expiresAt: Date.now() + 60_000,
+      blockers: [],
+      warnings: [],
+      operationIds: ["workspace-preflight"],
+      simulated: true,
+    }),
+  );
+  backend.confirmCreateConnectionWorkspace.mockResolvedValue({
+    outcome: "created",
+    kind: "workspace",
+    name: "new-workspace",
+    message: "Browser Mock simulated workspace creation.",
+    operationIds: ["workspace-confirm"],
+    simulated: true,
+    workspace: {
+      name: "new-workspace",
+      owner: "tester",
+      host: "",
+      root: "D:\\work\\new-workspace",
+      stream: "//depot/main",
+      description: "",
+      updated: null,
+      accessed: null,
+      rootStatus: "usable",
+      selectable: true,
+    },
+  });
+  backend.browseConnectionWorkspaces.mockImplementation(
+    async (request: {
+      context: RuntimeInfo["context"];
+      requestGeneration: number;
+      operationId?: string;
+      prefix?: string;
+    }) => {
+      const name = request.prefix ?? request.context.client;
+      return {
+        requestGeneration: request.requestGeneration,
+        items: [
+          {
+            name,
+            owner: request.context.user,
+            host: "",
+            root:
+              name === "new-workspace"
+                ? "D:\\work\\new-workspace"
+                : "C:\\fixture\\workspace",
+            stream: name === "new-workspace" ? "//depot/main" : "",
+            description: "",
+            updated: null,
+            accessed: null,
+            rootStatus: "usable" as const,
+            selectable: true,
+          },
+        ],
+        partial: false,
+        truncated: false,
+        stats: { scannedCount: 1, matchedCount: 1, safetyLimit: 500 },
+        operationIds: [request.operationId ?? "workspace-root"],
+        connection: status("connected", { server: request.context.server }),
+        simulated: true,
+      };
+    },
+  );
+  await render();
+  await act(async () => fieldAction("工作区", "新建").click());
+  expect(backend.preflightCreateConnectionWorkspace).not.toHaveBeenCalled();
+  await change(dialogInput("Workspace 名称"), "new-workspace");
+  await change(dialogInput("Workspace Root"), "D:\\work\\new-workspace");
+  await change(dialogInput("Stream"), "//depot/main");
+  await act(async () => dialogCheckbox("启用 P4VFS 虚拟同步").click());
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "P4 Server 2023.1+",
+  );
+  await act(async () => dialogButton("预检").click());
+  expect(backend.preflightCreateConnectionWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: expect.objectContaining({ user: "tester", client: "" }),
+      plan: expect.objectContaining({
+        name: "new-workspace",
+        root: "D:\\work\\new-workspace",
+        mapping: { kind: "stream", stream: "//depot/main" },
+        syncMode: "virtual",
+      }),
+    }),
+  );
 });
 
 it("creates a workspace only after explicit preview and fills its server-read Root", async () => {
@@ -908,14 +1072,11 @@ it("creates a workspace only after explicit preview and fills its server-read Ro
         name: "new-workspace",
         root: "D:\\work\\new-workspace",
         mapping: { kind: "stream", stream: "//depot/main" },
+        syncMode: "standard",
       }),
     }),
   );
-  await act(async () =>
-    document
-      .querySelector<HTMLInputElement>('dialog input[type="checkbox"]')!
-      .click(),
-  );
+  await act(async () => dialogCheckbox("我确认在").click());
   await act(async () => dialogButton("确认创建").click());
   await act(async () => dialogButton("填入连接设置").click());
   expect(input("工作区").value).toBe("new-workspace");
@@ -1035,9 +1196,7 @@ it("handles revision conflicts by reloading the list while preserving the local 
   expect(host.textContent).not.toContain("Revision 5");
 });
 
-it("protects active and last profiles and requires explicit confirmation for deletion", async () => {
-  const activeDelete = host;
-  void activeDelete;
+it("allows deleting any profile and requires a modal confirmation", async () => {
   backend.deleteConnectionProfile.mockResolvedValue(
     profilesDocument([profile("primary", "Primary")], 5),
   );
@@ -1045,13 +1204,18 @@ it("protects active and last profiles and requires explicit confirmation for del
   const activeButton = host.querySelector<HTMLButtonElement>(
     'button[aria-label="删除 Primary"]',
   )!;
-  expect(activeButton.disabled).toBe(true);
+  expect(activeButton.disabled).toBe(false);
   const secondaryDelete = host.querySelector<HTMLButtonElement>(
     'button[aria-label="删除 Secondary"]',
   )!;
   await act(async () => secondaryDelete.click());
-  expect(host.querySelector('[role="alertdialog"]')).toBeTruthy();
-  await act(async () => button("确认删除").click());
+  expect(document.querySelector("dialog[open]")).toBeTruthy();
+  expect(document.activeElement).toBe(dialogButton("取消"));
+  expect(backend.deleteConnectionProfile).not.toHaveBeenCalled();
+  await act(async () => dialogButton("取消").click());
+  expect(backend.deleteConnectionProfile).not.toHaveBeenCalled();
+  await act(async () => secondaryDelete.click());
+  await act(async () => dialogButton("确认删除").click());
   expect(backend.deleteConnectionProfile).toHaveBeenCalledWith({
     expectedRevision: 4,
     id: "secondary",
@@ -1060,59 +1224,75 @@ it("protects active and last profiles and requires explicit confirmation for del
     profilesDocument([profile("primary", "Primary")], 5),
   );
   await render({ ...runtime(), contextGeneration: 2 });
-  expect(host.textContent).toContain("当前且唯一");
+  expect(host.textContent).not.toContain("当前且唯一");
   expect(
     host.querySelector<HTMLButtonElement>('button[aria-label="删除 Primary"]')!
       .disabled,
-  ).toBe(true);
+  ).toBe(false);
 });
 
-it("shows verify/commit success and consumes backend runtime generation on profile switch", async () => {
-  let resolveSwitch!: (value: RuntimeInfo) => void;
-  backend.setActiveConnectionProfile.mockReturnValue(
-    new Promise<RuntimeInfo>((resolve) => {
-      resolveSwitch = resolve;
-    }),
+it("deletes the sole active profile, publishes a disconnected runtime, and offers a new connection", async () => {
+  backend.listConnectionProfiles.mockResolvedValue(
+    profilesDocument([profile("primary", "Primary")]),
   );
-  const next = {
-    ...runtime(status("connected")),
-    activeProfileId: "secondary",
+  backend.deleteConnectionProfile.mockResolvedValue({
+    ...profilesDocument([], 5),
+    activeProfileId: undefined,
+  });
+  const disconnected = {
+    ...runtime(),
+    activeProfileId: undefined,
     contextGeneration: 2,
-    context: profile("secondary", "Secondary").context,
+    context: { server: "", user: "", client: "" },
+    connection: status("disconnected", { server: "", recovery: "editConfig" }),
   };
+  backend.runtimeInfo.mockResolvedValue(disconnected);
   await render();
-  await act(async () => button("Secondary").click());
-  const switchButton = button("连接并使用");
-  await act(async () => {
-    switchButton.click();
-    await Promise.resolve();
-  });
-  expect(host.textContent).toContain("正在验证目标连接");
-  await act(async () => resolveSwitch(next));
-  expect(onRuntime).toHaveBeenCalledWith(next);
-  expect(host.textContent).toContain("连接切换成功");
-  expect(host.textContent).toContain("旧选择、详情、搜索和日志视图已安全清理");
+  const remove = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="删除 Primary"]',
+  )!;
+  expect(remove.disabled).toBe(false);
+  await act(async () => remove.click());
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "断开连接并清空相关视图",
+  );
+  await act(async () => dialogButton("确认删除").click());
+  expect(onRuntime).toHaveBeenCalledWith(disconnected);
+  expect(host.querySelectorAll(".profile-list-item")).toHaveLength(0);
+  expect(host.textContent).toContain("尚无已保存连接");
+  expect(input("服务器").value).toBe("");
+  expect(button("新建").disabled).toBe(false);
+  expect(document.querySelector("dialog")).toBeNull();
 });
 
-it("rolls back a failed profile switch and restores focus", async () => {
-  backend.setActiveConnectionProfile.mockRejectedValue({
-    code: "connectionFailed",
-    message: "offline",
+it("can explicitly reconnect a remaining profile after the active profile was deleted", async () => {
+  const remaining = profile("secondary", "Secondary");
+  const inactive = {
+    ...profilesDocument([remaining]),
+    activeProfileId: undefined,
+  };
+  const connected = {
+    ...runtime(),
+    activeProfileId: remaining.id,
+    contextGeneration: 3,
+    context: remaining.context,
+  };
+  backend.listConnectionProfiles
+    .mockResolvedValueOnce(inactive)
+    .mockResolvedValue(profilesDocument([remaining], 5, remaining.id));
+  backend.setActiveConnectionProfile.mockResolvedValue(connected);
+  await render({
+    ...runtime(),
+    activeProfileId: undefined,
+    context: { server: "", user: "", client: "" },
+    connection: status("disconnected", { server: "" }),
   });
-  await render();
-  await act(async () => button("Secondary").click());
-  const switchButton = button("连接并使用");
-  await act(async () => {
-    switchButton.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  await act(async () => button("使用此连接").click());
+  expect(backend.setActiveConnectionProfile).toHaveBeenCalledWith({
+    expectedRevision: 4,
+    id: remaining.id,
   });
-  expect(onRuntime).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("原连接和页面数据");
-  expect(host.textContent).toContain("连接切换失败");
-  expect(document.activeElement).toBe(switchButton);
-  expect(host.querySelector('[aria-current="true"]')?.textContent).toContain(
-    "Primary",
-  );
+  expect(onRuntime).toHaveBeenCalledWith(connected);
 });
 
 it("keeps draft validation separate from activation and clears a single-use password", async () => {
@@ -1144,6 +1324,106 @@ it("never publishes an unsaved active-profile draft into the global runtime", as
   expect(onConnection).not.toHaveBeenCalled();
   expect(onRuntime).not.toHaveBeenCalled();
   expect(host.textContent).toContain("验证不会保存或切换当前连接");
+});
+
+it("publishes verification for the active connection even when only its label is unsaved", async () => {
+  const active = runtime(status("notTested"));
+  backend.listConnectionProfiles.mockResolvedValue(
+    profilesDocument([
+      { id: "primary", name: "Primary", context: active.context },
+    ]),
+  );
+  await render(active);
+  await waitForResolvedRoot();
+  await change(input("连接名称（可选）"), "Renamed locally");
+  await act(async () => button("验证这些设置").click());
+  expect(onConnection).toHaveBeenCalledWith(
+    active.context,
+    expect.objectContaining({ state: "connected" }),
+    "Rev. P4/TEST/2026.1",
+  );
+  expect(onRuntime).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("当前连接与登录已验证");
+});
+
+it("recognizes canonical Windows roots and does not mark their spelling change as an unsaved connection", async () => {
+  const active = runtime(status("notTested"));
+  const saved = { ...active.context, cwd: "c:/fixture/workspace/" };
+  backend.listConnectionProfiles.mockResolvedValue(
+    profilesDocument([{ id: "primary", name: "Primary", context: saved }]),
+  );
+  await render(active);
+  await waitForResolvedRoot();
+  expect(host.querySelector(".settings-unsaved-note")).toBeNull();
+  await act(async () => button("验证这些设置").click());
+  expect(onConnection).toHaveBeenCalledWith(
+    active.context,
+    expect.objectContaining({ state: "connected" }),
+    expect.any(String),
+  );
+});
+
+it("a late verification of an edited label cannot overwrite a newly active server", async () => {
+  const active = runtime(status("notTested"));
+  backend.listConnectionProfiles.mockResolvedValue(
+    profilesDocument([
+      { id: "primary", name: "Primary", context: active.context },
+    ]),
+  );
+  await render(active);
+  await waitForResolvedRoot();
+  await change(input("连接名称（可选）"), "Renamed locally");
+  let resolve!: (value: ConnectionStatus) => void;
+  backend.testConnection.mockReturnValue(
+    new Promise<ConnectionStatus>((done) => {
+      resolve = done;
+    }),
+  );
+  await act(async () => {
+    button("验证这些设置").click();
+    await Promise.resolve();
+  });
+  await render({
+    ...active,
+    contextGeneration: 2,
+    context: { ...active.context, server: "new-active:1666" },
+  });
+  await act(async () => resolve(status("connected")));
+  expect(onConnection).not.toHaveBeenCalled();
+});
+
+it("metadata changes preserve the verified active connection, while a different server never publishes", async () => {
+  const active = runtime();
+  backend.listConnectionProfiles.mockResolvedValue(
+    profilesDocument([
+      { id: "primary", name: "Primary", context: active.context },
+    ]),
+  );
+  backend.updateConnectionProfile.mockResolvedValue(
+    profilesDocument(
+      [{ id: "primary", name: "Renamed locally", context: active.context }],
+      5,
+    ),
+  );
+  backend.runtimeInfo.mockResolvedValue({
+    ...active,
+    contextGeneration: 2,
+    connection: status("notTested"),
+  });
+  await render(active);
+  await waitForResolvedRoot();
+  await change(input("连接名称（可选）"), "Renamed locally");
+  await act(async () => button("保存连接").click());
+  expect(onRuntime).toHaveBeenCalledWith(
+    expect.objectContaining({
+      contextGeneration: 2,
+      connection: expect.objectContaining({ state: "connected" }),
+    }),
+  );
+  onConnection.mockClear();
+  await change(input("服务器"), "different:1666");
+  await act(async () => button("验证这些设置").click());
+  expect(onConnection).not.toHaveBeenCalled();
 });
 
 it("verifies Server and User before a Workspace is selected so recovery is reachable", async () => {

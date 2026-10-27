@@ -177,6 +177,29 @@ pub struct RuntimeInfo {
     pub connection: ConnectionStatus,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct P4VfsInspectRequest {
+    pub expected_context_generation: u64,
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct P4VfsStatus {
+    pub context_generation: u64,
+    pub workspace: String,
+    pub mode: WorkspaceSyncMode,
+    pub ready: bool,
+    pub server_version: Option<String>,
+    pub server_supported: bool,
+    pub client_version: Option<String>,
+    pub client_supported: bool,
+    pub agent_configured: bool,
+    pub reason: Option<String>,
+    pub operation_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectionState {
@@ -276,6 +299,8 @@ pub struct ConnectionWorkspaceCandidate {
     pub accessed: Option<i64>,
     pub root_status: ConnectionWorkspaceRootStatus,
     pub selectable: bool,
+    #[serde(default)]
+    pub sync_mode: WorkspaceSyncMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -327,6 +352,15 @@ pub struct ConnectionClassicViewLine {
     pub client_path: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceSyncMode {
+    #[default]
+    Standard,
+    Virtual,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ConnectionWorkspaceMapping {
@@ -345,6 +379,8 @@ pub struct ConnectionWorkspaceCreatePlan {
     pub root: String,
     pub description: Option<String>,
     pub mapping: ConnectionWorkspaceMapping,
+    #[serde(default)]
+    pub sync_mode: WorkspaceSyncMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -557,8 +593,11 @@ pub struct ClQuery {
     pub clients: Vec<String>,
     pub depot_path: Option<String>,
     pub stream: Option<String>,
+    #[serde(default)]
+    pub streams: Vec<String>,
     pub from: String,
     pub to: String,
+    #[serde(default)]
     pub jobs: Vec<String>,
     pub has_job: Option<bool>,
     pub merge_classifications: Vec<MergeClassification>,
@@ -1659,6 +1698,8 @@ pub struct FileActionRequest {
     pub resolve_method: Option<String>,
     #[serde(default)]
     pub label: Option<String>,
+    #[serde(default)]
+    pub revert_whole_changelist: bool,
     /// Opt-in P4-native transfer parallelism. Kept small by the command planner.
     #[serde(default)]
     pub parallel_threads: Option<u8>,
@@ -2452,6 +2493,10 @@ pub struct DiffResult {
     pub left: DiffSide,
     pub right: DiffSide,
     pub unified: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left_text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub right_text: Option<String>,
     pub stats: DiffStats,
     pub binary: bool,
     pub unsupported: bool,
@@ -3330,4 +3375,20 @@ pub struct WorkflowResult {
     pub log_reference: Option<String>,
     pub files: Vec<WorkflowFileResult>,
     pub refresh: WorkflowRefreshAdvice,
+}
+
+#[cfg(test)]
+mod submitted_filter_contract_tests {
+    #[test]
+    fn query_without_job_filters_deserializes() {
+        let query: super::ClQuery = serde_json::from_value(serde_json::json!({
+            "operationId":"offline-test", "requestGeneration":1, "keyword":"", "users":["alice"],
+            "clients":[], "from":"2026-10-01T00:00:00Z", "to":"2026-10-26T00:00:00Z",
+            "mergeClassifications":[], "hideReliableMerges":false, "pageSize":100
+        }))
+        .unwrap();
+        assert!(query.jobs.is_empty());
+        assert_eq!(query.has_job, None);
+        assert_eq!(query.users, vec!["alice"]);
+    }
 }

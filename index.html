@@ -5,9 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101214" />
     <title>P4Deck</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: var(--bg, #f6f8f7);
+        color: var(--text, #243c33);
+      }
+      .startup-shell { height: 100vh; font: 16px system-ui, sans-serif; }
+      .startup-title { height: 48px; padding: 14px 24px; box-sizing: border-box; font-weight: 700; border-bottom: 1px solid #80808020; }
+      .startup-toolbar { height: 76px; border-bottom: 1px solid #80808020; }
+      .startup-body { display: flex; height: calc(100vh - 125px); }
+      .startup-body aside { width: 320px; border-right: 1px solid #80808020; }
+      .startup-body main { flex: 1; }
+      .startup-progress { padding: 24px; color: #60756b; }
+      .startup-recovery { position: fixed; inset: 48px 0 0; display: grid; place-content: center; gap: 16px; padding: 24px; background: #f6f8f7; color: #243c33; font: 16px system-ui, sans-serif; }
+      .startup-recovery[hidden] { display: none; }
+      .startup-recovery p { margin: 0; max-width: 560px; overflow-wrap: anywhere; }
+      .startup-recovery button { justify-self: start; padding: 10px 18px; border: 1px solid #12795d; border-radius: 6px; background: #12795d; color: white; font: inherit; cursor: pointer; }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: var(--bg, #101714);
+          color: var(--text, #dce7e0);
+        }
+        .startup-recovery { background: #101714; color: #dce7e0; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="startup-shell" aria-label="P4Deck">
+        <div class="startup-title">P4Deck</div>
+        <div class="startup-toolbar"></div>
+        <div class="startup-body"><aside></aside><main><div class="startup-progress" role="status">正在启动 P4Deck…</div></main></div>
+      </div>
+    </div>
+    <script src="/startup.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

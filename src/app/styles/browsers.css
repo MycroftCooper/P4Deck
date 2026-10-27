@@ -21,7 +21,7 @@
 }
 .workspace-runtime-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 0 0 10px;
 }
@@ -46,10 +46,17 @@
   white-space: nowrap;
 }
 .workspace-simulated-note,
+.workspace-vfs-note,
 .workspace-switch-status:not(:empty) {
   margin: 0 0 10px;
   color: var(--muted);
   font-size: 11px;
+}
+.workspace-vfs-note {
+  padding: 7px 9px;
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warning) 7%, var(--panel));
 }
 .workspace-simulated-note {
   padding: 7px 9px;
@@ -181,13 +188,18 @@
   color: var(--muted);
   font-size: 12px;
 }
-.workspace-load-error {
+.workspace-load-error,
+.workspace-notice {
   padding: 12px;
   color: var(--danger);
   font-size: 12px;
   margin-bottom: 12px;
   border: 1px solid var(--danger);
   border-radius: 6px;
+}
+.workspace-notice {
+  color: var(--text);
+  border-color: var(--border);
 }
 @media (max-width: 1100px) {
   .workspace-layout.with-detail {
@@ -215,4 +227,146 @@
   .workspace-layout.with-detail .workspace-panel {
     min-height: 280px;
   }
+}
+
+/* History keeps fixed column tracks shared by its header and virtual records. */
+.history-table {
+  width: 100%;
+}
+.history-columns {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+.history-columns > [role="columnheader"] {
+  position: relative;
+  min-width: 0;
+  padding: 10px 12px;
+}
+.history-column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-right: 1px solid var(--border);
+}
+.history-column-resizer:hover,
+.history-column-resizer:focus-visible {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent);
+}
+.history-record {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+.history-row {
+  position: relative;
+  height: 52px;
+  cursor: pointer;
+}
+.history-row > [role="gridcell"] {
+  min-width: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.history-description-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.history-row .history-description-cell > .history-description-preview {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-description-toggle-slot {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+.history-description-toggle-slot button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text);
+  background: transparent;
+}
+.history-description-toggle-slot button:hover {
+  background: var(--hover);
+}
+.history-description-toggle-slot button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.history-description-row {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.history-row > span[role="gridcell"] {
+  display: block;
+}
+.history-row > time {
+  font-size: inherit;
+}
+
+.history-table {
+  --history-first-bg: #e8f0ff;
+  --history-first-edge: #2e6ba4;
+  --history-last-bg: #fff0d4;
+  --history-last-edge: #9b6112;
+}
+:root[data-theme="dark"] .history-table {
+  --history-first-bg: #20384c;
+  --history-first-edge: #91c9ff;
+  --history-last-bg: #4a3820;
+  --history-last-edge: #efca79;
+}
+.history-row.selected[data-selection-order="1"] {
+  background: var(--history-first-bg);
+  box-shadow: inset 3px 0 var(--history-first-edge);
+  color: var(--text);
+}
+.history-row.selected[data-selection-order="2"] {
+  background: var(--history-last-bg);
+  box-shadow: inset 3px 0 var(--history-last-edge);
+  color: var(--text);
+}
+
+/* History has no in-content heading; its search row follows the dock path bar. */
+.workspaces-page.history-page,
+.dock-page .workspaces-page.history-page {
+  padding-top: 8px;
+}
+.history-page > .query-bar {
+  margin-top: 0;
 }

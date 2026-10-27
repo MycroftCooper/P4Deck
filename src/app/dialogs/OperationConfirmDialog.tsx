@@ -26,6 +26,7 @@ export function OperationConfirmDialog({
     count: request.nodes.length,
   }));
   const [ack, setAck] = useState(false);
+  const needsAcknowledgement = snapshot.operation !== "revert";
   const names = {
     getLatest: tr("获取最新版本", "Get latest"),
     checkout: tr("签出", "Check out"),
@@ -40,10 +41,14 @@ export function OperationConfirmDialog({
   return (
     <Dialog
       title={tr("确认操作：", "Confirm: ") + names[snapshot.operation]}
-      description={tr(
-        "下面是固定的操作范围，不会跟随外部选择变化。",
-        "This scope is frozen and does not follow selection changes.",
-      )}
+      description={
+        snapshot.operation === "revert"
+          ? tr("确认还原以下文件？", "Revert the following files?")
+          : tr(
+              "下面是固定的操作范围，不会跟随外部选择变化。",
+              "This scope is frozen and does not follow selection changes.",
+            )
+      }
       zh={zh}
       source={snapshot.source}
       danger={danger}
@@ -55,7 +60,7 @@ export function OperationConfirmDialog({
           </button>
           <button
             className={danger ? "danger" : "primary"}
-            disabled={!snapshot.nodes.length || !ack}
+            disabled={!snapshot.nodes.length || (needsAcknowledgement && !ack)}
             onClick={() => onClose(true)}
           >
             {tr("确认执行", "Confirm operation")}
@@ -103,20 +108,27 @@ export function OperationConfirmDialog({
         )}
         label={tr("完整目标范围", "Full target scope")}
       />
-      <DialogNotice>
-        {tr(
-          "执行后可能部分成功。取消运行只能请求停止剩余工作，不能撤销已完成部分；请检查任务结果与日志。",
-          "Execution can partially succeed. Cancellation requests stopping remaining work; it does not undo completed changes. Check task results and logs.",
-        )}
-      </DialogNotice>
-      <label className="workflow-checkbox">
-        <input
-          type="checkbox"
-          checked={ack}
-          onChange={(event) => setAck(event.target.checked)}
-        />
-        {tr("我已核对以上范围与风险。", "I have reviewed the scope and risks.")}
-      </label>
+      {needsAcknowledgement && (
+        <DialogNotice>
+          {tr(
+            "执行后可能部分成功。取消运行只能请求停止剩余工作，不能撤销已完成部分；请检查任务结果与日志。",
+            "Execution can partially succeed. Cancellation requests stopping remaining work; it does not undo completed changes. Check task results and logs.",
+          )}
+        </DialogNotice>
+      )}
+      {needsAcknowledgement && (
+        <label className="workflow-checkbox">
+          <input
+            type="checkbox"
+            checked={ack}
+            onChange={(event) => setAck(event.target.checked)}
+          />
+          {tr(
+            "我已核对以上范围与风险。",
+            "I have reviewed the scope and risks.",
+          )}
+        </label>
+      )}
     </Dialog>
   );
 }

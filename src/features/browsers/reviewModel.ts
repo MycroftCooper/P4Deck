@@ -95,6 +95,11 @@ export function historyDiffPair(
 ): { left: RevisionReference; right: RevisionReference } | undefined {
   if (
     revisions.length !== 2 ||
+    !revisions[0].depotPath ||
+    revisions.some(
+      (item) => !Number.isSafeInteger(item.revision) || item.revision < 1,
+    ) ||
+    revisions[0].revision === revisions[1].revision ||
     revisions[0].depotPath !== revisions[1].depotPath
   )
     return undefined;
@@ -103,4 +108,18 @@ export function historyDiffPair(
     left: { kind: "revision", revision: left.revision },
     right: { kind: "revision", revision: right.revision },
   };
+}
+
+/** Right-clicking a selected revision keeps FIFO order; a new target is appended. */
+export function historyMenuQueue(
+  selected: FileRevision[],
+  clicked: FileRevision,
+) {
+  return selected.some(
+    (item) =>
+      item.depotPath === clicked.depotPath &&
+      item.revision === clicked.revision,
+  )
+    ? selected
+    : [...selected, clicked].slice(-2);
 }

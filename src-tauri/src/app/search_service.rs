@@ -248,6 +248,7 @@ impl GlobalSearchService {
                                 clients: Vec::new(),
                                 depot_path: None,
                                 stream: None,
+                                streams: Vec::new(),
                                 from: "2000-01-01T00:00:00Z".into(),
                                 to: "2100-01-01T00:00:00Z".into(),
                                 jobs: Vec::new(),

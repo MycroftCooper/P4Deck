@@ -1,5 +1,5 @@
 use crate::{domain::*, AppState};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
 pub async fn workspace_disk_usage(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
@@ -22,6 +22,23 @@ pub struct PanelRuntimeBinding {
     profile_id: Option<String>,
     context_generation: u64,
     connection_key: String,
+}
+
+fn logical_window_placement(
+    position: tauri::PhysicalPosition<i32>,
+    size: tauri::PhysicalSize<u32>,
+    scale_factor: f64,
+    maximized: bool,
+) -> crate::window_placement::WindowPlacement {
+    let position = position.to_logical::<i32>(scale_factor.max(f64::EPSILON));
+    let size = size.to_logical::<u32>(scale_factor.max(f64::EPSILON));
+    crate::window_placement::WindowPlacement {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+        maximized,
+    }
 }
 
 #[tauri::command]
@@ -48,11 +65,15 @@ pub async fn open_panel_window(
         .unwrap_or_default();
     let screens: Vec<crate::window_placement::ScreenRect> = monitors
         .iter()
-        .map(|monitor| crate::window_placement::ScreenRect {
-            x: monitor.position().x,
-            y: monitor.position().y,
-            width: monitor.size().width,
-            height: monitor.size().height,
+        .map(|monitor| {
+            let position = monitor.position().to_logical::<i32>(monitor.scale_factor());
+            let size = monitor.size().to_logical::<u32>(monitor.scale_factor());
+            crate::window_placement::ScreenRect {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+            }
         })
         .collect();
     let fallback = screens
@@ -78,6 +99,11 @@ pub async fn open_panel_window(
             .inner_size(value.width as f64, value.height as f64);
     }
     let window = builder.build().map_err(|e| e.to_string())?;
+    if let Some(value) = placement {
+        window
+            .set_position(tauri::LogicalPosition::new(value.x, value.y))
+            .map_err(|e| e.to_string())?;
+    }
     if placement.is_some_and(|value| value.maximized) {
         let _ = window.maximize();
     }
@@ -97,17 +123,19 @@ pub async fn open_panel_window(
             event,
             tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)
         ) {
-            if let (Ok(position), Ok(size), Ok(maximized), Ok(mut previous)) = (
+            if let (Ok(position), Ok(size), Ok(scale), Ok(maximized), Ok(mut previous)) = (
                 placement_window.outer_position(),
                 placement_window.inner_size(),
+                placement_window.scale_factor(),
                 placement_window.is_maximized(),
                 last_placement.lock(),
             ) {
                 if !maximized {
-                    previous.x = position.x;
-                    previous.y = position.y;
-                    previous.width = size.width;
-                    previous.height = size.height;
+                    let next = logical_window_placement(position, size, scale, false);
+                    previous.x = next.x;
+                    previous.y = next.y;
+                    previous.width = next.width;
+                    previous.height = next.height;
                 }
                 previous.maximized = maximized;
                 let _ = crate::window_placement::save(&placement_path, &placement_key, *previous);
@@ -398,11 +426,20 @@ pub async fn update_connection_profile(
 pub async fn delete_connection_profile(
     request: DeleteConnectionProfileRequest,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<ConnectionProfiles, ConnectionProfileError> {
+    use tauri::Emitter;
+    let before = state.connection.runtime_info().context_generation;
     let connection = state.connection.clone();
-    tauri::async_runtime::spawn_blocking(move || connection.delete_profile(request))
+    let profiles = tauri::async_runtime::spawn_blocking(move || connection.delete_profile(request))
         .await
-        .map_err(|error| profile_task_error(error.to_string()))?
+        .map_err(|error| profile_task_error(error.to_string()))??;
+    let runtime = state.connection.runtime_info();
+    if before != runtime.context_generation {
+        invalidate_after_context_change(&state);
+        let _ = app.emit("connection-changed", runtime);
+    }
+    Ok(profiles)
 }
 
 #[tauri::command]
@@ -462,6 +499,7 @@ fn invalidate_after_context_change(state: &AppState) {
     state.branch_mappings.clear_for_context_switch();
     state.submit.clear_confirmations();
     state.sync.clear_confirmations();
+    state.undo.clear_confirmations();
     state.workflows.clear_confirmations();
     state.workflows.clear_shelf_details();
     state.files.clear_review_cache();
@@ -552,6 +590,7 @@ pub async fn run_p4(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<OperationResult, String> {
+    crate::p4::context::validate_connection_context(&request.context)?;
     if request.input.is_some() {
         return Err("Generic IPC commands cannot provide stdin".into());
     }
@@ -592,6 +631,11 @@ fn generic_gui_requires_dedicated_api(source: &OperationSource, command: &str) -
 }
 
 #[tauri::command]
+pub fn cancel_all_operations(state: State<'_, AppState>) {
+    state.runner.cancel_all();
+}
+
+#[tauri::command]
 pub fn cancel_operation(operation_id: String, state: State<'_, AppState>) {
     state.runner.cancel(&operation_id);
     state.search.cancel(&operation_id);
@@ -629,12 +673,70 @@ pub fn set_log_policy(policy: LogPolicy, state: State<'_, AppState>) -> Result<L
 }
 
 #[tauri::command]
+pub async fn open_logs_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let path = state.logs.directory().to_owned();
+    tauri::async_runtime::spawn_blocking(move || crate::app::system_open::open_log_directory(&path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn delete_all_logs(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
+    let logs = state.logs.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || logs.clear_all())
+        .await
+        .map_err(|error| error.to_string())?;
+    let _ = app.emit("logs-cleared", ());
+    result
+}
+
+#[tauri::command]
 pub async fn export_diagnostics(
     request: DiagnosticExportRequest,
     state: State<'_, AppState>,
 ) -> Result<DiagnosticExportResult, String> {
     let diagnostics = state.diagnostics.clone();
     tauri::async_runtime::spawn_blocking(move || diagnostics.export(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn create_config_backup(
+    request: crate::persistence::backup::ConfigBackupCreateRequest,
+    state: State<'_, AppState>,
+) -> Result<crate::persistence::backup::ConfigBackupCreateResult, String> {
+    let backups = state.backups.clone();
+    tauri::async_runtime::spawn_blocking(move || backups.create(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn list_config_backups(
+    state: State<'_, AppState>,
+) -> Result<crate::persistence::backup::ConfigBackupOverview, String> {
+    let backups = state.backups.clone();
+    tauri::async_runtime::spawn_blocking(move || backups.overview())
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn restore_config_backup(
+    request: crate::persistence::backup::ConfigBackupRestoreRequest,
+    state: State<'_, AppState>,
+) -> Result<crate::persistence::backup::ConfigBackupRestoreResult, String> {
+    let backups = state.backups.clone();
+    tauri::async_runtime::spawn_blocking(move || backups.restore(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn open_config_backups_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let path = state.backups.directory();
+    tauri::async_runtime::spawn_blocking(move || crate::app::system_open::open_log_directory(&path))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -711,9 +813,18 @@ pub async fn list_workspace_children(
     path: Option<String>,
     refresh: Option<bool>,
     operation_id: Option<String>,
+    local_only: Option<bool>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceListing, String> {
+    if local_only.unwrap_or(false) {
+        let context = state.connection.context();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::app::file_service::FileService::workspace_directory(&context, path.as_deref())
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    }
     state
         .files
         .workspace_children_with_operation(
@@ -815,6 +926,15 @@ pub async fn confirm_rename_move(
     app: AppHandle,
 ) -> Result<RenameMoveResult, String> {
     Ok(state.rename.confirm(confirmation, Some(&app)).await)
+}
+
+#[tauri::command]
+pub async fn inspect_p4vfs(
+    request: P4VfsInspectRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<P4VfsStatus, String> {
+    state.vfs.inspect(request, Some(&app)).await
 }
 
 #[tauri::command]
@@ -1184,8 +1304,8 @@ pub async fn local_path_capabilities(
 #[cfg(test)]
 mod tests {
     use super::{
-        generic_gui_requires_dedicated_api, generic_lock_command_blocked, panel_window_kind,
-        panel_window_url, PanelRuntimeBinding,
+        generic_gui_requires_dedicated_api, generic_lock_command_blocked, logical_window_placement,
+        panel_window_kind, panel_window_url, PanelRuntimeBinding,
     };
     use crate::domain::OperationSource;
 
@@ -1249,4 +1369,35 @@ mod tests {
         assert!(panel_window_kind("terminal--unexpected-instance").is_ok());
         assert!(panel_window_kind("p4log?panel=terminal").is_err());
     }
+
+    #[test]
+    fn window_placement_round_trips_in_logical_pixels_at_150_percent_dpi() {
+        let placement = logical_window_placement(
+            tauri::PhysicalPosition::new(630, 270),
+            tauri::PhysicalSize::new(1767, 1116),
+            1.5,
+            false,
+        );
+        assert_eq!(placement.x, 420);
+        assert_eq!(placement.y, 180);
+        assert_eq!(placement.width, 1178);
+        assert_eq!(placement.height, 744);
+    }
+}
+
+#[tauri::command]
+pub async fn preview_undo(
+    request: crate::app::undo_service::UndoTarget,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<crate::app::undo_service::UndoPreview, String> {
+    state.undo.preview(request, Some(&app)).await
+}
+#[tauri::command]
+pub async fn confirm_undo(
+    confirmation: crate::app::undo_service::UndoConfirmation,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<OperationResult, String> {
+    state.undo.confirm(confirmation, Some(&app)).await
 }

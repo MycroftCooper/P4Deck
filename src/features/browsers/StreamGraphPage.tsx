@@ -1,3 +1,4 @@
+import { FixedPageHeader } from "../../app/docking/chrome";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
@@ -28,8 +29,19 @@ import type {
   StreamGraphResult,
   StreamSummary,
 } from "../../shared/contracts/types";
+import type { QueryKey } from "@tanstack/react-query";
+import { serverScope, snapshotKey } from "../../shared/cache/policy";
+import {
+  hydrateSnapshot,
+  isFresh,
+  readSnapshot,
+  writePagedSnapshot,
+} from "../../shared/cache/snapshots";
+import { useViewRefresh } from "../../shared/cache/useViewRefresh";
+import { cachedWorkspaceList } from "../workspaces/workspaceList";
 import { StreamSwitchDialog } from "./StreamSwitchDialog";
 import {
+  isStreamGraphSnapshot,
   layoutStreamGraph,
   mergeStreamGraphResults,
   streamGraphError,
@@ -38,6 +50,29 @@ import {
 const PAGE_SIZE = 100;
 const ZOOM_LEVELS = [0.8, 1, 1.25, 1.5] as const;
 type Phase = "idle" | "loading" | "loadingMore" | "ready" | "error";
+type GraphFilters = {
+  depotPrefix: string;
+  text: string;
+  includeDeleted: boolean;
+};
+type GraphQuery = Pick<
+  StreamGraphQuery,
+  "depotPrefix" | "text" | "includeDeleted" | "pageSize"
+>;
+
+function graphQuery(filters: GraphFilters): GraphQuery {
+  return {
+    depotPrefix: filters.depotPrefix || undefined,
+    text: filters.text || undefined,
+    includeDeleted: filters.includeDeleted,
+    pageSize: PAGE_SIZE,
+  };
+}
+
+/** Loaded pages per filter; disk copies omit the session-bound cursor. */
+export function streamGraphKey(scope: string, query: GraphQuery) {
+  return snapshotKey("streamGraph", scope, JSON.stringify(query));
+}
 
 function operationId() {
   return `stream-graph-${crypto.randomUUID()}`;
@@ -72,6 +107,8 @@ export function StreamGraphPage({
   onLocateStream(stream: string): void;
   zh: boolean;
 }) {
+  const remoteReady =
+    runtime.p4Version !== "loading" && runtime.connection.state === "connected";
   const [depotInput, setDepotInput] = useState("");
   const [textInput, setTextInput] = useState("");
   const [filters, setFilters] = useState({
@@ -99,14 +136,20 @@ export function StreamGraphPage({
     | {
         token: number;
         generation: number;
-        query: Pick<
-          StreamGraphQuery,
-          "depotPrefix" | "text" | "includeDeleted" | "pageSize"
-        >;
+        query: GraphQuery;
+        key: QueryKey;
       }
     | undefined
   >(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const latestRuntime = useRef(runtime);
+  latestRuntime.current = runtime;
+  const scope = serverScope(runtime);
+  const query = useMemo(
+    () => graphQuery(filters),
+    [filters.depotPrefix, filters.text, filters.includeDeleted],
+  );
+  const graphKey = useMemo(() => streamGraphKey(scope, query), [scope, query]);
   const connectionOwner = useMemo(
     () =>
       JSON.stringify([
@@ -137,6 +180,24 @@ export function StreamGraphPage({
     activeOperations.current.clear();
   }, []);
 
+  /** The current workspace stream comes from the shared workspace snapshot. */
+  const loadCurrentStream = useCallback((token: number) => {
+    const current = latestRuntime.current;
+    const allowRefresh =
+      current.p4Version !== "loading" &&
+      current.connection.state === "connected";
+    void cachedWorkspaceList(current, allowRefresh)
+      .then((workspaces) => {
+        if (requestToken.current !== token) return;
+        setCurrentStream(
+          workspaces.find(
+            (workspace) => workspace.name === current.context.client,
+          )?.stream,
+        );
+      })
+      .catch(() => undefined);
+  }, []);
+
   const scopeMatches = useCallback(
     (page: StreamGraphResult) =>
       page.scope.contextGeneration === runtime.contextGeneration &&
@@ -154,41 +215,24 @@ export function StreamGraphPage({
   );
 
   const startFresh = useCallback(
-    async (refresh: boolean, restartNotice = "") => {
+    async (refresh: boolean) => {
       cancelOperations();
       const token = ++requestToken.current;
       const generation = ++requestGeneration.current;
       const id = operationId();
-      const query = {
-        depotPrefix: filters.depotPrefix || undefined,
-        text: filters.text || undefined,
-        includeDeleted: filters.includeDeleted,
-        pageSize: PAGE_SIZE,
-      } satisfies Pick<
-        StreamGraphQuery,
-        "depotPrefix" | "text" | "includeDeleted" | "pageSize"
-      >;
-      session.current = { token, generation, query };
+      session.current = { token, generation, query, key: graphKey };
       consumedCursors.current.clear();
       pendingCursors.current.clear();
       activeOperations.current.add(id);
       setPhase("loading");
       setError("");
-      setNotice(restartNotice);
-      setSelectedPath(undefined);
-      setResult(undefined);
-      setCurrentStream(undefined);
-      void backend
-        .listUserWorkspaces()
-        .then((workspaces) => {
-          if (requestToken.current !== token) return;
-          setCurrentStream(
-            workspaces.find(
-              (workspace) => workspace.name === runtime.context.client,
-            )?.stream,
-          );
-        })
-        .catch(() => undefined);
+      setNotice("");
+      if (!refresh) {
+        setSelectedPath(undefined);
+        setResult(undefined);
+        setCurrentStream(undefined);
+      }
+      loadCurrentStream(token);
       try {
         const page = await backend.queryStreamGraph({
           ...query,
@@ -202,6 +246,7 @@ export function StreamGraphPage({
           !scopeMatches(page)
         )
           return;
+        writePagedSnapshot(graphKey, page);
         setResult(page);
         setPhase("ready");
       } catch (cause) {
@@ -217,28 +262,98 @@ export function StreamGraphPage({
         activeOperations.current.delete(id);
       }
     },
-    [
-      cancelOperations,
-      filters.depotPrefix,
-      filters.includeDeleted,
-      filters.text,
-      runtime.context.client,
-      scopeMatches,
-    ],
+    [cancelOperations, graphKey, loadCurrentStream, query, scopeMatches],
+  );
+
+  /** Shows cached pages and resumes their paging session without P4. */
+  const restore = useCallback(
+    (cached: StreamGraphResult) => {
+      cancelOperations();
+      const token = ++requestToken.current;
+      requestGeneration.current = Math.max(
+        requestGeneration.current,
+        cached.requestGeneration,
+      );
+      session.current = {
+        token,
+        generation: cached.requestGeneration,
+        query,
+        key: graphKey,
+      };
+      consumedCursors.current.clear();
+      pendingCursors.current.clear();
+      setResult(cached);
+      setPhase("ready");
+      setError("");
+      setNotice("");
+      setSelectedPath((path) =>
+        path && cached.nodes.some((node) => node.stream === path)
+          ? path
+          : undefined,
+      );
+      loadCurrentStream(token);
+    },
+    [cancelOperations, graphKey, loadCurrentStream, query],
   );
 
   useEffect(() => {
-    if (runtime.p4Version !== "loading") void startFresh(false);
+    let live = true;
+    const showSnapshot = () => {
+      if (!live) return;
+      const cached = readSnapshot<StreamGraphResult>(graphKey);
+      if (!cached && remoteReady) void startFresh(false);
+      else if (!cached) setPhase("idle");
+      else {
+        restore(cached.data);
+        // Stale pages, or pages from another connection, refresh behind the graph.
+        if (remoteReady && (!scopeMatches(cached.data) || !isFresh(graphKey)))
+          void startFresh(true);
+      }
+    };
+    if (runtime.p4Version !== "loading") {
+      if (readSnapshot(graphKey)) showSnapshot();
+      else {
+        setResult(undefined);
+        setPhase("loading");
+        void hydrateSnapshot(
+          graphKey,
+          (value): value is StreamGraphResult =>
+            isStreamGraphSnapshot(value) &&
+            value.scope.server === runtime.context.server &&
+            value.scope.user === runtime.context.user &&
+            value.scope.activeProfileId === runtime.activeProfileId,
+          { revalidate: true },
+        ).then(showSnapshot);
+      }
+    }
     return () => {
+      live = false;
       requestToken.current += 1;
       cancelOperations();
     };
-  }, [connectionOwner, runtime.p4Version, startFresh, cancelOperations]);
+  }, [
+    connectionOwner,
+    graphKey,
+    runtime.p4Version,
+    remoteReady,
+    restore,
+    scopeMatches,
+    startFresh,
+    cancelOperations,
+  ]);
+
+  useViewRefresh("streamgraph", graphKey, () => {
+    if (remoteReady && phase !== "loading" && phase !== "loadingMore")
+      void startFresh(true);
+  });
 
   const loadMore = useCallback(async () => {
     const cursor = result?.nextCursor;
     const active = session.current;
     if (
+      !remoteReady ||
+      phase === "loading" ||
+      phase === "loadingMore" ||
       !cursor ||
       !result?.hasMore ||
       !active ||
@@ -271,11 +386,11 @@ export function StreamGraphPage({
           page.nextCursor === cursor ||
           consumedCursors.current.has(page.nextCursor));
       const merged = mergeStreamGraphResults(result, page);
-      setResult(
-        nonProgressing
-          ? { ...merged, hasMore: false, nextCursor: undefined }
-          : merged,
-      );
+      const next = nonProgressing
+        ? { ...merged, hasMore: false, nextCursor: undefined }
+        : merged;
+      writePagedSnapshot(active.key, next);
+      setResult(next);
       setPhase("ready");
       if (nonProgressing)
         setNotice(
@@ -290,12 +405,8 @@ export function StreamGraphPage({
         failure.code === "invalidCursor" ||
         failure.code === "cursorExpired"
       ) {
-        void startFresh(
-          false,
-          zh
-            ? "分页快照已失效，已从首屏重新加载。"
-            : "The paging snapshot expired and was restarted from the first page.",
-        );
+        // Restored pages can outlive the backend paging snapshot (120 s).
+        void startFresh(true);
         return;
       }
       if (failure.code !== "cancelled") setError(failure.message);
@@ -304,7 +415,7 @@ export function StreamGraphPage({
       pendingCursors.current.delete(cursor);
       activeOperations.current.delete(id);
     }
-  }, [result, scopeMatches, startFresh, zh]);
+  }, [phase, remoteReady, result, scopeMatches, startFresh, zh]);
 
   const rows = useMemo(
     () =>
@@ -380,24 +491,23 @@ export function StreamGraphPage({
 
   return (
     <section className="stream-graph-page">
-      <header className="section-title stream-graph-title">
-        <div>
-          <span className="workspace-eyebrow">PERFORCE / STREAM GRAPH</span>
-          <h1>Stream Graph</h1>
-          <p>
-            {zh
-              ? "按官方 parent → child 关系查看 Stream 森林；图上操作不会直接修改工作区。"
-              : "Explore the official parent → child stream forest. Graph actions never mutate the workspace directly."}
-          </p>
-        </div>
+      <FixedPageHeader
+        description={
+          zh
+            ? "按官方 parent → child 关系查看 Stream 森林；图上操作不会直接修改工作区。"
+            : "Explore the official parent → child stream forest. Graph actions never mutate the workspace directly."
+        }
+      >
         <button
           onClick={() => void startFresh(true)}
-          disabled={phase === "loading" || phase === "loadingMore"}
+          disabled={
+            !remoteReady || phase === "loading" || phase === "loadingMore"
+          }
         >
           <RefreshCw size={15} className={phase === "loading" ? "spin" : ""} />
           {zh ? "刷新" : "Refresh"}
         </button>
-      </header>
+      </FixedPageHeader>
 
       <form
         className="stream-graph-query"
@@ -502,7 +612,9 @@ export function StreamGraphPage({
         <div className="workspace-load-error" role="alert">
           <span>{error}</span>
           <button
-            onClick={() => (result ? void loadMore() : void startFresh(false))}
+            onClick={() =>
+              phase === "error" ? void startFresh(!!result) : void loadMore()
+            }
           >
             {zh ? "重试" : "Retry"}
           </button>
@@ -688,7 +800,11 @@ export function StreamGraphPage({
           {result?.hasMore && (
             <button
               className="load-more-button"
-              disabled={phase === "loadingMore" || !result.nextCursor}
+              disabled={
+                phase === "loading" ||
+                phase === "loadingMore" ||
+                !result.nextCursor
+              }
               onClick={() => void loadMore()}
             >
               <ChevronDown size={14} />

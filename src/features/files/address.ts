@@ -1,3 +1,5 @@
+import type { P4Context } from "../../shared/contracts/types";
+
 /** Clipboard input is data, never a shell command or a P4 filespec. */
 export function cleanAddress(text: string): string {
   let value = text.replace(/^[\s\uFEFF\u200B]+|[\s\uFEFF\u200B]+$/g, "");
@@ -53,4 +55,82 @@ export function pathKey(path: string): string {
     .replaceAll("\\", "/")
     .replace(/\/$/, "");
   return windows ? normalized.toLowerCase() : normalized;
+}
+
+type WorkspaceAddressContext = Pick<P4Context, "cwd" | "client">;
+
+/** Only shorten a verified local/client path, never infer a depot mapping. */
+export function workspaceRelativePath(
+  path: string,
+  context: WorkspaceAddressContext,
+): string | undefined {
+  const normalized = path
+    .replace(/^\\\\\?\\UNC\\/i, "\\\\")
+    .replace(/^\\\\\?\\/, "")
+    .replaceAll("\\", "/");
+  const clientPrefix = `//${context.client}/`;
+  if (context.client && normalized.startsWith(clientPrefix))
+    return normalized.slice(clientPrefix.length);
+  // A forward-slash // path is a P4 identity, even on a UNC workspace.
+  if (path.startsWith("//")) return;
+  if (!context.cwd) return;
+  const root = context.cwd
+    .replace(/^\\\\\?\\UNC\\/i, "\\\\")
+    .replace(/^\\\\\?\\/, "")
+    .replaceAll("\\", "/")
+    .replace(/\/+$/, "");
+  if (normalized.startsWith("//") && !root.startsWith("//")) return;
+  const windows = /^[a-z]:\//i.test(normalized) || normalized.startsWith("//");
+  const value = windows ? normalized.toLowerCase() : normalized;
+  const prefix = windows ? root.toLowerCase() : root;
+  if (value.startsWith(`${prefix}/`)) return normalized.slice(root.length + 1);
+  if (value === prefix) return "";
+}
+
+/** Resolve pasted address syntax locally. Depot mappings remain server-owned. */
+export function completeFileAddress(
+  input: string,
+  context: WorkspaceAddressContext,
+): string {
+  const cleaned = cleanAddress(input)
+    .replace(/^\\\\\?\\UNC\\/i, "\\\\")
+    .replace(/^\\\\\?\\/, "");
+  let unc = cleaned.startsWith("\\\\");
+  let path = cleaned.replaceAll("\\", "/");
+  // Validate again after slash normalization, including mixed-slash depot paths.
+  if (!unc) cleanAddress(path);
+  const clientPrefix = `//${context.client}/`;
+  if (!unc && context.client && path.startsWith(clientPrefix) && context.cwd) {
+    path = `${context.cwd.replace(/[\\/]+$/, "")}/${path.slice(clientPrefix.length)}`;
+    unc = path.startsWith("\\\\");
+    path = path.replaceAll("\\", "/");
+  } else if (
+    !unc &&
+    !/^[a-z]:\//i.test(path) &&
+    (!path.startsWith("/") ||
+      (cleaned.startsWith("\\") && !path.startsWith("//")))
+  ) {
+    if (!context.cwd)
+      throw new Error(
+        "请先配置工作区根目录 / Configure the workspace root first",
+      );
+    path = `${context.cwd.replace(/[\\/]+$/, "")}/${path.replace(/^\/+/, "")}`;
+    unc = path.startsWith("\\\\");
+    path = path.replaceAll("\\", "/");
+  }
+  const prefix = path.startsWith("//")
+    ? "//"
+    : path.startsWith("/")
+      ? "/"
+      : /^[a-z]:\//i.test(path)
+        ? path.slice(0, 3)
+        : "";
+  const segments: string[] = [];
+  for (const part of path.slice(prefix.length).split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") segments.pop();
+    else segments.push(part);
+  }
+  const formatted = prefix + segments.join("/");
+  return unc ? formatted.replaceAll("/", "\\") : formatted;
 }

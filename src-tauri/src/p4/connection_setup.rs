@@ -2,7 +2,7 @@ use crate::{
     domain::{
         ConnectionErrorCode, ConnectionUserCandidate, ConnectionWorkspaceCandidate,
         ConnectionWorkspaceRootStatus, OperationResult, OperationSource, OutputMode,
-        P4CommandRequest, P4Context,
+        P4CommandRequest, P4Context, WorkspaceSyncMode,
     },
     p4::runner::{MutationGuard, P4Runner},
 };
@@ -37,6 +37,7 @@ pub struct ServerIdentity {
     pub server_id: Option<String>,
     pub server_address: String,
     pub user_name: String,
+    pub server_version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub struct WorkspaceSpecSnapshot {
     pub root: String,
     pub stream: String,
     pub description: String,
+    pub options: String,
     pub view: Vec<String>,
 }
 
@@ -453,6 +455,7 @@ fn parse_workspace(value: Value) -> Option<ConnectionWorkspaceCandidate> {
     let name = value_string(&value, &["client", "Client"]);
     let host = value_string(&value, &["Host", "host"]);
     let root = value_string(&value, &["Root", "root"]);
+    let options = value_string(&value, &["Options", "options"]);
     let (root_status, selectable) = workspace_root_status(&host, &root);
     (!name.is_empty()).then(|| ConnectionWorkspaceCandidate {
         name,
@@ -465,6 +468,7 @@ fn parse_workspace(value: Value) -> Option<ConnectionWorkspaceCandidate> {
         accessed: value_i64(&value, &["Access", "access"]),
         root_status,
         selectable,
+        sync_mode: workspace_sync_mode_from_options(&options),
     })
 }
 
@@ -475,6 +479,7 @@ fn parse_identity(value: Value) -> Option<ServerIdentity> {
         server_id: nonempty(value_string(&value, &["serverID"])),
         server_address,
         user_name,
+        server_version: nonempty(value_string(&value, &["serverVersion"])),
     })
 }
 
@@ -502,6 +507,7 @@ fn parse_workspace_spec(value: Value) -> Option<WorkspaceSpecSnapshot> {
         root: value_string(&value, &["Root", "root"]),
         stream: value_string(&value, &["Stream", "stream"]),
         description: value_string(&value, &["Description", "description"]),
+        options: value_string(&value, &["Options", "options"]),
         view: view.into_iter().map(|(_, value)| value).collect(),
     })
 }
@@ -528,6 +534,21 @@ pub fn workspace_candidate_from_spec(spec: &WorkspaceSpecSnapshot) -> Connection
         accessed: None,
         root_status,
         selectable,
+        sync_mode: workspace_sync_mode_from_options(&spec.options),
+    }
+}
+
+pub fn workspace_sync_mode_from_options(options: &str) -> WorkspaceSyncMode {
+    let options = options
+        .split_ascii_whitespace()
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>();
+    if options.iter().any(|option| option == "altsync") {
+        WorkspaceSyncMode::Virtual
+    } else if !options.is_empty() {
+        WorkspaceSyncMode::Standard
+    } else {
+        WorkspaceSyncMode::Unknown
     }
 }
 
@@ -600,11 +621,39 @@ mod tests {
     fn parses_ordered_workspace_view() {
         let spec = parse_workspace_spec(serde_json::json!({
             "Client":"dev-ws", "Owner":"dev", "Root":"D:\\\\work",
+            "Options":"noallwrite noclobber altsync normdir",
             "View1":"//depot/b/... //dev-ws/b/...", "View0":"//depot/a/... //dev-ws/a/..."
         }))
         .unwrap();
         assert_eq!(spec.view[0], "//depot/a/... //dev-ws/a/...");
         assert_eq!(spec.view[1], "//depot/b/... //dev-ws/b/...");
+        assert_eq!(
+            workspace_sync_mode_from_options(&spec.options),
+            WorkspaceSyncMode::Virtual
+        );
+    }
+
+    #[test]
+    fn parses_server_version_for_vfs_preflight() {
+        let identity = parse_identity(serde_json::json!({
+            "serverAddress": "ssl:fixture:1666",
+            "userName": "developer",
+            "serverID": "fixture-server",
+            "serverVersion": "P4D/NTX64/2026.1/1"
+        }))
+        .unwrap();
+        assert_eq!(
+            identity.server_version.as_deref(),
+            Some("P4D/NTX64/2026.1/1")
+        );
+        assert_eq!(
+            workspace_sync_mode_from_options("noallwrite noclobber normdir"),
+            WorkspaceSyncMode::Standard
+        );
+        assert_eq!(
+            workspace_sync_mode_from_options(""),
+            WorkspaceSyncMode::Unknown
+        );
     }
 
     #[test]

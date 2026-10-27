@@ -1,11 +1,13 @@
 import { lazy, Suspense } from "react";
 import { FileWorkbench } from "../features/files/components/FileWorkbench";
 import { canScanWorkspace } from "../features/files/workspaceQueries";
+import { connectionPresentation } from "../features/settings/connectionWizard";
 import type {
   GlobalSearchTarget,
   RuntimeInfo,
   WorkspaceNode,
   P4Context,
+  ConnectionStatus,
 } from "../shared/contracts/types";
 import type { Preferences } from "./hooks/usePreferences";
 import type { FilePageId, PageId, PanelTarget } from "./panels";
@@ -73,12 +75,17 @@ const ToolPanel = lazy(() =>
 export interface PageEnvironment {
   preferences: Preferences;
   runtime: RuntimeInfo;
+  checkingConnection?: boolean;
   connectionKey: string;
   selectedFile?: WorkspaceNode;
   directory?: string;
   onNavigate(node: WorkspaceNode): void;
   onReview(kind: FilePageId, node: WorkspaceNode): void;
-  onConnection(context: P4Context): void;
+  onConnection(
+    context: P4Context,
+    connection?: ConnectionStatus,
+    p4Version?: string,
+  ): void;
   onRuntime(runtime: RuntimeInfo): void;
   onOpenPage(page: PageId): void;
   streamNavigation?: { stream: string; nonce: number };
@@ -95,12 +102,27 @@ interface Props extends PageEnvironment {
   target: PanelTarget;
   changeTarget(path: string): void;
 }
+
+const CACHE_FIRST_PAGES: ReadonlySet<PageId> = new Set([
+  "pending",
+  "submitted",
+  "files",
+  "workspaces",
+  "history",
+  "streams",
+  "diff",
+  "revgraph",
+  "streamgraph",
+  "branchmappings",
+]);
+
 function Content({
   page,
   target,
   changeTarget,
   preferences,
   runtime,
+  checkingConnection,
   connectionKey,
   selectedFile,
   directory,
@@ -116,6 +138,63 @@ function Content({
   onSearchNavigate,
 }: Props) {
   const { t, zh, ui, theme, setTheme, locale, setLocale, setUi } = preferences;
+  // Cache-backed views render their persisted snapshot while verification runs.
+  // Their queries enable only after the connection becomes verified.
+  const cacheFirst = CACHE_FIRST_PAGES.has(page);
+  if (
+    (!runtime.context.server.trim() || !runtime.context.user.trim()) &&
+    page !== "settings" &&
+    page !== "p4log"
+  )
+    return (
+      <div className="workspace-empty" role="status">
+        <p>
+          {zh
+            ? "未连接，请在设置中添加或选择连接。"
+            : "Not connected. Add or select a connection in Settings."}
+        </p>
+        <button className="secondary" onClick={() => onOpenPage("settings")}>
+          {zh ? "连接设置" : "Connection settings"}
+        </button>
+      </div>
+    );
+  if (
+    (runtime.p4Version === "loading" ||
+      checkingConnection ||
+      runtime.connection.state === "notTested") &&
+    !cacheFirst &&
+    page !== "settings" &&
+    page !== "p4log"
+  )
+    return (
+      <div className="workspace-empty" role="status">
+        <p>
+          {zh
+            ? "正在自动检查连接与登录状态…"
+            : "Checking connection and login automatically…"}
+        </p>
+      </div>
+    );
+  if (
+    runtime.connection.state !== "connected" &&
+    !cacheFirst &&
+    page !== "files" &&
+    page !== "settings" &&
+    page !== "p4log" &&
+    page !== "terminal"
+  ) {
+    const status = connectionPresentation(runtime.connection, zh);
+    return (
+      <div className="workspace-empty" role="status">
+        <p>
+          {status.title} · {status.detail}
+        </p>
+        <button className="secondary" onClick={() => onOpenPage("settings")}>
+          {zh ? "连接设置" : "Connection settings"}
+        </button>
+      </div>
+    );
+  }
   switch (page) {
     case "search":
       return (
@@ -150,6 +229,7 @@ function Content({
           connectionKey={connectionKey}
           demo={runtime.mode === "mock"}
           ready={runtime.p4Version !== "loading"}
+          checkingConnection={checkingConnection}
           navigation={
             searchNavigation?.target.type === "pendingChange"
               ? {
@@ -192,8 +272,9 @@ function Content({
     case "revgraph":
       return (
         <FileReviewPage
-          key={connectionKey}
+          key={`${connectionKey}:${target.comparison ? `${target.target}#${target.comparison.left},${target.comparison.right}` : "default"}`}
           kind={page}
+          comparison={target.comparison}
           target={target.target}
           locked={target.locked}
           onTargetChange={changeTarget}
@@ -205,6 +286,9 @@ function Content({
     case "streams":
       return (
         <ReadOnlyPage
+          onPreviewChange={(changeId) =>
+            onSearchNavigate({ type: "submittedChange", changeId })
+          }
           key={connectionKey}
           kind={page}
           runtime={runtime}

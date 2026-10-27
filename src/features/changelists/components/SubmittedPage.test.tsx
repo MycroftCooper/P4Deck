@@ -1,3 +1,5 @@
+import { PageHeaderActionsContext } from "../../../app/docking/chrome";
+import { ChangeDetailsContext } from "./ChangeDetailsDialog";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -16,11 +18,13 @@ import type {
 } from "../../../shared/contracts/types";
 import {
   conservativeDetailClassification,
+  isSubmittedSnapshot,
   SubmittedPage,
 } from "./SubmittedPage";
 
 const backend = vi.hoisted(() => ({
   queryChangelists: vi.fn(),
+  listStreams: vi.fn(),
   getSubmittedChangeDetail: vi.fn(),
   cancelOperation: vi.fn(async () => undefined),
   performClAction: vi.fn(),
@@ -109,6 +113,7 @@ function page(
   };
 }
 
+const openDetails = vi.fn();
 let host: HTMLDivElement;
 let root: Root;
 
@@ -142,18 +147,26 @@ async function render(
   mode: RuntimeInfo["mode"] = "tauri",
   locale: "zh-CN" | "en-US" = "zh-CN",
   navigation?: { changeId: number; nonce: number },
+  overrides: Partial<RuntimeInfo> = {},
+  headerTarget: HTMLElement | null = null,
 ) {
-  const value = { ...runtime, mode };
+  const value = { ...runtime, mode, ...overrides };
   await act(async () =>
     root.render(
       <ContextMenuProvider scope={`${mode}:fixture`} zh={locale === "zh-CN"}>
-        <MenuEnvironment.Provider value={environment(mode, locale)}>
-          <SubmittedPage
-            runtime={value}
-            t={messages[locale]}
-            onOperation={async () => undefined}
-            navigation={navigation}
-          />
+        <MenuEnvironment.Provider
+          value={{ ...environment(mode, locale), runtime: value }}
+        >
+          <ChangeDetailsContext.Provider value={openDetails}>
+            <PageHeaderActionsContext.Provider value={headerTarget}>
+              <SubmittedPage
+                runtime={value}
+                t={messages[locale]}
+                onOperation={async () => undefined}
+                navigation={navigation}
+              />
+            </PageHeaderActionsContext.Provider>
+          </ChangeDetailsContext.Provider>
         </MenuEnvironment.Provider>
       </ContextMenuProvider>,
     ),
@@ -188,11 +201,51 @@ function input(label: string) {
     .querySelector<HTMLInputElement>("input")!;
 }
 
+it("keeps submitted rows and selection visible until a refresh succeeds, including after a failed refresh", async () => {
+  await render();
+  await click(row(102));
+  const previousRow = row(102);
+  const next = deferred<ReturnType<typeof page>>();
+  backend.queryChangelists.mockImplementationOnce((query) =>
+    next.promise.then((value) => ({
+      ...value,
+      requestGeneration: query.requestGeneration,
+    })),
+  );
+  await act(async () =>
+    window.dispatchEvent(new Event("p4deck:submitted-refresh")),
+  );
+  expect(row(102)).toBe(previousRow);
+  expect(row(102).classList.contains("selected")).toBe(true);
+  await act(async () =>
+    next.resolve(
+      page(
+        changes.map((change) => ({
+          ...change,
+          description: `Refreshed ${change.description}`,
+        })),
+        0,
+      ),
+    ),
+  );
+  expect(host.textContent).toContain("Refreshed Merge text only");
+  backend.queryChangelists.mockRejectedValueOnce(
+    new Error("Refresh unavailable"),
+  );
+  await act(async () =>
+    window.dispatchEvent(new Event("p4deck:submitted-refresh")),
+  );
+  expect(host.textContent).toContain("Refresh unavailable");
+  expect(host.textContent).toContain("Refreshed Merge text only");
+});
+
 beforeEach(() => {
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
+  openDetails.mockClear();
   backend.queryChangelists.mockReset();
+  backend.listStreams.mockReset();
   backend.getSubmittedChangeDetail.mockReset();
   backend.cancelOperation.mockClear();
   localStorage.clear();
@@ -253,40 +306,54 @@ afterEach(async () => {
   host.remove();
 });
 
-it("renders ordinary, evidence-backed reliable, text-only suspected, and unavailable detail states", async () => {
+it("reopens from the cache without P4 and revalidates behind the rows after a reconnect", async () => {
   await render();
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(1);
+  const remount = async () => {
+    await act(async () => root.unmount());
+    root = createRoot(host);
+  };
+  await remount();
+  await render();
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(1);
+  expect(row(101)).toBeTruthy();
 
-  await click(row(101));
-  expect(host.textContent).toContain("普通提交");
-  expect(host.textContent).toContain("此提交没有文件");
-
-  await click(row(102));
-  expect(host.textContent).toContain("JOB-102");
-  expect(host.textContent).toContain("filelog");
-  expect(host.textContent).toContain("merge from");
-  expect(host.textContent).toContain("//depot/main/integrated.ts");
-  expect(host.textContent).toContain("integrate");
-  expect(host.textContent).toContain("#7");
-
-  await click(row(103));
-  expect(host.textContent).toContain("疑似项保持可见");
-  expect(host.textContent).toContain("filelog was truncated");
-
-  await click(row(104));
-  expect(host.textContent).toContain("无法加载提交详情");
-  expect(host.textContent).toContain("describe failed");
-  expect(row(104).textContent).toContain("分类未知");
+  // A new connection generation invalidates the cursor, not the visible rows.
+  const next = deferred<ReturnType<typeof page>>();
+  backend.queryChangelists.mockImplementationOnce((query) =>
+    next.promise.then((value) => ({
+      ...value,
+      requestGeneration: query.requestGeneration,
+    })),
+  );
+  await remount();
+  await render("tauri", "zh-CN", undefined, { contextGeneration: 2 });
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(2);
+  expect(row(101)).toBeTruthy();
+  await act(async () =>
+    next.resolve(page([{ ...changes[0], description: "Revalidated" }], 0)),
+  );
+  expect(host.textContent).toContain("Revalidated");
+  expect(row(102)).toBeUndefined();
 });
 
-it("opens a searched submitted target with an exact query and live detail", async () => {
-  await render("tauri", "en-US", { changeId: 102, nonce: 1 });
-  expect(backend.queryChangelists).toHaveBeenCalledWith(
-    expect.objectContaining({ keyword: "102" }),
-  );
-  expect(backend.getSubmittedChangeDetail).toHaveBeenCalledWith(
-    expect.objectContaining({ changeId: 102 }),
-  );
-  expect(host.textContent).toContain("JOB-102");
+it("validates persisted rows, dates and query metadata before restoration", async () => {
+  await render();
+  const { appCache } = await import("../../../shared/cache/appCache");
+  const snapshot = appCache.getQueriesData({
+    queryKey: ["snapshot", "submitted"],
+  })[0][1] as Record<string, unknown>;
+  expect(isSubmittedSnapshot(snapshot)).toBe(true);
+  for (const value of [
+    null,
+    {},
+    { ...snapshot, changes: [null] },
+    { ...snapshot, changes: [{ ...changes[0], time: "not-a-date" }] },
+    { ...snapshot, changes: [{ ...changes[0], jobs: {} }] },
+    { ...snapshot, base: {} },
+    { ...snapshot, stats: {} },
+  ])
+    expect(isSubmittedSnapshot(value)).toBe(false);
 });
 
 it("never promotes unproven reliable or incomplete normal classifications", () => {
@@ -308,101 +375,6 @@ it("never promotes unproven reliable or incomplete normal classifications", () =
       "unknown",
     ),
   ).toBe("unknown");
-});
-
-it("cancels and ignores a stale response after a rapid row switch", async () => {
-  const first = deferred<SubmittedChangeDetail>();
-  const second = deferred<SubmittedChangeDetail>();
-  backend.getSubmittedChangeDetail.mockImplementation(({ changeId }) =>
-    changeId === 101 ? first.promise : second.promise,
-  );
-  await render();
-  await click(row(101));
-  expect(host.textContent).toContain("正在加载真实提交详情");
-  await click(row(102));
-  await act(async () =>
-    second.resolve(
-      detail(102, {
-        files: [{ depotPath: "//depot/new.ts", action: "edit", revision: 2 }],
-      }),
-    ),
-  );
-  expect(host.textContent).toContain("//depot/new.ts");
-  await act(async () =>
-    first.resolve(
-      detail(101, {
-        files: [{ depotPath: "//depot/stale.ts", action: "edit", revision: 1 }],
-      }),
-    ),
-  );
-  expect(host.textContent).not.toContain("//depot/stale.ts");
-  expect(backend.cancelOperation).toHaveBeenCalled();
-});
-
-it("hides only a row upgraded to reliable and keeps the hidden count and selection consistent", async () => {
-  await render();
-  await click(
-    [...host.querySelectorAll<HTMLLabelElement>("label")]
-      .find((item) => item.textContent?.includes("仅隐藏 reliable"))!
-      .querySelector("input")!,
-  );
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
-  expect(row(103)).toBeTruthy();
-  expect(row(104)).toBeTruthy();
-  await click(row(102));
-  expect(row(102)).toBeUndefined();
-  expect(host.textContent).toContain("已隐藏 1 条");
-  expect(host.textContent).toContain("选择一个 CL 查看详情");
-  expect(row(103).textContent).toContain("疑似合并");
-  expect(row(104).textContent).toContain("分类未知");
-});
-
-it("shows detail errors, retries, and renders an empty success", async () => {
-  backend.getSubmittedChangeDetail
-    .mockRejectedValueOnce(new Error("temporary failure"))
-    .mockResolvedValueOnce(detail(101));
-  await render();
-  await click(row(101));
-  expect(host.textContent).toContain("temporary failure");
-  await click(
-    [...host.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent === "重试",
-    )!,
-  );
-  expect(host.textContent).toContain("此提交没有文件");
-  expect(backend.getSubmittedChangeDetail).toHaveBeenCalledTimes(2);
-});
-
-it("labels Browser Mock detail as simulated and isolated from real networking", async () => {
-  await render("mock");
-  await click(row(101));
-  expect(host.textContent).toContain("模拟数据 · 未访问真实 P4 Server 或网络");
-  expect(backend.getSubmittedChangeDetail).toHaveBeenCalledWith(
-    expect.objectContaining({ changeId: 101 }),
-  );
-});
-
-it("keeps the responsive detail structure and virtual file viewport at 390px", async () => {
-  const previousWidth = window.innerWidth;
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    value: 390,
-  });
-  try {
-    await render();
-    await click(row(102));
-    expect(host.querySelector(".cl-layout")).toBeTruthy();
-    expect(host.querySelector(".detail-panel.visible")).toBeTruthy();
-    expect(
-      host.querySelector('[data-testid="revision-file-virtual-list"]'),
-    ).toBeTruthy();
-    expect(host.querySelector(".integration-evidence")).toBeTruthy();
-  } finally {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: previousWidth,
-    });
-  }
 });
 
 it("debounces a full filter mapping, cancels the old request, and ignores stale results", async () => {
@@ -427,8 +399,6 @@ it("debounces a full filter mapping, cancels the old request, and ignores stale 
     keyword: "second",
     users: [],
     clients: [],
-    jobs: [],
-    hasJob: undefined,
     mergeClassifications: [],
     hideReliableMerges: false,
     pageSize: 100,
@@ -446,42 +416,40 @@ it("debounces a full filter mapping, cancels the old request, and ignores stale 
   expect(row(102)).toBeTruthy();
 });
 
-it("maps multi-value, path, stream, Job and four-state controls to the typed query", async () => {
+it("uses a single user and cached current context without Job controls or extra queries", async () => {
+  const { appCache } = await import("../../../shared/cache/appCache");
+  const { workspaceListKey } = await import("../../workspaces/workspaceList");
+  appCache.setQueryData(workspaceListKey(runtime), [
+    { name: "workspace", root: "test", host: "", stream: "//depot/main" },
+  ]);
   await render();
-  backend.queryChangelists.mockClear();
-  await enter(input("User（逗号/换行分隔）"), "alice,buildbot");
-  await enter(input("Client（逗号/换行分隔）"), "ws-a,ws-b");
-  await enter(input("Depot Path"), "//depot/main/...");
-  await enter(input("Stream"), "//depot/main");
-  await enter(input("Job（逗号/换行分隔）"), "JOB-1,JOB-2");
-  const selects = [...host.querySelectorAll<HTMLSelectElement>("select")];
-  const jobSelect = selects.find((item) =>
-    item.closest("label")?.textContent?.includes("Job 状态"),
-  )!;
-  await act(async () => {
-    jobSelect.value = "yes";
-    jobSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  const unknown = [...host.querySelectorAll<HTMLLabelElement>("label")].find(
-    (item) => item.textContent === "未知",
-  )!;
-  await click(unknown.querySelector("input")!);
-  const hide = [...host.querySelectorAll<HTMLLabelElement>("label")].find(
-    (item) => item.textContent?.includes("仅隐藏 reliable"),
-  )!;
-  await click(hide.querySelector("input")!);
+  await enter(input("用户"), "alice");
+  await click(
+    host.querySelector<HTMLInputElement>(".submitted-stream-options input")!,
+  );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
   const query = backend.queryChangelists.mock.calls.at(-1)![0];
   expect(query).toMatchObject({
-    users: ["alice", "buildbot"],
-    clients: ["ws-a", "ws-b"],
-    depotPath: "//depot/main/...",
-    stream: "//depot/main",
-    jobs: ["JOB-1", "JOB-2"],
-    hasJob: true,
-    mergeClassifications: ["unknown"],
-    hideReliableMerges: true,
+    users: ["alice"],
+    clients: [],
+    streams: ["//depot/main"],
   });
+  expect(query).not.toHaveProperty("jobs");
+  expect(query).not.toHaveProperty("hasJob");
+  expect(host.textContent).not.toMatch(/Job 状态|逗号|换行/);
+  expect(host.querySelector("textarea")).toBeNull();
+});
+it("disables unknown current stream and blocks a multiuser query", async () => {
+  await render();
+  expect(
+    host.querySelector<HTMLInputElement>(".submitted-stream-options input")!
+      .disabled,
+  ).toBe(true);
+  backend.queryChangelists.mockClear();
+  await enter(input("用户"), "alice,bob");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(backend.queryChangelists).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("请输入单一用户名");
 });
 
 it("appends cursor pages without duplicates, preserves detail selection, and retries a failed page", async () => {
@@ -499,14 +467,14 @@ it("appends cursor pages without duplicates, preserves detail selection, and ret
     );
   await render();
   await click(row(101));
-  expect(host.querySelector(".detail-panel.visible")).toBeTruthy();
+  expect(row(101).classList.contains("selected")).toBe(true);
   const load = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
     (item) => item.textContent === "加载更多",
   )!;
   await click(load);
   expect(host.textContent).toContain("temporary page failure");
   expect(row(101)).toBeTruthy();
-  expect(host.querySelector(".detail-panel.visible")).toBeTruthy();
+  expect(row(101).classList.contains("selected")).toBe(true);
   const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
     (item) => item.textContent === "重试加载更多",
   )!;
@@ -515,7 +483,78 @@ it("appends cursor pages without duplicates, preserves detail selection, and ret
   expect(host.querySelectorAll(".cl-row")).toHaveLength(3);
   expect(host.querySelectorAll(".cl-row strong")[1].textContent).toBe("102");
   expect(host.textContent).toContain("2 页");
-  expect(host.querySelector(".detail-panel.visible")).toBeTruthy();
+  expect(row(101).classList.contains("selected")).toBe(true);
+});
+
+it.each([
+  "invalid submitted query cursor",
+  "submitted query cursor does not match this query or connection",
+  { code: "cursorExpired", message: "cursor expired" },
+  { code: "invalidCursor", message: "invalid cursor" },
+])(
+  "silently replaces an expired paging session while keeping rows visible (%j)",
+  async (failure) => {
+    const replacement = deferred<ReturnType<typeof page>>();
+    backend.queryChangelists
+      .mockImplementationOnce(async (query) =>
+        page(changes, query.requestGeneration, {
+          hasMore: true,
+          nextCursor: "expired",
+        }),
+      )
+      .mockRejectedValueOnce(failure)
+      .mockImplementationOnce((query) =>
+        replacement.promise.then((result) => ({
+          ...result,
+          requestGeneration: query.requestGeneration,
+        })),
+      );
+    await render("tauri", "en-US");
+    const more = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "Load more",
+    )!;
+    await click(more);
+    expect(backend.queryChangelists).toHaveBeenCalledTimes(3);
+    expect(backend.queryChangelists.mock.calls[1][0].cursor).toBe("expired");
+    expect(backend.queryChangelists.mock.calls[2][0].cursor).toBeUndefined();
+    expect(row(101)).toBeTruthy();
+    expect(host.textContent).not.toMatch(
+      /expired|invalid cursor|restarted from the first page/i,
+    );
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    await act(async () =>
+      replacement.resolve(
+        page([{ ...changes[0], description: "Fresh first page" }], 0),
+      ),
+    );
+    expect(host.querySelectorAll(".cl-row")).toHaveLength(1);
+    expect(host.textContent).toContain("Fresh first page");
+    expect(backend.queryChangelists).toHaveBeenCalledTimes(3);
+  },
+);
+
+it("reports a failed first-page recovery once and retains the cached rows", async () => {
+  backend.queryChangelists
+    .mockImplementationOnce(async (query) =>
+      page(changes, query.requestGeneration, {
+        hasMore: true,
+        nextCursor: "expired",
+      }),
+    )
+    .mockRejectedValueOnce("invalid submitted query cursor")
+    .mockRejectedValueOnce(new Error("Server unavailable"));
+  await render("tauri", "en-US");
+  await click(
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "Load more",
+    )!,
+  );
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(3);
+  expect(row(101)).toBeTruthy();
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "Server unavailable",
+  );
+  expect(host.textContent).not.toContain("invalid submitted query cursor");
 });
 
 it("announces truncated partial results and the 5,000 scan ceiling", async () => {
@@ -562,11 +601,31 @@ it("saves, confirms overwrite, applies, and confirms deletion without storing se
     )!,
   );
   await enter(input("关键词"), "temporary");
-  await click(
-    [...host.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent === "应用",
-    )!,
+  const preset = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="保存的过滤器"]',
+  )!;
+  const savedId = preset.value;
+  await act(async () => {
+    preset.value = "";
+    preset.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(input("关键词").value).toBe("temporary");
+  await act(async () => {
+    preset.value = savedId;
+    preset.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (button) => button.textContent === "应用",
+    ),
+  ).toBe(false);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  const calls = backend.queryChangelists.mock.calls.length;
+  await act(async () =>
+    preset.dispatchEvent(new Event("change", { bubbles: true })),
   );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(calls);
   expect(input("关键词").value).toBe("updated keyword");
   await click(
     [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
@@ -598,8 +657,10 @@ it("renders English labels and focusable controls in a 390px layout", async () =
   });
   try {
     await render("tauri", "en-US");
-    expect(host.textContent).toContain("Values within a field use OR");
-    expect(host.textContent).toContain("Hide reliable merges only");
+    expect(host.textContent).not.toContain("Current Client only");
+    expect(host.textContent).toContain("Current stream");
+    expect(host.textContent).not.toContain("Hide reliable merges only");
+    expect(host.textContent).toContain("Submission type");
     expect(host.querySelector('[aria-label="Saved filters"]')).toBeTruthy();
     const reset = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
       (item) => item.textContent?.includes("Reset to default"),
@@ -613,4 +674,384 @@ it("renders English labels and focusable controls in a 390px layout", async () =
       value: previousWidth,
     });
   }
+});
+
+it("opens shared CL details by double-click without navigating or losing selection", async () => {
+  await render();
+  await click(row(101));
+  expect(backend.getSubmittedChangeDetail).not.toHaveBeenCalled();
+  await act(async () =>
+    row(101).dispatchEvent(new MouseEvent("dblclick", { bubbles: true })),
+  );
+  expect(openDetails).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: "submitted", changeId: 101 }),
+    row(101),
+  );
+  expect(row(101).classList.contains("selected")).toBe(true);
+  expect(host.querySelector(".detail-panel")).toBeNull();
+});
+
+it("Go To opens the exact CL independently of active filters and rejects invalid numbers", async () => {
+  await render();
+  await enter(input("关键词"), "unrelated");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  const count = backend.queryChangelists.mock.calls.length;
+  const target = host.querySelector<HTMLInputElement>("#submitted-go-to")!;
+  const submit = () =>
+    act(async () => {
+      host
+        .querySelector(".submitted-go-to")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        );
+    });
+  for (const value of ["0", "-1", "1.2", "1e3", "abc"]) {
+    await enter(target, value);
+    await submit();
+  }
+  expect(openDetails).not.toHaveBeenCalled();
+  await enter(target, "12345");
+  await submit();
+  await enter(target, "67890");
+  await submit();
+  expect(openDetails.mock.calls.map(([value]) => value.changeId)).toEqual([
+    12345, 67890,
+  ]);
+  expect(input("关键词").value).toBe("unrelated");
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(count);
+});
+const expand = (id: number) =>
+  host.querySelector<HTMLButtonElement>(
+    `.submitted-expand[aria-label$="CL ${id}"]`,
+  )!;
+it("expands files on demand without changing selection or opening details, caches independent rows", async () => {
+  await render();
+  await click(row(101));
+  expect(backend.getSubmittedChangeDetail).not.toHaveBeenCalled();
+  await click(expand(102));
+  expect(host.textContent).toContain("integrated.ts");
+  expect(row(101).classList.contains("selected")).toBe(true);
+  expect(openDetails).not.toHaveBeenCalled();
+  await click(expand(103));
+  expect(host.querySelectorAll(".submitted-change-files")).toHaveLength(2);
+  await click(expand(102));
+  await click(expand(102));
+  expect(
+    backend.getSubmittedChangeDetail.mock.calls.filter(
+      ([q]) => q.changeId === 102,
+    ),
+  ).toHaveLength(1);
+});
+it("ignores collapsed stale file responses and allows retry", async () => {
+  await render();
+  const stale = deferred<SubmittedChangeDetail>();
+  backend.getSubmittedChangeDetail
+    .mockImplementationOnce(() => stale.promise)
+    .mockRejectedValueOnce(new Error("file access denied"));
+  await click(expand(101));
+  await click(expand(101));
+  await click(expand(101));
+  expect(host.textContent).toContain("file access denied");
+  await act(async () =>
+    stale.resolve(
+      detail(101, { message: "STALE", inspectionStatus: "partial" }),
+    ),
+  );
+  expect(host.textContent).not.toContain("STALE");
+  const retry = host.querySelector<HTMLButtonElement>(
+    ".submitted-change-files button",
+  )!;
+  await click(retry);
+  expect(host.textContent).not.toContain("file access denied");
+  expect(host.textContent).toContain("没有可显示的文件");
+});
+it("invalidates expanded file requests and cache on connection change", async () => {
+  await render();
+  const stale = deferred<SubmittedChangeDetail>();
+  backend.getSubmittedChangeDetail.mockImplementationOnce(() => stale.promise);
+  await click(expand(101));
+  await render("tauri", "zh-CN", undefined, { contextGeneration: 2 });
+  await act(async () =>
+    stale.resolve(
+      detail(101, { message: "OLD-CONNECTION", inspectionStatus: "partial" }),
+    ),
+  );
+  expect(host.textContent).not.toContain("OLD-CONNECTION");
+  expect(host.querySelector(".submitted-change-files")).toBeNull();
+  await click(expand(101));
+  expect(backend.getSubmittedChangeDetail).toHaveBeenCalledTimes(2);
+});
+
+it("filters loaded submission kinds using exact signatures and retains ordinary manual merge descriptions", async () => {
+  backend.queryChangelists.mockImplementation(async (query) =>
+    page(
+      [
+        { ...changes[0], description: "Manually merge feature" },
+        { ...changes[1], description: "Work\n合并来源: main" },
+        { ...changes[2], description: "[AutoGen] generated" },
+      ],
+      query.requestGeneration,
+    ),
+  );
+  await render();
+  const select = host.querySelector<HTMLSelectElement>(
+    ".submitted-kind-filter select",
+  )!;
+  await act(async () => {
+    select.value = "ordinary";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(row(101)).toBeTruthy();
+  expect(row(102)).toBeUndefined();
+  await act(async () => {
+    select.value = "ciMerge";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(row(102)).toBeTruthy();
+  expect(row(101)).toBeUndefined();
+  expect(host.textContent).toContain("已加载 3 条中显示 1 条");
+});
+
+it("keeps Go To in the title action slot and groups submission type with filters", async () => {
+  await render();
+  const go = host.querySelector(".submitted-go-to")!;
+  expect(go.parentElement?.classList.contains("target-controls")).toBe(true);
+  expect(go.textContent).not.toContain("周报提示词");
+  expect(go.textContent).not.toContain("打开已提交 CL 详情");
+  expect(go.querySelector("small")).toBeNull();
+  expect(
+    host.querySelector(".submitted-filter-grid .submitted-kind-filter select"),
+  ).toBeTruthy();
+  expect(host.querySelector(".submitted-page-actions")?.textContent).toContain(
+    "周报提示词",
+  );
+});
+
+it("portals the CL address into the fixed title bar and preserves exact Go To behavior", async () => {
+  const header = document.createElement("div");
+  header.className = "target-controls page-title-controls";
+  document.body.append(header);
+  try {
+    await render("tauri", "zh-CN", undefined, {}, header);
+    expect(host.querySelector(".submitted-go-to")).toBeNull();
+    const form = header.querySelector<HTMLFormElement>(".submitted-go-to")!;
+    expect(form.classList.contains("diff-path-field")).toBe(true);
+    expect(
+      form.querySelector(".target-refresh-slot button[title='转到 CL']"),
+    ).toBeTruthy();
+    expect(
+      header.querySelector("button[aria-label='周报提示词']"),
+    ).toBeTruthy();
+    expect(header.querySelector("button[aria-label='刷新']")).toBeTruthy();
+    await enter(form.querySelector("input")!, "12345");
+    await act(async () => {
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    expect(openDetails).toHaveBeenCalledWith(
+      { kind: "submitted", changeId: 12345 },
+      form.querySelector("input"),
+    );
+    expect(
+      host.querySelector(".submitted-filter-grid .submitted-kind-filter"),
+    ).toBeTruthy();
+  } finally {
+    header.remove();
+  }
+});
+
+it("has one classification control, resets it to All and does not hide integrations in the query", async () => {
+  await render();
+  const select = host.querySelector<HTMLSelectElement>(
+    ".submitted-kind-filter select",
+  )!;
+  expect(Array.from(select.options).map((option) => option.value)).toEqual([
+    "all",
+    "ordinary",
+    "ciMerge",
+    "autoGenerated",
+  ]);
+  expect(host.querySelector(".submitted-merge-filters")).toBeNull();
+  await act(async () => {
+    select.value = "ciMerge";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(host.querySelectorAll(".cl-row")).toHaveLength(0);
+  await click(
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+      button.textContent?.includes("重置为默认过滤器"),
+    )!,
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(select.value).toBe("all");
+  expect(host.querySelectorAll(".cl-row")).toHaveLength(changes.length);
+  expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
+    mergeClassifications: [],
+    hideReliableMerges: false,
+  });
+});
+
+it("multi-selects cached streams, deduplicates current and clears all filters", async () => {
+  const { appCache } = await import("../../../shared/cache/appCache");
+  const { serverScope, snapshotKey } =
+    await import("../../../shared/cache/policy");
+  const { workspaceListKey } = await import("../../workspaces/workspaceList");
+  appCache.setQueryData(workspaceListKey(runtime), [
+    { name: "workspace", root: "x", host: "", stream: "//d/main" },
+  ]);
+  appCache.setQueryData(
+    snapshotKey("streams", serverScope(runtime)),
+    ["//d/main", "//d/dev"].map((stream) => ({
+      stream,
+      name: stream,
+      parent: "none",
+      kind: "mainline",
+    })),
+  );
+  await render();
+  expect(host.textContent).not.toContain("仅当前 Client");
+  const options = host.querySelectorAll<HTMLInputElement>(
+    ".submitted-stream-options input",
+  );
+  for (const option of options) await click(option);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
+    clients: [],
+    streams: ["//d/dev", "//d/main"],
+  });
+  await click(
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        ".submitted-stream-options button",
+      ),
+    ].find((button) => button.textContent === "清空")!,
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
+    clients: [],
+    streams: [],
+  });
+});
+
+it("loads Stream options only on request and exposes failures for retry", async () => {
+  await render();
+  expect(backend.listStreams).not.toHaveBeenCalled();
+  const load = () =>
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        ".submitted-stream-options button",
+      ),
+    ].find((button) => button.textContent === "读取列表")!;
+  const pending = deferred<never>();
+  backend.listStreams.mockReturnValueOnce(pending.promise);
+  await click(load());
+  expect(load().disabled).toBe(true);
+  expect(host.textContent).toContain("正在读取");
+  await act(async () => pending.reject(new Error("Stream fixture failure")));
+  expect(host.textContent).toContain("Stream fixture failure");
+  backend.listStreams.mockResolvedValueOnce([]);
+  await click(load());
+  expect(backend.listStreams).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain("暂无缓存的 Stream 选项");
+});
+
+it("clears explicit streams across connections and resolves the current shortcut again", async () => {
+  const { appCache } = await import("../../../shared/cache/appCache");
+  const { workspaceListKey } = await import("../../workspaces/workspaceList");
+  const { serverScope, snapshotKey } =
+    await import("../../../shared/cache/policy");
+  appCache.setQueryData(workspaceListKey(runtime), [
+    { name: "workspace", root: "x", host: "", stream: "//old/main" },
+  ]);
+  appCache.setQueryData(snapshotKey("streams", serverScope(runtime)), [
+    { stream: "//old/dev", name: "Dev", parent: "none", kind: "mainline" },
+  ]);
+  await render();
+  for (const option of host.querySelectorAll<HTMLInputElement>(
+    ".submitted-stream-options input",
+  ))
+    await click(option);
+  const next = {
+    ...runtime,
+    contextGeneration: 2,
+    context: { ...runtime.context, server: "other-fixture:1666" },
+  };
+  appCache.setQueryData(workspaceListKey(next), [
+    { name: "workspace", root: "x", host: "", stream: "//new/main" },
+  ]);
+  await render("tauri", "zh-CN", undefined, next);
+  expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
+    clients: [],
+    streams: ["//new/main"],
+  });
+  expect(
+    host.querySelector(".submitted-stream-picker")?.textContent,
+  ).not.toContain("//old/");
+});
+
+it("keeps the loaded/displayed summary above results when filters collapse", async () => {
+  await render();
+  const filters = host.querySelector<HTMLDetailsElement>(".submitted-filters")!;
+  const summary = host.querySelector(".submitted-result-summary")!;
+  expect(summary.textContent).toContain(
+    `已加载 ${changes.length} 条中显示 ${changes.length} 条`,
+  );
+  expect(filters.contains(summary)).toBe(false);
+  expect(summary.nextElementSibling?.classList.contains("cl-layout")).toBe(
+    true,
+  );
+  await act(async () => {
+    filters.open = false;
+  });
+  expect(summary.closest("details")).toBeNull();
+  expect(summary.isConnected).toBe(true);
+});
+
+it("keeps Depot Path and Stream together, with both dates in their own paired row", async () => {
+  await render();
+  const scope = host.querySelector(".submitted-scope-row")!;
+  expect(
+    scope.querySelectorAll(":scope > .submitted-filter-field"),
+  ).toHaveLength(2);
+  expect(scope.contains(input("Depot Path"))).toBe(true);
+  expect(scope.querySelector(".submitted-stream-picker")).toBeTruthy();
+  expect(
+    host.querySelectorAll(".submitted-date-range input[type='datetime-local']"),
+  ).toHaveLength(2);
+});
+
+it("keeps distinct fixed-height result rows across expansion, collapse and resize", async () => {
+  await render();
+  const boxes = () => [
+    ...host.querySelectorAll<HTMLElement>(".submitted-change-row"),
+  ];
+  const assertSeparated = () => {
+    const items = boxes();
+    expect(items.length).toBeGreaterThan(1);
+    for (let index = 1; index < items.length; index++) {
+      const y = (node: HTMLElement) =>
+        Number(node.style.transform.match(/translateY\(([-\d.]+)px\)/)![1]);
+      expect(y(items[index])).toBeGreaterThanOrEqual(
+        y(items[index - 1]) + Number.parseFloat(items[index - 1].style.height),
+      );
+    }
+  };
+  assertSeparated();
+  await click(
+    boxes()[0].querySelector<HTMLButtonElement>(".submitted-expand")!,
+  );
+  expect(boxes()[0].style.height).toBe("324px");
+  assertSeparated();
+  await act(async () => {
+    host.querySelector<HTMLDetailsElement>(".submitted-filters")!.open = false;
+    window.dispatchEvent(new Event("resize"));
+  });
+  assertSeparated();
+  await click(
+    boxes()[0].querySelector<HTMLButtonElement>(".submitted-expand")!,
+  );
+  expect(boxes()[0].style.height).toBe("64px");
+  assertSeparated();
 });

@@ -16,6 +16,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use similar::{ChangeTag, TextDiff};
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     fs::{self, File},
     io::Read,
@@ -109,6 +110,60 @@ impl FileService {
 
     pub fn clear_review_cache(&self) {
         self.review_cache.lock().entries.clear();
+    }
+
+    /// Local directory names are available before any server or ticket checks.
+    pub fn workspace_directory(
+        context: &P4Context,
+        path: Option<&str>,
+    ) -> Result<WorkspaceListing, String> {
+        let root = canonical_root(context)?;
+        let directory = secure_path(&root, path.unwrap_or(""), true)?;
+        let scan = scan_workspace_directory(&root, &directory, Self::WORKSPACE_LIST_SAFETY_LIMIT);
+        let mut items = scan
+            .entries
+            .into_iter()
+            .map(|local| {
+                let status = WorkspaceFileStatus {
+                    primary: WorkspacePrimaryState::Unknown,
+                    opened_action: None,
+                    reconcile_action: None,
+                    sync: WorkspaceSyncState::Unknown,
+                    resolve: WorkspaceResolveState::Unknown,
+                    local: local.local_state,
+                    mapped: None,
+                    moved_file: None,
+                    ignore: None,
+                    file_type: None,
+                    exclusive_open: None,
+                    lock_ownership: None,
+                    lock_owner: None,
+                    other_open: Vec::new(),
+                    can_lock: Some(false),
+                    can_unlock: Some(false),
+                    lock_reason: Some("P4 status check is pending".into()),
+                    completeness: WorkspaceStatusCompleteness::Partial,
+                    evidence: vec![WorkspaceStatusEvidence {
+                        source: WorkspaceStatusSource::Filesystem,
+                        summary: "Local directory entry; P4 status check is pending".into(),
+                    }],
+                    errors: Vec::new(),
+                };
+                let mut node = workspace_node_from_local(&root, local, status);
+                node.state = "loading".into();
+                node
+            })
+            .collect::<Vec<_>>();
+        items.sort_by_key(|node| (node.kind != "directory", node.name.to_lowercase()));
+        Ok(WorkspaceListing {
+            items,
+            completeness: WorkspaceStatusCompleteness::Partial,
+            errors: scan.errors,
+            operation_ids: Vec::new(),
+            truncated: scan.truncated,
+            safety_limit: Self::WORKSPACE_LIST_SAFETY_LIMIT,
+            cache_freshness: "local".into(),
+        })
     }
 
     #[cfg(test)]
@@ -465,6 +520,11 @@ impl FileService {
     ) -> Result<Vec<DepotNode>, String> {
         let base = path.unwrap_or_else(|| "//...".into());
         let prefix = base.trim_end_matches("...").trim_end_matches('/');
+        if prefix.is_empty() {
+            let depots = self.run(&context, "depots", vec![], true, app).await?;
+            ensure_success(&depots, "depots")?;
+            return Ok(depot_roots(&depots));
+        }
         let dirs = self
             .run(&context, "dirs", vec![format!("{}/*", prefix)], true, app)
             .await?;
@@ -477,6 +537,8 @@ impl FileService {
                 app,
             )
             .await?;
+        ensure_depot_listing_success(&dirs, "dirs")?;
+        ensure_depot_listing_success(&files, "files")?;
         let mut nodes = Vec::new();
         for value in json_values(&dirs) {
             if let Some(path) = value.get("dir").and_then(Value::as_str) {
@@ -761,6 +823,8 @@ impl FileService {
                 left: left.metadata,
                 right: right.metadata,
                 unified: String::new(),
+                left_text: None,
+                right_text: None,
                 stats: DiffStats::default(),
                 binary,
                 unsupported,
@@ -785,13 +849,15 @@ impl FileService {
                 left: left.metadata,
                 right: right.metadata,
                 unified: String::new(),
+                left_text: None,
+                right_text: None,
                 stats: DiffStats::default(),
                 binary: false,
                 unsupported: true,
                 reason: Some(format!(
                     "Text diff exceeds the {MAX_TEXT_LINES} line safety limit"
                 )),
-                identical: left_text == right_text,
+                identical: normalize_diff_text(&left_text) == normalize_diff_text(&right_text),
                 truncated: true,
                 partial: true,
                 operation_ids,
@@ -807,17 +873,20 @@ impl FileService {
             &left.metadata.label,
             &right.metadata.label,
         );
+        let identical = stats.additions == 0 && stats.deletions == 0;
         let truncated = truncate_utf8(&mut unified, MAX_DIFF_BYTES);
         let result = DiffResult {
             path: inspection.depot_path,
             left: left.metadata,
             right: right.metadata,
             unified,
+            left_text: (!truncated).then_some(left_text),
+            right_text: (!truncated).then_some(right_text),
             stats,
             binary: false,
             unsupported: false,
             reason: truncated.then(|| "Diff output reached the 8 MiB safety limit".into()),
-            identical: left_text == right_text,
+            identical,
             truncated,
             partial: truncated,
             operation_ids,
@@ -1000,7 +1069,6 @@ impl FileService {
                 vec![
                     "-m".into(),
                     (limit + 1).to_string(),
-                    "-i".into(),
                     "-l".into(),
                     "-t".into(),
                     escape_review_filespec(&request.scope.file_identity),
@@ -1242,12 +1310,12 @@ impl FileService {
                 "print",
                 vec!["-q".into(), spec],
                 Some(format!("{operation_id}:print")),
-                false,
+                true,
                 app,
             )
             .await?;
         ensure_success(&printed, "print")?;
-        let text = event_text(&printed);
+        let text = printed_text(&printed)?;
         let digest = digest.or_else(|| Some(sha256_hex(text.as_bytes())));
         Ok(LoadedDiffSide {
             metadata,
@@ -1359,12 +1427,12 @@ impl FileService {
                 "print",
                 vec!["-q".into(), spec],
                 Some(format!("{operation_id}:print")),
-                false,
+                true,
                 app,
             )
             .await?;
         ensure_success(&printed, "print shelved revision")?;
-        let text = event_text(&printed);
+        let text = printed_text(&printed)?;
         let digest = digest.or_else(|| Some(sha256_hex(text.as_bytes())));
         Ok(LoadedDiffSide {
             metadata,
@@ -1671,16 +1739,58 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
+/// Structured `p4 print` carries exact text in data chunks. The runner's plain
+/// text events lose line terminators, so joining them cannot reconstruct a file.
+fn printed_text(result: &OperationResult) -> Result<String, String> {
+    let mut text = String::new();
+    for event in &result.events {
+        if !matches!(event.kind, EventKind::Stdout) {
+            continue;
+        }
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        let value: Value = serde_json::from_str(message)
+            .map_err(|_| "P4 print returned invalid structured text".to_owned())?;
+        // Diagnostics and metadata are not file content.
+        if value.get("severity").is_some()
+            || value.get("level").is_some()
+            || value
+                .get("code")
+                .and_then(Value::as_str)
+                .is_some_and(|code| code != "text")
+        {
+            continue;
+        }
+        if let Some(data) = value.get("data") {
+            text.push_str(data.as_str().ok_or("P4 print returned non-text content")?);
+        }
+    }
+    Ok(text)
+}
+
+/// Ignore CRLF/LF representation only. Keep final newlines, blank lines,
+/// whitespace and standalone carriage returns as meaningful content.
+fn normalize_diff_text(text: &str) -> Cow<'_, str> {
+    if text.contains("\r\n") {
+        Cow::Owned(text.replace("\r\n", "\n"))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
 fn build_unified_diff(
     left: &str,
     right: &str,
     left_label: &str,
     right_label: &str,
 ) -> (String, DiffStats) {
+    let left = normalize_diff_text(left);
+    let right = normalize_diff_text(right);
     if left == right {
         return (String::new(), DiffStats::default());
     }
-    let diff = TextDiff::from_lines(left, right);
+    let diff = TextDiff::from_lines(left.as_ref(), right.as_ref());
     let mut stats = DiffStats::default();
     for change in diff.iter_all_changes() {
         match change.tag() {
@@ -1718,6 +1828,52 @@ fn parse_filelog_result(result: &OperationResult) -> Vec<FileRevision> {
         .into_iter()
         .flat_map(crate::p4::history::parse)
         .collect()
+}
+
+fn depot_roots(result: &OperationResult) -> Vec<DepotNode> {
+    let mut roots = json_values(result)
+        .into_iter()
+        .filter_map(|value| {
+            let name = value.get("name")?.as_str()?.to_owned();
+            let path = format!("//{name}");
+            Some(DepotNode {
+                id: path.clone(),
+                name,
+                kind: "directory".into(),
+                depot_path: path,
+                head_revision: None,
+                head_action: None,
+                has_children: Some(true),
+            })
+        })
+        .collect::<Vec<_>>();
+    roots.sort_by_key(|node| node.name.to_lowercase());
+    roots
+}
+
+fn ensure_depot_listing_success(result: &OperationResult, command: &str) -> Result<(), String> {
+    let values = json_values(result);
+    let messages = values
+        .iter()
+        .filter(|value| {
+            value.get("code").and_then(Value::as_str) == Some("error")
+                || number(value, "severity").unwrap_or(0) > 0
+        })
+        .collect::<Vec<_>>();
+    let empty = !messages.is_empty()
+        && messages.iter().all(|value| {
+            number(value, "generic") == Some(17) && number(value, "severity").unwrap_or(3) < 3
+        });
+    if empty
+        && !result
+            .events
+            .iter()
+            .any(|event| matches!(event.kind, EventKind::Cancelled))
+    {
+        Ok(())
+    } else {
+        ensure_success(result, command)
+    }
 }
 
 fn ensure_success(result: &OperationResult, command: &str) -> Result<(), String> {
@@ -2659,6 +2815,11 @@ fn ignore_batches<'a>(entries: &'a [&'a LocalEntry]) -> Vec<Vec<&'a LocalEntry>>
     let mut current = Vec::new();
     let mut bytes = 0usize;
     for entry in entries {
+        // Directory status comes from the local scan. Some P4 CLI versions retain
+        // a directory's negated ignore rule for later file arguments in the batch.
+        if entry.local_state == WorkspaceLocalState::Directory {
+            continue;
+        }
         let entry_bytes = entry.absolute_path.len() + 1;
         if !current.is_empty() && (current.len() >= 64 || bytes + entry_bytes > 16_000) {
             batches.push(std::mem::take(&mut current));
@@ -3147,6 +3308,39 @@ mod tests {
     }
 
     #[test]
+    fn depot_browser_lists_depot_roots_and_does_not_hide_errors_as_empty_folders() {
+        let depots = operation(
+            "depots",
+            &[
+                r#"{"name":"游戏项目","type":"stream"}"#,
+                r#"{"name":"depot","type":"local"}"#,
+            ],
+        );
+        let roots = depot_roots(&depots);
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].depot_path, "//depot");
+        assert_eq!(roots[1].depot_path, "//游戏项目");
+        assert!(roots.iter().all(|node| node.kind == "directory"));
+        let mut empty = operation(
+            "dirs",
+            &[r#"{"code":"error","generic":17,"severity":2,"data":"No such file(s)."}"#],
+        );
+        empty.exit_code = 1;
+        assert!(ensure_depot_listing_success(&empty, "dirs").is_ok());
+        let mut denied = operation(
+            "files",
+            &[r#"{"code":"error","generic":6,"severity":3,"data":"Permission denied"}"#],
+        );
+        denied.exit_code = 1;
+        assert!(ensure_depot_listing_success(&denied, "files")
+            .unwrap_err()
+            .contains("Permission denied"));
+        let mut network = operation("dirs", &["Connect to server failed"]);
+        network.exit_code = 1;
+        assert!(ensure_depot_listing_success(&network, "dirs").is_err());
+    }
+
+    #[test]
     fn parses_structured_and_legacy_reconcile_preview_without_mutation_assumptions() {
         let result = operation(
             "reconcile",
@@ -3217,6 +3411,41 @@ mod tests {
     }
 
     #[test]
+    fn ignore_batches_keep_directories_out_of_file_rule_checks() {
+        let entries = (0..67)
+            .map(|index| {
+                let directory = index == 0 || index == 33;
+                let name = if directory {
+                    format!(".agents-{index}")
+                } else {
+                    format!("generated-{index}.csproj")
+                };
+                LocalEntry {
+                    absolute_path: format!("C:/workspace/{name}"),
+                    relative_path: name.clone(),
+                    name,
+                    kind: if directory { "directory" } else { "file" }.into(),
+                    modified_at: None,
+                    has_children: directory,
+                    local_state: if directory {
+                        WorkspaceLocalState::Directory
+                    } else {
+                        WorkspaceLocalState::Present
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        let candidates = entries.iter().collect::<Vec<_>>();
+        let batches = ignore_batches(&candidates);
+        assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [64, 1]);
+        let files = batches.into_iter().flatten().collect::<Vec<_>>();
+        assert_eq!(files[0].name, "generated-1.csproj");
+        assert_eq!(files[64].name, "generated-66.csproj");
+        assert!(files.iter().all(|entry| entry.kind == "file"));
+        assert!(ignore_batches(&[&entries[0], &entries[33]]).is_empty());
+    }
+
+    #[test]
     fn escapes_literal_filespec_characters_and_keeps_single_level_scope() {
         assert_eq!(
             local_child_filespec(Path::new("C:/ws/space @#%")),
@@ -3240,6 +3469,89 @@ mod tests {
         assert_eq!((stats.additions, stats.deletions, stats.hunks), (1, 1, 1));
         let (_, empty_stats) = build_unified_diff("", "first\n", "missing", "#1");
         assert_eq!(empty_stats.additions, 1);
+    }
+
+    #[test]
+    fn text_diff_ignores_crlf_lf_and_mixed_line_endings() {
+        for (left, right) in [
+            ("one\ntwo\n", "one\r\ntwo\r\n"),
+            ("世界\n\nlast", "世界\r\n\r\nlast"),
+            ("one\r\ntwo\nthree\r\n", "one\ntwo\r\nthree\n"),
+            ("\n", "\r\n"),
+        ] {
+            for (left, right) in [(left, right), (right, left)] {
+                let (diff, stats) = build_unified_diff(left, right, "Have", "Workspace");
+                assert!(
+                    diff.is_empty(),
+                    "Line endings created false changes: {diff}"
+                );
+                assert_eq!((stats.additions, stats.deletions, stats.hunks), (0, 0, 0));
+            }
+        }
+    }
+
+    #[test]
+    fn text_diff_counts_only_real_edits_across_line_endings() {
+        let left = "using System;\n\n// 世界\nold();\nunchanged();\n";
+        let right = "using System;\r\n\r\n// 世界\nnew();\r\nunchanged();\r\n";
+        let (diff, stats) = build_unified_diff(left, right, "Have", "Workspace");
+        assert_eq!((stats.additions, stats.deletions, stats.hunks), (1, 1, 1));
+        assert!(diff.contains("-old();\n+new();\n"));
+        assert!(!diff.contains("-using System;"));
+        assert!(!diff.contains('\r'));
+    }
+
+    #[test]
+    fn text_diff_preserves_final_newline_and_content_whitespace_changes() {
+        for (left, right) in [
+            ("one\r\n", "one"),
+            ("one", "one\r\n"),
+            ("one\r\n\r\n", "one\n"),
+            ("one \r\n", "one\n"),
+            ("\tone\r\n", "one\n"),
+            ("one\rtwo\r\n", "onetwo\n"),
+        ] {
+            let (diff, stats) = build_unified_diff(left, right, "Have", "Workspace");
+            assert!(!diff.is_empty());
+            assert!(stats.additions + stats.deletions > 0);
+        }
+        let (diff, stats) = build_unified_diff("one\r\n", "one", "Have", "Workspace");
+        assert!(diff.contains("\\ No newline at end of file"));
+        assert_eq!((stats.additions, stats.deletions, stats.hunks), (1, 1, 1));
+    }
+
+    #[test]
+    fn structured_print_preserves_chunk_boundaries_and_final_newlines() {
+        for expected in ["", "世界\r\n\nlast", "世界\n\nlast\r\n", "\n"] {
+            let split = expected
+                .char_indices()
+                .nth(expected.chars().count() / 2)
+                .map_or(expected.len(), |(offset, _)| offset);
+            let chunks = [
+                serde_json::json!({"depotFile": "//depot/a.txt", "rev": "1"}).to_string(),
+                serde_json::json!({"data": &expected[..split]}).to_string(),
+                serde_json::json!({"data": &expected[split..]}).to_string(),
+                serde_json::json!({"data": ""}).to_string(),
+                serde_json::json!({"code": "info", "data": "not content"}).to_string(),
+                serde_json::json!({"severity": 2, "data": "not content"}).to_string(),
+                serde_json::json!({"level": 0, "data": "not content"}).to_string(),
+            ];
+            let mut result = operation(
+                "print",
+                &chunks.iter().map(String::as_str).collect::<Vec<_>>(),
+            );
+            let mut stderr = result.events[0].clone();
+            stderr.kind = EventKind::Stderr;
+            stderr.message = Some("not content".into());
+            result.events.push(stderr);
+            assert_eq!(printed_text(&result).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn structured_print_rejects_malformed_content_instead_of_hiding_changes() {
+        assert!(printed_text(&operation("print", &["not JSON"])).is_err());
+        assert!(printed_text(&operation("print", &[r#"{"data":123}"#])).is_err());
     }
 
     #[test]
@@ -3362,6 +3674,34 @@ mod tests {
         assert_eq!(edges.iter().filter(|edge| edge.kind == "merge").count(), 1);
         let merge = edges.iter().find(|edge| edge.kind == "merge").unwrap();
         assert!(merge.target.contains("#2"));
+    }
+
+    #[test]
+    fn local_directory_is_available_without_a_cli_or_status_evidence() {
+        let root = std::env::temp_dir().join(format!("p4deck-local-tree-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("Assets")).unwrap();
+        std::fs::write(root.join("Assets").join("nested.txt"), b"nested").unwrap();
+        std::fs::write(root.join("local.txt"), b"local").unwrap();
+        let context = P4Context {
+            cwd: Some(root.to_string_lossy().into_owned()),
+            executable: Some("missing-p4-cli".into()),
+            ..Default::default()
+        };
+        let listing = FileService::workspace_directory(&context, None).unwrap();
+        assert_eq!(listing.cache_freshness, "local");
+        assert!(listing.errors.is_empty());
+        assert!(listing.operation_ids.is_empty());
+        assert_eq!(listing.items.len(), 2);
+        assert_eq!(listing.items[0].name, "Assets");
+        assert_eq!(listing.items[0].has_children, Some(true));
+        assert!(listing.items.iter().all(|node| node.state == "loading"
+            && node.status.primary == WorkspacePrimaryState::Unknown
+            && node.status.mapped.is_none()
+            && node.status.can_lock == Some(false)));
+        let children = FileService::workspace_directory(&context, Some("Assets")).unwrap();
+        assert_eq!(children.items[0].name, "nested.txt");
+        assert!(FileService::workspace_directory(&context, Some("..")).is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

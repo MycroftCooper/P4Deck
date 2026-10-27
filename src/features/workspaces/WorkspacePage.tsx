@@ -1,57 +1,19 @@
+import { FixedPageHeader } from "../../app/docking/chrome";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Monitor, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
-import type {
-  ClientWorkspace,
-  RuntimeInfo,
-} from "../../shared/contracts/types";
+import type { P4VfsStatus, RuntimeInfo } from "../../shared/contracts/types";
 import type { messages } from "../../shared/i18n";
 
 import { useContextMenu } from "../../app/context-menu/ContextMenu";
 import { TableHeader } from "../../app/context-menu/TableHeader";
 import { action, copy } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
-const cache = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 60_000, gcTime: 300_000, retry: false },
-  },
-});
-
-function switchFailure(cause: unknown, zh: boolean) {
-  const value =
-    cause && typeof cause === "object"
-      ? (cause as { code?: string; message?: string })
-      : undefined;
-  const code = value?.code ?? String(cause).match(/(?:Error:\s*)?(\w+):/)?.[1];
-  const recovery: Record<string, [string, string]> = {
-    contextChanged: [
-      "活动连接已变化，请刷新 Workspace 后重试。",
-      "The active connection changed. Refresh workspaces and retry.",
-    ],
-    authenticationRequired: [
-      "当前 Profile 需要登录，请到设置中完成认证后重试。",
-      "The current profile requires login. Authenticate in Settings, then retry.",
-    ],
-    connectionFailed: [
-      "目标 Workspace 验证失败，请检查 Server、Client 与 Root。",
-      "Target workspace verification failed. Check its server, client, and root.",
-    ],
-    notFound: [
-      "目标 Workspace 已不存在或不再属于当前用户，请刷新列表。",
-      "The target workspace no longer exists or is not owned by this user. Refresh the list.",
-    ],
-  };
-  const copy = code ? recovery[code] : undefined;
-  return copy
-    ? zh
-      ? copy[0]
-      : copy[1]
-    : zh
-      ? "切换请求未完成，请刷新后重试。"
-      : "The switch request did not complete. Refresh and retry.";
-}
+import { appCache } from "../../shared/cache/appCache";
+import { useViewRefresh } from "../../shared/cache/useViewRefresh";
+import { switchFailure } from "./workspaceSwitch";
+import { useWorkspaceList, workspaceListKey } from "./workspaceList";
 
 export function WorkspacePage({
   t,
@@ -63,13 +25,13 @@ export function WorkspacePage({
   onRuntime(runtime: RuntimeInfo): void;
 }) {
   const zh = t.files === "文件";
-  const [items, setItems] = useState<ClientWorkspace[]>([]);
   const [search, setSearch] = useState("");
   const [selectedName, setSelectedName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [refresh, setRefresh] = useState(0);
+  const [switchError, setError] = useState("");
   const [switching, setSwitching] = useState(false);
+  const [vfsStatus, setVfsStatus] = useState<P4VfsStatus>();
+  const [vfsError, setVfsError] = useState("");
+  const [vfsRevision, setVfsRevision] = useState(0);
   const [switchPhase, setSwitchPhase] = useState<
     "idle" | "verifying" | "committing" | "success" | "error"
   >("idle");
@@ -78,39 +40,17 @@ export function WorkspacePage({
   const switchButton = useRef<HTMLButtonElement>(null);
   const restoreSwitchFocus = useRef(false);
   const previousGeneration = useRef(runtime.contextGeneration);
+  const vfsSequence = useRef(0);
   const ready = runtime.connection.state === "connected";
-  const key = useMemo(
-    () => ["user-workspaces", runtime.mode, runtime.context],
-    [runtime],
+  const key = workspaceListKey(runtime);
+  // Cached rows stay visible while unverified; only a verified connection asks P4.
+  const list = useWorkspaceList(
+    runtime,
+    ready && runtime.p4Version !== "loading",
   );
-  useEffect(() => {
-    if (runtime.p4Version === "loading" || !ready) {
-      setItems([]);
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    setItems(cache.getQueryData<ClientWorkspace[]>(key) ?? []);
-    setLoading(true);
-    setError("");
-    void cache
-      .fetchQuery({
-        queryKey: key,
-        queryFn: () => backend.listUserWorkspaces(),
-      })
-      .then((data) => {
-        if (active) setItems(data);
-      })
-      .catch((cause) => {
-        if (active) setError(String(cause));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [key, ready, runtime.p4Version, refresh]);
+  const items = useMemo(() => list.data ?? [], [list.data]);
+  const loading = list.initialLoading || list.refreshing;
+  const error = switchError || list.error;
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return items.filter((item) =>
@@ -144,23 +84,44 @@ export function WorkspacePage({
     value == null
       ? "—"
       : new Date(value * 1000).toLocaleString(zh ? "zh-CN" : "en-US");
-  const reload = async () => {
-    await cache.invalidateQueries({ queryKey: key });
-    setRefresh((value) => value + 1);
+  const reload = () => {
+    setError("");
+    setVfsError("");
+    setVfsRevision((value) => value + 1);
+    return list.refresh();
   };
   useEffect(() => {
-    const autoRefresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ activePage?: string }>).detail;
-      if (detail?.activePage === "workspaces") void reload();
+    const sequence = ++vfsSequence.current;
+    if (!ready) {
+      setVfsStatus(undefined);
+      setVfsError("");
+      return;
+    }
+    setVfsStatus(undefined);
+    setVfsError("");
+    void backend
+      .inspectP4Vfs({
+        expectedContextGeneration: runtime.contextGeneration,
+        operationId: `workspace-vfs-${crypto.randomUUID()}`,
+      })
+      .then((status) => {
+        if (sequence === vfsSequence.current) setVfsStatus(status);
+      })
+      .catch((cause) => {
+        if (sequence !== vfsSequence.current) return;
+        const message = cause instanceof Error ? cause.message : String(cause);
+        if (!message.includes("contextChanged")) setVfsError(message);
+      });
+    return () => {
+      vfsSequence.current += 1;
     };
-    window.addEventListener("p4deck:auto-refresh", autoRefresh);
-    return () => window.removeEventListener("p4deck:auto-refresh", autoRefresh);
-  }, [key]);
+  }, [ready, runtime.contextGeneration, vfsRevision]);
+  useViewRefresh("workspaces", key, reload);
   useEffect(() => {
     if (previousGeneration.current === runtime.contextGeneration) return;
     previousGeneration.current = runtime.contextGeneration;
-    void cache.removeQueries({ queryKey: ["user-workspaces"] });
-    setItems([]);
+    // Stream or workspace switches can change rows; keep them visible meanwhile.
+    void appCache.invalidateQueries({ queryKey: workspaceListKey(runtime) });
     setSearch("");
     setError("");
     if (switchTarget.current === runtime.context.client) {
@@ -207,25 +168,19 @@ export function WorkspacePage({
   };
   return (
     <section className="workspaces-page">
-      <header className="section-title">
-        <div>
-          <span className="workspace-eyebrow">
-            PERFORCE / CLIENT WORKSPACES
-          </span>
-          <h1>
-            Workspace <span className="heading-count">{items.length}</span>
-          </h1>
-          <p>
-            {zh
-              ? "当前用户拥有的工作区，跨主机集中查看。"
-              : "Workspaces owned by the current user, across hosts."}
-          </p>
-        </div>
+      <FixedPageHeader
+        description={
+          zh
+            ? "当前用户拥有的工作区，跨主机集中查看。"
+            : "Workspaces owned by the current user, across hosts."
+        }
+      >
+        <span className="fixed-page-meta">{items.length}</span>
         <button disabled={loading || !ready} onClick={() => void reload()}>
           <RefreshCw size={15} className={loading ? "spin" : ""} />
           {t.refresh}
         </button>
-      </header>
+      </FixedPageHeader>
       <div className="query-bar">
         <label className="search-field">
           <Search size={15} />
@@ -274,7 +229,37 @@ export function WorkspacePage({
           <span>STREAM</span>
           <strong>{currentWorkspace?.stream || "—"}</strong>
         </div>
+        <div title={vfsStatus?.reason}>
+          <span>SYNC MODE</span>
+          <strong>
+            {vfsStatus?.mode === "virtual"
+              ? vfsStatus.ready
+                ? "P4VFS"
+                : zh
+                  ? "P4VFS · 待配置"
+                  : "P4VFS · setup needed"
+              : vfsStatus?.mode === "standard"
+                ? zh
+                  ? "标准同步"
+                  : "Standard"
+                : zh
+                  ? "检查中…"
+                  : "Checking…"}
+          </strong>
+        </div>
       </section>
+      {vfsStatus?.mode === "virtual" && !vfsStatus.ready && (
+        <p className="workspace-vfs-note" role="status">
+          {zh ? "P4VFS 尚未就绪：" : "P4VFS is not ready: "}
+          {vfsStatus.reason}
+        </p>
+      )}
+      {vfsError && (
+        <p className="workspace-vfs-note" role="status">
+          {zh ? "无法检查 P4VFS 状态：" : "P4VFS status unavailable: "}
+          {vfsError}
+        </p>
+      )}
       {runtime.mode === "mock" && (
         <p className="workspace-simulated-note">
           {zh
@@ -439,6 +424,26 @@ export function WorkspacePage({
                   "Stream",
                   selected.stream || (zh ? "传统工作区" : "Classic workspace"),
                 ],
+                ...(selected.name === runtime.context.client
+                  ? [
+                      [
+                        zh ? "同步方式" : "Sync mode",
+                        vfsStatus?.mode === "virtual"
+                          ? vfsStatus.ready
+                            ? "P4VFS"
+                            : zh
+                              ? "P4VFS（未就绪）"
+                              : "P4VFS (not ready)"
+                          : vfsStatus?.mode === "standard"
+                            ? zh
+                              ? "标准同步"
+                              : "Standard sync"
+                            : zh
+                              ? "未知"
+                              : "Unknown",
+                      ],
+                    ]
+                  : []),
                 [zh ? "更新时间" : "Updated", date(selected.updated)],
                 [zh ? "访问时间" : "Accessed", date(selected.accessed)],
               ].map(([label, value]) => (

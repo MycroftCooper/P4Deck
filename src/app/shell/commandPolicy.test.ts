@@ -1,3 +1,4 @@
+import { historyDiffTarget } from "./commandPolicy";
 import { expect, it } from "vitest";
 import type { WorkspaceNode } from "../../shared/contracts/types";
 import {
@@ -41,6 +42,18 @@ it("keeps execution snapshot identity independent of the currently focused objec
   expect(
     commandTargetKey({ ...snapshot, nodes: [snapshot.node, other.node] }),
   ).not.toBe(commandTargetKey(snapshot));
+  expect(
+    commandTargetKey({
+      ...snapshot,
+      nodes: [snapshot.node, other.node],
+      wholeChangelistId: 0,
+    }),
+  ).not.toBe(
+    commandTargetKey({
+      ...snapshot,
+      nodes: [snapshot.node, other.node],
+    }),
+  );
   expect(commandTargetKey({ type: "pending", id: 42, count: 1 })).not.toBe(
     commandTargetKey({ type: "submitted", id: 42 }),
   );
@@ -61,6 +74,8 @@ it("separates local untracked, controlled, opened and conflicted files", () => {
   expect(allowed("checkout", file("controlled"))).toBe(true);
   expect(allowed("checkout", file("openedEdit"))).toBe(false);
   expect(allowed("revert", file("openedEdit"))).toBe(true);
+  expect(allowed("revert", file("openedMoveAdd"))).toBe(true);
+  expect(allowed("revert", file("openedMoveDelete"))).toBe(true);
   expect(allowed("getLatest", file("conflicted"))).toBe(false);
   expect(allowed("diff", file("conflicted"))).toBe(true);
 });
@@ -204,4 +219,25 @@ it("folder state is not a descendant status aggregate", () => {
     "openWith",
   ] as CommandId[])
     expect(allowed(id, file("controlled", "directory"))).toBe(false);
+});
+
+it("routes exactly two historical revisions in ascending order and disables mutations", () => {
+  const target = {
+    type: "history" as const,
+    path: "//mock/config.toml",
+    revisions: [8, 7],
+  };
+  expect(historyDiffTarget(target)).toEqual({
+    path: target.path,
+    left: 7,
+    right: 8,
+  });
+  expect(commandReason("diff", target, false, false, true)).toBeUndefined();
+  expect(commandReason("checkout", target, false, false, true)).toBeTruthy();
+  for (const revisions of [[], [8], [8, 7, 6], [8, 8], [0, 1]]) {
+    expect(historyDiffTarget({ ...target, revisions })).toBeUndefined();
+    expect(
+      commandReason("diff", { ...target, revisions }, false, false, true),
+    ).toBeTruthy();
+  }
 });

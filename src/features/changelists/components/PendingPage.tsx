@@ -1,10 +1,13 @@
+import { useChangeDetails } from "./ChangeDetailsDialog";
 import { useCommandFocus } from "../../../app/shell/CommandContext";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useState,
   useContext,
   useRef,
+  useMemo,
   type DragEvent,
   type KeyboardEvent,
 } from "react";
@@ -13,17 +16,24 @@ import {
   useVirtualizer,
   type VirtualItem,
 } from "@tanstack/react-virtual";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   FolderArchive,
   MoreHorizontal,
   Plus,
+  RotateCcw,
+  Send,
   Trash2,
+  ListChecks,
+  LoaderCircle,
+  Check,
 } from "lucide-react";
 import type {
   PendingChange,
   PendingChangeSort,
   PendingChangeMutationResult,
+  WorkspaceNode,
 } from "../../../shared/contracts/types";
 import type { messages } from "../../../shared/i18n";
 import { backend } from "../../../infrastructure/backend";
@@ -36,9 +46,10 @@ import { ChangelistFormDialog } from "./ChangelistFormDialog";
 import { ShelfDialog, type ShelfRequest } from "./ShelfDialog";
 import { UnshelveDialog } from "./UnshelveDialog";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
-import { DeleteChangelistDialog } from "./DeleteChangelistDialog";
-import { workspaceCache } from "../../files/workspaceQueries";
-import { pendingQuery, pendingQueryKey } from "../pendingQueries";
+import { invalidateData } from "../../../shared/cache/dataEffects";
+import { mergePendingMutation } from "../pendingQueries";
+export { mergePendingMutation } from "../pendingQueries";
+import { usePendingCache } from "../pendingCache";
 import {
   readPendingFilterState,
   writePendingFilterState,
@@ -46,33 +57,28 @@ import {
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import type { WorkflowRefreshDetail } from "../workflowRefresh";
 import { swarmMenuAction } from "../../swarm/SwarmAction";
+import { pendingFilePath } from "../pendingFilePath";
+import { filterPendingChanges } from "../pendingQueries";
+import { connectionPresentation } from "../../settings/connectionWizard";
+import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 type T = (typeof messages)[keyof typeof messages];
-
-export function mergePendingMutation(
-  current: PendingChange[],
-  result: PendingChangeMutationResult,
-) {
-  if (result.refreshError) return current;
-  const affected = new Set(result.affectedChanges);
-  const refreshed = new Map(
-    result.refreshedChanges.map((change) => [change.id, change]),
-  );
-  const next = current
-    .filter((change) => !affected.has(change.id) || refreshed.has(change.id))
-    .map((change) => refreshed.get(change.id) ?? change);
-  for (const change of refreshed.values())
-    if (!next.some((item) => item.id === change.id)) next.push(change);
-  return next.sort((left, right) =>
-    left.id === 0 ? -1 : right.id === 0 ? 1 : right.id - left.id,
-  );
-}
+const openedStates: Record<string, WorkspaceNode["state"]> = {
+  add: "openedAdd",
+  branch: "openedAdd",
+  edit: "openedEdit",
+  integrate: "openedEdit",
+  delete: "openedDelete",
+  "move/add": "openedMoveAdd",
+  "move/delete": "openedMoveDelete",
+};
 
 export function PendingPage({
   t,
   clientName,
   connectionKey,
   demo,
-  ready,
+  ready: cliReady,
+  checkingConnection = false,
   navigation,
 }: {
   t: T;
@@ -80,10 +86,23 @@ export function PendingPage({
   connectionKey: string;
   demo: boolean;
   ready: boolean;
+  checkingConnection?: boolean;
   navigation?: { changeId: number; nonce: number };
 }) {
   const menuEnvironment = useMenuEnvironment();
+  const connection = menuEnvironment.runtime.connection;
+  const ready = cliReady && connection.state === "connected";
+  const checking = checkingConnection || connection.state === "notTested";
+  const connectionProblem = !checking && connection.state !== "connected";
+  const connectionReason = ready
+    ? undefined
+    : t.files === "文件"
+      ? "连接尚未就绪"
+      : "Connection is not ready";
+  const retryConnection = () =>
+    window.dispatchEvent(new Event("p4deck:auto-refresh"));
   const focus = useCommandFocus();
+  const headerTarget = useContext(PageHeaderActionsContext);
   const surface = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const handledNavigation = useRef<number | undefined>(undefined);
@@ -91,13 +110,30 @@ export function PendingPage({
     change?: PendingChange;
     source: HTMLElement | null;
   }>();
-  const openForm = (change?: PendingChange) =>
+  const openForm = (change?: PendingChange) => {
+    if (!ready) return;
     setForm({
       change,
       source: surface.current?.ownerDocument
         .activeElement as HTMLElement | null,
     });
-  const [refresh, setRefresh] = useState(0);
+  };
+  const pending = usePendingCache(menuEnvironment.runtime, ready);
+  const cachedChanges = pending.changes;
+  const setChanges = pending.updateChanges;
+  const loading = pending.initialLoading || pending.refreshing;
+  const loaded = !!pending.data;
+  const partial = pending.data?.partial ?? false;
+  const truncated = pending.data?.stats.truncatedBySafetyLimit ?? false;
+  const stats = pending.data?.stats ?? { scannedCount: 0, matchedCount: 0 };
+  const reload = useCallback(() => {
+    setError("");
+    if (!ready) {
+      window.dispatchEvent(new Event("p4deck:auto-refresh"));
+      return Promise.resolve();
+    }
+    return pending.refresh();
+  }, [pending.refresh, ready]);
   const [move, setMove] = useState<MoveFilesRequest>();
   const [drag, setDrag] = useState<{
     connectionKey: string;
@@ -106,10 +142,10 @@ export function PendingPage({
     origins: Record<string, number>;
   }>();
   const [dropTarget, setDropTarget] = useState<number>();
-  const [deleting, setDeleting] = useState<{
-    change: PendingChange;
-    source: HTMLElement | null;
-  }>();
+  const [deleting, setDeleting] = useState<number>();
+  const deletingRef = useRef(false);
+  const currentBinding = useRef(connectionKey);
+  currentBinding.current = connectionKey;
   const [shelfRequest, setShelfRequest] = useState<{
     request: ShelfRequest;
     unshelve: boolean;
@@ -119,7 +155,8 @@ export function PendingPage({
     mode: "shelve" | "delete" | "unshelve",
     paths: string[],
     source?: HTMLElement,
-  ) =>
+  ) => {
+    if (!ready) return;
     setShelfRequest({
       request: {
         changeId: change.id,
@@ -132,18 +169,25 @@ export function PendingPage({
       },
       unshelve: mode === "unshelve",
     });
-  const openMove = (from: number, paths: string[]) =>
+  };
+  const openMove = (from: number, paths: string[]) => {
+    if (!ready) return;
     setMove({
       from,
       paths: [...paths],
       source: surface.current?.ownerDocument
         .activeElement as HTMLElement | null,
     });
+  };
   const beginDrag = (
     from: number,
     paths: string[],
     event: DragEvent<HTMLElement>,
   ) => {
+    if (!ready || move || menuEnvironment.commandBusy) {
+      event.preventDefault();
+      return;
+    }
     const snapshot = {
       connectionKey,
       from,
@@ -162,6 +206,7 @@ export function PendingPage({
     event.preventDefault();
     event.stopPropagation();
     setDropTarget(undefined);
+    if (!ready || move || menuEnvironment.commandBusy) return;
     if (!drag || drag.connectionKey !== connectionKey) {
       setDrag(undefined);
       return;
@@ -190,14 +235,6 @@ export function PendingPage({
       fresh,
     );
   useEffect(() => {
-    const reload = () => setRefresh((n) => n + 1);
-    const merge = (event: Event) => {
-      const result = (event as CustomEvent<PendingChangeMutationResult>).detail;
-      if (result) {
-        setChanges((value) => mergePendingMutation(value, result));
-        reload();
-      }
-    };
     const mergeWorkflow = (event: Event) => {
       const detail = (event as CustomEvent<WorkflowRefreshDetail>).detail;
       if (!detail || detail.connectionKey !== connectionKey) return;
@@ -205,41 +242,47 @@ export function PendingPage({
       setNotice(
         `${detail.result.message}${operation ? ` · ${t.files === "文件" ? "操作记录" : "Operations"} ${operation}` : ""}${detail.result.logReference ? ` · ${t.files === "文件" ? "日志" : "Log"} ${detail.result.logReference}` : ""}`,
       );
-      reload();
     };
-    window.addEventListener("p4deck:pending-refresh", reload);
-    window.addEventListener("p4deck:pending-mutation", merge);
     window.addEventListener("p4deck:workflow-result", mergeWorkflow);
     return () => {
-      window.removeEventListener("p4deck:pending-refresh", reload);
-      window.removeEventListener("p4deck:pending-mutation", merge);
       window.removeEventListener("p4deck:workflow-result", mergeWorkflow);
     };
   }, [connectionKey, t.files]);
-  const [changes, setChanges] = useState<PendingChange[]>([]);
   const initialFilter = useRef(readPendingFilterState()).current;
   const [keyword, setKeyword] = useState(initialFilter.keyword);
   const [sort, setSort] = useState<PendingChangeSort>(initialFilter.sort);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string>();
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [partial, setPartial] = useState(false);
-  const [truncated, setTruncated] = useState(false);
-  const [stats, setStats] = useState({ scannedCount: 0, matchedCount: 0 });
-  const queryGeneration = useRef(0);
-  const queryOperation = useRef<string | undefined>(undefined);
-  const changesRef = useRef(changes);
-  changesRef.current = changes;
-  const cursorRef = useRef<string | undefined>(nextCursor);
-  cursorRef.current = nextCursor;
-  const hasMoreRef = useRef(hasMore);
-  hasMoreRef.current = hasMore;
-  const usedCursors = useRef(new Set<string>());
+  const [optimisticDeleted, setOptimisticDeleted] = useState<Set<number>>(
+    new Set(),
+  );
+  const visibleChanges = useMemo(
+    () => cachedChanges.filter((change) => !optimisticDeleted.has(change.id)),
+    [cachedChanges, optimisticDeleted],
+  );
+  const changes = useMemo(
+    () =>
+      filterPendingChanges(visibleChanges, keyword).sort((left, right) =>
+        left.id === 0
+          ? -1
+          : right.id === 0
+            ? 1
+            : sort === "newest"
+              ? right.id - left.id
+              : left.id - right.id,
+      ),
+    [visibleChanges, keyword, sort],
+  );
   const mounted = useRef(true);
   const activeChangeId = useRef<number | undefined>(undefined);
   const restoreVirtualFocus = useRef(false);
-  const [error, setError] = useState("");
+  const [operationError, setError] = useState("");
+  const error = operationError || pending.error;
+  const authenticationRequired =
+    ["authRequired", "ticketExpired"].includes(
+      menuEnvironment.runtime.connection.state,
+    ) ||
+    /session has expired|ticket (?:has )?expired|password (?:invalid|unset)|not logged in|authenticationRequired/i.test(
+      error,
+    );
   const [notice, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set([31821]));
   const [collapsedShelves, setCollapsedShelves] = useState<Set<number>>(
@@ -249,13 +292,16 @@ export function PendingPage({
   useEffect(() => {
     setExpanded(new Set());
     setCollapsedShelves(new Set());
+    setOptimisticDeleted(new Set());
     setDrag(undefined);
     setDropTarget(undefined);
   }, [connectionKey]);
   useEffect(() => {
     if (!navigation || handledNavigation.current === navigation.nonce) return;
+    if (!cachedChanges.some((change) => change.id === navigation.changeId))
+      return;
     if (!changes.some((change) => change.id === navigation.changeId)) {
-      if (!loading) setKeyword(String(navigation.changeId));
+      setKeyword(String(navigation.changeId));
       return;
     }
     handledNavigation.current = navigation.nonce;
@@ -265,130 +311,33 @@ export function PendingPage({
         `[data-pending-change="${navigation.changeId}"]`,
       )
       ?.focus();
-  }, [changes, loading, navigation]);
+  }, [cachedChanges, changes, navigation]);
   const toggleShelf = (id: number) =>
     setCollapsedShelves((previous) => {
       const next = new Set(previous);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const cancelQuery = useCallback(() => {
-    queryGeneration.current++;
-    void workspaceCache.cancelQueries({
-      queryKey: ["pending-changes", connectionKey],
-    });
-    const operationId = queryOperation.current;
-    queryOperation.current = undefined;
-    if (operationId)
-      void backend.cancelOperation(operationId).catch(() => undefined);
-  }, [connectionKey]);
-  const runQuery = useCallback(
-    async (cursor: string | undefined, append: boolean) => {
-      if (!ready || (append && (!cursor || queryOperation.current))) return;
-      cancelQuery();
-      const requestGeneration = queryGeneration.current;
-      const operationId = crypto.randomUUID();
-      queryOperation.current = operationId;
-      if (cursor) usedCursors.current.add(cursor);
-      append ? setLoadingMore(true) : setLoading(true);
-      if (!append) setError("");
-      try {
-        const query = {
-          ...pendingQuery(requestGeneration, operationId, keyword, cursor),
-          sort,
-        };
-        const result = await workspaceCache.fetchQuery({
-          queryKey: pendingQueryKey(connectionKey, query),
-          queryFn: () => backend.queryPendingChanges(query),
-          staleTime: 0,
-        });
-        if (
-          !mounted.current ||
-          requestGeneration !== queryGeneration.current ||
-          result.requestGeneration !== requestGeneration
-        )
-          return;
-        const prior = append ? changesRef.current : [];
-        const known = new Set(prior.map((change) => change.id));
-        const incoming = [
-          ...(result.defaultChange ? [result.defaultChange] : []),
-          ...result.items,
-        ].filter((change) => {
-          if (known.has(change.id)) return false;
-          known.add(change.id);
-          return true;
-        });
-        const combined = [...prior, ...incoming];
-        changesRef.current = combined;
-        setChanges(combined);
-        const invalidContinuation =
-          result.hasMore &&
-          (!result.nextCursor || usedCursors.current.has(result.nextCursor));
-        setHasMore(invalidContinuation ? false : result.hasMore);
-        hasMoreRef.current = invalidContinuation ? false : result.hasMore;
-        setNextCursor(invalidContinuation ? undefined : result.nextCursor);
-        cursorRef.current = invalidContinuation ? undefined : result.nextCursor;
-        setPartial(result.partial || invalidContinuation);
-        setTruncated(result.stats.truncatedBySafetyLimit);
-        setStats({
-          scannedCount: result.stats.scannedCount,
-          matchedCount: result.stats.matchedCount,
-        });
-        if (invalidContinuation)
-          setError(
-            t.files === "文件"
-              ? "后端返回了不可继续的游标；已保留当前部分结果。"
-              : "The backend returned a non-progressing cursor; current partial results were preserved.",
-          );
-      } catch (cause) {
-        if (mounted.current && requestGeneration === queryGeneration.current)
-          setError(String(cause));
-      } finally {
-        if (queryOperation.current === operationId)
-          queryOperation.current = undefined;
-        if (requestGeneration === queryGeneration.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
-      }
-    },
-    [cancelQuery, connectionKey, keyword, ready, sort, t.files],
-  );
   useEffect(() => {
     mounted.current = true;
-    if (!ready) return;
-    cancelQuery();
-    changesRef.current = [];
-    setChanges([]);
-    setHasMore(false);
-    setNextCursor(undefined);
-    setPartial(false);
-    setTruncated(false);
-    usedCursors.current.clear();
-    const timer = window.setTimeout(() => void runQuery(undefined, false), 250);
     return () => {
-      window.clearTimeout(timer);
-      cancelQuery();
-    };
-  }, [ready, refresh, connectionKey, keyword, sort, cancelQuery, runQuery]);
-  useEffect(
-    () => () => {
       mounted.current = false;
-      cancelQuery();
-    },
-    [cancelQuery],
-  );
+    };
+  }, []);
   const menu = useContextMenu();
+  const openChangeDetails = useChangeDetails();
   const run = useContext(CommandExecutionContext);
   const selection = useRecordSelection(
     changes,
     (change) => String(change.id),
     connectionKey,
   );
-  const rowVirtualizer = useVirtualizer({
+  const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: changes.length,
     getScrollElement: () => list.current,
-    estimateSize: (index) => (expanded.has(changes[index]?.id) ? 380 : 66),
+    estimateSize: (index) => (expanded.has(changes[index]?.id) ? 380 : 54),
+    // Expansion needs the committed height, even before ResizeObserver delivers.
+    measureElement: (element) => (element as HTMLDivElement).offsetHeight,
     overscan: 6,
     getItemKey: (index) => changes[index]?.id ?? index,
     initialRect: { width: 800, height: 600 },
@@ -397,6 +346,11 @@ export function PendingPage({
         (index) => index < changes.length,
       ),
   });
+  useLayoutEffect(() => {
+    list.current
+      ?.querySelectorAll<HTMLDivElement>(".pending-change-virtual-row")
+      .forEach((element) => rowVirtualizer.measureElement(element));
+  }, [rowVirtualizer, changes, expanded, collapsedShelves]);
   const measuredRows = rowVirtualizer.getVirtualItems();
   const virtualRows: VirtualItem[] = measuredRows.length
     ? measuredRows
@@ -408,7 +362,6 @@ export function PendingPage({
         end: (index + 1) * 66,
         lane: 0,
       }));
-  const lastVirtualIndex = virtualRows.at(-1)?.index ?? -1;
   useEffect(() => {
     const changeId = activeChangeId.current;
     if (!restoreVirtualFocus.current || changeId === undefined) return;
@@ -427,24 +380,11 @@ export function PendingPage({
       target.focus();
     }
   }, [virtualRows]);
-  useEffect(() => {
-    if (
-      lastVirtualIndex >= changes.length - 4 &&
-      hasMoreRef.current &&
-      cursorRef.current &&
-      !queryOperation.current
-    )
-      void runQuery(cursorRef.current, true);
-  }, [changes.length, lastVirtualIndex, runQuery]);
-  const reload = () => setRefresh((n) => n + 1);
   const applyMutation = (
     result: PendingChangeMutationResult,
     incompleteMessage: string,
     successMessage: string,
   ) => {
-    void workspaceCache.invalidateQueries({
-      queryKey: ["pending-changes", connectionKey],
-    });
     if (!result.refreshError)
       setChanges((value) => mergePendingMutation(value, result));
     setError(
@@ -462,16 +402,76 @@ export function PendingPage({
         new CustomEvent("p4deck:pending-mutation", { detail: result }),
       );
   };
-  const refreshFileStatus = async () => {
-    await Promise.all([
-      workspaceCache.invalidateQueries({
-        queryKey: ["workspace-files", connectionKey],
-      }),
-      workspaceCache.invalidateQueries({
-        queryKey: ["depot-files", connectionKey],
-      }),
-    ]);
+  const refreshFileStatus = (affectedPaths?: readonly string[]) =>
+    invalidateData(["workspaceStatus", "depot"], {
+      connectionKey,
+      affectedPaths,
+    }).catch(() => undefined);
+  const deleteEmptyChange = async (change: PendingChange) => {
+    if (
+      !ready ||
+      menuEnvironment.commandBusy ||
+      deletingRef.current ||
+      change.id <= 0 ||
+      change.files.length ||
+      change.shelvedFiles.length ||
+      change.jobs.length
+    )
+      return;
+    const binding = connectionKey;
+    deletingRef.current = true;
+    setDeleting(change.id);
+    setError("");
+    setOptimisticDeleted((current) => new Set(current).add(change.id));
+    setChanges((current) => current.filter((item) => item.id !== change.id), {
+      revalidate: false,
+    });
+    try {
+      const result = await backend.mutatePendingChange({
+        type: "delete",
+        changeId: change.id,
+        operationId: crypto.randomUUID(),
+      });
+      if (!mounted.current || currentBinding.current !== binding) return;
+      applyMutation(
+        result,
+        t.files === "文件" ? "删除后的刷新不完整" : "Delete refresh incomplete",
+        t.files === "文件" ? "CL 已删除" : "Changelist deleted",
+      );
+    } catch (cause) {
+      if (!mounted.current || currentBinding.current !== binding) return;
+      setOptimisticDeleted((current) => {
+        const next = new Set(current);
+        next.delete(change.id);
+        return next;
+      });
+      setChanges(
+        (current) =>
+          current.some((item) => item.id === change.id)
+            ? current
+            : [...current, change].sort((left, right) =>
+                left.id === 0 ? -1 : right.id === 0 ? 1 : right.id - left.id,
+              ),
+        { revalidate: false },
+      );
+      void reload().catch(() => undefined);
+      if (mounted.current && currentBinding.current === binding)
+        setError(String(cause));
+    } finally {
+      deletingRef.current = false;
+      if (mounted.current) setDeleting(undefined);
+    }
   };
+  const deleteReason = (change: PendingChange) =>
+    !ready || menuEnvironment.commandBusy || deleting !== undefined
+      ? "请等待当前操作完成 / Wait for the current operation"
+      : change.id <= 0
+        ? "Default CL 不可删除 / Default cannot be deleted"
+        : change.files.length ||
+            change.shelvedFiles.length ||
+            change.jobs.length
+          ? "CL 包含文件、Shelf 或 Jobs / Changelist contains files, shelves or Jobs"
+          : undefined;
   const toggle = (id: number) =>
     setExpanded((value) => {
       const next = new Set(value);
@@ -513,9 +513,12 @@ export function PendingPage({
           : "C02",
       () => ({
         "展开/折叠": action(() => toggle(change.id)),
-        查看详情: action(() => {
-          setExpanded((v) => new Set([...v, change.id]));
-        }),
+        查看详情: action((source) =>
+          openChangeDetails?.(
+            { kind: "pending", changeId: change.id, snapshot: change },
+            source,
+          ),
+        ),
         "复制标识 default": copy("default"),
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),
@@ -530,15 +533,14 @@ export function PendingPage({
         ),
         "编辑 CL…": action(
           () => openForm(change),
-          change.id > 0
-            ? undefined
-            : "Default CL 没有可编辑的编号 spec / Default has no numbered spec",
+          connectionReason ??
+            (change.id > 0
+              ? undefined
+              : "Default CL 没有可编辑的编号 spec / Default has no numbered spec"),
         ),
-        "删除空 CL…": action(
-          (source) => setDeleting({ change, source: source ?? null }),
-          change.id > 0
-            ? undefined
-            : "Default CL 不可删除 / Default cannot be deleted",
+        "删除空 CL": action(
+          () => deleteEmptyChange(change),
+          deleteReason(change),
         ),
         "搁置…": action(
           (source) =>
@@ -548,7 +550,10 @@ export function PendingPage({
               change.files.map((file) => file.depotPath),
               source,
             ),
-          change.files.length ? undefined : "没有已打开文件 / No opened files",
+          connectionReason ??
+            (change.files.length
+              ? undefined
+              : "没有已打开文件 / No opened files"),
         ),
         "创建编号 CL 并搁置…": action(
           (source) =>
@@ -558,7 +563,10 @@ export function PendingPage({
               change.files.map((file) => file.depotPath),
               source,
             ),
-          change.files.length ? undefined : "没有已打开文件 / No opened files",
+          connectionReason ??
+            (change.files.length
+              ? undefined
+              : "没有已打开文件 / No opened files"),
         ),
         "移动文件到编号 CL…": action(
           () =>
@@ -566,9 +574,10 @@ export function PendingPage({
               change.id,
               change.files.map((file) => file.depotPath),
             ),
-          change.files.length
-            ? undefined
-            : "没有可移动的文件 / No files to move",
+          connectionReason ??
+            (change.files.length
+              ? undefined
+              : "没有可移动的文件 / No files to move"),
         ),
         "移动文件到其他 CL…": action(
           () =>
@@ -576,9 +585,10 @@ export function PendingPage({
               change.id,
               change.files.map((file) => file.depotPath),
             ),
-          change.files.length
-            ? undefined
-            : "没有可移动的文件 / No files to move",
+          connectionReason ??
+            (change.files.length
+              ? undefined
+              : "没有可移动的文件 / No files to move"),
         ),
         "复制 CL 编号列表": copy(
           selection
@@ -603,7 +613,8 @@ export function PendingPage({
               },
               source,
             ),
-          change.files.length ? undefined : "空 CL 不可提交",
+          connectionReason ??
+            (change.files.length ? undefined : "空 CL 不可提交"),
         ),
       }),
       {
@@ -611,8 +622,53 @@ export function PendingPage({
         onOpen: () => selection.context(change),
       },
     );
+  const headerActions =
+    headerTarget &&
+    createPortal(
+      <>
+        <span
+          className="pending-operation-state"
+          title={
+            checking
+              ? t.files === "文件"
+                ? "正在检查连接与登录状态"
+                : "Checking connection and login"
+              : notice || undefined
+          }
+          role="status"
+        >
+          {checking || move || deleting !== undefined ? (
+            <LoaderCircle size={16} className="spin" />
+          ) : notice ? (
+            <Check size={16} />
+          ) : null}
+          <span className="sr-only">
+            {checking
+              ? t.files === "文件"
+                ? "正在检查连接与登录状态"
+                : "Checking connection and login"
+              : move || deleting !== undefined
+                ? t.files === "文件"
+                  ? "正在操作"
+                  : "Operation in progress"
+                : notice}
+          </span>
+        </span>
+        <button
+          disabled={!ready}
+          title={connectionReason}
+          aria-label={t.newCl}
+          onClick={() => openForm()}
+        >
+          <Plus size={15} aria-hidden="true" />
+          <span>{t.newCl}</span>
+        </button>
+      </>,
+      headerTarget,
+    );
   return (
     <section className="pending-page" ref={surface}>
+      {headerActions}
       {shelfRequest &&
         (shelfRequest.unshelve ? (
           <UnshelveDialog
@@ -636,7 +692,7 @@ export function PendingPage({
       {move && (
         <MoveFilesDialog
           request={move}
-          changes={changes}
+          changes={cachedChanges}
           client={clientName}
           connectionKey={connectionKey}
           zh={t.files === "文件"}
@@ -660,36 +716,15 @@ export function PendingPage({
               setError(result.refreshError);
               window.dispatchEvent(new Event("p4deck:pending-refresh"));
             }
-            setNotice(result.message);
-            reload();
-            await refreshFileStatus();
-          }}
-        />
-      )}
-      {deleting && (
-        <DeleteChangelistDialog
-          change={deleting.change}
-          source={deleting.source}
-          zh={t.files === "文件"}
-          onDismiss={() => setDeleting(undefined)}
-          onDelete={async () => {
-            try {
-              const result = await backend.mutatePendingChange({
-                type: "delete",
-                changeId: deleting.change.id,
-                operationId: crypto.randomUUID(),
-              });
-              applyMutation(
-                result,
-                t.files === "文件"
-                  ? "删除后的刷新不完整"
-                  : "Delete refresh incomplete",
-                t.files === "文件" ? "CL 已删除" : "Changelist deleted",
-              );
-            } catch (cause) {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
-              throw cause;
-            }
+            setNotice(
+              result.outcome === "succeeded"
+                ? t.files === "文件"
+                  ? "移动完成"
+                  : "Move completed"
+                : "",
+            );
+            if (result.refreshError) void reload().catch(() => undefined);
+            void refreshFileStatus(result.refresh.depotPaths);
           }}
         />
       )}
@@ -741,20 +776,6 @@ export function PendingPage({
           }}
         />
       )}
-      <header className="section-title">
-        <div>
-          <h1>{t.pendingPage}</h1>
-          <p>
-            {t.workspace} · {clientName}
-          </p>
-        </div>
-        <div>
-          <button onClick={() => openForm()}>
-            <Plus size={15} />
-            {t.newCl}
-          </button>
-        </div>
-      </header>
       <div
         className="pending-query-bar"
         aria-label="Pending changelist filters"
@@ -764,8 +785,8 @@ export function PendingPage({
           onChange={(event) => setKeyword(event.target.value)}
           placeholder={
             t.files === "文件"
-              ? "筛选 CL、描述、Job 或文件路径"
-              : "Filter CL, description, job, or file path"
+              ? "筛选已缓存的 CL、描述或文件路径"
+              : "Filter cached CL, description, or file path"
           }
           aria-label={
             t.files === "文件"
@@ -785,24 +806,58 @@ export function PendingPage({
             {t.files === "文件" ? "最早优先" : "Oldest first"}
           </option>
         </select>
-        <span>
-          {t.files === "文件"
-            ? "当前用户 · 当前工作区"
-            : "Current user · My workspace"}
-        </span>
       </div>
-      {error && (
-        <div role="alert" className="workspace-load-error">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div role="status" className="workspace-load-error">
-          {notice}
+      {(error || authenticationRequired || connectionProblem) && (
+        <div
+          role="alert"
+          className={`workspace-load-error${connectionProblem || authenticationRequired ? " pending-connection-status" : ""}`}
+        >
+          {authenticationRequired ? (
+            <>
+              <p>
+                {t.files === "文件"
+                  ? "登录已过期或尚未登录，无法读取 Pending 列表。请在连接设置中重新登录后刷新。"
+                  : "Your login has expired or is required. Sign in again in connection settings, then refresh Pending."}
+              </p>
+              <button
+                className="secondary"
+                onClick={() => menuEnvironment.openPage("settings")}
+              >
+                {t.files === "文件" ? "前往连接设置" : "Connection settings"}
+              </button>
+            </>
+          ) : connectionProblem ? (
+            <>
+              <p>
+                {connectionPresentation(connection, t.files === "文件").title}
+                {" · "}
+                {t.files === "文件"
+                  ? loaded
+                    ? "当前显示本地缓存。"
+                    : "还没有本地缓存。"
+                  : loaded
+                    ? "Showing the local cache."
+                    : "No local cache is available yet."}
+              </p>
+              {connection.recovery === "retry" && (
+                <button className="secondary" onClick={retryConnection}>
+                  {t.files === "文件" ? "重试连接" : "Retry connection"}
+                </button>
+              )}
+              <button
+                className="secondary"
+                onClick={() => menuEnvironment.openPage("settings")}
+              >
+                {t.files === "文件" ? "连接设置" : "Connection settings"}
+              </button>
+            </>
+          ) : (
+            error
+          )}
         </div>
       )}
       {(partial || truncated) && (
-        <div role="status" className="workspace-load-error">
+        <div role="status" className="workspace-notice">
           {t.files === "文件"
             ? `结果为部分数据：扫描 ${stats.scannedCount}，匹配 ${stats.matchedCount}。`
             : `Partial results: scanned ${stats.scannedCount}, matched ${stats.matchedCount}.`}
@@ -814,7 +869,7 @@ export function PendingPage({
         tabIndex={0}
         data-testid="pending-change-virtual-list"
         {...menu("C13", () => ({
-          "新建 CL…": action(() => openForm()),
+          "新建 CL…": action(() => openForm(), connectionReason),
           刷新: action(reload),
           全选当前筛选结果: action(selection.all),
           清除选择: action(selection.clear),
@@ -826,6 +881,52 @@ export function PendingPage({
         >
           {virtualRows.map((virtualRow: VirtualItem) => {
             const change = changes[virtualRow.index];
+            const zh = t.files === "文件";
+            const label = change.id ? `CL ${change.id}` : "Default";
+            const unavailable = !ready
+              ? zh
+                ? "连接尚未就绪"
+                : "Connection is not ready"
+              : menuEnvironment.commandBusy || deleting !== undefined
+                ? zh
+                  ? "请等待当前操作完成"
+                  : "Wait for the current operation"
+                : !change.files.length
+                  ? zh
+                    ? "没有已打开文件"
+                    : "No opened files"
+                  : undefined;
+            const numberedReason =
+              unavailable ??
+              (change.id === 0
+                ? zh
+                  ? "请先将文件移到编号 CL"
+                  : "Move files to a numbered CL first"
+                : undefined);
+            const revertTarget = () => {
+              const revertNodes: WorkspaceNode[] = change.files.map((file) => ({
+                id: file.depotPath,
+                name: file.depotPath.split("/").pop()!,
+                kind: "file",
+                depotPath: file.depotPath,
+                absolutePath: "",
+                relativePath: pendingFilePath(
+                  file,
+                  menuEnvironment.runtime.context,
+                ),
+                state: file.state ?? openedStates[file.action] ?? "unknown",
+                changelistId: change.id,
+              }));
+              return revertNodes.length
+                ? {
+                    type: "file" as const,
+                    node: revertNodes[0],
+                    nodes: revertNodes,
+                    scopeLabel: `${label} · ${zh ? "全部已打开文件" : "All opened files"}`,
+                    wholeChangelistId: change.id,
+                  }
+                : undefined;
+            };
             return (
               <div
                 key={change.id}
@@ -897,18 +998,120 @@ export function PendingPage({
                     <strong>
                       {change.id === 0 ? "Default" : `CL ${change.id}`}
                     </strong>
-                    <span>{change.description}</span>
+                    <span
+                      className="pending-description"
+                      title={change.description}
+                    >
+                      {change.description}
+                    </span>
                     <b>
                       {change.files.length} {t.files}
                     </b>
-                    <button
-                      aria-label={`${t.files === "文件" ? "打开 CL 菜单" : "Open CL menu"} ${change.id || "Default"}`}
-                      onClick={(event) =>
-                        changeMenu(change).onContextMenu(event)
-                      }
+                    <div
+                      className="pending-cl-actions"
+                      role="group"
+                      aria-label={`${label} ${zh ? "操作" : "actions"}`}
                     >
-                      <MoreHorizontal size={16} />
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!!numberedReason}
+                        title={
+                          numberedReason ??
+                          (zh ? `提交整个 ${label}` : `Submit entire ${label}`)
+                        }
+                        aria-label={zh ? `提交 ${label}` : `Submit ${label}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          run(
+                            "submit",
+                            {
+                              type: "pending",
+                              id: change.id,
+                              count: change.files.length,
+                            },
+                            event.currentTarget,
+                          );
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <Send size={14} />
+                        <span>{zh ? "提交" : "Submit"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!!unavailable}
+                        title={
+                          unavailable ??
+                          (zh
+                            ? `还原 ${label} 的全部已打开文件`
+                            : `Revert all opened files in ${label}`)
+                        }
+                        aria-label={
+                          zh ? `还原全部 ${label}` : `Revert all ${label}`
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const target = revertTarget();
+                          if (target)
+                            run("revert", target, event.currentTarget);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <RotateCcw size={14} />
+                        <span>{zh ? "还原全部" : "Revert all"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!!unavailable}
+                        title={
+                          unavailable ??
+                          (zh
+                            ? `仅还原 ${label} 中内容和类型未更改的文件`
+                            : `Revert only unchanged files in ${label}`)
+                        }
+                        aria-label={
+                          zh
+                            ? `还原未更改 ${label}`
+                            : `Revert unchanged ${label}`
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const target = revertTarget();
+                          if (target)
+                            run("revertUnchanged", target, event.currentTarget);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <ListChecks size={14} />
+                        <span>{zh ? "还原未更改" : "Revert unchanged"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!!numberedReason}
+                        title={
+                          numberedReason ??
+                          (zh
+                            ? `搁置 ${label} 的全部已打开文件`
+                            : `Shelve all opened files in ${label}`)
+                        }
+                        aria-label={
+                          zh ? `全部 Shelve ${label}` : `Shelve all ${label}`
+                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openShelf(
+                            change,
+                            "shelve",
+                            change.files.map((file) => file.depotPath),
+                            event.currentTarget,
+                          );
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <FolderArchive size={14} />
+                        <span>{zh ? "全部 Shelve" : "Shelve all"}</span>
+                      </button>
+                    </div>
                     {change.id ? (
                       <button
                         title={
@@ -917,21 +1120,31 @@ export function PendingPage({
                             : "Delete an empty numbered CL"
                         }
                         aria-label={t.delete}
+                        disabled={!!deleteReason(change)}
+                        aria-busy={deleting === change.id}
                         onClick={(event) => {
                           event.stopPropagation();
-                          setDeleting({
-                            change,
-                            source: event.currentTarget,
-                          });
+                          void deleteEmptyChange(change);
                         }}
                       >
-                        <Trash2 size={14} />
+                        {deleting === change.id ? (
+                          <LoaderCircle size={14} className="spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
                       </button>
                     ) : null}
+                    <button
+                      aria-label={`${t.files === "文件" ? "打开 CL 菜单" : "Open CL menu"} ${change.id || "Default"}`}
+                      onClick={(event) =>
+                        changeMenu(change).onContextMenu(event)
+                      }
+                    >
+                      <MoreHorizontal size={16} />
+                    </button>
                   </header>
                   {expanded.has(change.id) ? (
                     <div className="pending-body">
-                      <h4>{t.openedFiles}</h4>
                       <PendingFileList
                         files={change.files}
                         changeId={change.id}
@@ -1019,24 +1232,16 @@ export function PendingPage({
             );
           })}
         </div>
-        {loading && !changes.length ? (
+        {loading && !loaded && !changes.length ? (
           <div role="status">{t.files === "文件" ? "加载中…" : "Loading…"}</div>
         ) : null}
-        {loadingMore ? (
-          <div role="status">
-            {t.files === "文件" ? "加载更多…" : "Loading more…"}
-          </div>
-        ) : null}
-        {!loading && !changes.length && !error ? (
+        {(loaded || !loading) &&
+        !changes.length &&
+        !error &&
+        !authenticationRequired &&
+        !checking &&
+        !connectionProblem ? (
           <div className="empty-state">{t.empty}</div>
-        ) : null}
-        {hasMore && !loadingMore ? (
-          <button
-            className="secondary pending-load-more"
-            onClick={() => void runQuery(cursorRef.current, true)}
-          >
-            {t.files === "文件" ? "加载更多" : "Load more"}
-          </button>
         ) : null}
       </div>
     </section>

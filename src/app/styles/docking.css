@@ -53,12 +53,14 @@
   height: 100%;
 }
 .dock-actions {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 0 5px;
 }
 .dock-actions button {
+  flex: 0 0 25px;
   display: grid;
   place-items: center;
   width: 25px;
@@ -73,7 +75,8 @@
   color: var(--accent);
 }
 .dock-actions button:disabled {
-  opacity: 0.3;
+  opacity: var(--disabled-opacity, 0.3);
+  cursor: not-allowed;
 }
 .dock-error {
   position: absolute;
@@ -123,6 +126,20 @@
   min-width: 36px;
   max-width: 100%;
 }
+.tab-context-target:has(.dock-tab-icon) {
+  position: relative;
+}
+.dock-tab-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+.tab-context-target:has(.dock-tab-icon) > .dv-default-tab {
+  padding-left: 20px;
+}
 /* The title gives up space before the close target does. Sticky also keeps
    the action reachable when a tab is partially clipped by the tab strip. */
 .dockview-theme-p4deck .dv-tab .dv-default-tab {
@@ -142,6 +159,27 @@
   right: 0;
   z-index: 1;
   background: inherit;
+}
+.dockview-theme-p4deck .dv-active-group .dv-active-tab .dv-default-tab-action {
+  background: var(--dv-activegroup-visiblepanel-tab-background-color);
+}
+.dockview-theme-p4deck
+  .dv-active-group
+  .dv-inactive-tab
+  .dv-default-tab-action {
+  background: var(--dv-activegroup-hiddenpanel-tab-background-color);
+}
+.dockview-theme-p4deck
+  .dv-inactive-group
+  .dv-active-tab
+  .dv-default-tab-action {
+  background: var(--dv-inactivegroup-visiblepanel-tab-background-color);
+}
+.dockview-theme-p4deck
+  .dv-inactive-group
+  .dv-inactive-tab
+  .dv-default-tab-action {
+  background: var(--dv-inactivegroup-hiddenpanel-tab-background-color);
 }
 .dockview-theme-p4deck .dv-tab:hover .dv-default-tab-action,
 .dockview-theme-p4deck .dv-tab:focus-within .dv-default-tab-action {
@@ -174,6 +212,12 @@
 }
 .dock-page .file-workbench {
   padding: 0 14px 12px;
+}
+.dock-page .pending-page {
+  padding-top: 12px;
+}
+.dock-page .pending-page > .pending-query-bar {
+  margin-top: 0;
 }
 .detached-shell .resource-explorer,
 .detached-shell > .topbar,
@@ -249,4 +293,13 @@
 }
 .file-details.workspace-details {
   display: block;
+}
+
+.dockview-theme-p4deck
+  .dv-tabs-and-actions-container
+  > .dv-right-actions-container {
+  flex: 0 0 auto;
+}
+.dockview-theme-p4deck .dv-tabs-and-actions-container > .dv-scrollable {
+  min-width: 0;
 }

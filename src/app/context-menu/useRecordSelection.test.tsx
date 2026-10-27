@@ -98,3 +98,69 @@ it("clears selection when its object scope changes", async () => {
   await act(async () => root.render(<Harness scope="second" />));
   expect(selected()).toBe("");
 });
+
+let bounded: ReturnType<typeof useRecordSelection<string>>;
+function Bounded({
+  items = rows,
+  scope = "bounded",
+}: {
+  items?: string[];
+  scope?: string;
+}) {
+  bounded = useRecordSelection(items, (row) => row, scope, 2);
+  return (
+    <>
+      {items.map((row) => (
+        <div
+          key={row}
+          data-row={row}
+          tabIndex={0}
+          onKeyDown={(event) => bounded.keyboard(row, event)}
+        />
+      ))}
+    </>
+  );
+}
+it("keeps a FIFO pair in actual selection order, independent of sorted rows", async () => {
+  await act(async () => root.render(<Bounded items={["d", "c", "b", "a"]} />));
+  for (const row of ["a", "b", "c"]) await act(async () => bounded.select(row));
+  expect(bounded.selected).toEqual(["b", "c"]);
+  await act(async () => bounded.select("b"));
+  await act(async () => bounded.select("d"));
+  expect(bounded.selected).toEqual(["c", "d"]);
+  await act(async () => bounded.context("d"));
+  expect(bounded.selected).toEqual(["c", "d"]);
+  await act(async () =>
+    bounded.select("d", { ctrlKey: true, metaKey: false, shiftKey: false }),
+  );
+  expect(bounded.selected).toEqual(["c"]);
+  await act(async () =>
+    bounded.select("b", { ctrlKey: false, metaKey: true, shiftKey: false }),
+  );
+  expect(bounded.selected).toEqual(["c", "b"]);
+  await key("a");
+  expect(bounded.selected).toEqual(["b", "a"]);
+  await act(async () => bounded.context("d"));
+  expect(bounded.selected).toEqual(["a", "d"]);
+});
+it("handles ranges and select-all in deterministic insertion order with a two-item cap", async () => {
+  await act(async () => root.render(<Bounded />));
+  await act(async () => bounded.select("a"));
+  await key("c", { shiftKey: true });
+  expect(bounded.selected).toEqual(["b", "c"]);
+  await act(async () => bounded.clear());
+  await act(async () => bounded.all());
+  expect(bounded.selected).toEqual(["b", "c"]);
+  await act(async () => bounded.all());
+  expect(new Set(bounded.selected).size).toBe(2);
+});
+it("prunes missing bounded records on refresh and clears selection on a new file", async () => {
+  await act(async () => root.render(<Bounded />));
+  await act(async () => bounded.all());
+  await act(async () => root.render(<Bounded items={["c", "d"]} />));
+  expect(bounded.selected).toEqual(["c"]);
+  await act(async () => bounded.select("d"));
+  expect(bounded.selected).toEqual(["c", "d"]);
+  await act(async () => root.render(<Bounded scope="new-file" />));
+  expect(bounded.selected).toEqual([]);
+});

@@ -90,6 +90,40 @@ pub fn open(root: &Path, request: OpenLocalPathRequest) -> Result<(), String> {
     platform_open(&validated.path, validated.mode)
 }
 
+/// Opens an app-owned directory; callers supply no frontend path or arguments.
+pub fn open_log_directory(path: &Path) -> Result<(), String> {
+    let path = path.canonicalize().map_err(|error| error.to_string())?;
+    if !path.is_dir() {
+        return Err("The log directory is unavailable".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer.exe")
+            .arg(path)
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("/usr/bin/open")
+            .arg(path)
+            .status()
+            .map_err(|error| error.to_string())?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("The log directory could not be opened".into())
+        }
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        Err("Opening the log directory is supported on macOS and Windows".into())
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn platform_open(path: &Path, mode: OpenLocalPathMode) -> Result<(), String> {
     use std::process::Command;

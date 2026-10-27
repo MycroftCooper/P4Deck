@@ -10,6 +10,7 @@ import type {
 } from "../../../shared/contracts/types";
 import { storage } from "../../../shared/lib/storage";
 import { readLogViewPreferences } from "../logPreferences";
+import { subscribeSafely } from "../../../shared/lib/subscription";
 
 const PAGE_SIZE = 100;
 
@@ -139,6 +140,21 @@ export function LogView({
     return () => void ++generation.current;
   }, [connectionKey, load, refreshKey]);
 
+  useEffect(
+    () =>
+      subscribeSafely(
+        () =>
+          backend.subscribeLogsCleared(() => {
+            generation.current += 1;
+            setEntries([]);
+            setNextCursor(undefined);
+            void load();
+          }),
+        (cause) => setError(String(cause)),
+      ),
+    [load],
+  );
+
   useEffect(() => {
     const request = ++policyGeneration.current;
     setPolicy(undefined);
@@ -198,6 +214,9 @@ export function LogView({
         className="diagnostic-toolbar"
         aria-label={zh ? "日志筛选" : "Log filters"}
       >
+        <span className="muted">
+          {zh ? "本次运行日志" : "Current session logs"}
+        </span>
         <input
           aria-label={zh ? "搜索日志" : "Search logs"}
           value={keyword}

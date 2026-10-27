@@ -35,6 +35,14 @@ struct PlacementStore {
     panels: BTreeMap<String, WindowPlacement>,
 }
 
+pub(crate) fn validate_backup_document(bytes: &[u8]) -> Result<(), String> {
+    let store: PlacementStore = serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+    if store.version != PLACEMENT_VERSION {
+        return Err("unsupported window placement schema version".into());
+    }
+    Ok(())
+}
+
 pub fn load(path: &Path, key: &str) -> Option<WindowPlacement> {
     let _guard = STORE_LOCK.get_or_init(|| Mutex::new(())).lock().ok()?;
     let store: PlacementStore = serde_json::from_slice(&fs::read(path).ok()?).ok()?;

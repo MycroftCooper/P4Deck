@@ -1,11 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import {
-  dialogHarness,
-  dialogButton,
-  chooseSelect,
-} from "../../../app/dialogs/testHarness";
+import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { FileClWorkflow } from "./FileClWorkflow";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -48,7 +44,12 @@ const page = (value: PendingChange[]): PendingChangePage => ({
     truncatedBySafetyLimit: false,
   },
 });
-it("loads once and skips selected files already in the move destination", async () => {
+it("loads once and moves only files outside the chosen destination", async () => {
+  const check = vi
+    .spyOn(backend, "preflightMoveFiles")
+    .mockImplementation(async () => {
+      throw new Error("test stop");
+    });
   const query = vi
     .spyOn(backend, "queryPendingChanges")
     .mockResolvedValue(page(changes));
@@ -63,12 +64,9 @@ it("loads once and skips selected files already in the move destination", async 
       onDismiss={vi.fn()}
     />,
   );
-  await chooseSelect("10");
-  expect(document.body.textContent).toContain(
-    "已跳过本来就在目标 CL 的文件：1",
-  );
-  expect(document.body.textContent).toContain(
-    "Default, CL 10 → CL 10 · 1 个文件",
+  await act(async () => dialogButton("CL 10CL").click());
+  expect(check).toHaveBeenCalledWith(
+    expect.objectContaining({ targetChangeId: 10, depotPaths: ["//depot/a"] }),
   );
   expect(query).toHaveBeenCalledOnce();
 });

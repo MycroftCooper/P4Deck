@@ -1,6 +1,15 @@
 // Object/item IDs correspond to Designer/右键菜单对象与菜单项总表.md.
 // Keep the complete UI inventory, including explicitly unavailable future capabilities.
 export const menuCatalog = {
+  H01: {
+    title: "文件历史版本",
+    items: [
+      { id: "H01-01", label: "预览 CL", phase: "initial" },
+      { id: "H01-02", label: "获取这个版本", phase: "initial" },
+      { id: "H01-03", label: "Undo", phase: "initial" },
+      { id: "H01-04", label: "Diff", phase: "initial" },
+    ],
+  },
   F01: {
     title: "单个工作文件：工作区侧栏、Files",
     items: [
@@ -1103,7 +1112,7 @@ export const menuCatalog = {
       },
       {
         id: "C02-12",
-        label: "删除空 CL…",
+        label: "删除空 CL",
         phase: "later",
       },
       { id: "C02-13", label: "在 Swarm 中打开", phase: "initial" },

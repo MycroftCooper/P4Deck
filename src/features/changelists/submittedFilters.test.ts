@@ -4,6 +4,7 @@ import {
   SUBMITTED_FILTERS_SCHEMA_VERSION,
   SUBMITTED_FILTERS_STORAGE_KEY,
   createDefaultSubmittedFilter,
+  parseChangeNumber,
   readSavedSubmittedFilters,
   validateSubmittedFilter,
   writeSavedSubmittedFilters,
@@ -12,100 +13,102 @@ import {
 
 beforeEach(() => localStorage.clear());
 
-it("maps every filter field while preserving OR lists and AND conditions", () => {
+it("queries one user and only the current context, omitting Job parameters", () => {
   const draft = {
-    ...createDefaultSubmittedFilter(new Date("2026-10-09T12:00:00+08:00")),
-    keyword: "  修复  ",
-    users: "alice, buildbot\nalice",
-    clients: "workspace-a;workspace-b",
-    depotPath: " //depot/main/... ",
-    stream: " //depot/main/ ",
-    from: "2026-10-01T00:00",
-    to: "2026-10-09T23:59",
-    jobs: "JOB-1,JOB-2",
-    hasJob: "yes" as const,
-    mergeClassifications: [
-      "normal" as const,
-      "unknown" as const,
-      "normal" as const,
-    ],
-    hideReliableMerges: true,
+    ...createDefaultSubmittedFilter(),
+    users: " alice ",
+    currentStreamOnly: true,
   };
-  const result = validateSubmittedFilter(draft);
+  const result = validateSubmittedFilter(draft, {
+    client: "workspace",
+    stream: "//depot/main",
+  });
   expect(result.errors).toEqual({});
   expect(result.query).toMatchObject({
-    keyword: "修复",
-    users: ["alice", "buildbot"],
-    clients: ["workspace-a", "workspace-b"],
-    depotPath: "//depot/main/...",
-    stream: "//depot/main",
-    jobs: ["JOB-1", "JOB-2"],
-    hasJob: true,
-    mergeClassifications: ["normal", "unknown"],
-    hideReliableMerges: true,
-    pageSize: 100,
+    users: ["alice"],
+    clients: [],
+    streams: ["//depot/main"],
   });
-  expect(Date.parse(result.query!.from)).toBeLessThan(
-    Date.parse(result.query!.to),
+  expect(result.query).not.toHaveProperty("jobs");
+  expect(result.query).not.toHaveProperty("hasJob");
+  expect(
+    validateSubmittedFilter(draft, { client: "new", stream: "//depot/new" })
+      .query,
+  ).toMatchObject({ clients: [], streams: ["//depot/new"] });
+  expect(validateSubmittedFilter(draft).query).toBeUndefined();
+});
+it.each(["a,b", "a;b", "a\nb", "a b", "a\r"])(
+  "rejects combined or invalid usernames: %s",
+  (users) => {
+    expect(
+      validateSubmittedFilter({ ...createDefaultSubmittedFilter(), users })
+        .query,
+    ).toBeUndefined();
+  },
+);
+it("retains date and path validation and defaults to no context restriction", () => {
+  const draft = createDefaultSubmittedFilter();
+  expect(validateSubmittedFilter(draft).query).toMatchObject({
+    users: [],
+    clients: [],
+  });
+  expect(
+    validateSubmittedFilter({ ...draft, from: "", to: "bad" }).query,
+  ).toBeUndefined();
+  expect(
+    validateSubmittedFilter({ ...draft, from: "2026-10-10", to: "2026-10-09" })
+      .query,
+  ).toBeUndefined();
+  expect(
+    validateSubmittedFilter({ ...draft, depotPath: "//depot/...#3" }).query,
+  ).toBeUndefined();
+  expect(
+    validateSubmittedFilter(
+      { ...draft, depotPath: "//other/...", currentStreamOnly: true },
+      { stream: "//depot/main" },
+    ).query,
+  ).toBeUndefined();
+});
+it("migrates legacy filters without replaying multiusers, arbitrary context or Jobs", () => {
+  localStorage.setItem(
+    SUBMITTED_FILTERS_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      filters: [
+        {
+          id: "old",
+          name: "Old",
+          updatedAt: "now",
+          filter: {
+            ...createDefaultSubmittedFilter(),
+            users: "a,b",
+            clients: "old-a,old-b",
+            stream: "//old/main",
+            jobs: "JOB-1",
+            hasJob: "yes",
+          },
+        },
+      ],
+    }),
   );
-});
-
-it("rejects invalid/reversed dates, excessive/invalid lists, and contradictory Job filters", () => {
-  const base = createDefaultSubmittedFilter();
+  const [saved] = readSavedSubmittedFilters();
+  expect(saved.migrated).toBe(true);
+  expect(saved.filter).toMatchObject({
+    users: "a,b",
+    currentStreamOnly: true,
+  });
+  expect(saved.filter).not.toHaveProperty("jobs");
+  expect(saved.filter).not.toHaveProperty("clients");
   expect(
-    validateSubmittedFilter({ ...base, from: "", to: "not-a-date" }).errors,
-  ).toMatchObject({ from: expect.any(String), to: expect.any(String) });
-  expect(
-    validateSubmittedFilter({
-      ...base,
-      from: "2026-10-10T00:00",
-      to: "2026-10-09T00:00",
-    }).errors.to,
-  ).toBeTruthy();
-  expect(
-    validateSubmittedFilter({
-      ...base,
-      users: Array.from({ length: 17 }, (_, index) => `u${index}`).join(","),
-    }).errors.users,
-  ).toContain("16");
-  expect(
-    validateSubmittedFilter({ ...base, clients: "has whitespace" }).errors
-      .clients,
-  ).toBeTruthy();
-  expect(
-    validateSubmittedFilter({ ...base, keyword: "界".repeat(200) }).errors
-      .keyword,
-  ).toBeTruthy();
-  expect(
-    validateSubmittedFilter({
-      ...base,
-      jobs: "JOB-1",
-      hasJob: "no",
-    }).errors.hasJob,
-  ).toBeTruthy();
-});
-
-it("ignores empty multi-values and validates path/stream scope", () => {
-  const base = createDefaultSubmittedFilter();
-  expect(
-    validateSubmittedFilter({
-      ...base,
-      users: " ,\n; ",
-      clients: "",
-      jobs: "",
+    validateSubmittedFilter(saved.filter, {
+      client: "new",
+      stream: "//new/main",
     }).query,
-  ).toMatchObject({ users: [], clients: [], jobs: [] });
-  expect(
-    validateSubmittedFilter({
-      ...base,
-      depotPath: "//other/...",
-      stream: "//depot/main",
-    }).errors.depotPath,
-  ).toContain("Stream");
-  expect(
-    validateSubmittedFilter({ ...base, depotPath: "//depot/main/...#3" }).errors
-      .depotPath,
-  ).toBeTruthy();
+  ).toBeUndefined();
+  writeSavedSubmittedFilters([saved]);
+  expect(localStorage.getItem(SUBMITTED_FILTERS_STORAGE_KEY)).not.toContain(
+    "old-a",
+  );
 });
 
 it("round-trips only the versioned whitelist and never persists connection secrets", () => {
@@ -166,4 +169,178 @@ it("safely degrades corrupted, old-version, and malformed saved schemas", () => 
     }),
   );
   expect(readSavedSubmittedFilters()).toEqual([]);
+});
+
+it.each(["", "0", "-1", "1.2", "1e3", "9007199254740992"])(
+  "rejects invalid CL %s",
+  (value) => expect(parseChangeNumber(value)).toBeUndefined(),
+);
+it("accepts a positive integer CL", () =>
+  expect(parseChangeNumber(" 12345 ")).toBe(12345));
+
+it("isolates malformed legacy entries without losing valid saved filters", () => {
+  const valid = {
+    id: "good",
+    name: "Preserve me",
+    updatedAt: "now",
+    filter: {
+      ...createDefaultSubmittedFilter(),
+      users: "alice",
+      clients: "old-workspace",
+      stream: "//old/main",
+    },
+  };
+  localStorage.setItem(
+    SUBMITTED_FILTERS_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      filters: [
+        {
+          ...valid,
+          id: "bad-client",
+          filter: { ...valid.filter, clients: 42 },
+        },
+        { ...valid, id: "bad-stream", filter: { ...valid.filter, stream: {} } },
+        { ...valid, id: "bad-filter", filter: [] },
+        valid,
+      ],
+    }),
+  );
+  const before = localStorage.getItem(SUBMITTED_FILTERS_STORAGE_KEY);
+  const saved = readSavedSubmittedFilters();
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({
+    id: "good",
+    name: "Preserve me",
+    filter: {
+      users: "alice",
+      currentStreamOnly: true,
+    },
+  });
+  expect(localStorage.getItem(SUBMITTED_FILTERS_STORAGE_KEY)).toBe(before);
+  expect(
+    validateSubmittedFilter(saved[0].filter, {
+      client: "current",
+      stream: "//current/main",
+    }).query,
+  ).toMatchObject({
+    users: ["alice"],
+    clients: [],
+    streams: ["//current/main"],
+  });
+});
+
+it("migrates v2 integration constraints to all submission types without losing unrelated filters", () => {
+  const filter = {
+    ...createDefaultSubmittedFilter(),
+    keyword: "keep",
+    users: "alice",
+    mergeClassifications: ["reliableMerge"],
+    hideReliableMerges: true,
+  };
+  localStorage.setItem(
+    SUBMITTED_FILTERS_STORAGE_KEY,
+    JSON.stringify({
+      version: 2,
+      filters: [{ id: "legacy", name: "Saved", updatedAt: "now", filter }],
+    }),
+  );
+  const [entry] = readSavedSubmittedFilters();
+  expect(entry.filter).toMatchObject({
+    keyword: "keep",
+    users: "alice",
+    submissionKind: "all",
+  });
+  expect(entry.filter).not.toHaveProperty("mergeClassifications");
+  expect(entry.filter).not.toHaveProperty("hideReliableMerges");
+  expect(
+    validateSubmittedFilter(entry.filter, { client: "current" }).query,
+  ).toMatchObject({
+    users: ["alice"],
+    clients: [],
+    mergeClassifications: [],
+    hideReliableMerges: false,
+  });
+});
+it.each(["all", "ordinary", "ciMerge", "autoGenerated"] as const)(
+  "persists %s without replaying injected integration filters",
+  (submissionKind) => {
+    const filter = {
+      ...createDefaultSubmittedFilter(),
+      submissionKind,
+      mergeClassifications: ["reliableMerge"],
+      hideReliableMerges: true,
+    };
+    writeSavedSubmittedFilters([
+      { id: "kind", name: "Kind", updatedAt: "now", filter },
+    ]);
+    const [saved] = readSavedSubmittedFilters();
+    expect(saved.filter.submissionKind).toBe(submissionKind);
+    expect(validateSubmittedFilter(saved.filter).query).toMatchObject({
+      mergeClassifications: [],
+      hideReliableMerges: false,
+    });
+    expect(localStorage.getItem(SUBMITTED_FILTERS_STORAGE_KEY)).not.toContain(
+      "hideReliableMerges",
+    );
+    expect(createDefaultSubmittedFilter().submissionKind).toBe("all");
+  },
+);
+
+it("unions current and explicit streams, deduplicates, clears and persists selections", () => {
+  const filter = {
+    ...createDefaultSubmittedFilter(),
+    currentStreamOnly: true,
+    streams: ["//d/main/", "//d/dev", "//d/main"],
+  };
+  expect(
+    validateSubmittedFilter(filter, { stream: "//d/main" }).query,
+  ).toMatchObject({ clients: [], streams: ["//d/dev", "//d/main"] });
+  expect(
+    validateSubmittedFilter(filter, { stream: "//new/current" }).query?.streams,
+  ).toContain("//new/current");
+  expect(validateSubmittedFilter(filter).query).toBeUndefined();
+  writeSavedSubmittedFilters([
+    { id: "multi", name: "Multi", updatedAt: "now", filter },
+  ]);
+  expect(readSavedSubmittedFilters()[0].filter).toEqual(filter);
+  expect(
+    validateSubmittedFilter(createDefaultSubmittedFilter()).query,
+  ).toMatchObject({ clients: [], streams: [] });
+});
+it("migrates v3 current Stream while removing the hidden Client condition", () => {
+  localStorage.setItem(
+    SUBMITTED_FILTERS_STORAGE_KEY,
+    JSON.stringify({
+      version: 3,
+      filters: [
+        {
+          id: "v3",
+          name: "Keep",
+          updatedAt: "now",
+          filter: {
+            ...createDefaultSubmittedFilter(),
+            currentClientOnly: true,
+            currentStreamOnly: true,
+            users: "alice",
+            submissionKind: "ciMerge",
+          },
+        },
+      ],
+    }),
+  );
+  const [saved] = readSavedSubmittedFilters();
+  expect(saved.filter).not.toHaveProperty("currentClientOnly");
+  expect(saved.filter).toMatchObject({
+    streams: [],
+    currentStreamOnly: true,
+    users: "alice",
+    submissionKind: "ciMerge",
+  });
+  expect(
+    validateSubmittedFilter(saved.filter, {
+      client: "old",
+      stream: "//new/current",
+    }).query,
+  ).toMatchObject({ clients: [], streams: ["//new/current"] });
 });

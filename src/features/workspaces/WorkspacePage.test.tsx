@@ -9,6 +9,7 @@ import { WorkspacePage } from "./WorkspacePage";
 const backend = vi.hoisted(() => ({
   listUserWorkspaces: vi.fn(),
   switchWorkspace: vi.fn(),
+  inspectP4Vfs: vi.fn(),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
 vi.mock("@tanstack/react-virtual", () => ({
@@ -103,6 +104,18 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   backend.listUserWorkspaces.mockReset().mockResolvedValue(workspaces);
   backend.switchWorkspace.mockReset();
+  backend.inspectP4Vfs.mockReset().mockResolvedValue({
+    contextGeneration: 7,
+    workspace: "C:\\work\\main",
+    mode: "virtual",
+    ready: true,
+    serverVersion: "P4D/NTX64/2026.1/1",
+    serverSupported: true,
+    clientVersion: "Rev. P4/NTX64/2026.1/1",
+    clientSupported: true,
+    agentConfigured: true,
+    operationIds: ["vfs-inspect"],
+  });
   applied.mockReset();
   host = document.createElement("div");
   document.body.append(host);
@@ -128,6 +141,9 @@ it("shows the real current Client, Root, and Stream and marks Mock as simulated"
   ).toContain("//depot/main");
   expect(host.textContent).toContain("Simulated Mock");
   expect(host.textContent).toContain("不访问真实网络");
+  expect(
+    host.querySelector(".workspace-runtime-summary")?.textContent,
+  ).toContain("P4VFS");
 });
 
 it("does not query or offer refresh before the connection is verified", async () => {
@@ -151,8 +167,33 @@ it("does not query or offer refresh before the connection is verified", async ()
     await Promise.resolve();
   });
   expect(backend.listUserWorkspaces).not.toHaveBeenCalled();
+  expect(backend.inspectP4Vfs).not.toHaveBeenCalled();
   expect(button("刷新").disabled).toBe(true);
   expect(host.textContent).toContain("连接未验证时不会自动扫描 Workspace");
+});
+
+it("shows P4VFS setup requirements for a virtual workspace that is not ready", async () => {
+  backend.inspectP4Vfs.mockResolvedValue({
+    contextGeneration: 7,
+    workspace: "C:\\work\\main",
+    mode: "virtual",
+    ready: false,
+    serverVersion: "P4D/NTX64/2022.2/1",
+    serverSupported: false,
+    clientVersion: "Rev. P4/NTX64/2026.1/1",
+    clientSupported: true,
+    agentConfigured: true,
+    reason: "P4 Server 2023.1 or later is required for P4VFS.",
+    operationIds: ["vfs-inspect"],
+  });
+  await render();
+  expect(
+    host.querySelector(".workspace-runtime-summary")?.textContent,
+  ).toContain("P4VFS · 待配置");
+  expect(host.textContent).toContain("P4 Server 2023.1 or later");
+  expect(backend.inspectP4Vfs).toHaveBeenCalledWith(
+    expect.objectContaining({ expectedContextGeneration: 7 }),
+  );
 });
 
 it("calls switchWorkspace with generation, exposes verify/commit/success, and applies returned runtime", async () => {

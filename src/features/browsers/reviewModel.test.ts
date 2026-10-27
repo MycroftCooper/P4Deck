@@ -1,3 +1,5 @@
+import { historyMenuQueue } from "./reviewModel";
+import type { FileRevision } from "../../shared/contracts/types";
 import { describe, expect, it } from "vitest";
 import {
   graphNodeDiffPair,
@@ -123,4 +125,22 @@ describe("file review model", () => {
     expect(merged.operationIds).toEqual(["first", "second"]);
     expect(merged.partial).toBe(false);
   });
+});
+
+it("right-click preserves selected FIFO order and comparison rejects mixed files", () => {
+  const row = (revision: number, depotPath = "//depot/a.txt") =>
+    ({ revision, depotPath, changelistId: revision * 100 }) as FileRevision;
+  const first = row(42),
+    last = row(17),
+    third = row(73);
+  expect(historyMenuQueue([first, last], first)).toEqual([first, last]);
+  expect(historyMenuQueue([first, last], third)).toEqual([last, third]);
+  expect(historyDiffPair([first, last])).toEqual({
+    left: { kind: "revision", revision: 17 },
+    right: { kind: "revision", revision: 42 },
+  });
+  expect(
+    historyDiffPair([first, row(17, "//depot/other.txt")]),
+  ).toBeUndefined();
+  expect(historyDiffPair([first, first])).toBeUndefined();
 });

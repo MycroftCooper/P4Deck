@@ -739,11 +739,9 @@ impl StreamSwitchService {
             record_paths(&resolve, &["fromFile", "toFile", "clientFile", "path"]);
 
         let reconcile_id = format!("{operation_id}:reconcile");
-        let reconcile_filespec = format!(
-            "{}{}...",
-            workspace.trim_end_matches(['/', '\\']),
-            std::path::MAIN_SEPARATOR
-        );
+        // Client syntax works for canonical Windows/UNC roots too. The CLI
+        // treats a verbatim Windows filesystem path as outside the client.
+        let reconcile_filespec = format!("//{}/...", context.client);
         let reconcile = self
             .run(
                 context,
@@ -1031,8 +1029,29 @@ fn ensure_success_or_empty(result: &OperationResult, empty: &[&str]) -> Result<(
     if result.exit_code == 0 {
         return Ok(());
     }
-    let text = event_text(result).to_ascii_lowercase();
-    if empty.iter().any(|pattern| text.contains(pattern)) {
+    let text = result
+        .events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.kind,
+                EventKind::Stdout | EventKind::Stderr | EventKind::Warning | EventKind::Error
+            )
+        })
+        .filter_map(|event| event.message.as_deref())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_ascii_lowercase();
+    if !text.trim().is_empty()
+        && text
+            .lines()
+            .filter(|message| !message.trim().is_empty())
+            .all(|message| {
+                empty
+                    .iter()
+                    .any(|pattern| message.to_ascii_lowercase().contains(pattern))
+            })
+    {
         Ok(())
     } else {
         Err(text)
@@ -1373,6 +1392,28 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_reconcile_does_not_hide_another_inspection_error() {
+        let mut result = OperationResult {
+            operation_id: "inspection".into(),
+            exit_code: 1,
+            duration_ms: 0,
+            events: vec![OperationEvent {
+                operation_id: "inspection".into(),
+                kind: EventKind::Stderr,
+                message: Some("No file(s) to reconcile.".into()),
+                progress: None,
+                timestamp: String::new(),
+            }],
+        };
+        assert!(ensure_success_or_empty(&result, &["no file(s) to reconcile"]).is_ok());
+        result.events[0].message =
+            Some("Path is not under client's root.\nNo file(s) to reconcile.".into());
+        assert!(ensure_success_or_empty(&result, &["no file(s) to reconcile"]).is_err());
+        result.events[0].kind = EventKind::Started;
+        assert!(ensure_success_or_empty(&result, &["no file(s) to reconcile"]).is_err());
+    }
 
     fn target() -> StreamSwitchTargetSnapshot {
         StreamSwitchTargetSnapshot {

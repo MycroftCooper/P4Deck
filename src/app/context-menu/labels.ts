@@ -1,4 +1,6 @@
 const english: Record<string, string> = {
+  "预览 CL": "View submitted CL",
+  获取这个版本: "Get this revision",
   刷新: "Refresh",
   文件预览: "Preview file",
   在新页签中预览: "Preview in new tab",

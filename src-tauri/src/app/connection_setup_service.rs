@@ -235,6 +235,9 @@ impl ConnectionSetupService {
                         blockers.push(connection_issue(&failure_status(&request.context).await))
                     }
                 }
+                if let Some(observed) = identity.as_ref() {
+                    blockers.extend(vfs_plan_issues(&request.context, &request.plan, observed));
+                }
                 if identity.is_some() {
                     match self
                         .repository
@@ -620,6 +623,12 @@ fn validate_workspace_plan(
             "Workspace description is invalid.",
         ));
     }
+    if plan.sync_mode == WorkspaceSyncMode::Unknown {
+        issues.push(issue(
+            ConnectionSpecIssueCode::InvalidInput,
+            "Choose either standard sync or virtual sync for a new workspace.",
+        ));
+    }
     match &plan.mapping {
         ConnectionWorkspaceMapping::Stream { stream } => {
             if !stream.starts_with("//")
@@ -642,6 +651,51 @@ fn validate_workspace_plan(
                 issues.push(issue(ConnectionSpecIssueCode::InvalidInput, "Classic View must contain 1–128 safe, compatible mappings for this exact workspace."));
             }
         }
+    }
+    issues
+}
+
+fn vfs_plan_issues(
+    context: &P4Context,
+    plan: &ConnectionWorkspaceCreatePlan,
+    identity: &ServerIdentity,
+) -> Vec<ConnectionSpecIssue> {
+    if plan.sync_mode != WorkspaceSyncMode::Virtual {
+        return Vec::new();
+    }
+    let mut issues = Vec::new();
+    if !cfg!(windows) {
+        issues.push(issue(
+            ConnectionSpecIssueCode::InvalidInput,
+            "P4VFS virtual workspaces are supported only on Windows clients.",
+        ));
+    }
+    if !identity
+        .server_version
+        .as_deref()
+        .is_some_and(crate::p4::vfs::version_supports_vfs)
+    {
+        issues.push(issue(
+            ConnectionSpecIssueCode::VerificationFailed,
+            "P4 Server 2023.1 or later is required for a virtual workspace.",
+        ));
+    }
+    let cli = crate::p4::connection::ConnectionAdapter::discover(context.executable.as_deref());
+    if !cli
+        .version
+        .as_deref()
+        .is_some_and(crate::p4::vfs::version_supports_vfs)
+    {
+        issues.push(issue(
+            ConnectionSpecIssueCode::VerificationFailed,
+            "P4 CLI 2023.1 or later is required for a virtual workspace.",
+        ));
+    }
+    if !crate::p4::vfs::agent_is_configured() {
+        issues.push(issue(
+            ConnectionSpecIssueCode::VerificationFailed,
+            "P4ALTSYNC is not visible to P4Deck. Install P4VFS and restart P4Deck before creating a virtual workspace.",
+        ));
     }
     issues
 }
@@ -685,6 +739,8 @@ fn workspace_matches(
         || item.owner != owner
         || item.root != plan.root
         || item.description.trim() != plan.description.as_deref().unwrap_or("Created by P4Deck")
+        || crate::p4::connection_setup::workspace_sync_mode_from_options(&item.options)
+            != plan.sync_mode
     {
         return false;
     }
@@ -714,7 +770,12 @@ fn user_form(plan: &ConnectionUserCreatePlan) -> String {
 }
 
 fn workspace_form(owner: &str, plan: &ConnectionWorkspaceCreatePlan) -> String {
-    let mut form = format!("Client:\t{}\nOwner:\t{}\nRoot:\t{}\nDescription:\n\t{}\nOptions:\tnoallwrite noclobber nocompress unlocked nomodtime normdir\nSubmitOptions:\tsubmitunchanged\nLineEnd:\tlocal\n", plan.name, owner, plan.root, plan.description.as_deref().unwrap_or("Created by P4Deck"));
+    let sync_option = match plan.sync_mode {
+        WorkspaceSyncMode::Virtual => " altsync",
+        WorkspaceSyncMode::Standard => "",
+        WorkspaceSyncMode::Unknown => " noaltsync",
+    };
+    let mut form = format!("Client:\t{}\nOwner:\t{}\nRoot:\t{}\nDescription:\n\t{}\nOptions:\tnoallwrite noclobber nocompress unlocked nomodtime normdir{}\nSubmitOptions:\tsubmitunchanged\nLineEnd:\tlocal\n", plan.name, owner, plan.root, plan.description.as_deref().unwrap_or("Created by P4Deck"), sync_option);
     match &plan.mapping {
         ConnectionWorkspaceMapping::Stream { stream } => {
             form.push_str(&format!("Stream:\t{stream}\n"))
@@ -948,6 +1009,29 @@ mod tests {
         });
         assert!(!form.contains("-f"));
         assert!(!form.contains("Password:"));
+
+        let workspace = ConnectionWorkspaceCreatePlan {
+            name: "dev-ws".into(),
+            root: "C:\\work\\dev-ws".into(),
+            description: None,
+            mapping: ConnectionWorkspaceMapping::Stream {
+                stream: "//depot/main".into(),
+            },
+            sync_mode: WorkspaceSyncMode::Virtual,
+        };
+        let virtual_form = workspace_form("developer", &workspace);
+        assert!(virtual_form.contains(
+            "Options:\tnoallwrite noclobber nocompress unlocked nomodtime normdir altsync"
+        ));
+        let standard_form = workspace_form(
+            "developer",
+            &ConnectionWorkspaceCreatePlan {
+                sync_mode: WorkspaceSyncMode::Standard,
+                ..workspace
+            },
+        );
+        assert!(!standard_form.contains(" altsync"));
+        assert!(!standard_form.contains("-f"));
     }
 
     #[cfg(windows)]

@@ -107,6 +107,7 @@ pub struct P4Runner {
     operation_group_sequence: AtomicUsize,
     pending_cancellations: Mutex<HashMap<String, Instant>>,
     server_limits: Mutex<HashMap<String, Arc<ServerLimits>>>,
+    child_job: super::process::ChildProcessJob,
     logs: Arc<LogStore>,
     journal: Arc<OperationJournal>,
 }
@@ -119,6 +120,8 @@ impl P4Runner {
             operation_group_sequence: AtomicUsize::new(0),
             pending_cancellations: Mutex::new(HashMap::new()),
             server_limits: Mutex::new(HashMap::new()),
+            child_job: super::process::ChildProcessJob::new()
+                .expect("failed to create the P4 child process lifetime job"),
             logs,
             journal,
         }
@@ -377,7 +380,14 @@ impl P4Runner {
             .lock()
             .insert(operation_id.clone(), token.clone());
         let started_at = Instant::now();
-        let queued = event_with_progress(&operation_id, EventKind::Queued, None, Some(0.0));
+        let label = security::redact_command(&request.command, &request.args);
+        let label = label.chars().take(512).collect::<String>();
+        let queued = event_with_progress(
+            &operation_id,
+            EventKind::Queued,
+            Some(label.clone()),
+            Some(0.0),
+        );
         emit(app, &queued);
         let mut events = vec![queued];
 
@@ -413,10 +423,11 @@ impl P4Runner {
             }
         };
 
-        let started = event_with_progress(&operation_id, EventKind::Started, None, Some(2.0));
+        let started =
+            event_with_progress(&operation_id, EventKind::Started, Some(label), Some(2.0));
         emit(app, &started);
         events.push(started);
-        let mut command = Command::new(executable);
+        let mut command = Command::from(super::process::command(executable));
         if !request.context.server.is_empty() {
             command.args(["-p", &request.context.server]);
         }
@@ -460,6 +471,17 @@ impl P4Runner {
                 return Err(RunnerError::Launch(error));
             }
         };
+        if let Err(error) = self.child_job.assign(&child) {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            self.operations.lock().remove(&operation_id);
+            let _ = self.journal.finish(
+                &operation_id,
+                JournalState::Failed,
+                Some(OperationFailureKind::CommandFailure),
+            );
+            return Err(RunnerError::Launch(error));
+        }
         let stdin_input = argument_input
             .map(|arguments| arguments.join("\n") + "\n")
             .or_else(|| request.input.clone());
@@ -513,7 +535,21 @@ impl P4Runner {
                 events.push(cancelled);
                 (child.wait().await?, true)
             }
-            result = tokio::time::timeout(timeout, child.wait()) => match result { Ok(value) => (value?, false), Err(_) => { let _ = child.kill().await; self.operations.lock().remove(&operation_id); let _ = self.journal.finish(&operation_id, JournalState::Failed, Some(OperationFailureKind::ServerUnreachable)); return Err(RunnerError::Timeout); } }
+            result = tokio::time::timeout(timeout, child.wait()) => match result {
+                Ok(value) => (value?, false),
+                Err(_) => {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    self.operations.lock().remove(&operation_id);
+                    let failure = timeout_failure(read_only);
+                    let _ = self.journal.finish(
+                        &operation_id,
+                        JournalState::Failed,
+                        Some(failure),
+                    );
+                    return Err(RunnerError::Timeout);
+                }
+            }
         };
         let stdout_events = stdout_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
         let stderr_events = stderr_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
@@ -607,6 +643,14 @@ fn journal_failure(stderr: &str) -> OperationFailureKind {
         }
         ConnectionErrorCode::PermissionDenied => OperationFailureKind::PermissionDenied,
         _ => OperationFailureKind::CommandFailure,
+    }
+}
+
+fn timeout_failure(read_only: bool) -> OperationFailureKind {
+    if read_only {
+        OperationFailureKind::ServerUnreachable
+    } else {
+        OperationFailureKind::Unknown
     }
 }
 
@@ -792,6 +836,7 @@ fn is_read_only(command: &str) -> bool {
         "branches"
             | "changes"
             | "clients"
+            | "depots"
             | "describe"
             | "diff"
             | "diff2"
@@ -841,7 +886,7 @@ fn is_read_only_request(request: &P4CommandRequest) -> bool {
                 .args
                 .first()
                 .is_some_and(|argument| argument == "-o"))
-        || (matches!(request.command.as_str(), "unshelve" | "resolve")
+        || (matches!(request.command.as_str(), "unshelve" | "resolve" | "undo")
             && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "reconcile" && request.args.iter().any(|argument| argument == "-n"))
         || (request.command == "sync" && request.args.iter().any(|argument| argument == "-n"))
@@ -1070,15 +1115,17 @@ mod tests {
         assert!(!serde_json::to_string(&logs.query(&LogQuery::default()))
             .unwrap()
             .contains(SENTINEL));
-        let sqlite_text: String = rusqlite::Connection::open(base.join("logs.sqlite"))
-            .unwrap()
-            .query_row(
-                "SELECT command || message FROM logs WHERE id='sentinel-log'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert!(!sqlite_text.contains(SENTINEL));
+        let mut log_text = String::new();
+        for entry in std::fs::read_dir(logs.directory()).unwrap() {
+            let path = entry.unwrap().path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
+                log_text.push_str(&std::fs::read_to_string(path).unwrap());
+            }
+        }
+        assert!(!log_text.contains(SENTINEL));
 
         journal
             .start(
@@ -1162,6 +1209,19 @@ mod tests {
     }
 
     #[test]
+    fn timeout_after_a_mutation_starts_is_unknown_not_a_safe_retry() {
+        assert_eq!(
+            timeout_failure(false),
+            OperationFailureKind::Unknown,
+            "a timed-out mutation may have reached the server"
+        );
+        assert_eq!(
+            timeout_failure(true),
+            OperationFailureKind::ServerUnreachable
+        );
+    }
+
+    #[test]
     fn change_spec_reads_do_not_block_the_submit_revalidation_lane() {
         let mut request = P4CommandRequest {
             operation_id: None,
@@ -1175,6 +1235,11 @@ mod tests {
         };
         assert!(is_read_only_request(&request));
         request.args[0] = "-d".into();
+        assert!(!is_read_only_request(&request));
+        request.command = "undo".into();
+        request.args = vec!["-n".into(), "//depot/main/a#17".into()];
+        assert!(is_read_only_request(&request));
+        request.args.remove(0);
         assert!(!is_read_only_request(&request));
         request.command = "sync".into();
         request.args = vec!["-n".into(), "//depot/main/...#head".into()];

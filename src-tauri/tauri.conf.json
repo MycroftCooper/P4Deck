@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "identifier": "dev.p4deck.desktop",
   "build": {
-    "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm dev:desktop:frontend",
+    "devUrl": "http://127.0.0.1:1422",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "P4Deck", "width": 1280, "height": 800, "minWidth": 390, "minHeight": 620, "resizable": true, "dragDropEnabled": false }],
+    "windows": [{ "title": "P4Deck", "width": 1280, "height": 800, "minWidth": 390, "minHeight": 620, "resizable": true, "decorations": false, "dragDropEnabled": false }],
     "security": { "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src ipc: http://ipc.localhost" }
   },
   "bundle": { "active": true, "targets": "all", "icon": [], "createUpdaterArtifacts": false }

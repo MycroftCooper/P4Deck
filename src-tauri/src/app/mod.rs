@@ -17,4 +17,6 @@ pub mod submit_service;
 pub mod swarm_open;
 pub mod sync_service;
 pub mod system_open;
+pub mod undo_service;
+pub mod vfs_service;
 pub mod workflow_service;

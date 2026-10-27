@@ -44,6 +44,7 @@ pub enum OperationFailureKind {
     CommandFailure,
     Cancelled,
     Interrupted,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -98,7 +99,7 @@ impl OperationJournal {
               started_at TEXT NOT NULL, finished_at TEXT, log_reference TEXT
             );
             CREATE INDEX IF NOT EXISTS operation_journal_order ON operation_journal(started_at DESC, operation_id DESC);
-            UPDATE operation_journal SET state='interrupted', failure='interrupted', finished_at=datetime('now') WHERE state IN ('queued','running');")
+            UPDATE operation_journal SET state='interrupted', failure='interrupted', finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE state IN ('queued','running');")
             .map_err(|e| e.to_string())?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -253,6 +254,7 @@ fn failure_name(v: OperationFailureKind) -> &'static str {
         OperationFailureKind::CommandFailure => "commandFailure",
         OperationFailureKind::Cancelled => "cancelled",
         OperationFailureKind::Interrupted => "interrupted",
+        OperationFailureKind::Unknown => "unknown",
     }
 }
 fn row_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<OperationRecord> {
@@ -291,12 +293,26 @@ fn row_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<OperationRecord> {
                 "permissionDenied" => OperationFailureKind::PermissionDenied,
                 "cancelled" => OperationFailureKind::Cancelled,
                 "interrupted" => OperationFailureKind::Interrupted,
+                "unknown" => OperationFailureKind::Unknown,
                 _ => OperationFailureKind::CommandFailure,
             }),
-        started_at: row.get(7)?,
-        finished_at: row.get(8)?,
+        started_at: normalize_utc_timestamp(row.get(7)?),
+        finished_at: row
+            .get::<_, Option<String>>(8)?
+            .map(normalize_utc_timestamp),
         log_reference: row.get(9)?,
     })
+}
+
+fn normalize_utc_timestamp(value: String) -> String {
+    // Older startup recovery stored SQLite datetime('now') as
+    // `YYYY-MM-DD HH:MM:SS`. JavaScript treats that timezone-less form as
+    // local time, shifting the timestamp by the current UTC offset.
+    if value.len() == 19 && value.as_bytes().get(10) == Some(&b' ') {
+        format!("{}Z", value.replacen(' ', "T", 1))
+    } else {
+        value
+    }
 }
 
 #[cfg(test)]
@@ -324,6 +340,10 @@ mod tests {
         let recovered = journal.get("op-secret").unwrap();
         assert_eq!(recovered.state, JournalState::Interrupted);
         assert_eq!(recovered.failure, Some(OperationFailureKind::Interrupted));
+        assert!(recovered
+            .finished_at
+            .as_deref()
+            .is_some_and(|value| value.ends_with('Z')));
         let schema = std::fs::read(&path).unwrap();
         assert!(!String::from_utf8_lossy(&schema).contains("password-value"));
         for i in 0..5 {
@@ -507,5 +527,46 @@ mod tests {
         assert!(!stored.contains(SENTINEL));
         drop(journal);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn preserves_unknown_failure_for_manual_recovery() {
+        let path = path();
+        let journal = OperationJournal::open(&path).unwrap();
+        journal
+            .start(
+                "uncertain-mutation",
+                "connection",
+                "workspace",
+                OperationSource::Gui,
+                OperationCategory::FileMutation,
+            )
+            .unwrap();
+        journal
+            .finish(
+                "uncertain-mutation",
+                JournalState::Failed,
+                Some(OperationFailureKind::Unknown),
+            )
+            .unwrap();
+        let record = journal.get("uncertain-mutation").unwrap();
+        assert_eq!(record.failure, Some(OperationFailureKind::Unknown));
+        let serialized = serde_json::to_string(&record).unwrap();
+        assert!(serialized.contains("\"failure\":\"unknown\""));
+        assert!(!serialized.contains("payload"));
+        drop(journal);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn normalizes_legacy_sqlite_utc_timestamps() {
+        assert_eq!(
+            normalize_utc_timestamp("2026-10-22 12:01:19".into()),
+            "2026-10-22T12:01:19Z"
+        );
+        assert_eq!(
+            normalize_utc_timestamp("2026-10-22T12:01:19.123Z".into()),
+            "2026-10-22T12:01:19.123Z"
+        );
     }
 }

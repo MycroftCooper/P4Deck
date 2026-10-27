@@ -12,11 +12,13 @@
 @import "./styles/preferences.css";
 @import "./styles/preview.css";
 @import "./styles/commands.css";
+@import "./styles/workspace-switcher.css";
 @import "./styles/activity.css";
 @import "./styles/search.css";
 @import "./styles/stream-graph.css";
 @import "./styles/branch-mappings.css";
 @import "./styles/status.css";
+@import "./styles/dropdowns.css";
 .runtime-error,
 .tool-error {
   position: fixed;

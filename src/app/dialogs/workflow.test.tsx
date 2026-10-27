@@ -55,18 +55,18 @@ function button(text: string) {
     (button) => button.textContent === text,
   )!;
 }
-it("requires scope acknowledgement for destructive operations and cancels explicitly", async () => {
+it("requires scope acknowledgement for delete and cancels explicitly", async () => {
   await act(async () =>
     root.render(
       <OperationConfirmDialog
-        request={{ operation: "revert", nodes: [node], source: null }}
+        request={{ operation: "delete", nodes: [node], source: null }}
         zh
         onClose={close}
       />,
     ),
   );
   expect(button("确认执行").disabled).toBe(true);
-  expect(document.body.textContent).toContain("还原可能丢失");
+  expect(document.body.textContent).toContain("标记为删除");
   expect(document.body.textContent).toContain("不能撤销已完成部分");
   await act(async () => button("取消").click());
   expect(close).toHaveBeenCalledExactlyOnceWith(null);
@@ -89,11 +89,8 @@ it("wraps Tab and Shift+Tab within visible enabled modal controls", async () => 
         />,
       ),
     );
-    await act(async () =>
-      document
-        .querySelector<HTMLInputElement>('input[type="checkbox"]')!
-        .click(),
-    );
+    expect(document.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(button("确认执行").disabled).toBe(false);
     const last = button("确认执行"),
       first = document.querySelector<HTMLButtonElement>(
         '[aria-label="关闭对话框"]',
