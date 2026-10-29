@@ -296,7 +296,9 @@ export function apply(ctx, config = {}) {
   const workspace = config.workspace ?? "D:\\GitCode\\P4Deck";
   const handler = makeHandler(workspace);
   ctx.effect(() => {
-    const disposePage = ctx.webServer.register({ kind: "prefix", path: `${ROUTE}/`, handler });
+    // 前缀路径不能带尾斜杠：webserver 用 `${prefix}/` 做边界匹配，
+    // 写成 "/p4deck-board/" 会让 "/p4deck-board/api/*" 永远匹配不上。
+    const disposePage = ctx.webServer.register({ kind: "prefix", path: ROUTE, handler });
     const disposeExact = ctx.webServer.register({ kind: "exact", path: ROUTE, handler });
     return () => {
       disposeExact();

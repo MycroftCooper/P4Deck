@@ -62,7 +62,7 @@ const ctx = {
   },
 };
 apply(ctx, { workspace: WORKSPACE });
-check("注册 prefix 路由", routes.some((route) => route.kind === "prefix" && route.path === "/p4deck-board/"));
+check("注册 prefix 路由", routes.some((route) => route.kind === "prefix" && route.path === "/p4deck-board"));
 check("注册 exact 路由", routes.some((route) => route.kind === "exact" && route.path === "/p4deck-board"));
 
 const handler = routes.find((route) => route.kind === "prefix").handler;
