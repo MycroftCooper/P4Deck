@@ -73,8 +73,22 @@ if (isMainEntry) {
           .map((file) => file.trim().replace(/\\/g, "/"))
           .filter(Boolean)
       : undefined;
-  const plan = buildPlan(explicitFiles);
+  const sinceBaseline = args.has("--since-baseline");
+  let baselineFiles;
+  if (!explicitFiles && sinceBaseline) {
+    const result = spawnSync(process.execPath, ["scripts/workflow/baseline.mjs", "changed", "--json"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
+    try {
+      baselineFiles = JSON.parse(result.stdout).files;
+    } catch {
+      baselineFiles = [];
+    }
+  }
+  const plan = buildPlan(explicitFiles ?? baselineFiles);
   if (explicitFiles) plan.source = "explicit";
+  if (baselineFiles) plan.source = "baseline";
   if (args.has("--quiet")) {
     for (const [name, command] of Object.entries(plan.commands)) {
       process.stdout.write(`${name}: ${command.join(" ")}\n`);

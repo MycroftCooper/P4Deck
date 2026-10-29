@@ -93,6 +93,56 @@ const archiveGate = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "
 });
 check("归档门禁拒绝未人验", archiveGate.status === 1 && String(archiveGate.stderr).includes("humanAccepted"), String(archiveGate.status));
 
+// 状态工具新增能力：队列 / compact 看板 / 告警截断 / baseline / 文档轮转 dry-run
+const queueOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "queue", "--for", "FE", "--json"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+let queueJson;
+try {
+  queueJson = JSON.parse(queueOut.stdout);
+} catch {}
+check("queue --for FE 输出", Boolean(queueJson) && queueJson.role === "FE" && queueJson.count > 0, String(queueJson?.count));
+
+const compactOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "board", "--compact"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+const compactLines = compactOut.stdout.trim().split(/\r?\n/);
+check("board --compact 有批次行", compactLines[0]?.startsWith("批次 "), compactLines[0]);
+check("board --compact 只列活跃任务", compactLines.length === 1 + 50, String(compactLines.length));
+
+const checkOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "check"], { cwd: ROOT, encoding: "utf8" });
+const checkJson = JSON.parse(checkOut.stdout.slice(checkOut.stdout.indexOf("{")));
+check("check 告警截断", Array.isArray(checkJson.warnings) && checkJson.warnings.length <= 5 && checkJson.warningCount > 5, `${checkJson.warnings?.length}/${checkJson.warningCount}`);
+
+const baselineFile = path.join(os.tmpdir(), `p4deck-baseline-${Date.now()}.json`);
+const runBaseline = (argv) =>
+  spawnSync(process.execPath, [path.join(HERE, "baseline.mjs"), ...argv], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, P4DECK_BASELINE: baselineFile },
+  });
+check("baseline start", runBaseline(["start"]).status === 0);
+const changedNow = JSON.parse(runBaseline(["changed", "--json"]).stdout);
+check("baseline 立即对比为 0", changedNow.count === 0, String(changedNow.count));
+await rm(baselineFile, { force: true });
+
+const archiveDry = spawnSync(process.execPath, [path.join(HERE, "archive.mjs"), "--keep", "2"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+let archiveReport;
+try {
+  archiveReport = JSON.parse(archiveDry.stdout.slice(archiveDry.stdout.indexOf("{")));
+} catch {}
+const archiveNoop = archiveDry.stdout.includes("无需轮转");
+check(
+  "archive 默认 dry-run（或有内容时只预览）",
+  archiveDry.status === 0 && (archiveReport?.dryRun === true || archiveNoop),
+  archiveNoop ? "noop" : String(archiveReport?.move),
+);
+
 // 编码守卫：PowerShell 的 Set-Content 会写 BOM，JSON/YAML 因此解析失败（真实踩过）。
 import { readdir, readFile } from "node:fs/promises";
 async function walkFiles(dir, out = []) {

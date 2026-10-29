@@ -11,6 +11,7 @@ window.__ModuleLoader__.load({
 		const BOARD_KIND = "p4deckBoard";
 		const API = "/p4deck-board/api/snapshot";
 		const TOGGLE = "/p4deck-board/api/human-todos/toggle";
+		const EVENTS = "/p4deck-board/api/events";
 		const LINE = "1px solid rgba(128,128,128,0.32)";
 		const MUTED = "rgba(128,128,128,0.95)";
 
@@ -261,10 +262,33 @@ window.__ModuleLoader__.load({
 					}
 				};
 				load();
-				const timer = setInterval(load, 5000);
+				// 事件驱动：宿主 watch 数据文件，变了才推送；EventSource 不可用才退回 30s 轮询。
+				let source;
+				let timer;
+				const startPolling = () => {
+					if (timer) return;
+					timer = setInterval(() => {
+						if (typeof document === "undefined" || !document.hidden) load();
+					}, 30000);
+				};
+				if (typeof window !== "undefined" && window.EventSource) {
+					source = new window.EventSource(EVENTS);
+					source.onmessage = () => {
+						if (typeof document === "undefined" || !document.hidden) load();
+					};
+					source.onerror = startPolling;
+					if (typeof document !== "undefined") {
+						document.addEventListener("visibilitychange", () => {
+							if (!document.hidden) load();
+						});
+					}
+				} else {
+					startPolling();
+				}
 				return () => {
 					alive = false;
-					clearInterval(timer);
+					if (source) source.close();
+					if (timer) clearInterval(timer);
 				};
 			}, [nonce]);
 			return { ...state, reload: () => setNonce((value) => value + 1) };

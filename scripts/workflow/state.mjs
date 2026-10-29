@@ -393,6 +393,9 @@ async function cmdCheck(args) {
   if (mainCount === 0) errors.push("没有主工作包");
 
   const summary = summarize(state);
+  const verbose = args.includes("--verbose");
+  // 同类告警会淹没输出（历史迁移包必然 40+ 条），默认截断并给计数，--verbose 才全列。
+  const shownWarnings = verbose ? warnings : warnings.slice(0, 5);
   const report = {
     ok: errors.length === 0,
     strict,
@@ -404,11 +407,17 @@ async function cmdCheck(args) {
     byStage: summary.byStage,
     bySlice: summary.slices,
     errors,
-    warnings,
+    warningCount: warnings.length,
+    warnings: shownWarnings,
+    warningsTruncated: !verbose && warnings.length > shownWarnings.length,
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   await mkdir(ARTIFACT_DIR, { recursive: true });
-  await writeFile(path.join(ARTIFACT_DIR, "state-check.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(
+    path.join(ARTIFACT_DIR, "state-check.json"),
+    `${JSON.stringify({ ...report, warnings }, null, 2)}\n`,
+    "utf8",
+  );
   if (!report.ok) process.exitCode = 1;
 }
 
@@ -430,9 +439,19 @@ const SLICE_LABELS = {
   paused: "暂停",
 };
 
-async function cmdBoard() {
+async function cmdBoard(args = []) {
   const state = await loadState();
   const summary = summarize(state);
+  // 极简视图：给 agent 用，只有 id/状态/优先级/负责人，避免拉整份看板。
+  if (args.includes("--compact")) {
+    const slices = (state.batch?.slices ?? []).map((slice) => `${slice.id}:${slice.status}`).join(" ");
+    const lines = [`批次 ${state.batch.id} | 切片 ${slices}`];
+    for (const pkg of state.packages.filter((entry) => !entry.archived)) {
+      lines.push(`${pkg.id} | ${pkg.stage} | ${pkg.priority} | ${pkg.owner}`);
+    }
+    process.stdout.write(`${lines.join("\n")}\n`);
+    return;
+  }
   const lines = [];
   lines.push("# 工作流看板（自动生成，勿手改）", "");
   lines.push("> 由 `node scripts/workflow/state.mjs board` 从 [state.json](state.json) 生成。");
@@ -647,6 +666,33 @@ async function cmdRestore(id, args) {
   process.stdout.write(`已恢复 ${pkg.id} 为活跃任务\n`);
 }
 
+/** 角色队列：一次给出"我该干哪些"，替代翻看板/state.json。 */
+async function cmdQueue(args) {
+  const roleIndex = args.indexOf("--for");
+  const role = roleIndex >= 0 ? String(args[roleIndex + 1] ?? "").toUpperCase() : undefined;
+  const state = await loadState();
+  const rows = state.packages.filter(
+    (pkg) => !pkg.archived && (!role || String(pkg.owner ?? "").toUpperCase().includes(role)),
+  );
+  const tasks = rows.map((pkg) => ({
+    id: pkg.id,
+    stage: pkg.stage,
+    priority: pkg.priority,
+    owner: pkg.owner,
+    type: pkg.type,
+    module: pkg.module,
+  }));
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify({ role: role ?? "ALL", count: tasks.length, tasks }, null, 2)}\n`);
+    return;
+  }
+  const lines = [`队列 ${role ?? "全部"}：${tasks.length} 个活跃任务`];
+  for (const task of tasks) {
+    lines.push(`${task.id}  ${task.stage}  ${task.priority}  ${truncate(task.owner, 16)}  ${truncate(task.module, 14)}`);
+  }
+  process.stdout.write(`${lines.join("\n")}\n`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {
   case "import":
@@ -656,7 +702,10 @@ switch (command) {
     await cmdCheck(rest);
     break;
   case "board":
-    await cmdBoard();
+    await cmdBoard(rest);
+    break;
+  case "queue":
+    await cmdQueue(rest);
     break;
   case "task":
     await cmdTask(rest[0], rest.slice(1));

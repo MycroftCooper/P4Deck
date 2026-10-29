@@ -6,11 +6,12 @@
 //   node scripts/workflow/board.mjs --serve        本地实时服务 http://127.0.0.1:1421（每 4 秒自刷）
 //   node scripts/workflow/board.mjs --json         打印快照 JSON
 import { createServer } from "node:http";
+import { existsSync, watch } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { readTodos, toggleTodo } from "./human-todos.mjs";
+import { readTodos, toggleTodo, TODOS_FILE } from "./human-todos.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKFLOW_DIR = path.join(ROOT, "ForAIDoc", "PM", "工作流");
@@ -455,12 +456,28 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
   render(JSON.parse(document.getElementById("snapshot").textContent));
 
   if (LIVE) {
-    setInterval(function () {
+    // 事件驱动：宿主 watch 三个数据文件，变了才推一条；不再轮询整份快照。
+    var pollTimer;
+    function refresh() {
       fetch("/api/snapshot", { cache: "no-store" })
         .then(function (response) { return response.json(); })
         .then(render)
         .catch(function () {});
-    }, 4000);
+    }
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(function () {
+        if (!document.hidden) refresh();
+      }, 30000);
+    }
+    if (window.EventSource) {
+      var source = new EventSource("/api/events");
+      source.onmessage = function () { if (!document.hidden) refresh(); };
+      source.onerror = function () { startPolling(); };
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
+    } else {
+      startPolling();
+    }
   }
 })();
 </script>
@@ -489,8 +506,43 @@ function readBody(request) {
 }
 
 function startServer(port) {
+  const clients = new Set();
+  let debounce;
+  const broadcast = () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      for (const client of clients) {
+        try {
+          client.write("data: changed\n\n");
+        } catch {
+          clients.delete(client);
+        }
+      }
+    }, 120);
+  };
+  for (const file of [STATE_FILE, RUNTIME_FILE, TODOS_FILE]) {
+    if (!existsSync(file)) continue;
+    try {
+      const watcher = watch(file, { persistent: false }, broadcast);
+      watcher.on("error", () => {});
+    } catch {
+      // 个别平台不允许 watch：忽略，前端有 30s 兜底轮询
+    }
+  }
+
   const server = createServer(async (request, response) => {
     try {
+      if (request.url === "/api/events") {
+        response.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-store",
+          connection: "keep-alive",
+        });
+        response.write(": connected\n\n");
+        clients.add(response);
+        request.on("close", () => clients.delete(response));
+        return;
+      }
       if (request.method === "POST" && request.url === "/api/human-todos/toggle") {
         const raw = await readBody(request);
         let payload;

@@ -48,6 +48,18 @@
 停笔 <是/否>
 ```
 
+
+## 常用命令
+
+```powershell
+node scripts/workflow/state.mjs queue --for BE
+node scripts/workflow/ownership.mjs check --role BE
+node scripts/workflow/ci-fast.mjs --files <本片改动> --role BE
+scripts\workflow\cargo-candidate.cmd check --offline --locked --lib --manifest-path src-tauri/Cargo.toml
+node scripts/workflow/state.mjs board --compact
+```
+
+> 共享 Rust 缓存的实测收益：冷 67.1s → 热 5.6s（12×）。跑 cargo 一律走 cargo-candidate.cmd。
 ## 预算
 
 单任务 ≤12 轮；集成批次单独计。Rust 冷编译已用共享 target 缓解，不要重复全量 build。

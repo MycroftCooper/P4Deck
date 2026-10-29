@@ -29,6 +29,9 @@ function fakeResponse() {
     end(body) {
       this.body = body;
     },
+    write(chunk) {
+      this.body = (this.body ?? "") + chunk;
+    },
   };
 }
 
@@ -81,6 +84,16 @@ check("API 返回 total=52", payload.counts.total === 52);
 check("API 不缓存", api.headers?.["cache-control"] === "no-store");
 check("快照含人类待办", Array.isArray(payload.humanTodos) && payload.humanTodos.length > 0, `${payload.humanTodos?.length} 条`);
 check("归档与活跃分开", (payload.archived || []).length === 2 && payload.packages.every((pkg) => !pkg.archived));
+
+// 4a) SSE：事件流路由（不再轮询）
+const eventRequest = new EventEmitter();
+eventRequest.method = "GET";
+eventRequest.url = "/p4deck-board/api/events";
+const eventResponse = fakeResponse();
+await handler(eventRequest, eventResponse);
+check("SSE 路由 200", eventResponse.statusCode === 200, String(eventResponse.statusCode));
+check("SSE content-type", String(eventResponse.headers?.["content-type"]).includes("text/event-stream"));
+check("SSE 首帧 connected", String(eventResponse.body ?? "").includes("connected"));
 
 // 4b) 人类待办勾选：POST 写回 JSON（临时工作区，不动仓库）
 const tempRoot = await mkdtemp(path.join(os.tmpdir(), "p4deck-toggle-"));

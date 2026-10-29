@@ -51,6 +51,15 @@
 - 不恢复 CUA（用户已用 Escape 停止）。
 - 不把"未运行"说成"通过"。
 
+
+## 常用命令
+
+```powershell
+node scripts/workflow/state.mjs queue --for QA
+node scripts/workflow/ownership.mjs check --role QA
+node scripts/workflow/ci-fast.mjs --files <本片改动> --role QA
+node scripts/workflow/batch.mjs verify --manifest <f> --qa <qa-approval.json>
+```
 ## 预算
 
 单切片 ≤10 轮；机械核对交给脚本，轮次留给语义判断。

@@ -2,7 +2,7 @@
 // 快速层门禁：只跑与改动相关的检查，并且并行执行。
 // 与 ci:quick（11 步串行、完整）分工：本命令属于“每片开发中”，ci:quick 属于“freeze 前”。
 // 用法: node scripts/workflow/ci-fast.mjs
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -47,8 +47,22 @@ const explicitFiles =
         .map((file) => file.trim().replace(/\\/g, "/"))
         .filter(Boolean)
     : undefined;
-const plan = buildPlan(explicitFiles);
-if (plan.broad && !explicitFiles) {
+const sinceBaseline = process.argv.includes("--since-baseline");
+let baselineFiles;
+if (!explicitFiles && sinceBaseline) {
+  const result = spawnSync(process.execPath, ["scripts/workflow/baseline.mjs", "changed", "--json"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  try {
+    baselineFiles = JSON.parse(result.stdout).files;
+  } catch {
+    baselineFiles = [];
+  }
+}
+const plan = buildPlan(explicitFiles ?? baselineFiles);
+if (baselineFiles) plan.source = "baseline";
+if (plan.broad && !explicitFiles && !baselineFiles) {
   process.stderr.write(
     "警告: 改动文件过多（>20），本次接近全量门禁。建议 --files a,b,c 指定本片改动，或先做基线 commit。\n",
   );
@@ -73,6 +87,7 @@ const preflight = [];
 if (role) {
   const ownershipArgs = ["scripts/workflow/ownership.mjs", "check", "--role", role];
   if (explicitFiles?.length) ownershipArgs.push("--files", explicitFiles.join(","));
+  else if (baselineFiles?.length) ownershipArgs.push("--files", baselineFiles.join(","));
   preflight.push({ name: "ownership", command: [process.execPath, ...ownershipArgs] });
 }
 if (
@@ -161,4 +176,23 @@ const summary = {
 await mkdir(ARTIFACT_DIR, { recursive: true });
 await writeFile(path.join(ARTIFACT_DIR, "ci-fast-latest.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
 process.stdout.write(`\n${JSON.stringify(summary, null, 2)}\n`);
+// 自动量测：门禁耗时/改动规模进 metrics.jsonl，不用人记。
+spawnSync(
+  process.execPath,
+  [
+    "scripts/workflow/measure.mjs",
+    "record",
+    "--batch",
+    process.env.P4DECK_BATCH ?? "CON06+ACTION-R01",
+    "--role",
+    role ?? "UNKNOWN",
+    "--event",
+    "ci-fast",
+    "--gateMs",
+    String(summary.durationMs),
+    "--files",
+    String(plan.changed.total),
+  ],
+  { cwd: ROOT, stdio: "ignore" },
+);
 if (!summary.ok) process.exitCode = 1;

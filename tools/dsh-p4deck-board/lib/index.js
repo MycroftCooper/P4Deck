@@ -5,6 +5,7 @@
 //   GET /p4deck-board/           → 看板页面（每 5 秒拉一次快照）
 //   GET /p4deck-board/api/snapshot → JSON 快照（state.json + 运行状态.json + metrics）
 import { readFile, writeFile } from "node:fs/promises";
+import { existsSync, watch } from "node:fs";
 import path from "node:path";
 
 export const name = "p4deck-board";
@@ -220,7 +221,16 @@ function render(s){
 }
 function tick(){fetch("${ROUTE}/api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(render)
  .catch(function(e){document.getElementById("footer").textContent="读取失败: "+e;});}
-tick();setInterval(tick,5000);
+tick();
+// 事件驱动：宿主 watch 数据文件，变化才推；EventSource 不可用才退回 30s 轮询。
+if(window.EventSource){
+ var es=new EventSource("${ROUTE}/api/events");
+ es.onmessage=function(){ if(!document.hidden) tick(); };
+ es.onerror=function(){ if(!window.__p4poll) window.__p4poll=setInterval(function(){ if(!document.hidden) tick(); },30000); };
+ document.addEventListener("visibilitychange",function(){ if(!document.hidden) tick(); });
+}else{
+ setInterval(function(){ if(!document.hidden) tick(); },30000);
+}
 </script></body></html>`;
 }
 
@@ -231,8 +241,46 @@ function sendJson(res, statusCode, payload) {
 }
 
 function makeHandler(workspace) {
-  return async (req, res) => {
+  const clients = new Set();
+  let debounce;
+  const broadcast = () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      for (const client of clients) {
+        try {
+          client.write("data: changed\n\n");
+        } catch {
+          clients.delete(client);
+        }
+      }
+    }, 120);
+  };
+  const watchers = [];
+  for (const name of ["state.json", "运行状态.json", "人类待办.json"]) {
+    const file = path.join(workspace, "ForAIDoc", "PM", "工作流", name);
+    if (!existsSync(file)) continue;
+    try {
+      const watcher = watch(file, { persistent: false }, broadcast);
+      watcher.on("error", () => {});
+      watchers.push(watcher);
+    } catch {
+      // 个别平台不允许 watch：忽略，前端有 30s 兜底轮询
+    }
+  }
+
+  const handler = async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    if (url.pathname === `${ROUTE}/api/events`) {
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      });
+      res.write(": connected\n\n");
+      clients.add(res);
+      req.on("close", () => clients.delete(res));
+      return;
+    }
     if (url.pathname === `${ROUTE}/api/human-todos/toggle`) {
       if (req.method !== "POST") {
         res.writeHead(405, { allow: "POST" });
@@ -276,6 +324,21 @@ function makeHandler(workspace) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found");
   };
+  const dispose = () => {
+    clearTimeout(debounce);
+    for (const watcher of watchers) {
+      try {
+        watcher.close();
+      } catch {}
+    }
+    for (const client of clients) {
+      try {
+        client.end();
+      } catch {}
+    }
+    clients.clear();
+  };
+  return { handler, dispose };
 }
 
 /** 只有用户能勾选：面板 POST 回来时直接写 人类待办.json。 */
@@ -294,7 +357,7 @@ async function toggleTodoFile(workspace, id) {
 /** cordis 宿主插件入口。 */
 export function apply(ctx, config = {}) {
   const workspace = config.workspace ?? "D:\\GitCode\\P4Deck";
-  const handler = makeHandler(workspace);
+  const { handler, dispose } = makeHandler(workspace);
   ctx.effect(() => {
     // 前缀路径不能带尾斜杠：webserver 用 `${prefix}/` 做边界匹配，
     // 写成 "/p4deck-board/" 会让 "/p4deck-board/api/*" 永远匹配不上。
@@ -303,6 +366,7 @@ export function apply(ctx, config = {}) {
     return () => {
       disposeExact();
       disposePage();
+      dispose();
     };
   });
 }

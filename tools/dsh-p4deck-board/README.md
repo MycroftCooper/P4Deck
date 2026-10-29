@@ -29,7 +29,7 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
 
 1. 右侧栏标签条末端的 **＋**（add control）会打开指南页；
 2. 指南页里选 **工作流看板**（图标是三个小方块）；
-3. 之后这个「看板」标签会留在右侧栏，内容是实时数据，每 5 秒自刷。
+3. 之后这个「看板」标签会留在右侧栏。**数据由文件监听驱动**：`state.json` / `运行状态.json` / `人类待办.json` 一变，宿主通过 SSE 推一帧，面板才刷新；不轮询。EventSource 不可用时才退回 30 秒兜底轮询。
 
 > 只有在右侧栏没有其它标签占用时才需要走 ＋；已有标签时可在标签条上切换。
 > 页面版入口仍保留：浏览器打开 `http://127.0.0.1:56326/p4deck-board`。
@@ -38,6 +38,7 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
 
 | 方法与路径 | 返回 |
 |---|---|
+| `GET /p4deck-board/api/events` | SSE：数据文件变化时推一帧（事件驱动） |
 | `GET /p4deck-board` | 看板页面 |
 | `GET /p4deck-board/` | 看板页面 |
 | `GET /p4deck-board/api/snapshot` | 快照 JSON（`cache-control: no-store`） |

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-29T21:05:00+08:00",
+  "updatedAt": "2026-10-29T13:27:11.091Z",
   "note": "人类待办：只有用户能勾选。Agent 可以读、可以建议，但不得代勾。",
   "items": [
     {
@@ -14,9 +14,9 @@
     {
       "id": "T02",
       "text": "重启 DSH 后验证侧栏「工作流看板」面板是否出现",
-      "done": false,
+      "done": true,
       "createdAt": "2026-10-29T21:05:00+08:00",
-      "doneAt": null,
+      "doneAt": "2026-10-29T13:27:11.091Z",
       "note": "插件树与客户端 bundle 都在启动时构建"
     },
     {

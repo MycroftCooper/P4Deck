@@ -29,6 +29,8 @@
 ## 命令
 
 ```powershell
+node scripts/workflow/state.mjs queue --for LEAD
+node scripts/workflow/sync.mjs
 node scripts/workflow/state.mjs task <ID> --for FE --message   # 直接可转发的任务单
 node scripts/workflow/state.mjs check                          # 交接前校验
 node scripts/workflow/state.mjs board                          # 刷新看板
