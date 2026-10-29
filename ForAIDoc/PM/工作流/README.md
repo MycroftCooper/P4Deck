@@ -60,6 +60,9 @@
 | `node scripts/workflow/state.mjs check [--strict]` | 校验状态库（包/切片/依赖/证据/负责人） | 改完 state、交接前、CI |
 | `node scripts/workflow/state.mjs board` | 重新生成 Markdown 看板 | state 变更后 |
 | `node scripts/workflow/state.mjs task <ID> --for <ROLE> [--json\|--message]` | 生成可直接转发的任务单 | 派活时 |
+| `node scripts/workflow/state.mjs archive <ID> --note "理由" [--evidence <sha>]` | 归档（前置：`humanAccepted === true`） | 人工验收后 |
+| `node scripts/workflow/state.mjs restore <ID>` | 撤销归档 | 归档错了 |
+| `node scripts/workflow/human-todos.mjs [list\|add\|toggle\|done\|remove]` | 人类待办（只有用户勾） | 提醒用户处理 |
 | `node scripts/workflow/evidence.mjs [--collect-temp] [--dry]` | 从回执派生验收事实 | QA/Apply 之后 |
 | `node scripts/workflow/ownership.mjs check --role <ROLE>` | 写域越界检查 | 提交前 / `ci:fast --role` |
 | `node scripts/workflow/ownership.mjs map <路径>` | 这条路径归谁 | 拿不准时 |
@@ -86,12 +89,30 @@
 
 「谁在忙什么」在 `运行状态.json`（agents / events）；**切片状态**在 `state.json` 的 `batch.slices`，两处不重复。
 
+看板布局（三个入口一致）：
+
+1. **人类待办**（Agent 不代勾）——`--serve` 或 DSH 面板里勾选会写回 [`人类待办.json`](人类待办.json)；静态 HTML 里的勾选只存本浏览器。
+2. **任务看板**——只显示活跃任务（当前 50），标题标「活跃 50 · 总计 52」。
+3. **已完成归档**——独立区域放在最底部，显示归档时间/理由/证据，不与活跃看板混排。
+
+## 3.2 归档模型
+
+```
+node scripts/workflow/state.mjs archive WIN-P1-03 --note "0.1.2 已在异机安装验收" --evidence <manifest sha>
+```
+
+- **前置门禁**：`verification.humanAccepted === true` 才允许归档，否则拒绝（防止把"已实现待验收"偷偷归档）。
+- **写入**：`archived / archivedAt / archivedBy / archiveReason / archiveEvidence`。
+- **不会被 import 打回**：合并时归档状态优先保留，即使 TODO 表删了对应行。
+- **计数口径不变**：归档仍计入 52，不新增工作包；活跃看板自动少一行。
+- `restore <ID>` 可撤销，理由保留为"恢复：…"。
+
 ## 4. 门禁分层（证据强度递增，弱证据不得顶替强证据）
 
 | 层 | 内容 | 能证明什么 |
 |---|---|---|
 | 快速层 `ci:fast` | 预检 + Prettier + tsc + `vitest related` | 改动自洽、相关测试过 |
-| 完整层 `ci:quick` | contracts/版本/validate/format/rustfmt/tsc/clippy/vitest/cargo test + **workflow-state** | freeze 可用 |
+| 完整层 `ci:quick` | contracts/版本/format/rustfmt/tsc/clippy/vitest/cargo test + **workflow-state** | freeze 可用 |
 | 重层 `ci:local` | 上面 + 生产构建 + 双端性能 + 打包审计 | 交付候选可用 |
 | QA 定向 | 冻结快照上的语义/边界/故障注入 | 可放行 |
 | 人工验收 | dev 实机 / 原生 | 可归档 |

@@ -106,6 +106,8 @@ check("渲染出 52 计数", html.includes("共 52 个主工作包"), "");
 check("渲染出 Agent（LEAD/BE）", html.includes("LEAD") && html.includes("BE"));
 check("渲染出里程碑", html.includes("CON06") || html.includes("批次里程碑"));
 check("渲染出任务卡（CL-01/UI-07）", html.includes("CL-01") || html.includes("UI-07"));
+check("渲染出人类待办", html.includes("人类待办") && html.includes("T01"));
+check("渲染出已完成归档", html.includes("已完成归档"));
 check("无数据时显示加载态", renderToStaticMarkup(react.createElement(module.BoardView, { snapshot: null, status: "loading", error: null })).includes("正在读取"));
 check("出错时显示错误态", renderToStaticMarkup(react.createElement(module.BoardView, { snapshot: null, status: "error", error: "HTTP 503" })).includes("HTTP 503"));
 

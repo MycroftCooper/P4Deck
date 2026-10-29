@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { readTodos, toggleTodo } from "./human-todos.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKFLOW_DIR = path.join(ROOT, "ForAIDoc", "PM", "工作流");
@@ -57,6 +58,7 @@ async function buildSnapshot() {
     process.exit(1);
   }
   const runtime = await readJson(RUNTIME_FILE, { agents: [], milestones: [], events: [] });
+  const todos = await readTodos();
   const metrics = await readMetrics();
 
   const byStage = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, 0]));
@@ -72,17 +74,31 @@ async function buildSnapshot() {
     generatedAt: new Date().toISOString(),
     batch: state.batch,
     counts: { total: state.packages.length, byStage, modules: [...moduleMap.entries()].map(([name, total]) => ({ name, total })) },
-    packages: state.packages.map((pkg) => ({
-      id: pkg.id,
-      type: pkg.type,
-      owner: pkg.owner,
-      priority: pkg.priority,
-      stage: pkg.stage,
-      module: pkg.module,
-      evidence: pkg.evidence.length,
-      note: pkg.note,
-      archived: Boolean(pkg.archived),
-    })),
+    packages: state.packages
+      .filter((pkg) => !pkg.archived)
+      .map((pkg) => ({
+        id: pkg.id,
+        type: pkg.type,
+        owner: pkg.owner,
+        priority: pkg.priority,
+        stage: pkg.stage,
+        module: pkg.module,
+        evidence: pkg.evidence.length,
+        note: pkg.note,
+      })),
+    archived: state.packages
+      .filter((pkg) => pkg.archived)
+      .map((pkg) => ({
+        id: pkg.id,
+        type: pkg.type,
+        owner: pkg.owner,
+        module: pkg.module,
+        archivedAt: pkg.archivedAt,
+        archiveReason: pkg.archiveReason,
+        archiveEvidence: pkg.archiveEvidence,
+        note: pkg.note,
+      })),
+    humanTodos: todos.items ?? [],
     agents: runtime.agents ?? [],
     milestones: state.batch?.slices ?? [],
     events: runtime.events ?? [],
@@ -169,6 +185,12 @@ input[type=search] { background: var(--panel); border: 1px solid var(--line); co
 .card { border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; background: var(--bg); }
 .card .id { font-weight: 600; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .card .meta { margin-top: 3px; color: var(--muted); font-size: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
+.todos { display: flex; flex-direction: column; gap: 6px; }
+.todo { display: flex; align-items: baseline; gap: 9px; border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 9px; background: var(--panel); cursor: pointer; }
+.todo.done .todo-text { text-decoration: line-through; color: var(--muted); }
+.todo-text { flex: 1 1 auto; }
+.todo-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .tag { font-size: 10px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); }
 .tag.bug { color: var(--danger); border-color: var(--danger); }
 .tag.feature { color: var(--accent); border-color: var(--accent); }
@@ -193,6 +215,9 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
   <h2>批次里程碑</h2>
   <div class="milestones" id="milestones"></div>
 
+  <h2>人类待办（只有你能勾）</h2>
+  <div class="todos" id="todos"></div>
+
   <h2>任务状态分布</h2>
   <div class="stats">
     <div class="bar" id="bar"></div>
@@ -200,12 +225,15 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
     <div id="gate"></div>
   </div>
 
-  <h2>任务看板（共 <span id="total"></span> 个主工作包）</h2>
+  <h2>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</h2>
   <div class="toolbar">
     <input type="search" id="filter" placeholder="按 ID / 负责人 / 模块过滤，例如 FE、CL-01、Shelf">
     <span class="hint">卡片标题为模块与范围，鼠标悬停可看剩余步骤。状态以 state.json 为准。</span>
   </div>
   <div class="board" id="board"></div>
+
+  <h2>已完成归档（独立区域，不混在活跃看板）</h2>
+  <div class="cards" id="archived"></div>
 
   <footer id="footer"></footer>
 </div>
@@ -289,6 +317,8 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       legend.appendChild(item);
     });
     document.getElementById("total").textContent = snapshot.counts.total;
+    var activeHost = document.getElementById("active");
+    if (activeHost) activeHost.textContent = String(snapshot.packages.length);
     var gate = document.getElementById("gate");
     gate.textContent = "停机条件：" + (snapshot.batch.stopCondition || "—");
   }
@@ -332,6 +362,74 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
     });
   }
 
+  function todoLocal() {
+    try { return JSON.parse(localStorage.getItem("p4deck-todos") || "{}"); } catch (error) { return {}; }
+  }
+
+  function renderTodos(snapshot) {
+    var host = document.getElementById("todos");
+    host.innerHTML = "";
+    var items = snapshot.humanTodos || [];
+    var hint = el("div", "hint", LIVE
+      ? "勾选会写回 人类待办.json（只有用户能勾，Agent 不代勾）"
+      : "静态模式：勾选只存这个浏览器；要持久化请用 --serve 或 DSH 面板");
+    if (!items.length) {
+      host.appendChild(el("div", "empty", "（暂无人类待办）"));
+      return;
+    }
+    var local = LIVE ? {} : todoLocal();
+    items.forEach(function (item) {
+      var done = LIVE ? Boolean(item.done) : (Object.prototype.hasOwnProperty.call(local, item.id) ? Boolean(local[item.id]) : Boolean(item.done));
+      var row = el("label", "todo" + (done ? " done" : ""));
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = done;
+      box.addEventListener("change", function () {
+        if (LIVE) {
+          fetch("/api/human-todos/toggle", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id: item.id })
+          }).then(function () { return fetch("/api/snapshot", { cache: "no-store" }); })
+            .then(function (response) { return response.json(); })
+            .then(render)
+            .catch(function () {});
+        } else {
+          var map = todoLocal();
+          map[item.id] = box.checked;
+          try { localStorage.setItem("p4deck-todos", JSON.stringify(map)); } catch (error) {}
+          row.className = "todo" + (box.checked ? " done" : "");
+        }
+      });
+      row.appendChild(box);
+      row.appendChild(el("span", "todo-text", item.text));
+      row.appendChild(el("span", "todo-meta", item.id + (item.note ? " · " + item.note : "")));
+      host.appendChild(row);
+    });
+    host.appendChild(hint);
+  }
+
+  function renderArchived(snapshot) {
+    var host = document.getElementById("archived");
+    host.innerHTML = "";
+    var items = snapshot.archived || [];
+    if (!items.length) {
+      host.appendChild(el("div", "empty", "（暂无归档）"));
+      return;
+    }
+    items.forEach(function (pkg) {
+      var card = el("div", "card");
+      card.title = pkg.note || "";
+      var id = el("div", "id");
+      id.appendChild(document.createTextNode(pkg.id));
+      if (pkg.type) id.appendChild(el("span", "tag " + pkg.type, TYPE_LABELS[pkg.type] || pkg.type));
+      card.appendChild(id);
+      card.appendChild(el("div", "meta", "归档于 " + fmt(pkg.archivedAt) + " · " + (pkg.archiveReason || "历史迁移项")));
+      if (pkg.archiveEvidence) card.appendChild(el("div", "meta", "证据 " + pkg.archiveEvidence));
+      host.appendChild(card);
+    });
+  }
+
   function render(snapshot) {
     CURRENT = snapshot;
     document.getElementById("batchId").textContent = snapshot.batch.id;
@@ -340,8 +438,10 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
     document.getElementById("liveMark").textContent = LIVE ? " · 实时（4s）" : "";
     renderAgents(snapshot.agents);
     renderMilestones(snapshot.milestones);
+    renderTodos(snapshot);
     renderStats(snapshot);
     renderBoard(snapshot, document.getElementById("filter").value);
+    renderArchived(snapshot);
     var m = snapshot.metrics || {};
     document.getElementById("footer").textContent =
       "来源：state.json（任务真值）· 运行状态.json（Agent/里程碑）· metrics.jsonl · 量测样本 " +
@@ -376,9 +476,37 @@ async function writeStatic() {
   process.stdout.write(`已写入 ${path.relative(ROOT, HTML_FILE)}（双击可看）\n`);
 }
 
+function readBody(request) {
+  return new Promise((resolve) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 64 * 1024) request.destroy();
+    });
+    request.on("end", () => resolve(body));
+    request.on("error", () => resolve(""));
+  });
+}
+
 function startServer(port) {
   const server = createServer(async (request, response) => {
     try {
+      if (request.method === "POST" && request.url === "/api/human-todos/toggle") {
+        const raw = await readBody(request);
+        let payload;
+        try {
+          payload = JSON.parse(raw || "{}");
+        } catch {
+          payload = {};
+        }
+        const result = await toggleTodo(payload.id);
+        response.writeHead(result.ok ? 200 : 400, {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+        });
+        response.end(JSON.stringify(result));
+        return;
+      }
       if (request.url === "/api/snapshot") {
         const snapshot = await buildSnapshot();
         response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });

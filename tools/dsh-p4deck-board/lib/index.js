@@ -4,7 +4,7 @@
 //   GET /p4deck-board            → 302 到 /p4deck-board/
 //   GET /p4deck-board/           → 看板页面（每 5 秒拉一次快照）
 //   GET /p4deck-board/api/snapshot → JSON 快照（state.json + 运行状态.json + metrics）
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const name = "p4deck-board";
@@ -62,6 +62,7 @@ export async function buildSnapshot(workspace) {
   const state = await readJson(path.join(workflowDir, "state.json"), undefined);
   if (!state) throw new Error(`找不到 ${path.join(workflowDir, "state.json")}`);
   const runtime = await readJson(path.join(workflowDir, "运行状态.json"), { agents: [], milestones: [], events: [] });
+  const todos = await readJson(path.join(workflowDir, "人类待办.json"), { items: [] });
   const metrics = await readMetrics(workspace);
 
   const byStage = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, 0]));
@@ -76,17 +77,31 @@ export async function buildSnapshot(workspace) {
     generatedAt: new Date().toISOString(),
     batch: state.batch,
     counts: { total: state.packages.length, byStage, modules: [...modules.entries()].map(([mod, total]) => ({ name: mod, total })) },
-    packages: state.packages.map((pkg) => ({
-      id: pkg.id,
-      type: pkg.type,
-      owner: pkg.owner,
-      priority: pkg.priority,
-      stage: pkg.stage,
-      module: pkg.module,
-      evidence: (pkg.evidence ?? []).length,
-      note: pkg.note,
-      archived: Boolean(pkg.archived),
-    })),
+    packages: state.packages
+      .filter((pkg) => !pkg.archived)
+      .map((pkg) => ({
+        id: pkg.id,
+        type: pkg.type,
+        owner: pkg.owner,
+        priority: pkg.priority,
+        stage: pkg.stage,
+        module: pkg.module,
+        evidence: (pkg.evidence ?? []).length,
+        note: pkg.note,
+      })),
+    archived: state.packages
+      .filter((pkg) => pkg.archived)
+      .map((pkg) => ({
+        id: pkg.id,
+        type: pkg.type,
+        owner: pkg.owner,
+        module: pkg.module,
+        archivedAt: pkg.archivedAt,
+        archiveReason: pkg.archiveReason,
+        archiveEvidence: pkg.archiveEvidence,
+        note: pkg.note,
+      })),
+    humanTodos: todos.items ?? [],
     agents: runtime.agents ?? [],
     milestones: state.batch?.slices ?? [],
     events: runtime.events ?? [],
@@ -128,6 +143,10 @@ h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute
 .col h3{margin:0;padding:8px 10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);
 display:flex;justify-content:space-between}
 .cards{padding:8px;display:flex;flex-direction:column;gap:6px}
+.todos{display:flex;flex-direction:column;gap:6px}
+.todo{display:flex;align-items:baseline;gap:8px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--panel);cursor:pointer}
+.todo.done .todo-text{text-decoration:line-through;color:var(--muted)}
+.todo-text{flex:1 1 auto}.todo-meta{color:var(--muted);font-size:11px;white-space:nowrap}
 .card{border:1px solid var(--line);border-radius:6px;padding:7px 8px;background:var(--bg)}
 .card .id{font-weight:600;font-size:12px}.card .meta{margin-top:3px;color:var(--muted);font-size:11px}
 .tag{font-size:10px;border:1px solid var(--line);border-radius:3px;padding:0 5px;margin-left:6px;color:var(--muted)}
@@ -139,16 +158,45 @@ footer{margin-top:18px;border-top:1px solid var(--line);padding-top:10px;color:v
 <div class="stamp">数据时间 <span id="stamp"></span></div></header>
 <h2>Agent 在忙什么</h2><div class="agents" id="agents"></div>
 <h2>批次里程碑</h2><div class="ms" id="milestones"></div>
-<h2>任务看板（<span id="total"></span> 个主工作包）</h2><div class="board" id="board"></div>
+<h2>人类待办（只有你能勾）</h2><div class="todos" id="todos"></div>
+<h2>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</h2><div class="board" id="board"></div>
+<h2>已完成归档（独立区域）</h2><div class="cards" id="archived"></div>
 <footer id="footer"></footer></div>
 <script>
 var META=${meta};
 function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;}
 function fmt(s){if(!s)return "—";var d=new Date(s);return isNaN(d)?s:d.toLocaleString("zh-CN",{hour12:false});}
+function renderTodos(s){
+ var host=document.getElementById("todos");host.innerHTML="";
+ var items=s.humanTodos||[];
+ if(!items.length){host.appendChild(el("div","empty","（暂无人类待办）"));return;}
+ items.forEach(function(t){var row=el("label","todo"+(t.done?" done":""));
+  var box=document.createElement("input");box.type="checkbox";box.checked=!!t.done;
+  box.addEventListener("change",function(){
+   fetch("${ROUTE}/api/human-todos/toggle",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:t.id})})
+    .then(function(){return fetch("${ROUTE}/api/snapshot",{cache:"no-store"});})
+    .then(function(r){return r.json();}).then(render).catch(function(){});
+  });
+  row.appendChild(box);row.appendChild(el("span","todo-text",t.text));
+  row.appendChild(el("span","todo-meta",t.id+(t.note?" · "+t.note:"")));host.appendChild(row);});
+ var hint=el("div","hint","勾选会写回 人类待办.json（只有用户能勾）");host.appendChild(hint);
+}
+function renderArchived(s){
+ var host=document.getElementById("archived");host.innerHTML="";
+ var items=s.archived||[];
+ if(!items.length){host.appendChild(el("div","empty","（暂无归档）"));return;}
+ items.forEach(function(p){var c=el("div","card");c.title=p.note||"";
+  var id=el("div","id");id.appendChild(document.createTextNode(p.id));
+  if(p.type){id.appendChild(el("span","tag "+p.type,p.type));}c.appendChild(id);
+  c.appendChild(el("div","meta","归档于 "+fmt(p.archivedAt)+" · "+(p.archiveReason||"历史迁移项")));
+  host.appendChild(c);});
+}
 function render(s){
  document.getElementById("batch").textContent=s.batch.id;
  document.getElementById("stamp").textContent=fmt(s.generatedAt);
  document.getElementById("total").textContent=s.counts.total;
+ document.getElementById("active").textContent=String((s.packages||[]).length);
+ renderTodos(s);
  var a=document.getElementById("agents");a.innerHTML="";
  s.agents.forEach(function(g){var c=el("div","agent");var top=el("div","top");
   top.appendChild(el("span","dot "+(g.status||"idle")));top.appendChild(el("span","role",g.role));
@@ -167,7 +215,8 @@ function render(s){
    if(p.type){id.appendChild(el("span","tag "+p.type,p.type));}c.appendChild(id);
    c.appendChild(el("div","meta",(p.owner||"—")+" · "+(p.priority||"")+" · 证据 "+(p.evidence||0)));cards.appendChild(c);});
   col.appendChild(cards);b.appendChild(col);});
- document.getElementById("footer").textContent="来源：state.json（真值）· 运行状态.json · metrics.jsonl；每 5 秒自动刷新。";
+ renderArchived(s);
+ document.getElementById("footer").textContent="来源：state.json（真值）· 运行状态.json · 人类待办.json；每 5 秒自动刷新。";
 }
 function tick(){fetch("${ROUTE}/api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(render)
  .catch(function(e){document.getElementById("footer").textContent="读取失败: "+e;});}
@@ -184,6 +233,28 @@ function sendJson(res, statusCode, payload) {
 function makeHandler(workspace) {
   return async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    if (url.pathname === `${ROUTE}/api/human-todos/toggle`) {
+      if (req.method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        res.end();
+        return;
+      }
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 64 * 1024) req.destroy();
+      });
+      req.on("end", async () => {
+        try {
+          const payload = JSON.parse(raw || "{}");
+          const result = await toggleTodoFile(workspace, payload.id);
+          sendJson(res, result.ok ? 200 : 400, result);
+        } catch (error) {
+          sendJson(res, 400, { ok: false, reason: String(error?.message ?? error) });
+        }
+      });
+      return;
+    }
     if (req.method !== "GET" && req.method !== "HEAD") {
       res.writeHead(405, { allow: "GET, HEAD" });
       res.end();
@@ -205,6 +276,19 @@ function makeHandler(workspace) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found");
   };
+}
+
+/** 只有用户能勾选：面板 POST 回来时直接写 人类待办.json。 */
+async function toggleTodoFile(workspace, id) {
+  const file = path.join(workspace, "ForAIDoc", "PM", "工作流", "人类待办.json");
+  const doc = await readJson(file, { items: [] });
+  const item = (doc.items ?? []).find((entry) => entry.id.toUpperCase() === String(id ?? "").toUpperCase());
+  if (!item) return { ok: false, reason: `没有待办 ${id}` };
+  item.done = !item.done;
+  item.doneAt = item.done ? new Date().toISOString() : null;
+  doc.updatedAt = new Date().toISOString();
+  await writeFile(file, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  return { ok: true, item };
 }
 
 /** cordis 宿主插件入口。 */

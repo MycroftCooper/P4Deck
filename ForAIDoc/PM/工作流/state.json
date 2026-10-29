@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-29T12:08:47.947Z",
+  "updatedAt": "2026-10-29T13:00:31.272Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -118,6 +118,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.533Z"
     },
     {
@@ -145,6 +149,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -173,6 +181,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -200,6 +212,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -229,6 +245,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -260,6 +280,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -290,6 +314,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -320,6 +348,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -351,6 +383,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -381,6 +417,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -410,6 +450,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -439,6 +483,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -468,6 +516,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -499,6 +551,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -529,6 +585,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -558,6 +618,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -589,6 +653,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -618,6 +686,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -649,6 +721,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -678,6 +754,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -707,6 +787,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -737,6 +821,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -767,6 +855,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -796,6 +888,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -826,6 +922,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -855,6 +955,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -885,6 +989,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -915,6 +1023,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -944,6 +1056,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -974,6 +1090,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1003,6 +1123,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1030,6 +1154,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1061,6 +1189,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1092,6 +1224,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1119,6 +1255,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1147,6 +1287,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1173,6 +1317,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1201,6 +1349,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1228,6 +1380,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1255,6 +1411,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1287,6 +1447,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1318,6 +1482,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1345,6 +1513,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1372,6 +1544,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1399,6 +1575,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1426,6 +1606,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1452,6 +1636,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1482,6 +1670,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1510,6 +1702,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1537,6 +1733,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1563,6 +1763,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": "2026-10-29T13:00:31.270Z",
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
@@ -1590,6 +1794,10 @@
         "humanAccepted": null
       },
       "updatedAt": null,
+      "archivedAt": "2026-10-29T13:00:31.272Z",
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     }
   ],

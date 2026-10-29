@@ -67,6 +67,32 @@ check("任务单带写域", String(parsed?.writeScope ?? "").includes("src/"), p
 check("任务单带门禁", Array.isArray(parsed?.gates) && parsed.gates.length > 0);
 check("任务单带预算", String(parsed?.budget ?? "").includes("12"));
 
+// 人类待办：CLI 用临时文件，不碰仓库
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+const todoDir = await mkdtemp(path.join(os.tmpdir(), "p4deck-todos-"));
+const todoFile = path.join(todoDir, "人类待办.json");
+const runTodos = (argv) =>
+  spawnSync(process.execPath, [path.join(HERE, "human-todos.mjs"), ...argv], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: { ...process.env, P4DECK_TODOS: todoFile },
+  });
+const addedTodo = runTodos(["add", "测试待办"]);
+check("人类待办 add", addedTodo.status === 0 && addedTodo.stdout.includes("T01"), addedTodo.stdout.trim());
+const toggledTodo = runTodos(["toggle", "T01"]);
+check("人类待办 toggle", toggledTodo.status === 0 && toggledTodo.stdout.includes("已完成"), toggledTodo.stdout.trim());
+const listedTodos = JSON.parse(runTodos(["list", "--json"]).stdout);
+check("人类待办落盘", listedTodos.items?.[0]?.done === true);
+await rm(todoDir, { recursive: true, force: true });
+
+// 归档门禁：未人验不得归档
+const archiveGate = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "archive", "CL-01", "--note", "测试"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+check("归档门禁拒绝未人验", archiveGate.status === 1 && String(archiveGate.stderr).includes("humanAccepted"), String(archiveGate.status));
+
 // 编码守卫：PowerShell 的 Set-Content 会写 BOM，JSON/YAML 因此解析失败（真实踩过）。
 import { readdir, readFile } from "node:fs/promises";
 async function walkFiles(dir, out = []) {

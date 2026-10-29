@@ -17,6 +17,7 @@ const STATE_FILE = path.join(STATE_DIR, "state.json");
 const BOARD_FILE = path.join(STATE_DIR, "看板.md");
 const OWNERSHIP_FILE = path.join(STATE_DIR, "ownership.json");
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "workflow");
+const TODOS_FILE = path.join(STATE_DIR, "人类待办.json");
 
 const STAGES = ["done", "implemented", "partial", "in-progress", "todo", "blocked", "proposed"];
 const TYPES = ["bug", "feature", "refactor"];
@@ -232,9 +233,18 @@ function defaultBatch() {
   };
 }
 
-/** 迁移时按 id 合并：保留人工/派生字段，不回退已有证据。 */
+/** 迁移时按 id 合并：保留人工/派生字段，不回退已有证据与归档状态。 */
 function mergePackage(previous, next) {
-  if (!previous) return { ...next, firstSeenAt: new Date().toISOString() };
+  if (!previous) {
+    return {
+      ...next,
+      firstSeenAt: new Date().toISOString(),
+      archivedAt: next.archived ? new Date().toISOString() : null,
+      archivedBy: null,
+      archiveReason: null,
+      archiveEvidence: null,
+    };
+  }
   return {
     ...next,
     verification: {
@@ -242,6 +252,12 @@ function mergePackage(previous, next) {
       applied: previous.verification?.applied ?? null,
       humanAccepted: previous.verification?.humanAccepted ?? null,
     },
+    // 归档一旦成立，import 不会把它打回活跃（即使 TODO 表里删了行）。
+    archived: Boolean(previous.archived) || Boolean(next.archived),
+    archivedAt: previous.archivedAt ?? (next.archived ? new Date().toISOString() : null),
+    archivedBy: previous.archivedBy ?? null,
+    archiveReason: previous.archiveReason ?? null,
+    archiveEvidence: previous.archiveEvidence ?? null,
     firstSeenAt: previous.firstSeenAt ?? new Date().toISOString(),
   };
 }
@@ -440,21 +456,49 @@ async function cmdBoard() {
       .join(" ");
     lines.push(`| ${moduleName} | ${bucket.total} | ${detail} |`);
   }
-  lines.push("", "## 主工作包（含归档，归档项标 †）", "");
+  lines.push("", "## 人类待办（只有用户能勾选）", "");
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const openTodos = (todos.items ?? []).filter((item) => !item.done);
+  const doneTodos = (todos.items ?? []).filter((item) => item.done);
+  if (!openTodos.length && !doneTodos.length) {
+    lines.push("（暂无）");
+  } else {
+    lines.push("| 完成 | ID | 待办 | 说明 |", "|---|---|---|---|");
+    for (const item of [...openTodos, ...doneTodos]) {
+      lines.push(`| ${item.done ? "[x]" : "[ ]"} | ${item.id} | ${truncate(item.text, 60)} | ${truncate(item.note, 40)} |`);
+    }
+    lines.push("");
+    lines.push("> 勾选方式：`node scripts/workflow/human-todos.mjs toggle <ID>`，或用 HTML 看板 / DSH 面板直接点。");
+  }
+  lines.push("", "## 主工作包（活跃）", "");
   lines.push("| ID | 类型 | 负责人 | 优先级 | 状态 | 验收 | 剩余步骤 |", "|---|---|---|---|---|---|---|");
-  for (const pkg of state.packages) {
+  for (const pkg of state.packages.filter((entry) => !entry.archived)) {
     const verification = pkg.verification ?? {};
     const marks = [verification.qaPassed ? "QA" : "", verification.applied ? "已应用" : "", verification.humanAccepted ? "人验" : ""]
       .filter(Boolean)
       .join("/");
     lines.push(
-      `| ${pkg.archived ? `${pkg.id} †` : pkg.id} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
+      `| ${pkg.id} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
     );
   }
   lines.push("", "## 关联子项（不单独计数）", "");
   lines.push("| 子项 | 父项 | 类型 | 负责人 | 状态 |", "|---|---|---|---|---|");
   for (const item of state.subitems) {
     lines.push(`| ${item.id} | ${item.parentId} | ${item.type ?? "?"} | ${truncate(item.owner, 18)} | ${item.stage} |`);
+  }
+  lines.push("", "## 已完成归档（独立区域，不混在活跃看板）", "");
+  const archivedPackages = state.packages.filter((entry) => entry.archived);
+  const fmtArchivedAt = (value) => (value ? String(value).slice(0, 19).replace("T", " ") : "—");
+  if (!archivedPackages.length) {
+    lines.push("（暂无归档）");
+  } else {
+    lines.push("| ID | 类型 | 归档时间 | 归档理由 | 证据 |", "|---|---|---|---|---|");
+    for (const pkg of archivedPackages) {
+      lines.push(
+        `| ${pkg.id} | ${pkg.type ?? "?"} | ${fmtArchivedAt(pkg.archivedAt)} | ${truncate(pkg.archiveReason ?? "历史迁移项", 50)} | ${truncate(pkg.archiveEvidence ?? "—", 20)} |`,
+      );
+    }
+    lines.push("", "> 归档前置：`verification.humanAccepted === true`；命令：`state.mjs archive <ID> --note \"理由\"`。");
   }
   lines.push("");
   await writeFile(BOARD_FILE, lines.join("\n"), "utf8");
@@ -533,6 +577,76 @@ async function cmdTask(id, args) {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
+async function cmdArchive(id, args) {
+  if (!id) {
+    process.stderr.write('用法: node scripts/workflow/state.mjs archive <ID> --note "归档理由" [--evidence <manifest sha>] [--dry]\n');
+    process.exit(2);
+  }
+  const noteIndex = args.indexOf("--note");
+  const note = noteIndex >= 0 ? String(args[noteIndex + 1] ?? "").trim() : "";
+  const evidenceIndex = args.indexOf("--evidence");
+  const evidence = evidenceIndex >= 0 ? String(args[evidenceIndex + 1] ?? "").trim() : undefined;
+  const dry = args.includes("--dry");
+  const state = await loadState();
+  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === id.toUpperCase());
+  if (!pkg) {
+    process.stderr.write(`未知任务: ${id}\n`);
+    process.exit(1);
+  }
+  if (pkg.archived) {
+    process.stdout.write(`${pkg.id} 已经归档（${pkg.archivedAt ?? "时间未知"}）\n`);
+    return;
+  }
+  if (pkg.verification?.humanAccepted !== true) {
+    process.stderr.write(
+      `拒绝归档 ${pkg.id}: 需要人工验收通过（verification.humanAccepted === true，当前 ${pkg.verification?.humanAccepted ?? "null"}）\n`,
+    );
+    process.exit(1);
+  }
+  if (!note) {
+    process.stderr.write("归档必须给 --note 说明理由（将来要能回答凭什么归档）\n");
+    process.exit(2);
+  }
+  const plan = {
+    id: pkg.id,
+    archivedAt: new Date().toISOString(),
+    archivedBy: "LEAD",
+    archiveReason: note,
+    archiveEvidence: evidence ?? null,
+  };
+  if (dry) {
+    process.stdout.write(`${JSON.stringify({ dryRun: true, ...plan }, null, 2)}\n`);
+    return;
+  }
+  Object.assign(pkg, { archived: true, ...plan });
+  state.updatedAt = plan.archivedAt;
+  await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  process.stdout.write(`已归档 ${pkg.id}：${note}\n`);
+}
+
+async function cmdRestore(id, args) {
+  const noteIndex = args.indexOf("--note");
+  const note = noteIndex >= 0 ? String(args[noteIndex + 1] ?? "").trim() : "";
+  const state = await loadState();
+  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === String(id ?? "").toUpperCase());
+  if (!pkg) {
+    process.stderr.write(`未知任务: ${id}\n`);
+    process.exit(1);
+  }
+  if (!pkg.archived) {
+    process.stdout.write(`${pkg.id} 未归档\n`);
+    return;
+  }
+  pkg.archived = false;
+  pkg.archivedAt = null;
+  pkg.archivedBy = null;
+  pkg.archiveEvidence = null;
+  pkg.archiveReason = note ? `恢复：${note}` : "恢复为活跃任务";
+  state.updatedAt = new Date().toISOString();
+  await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  process.stdout.write(`已恢复 ${pkg.id} 为活跃任务\n`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {
   case "import":
@@ -546,6 +660,12 @@ switch (command) {
     break;
   case "task":
     await cmdTask(rest[0], rest.slice(1));
+    break;
+  case "archive":
+    await cmdArchive(rest[0], rest.slice(1));
+    break;
+  case "restore":
+    await cmdRestore(rest[0], rest.slice(1));
     break;
   default:
     process.stderr.write("usage: node scripts/workflow/state.mjs <import|check|board|task <ID>>\n");

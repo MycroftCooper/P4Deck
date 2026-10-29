@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-29T21:05:00+08:00",
+  "note": "人类待办：只有用户能勾选。Agent 可以读、可以建议，但不得代勾。",
+  "items": [
+    {
+      "id": "T01",
+      "text": "确认 dev 已关闭且无在途操作，安排 CON06 + ACTION 联合 Apply",
+      "done": false,
+      "createdAt": "2026-10-29T21:05:00+08:00",
+      "doneAt": null,
+      "note": "Apply 前 BE 会 fresh Verify；漂移即停"
+    },
+    {
+      "id": "T02",
+      "text": "重启 DSH 后验证侧栏「工作流看板」面板是否出现",
+      "done": false,
+      "createdAt": "2026-10-29T21:05:00+08:00",
+      "doneAt": null,
+      "note": "插件树与客户端 bundle 都在启动时构建"
+    },
+    {
+      "id": "T03",
+      "text": "异机安装 0.1.2 包并反馈（安装/启动/卸载）",
+      "done": false,
+      "createdAt": "2026-10-29T21:05:00+08:00",
+      "doneAt": null,
+      "note": "包未签名，不能外推为可用"
+    },
+    {
+      "id": "T04",
+      "text": "轮换 ~/.dsh/profiles/desktop/cordis.patch.yml 里的明文 GitHub PAT",
+      "done": false,
+      "createdAt": "2026-10-29T21:05:00+08:00",
+      "doneAt": null,
+      "note": "建议改用环境变量注入并吊销旧 token"
+    }
+  ]
+}

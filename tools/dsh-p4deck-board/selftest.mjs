@@ -1,5 +1,8 @@
 // 插件自测：用假 ctx / 假 req-res 跑通路由与快照，不需要 dsh 运行时。
 // 用法: node tools/dsh-p4deck-board/selftest.mjs
+import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -76,6 +79,46 @@ const payload = JSON.parse(api.body);
 check("API 200", api.statusCode === 200);
 check("API 返回 total=52", payload.counts.total === 52);
 check("API 不缓存", api.headers?.["cache-control"] === "no-store");
+check("快照含人类待办", Array.isArray(payload.humanTodos) && payload.humanTodos.length > 0, `${payload.humanTodos?.length} 条`);
+check("归档与活跃分开", (payload.archived || []).length === 2 && payload.packages.every((pkg) => !pkg.archived));
+
+// 4b) 人类待办勾选：POST 写回 JSON（临时工作区，不动仓库）
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), "p4deck-toggle-"));
+try {
+  const flowDir = path.join(tempRoot, "ForAIDoc", "PM", "工作流");
+  await mkdir(flowDir, { recursive: true });
+  const todoFile = path.join(flowDir, "人类待办.json");
+  await writeFile(todoFile, JSON.stringify({ schemaVersion: 1, items: [{ id: "T01", text: "x", done: false }] }), "utf8");
+  const tempRoutes = [];
+  apply(
+    {
+      webServer: {
+        register(route) {
+          tempRoutes.push(route);
+          return () => {};
+        },
+      },
+      effect(fn) {
+        return fn();
+      },
+    },
+    { workspace: tempRoot },
+  );
+  const tempHandler = tempRoutes.find((route) => route.kind === "prefix").handler;
+  const request = new EventEmitter();
+  request.method = "POST";
+  request.url = "/p4deck-board/api/human-todos/toggle";
+  const response = fakeResponse();
+  tempHandler(request, response);
+  request.emit("data", JSON.stringify({ id: "T01" }));
+  request.emit("end");
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const after = JSON.parse(await readFile(todoFile, "utf8"));
+  check("POST 勾选返回 200", response.statusCode === 200, String(response.statusCode));
+  check("勾选写回 JSON", after.items[0].done === true);
+} finally {
+  await rm(tempRoot, { recursive: true, force: true });
+}
 
 // 5) 边界
 const post = await call(handler, { method: "POST", url: "/p4deck-board/" });

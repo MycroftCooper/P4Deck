@@ -10,6 +10,7 @@ window.__ModuleLoader__.load({
 		const BOARD_ID = "dsh-p4deck-board";
 		const BOARD_KIND = "p4deckBoard";
 		const API = "/p4deck-board/api/snapshot";
+		const TOGGLE = "/p4deck-board/api/human-todos/toggle";
 		const LINE = "1px solid rgba(128,128,128,0.32)";
 		const MUTED = "rgba(128,128,128,0.95)";
 
@@ -57,7 +58,7 @@ window.__ModuleLoader__.load({
 		}
 
 		/** 纯视图：只吃 snapshot，便于单测与复用。 */
-		function BoardView({ snapshot, status, error }) {
+		function BoardView({ snapshot, status, error, onToggle }) {
 			if (!snapshot) {
 				return h(
 					"div",
@@ -69,6 +70,8 @@ window.__ModuleLoader__.load({
 			const agents = snapshot.agents || [];
 			const milestones = snapshot.milestones || [];
 			const packages = snapshot.packages || [];
+			const todos = snapshot.humanTodos || [];
+			const archived = snapshot.archived || [];
 
 			const style = {
 				padding: "10px 12px 24px",
@@ -145,6 +148,37 @@ window.__ModuleLoader__.load({
 					),
 				),
 
+				h("div", { style: sectionTitle }, "人类待办（只有你能勾）"),
+				...todos.map((todo) =>
+					h(
+						"label",
+						{
+							key: "todo-" + todo.id,
+							title: todo.note || "",
+							style: { ...card, padding: "5px 7px", display: "flex", gap: 8, alignItems: "baseline", cursor: "pointer" },
+						},
+						h("input", {
+							type: "checkbox",
+							checked: Boolean(todo.done),
+							onChange: () => onToggle && onToggle(todo.id),
+							style: { margin: 0 },
+						}),
+						h(
+							"span",
+							{
+								style: {
+									flex: "1 1 auto",
+									textDecoration: todo.done ? "line-through" : "none",
+									color: todo.done ? MUTED : "inherit",
+								},
+							},
+							todo.text,
+						),
+						h("span", { style: { color: MUTED, fontSize: 10, whiteSpace: "nowrap" } }, todo.id),
+					),
+				),
+				todos.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
+
 				...STAGE_ORDER.map((stage) => {
 					const items = packages.filter((pkg) => pkg.stage === stage);
 					if (!items.length) return null;
@@ -182,16 +216,33 @@ window.__ModuleLoader__.load({
 					);
 				}),
 
+				h("div", { style: { ...sectionTitle, marginTop: 16 } }, "已完成归档（独立区域）"),
+				...archived.map((pkg) =>
+					h(
+						"div",
+						{ key: "arch-" + pkg.id, style: { ...card, padding: "5px 7px" }, title: pkg.note || "" },
+						h(
+							"div",
+							{ style: { display: "flex", gap: 6, alignItems: "baseline" } },
+							h("strong", { style: { fontSize: 12 } }, pkg.id),
+							h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, fmtTime(pkg.archivedAt)),
+						),
+						h("div", { style: { color: MUTED, fontSize: 10, marginTop: 1 } }, pkg.archiveReason || "历史迁移项"),
+					),
+				),
+				archived.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
+
 				h(
 					"div",
 					{ style: { ...sectionTitle, marginTop: 18 } },
-					"来源：state.json · 运行状态.json · 每 5 秒自动刷新",
+					"来源：state.json · 运行状态.json · 人类待办.json · 每 5 秒自动刷新",
 				),
 			);
 		}
 
 		function useSnapshot() {
 			const [state, setState] = react.useState({ status: "loading", snapshot: null, error: null });
+			const [nonce, setNonce] = react.useState(0);
 			react.useEffect(() => {
 				let alive = true;
 				const load = async () => {
@@ -215,13 +266,28 @@ window.__ModuleLoader__.load({
 					alive = false;
 					clearInterval(timer);
 				};
-			}, []);
-			return state;
+			}, [nonce]);
+			return { ...state, reload: () => setNonce((value) => value + 1) };
 		}
 
 		function BoardBody() {
-			const { status, snapshot, error } = useSnapshot();
-			return h(BoardView, { snapshot, status, error });
+			const { status, snapshot, error, reload } = useSnapshot();
+			const onToggle = react.useCallback(
+				async (id) => {
+					try {
+						await fetch(TOGGLE, {
+							method: "POST",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({ id }),
+							credentials: "same-origin",
+						});
+					} finally {
+						reload();
+					}
+				},
+				[reload],
+			);
+			return h(BoardView, { snapshot, status, error, onToggle });
 		}
 
 		function BoardTitle() {
