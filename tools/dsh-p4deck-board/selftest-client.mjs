@@ -40,10 +40,29 @@ check("导出 inject 含 sidebarRightTabs", Array.isArray(module.inject) && modu
 // 2) 假 ctx：收集注册
 const tabTypes = [];
 const slotRegistrations = [];
+const commands = [];
+const opened = [];
 const ctx = {
   sidebarRightTabs: {
     register(definition) {
       tabTypes.push(definition);
+      return () => {};
+    },
+  },
+  sidebarRight: {
+    commandTarget() {
+      return undefined;
+    },
+    openTab(kind) {
+      opened.push(kind);
+    },
+    openTabFromTarget(kind) {
+      opened.push(kind);
+    },
+  },
+  shortcuts: {
+    register(definition) {
+      commands.push(definition);
       return () => {};
     },
   },
@@ -56,6 +75,9 @@ const ctx = {
       return () => {};
     },
   },
+  inject(names, factory) {
+    return factory(ctx);
+  },
   effect(fn) {
     return fn();
   },
@@ -66,6 +88,13 @@ check("注册了标签类型", tabTypes.length === 1, tabTypes[0]?.kind);
 const tab = tabTypes[0] ?? {};
 check("标签类型 kind/id", tab.kind === "p4deckBoard" && tab.id === "dsh-p4deck-board", `${tab.kind}/${tab.id}`);
 check("标签类型有 guide 入口", Array.isArray(tab.guide) && tab.guide.length === 1, tab.guide?.[0]?.title?.());
+check("guide 条目挂 commandId", tab.guide?.[0]?.commandId === "p4deck.board", tab.guide?.[0]?.commandId);
+check("注册了命令 p4deck.board", commands.some((command) => command.id === "p4deck.board"));
+const command = commands[0] ?? {};
+const resolved = command.resolve?.({ target: undefined });
+check("命令 resolve 返回 handled", resolved?.status === "handled", resolved?.status);
+resolved?.run?.();
+check("命令打开看板标签", opened.includes("p4deckBoard"), opened.join(","));
 check("注册了主体插槽", slotRegistrations.some((entry) => entry.declaration.name === "sidebar.right.pane.tab" && entry.declaration.key === "dsh-p4deck-board"));
 check("注册了标题插槽", slotRegistrations.some((entry) => entry.declaration.name === "sidebar.right.pane.tab.title"));
 

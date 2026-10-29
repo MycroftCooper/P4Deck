@@ -238,10 +238,48 @@ window.__ModuleLoader__.load({
 			);
 		}
 
-		/** 必需服务：插槽注册表 + 右侧栏标签类型。 */
-		const inject = ["slots", "sidebarRightTabs"];
+		/** 必需服务：插槽注册表 + 右侧栏标签类型 + 右侧栏导航。 */
+		const inject = ["slots", "sidebarRightTabs", "sidebarRight"];
+
+		function openBoard(ctx, target) {
+			if (target !== undefined && typeof ctx.sidebarRight.openTabFromTarget === "function") {
+				ctx.sidebarRight.openTabFromTarget(BOARD_KIND, target);
+				return;
+			}
+			ctx.sidebarRight.openTab(BOARD_KIND);
+		}
 
 		function apply(ctx) {
+			// guide 条目必须挂命令才会显示，因此先登记命令。
+			ctx.inject(["shortcuts"], (ctx) => {
+				ctx.effect(
+					() =>
+						ctx.shortcuts.register({
+							id: "p4deck.board",
+							label: () => "工作流看板",
+							aliases: ["p4deck board", "workflow board", "看板"],
+							regions: ["page", "editable", "terminal"],
+							modals: [],
+							resolve: ({ target: element }) => {
+								const target =
+									typeof ctx.sidebarRight.commandTarget === "function"
+										? ctx.sidebarRight.commandTarget(element)
+										: undefined;
+								return {
+									status: "handled",
+									run: () => {
+										try {
+											openBoard(ctx, target);
+										} catch {
+											ctx.sidebarRight.openTab(BOARD_KIND);
+										}
+									},
+								};
+							},
+						}),
+					"p4deck-board: shortcut",
+				);
+			});
 			ctx.effect(
 				() =>
 					ctx.sidebarRightTabs.register({
@@ -252,7 +290,8 @@ window.__ModuleLoader__.load({
 						guide: [
 							{
 								id: "p4deck-board",
-								order: 40,
+								commandId: "p4deck.board",
+								order: 5,
 								title: () => "工作流看板",
 								description: () => "任务状态与 Agent 忙闲",
 								icon: BoardIcon,
