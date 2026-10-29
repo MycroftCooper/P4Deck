@@ -65,6 +65,21 @@ export const assertCommandCatalog = (source) => {
 const commandIds = assertCommandCatalog(catalog);
 
 const registryIds = ids(menuRegistry, /id:\s*"([FCVSWUT]\d{2}-\d{2})"/g);
+// 稳定 ID 约定：文档顶部用 `<!-- menu-stable-ids W01: W01-06,W01-08,... -->` 声明显示顺序，
+// 因为这些 ID 不随展示顺序重排（例如把某项提到最前、或只保留历史 ID 中的一部分）。
+// 有声明就用声明，没有才按勾选项数顺序推导。
+const stableIds = new Map();
+for (const match of design.matchAll(
+  /<!--\s*menu-stable-ids\s+([FCVSWUT]\d{2})\s*:\s*([^*>]+?)-->/g,
+)) {
+  stableIds.set(
+    match[1],
+    match[2]
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
 const designIds = [];
 for (const line of design.split("\n")) {
   if (!/^\| [FCVSWUT]\d{2} \|/.test(line)) continue;
@@ -73,6 +88,15 @@ for (const line of design.split("\n")) {
   const count = [...cells[3].split("；"), ...cells[4].split("；")].filter(
     (value) => /^[☐☑]/u.test(value.trim()),
   ).length;
+  const declared = stableIds.get(object);
+  if (declared) {
+    if (declared.length !== count)
+      throw new Error(
+        `menu-stable-ids ${object}: 声明 ${declared.length} 项，但文档勾选 ${count} 项`,
+      );
+    designIds.push(...declared);
+    continue;
+  }
   for (let index = 1; index <= count; index += 1)
     designIds.push(`${object}-${String(index).padStart(2, "0")}`);
 }

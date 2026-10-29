@@ -10,18 +10,21 @@
     "target/",
     "test-results/",
     "playwright-report/",
-    ".tools/",
+    ".local/",
     "ForAIDoc/PM/工作流/看板.html"
   ],
   "rules": [
-    { "prefix": "src/test/batch-qa/", "role": "QA", "note": "QA 专用验收代码与证据" },
-    { "prefix": "src/test/preview-audit/", "role": "QA", "note": "合成视觉验收夹具" },
+    { "prefix": "tests/qa/batch-qa/", "role": "QA", "note": "QA 专用验收代码与证据" },
+    { "prefix": "tests/qa/preview-audit/", "role": "QA", "note": "合成视觉验收夹具" },
     { "prefix": "tests/browser/", "role": "QA", "note": "浏览器验收 spec" },
+    { "prefix": "tests/fixtures/", "role": "FE", "note": "前端测试夹具（Tauri 拖拽路由等）" },
     { "prefix": "src/", "role": "FE", "note": "前端产品代码与同目录测试" },
     { "prefix": "src-tauri/", "role": "BE", "note": "Rust / IPC / 宿主" },
     { "prefix": "scripts/workflow/", "role": "LEAD", "note": "工作流工具" },
     { "prefix": "scripts/", "role": "LEAD", "note": "构建/门禁脚本，根协调" },
     { "prefix": "tools/", "role": "LEAD", "note": "DSH 插件等工作流外挂工具" },
+    { "prefix": "public/", "role": "FE", "note": "静态资源（popout/startup）" },
+    { "prefix": "assets/", "role": "LEAD", "note": "仓库级品牌资源（图标源文件）" },
     { "prefix": "ForAIDoc/", "role": "LEAD", "note": "台账、交接、工作流文档" }
   ],
   "rootFiles": {
@@ -31,6 +34,7 @@
       "tsconfig.json",
       "tsconfig.app.json",
       "tsconfig.node.json",
+      "tsconfig.tests.json",
       "vite.config.ts",
       "vitest.config.ts",
       "vitest.perf.config.ts",

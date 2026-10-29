@@ -25,7 +25,7 @@ function check(name, ok, detail = "") {
 const workDir = await mkdtemp(path.join(os.tmpdir(), "p4deck-batch-selftest-"));
 const originalRoot = path.join(workDir, "original");
 const candidateRoot = path.join(workDir, "candidate");
-const relPath = "src/shared/i18n/selftest-sample.ts";
+const relPath = "src/shared/lib/selftest-sample.ts";
 const originalText = "export const sample = 1;\n";
 const changedText = "export const sample = 2;\n";
 

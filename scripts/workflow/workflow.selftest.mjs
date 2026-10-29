@@ -20,7 +20,7 @@ const owner = (file) => resolveOwner(ownership, file);
 
 check("src → FE", owner("src/app/App.tsx").role === "FE");
 check("src-tauri → BE", owner("src-tauri/src/lib.rs").role === "BE");
-check("batch-qa 优先于 src → QA", owner("src/test/batch-qa/e2e/fixture.tsx").role === "QA");
+check("batch-qa 优先于 src → QA", owner("tests/qa/batch-qa/e2e/fixture.tsx").role === "QA");
 check("tests/browser → QA", owner("tests/browser/a.spec.ts").role === "QA");
 check("ForAIDoc → LEAD", owner("ForAIDoc/PM/工作流/state.json").role === "LEAD");
 check("根文件 → LEAD", owner("package.json").role === "LEAD");
@@ -29,7 +29,7 @@ check("未知路径 未映射", owner("somewhere/else.txt").role === undefined &
 
 const mixed = checkFiles(ownership, ["src/a.ts", "src-tauri/b.rs", "ForAIDoc/x.md"], "FE");
 check("FE 越界被抓到", mixed.violations.length === 2, mixed.violations.map((v) => v.file).join(","));
-const clean = checkFiles(ownership, ["src/a.ts", "src/test/batch-qa/x.tsx"], "FE");
+const clean = checkFiles(ownership, ["src/a.ts", "tests/qa/batch-qa/x.tsx"], "FE");
 check("FE 自己的范围放行", clean.violations.length === 1, "batch-qa 属于 QA，应记 1 条越界");
 
 check("classify qa", classify({ noninteractiveQA: "passed" }) === "qa");
@@ -115,6 +115,13 @@ check("board --compact 只列活跃任务", compactLines.length === 1 + 50, Stri
 const checkOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "check"], { cwd: ROOT, encoding: "utf8" });
 const checkJson = JSON.parse(checkOut.stdout.slice(checkOut.stdout.indexOf("{")));
 check("check 告警截断", Array.isArray(checkJson.warnings) && checkJson.warnings.length <= 5 && checkJson.warningCount > 5, `${checkJson.warnings?.length}/${checkJson.warningCount}`);
+
+// 目录结构迁移（src/test/ → tests/qa/、artifacts 清理）后，台账证据路径必须仍然可达。
+const verboseOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "check", "--verbose"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+check("台账没有失效证据路径", !verboseOut.stdout.includes("证据路径不存在"));
 
 const baselineFile = path.join(os.tmpdir(), `p4deck-baseline-${Date.now()}.json`);
 const runBaseline = (argv) =>

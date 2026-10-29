@@ -27,7 +27,11 @@ function changedFiles() {
 
 export function buildPlan(files = changedFiles()) {
   const web = files.filter(
-    (file) => /^src\//.test(file) && /\.(ts|tsx|css)$/.test(file) && !/\.(test|spec)\.(ts|tsx)$/.test(file),
+    (file) =>
+      /^(src|tests\/qa|tests)\//.test(file) &&
+      /\.(ts|tsx|css)$/.test(file) &&
+      !/\.(test|spec)\.(ts|tsx)$/.test(file) &&
+      !/^tests\/browser\//.test(file),
   );
   const rust = files.filter((file) => /^src-tauri\/(src|tests)\//.test(file) && /\.rs$/.test(file));
   const docs = files.filter((file) => /^(ForAIDoc|docs)\//.test(file));
