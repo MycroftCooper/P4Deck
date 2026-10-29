@@ -11,6 +11,7 @@ target/
 .tools/
 artifacts/performance/
 artifacts/ci/
+artifacts/workflow/
 artifacts/desktop/
 artifacts/qa-*/
 src-tauri/tauri.release.generated.conf.json
