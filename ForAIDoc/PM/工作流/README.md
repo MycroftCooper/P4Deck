@@ -62,6 +62,19 @@
 | `node scripts/workflow/measure.mjs record/summary` | 量测（token/轮次/门禁耗时/入场行数） | 每批首尾 |
 | `scripts\workflow\cargo-candidate.cmd <cargo 参数>` | 共享 Rust 编译缓存 + 可选 sccache | 候选内跑 cargo 时 |
 | `node scripts/workflow/env-candidate.mjs --candidate <候选>` | 校验候选位置、打印环境变量 | 建候选后自检 |
+| `node scripts/workflow/board.mjs` | 生成静态看板 `看板.html`（双击可看） | 想离线看 |
+| `node scripts/workflow/board.mjs --serve` | 本地实时看板 `http://127.0.0.1:1421` | 想边干边看 |
+
+## 3.1 可视化看板
+
+两个入口，数据同源（`state.json` + `运行状态.json` + `metrics.jsonl`）：
+
+1. **静态**：`node scripts/workflow/board.mjs` → `看板.html`，双击即看（生成物已 gitignore）。
+2. **实时**：`node scripts/workflow/board.mjs --serve`，页面每 4 秒自刷。
+3. **DSH 插件**（在 GUI 里看）：`tools/dsh-p4deck-board/` 是 cordis 宿主插件，经 Plugins 页以本地路径安装后，打开
+   `http://127.0.0.1:56326/p4deck-board`。安装步骤见其 [README](../../../tools/dsh-p4deck-board/README.md)。
+
+「谁在忙什么」写在 `运行状态.json`（LEAD 维护，含 agents / milestones / events）；任务状态仍只在 `state.json`。
 
 ## 4. 门禁分层（证据强度递增，弱证据不得顶替强证据）
 

@@ -1,0 +1,111 @@
+// 插件自测：用假 ctx / 假 req-res 跑通路由与快照，不需要 dsh 运行时。
+// 用法: node tools/dsh-p4deck-board/selftest.mjs
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { apply, buildSnapshot } from "./lib/index.js";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const WORKSPACE = path.resolve(HERE, "..", "..");
+
+const checks = [];
+function check(name, ok, detail = "") {
+  checks.push({ name, ok, detail });
+  process.stdout.write(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}\n`);
+}
+
+function fakeResponse() {
+  return {
+    statusCode: undefined,
+    headers: undefined,
+    body: undefined,
+    writeHead(statusCode, headers) {
+      this.statusCode = statusCode;
+      this.headers = headers;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+}
+
+async function call(handler, { method = "GET", url }) {
+  const res = fakeResponse();
+  await handler({ method, url }, res);
+  return res;
+}
+
+// 1) 快照
+const snapshot = await buildSnapshot(WORKSPACE);
+check("快照含 52 个主工作包", snapshot.counts.total === 52, String(snapshot.counts.total));
+check("快照含 Agent 活动", snapshot.agents.length > 0, `${snapshot.agents.length} 个角色`);
+check("快照含里程碑", snapshot.milestones.length > 0, `${snapshot.milestones.length} 条`);
+check("状态分布含进行中", typeof snapshot.counts.byStage["in-progress"] === "number");
+
+// 2) 注册
+const routes = [];
+const ctx = {
+  webServer: {
+    register(route) {
+      routes.push(route);
+      return () => {
+        const index = routes.indexOf(route);
+        if (index >= 0) routes.splice(index, 1);
+      };
+    },
+  },
+  effect(fn) {
+    return fn();
+  },
+};
+apply(ctx, { workspace: WORKSPACE });
+check("注册 prefix 路由", routes.some((route) => route.kind === "prefix" && route.path === "/p4deck-board/"));
+check("注册 exact 路由", routes.some((route) => route.kind === "exact" && route.path === "/p4deck-board"));
+
+const handler = routes.find((route) => route.kind === "prefix").handler;
+
+// 3) 页面
+const page = await call(handler, { url: "/p4deck-board/" });
+check("页面 200", page.statusCode === 200, String(page.statusCode));
+check("页面是 HTML", String(page.headers?.["content-type"]).includes("text/html"));
+check("页面含看板标题", String(page.body).includes("Agent 在忙什么"));
+
+// 4) API
+const api = await call(handler, { url: "/p4deck-board/api/snapshot" });
+const payload = JSON.parse(api.body);
+check("API 200", api.statusCode === 200);
+check("API 返回 total=52", payload.counts.total === 52);
+check("API 不缓存", api.headers?.["cache-control"] === "no-store");
+
+// 5) 边界
+const post = await call(handler, { method: "POST", url: "/p4deck-board/" });
+check("非 GET 返回 405", post.statusCode === 405, String(post.statusCode));
+const missing = await call(handler, { url: "/p4deck-board/nope" });
+check("未知子路径 404", missing.statusCode === 404, String(missing.statusCode));
+
+// 6) 失败路径：workspace 无效时要 503 而不是崩溃
+const broken = applyBroken();
+async function applyBroken() {
+  const localRoutes = [];
+  apply(
+    {
+      webServer: {
+        register(route) {
+          localRoutes.push(route);
+          return () => {};
+        },
+      },
+      effect(fn) {
+        return fn();
+      },
+    },
+    { workspace: path.join(WORKSPACE, "does-not-exist") },
+  );
+  return localRoutes.find((route) => route.kind === "prefix").handler;
+}
+const brokenRes = await call(await broken, { url: "/p4deck-board/api/snapshot" });
+check("缺 state.json 时 503", brokenRes.statusCode === 503, String(brokenRes.statusCode));
+
+const failed = checks.filter((entry) => !entry.ok);
+process.stdout.write(`\n${checks.length - failed.length}/${checks.length} 通过\n`);
+if (failed.length) process.exitCode = 1;

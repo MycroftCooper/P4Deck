@@ -13,6 +13,7 @@ artifacts/performance/
 artifacts/ci/
 artifacts/workflow/
 artifacts/desktop/
+ForAIDoc/PM/工作流/看板.html
 artifacts/qa-*/
 src-tauri/tauri.release.generated.conf.json
 test-results/
