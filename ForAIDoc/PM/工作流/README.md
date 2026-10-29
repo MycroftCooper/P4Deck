@@ -82,6 +82,7 @@
 2. **实时**：`node scripts/workflow/board.mjs --serve`，页面每 4 秒自刷。
 3. **DSH 插件**：`tools/dsh-p4deck-board/`，装后右侧栏 **＋** → 指南页 → **工作流看板**；
    也保留页面入口 `http://127.0.0.1:56326/p4deck-board`。见其 [README](../../../tools/dsh-p4deck-board/README.md)。
+   安装或替换包文件后需**重启 DSH**（插件树与客户端 bundle 都在启动时构建）；面板数据本身会自刷新。
 
 「谁在忙什么」在 `运行状态.json`（agents / events）；**切片状态**在 `state.json` 的 `batch.slices`，两处不重复。
 

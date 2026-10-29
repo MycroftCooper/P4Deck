@@ -16,7 +16,12 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
    D:\GitCode\P4Deck\tools\dsh-p4deck-board
    ```
 
-4. 点 **Install**，完成后点 **Enable now**。带 HMR 的 profile 会即时挂载，不需要重启。
+4. 点 **Install**，完成后点 **Enable now**。
+5. **重启 DeepSeek Harness**（或至少对窗口按 Ctrl+R 重载一次）。
+
+> 重要：DSH 的插件树在**进程启动时组合**，并且客户端 bundle 只在启动时构建。
+> 因此首次安装、或包的 `package.json`/`lib/client.js` 被替换后，**必须重启**才能看到侧栏条目；
+> 只改面板里的数据（`state.json` / `运行状态.json`）不需要重启，面板每 5 秒自刷新。
 
 ## 打开面板
 
