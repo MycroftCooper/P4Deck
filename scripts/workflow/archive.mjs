@@ -13,12 +13,75 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LIVE_FILE = path.join(ROOT, "ForAIDoc", "PM", "并行交接.md");
+const TODO_FILE = path.join(ROOT, "ForAIDoc", "PM", "Windows本机私用TODO.md");
 const ARCHIVE_DIR = path.join(ROOT, "ForAIDoc", "PM", "归档");
+
+/** TODO 顶部叙事轮转：只移"台账之前"的叙事段，保留 import 依赖的表格段。 */
+async function rotateTodo() {
+  const raw = await readFile(TODO_FILE, "utf8");
+  const beforeStat = await stat(TODO_FILE);
+  const lines = raw.split(/\r?\n/);
+  const firstHeading = lines.findIndex((line) => line.startsWith("## "));
+  const markerTitle = "当前结论与状态口径";
+  const marker = lines.findIndex((line) => line.startsWith(`## ${markerTitle}`));
+  if (firstHeading < 0 || marker < 0 || marker < firstHeading) {
+    process.stdout.write("TODO 结构不符（找不到台账起点），放弃轮转，不改文件。\n");
+    return;
+  }
+  if (marker === firstHeading) {
+    process.stdout.write(`${JSON.stringify({ dryRun: !apply, movedSections: 0, beforeChars: raw.length, afterChars: raw.length, note: "台账之前没有叙事段，无需轮转" }, null, 2)}\n`);
+    return;
+  }
+  const header = lines.slice(0, firstHeading);
+  const movedLines = lines.slice(firstHeading, marker);
+  const keptLines = lines.slice(marker);
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const archiveFile = path.join(ARCHIVE_DIR, `TODO-叙事-${month}.md`);
+  const pointer = [
+    `> 历史叙事（S2B-QA / ACTION 集成 / 阶段2b / 当前批次调度）已于 ${now.toISOString()} 轮转至 [归档/TODO-叙事-${month}.md](归档/TODO-叙事-${month}.md)。`,
+    "> 本文件只保留：数量汇总、唯一任务表、完成项归档、关联子项、验收定义。状态真值见 `工作流/state.json` 与 `工作流/当前批次.md`。",
+    "",
+  ];
+  const next = [...header, ...pointer, ...keptLines].join("\n");
+  const report = {
+    dryRun: !apply,
+    movedSections: movedLines.filter((line) => line.startsWith("## ")).length,
+    beforeChars: raw.length,
+    afterChars: next.length,
+    archiveFile: path.relative(ROOT, archiveFile).split(path.sep).join("/"),
+  };
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  if (!apply) {
+    process.stdout.write("dry-run：未写文件。确认后加 --todo --apply。\n");
+    return;
+  }
+  const afterStat = await stat(TODO_FILE);
+  if (afterStat.mtimeMs !== beforeStat.mtimeMs || afterStat.size !== beforeStat.size) {
+    process.stderr.write("TODO 在读取后被改动，放弃轮转（避免覆盖别人的写入）。\n");
+    process.exit(3);
+  }
+  await mkdir(ARCHIVE_DIR, { recursive: true });
+  let existing = "";
+  try {
+    existing = await readFile(archiveFile, "utf8");
+  } catch {
+    existing = `# TODO 历史叙事归档（${month}）\n\n> 由 archive.mjs --todo 从 Windows本机私用TODO.md 轮转而来，只读追溯用。\n\n`;
+  }
+  await writeFile(archiveFile, `${existing.trimEnd()}\n\n${movedLines.join("\n").trim()}\n`, "utf8");
+  await writeFile(TODO_FILE, `${next.trimEnd()}\n`, "utf8");
+  process.stdout.write(`已轮转 TODO 叙事到 ${path.relative(ROOT, archiveFile)}（${report.beforeChars} → ${report.afterChars} 字符）\n`);
+}
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const keepIndex = args.indexOf("--keep");
 const keep = keepIndex >= 0 ? Number(args[keepIndex + 1]) : 2;
+
+if (args.includes("--todo")) {
+  await rotateTodo();
+  process.exit(0);
+}
 
 const original = await readFile(LIVE_FILE, "utf8");
 const before = await stat(LIVE_FILE);

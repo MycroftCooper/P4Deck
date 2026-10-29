@@ -143,6 +143,19 @@ check(
   archiveNoop ? "noop" : String(archiveReport?.move),
 );
 
+// TODO 叙事轮转后，台账结构必须仍然可 import（52/7/11）
+const todoDry = spawnSync(process.execPath, [path.join(HERE, "archive.mjs"), "--todo"], { cwd: ROOT, encoding: "utf8" });
+let todoReport;
+try {
+  todoReport = JSON.parse(todoDry.stdout.slice(todoDry.stdout.indexOf("{")));
+} catch {}
+check("TODO 轮转默认 dry-run", todoDry.status === 0 && todoReport?.dryRun === true, String(todoReport?.movedSections));
+check(
+  "状态库结构仍是 52 包 / 7 切片 / 11 子项",
+  checkJson.checked === 52 && checkJson.slices === 7 && checkJson.subitems === 11,
+  `${checkJson.checked}/${checkJson.slices}/${checkJson.subitems}`,
+);
+
 // 编码守卫：PowerShell 的 Set-Content 会写 BOM，JSON/YAML 因此解析失败（真实踩过）。
 import { readdir, readFile } from "node:fs/promises";
 async function walkFiles(dir, out = []) {
