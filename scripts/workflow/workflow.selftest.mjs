@@ -67,6 +67,37 @@ check("任务单带写域", String(parsed?.writeScope ?? "").includes("src/"), p
 check("任务单带门禁", Array.isArray(parsed?.gates) && parsed.gates.length > 0);
 check("任务单带预算", String(parsed?.budget ?? "").includes("12"));
 
+// 编码守卫：PowerShell 的 Set-Content 会写 BOM，JSON/YAML 因此解析失败（真实踩过）。
+import { readdir, readFile } from "node:fs/promises";
+async function walkFiles(dir, out = []) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) await walkFiles(full, out);
+    else out.push(full);
+  }
+  return out;
+}
+const guardedDirs = ["tools/dsh-p4deck-board", "scripts/workflow", "ForAIDoc/PM/工作流"];
+const bomFiles = [];
+for (const dir of guardedDirs) {
+  for (const file of await walkFiles(path.join(ROOT, dir))) {
+    const head = await readFile(file);
+    if (head.length >= 3 && head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf) {
+      bomFiles.push(path.relative(ROOT, file));
+    }
+  }
+}
+check("工作流文件无 BOM", bomFiles.length === 0, bomFiles.join(","));
+for (const jsonFile of ["tools/dsh-p4deck-board/package.json", "package.json", "ForAIDoc/PM/工作流/state.json"]) {
+  let ok = true;
+  try {
+    JSON.parse(await readFile(path.join(ROOT, jsonFile), "utf8"));
+  } catch {
+    ok = false;
+  }
+  check(`JSON 可解析: ${jsonFile}`, ok);
+}
+
 const failed = checks.filter((entry) => !entry.ok);
 process.stdout.write(`\n${checks.length - failed.length}/${checks.length} 通过\n`);
 if (failed.length) process.exitCode = 1;
