@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "note": "路径 → 角色 的写域映射。最长前缀优先；同一路径命中多个角色视为配置错误。LEAD 维护。",
+  "roles": ["LEAD", "FE", "BE", "QA"],
+  "ignoredPrefixes": [
+    "artifacts/",
+    "node_modules/",
+    ".git/",
+    "dist/",
+    "target/",
+    "test-results/",
+    "playwright-report/",
+    ".tools/",
+    "ForAIDoc/PM/工作流/看板.html"
+  ],
+  "rules": [
+    { "prefix": "src/test/batch-qa/", "role": "QA", "note": "QA 专用验收代码与证据" },
+    { "prefix": "src/test/preview-audit/", "role": "QA", "note": "合成视觉验收夹具" },
+    { "prefix": "tests/browser/", "role": "QA", "note": "浏览器验收 spec" },
+    { "prefix": "src/", "role": "FE", "note": "前端产品代码与同目录测试" },
+    { "prefix": "src-tauri/", "role": "BE", "note": "Rust / IPC / 宿主" },
+    { "prefix": "scripts/workflow/", "role": "LEAD", "note": "工作流工具" },
+    { "prefix": "scripts/", "role": "LEAD", "note": "构建/门禁脚本，根协调" },
+    { "prefix": "tools/", "role": "LEAD", "note": "DSH 插件等工作流外挂工具" },
+    { "prefix": "ForAIDoc/", "role": "LEAD", "note": "台账、交接、工作流文档" }
+  ],
+  "rootFiles": {
+    "role": "LEAD",
+    "names": [
+      "package.json",
+      "tsconfig.json",
+      "tsconfig.app.json",
+      "tsconfig.node.json",
+      "vite.config.ts",
+      "vitest.config.ts",
+      "vitest.perf.config.ts",
+      "playwright.config.ts",
+      "pnpm-workspace.yaml",
+      ".gitignore",
+      "index.html"
+    ]
+  }
+}

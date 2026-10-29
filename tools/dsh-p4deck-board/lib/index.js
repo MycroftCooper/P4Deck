@@ -25,6 +25,8 @@ const MS_LABEL = {
   done: "完成",
   frozen: "已冻结",
   qa_with_gap: "QA 有缺口",
+  qa: "QA 中",
+  todo: "待开始",
   awaiting_apply: "待应用",
   blocked: "阻塞",
   in_progress: "进行中",
@@ -86,7 +88,7 @@ export async function buildSnapshot(workspace) {
       archived: Boolean(pkg.archived),
     })),
     agents: runtime.agents ?? [],
-    milestones: runtime.milestones ?? [],
+    milestones: state.batch?.slices ?? [],
     events: runtime.events ?? [],
     metrics,
     runtimeUpdatedAt: runtime.updatedAt,
@@ -119,7 +121,7 @@ h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute
 .ms{display:flex;gap:8px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--panel);font-size:12px}
 .chip i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--idle)}
-.chip.done i{background:var(--accent)}.chip.frozen i,.chip.qa_with_gap i,.chip.in_progress i{background:var(--busy)}
+.chip.done i{background:var(--accent)}.chip.frozen i,.chip.qa_with_gap i,.chip.in_progress i,.chip.qa i{background:var(--busy)}
 .chip.awaiting_apply i{background:var(--warn)}.chip.blocked i{background:var(--danger)}
 .board{display:grid;grid-template-columns:repeat(7,minmax(190px,1fr));gap:10px;overflow-x:auto}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:100px}

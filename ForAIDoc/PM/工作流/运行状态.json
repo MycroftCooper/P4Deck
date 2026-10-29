@@ -1,20 +1,20 @@
 {
-  "schemaVersion": 1,
-  "updatedAt": "2026-10-29T19:32:00+08:00",
-  "note": "LEAD 手工维护：谁在忙什么、批次里程碑、最近事件。任务状态真值仍在 state.json。",
+  "schemaVersion": 2,
+  "updatedAt": "2026-10-29T20:10:00+08:00",
+  "note": "LEAD 手工维护：谁在忙什么 + 最近事件。批次切片与任务状态在 state.json（batch.slices / packages），本文件不再保存里程碑。",
   "agents": [
     {
       "role": "LEAD",
       "status": "working",
-      "task": "工作流 v1 落地（省 token / 提速）",
-      "detail": "state.json + 批次工具 + 角色合同已提交 103b434；正在做可视化看板",
-      "since": "2026-10-29T18:00:00+08:00"
+      "task": "工作流 v1.1：证据派生 / 切片 / 写域校验 / 任务单投递",
+      "detail": "evidence.mjs + batch 证据落盘 + ownership 校验 + state 切片模型",
+      "since": "2026-10-29T20:05:00+08:00"
     },
     {
       "role": "BE",
       "status": "working",
       "task": "NOOP-01 窄修 + 技术阶段3 迁移",
-      "detail": "补 revertUnchanged 正常保留的事实来源；阶段3 逐行接真实入口链；测试 EXE 0xC0000005 待一次受控复测",
+      "detail": "补 revertUnchanged 正常保留事实来源；阶段3 逐行接真实入口链；测试 EXE 0xC0000005 待一次受控复测",
       "since": "2026-10-29T17:40:00+08:00"
     },
     {
@@ -32,51 +32,12 @@
       "since": "2026-10-29T16:50:00+08:00"
     }
   ],
-  "milestones": [
-    {
-      "id": "CON06",
-      "label": "CON06 服务器状态",
-      "status": "awaiting_apply",
-      "note": "QA 已过（20 文件 manifest EEFA0274…），待与 ACTION 联合后一次 Apply"
-    },
-    {
-      "id": "S1A",
-      "label": "ACTION S1A MOVE 持久回执",
-      "status": "done",
-      "note": "已冻结 + QA 通过，作为 S1B 基线"
-    },
-    {
-      "id": "S1B",
-      "label": "ACTION S1B 宿主准入/解除",
-      "status": "frozen",
-      "note": "host57/FE＋pure98 仅模块证据；跨窗互斥与 unknown 解除待联合验收"
-    },
-    {
-      "id": "S2a",
-      "label": "ACTION S2a SHELF 真实入口",
-      "status": "qa_with_gap",
-      "note": "53 mock / 17 hash 通过；候选缺 vite.config.ts → TS18003，待集成候选补齐"
-    },
-    {
-      "id": "S2b",
-      "label": "ACTION S2b Revert 真实入口",
-      "status": "blocked",
-      "note": "NOOP-01：正常保留（retained/no-op）正向验收未闭环，S2b 不整体放行"
-    },
-    {
-      "id": "S3",
-      "label": "ACTION 技术阶段3 全矩阵迁移",
-      "status": "in_progress",
-      "note": "S3a host 24 纯测/6hash；REG01 95 定向仅注册覆盖；测试 EXE 异常保留"
-    },
-    {
-      "id": "UPD",
-      "label": "PKG-02 软件更新",
-      "status": "paused",
-      "note": "暂停，仅保留离线检查点，不混入本批"
-    }
-  ],
   "events": [
+    {
+      "at": "2026-10-29T20:05:00+08:00",
+      "role": "LEAD",
+      "text": "工作流 v1.1：验收事实从回执派生、批次切片进 state、写域可校验、任务单可直发"
+    },
     {
       "at": "2026-10-29T19:27:00+08:00",
       "role": "LEAD",
@@ -86,16 +47,6 @@
       "at": "2026-10-29T19:20:00+08:00",
       "role": "QA",
       "text": "S2b 结果：21＋3 项通过，但 retained/no-op 未闭环，不整体放行"
-    },
-    {
-      "at": "2026-10-29T18:55:00+08:00",
-      "role": "BE",
-      "text": "S3a 宿主 24 纯测/6hash 通过；NOOP 最小修复 offline check 通过"
-    },
-    {
-      "at": "2026-10-29T18:30:00+08:00",
-      "role": "QA",
-      "text": "SHELF 真实入口 53 mock / appTS / 17 hash 通过（候选缺 vite.config.ts）"
     }
   ]
 }

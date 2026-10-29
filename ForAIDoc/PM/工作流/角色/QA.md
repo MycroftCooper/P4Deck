@@ -18,9 +18,12 @@
 2. 机械门用脚本（不要人肉比 40 个 hash）：
 
    ```powershell
+   node scripts/workflow/ownership.mjs check --role QA   # 确认只动了 QA 写域
    node scripts/workflow/batch.mjs verify --manifest <manifest.json> --qa <上一版或省略>
-   node scripts/workflow/batch.selftest.mjs      # 工具自身可信度
+   node scripts/workflow/batch.selftest.mjs              # 工具自身可信度
    ```
+
+   回执请存到 `artifacts/evidence/<batch>/`（`batch.mjs` 会自动写），别只留在 %TEMP%：`evidence.mjs` 靠它派生包的验收事实。
 
 3. 语义门自己看：边界是否覆盖、mock 是否冒充真实、partial/unknown 是否如实、单写者是否被破坏。
 4. 出 `qa-approval.json`：
@@ -29,6 +32,7 @@
    {
      "schemaVersion": 1,
      "batchId": "<与 manifest 一致>",
+     "task": "<切片 id：CON06 / S1A / S1B / S2a / S2b / S3 / UPD>",
      "manifestSha256": "<逐字复制 manifest.manifestSha256>",
      "noninteractiveQA": "passed",
      "passed": true,

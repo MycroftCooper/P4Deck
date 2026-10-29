@@ -84,7 +84,7 @@ async function buildSnapshot() {
       archived: Boolean(pkg.archived),
     })),
     agents: runtime.agents ?? [],
-    milestones: runtime.milestones ?? [],
+    milestones: state.batch?.slices ?? [],
     events: runtime.events ?? [],
     metrics,
     runtimeUpdatedAt: runtime.updatedAt,
@@ -146,7 +146,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 .ms { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; background: var(--panel);
   display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: default; }
 .ms i { width: 7px; height: 7px; border-radius: 50%; background: var(--idle); display: inline-block; }
-.ms.done i { background: var(--accent); } .ms.frozen i, .ms.qa_with_gap i { background: var(--busy); }
+.ms.done i { background: var(--accent); } .ms.frozen i, .ms.qa_with_gap i, .ms.qa i { background: var(--busy); }
 .ms.awaiting_apply i { background: var(--warn); } .ms.blocked i { background: var(--danger); }
 .ms.in_progress i { background: var(--busy); } .ms.paused i { background: var(--idle); }
 .ms small { color: var(--muted); }
@@ -222,7 +222,7 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
   };
   var AGENT_LABEL = { working: "工作中", waiting: "等待依赖", blocked: "阻塞", idle: "空闲" };
   var MS_LABEL = {
-    done: "完成", frozen: "已冻结", qa_with_gap: "QA 有缺口", awaiting_apply: "待应用",
+    done: "完成", frozen: "已冻结", qa_with_gap: "QA 有缺口", qa: "QA 中", todo: "待开始", awaiting_apply: "待应用",
     blocked: "阻塞", in_progress: "进行中", paused: "暂停"
   };
   var CURRENT = null;

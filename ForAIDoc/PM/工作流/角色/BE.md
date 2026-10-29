@@ -27,10 +27,12 @@
 5. 集成：对已过 QA 的片做三方 diff，只合冻结 hunk；交联合 manifest。
 6. Apply（唯一执行者）：
 
-   ```powershell
+   ```
+   node scripts/workflow/ownership.mjs check --role BE                              # 先确认没写到 FE/QA 的路径
    node scripts/workflow/batch.mjs verify --manifest <f> --qa <qa-approval.json>   # 必须 PASS
    node scripts/workflow/batch.mjs apply  --manifest <f>                            # dry-run 复核计划
    node scripts/workflow/batch.mjs apply  --manifest <f> --apply --confirm-dev-closed
+   node scripts/workflow/evidence.mjs                                                # 回执 → 状态（派生 applied）
    ```
 
    出现漂移立即停，只报受影响文件，不覆盖用户改动。

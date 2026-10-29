@@ -1,10 +1,10 @@
 {
-  "schemaVersion": 1,
-  "updatedAt": "2026-10-29T11:19:20.189Z",
+  "schemaVersion": 2,
+  "updatedAt": "2026-10-29T12:08:47.947Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
-    "note": "由 scripts/workflow/state.mjs import 生成；此后 state.json 为唯一真值，TODO 表为历史台账。"
+    "note": "由 state.mjs import 生成；此后 state.json 为唯一真值。verification 由 evidence.mjs 从回执派生。"
   },
   "batch": {
     "id": "CON06+ACTION-R01",
@@ -14,13 +14,80 @@
     "applyMode": "batched",
     "openQuestions": [
       "Apply 前需用户确认 dev 已关闭且无在途操作"
+    ],
+    "slices": [
+      {
+        "id": "CON06",
+        "label": "CON06 服务器状态",
+        "status": "awaiting_apply",
+        "owner": "BE",
+        "exit": "联合 QA 通过 → 与 ACTION 一起 Apply",
+        "evidence": "artifacts/evidence",
+        "note": "QA 已过（20 文件 manifest），待一次联合应用",
+        "qaPassed": true
+      },
+      {
+        "id": "S1A",
+        "label": "ACTION S1A：MOVE 持久回执",
+        "status": "done",
+        "owner": "BE",
+        "exit": "冻结 + QA 通过",
+        "evidence": "artifacts/evidence",
+        "note": "作为 S1B 基线"
+      },
+      {
+        "id": "S1B",
+        "label": "ACTION S1B：宿主准入与 unknown 解除",
+        "status": "frozen",
+        "owner": "BE",
+        "exit": "跨窗互斥 / 排队取消零写 / 解除边界 通过 QA",
+        "evidence": "artifacts/evidence",
+        "note": "host57 / FE+pure98 仅模块证据"
+      },
+      {
+        "id": "S2a",
+        "label": "ACTION S2a：SHELF 真实入口",
+        "status": "qa_with_gap",
+        "owner": "BE",
+        "exit": "完整基线配置下重跑全 TS + 联合 QA",
+        "evidence": "artifacts/evidence",
+        "note": "53mock/17hash 通过；候选缺 vite.config.ts 导致 TS18003"
+      },
+      {
+        "id": "S2b",
+        "label": "ACTION S2b：Revert 真实入口",
+        "status": "blocked",
+        "owner": "BE",
+        "exit": "NOOP-01 闭环：retained/no-op 有可验证事实来源 + 新 hash QA",
+        "evidence": "artifacts/evidence",
+        "note": "正常保留正向验收未闭环"
+      },
+      {
+        "id": "S3",
+        "label": "ACTION 技术阶段3：全矩阵迁移",
+        "status": "in_progress",
+        "owner": "BE",
+        "exit": "逐行 入口→adapter→host 链有证据，旧路径退出",
+        "evidence": "artifacts/evidence",
+        "note": "S3a host 24 纯测/6hash；REG01 仅注册覆盖"
+      },
+      {
+        "id": "UPD",
+        "label": "PKG-02 软件更新",
+        "status": "paused",
+        "owner": "BE",
+        "exit": "本批结束后再议",
+        "evidence": "artifacts/evidence",
+        "note": "暂停，保留离线检查点"
+      }
     ]
   },
   "counts": {
     "main": 50,
     "archived": 2,
     "total": 52,
-    "subitems": 11
+    "subitems": 11,
+    "slices": 7
   },
   "packages": [
     {
@@ -50,7 +117,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.533Z"
     },
     {
       "id": "SAFE-01",
@@ -76,7 +144,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SAFE-02",
@@ -103,7 +172,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SAFE-03",
@@ -129,7 +199,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "QA-01",
@@ -157,7 +228,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-01",
@@ -184,10 +256,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-02",
@@ -213,10 +286,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-03",
@@ -245,7 +319,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-04",
@@ -275,7 +350,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CON-04",
@@ -304,7 +380,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CON-01",
@@ -329,10 +406,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CON-02",
@@ -360,7 +438,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CON-03",
@@ -388,7 +467,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "FILE-01",
@@ -415,10 +495,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "FILE-02",
@@ -447,7 +528,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "FILE-03",
@@ -475,7 +557,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "FILE-04",
@@ -505,7 +588,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "HIS-01",
@@ -533,7 +617,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "HIS-02",
@@ -563,7 +648,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-01",
@@ -588,10 +674,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-02",
@@ -616,10 +703,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-03",
@@ -645,10 +733,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-04",
@@ -677,7 +766,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-01",
@@ -705,7 +795,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-02",
@@ -734,7 +825,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-03",
@@ -762,7 +854,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-04",
@@ -791,7 +884,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-05",
@@ -817,10 +911,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-06",
@@ -848,7 +943,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SEARCH-01",
@@ -877,7 +973,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SEARCH-02",
@@ -905,7 +1002,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SEARCH-03",
@@ -931,7 +1029,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "OPS-01",
@@ -958,10 +1057,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "OPS-02",
@@ -991,7 +1091,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "OPS-03",
@@ -1017,7 +1118,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "WIN-P0-01",
@@ -1044,7 +1146,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "WIN-P0-03",
@@ -1069,7 +1172,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "WIN-P2-01",
@@ -1096,7 +1200,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "OPT-01",
@@ -1122,7 +1227,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "OPT-02",
@@ -1148,7 +1254,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-05",
@@ -1179,7 +1286,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "SUB-07",
@@ -1209,7 +1317,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "PKG-01",
@@ -1235,7 +1344,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CON-05",
@@ -1261,7 +1371,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-05",
@@ -1287,7 +1398,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-06",
@@ -1313,7 +1425,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-06",
@@ -1338,7 +1451,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "CL-07",
@@ -1367,7 +1481,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "UI-07",
@@ -1391,10 +1506,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "PKG-02",
@@ -1417,10 +1533,11 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
+        "applied": true,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "WIN-P1-01",
@@ -1445,7 +1562,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
       "id": "WIN-P1-02",
@@ -1471,7 +1589,8 @@
         "applied": null,
         "humanAccepted": null
       },
-      "updatedAt": null
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-29T12:07:10.537Z"
     }
   ],
   "subitems": [

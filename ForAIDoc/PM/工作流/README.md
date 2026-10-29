@@ -1,16 +1,18 @@
-# P4Deck 工作流 v1（2026-10-29）
+# P4Deck 工作流 v1.1（2026-10-29）
 
-> **唯一入口。** 读完本文件 + [`state.json`](state.json) 就能接活，不需要再通读 2121 行交接日志。
+> **唯一入口。** 读完本文件 + [`state.json`](state.json) + `state.mjs task <ID>` 就能接活。
 > 目标：把"自然语言长日志当状态库"换成"状态文件 + 短任务单 + 脚本门"，省 token、提速。
-> 本次改动只新增文件与两处横幅，**未修改任何产品代码、未改写历史文档内容**。
+> v1.1 起，验收事实从回执派生、批次切片进状态库、写域可校验——但仍**不修改任何产品代码**。
 
 ## 0. 权威地图（谁说话算数）
 
 | 内容 | 权威位置 | 说明 |
 |---|---|---|
-| 任务 / 批次状态 | [`state.json`](state.json) | **机读真值**，唯一 |
-| 人类视图 | [`看板.md`](看板.md) | 自动生成，勿手改 |
-| 当前批次 / 停机条件 / 滚动决议 | [`当前批次.md`](当前批次.md) | 每批覆盖，保持 ≤60 行 |
+| 任务 / 批次 / 切片状态 | [`state.json`](state.json) | **机读真值**，唯一 |
+| 写域（谁可以改哪条路径） | [`ownership.json`](ownership.json) | 最长前缀优先，可执行校验 |
+| 验收回执（QA/Apply/manifest） | `artifacts/evidence/<batch>/` | **耐久**，不随 %TEMP% 消失 |
+| 人类视图 | [`看板.md`](看板.md) / `看板.html` / DSH 面板 | 自动生成，勿手改 |
+| 当前批次 / 停机条件 / 滚动决议 | [`当前批次.md`](当前批次.md) | 每批覆盖，≤60 行 |
 | 角色合同 | [`角色/`](角色/) | LEAD / FE / BE / QA 各一页 |
 | 任务单格式 | [`任务单模板.md`](任务单模板.md) | ≤200 字，8 行 |
 | 历史决议与证据叙述 | [`../并行交接.md`](../并行交接.md) | **已归档，只读，不再追加** |
@@ -20,70 +22,76 @@
 
 ## 1. 角色：4 个（原根 + PM 合并）
 
-| 角色 | 写域 | 该做 | 禁做 |
+| 角色 | 写域（以 ownership.json 为准） | 该做 | 禁做 |
 |---|---|---|---|
-| **LEAD** | `ForAIDoc/**`、`scripts/**`、根配置 | 收需求、定类型/优先级、建任务单、转发、收执、更新状态、对用户汇报 | 不写 `src/`、`src-tauri/` 产品代码；不替 FE/BE 施工 |
-| **FE** | `src/**` + 同目录测试 | React/TS/CSS、mock、定向测试 | 不写 `src-tauri/**`、不改根配置、不碰 QA 证据 |
+| **LEAD** | `ForAIDoc/**`、`scripts/**`、`tools/**`、根配置 | 收需求、定类型/优先级、建任务单、转发、收执、派生状态、对用户汇报 | 不写 `src/`、`src-tauri/` 产品代码；不替 FE/BE 施工 |
+| **FE** | `src/**`（`src/test/batch-qa/**` 除外） | React/TS/CSS、mock、定向测试 | 不写 `src-tauri/**`、不改根配置、不碰 QA 证据 |
 | **BE** | `src-tauri/**`、构建配置 | Rust/IPC/宿主；**唯一集成人与唯一 Apply 执行者** | 不写 `src/**`；不改包版本/发布链 |
-| **QA** | `src/test/batch-qa/**`、`evidence/**` | 对**冻结快照**独立验收，只报 PASS/FAIL + 语义缺口 | 不改产品实现、不边测边改、不复用旧批准 |
+| **QA** | `src/test/batch-qa/**`、`src/test/preview-audit/**`、`tests/browser/**`、`evidence/**` | 对**冻结快照**独立验收 | 不改产品实现、不边测边改、不复用旧批准 |
 
 **合并理由**：根与 PM 都不写产品代码，中间多一跳 = 多一次上下文复制和一次失真机会。**QA 独立必须保留**——它是整套流程的质量支点。
 
-**单写者**：`types.ts`、IPC 契约、`App.tsx`、`TopBar`、`CommandBar`、`Pending` 等共享文件，先定唯一作者；其他人只交**精确 hunk**，禁止整文件覆盖。
+**单写者**：从"文字约定"升级为可执行检查——`ownership.mjs check --role FE` 会按路径判定越界并 fail。共享文件仍需先定唯一作者，其他人只交**精确 hunk**。
 
-## 2. 一个任务的生命周期（8 步，每步一道门）
+## 2. 一个任务的生命周期（9 步，每步一道门）
 
 ```
-① LEAD 建任务单（state.json + ≤200字任务单）
+① LEAD 建/更新切片与任务：state.batch.slices + ≤200字任务单（state.mjs task --for <ROLE> --message）
 ② 转发：一条消息，不写文档
 ③ FE/BE 在 %TEMP%\P4Deck-<切片>-<日期>\source 建候选（BE 唯一快照者）
-④ freeze：node scripts/workflow/batch.mjs manifest ...  → manifest.json（逐文件 hash）
-⑤ QA：对冻结快照出 qa-approval.json，manifestSha256 必须绑定 ④
-⑥ verify：node scripts/workflow/batch.mjs verify --manifest ... --qa ...
-⑦ apply：BE 执行，默认 dry-run；真写需 --apply --confirm-dev-closed（用户确认 dev 已关）
-⑧ 用户人工验收 → LEAD 更新 state.json（qaPassed/applied/humanAccepted）
+④ freeze：batch.mjs manifest --candidate … --packages <ID>  → manifest + 耐久副本
+⑤ QA：对冻结快照出 qa-approval.json（manifestSha256 绑定 ④，task=<切片>）
+⑥ verify：batch.mjs verify --manifest … --qa …
+⑦ apply：BE 执行，默认 dry-run；真写需 --apply --confirm-dev-closed
+⑧ 派生验收事实：node scripts/workflow/evidence.mjs（qa→待应用，apply→待人工验收）
+⑨ 用户人工验收 → LEAD 只改 humanAccepted / 切片状态 → state.mjs board 刷新
 ```
 
 不许推进：manifest 未冻结、QA 未过或绑定不上、原树漂移、用户未确认 dev 关闭、候选夹带未验切片。
+
+**验收事实不再手写**：④–⑦ 的回执统一落到 `artifacts/evidence/<batch>/`；`evidence.mjs` 按
+"回执里的文件路径 → 包的 evidence 路径"归因到包，按"回执 task/batchId → 切片 id"归因到切片。
+`blocked` / `paused` 不会被自动改写；`humanAccepted` 只能由 LEAD 写。
 
 ## 3. 命令（都已实现并有自测）
 
 | 命令 | 作用 | 何时用 |
 |---|---|---|
-| `node scripts/workflow/state.mjs check` | 校验状态库（ID/类型/状态/依赖/证据路径） | 改完 state.json、交接前 |
-| `node scripts/workflow/state.mjs board` | 重新生成看板 | state 变更后 |
-| `node scripts/workflow/state.mjs task <ID>` | 打印该任务短任务单 | 领活时 |
-| `node scripts/workflow/select-tests.mjs` | 按改动文件给测试计划 | 提交前 |
-| `node scripts/workflow/ci-fast.mjs` | 快速层门禁（并行：格式/类型/选测） | 每片开发中 |
-| `… --files a,b,c` | 显式指定本片改动（无基线 commit 时必用） | 上面两条均可加 |
-| `pnpm ci:quick` | 完整 11 步串行门禁 | **freeze 前一次** |
+| `node scripts/workflow/state.mjs check [--strict]` | 校验状态库（包/切片/依赖/证据/负责人） | 改完 state、交接前、CI |
+| `node scripts/workflow/state.mjs board` | 重新生成 Markdown 看板 | state 变更后 |
+| `node scripts/workflow/state.mjs task <ID> --for <ROLE> [--json\|--message]` | 生成可直接转发的任务单 | 派活时 |
+| `node scripts/workflow/evidence.mjs [--collect-temp] [--dry]` | 从回执派生验收事实 | QA/Apply 之后 |
+| `node scripts/workflow/ownership.mjs check --role <ROLE>` | 写域越界检查 | 提交前 / `ci:fast --role` |
+| `node scripts/workflow/ownership.mjs map <路径>` | 这条路径归谁 | 拿不准时 |
+| `node scripts/workflow/select-tests.mjs [--files a,b]` | 按改动文件给测试计划 | 提交前 |
+| `node scripts/workflow/ci-fast.mjs [--files a,b] [--role FE]` | 快速门禁：预检（写域/状态）+ 并行格式/类型/选测 | 每片开发中 |
+| `node scripts/ci-runner.mjs quick`（`pnpm ci:quick`） | 完整串行门禁，含 workflow-state | **freeze 前一次** |
 | `node scripts/workflow/batch.mjs manifest/verify/apply` | 批次 hash 守卫与 Apply | ④⑥⑦ |
-| `node scripts/workflow/batch.selftest.mjs` | 批次工具自测（临时目录，不碰原树） | 改动 batch.mjs 后 |
 | `node scripts/workflow/measure.mjs record/summary` | 量测（token/轮次/门禁耗时/入场行数） | 每批首尾 |
-| `scripts\workflow\cargo-candidate.cmd <cargo 参数>` | 共享 Rust 编译缓存 + 可选 sccache | 候选内跑 cargo 时 |
+| `scripts\workflow\cargo-candidate.cmd <cargo 参数>` | 共享 Rust 编译缓存 | 候选内跑 cargo |
 | `node scripts/workflow/env-candidate.mjs --candidate <候选>` | 校验候选位置、打印环境变量 | 建候选后自检 |
-| `node scripts/workflow/board.mjs` | 生成静态看板 `看板.html`（双击可看） | 想离线看 |
-| `node scripts/workflow/board.mjs --serve` | 本地实时看板 `http://127.0.0.1:1421` | 想边干边看 |
+| `node scripts/workflow/board.mjs [--serve]` | 静态 / 实时 HTML 看板 | 想离线或边干边看 |
+
+> 本机注意：PowerShell 执行策略禁止 `pnpm.ps1`，用 `pnpm.cmd ci:quick` 或直接 `node scripts/ci-runner.mjs quick`。
 
 ## 3.1 可视化看板
 
-两个入口，数据同源（`state.json` + `运行状态.json` + `metrics.jsonl`）：
+三个入口，数据同源（`state.json` + `运行状态.json` + `metrics.jsonl`）：
 
 1. **静态**：`node scripts/workflow/board.mjs` → `看板.html`，双击即看（生成物已 gitignore）。
 2. **实时**：`node scripts/workflow/board.mjs --serve`，页面每 4 秒自刷。
-3. **DSH 插件**（在 GUI 侧栏里看）：`tools/dsh-p4deck-board/` 是 cordis 插件，经 Plugins 页以本地路径安装后，
-   右侧栏标签条 **＋** → 指南页 → **工作流看板**，即得一个原生面板（每 5 秒自刷）。也保留页面入口
-   `http://127.0.0.1:56326/p4deck-board`。安装步骤见其 [README](../../../tools/dsh-p4deck-board/README.md)。
+3. **DSH 插件**：`tools/dsh-p4deck-board/`，装后右侧栏 **＋** → 指南页 → **工作流看板**；
+   也保留页面入口 `http://127.0.0.1:56326/p4deck-board`。见其 [README](../../../tools/dsh-p4deck-board/README.md)。
 
-「谁在忙什么」写在 `运行状态.json`（LEAD 维护，含 agents / milestones / events）；任务状态仍只在 `state.json`。
+「谁在忙什么」在 `运行状态.json`（agents / events）；**切片状态**在 `state.json` 的 `batch.slices`，两处不重复。
 
 ## 4. 门禁分层（证据强度递增，弱证据不得顶替强证据）
 
 | 层 | 内容 | 能证明什么 |
 |---|---|---|
-| 快速层 `ci:fast` | Prettier + tsc + `vitest related` | 改动自洽、相关测试过 |
-| 完整层 `ci:quick` | contracts/validate/3×node test/format/rustfmt/tsc/cargo check/clippy/vitest/cargo test | freeze 可用 |
-| 重层 `ci:local` | 上面 + 生产构建 + 双端性能 | 交付候选可用 |
+| 快速层 `ci:fast` | 预检 + Prettier + tsc + `vitest related` | 改动自洽、相关测试过 |
+| 完整层 `ci:quick` | contracts/版本/validate/format/rustfmt/tsc/clippy/vitest/cargo test + **workflow-state** | freeze 可用 |
+| 重层 `ci:local` | 上面 + 生产构建 + 双端性能 + 打包审计 | 交付候选可用 |
 | QA 定向 | 冻结快照上的语义/边界/故障注入 | 可放行 |
 | 人工验收 | dev 实机 / 原生 | 可归档 |
 
@@ -91,7 +99,8 @@
 
 ## 5. 消息协议（省 token 的关键）
 
-任务单一律 ≤200 字、固定 8 行（见[模板](任务单模板.md)）。**禁止**把背景、历史、事故叙述写进任务单——这些去 `state.json` 的 id 和证据路径里查。
+任务单一律 ≤200 字、固定 9 行，**由 `state.mjs task <ID> --for <ROLE> --message` 直接生成**，不要手写。
+**禁止**把背景、历史、事故叙述写进任务单——这些去 `state.json` 的 id 与证据路径里查。
 
 - 一次只激活一条任务；不逐项 steer；正写代码/跑工具时不打断。
 - 缺依赖只阻塞对应动作，其他继续。
@@ -100,12 +109,12 @@
 
 ## 6. 预算（超限就停笔，不硬撑）
 
-**模型档位**（省 token 的第二把刀）：
+**模型档位**：
 
 | 工作类型 | 用法 |
 |---|---|
 | 写产品代码、冻结契约、阶段裁决 | 强模型 |
-| 跑门禁、生成 manifest、Verify、Apply、状态渲染 | **脚本，不调用模型** |
+| 跑门禁、生成 manifest、Verify、Apply、状态渲染、证据派生 | **脚本，不调用模型** |
 | 截图核对、官方文档调研、只读审计 | 便宜模型 + 三列输出（已证 / 推测 / 未知） |
 
 | 项 | 上限 |
@@ -113,14 +122,15 @@
 | 单角色单任务 | ≤12 轮 |
 | 任务单 | ≤200 字 |
 | 交接消息 | ≤15 行 |
-| 入场必读 | 本文件 + `当前批次.md` + `state.mjs task <ID>` ≈ 15k 字以内 |
+| 入场必读 | 本文件 + `当前批次.md` + `state.mjs task <ID>` |
 
 超限不是失败，是信号：说明任务该拆，或规格不清。
 
 ## 7. 归档与回滚
 
-- `并行交接.md` 已加横幅：只读归档，**新增决议写 `当前批次.md`**，超出 10 条移入 `归档/决议-YYYY-MM.md`。
-- 想彻底回滚本次改造：删除 `ForAIDoc/PM/工作流/` 与 `scripts/workflow/`，去掉两处横幅与 `package.json` 的 `wf:*` 脚本即可。原始文档内容未被改写。
+- `并行交接.md` 已加横幅：只读归档；**新增决议写 `当前批次.md`**，超出 10 条移入 `归档/决议-YYYY-MM.md`（等外部线程停止追加后再启用自动轮转）。
+- `artifacts/evidence/` 与 `artifacts/workflow/` 已 gitignore；证据目录是"耐久运行产物"，不进仓库但也不随 TEMP 消失。
+- 想彻底回滚本次改造：删除 `ForAIDoc/PM/工作流/`、`scripts/workflow/`、`tools/dsh-p4deck-board/`，去掉两处横幅与 `package.json` 的 `wf:*`、`ci-runner` 的 workflow-state 步骤即可。
 
 ## 8. 不因省 token 而放弃的底线
 

@@ -1,17 +1,19 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { classifyStepResult, summarySucceeded } from "./ci-step-result.mjs";
 
+const MODES = ["quick", "local", "e2e"];
 const mode = process.argv[2] ?? "quick";
-if (!new Set(["quick", "local"]).has(mode)) {
-  process.stderr.write("usage: node scripts/ci-runner.mjs <quick|local>\n");
+if (!MODES.includes(mode)) {
+  process.stderr.write("usage: node scripts/ci-runner.mjs <quick|local|e2e>\n");
   process.exit(2);
 }
 
 if (!process.env.npm_execpath) {
   process.stderr.write(
-    "Run this entry point through pnpm ci:quick or pnpm ci:local.\n",
+    "Run this entry point through pnpm ci:quick / ci:local / ci:e2e.\n",
   );
   process.exit(2);
 }
@@ -21,6 +23,12 @@ const pnpmStep = (name, script) => ({
   command: packageManager[0],
   args: [...packageManager[1], script],
 });
+const nodeStep = (name, script, args = []) => ({
+  name,
+  command: process.execPath,
+  args: [script, ...args],
+});
+
 const childEnvironment = { ...process.env };
 for (const secretName of [
   "P4PASSWD",
@@ -29,32 +37,19 @@ for (const secretName of [
 ]) {
   delete childEnvironment[secretName];
 }
-const steps = [
-  {
-    name: "frontend-contracts",
-    command: process.execPath,
-    args: ["scripts/validate-frontend-contracts.mjs"],
-  },
-  {
-    name: "validate-ci",
-    command: process.execPath,
-    args: ["scripts/validate-ci.mjs"],
-  },
-  {
-    name: "release-config-tests",
-    command: process.execPath,
-    args: ["--test", "scripts/release-config.test.mjs"],
-  },
-  {
-    name: "ci-step-result-tests",
-    command: process.execPath,
-    args: ["--test", "scripts/ci-step-result.test.mjs"],
-  },
-  {
-    name: "theme-contrast-tests",
-    command: process.execPath,
-    args: ["--test", "scripts/theme-contrast.test.mjs"],
-  },
+delete childEnvironment.P4DECK_E2E_RESULT_FILE;
+
+const baseSteps = [
+  nodeStep("frontend-contracts", "scripts/validate-frontend-contracts.mjs"),
+  nodeStep("validate-ci", "scripts/validate-ci.mjs"),
+  nodeStep("version-consistency", "scripts/validate-versions.mjs"),
+  nodeStep("ci-step-result-tests", "--test", [
+    "scripts/ci-step-result.test.mjs",
+  ]),
+  nodeStep("version-tests", "--test", ["scripts/validate-versions.test.mjs"]),
+  nodeStep("theme-contrast-tests", "--test", [
+    "scripts/theme-contrast.test.mjs",
+  ]),
   pnpmStep("web-format", "format:check"),
   {
     name: "rust-format",
@@ -62,11 +57,6 @@ const steps = [
     args: ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"],
   },
   pnpmStep("web-check", "check:web"),
-  {
-    name: "rust-check",
-    command: "cargo",
-    args: ["check", "--manifest-path", "src-tauri/Cargo.toml", "--all-targets"],
-  },
   {
     name: "rust-clippy",
     command: "cargo",
@@ -88,12 +78,30 @@ const steps = [
   },
 ];
 
-if (mode === "local") {
-  steps.push(
+// 工作流状态库校验：只有在存在状态库与脚本时才跑（候选白名单副本通常不含 ForAIDoc，不应因此变红）。
+if (existsSync("ForAIDoc/PM/工作流/state.json") && existsSync("scripts/workflow/state.mjs")) {
+  baseSteps.splice(2, 0, nodeStep("workflow-state", "scripts/workflow/state.mjs", ["check"]));
+}
+
+const p4dStep = {
+  ...pnpmStep("localhost-p4d-e2e", "test:e2e:p4d:win"),
+  required: true,
+  protocol: "p4d-e2e-v1",
+  resultFile: path.resolve("artifacts", "ci", "p4d-e2e-latest.json"),
+};
+
+let steps = [];
+if (mode === "quick") {
+  steps = baseSteps;
+} else if (mode === "local") {
+  steps = [
+    ...baseSteps,
     pnpmStep("web-build", "build"),
+    pnpmStep("desktop-build", "build:desktop"),
+    nodeStep("desktop-bundle-audit", "scripts/verify-desktop-bundle.mjs"),
     pnpmStep("web-performance", "test:perf"),
     pnpmStep("backend-performance", "test:perf:backend"),
-  );
+  ];
   if (process.env.P4DECK_CI_RUN_P4D === "1") {
     if (process.platform !== "win32") {
       process.stderr.write(
@@ -101,13 +109,18 @@ if (mode === "local") {
       );
       process.exit(2);
     }
-    steps.push({
-      ...pnpmStep("localhost-p4d-e2e", "test:e2e:p4d:win"),
-      required: true,
-      protocol: "p4d-e2e-v1",
-      resultFile: path.resolve("artifacts", "ci", "p4d-e2e-latest.json"),
-    });
+    childEnvironment.P4DECK_CI_RUN_P4D = "1";
+    steps.push(p4dStep);
   }
+} else {
+  // Dedicated CI entry point: only the isolated localhost p4d suite, still
+  // reported through the shared JSON result protocol.
+  if (process.platform !== "win32") {
+    process.stderr.write("ci:e2e is supported only on the Windows runner.\n");
+    process.exit(2);
+  }
+  childEnvironment.P4DECK_CI_RUN_P4D = "1";
+  steps = [p4dStep];
 }
 
 const results = [];

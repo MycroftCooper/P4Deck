@@ -65,8 +65,28 @@ if (hasWeb) {
 if (plan.changed.scripts.some((file) => file.endsWith(".mjs"))) {
   steps.push({ name: "script-syntax", command: plan.commands.scriptSyntax });
 }
+
+// 预检：写域越界 / 工作流状态不健康时，先停下再浪费测试时间。
+const roleIndex = process.argv.indexOf("--role");
+const role = roleIndex >= 0 ? String(process.argv[roleIndex + 1] ?? "").toUpperCase() : process.env.P4DECK_ROLE?.toUpperCase();
+const preflight = [];
+if (role) {
+  const ownershipArgs = ["scripts/workflow/ownership.mjs", "check", "--role", role];
+  if (explicitFiles?.length) ownershipArgs.push("--files", explicitFiles.join(","));
+  preflight.push({ name: "ownership", command: [process.execPath, ...ownershipArgs] });
+}
+if (
+  plan.changed.docs.some((file) => file.startsWith("ForAIDoc/PM/工作流/")) ||
+  plan.changed.scripts.some((file) => file.startsWith("scripts/workflow/"))
+) {
+  preflight.push({
+    name: "workflow-state",
+    command: [process.execPath, "scripts/workflow/state.mjs", "check"],
+  });
+}
 if (process.argv.includes("--plan")) {
   const planned = [
+    ...preflight,
     ...steps,
     ...(hasRust ? [{ name: "rust:offline-check", command: plan.commands.rustCheck }] : []),
   ];
@@ -75,6 +95,7 @@ if (process.argv.includes("--plan")) {
       {
         schemaVersion: 1,
         planOnly: true,
+        role: role ?? null,
         scope: { web: plan.changed.web.length, rust: plan.changed.rust.length, tests: plan.changed.tests.length },
         steps: planned.map((step) => ({ name: step.name, command: step.command.join(" ") })),
       },
@@ -85,7 +106,28 @@ if (process.argv.includes("--plan")) {
   process.exit(0);
 }
 
-if (!steps.length && !hasRust) {
+const preflightResults = [];
+for (const step of preflight) {
+  const result = await runStep(step);
+  preflightResults.push(result);
+  if (result.status !== "passed") break;
+}
+if (preflightResults.some((result) => result.status !== "passed")) {
+  const summary = {
+    schemaVersion: 1,
+    ok: false,
+    role: role ?? null,
+    stoppedAt: "preflight",
+    steps: preflightResults,
+    note: "预检失败，未执行测试。先修写域越界或状态库错误。",
+  };
+  await mkdir(ARTIFACT_DIR, { recursive: true });
+  await writeFile(path.join(ARTIFACT_DIR, "ci-fast-latest.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  process.stdout.write(`\n${JSON.stringify(summary, null, 2)}\n`);
+  process.exit(1);
+}
+
+if (!steps.length && !hasRust && !preflight.length) {
   const summary = {
     schemaVersion: 1,
     ok: true,
@@ -102,7 +144,7 @@ if (!steps.length && !hasRust) {
 
 const startedAt = Date.now();
 const parallelResults = await Promise.all(steps.map(runStep));
-const results = [...parallelResults];
+const results = [...preflightResults, ...parallelResults];
 
 if (hasRust) {
   results.push(await runStep({ name: "rust:offline-check", command: plan.commands.rustCheck }));

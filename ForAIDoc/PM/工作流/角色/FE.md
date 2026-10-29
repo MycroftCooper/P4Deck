@@ -35,8 +35,9 @@
 
 ```powershell
 node scripts/workflow/select-tests.mjs --files src/features/x/a.ts,src/features/x/b.tsx
-node scripts/workflow/ci-fast.mjs --files <同样列表>   # 无基线 commit 时用 --files，否则会接近全量
-pnpm exec vitest related --run <files>                 # 选测
+node scripts/workflow/ci-fast.mjs --files <同样列表> --role FE   # 必须带 --role，越界会先被拦
+node scripts/workflow/ownership.mjs map src/features/x/a.ts        # 拿不准某路径归谁时
+pnpm exec vitest related --run <files>                             # 选测
 ```
 
 ## 预算

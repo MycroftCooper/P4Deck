@@ -21,15 +21,17 @@
 2. 用[模板](任务单模板.md)生成 ≤200 字任务单，一条消息发给唯一执行者。
 3. 记录依赖；缺依赖只挂起该项。
 4. 收 6 行回执：范围 / 跑过的命令与结果 / 没跑的 / 阻碍 / 是否安全停笔。
-5. 按证据推进状态：QA 出 `qa-approval.json` → `qaPassed=true`；BE Apply 回执 → `applied=true`；用户确认 → `humanAccepted=true`。
+5. 按证据推进状态：QA/Apply 回执落盘后跑 `evidence.mjs` 自动派生 `qaPassed/applied`；只有 `humanAccepted` 和 `blocked/paused` 由你手写。
 6. 生成看板并汇报（≤10 行）。
 
 ## 命令
 
 ```powershell
-node scripts/workflow/state.mjs task <ID>     # 出任务单
-node scripts/workflow/state.mjs check         # 交接前校验
-node scripts/workflow/state.mjs board         # 刷新看板
+node scripts/workflow/state.mjs task <ID> --for FE --message   # 直接可转发的任务单
+node scripts/workflow/state.mjs check                          # 交接前校验
+node scripts/workflow/state.mjs board                          # 刷新看板
+node scripts/workflow/evidence.mjs                             # 从回执派生验收事实
+node scripts/workflow/ownership.mjs check --role LEAD           # 自己别越界写
 node scripts/workflow/batch.mjs verify --manifest <f> --qa <f>
 ```
 

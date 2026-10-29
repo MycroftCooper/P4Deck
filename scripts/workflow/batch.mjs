@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "workflow");
+const EVIDENCE_DIR = path.join(ROOT, "artifacts", "evidence");
 
 const ALLOWED_PREFIXES = ["src/", "src-tauri/", "ForAIDoc/", "scripts/", "tests/", "public/"];
 const ALLOWED_ROOT_FILE = /\.(json|ts|mjs|js|html|ya?ml|toml|md)$/i;
@@ -89,9 +90,10 @@ async function loadJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
 
-async function writeReceipt(name, payload) {
-  await mkdir(ARTIFACT_DIR, { recursive: true });
-  const target = path.join(ARTIFACT_DIR, name);
+async function writeReceipt(batchId, name, payload) {
+  const dir = path.join(EVIDENCE_DIR, String(batchId ?? "unbatched").replace(/[^A-Za-z0-9._-]+/g, "-"));
+  await mkdir(dir, { recursive: true });
+  const target = path.join(dir, name);
   await writeFile(target, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   return path.relative(ROOT, target).split(path.sep).join("/");
 }
@@ -126,6 +128,10 @@ async function cmdManifest(args) {
   const manifest = {
     schemaVersion: 1,
     batchId,
+    packages: String(args.packages ?? "")
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
     createdAt: new Date().toISOString(),
     originalRoot,
     candidateRoot,
@@ -137,9 +143,11 @@ async function cmdManifest(args) {
   const outPath = path.resolve(String(args.out ?? path.join(ARTIFACT_DIR, `${batchId}-manifest.json`)));
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  // 同时在耐久证据目录留一份（QA/Apply 回执会落在同目录，evidence.mjs 据此派生验收）
+  const evidenceCopy = await writeReceipt(batchId, `manifest-${manifest.manifestSha256.slice(0, 8)}.json`, manifest);
   const counts = files.reduce((acc, file) => ({ ...acc, [file.kind]: (acc[file.kind] ?? 0) + 1 }), {});
   process.stdout.write(
-    `manifest: ${path.relative(ROOT, outPath)} | batch=${batchId} | 文件 ${files.length} (${JSON.stringify(counts)}) | sha=${manifest.manifestSha256}\n`,
+    `manifest: ${path.relative(ROOT, outPath)} | batch=${batchId} | 文件 ${files.length} (${JSON.stringify(counts)}) | sha=${manifest.manifestSha256} | 证据副本 ${evidenceCopy}\n`,
   );
 }
 
@@ -202,11 +210,12 @@ async function cmdVerify(args) {
   if (!args.manifest) fail("缺少 --manifest <文件>");
   const manifest = await loadJson(path.resolve(String(args.manifest)));
   const result = await verifyManifest(manifest, args.qa ? String(args.qa) : undefined);
-  const receipt = await writeReceipt(`verify-${Date.now()}.json`, {
+  const receipt = await writeReceipt(manifest.batchId, `verify-${Date.now()}.json`, {
     schemaVersion: 1,
     kind: "verify",
     manifestSha256: manifest.manifestSha256,
     batchId: manifest.batchId,
+    packages: manifest.packages ?? [],
     checkedAt: new Date().toISOString(),
     ...result,
   });
@@ -233,6 +242,7 @@ async function cmdApply(args) {
     kind: "apply-plan",
     batchId: manifest.batchId,
     manifestSha256: manifest.manifestSha256,
+    packages: manifest.packages ?? [],
     createdAt: new Date().toISOString(),
     dryRun: args.apply !== true,
     files: manifest.files.length,
@@ -247,7 +257,7 @@ async function cmdApply(args) {
     fail("Verify 未通过，拒绝 Apply（原树漂移或候选被改动）", 1);
   }
   if (args.apply !== true) {
-    const receipt = await writeReceipt(`apply-plan-${Date.now()}.json`, plan);
+    const receipt = await writeReceipt(manifest.batchId, `apply-plan-${Date.now()}.json`, plan);
     process.stdout.write(`${JSON.stringify({ ...plan, receipt }, null, 2)}\n`);
     process.stderr.write("dry-run：未写原树。确认 dev 已关闭后追加 --apply --confirm-dev-closed。\n");
     return;
@@ -284,6 +294,7 @@ async function cmdApply(args) {
     kind: "post-apply-verify",
     batchId: manifest.batchId,
     manifestSha256: manifest.manifestSha256,
+    packages: manifest.packages ?? [],
     appliedAt: new Date().toISOString(),
     verifiedFiles: applied.length,
     mismatches: applied
@@ -296,7 +307,7 @@ async function cmdApply(args) {
   postVerify.originalApplied = postVerify.mismatches.length === 0;
   postVerify.backupVerified = backups.every((backup) => backup.sha256 !== undefined);
 
-  const applyReceipt = await writeReceipt(`apply-${stamp}.json`, {
+  const applyReceipt = await writeReceipt(manifest.batchId, `apply-${stamp}.json`, {
     ...plan,
     dryRun: false,
     appliedAt: postVerify.appliedAt,
@@ -304,7 +315,7 @@ async function cmdApply(args) {
     backups: backups.length,
     backupDir: path.relative(ROOT, backupDir).split(path.sep).join("/"),
   });
-  const verifyReceipt = await writeReceipt(`post-apply-verify-${stamp}.json`, postVerify);
+  const verifyReceipt = await writeReceipt(manifest.batchId, `post-apply-verify-${stamp}.json`, postVerify);
   process.stdout.write(`${JSON.stringify({ ...postVerify, applyReceipt, verifyReceipt }, null, 2)}\n`);
   if (!postVerify.originalApplied) process.exitCode = 1;
 }
