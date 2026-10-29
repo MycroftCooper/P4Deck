@@ -47,14 +47,25 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
 
 ## 配置
 
-`cordis.patch.yml` 里可改工作区路径：
+`cordis.patch.yml` 必须是 **bundle patch 列表**：新增行要用 `insert:`。直接写 `id + name` 会被当成
+"覆盖已有行"，目标不存在时报 `patch: entry "p4deck-board" not found` 并**静默跳过**——这是它一开始
+不出现的真正原因。
 
 ```yaml
-- id: p4deck-board
-  name: dsh-p4deck-board
-  config:
-    workspace: D:\GitCode\P4Deck
+- insert:
+    - id: p4deck-board
+      name: dsh-p4deck-board
+      config:
+        workspace: D:/GitCode/P4Deck
 ```
+
+离线自检（不用重启 GUI）：把 profile 复制成临时名，再 dump 组合树：
+
+```powershell
+dsh.cmd --profile <tmp> --dump-config | Select-String p4deck
+```
+
+打印出 `- id: p4deck-board` 且没有 `not found` 警告，说明组合正确；再重启 GUI 才会实际加载。
 
 ## 自测（不需要 dsh 运行时）
 
