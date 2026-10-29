@@ -1,0 +1,285 @@
+window.__ModuleLoader__.load({
+	id: "dsh-p4deck-board",
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+		const react = require("react");
+		const h = react.createElement;
+
+		const BOARD_ID = "dsh-p4deck-board";
+		const BOARD_KIND = "p4deckBoard";
+		const API = "/p4deck-board/api/snapshot";
+		const LINE = "1px solid rgba(128,128,128,0.32)";
+		const MUTED = "rgba(128,128,128,0.95)";
+
+		const STAGE_LABELS = {
+			"in-progress": "进行中",
+			blocked: "阻塞",
+			implemented: "实现待验收",
+			partial: "部分实现",
+			todo: "待实现",
+			proposed: "待确认",
+			done: "已完成"
+		};
+		const STAGE_ORDER = ["in-progress", "blocked", "implemented", "partial", "todo", "proposed", "done"];
+		const STAGE_COLOR = {
+			"in-progress": "#1f5f8b",
+			blocked: "#9b2c2c",
+			implemented: "#2f6f4f",
+			partial: "#8a5a00",
+			todo: "rgba(128,128,128,0.8)",
+			proposed: "rgba(128,128,128,0.8)",
+			done: "rgba(128,128,128,0.55)"
+		};
+		const MS_LABEL = {
+			done: "完成",
+			frozen: "已冻结",
+			qa_with_gap: "QA 有缺口",
+			awaiting_apply: "待应用",
+			blocked: "阻塞",
+			in_progress: "进行中",
+			paused: "暂停"
+		};
+		const AGENT_LABEL = { working: "工作中", waiting: "等待依赖", blocked: "阻塞", idle: "空闲" };
+		const AGENT_COLOR = {
+			working: "#1f5f8b",
+			waiting: "#8a5a00",
+			blocked: "#9b2c2c",
+			idle: "rgba(128,128,128,0.7)"
+		};
+
+		function fmtTime(iso) {
+			if (!iso) return "—";
+			const date = new Date(iso);
+			if (Number.isNaN(date.getTime())) return String(iso);
+			return date.toLocaleString("zh-CN", { hour12: false });
+		}
+
+		/** 纯视图：只吃 snapshot，便于单测与复用。 */
+		function BoardView({ snapshot, status, error }) {
+			if (!snapshot) {
+				return h(
+					"div",
+					{ style: { padding: 12, fontSize: 12, color: MUTED, fontFamily: "inherit" } },
+					status === "error" ? "看板数据读取失败：" + (error || "未知错误") + "（确认已启用 dsh-p4deck-board 宿主插件）" : "正在读取看板数据…",
+				);
+			}
+			const counts = snapshot.counts || { byStage: {}, total: 0 };
+			const agents = snapshot.agents || [];
+			const milestones = snapshot.milestones || [];
+			const packages = snapshot.packages || [];
+
+			const style = {
+				padding: "10px 12px 24px",
+				fontFamily: "inherit",
+				fontSize: 12,
+				lineHeight: 1.45,
+				color: "inherit",
+				overflowY: "auto",
+				height: "100%",
+				boxSizing: "border-box",
+			};
+			const sectionTitle = { fontSize: 11, letterSpacing: "0.06em", color: MUTED, margin: "14px 0 6px" };
+			const card = { border: LINE, borderRadius: 6, padding: "6px 8px", marginBottom: 6, background: "rgba(128,128,128,0.05)" };
+
+			return h(
+				"div",
+				{ style },
+				h(
+					"div",
+					{ style: { display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" } },
+					h("strong", { style: { fontSize: 13 } }, "工作流看板"),
+					h("span", { style: { color: MUTED } }, snapshot.batch ? snapshot.batch.id : ""),
+					h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 11 } }, fmtTime(snapshot.generatedAt)),
+				),
+				h(
+					"div",
+					{ style: { color: MUTED, fontSize: 11, marginTop: 2 } },
+					(status === "stale" ? "数据可能过期 · " : "") + "共 " + counts.total + " 个主工作包",
+				),
+
+				h("div", { style: sectionTitle }, "AGENT 在忙什么"),
+				...agents.map((agent) =>
+					h(
+						"div",
+						{ key: "agent-" + agent.role, style: card, title: agent.detail || "" },
+						h(
+							"div",
+							{ style: { display: "flex", alignItems: "center", gap: 6 } },
+							h("span", {
+								style: {
+									width: 7,
+									height: 7,
+									borderRadius: "50%",
+									background: AGENT_COLOR[agent.status] || AGENT_COLOR.idle,
+									flex: "0 0 auto",
+								},
+							}),
+							h("strong", null, agent.role),
+							h("span", { style: { color: MUTED, fontSize: 11 } }, AGENT_LABEL[agent.status] || agent.status || ""),
+						),
+						h("div", { style: { marginTop: 2, fontWeight: 600 } }, agent.task || "—"),
+						agent.detail ? h("div", { style: { color: MUTED, fontSize: 11, marginTop: 1 } }, agent.detail) : null,
+					),
+				),
+
+				h("div", { style: sectionTitle }, "批次里程碑"),
+				h(
+					"div",
+					{ style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+					...milestones.map((ms) =>
+						h(
+							"span",
+							{
+								key: "ms-" + ms.id,
+								title: ms.note || "",
+								style: { ...card, marginBottom: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 },
+							},
+							h("span", {
+								style: { width: 6, height: 6, borderRadius: "50%", background: STAGE_COLOR[ms.status] || "rgba(128,128,128,0.7)" },
+							}),
+							ms.label,
+							h("span", { style: { color: MUTED } }, "· " + (MS_LABEL[ms.status] || ms.status)),
+						),
+					),
+				),
+
+				...STAGE_ORDER.map((stage) => {
+					const items = packages.filter((pkg) => pkg.stage === stage);
+					if (!items.length) return null;
+					return h(
+						"div",
+						{ key: "stage-" + stage },
+						h(
+							"div",
+							{ style: sectionTitle },
+							h("span", {
+								style: {
+									display: "inline-block",
+									width: 6,
+									height: 6,
+									borderRadius: 2,
+									marginRight: 6,
+									background: STAGE_COLOR[stage],
+								},
+							}),
+							(STAGE_LABELS[stage] || stage) + " " + items.length,
+						),
+						...items.map((pkg) =>
+							h(
+								"div",
+								{ key: pkg.id, style: { ...card, padding: "5px 7px" }, title: pkg.note || "" },
+								h(
+									"div",
+									{ style: { display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" } },
+									h("strong", { style: { fontSize: 12 } }, pkg.id),
+									pkg.priority ? h("span", { style: { color: MUTED, fontSize: 10 } }, pkg.priority) : null,
+									h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, pkg.owner || ""),
+								),
+							),
+						),
+					);
+				}),
+
+				h(
+					"div",
+					{ style: { ...sectionTitle, marginTop: 18 } },
+					"来源：state.json · 运行状态.json · 每 5 秒自动刷新",
+				),
+			);
+		}
+
+		function useSnapshot() {
+			const [state, setState] = react.useState({ status: "loading", snapshot: null, error: null });
+			react.useEffect(() => {
+				let alive = true;
+				const load = async () => {
+					try {
+						const response = await fetch(API, { cache: "no-store", credentials: "same-origin" });
+						if (!response.ok) throw new Error("HTTP " + response.status);
+						const snapshot = await response.json();
+						if (alive) setState({ status: "ready", snapshot, error: null });
+					} catch (error) {
+						if (!alive) return;
+						setState((previous) => ({
+							status: previous.snapshot ? "stale" : "error",
+							snapshot: previous.snapshot,
+							error: String(error && error.message ? error.message : error),
+						}));
+					}
+				};
+				load();
+				const timer = setInterval(load, 5000);
+				return () => {
+					alive = false;
+					clearInterval(timer);
+				};
+			}, []);
+			return state;
+		}
+
+		function BoardBody() {
+			const { status, snapshot, error } = useSnapshot();
+			return h(BoardView, { snapshot, status, error });
+		}
+
+		function BoardTitle() {
+			return h("span", { style: { fontSize: 12 } }, "看板");
+		}
+
+		function BoardIcon() {
+			return h(
+				"svg",
+				{ width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": "true", fill: "currentColor" },
+				h("rect", { x: 1, y: 1, width: 4, height: 6, rx: 1 }),
+				h("rect", { x: 6, y: 1, width: 4, height: 9, rx: 1, opacity: 0.75 }),
+				h("rect", { x: 11, y: 1, width: 4, height: 4, rx: 1, opacity: 0.55 }),
+			);
+		}
+
+		/** 必需服务：插槽注册表 + 右侧栏标签类型。 */
+		const inject = ["slots", "sidebarRightTabs"];
+
+		function apply(ctx) {
+			ctx.effect(
+				() =>
+					ctx.sidebarRightTabs.register({
+						id: BOARD_ID,
+						kind: BOARD_KIND,
+						priority: "builtin",
+						title: () => "看板",
+						guide: [
+							{
+								id: "p4deck-board",
+								order: 40,
+								title: () => "工作流看板",
+								description: () => "任务状态与 Agent 忙闲",
+								icon: BoardIcon,
+							},
+						],
+					}),
+				"p4deck-board: tab type",
+			);
+			ctx.effect(
+				() =>
+					ctx.slots.inject("sidebar.right.pane.tab", () =>
+						ctx.slots.register({ name: "sidebar.right.pane.tab", key: BOARD_ID }, BoardBody),
+					),
+				"p4deck-board: tab body",
+			);
+			ctx.effect(
+				() =>
+					ctx.slots.inject("sidebar.right.pane.tab.title", () =>
+						ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BOARD_ID }, BoardTitle),
+					),
+				"p4deck-board: tab title",
+			);
+		}
+
+		exports.apply = apply;
+		exports.inject = inject;
+		exports.BoardView = BoardView;
+		return module.exports;
+	},
+});

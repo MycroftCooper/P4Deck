@@ -1,23 +1,31 @@
 {
   "name": "dsh-p4deck-board",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "description": "P4Deck 工作流看板：在 DSH Web GUI 内查看任务状态与 Agent 忙闲",
+  "description": "P4Deck 工作流看板：在 DSH Web GUI 右侧栏查看任务状态与 Agent 忙闲",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
+    "lib/client.js",
     "cordis.patch.yml",
     "README.md"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ],
+      "platform": "web"
     }
   },
   "license": "MIT",

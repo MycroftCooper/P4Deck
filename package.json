@@ -43,7 +43,7 @@
     "wf:measure": "node scripts/workflow/measure.mjs",
     "wf:view": "node scripts/workflow/board.mjs",
     "wf:serve": "node scripts/workflow/board.mjs --serve",
-    "wf:plugin:test": "node tools/dsh-p4deck-board/selftest.mjs",
+    "wf:plugin:test": "node tools/dsh-p4deck-board/selftest.mjs && node tools/dsh-p4deck-board/selftest-client.mjs",
     "test:e2e:p4d:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-p4d-e2e.ps1",
     "test:fixture-safety:win": "powershell -NoProfile -File scripts/fixture-safety.test.ps1",
     "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml",

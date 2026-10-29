@@ -71,7 +71,8 @@
 
 1. **静态**：`node scripts/workflow/board.mjs` → `看板.html`，双击即看（生成物已 gitignore）。
 2. **实时**：`node scripts/workflow/board.mjs --serve`，页面每 4 秒自刷。
-3. **DSH 插件**（在 GUI 里看）：`tools/dsh-p4deck-board/` 是 cordis 宿主插件，经 Plugins 页以本地路径安装后，打开
+3. **DSH 插件**（在 GUI 侧栏里看）：`tools/dsh-p4deck-board/` 是 cordis 插件，经 Plugins 页以本地路径安装后，
+   右侧栏标签条 **＋** → 指南页 → **工作流看板**，即得一个原生面板（每 5 秒自刷）。也保留页面入口
    `http://127.0.0.1:56326/p4deck-board`。安装步骤见其 [README](../../../tools/dsh-p4deck-board/README.md)。
 
 「谁在忙什么」写在 `运行状态.json`（LEAD 维护，含 agents / milestones / events）；任务状态仍只在 `state.json`。
