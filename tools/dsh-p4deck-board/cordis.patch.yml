@@ -1,6 +1,8 @@
-# dsh-p4deck-board bundle patch：把一个宿主插件挂进 dsh profile。
-# 只注册同源只读路由，不接触 P4、不写原树。
-- id: p4deck-board
-  name: dsh-p4deck-board
-  config:
-    workspace: D:\GitCode\P4Deck
+# dsh-p4deck-board bundle patch。
+# 注意：bundle 层是 patch 列表，新增行必须用 insert；直接写 id 会被当成"覆盖一行"，找不到就跳过并报
+# "patch: entry \"p4deck-board\" not found"。
+- insert:
+    - id: p4deck-board
+      name: dsh-p4deck-board
+      config:
+        workspace: D:/GitCode/P4Deck
