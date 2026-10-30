@@ -110,7 +110,9 @@ const compactOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "b
 });
 const compactLines = compactOut.stdout.trim().split(/\r?\n/);
 check("board --compact 有批次行", compactLines[0]?.startsWith("批次 "), compactLines[0]);
-check("board --compact 只列活跃任务", compactLines.length === 1 + 50, String(compactLines.length));
+const stateOnDisk = JSON.parse(await readFile(path.join(ROOT, "ForAIDoc", "PM", "工作流", "state.json"), "utf8"));
+const activeOnDisk = stateOnDisk.packages.filter((pkg) => !pkg.archived).length;
+check("board --compact 只列活跃任务", compactLines.length === 1 + activeOnDisk, `${compactLines.length}/${1 + activeOnDisk}`);
 
 const checkOut = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "check"], { cwd: ROOT, encoding: "utf8" });
 const checkJson = JSON.parse(checkOut.stdout.slice(checkOut.stdout.indexOf("{")));
@@ -158,8 +160,8 @@ try {
 } catch {}
 check("TODO 轮转默认 dry-run", todoDry.status === 0 && todoReport?.dryRun === true, String(todoReport?.movedSections));
 check(
-  "状态库结构仍是 52 包 / 7 切片 / 11 子项",
-  checkJson.checked === 52 && checkJson.slices === 7 && checkJson.subitems === 11,
+  "状态库结构可读（不再锁死包数，TODO 台账会增长）",
+  Number.isInteger(checkJson.checked) && checkJson.checked >= 50 && checkJson.slices >= 6 && checkJson.subitems >= 10,
   `${checkJson.checked}/${checkJson.slices}/${checkJson.subitems}`,
 );
 
@@ -193,6 +195,35 @@ for (const jsonFile of ["tools/dsh-p4deck-board/package.json", "package.json", "
   }
   check(`JSON 可解析: ${jsonFile}`, ok);
 }
+
+// 人工验收命令：dry-run 不落盘；没有 --note 必须拒绝。
+const acceptDry = spawnSync(
+  process.execPath,
+  [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force", "--note", "selftest", "--dry"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+check(
+  "accept --dry 输出计划不落盘",
+  acceptDry.status === 0 && acceptDry.stdout.includes('"dryRun": true'),
+  acceptDry.stderr.trim(),
+);
+const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force"], {
+  cwd: ROOT,
+  encoding: "utf8",
+});
+check("accept 必须给 --note", acceptNoNote.status === 2, String(acceptNoNote.status));
+
+// 看板必须把"实现待验收"拆成证据齐/待应用/未登记三个桶。
+const boardRun = spawnSync(process.execPath, [path.join(HERE, "board.mjs")], { cwd: ROOT, encoding: "utf8" });
+const boardHtml = (await import("node:fs")).readFileSync(
+  path.join(ROOT, "ForAIDoc", "PM", "工作流", "看板.html"),
+  "utf8",
+);
+check(
+  "看板拆分验收桶",
+  boardRun.status === 0 && boardHtml.includes("待人工验收") && boardHtml.includes("未登记验收"),
+  "缺少验收桶标签",
+);
 
 const failed = checks.filter((entry) => !entry.ok);
 process.stdout.write(`\n${checks.length - failed.length}/${checks.length} 通过\n`);

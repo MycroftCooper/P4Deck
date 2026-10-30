@@ -16,12 +16,15 @@ const STAGE_LABELS = {
   "in-progress": "进行中",
   blocked: "阻塞",
   implemented: "实现待验收",
+  "awaiting_accept": "待人工验收",
+  "awaiting_apply": "待应用",
+  unverified: "未登记验收",
   partial: "部分实现",
   todo: "待实现",
   proposed: "待确认",
   done: "已完成",
 };
-const STAGE_ORDER = ["in-progress", "blocked", "implemented", "partial", "todo", "proposed", "done"];
+const STAGE_ORDER = ["in-progress", "blocked", "awaiting_accept", "awaiting_apply", "unverified", "partial", "todo", "proposed", "done"];
 const MS_LABEL = {
   done: "完成",
   frozen: "已冻结",
@@ -37,7 +40,7 @@ const AGENT_LABEL = { working: "工作中", waiting: "等待依赖", blocked: "�
 
 async function readJson(filePath, fallback) {
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse((await readFile(filePath, "utf8")).replace(/^\uFEFF/, ""));
   } catch {
     return fallback;
   }
@@ -57,6 +60,18 @@ async function readMetrics(workspace) {
   }
 }
 
+
+/** 把 stage=implemented 的包按验收事实拆成三个真实桶，避免"实现待验收"混装。 */
+function packageStage(pkg) {
+  const verification = pkg.verification ?? {};
+  if (verification.humanAccepted === true) return "done";
+  if (pkg.stage === "implemented") {
+    if (verification.qaPassed === true && verification.applied === true) return "awaiting_accept";
+    if (verification.qaPassed === true) return "awaiting_apply";
+    return "unverified";
+  }
+  return pkg.stage ?? "proposed";
+}
 /** 组合看板快照。state.json 是任务真值，运行状态.json 提供 Agent/里程碑。 */
 export async function buildSnapshot(workspace) {
   const workflowDir = path.join(workspace, "ForAIDoc", "PM", "工作流");
@@ -69,7 +84,7 @@ export async function buildSnapshot(workspace) {
   const byStage = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, 0]));
   const modules = new Map();
   for (const pkg of state.packages) {
-    const stage = pkg.stage ?? "proposed";
+    const stage = packageStage(pkg);
     byStage[stage] = (byStage[stage] ?? 0) + 1;
     if (!pkg.archived) modules.set(pkg.module, (modules.get(pkg.module) ?? 0) + 1);
   }
@@ -85,7 +100,8 @@ export async function buildSnapshot(workspace) {
         type: pkg.type,
         owner: pkg.owner,
         priority: pkg.priority,
-        stage: pkg.stage,
+        stage: packageStage(pkg),
+        rawStage: pkg.stage,
         module: pkg.module,
         evidence: (pkg.evidence ?? []).length,
         note: pkg.note,

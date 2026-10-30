@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-30T07:41:46.747Z",
+  "updatedAt": "2026-10-30T12:55:24.668Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -10,21 +10,22 @@
     "id": "CON06+ACTION-R01",
     "goal": "只完成 CON06（服务器状态）与 ACTION-R01 全矩阵迁移及必要 QA",
     "stopCondition": "两项完成 + 联合 QA 通过 → BE 一次性 Apply 到本地原树 → 全员停工",
-    "devClosedByUser": false,
+    "devClosedByUser": true,
     "applyMode": "batched",
     "openQuestions": [
-      "Apply 前需用户确认 dev 已关闭且无在途操作"
+      "已 Apply（final-joint 00B1DD16，185 文件，2026-10-30 15:46）；待用户人工验收"
     ],
     "slices": [
       {
         "id": "CON06",
         "label": "CON06 服务器状态",
-        "status": "awaiting_apply",
+        "status": "awaiting_accept",
         "owner": "BE",
         "exit": "联合 QA 通过 → 与 ACTION 一起 Apply",
         "evidence": "artifacts/evidence",
-        "note": "QA 通过（20 文件 EEFA0274），等待最终一次性 Apply（用户裁决：全矩阵完成后再 Apply）",
-        "qaPassed": true
+        "note": "QA 通过并已随 final-joint 00B1DD16 Apply（185 文件全部写入成功，后验 sha 185/185）",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "S1A",
@@ -33,46 +34,53 @@
         "owner": "BE",
         "exit": "冻结 + QA 通过",
         "evidence": "artifacts/evidence",
-        "note": "完成，作为 S1B 基线；已含入 B1 批（C1B17F0B）"
+        "note": "完成并已随 final-joint Apply（B1 批 C1B17F0B → final 00B1DD16）",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "S1B",
         "label": "ACTION S1B：宿主准入与 unknown 解除",
-        "status": "frozen",
+        "status": "awaiting_accept",
         "owner": "BE",
         "exit": "跨窗互斥 / 排队取消零写 / 解除边界 通过 QA",
         "evidence": "artifacts/evidence",
-        "note": "BE+FE 冻结并 QA PASS；已含入 v2/B1 批"
+        "note": "已随 final-joint Apply（final 00B1DD16），待人工验收",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "S2a",
         "label": "ACTION S2a：SHELF 真实入口",
-        "status": "awaiting_apply",
+        "status": "awaiting_accept",
         "owner": "BE",
         "exit": "完整基线配置下重跑全 TS + 联合 QA",
         "evidence": "artifacts/evidence",
-        "note": "BE+FE QA PASS，完整 TS 已在 joint v2/B1 批闭环；已含入 B1 批 C1B17F0B",
-        "qaPassed": true
+        "note": "已随 final-joint Apply（final 00B1DD16），待人工验收",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "S2b",
         "label": "ACTION S2b：Revert 真实入口",
-        "status": "blocked",
+        "status": "awaiting_accept",
         "owner": "BE",
         "exit": "NOOP-01 闭环：retained/no-op 有可验证事实来源 + 新 hash QA",
         "evidence": "artifacts/evidence",
-        "note": "NOOP-01 闭环（retained 事实来源 wire 9E1FD2E7），BE+FE QA PASS；已含入 B1 批",
-        "qaPassed": true
+        "note": "已随 final-joint Apply（final 00B1DD16），待人工验收",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "S3",
         "label": "ACTION 技术阶段3：全矩阵迁移",
-        "status": "awaiting_apply",
+        "status": "awaiting_accept",
         "owner": "BE",
         "exit": "逐行 入口→adapter→host 链有证据，旧路径退出",
         "evidence": "artifacts/evidence",
-        "note": "S3a/S3-local/S4a/S4b/S4c/S4d 已冻并结合 B1 批 QA PASS（C1B17F0B）；剩余矩阵（CL 写/提交/控制面）S4f/S4g 施工中",
-        "qaPassed": true
+        "note": "ACTION-R01 全矩阵（30 行目标）已随 final-joint 00B1DD16 Apply：24 行迁移 + 6 项明确例外（terminal/open-external/window-close/preferences/legacy CL move/server-status）记录在 S4k 证据；待人工验收",
+        "qaPassed": true,
+        "applied": true
       },
       {
         "id": "UPD",
@@ -81,15 +89,17 @@
         "owner": "BE",
         "exit": "本批结束后再议",
         "evidence": "artifacts/evidence",
-        "note": "暂停（保留离线检查点），本批结束再议"
+        "note": "暂停（保留离线检查点），本批结束再议",
+        "qaPassed": true,
+        "applied": true
       }
     ]
   },
   "counts": {
-    "main": 50,
+    "main": 54,
     "archived": 2,
-    "total": 52,
-    "subitems": 11,
+    "total": 56,
+    "subitems": 28,
     "slices": 7
   },
   "packages": [
@@ -118,7 +128,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -149,7 +163,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -181,7 +199,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -212,7 +234,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -245,7 +271,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -261,7 +291,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：导航迁到主工具栏右侧、设置末端、关闭全部在页签栏",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P0",
       "evidence": [
@@ -280,7 +310,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:21.605Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-28 用户 dev 人工通过（限定范围）：顶栏'提交 CL'按钮已删除、待提交入口保留；PM 登记 09:45:09 UTC",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md#完成项归档"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -296,7 +330,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：固定页紧凑头、多开页 icon、主题与标题国际化",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -314,7 +348,11 @@
       "verification": {
         "qaPassed": null,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:22.097Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "已验收：英文＋稳定 ID 套件 72/72（完成项归档 UI-02-B01）；QA 回执缺失，force 补登",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md#完成项归档"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -348,7 +386,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -383,7 +425,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -416,8 +462,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -450,7 +500,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -482,8 +536,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -516,7 +574,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -532,7 +594,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "文件与版本",
       "scope": "文件与版本：Workspace/Depot 树、预览、状态与缓存",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -551,7 +613,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:21.730Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-28 用户 dev 人工通过（限定范围）：JSON 正文/缩窄/隐藏恢复正常；PM 登记 09:45:09 UTC",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md#完成项归档"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -584,8 +650,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": true,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -617,8 +687,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": true,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -653,7 +727,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -686,7 +764,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -720,8 +802,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": true,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -754,7 +840,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -787,7 +877,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -821,7 +915,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -829,6 +927,43 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
+    },
+    {
+      "id": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE（PM拆领取范围）",
+      "module": "界面与导航",
+      "scope": "界面与导航：Resolve 对话框与手工合并工具重做（对齐 P4V 与 UGit）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "暂停（后置；2026-10-30 用户调整优先级）",
+      "evidence": [
+        "src/features/files/components/ResolveDialog.tsx",
+        "src/features/files/components/ManualMergeEditor.tsx"
+      ],
+      "note": "用户验收明确判定当前临时实现不达标；先调研出参考规格再重做。参考目标：P4V 老版 Resolve 窗口（[官方说明](https://legacy-docs.perforce.com/doc.current/manuals/v17.2/p4v/branches.resolve.html)）与腾讯 UGit 冲突解决界面（[介绍](https://cloud.tencent.com.cn/developer/article/2482449)）。不改 host resolve 语义/安全边界（blocked/unknown 不执行、token/digest 校验），只重做呈现与交互；与参考截图逐项对照 + 用户验收通过前不关闭 CL-03",
+      "depsRaw": "CL-03；UI-08-1",
+      "deps": [
+        "CL-03"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T11:14:18.235Z"
     },
     {
       "id": "CL-04",
@@ -855,7 +990,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -888,7 +1027,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -921,8 +1064,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": true,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -955,7 +1102,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -989,7 +1140,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1023,7 +1178,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1056,7 +1215,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1090,7 +1253,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1122,8 +1289,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1139,7 +1310,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "搜索与分支",
       "scope": "搜索与分支：Branch Mapping 列表/详情/预览/受控CRUD",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1153,8 +1324,12 @@
       "migrated": true,
       "verification": {
         "qaPassed": null,
-        "applied": null,
-        "humanAccepted": null
+        "applied": true,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:21.877Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-28 用户 dev 人工通过（限定范围）：分支列表切换/滚动后无叠字；PM 登记 09:45:09 UTC",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md#完成项归档"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1189,7 +1364,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1224,7 +1403,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1255,7 +1438,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1287,7 +1474,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1317,7 +1508,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1349,7 +1544,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1380,7 +1579,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1411,7 +1614,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1447,7 +1654,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1482,7 +1693,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1512,7 +1727,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1543,7 +1762,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1559,7 +1782,7 @@
       "owner": "FE",
       "module": "CL工作流",
       "scope": "CL工作流：Pending编号数值正倒序按钮（用户已批准）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "限定dev人工通过（其余范围保留）",
       "priority": "P1",
       "evidence": [
@@ -1574,7 +1797,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:21.982Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-28 用户 dev 人工通过（限定范围）：CL 正倒序、Default 置顶、滚动条清晰；PM 登记 09:45:09 UTC",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md#完成项归档"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1590,7 +1817,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：全局横纵滚动条对比与边界（UI优化）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收（本次滚动条清晰人工通过）",
       "priority": "P1",
       "evidence": [
@@ -1605,7 +1832,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T12:54:22.204Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "滚动条清晰人工通过（TODO UI-06 状态列）；回执缺失，force 补登",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1635,7 +1866,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1669,7 +1904,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1701,7 +1940,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1732,7 +1975,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1740,6 +1987,110 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
+    },
+    {
+      "id": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "BE＋FE（PM拆领取范围）",
+      "module": "交付",
+      "scope": "交付：自动升级（GitHub Releases public + 标题栏提示 + 下载安装重启）",
+      "stage": "in-progress",
+      "statusRaw": "进行中（R→S）",
+      "priority": "P1，用户列第一优先",
+      "evidence": [
+        "src-tauri/tauri.conf.json",
+        "scripts/package-desktop.mjs"
+      ],
+      "note": "用户已定：放 **GitHub Releases（public）**。要点：Tauri2 updater（createUpdaterArtifacts=true、pubkey、`latest.json` endpoint）、updater 签名密钥（私钥不进仓库）、启动/定时检查、标题栏“有新版本”提示、点击下载→安装→重启、失败/回退/无网提示；首个带 updater 版本需手动安装一次。仓库 owner/repo、密钥生成与保管、首个版本手装确认待用户对齐",
+      "depsRaw": "—",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T12:46:42.375Z"
+    },
+    {
+      "id": "UI-09",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "界面与导航",
+      "scope": "界面与导航：设置里支持自定义背景色（主题色之外）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P2，用户列第三优先",
+      "evidence": [
+        "src/app/shell/AppControls.tsx"
+      ],
+      "note": "设置新增“背景色”自定义（颜色选择/恢复默认），与主题深/浅色兼容，保证文字对比度与选中态可读；持久化到偏好并重启生效；提供少量预设 + 自定义入口；验收含截图（深/浅背景下可读性）",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T12:46:42.377Z"
+    },
+    {
+      "id": "KEY-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE＋BE",
+      "module": "界面与导航",
+      "scope": "界面与导航：快捷键系统（P4V 对齐 + 设置可配置 + 持久化）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P2",
+      "evidence": [
+        "src/app/commands/catalog.ts",
+        "ForAIDoc/Designer/统一Action刷新与通知.md"
+      ],
+      "note": "4 个关联子项分别验收：①调研 P4V 默认快捷键（Windows 键位，输出映射/冲突/保留清单）②按 P4V 习惯在 catalog 实现全局+页面快捷键（统一 commandForShortcut，保留输入框保护/平台差异/风险绕过检查）③Settings 新增快捷键分区（命令列表/当前键/录制/冲突检测/恢复默认）④keymap 持久化（本地配置文件跨重启生效，默认=P4V 对齐，含版本迁移与重启验证）",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T09:08:20.193Z"
     },
     {
       "id": "WIN-P1-01",
@@ -1762,7 +2113,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": "2026-10-29T13:00:31.270Z",
@@ -1793,7 +2148,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": "2026-10-29T13:00:31.272Z",
@@ -1945,6 +2304,227 @@
       "stage": "implemented",
       "depsRaw": "SUB-05虚拟行Bug回归；QA-01",
       "note": "紧凑筛选、结果摘要、自然展开等用户需求与重叠Bug分别判断；旧静态/限定mock证据不外推全部新布局像素通过",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-1",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（调研）",
+      "owner": "FE；PM",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "无",
+      "note": "调研 P4V 老版 Resolve 窗口与腾讯 UGit 冲突解决界面（截图/录屏/键盘路径），输出布局规格：分区、列、按钮、状态色、自动/交互模式、逐文件与批量操作；列出与本实现差异及不可复制项（外部 merge tool、行尾空白选项等）",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-2",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（UI重做）",
+      "owner": "FE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-08-1",
+      "note": "按规格重做 Resolve 主窗口：文件表（目标/来源/类型）、推荐操作区、逐文件选项、批量操作、空/加载/失败态；保持 host 现有策略与 token 安全边界不降低",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-3",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（能力核对）",
+      "owner": "FE＋BE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-08-1",
+      "note": "核对行尾/空白选项与“二进制按文本合并”的 host 能力边界；可实现则接入，否则明确禁用文案与原因，不伪造可用控件",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-4",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（交互增强）",
+      "owner": "FE",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-08-2",
+      "note": "参考 UGit 的逐块冲突导航：冲突块上一/下一、接受当前块/两侧对比跳转；先评估 host 是否提供块级事实，无法权威支持则不做假块操作",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-5",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（UI重做）",
+      "owner": "FE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-08-1",
+      "note": "重做手工合并工具（ManualMergeEditor）：P4V Merge + UGit 风格三栏/逐块导航/接受块/保存校验与备份提示；保留现有 session/validate/save/resolve 生命周期，不绕过结果 digest 校验",
+      "migrated": true
+    },
+    {
+      "id": "UI-08-6",
+      "parentId": "UI-08",
+      "type": "feature",
+      "typeRaw": "功能需求（验收）",
+      "owner": "FE；用户",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-08-2；UI-08-5",
+      "note": "与参考截图逐项对照并交用户验收；保留对照截图/录屏证据；用户明确通过前不标记完成、不关闭 CL-03",
+      "migrated": true
+    },
+    {
+      "id": "UPD-01-1",
+      "parentId": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求（调研/方案）",
+      "owner": "BE；PM",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "无",
+      "note": "调研 Tauri2 updater + NSIS 产物 + GitHub Releases：pubkey 配置、`latest.json` 格式与 endpoint、签名命令、安装/回退路径；输出可选仓库（release-only public）与发布流程方案；列出与 Windows 安装包签名/首次手装的边界",
+      "migrated": true
+    },
+    {
+      "id": "UPD-01-2",
+      "parentId": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求（BE集成）",
+      "owner": "BE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UPD-01-1",
+      "note": "集成 updater：启动检查 + 定时检查（间隔可配）、仅提示不静默安装、下载进度、安装并重启；失败/断网/校验失败有明确提示；不记录账号/P4 配置/遥测",
+      "migrated": true
+    },
+    {
+      "id": "UPD-01-3",
+      "parentId": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求（FE UI）",
+      "owner": "FE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UPD-01-1",
+      "note": "标题栏“有新版本 vX.Y.Z”入口 + 更新面板：版本说明、下载进度、稍后、立即重启安装；与现有 WindowControls/CommandBar 布局兼容；无更新时不打扰",
+      "migrated": true
+    },
+    {
+      "id": "UPD-01-4",
+      "parentId": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求（发布流水线）",
+      "owner": "BE＋PM",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UPD-01-1",
+      "note": "版本发布流水线：版本一致性校验、构建、签名 updater 产物、生成 `latest.json`、上传 GitHub Release（public）；记录 sha/签名/资产清单；失败不发布半成品",
+      "migrated": true
+    },
+    {
+      "id": "UPD-01-5",
+      "parentId": "UPD-01",
+      "type": "feature",
+      "typeRaw": "功能需求（验收）",
+      "owner": "PM；用户",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UPD-01-2；UPD-01-4",
+      "note": "端到端验收：手装旧基线版→发布新版本→标题栏提示→下载安装→重启后版本更新；覆盖无网/中断/签名不匹配/回退；证明不静默安装、不上传敏感信息",
+      "migrated": true
+    },
+    {
+      "id": "UI-09-1",
+      "parentId": "UI-09",
+      "type": "feature",
+      "typeRaw": "功能需求（UI）",
+      "owner": "FE",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "无",
+      "note": "设置“背景色”自定义：预设 + 取色器/十六进制输入、恢复默认；主题深/浅色下文字与选中态对比度检查；偏好持久化、重启生效",
+      "migrated": true
+    },
+    {
+      "id": "UI-09-2",
+      "parentId": "UI-09",
+      "type": "feature",
+      "typeRaw": "功能需求（验收）",
+      "owner": "FE；用户",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-09-1",
+      "note": "截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户确认后关闭",
+      "migrated": true
+    },
+    {
+      "id": "KEY-01-1",
+      "parentId": "KEY-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE；PM",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "无",
+      "note": "调研 P4V 默认快捷键（Windows：菜单/工具栏/面板），输出 P4V 键位→P4Deck 命令映射清单、冲突与不迁移项（保留系统/输入法冲突说明）",
+      "migrated": true
+    },
+    {
+      "id": "KEY-01-2",
+      "parentId": "KEY-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "KEY-01-1",
+      "note": "按 P4V 习惯在 app/commands/catalog.ts 补齐全局+页面快捷键；统一 commandForShortcut 分发，保留输入框保护/平台 Ctrl-Cmd/风险与确认不绕过；冲突测试更新",
+      "migrated": true
+    },
+    {
+      "id": "KEY-01-3",
+      "parentId": "KEY-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "KEY-01-2",
+      "note": "Settings 新增“快捷键”分区：按分组列出命令/当前键/可用条件；点击录制新键；实时冲突提示；恢复默认；不可用原因显示",
+      "migrated": true
+    },
+    {
+      "id": "KEY-01-4",
+      "parentId": "KEY-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "priority": "P2",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "KEY-01-3",
+      "note": "keymap 持久化（本地配置文件，随 profile 独立；版本号/迁移；损坏回退默认）；重启后生效验证；与命令面板标签一致",
       "migrated": true
     }
   ]

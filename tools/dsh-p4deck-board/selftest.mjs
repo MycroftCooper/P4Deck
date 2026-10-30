@@ -43,7 +43,7 @@ async function call(handler, { method = "GET", url }) {
 
 // 1) 快照
 const snapshot = await buildSnapshot(WORKSPACE);
-check("快照含 52 个主工作包", snapshot.counts.total === 52, String(snapshot.counts.total));
+check("快照含主工作包", snapshot.counts.total >= 52, String(snapshot.counts.total));
 check("快照含 Agent 活动", snapshot.agents.length > 0, `${snapshot.agents.length} 个角色`);
 check("快照含里程碑", snapshot.milestones.length > 0, `${snapshot.milestones.length} 条`);
 check("状态分布含进行中", typeof snapshot.counts.byStage["in-progress"] === "number");
@@ -80,7 +80,7 @@ check("页面含看板标题", String(page.body).includes("Agent 在忙什么"))
 const api = await call(handler, { url: "/p4deck-board/api/snapshot" });
 const payload = JSON.parse(api.body);
 check("API 200", api.statusCode === 200);
-check("API 返回 total=52", payload.counts.total === 52);
+check("API 返回 total 与快照一致", payload.counts.total === snapshot.counts.total, `${payload.counts.total}/${snapshot.counts.total}`);
 check("API 不缓存", api.headers?.["cache-control"] === "no-store");
 check("快照含人类待办", Array.isArray(payload.humanTodos) && payload.humanTodos.length > 0, `${payload.humanTodos?.length} 条`);
 check("归档与活跃分开", (payload.archived || []).length === 2 && payload.packages.every((pkg) => !pkg.archived));

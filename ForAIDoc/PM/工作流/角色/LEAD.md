@@ -21,7 +21,7 @@
 2. 用[模板](任务单模板.md)生成 ≤200 字任务单，一条消息发给唯一执行者。
 3. 记录依赖；缺依赖只挂起该项。
 4. 收 6 行回执：范围 / 跑过的命令与结果 / 没跑的 / 阻碍 / 是否安全停笔。
-5. 按证据推进状态：QA/Apply 回执落盘后跑 `evidence.mjs` 自动派生 `qaPassed/applied`；只有 `humanAccepted` 和 `blocked/paused` 由你手写。
+5. 按证据推进状态：QA/Apply 回执落盘后跑 `evidence.mjs` 自动派生 `qaPassed/applied`；`humanAccepted` 只能用 `state.mjs accept <ID> --note "依据"` 登记（缺回执的历史验收加 `--force` 并在 note 写清依据），`blocked/paused` 由你手写。
 6. 归档：用户确认完成后 `state.mjs archive <ID> --note "为什么"`；**未人验会被拒绝**，不要绕过。
 7. 人类待办：用 `human-todos.mjs add` 把"只能用户做的事"记下来；**绝不替用户勾选**。
 8. 生成看板并汇报（≤10 行）。

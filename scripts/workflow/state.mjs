@@ -246,13 +246,20 @@ function mergePackage(previous, next) {
       archiveEvidence: null,
     };
   }
+  const verification = {
+    qaPassed: previous.verification?.qaPassed ?? null,
+    applied: previous.verification?.applied ?? null,
+    humanAccepted: previous.verification?.humanAccepted ?? null,
+    humanAcceptedAt: previous.verification?.humanAcceptedAt ?? null,
+    humanAcceptedBy: previous.verification?.humanAcceptedBy ?? null,
+    humanAcceptedNote: previous.verification?.humanAcceptedNote ?? null,
+    humanAcceptedEvidence: previous.verification?.humanAcceptedEvidence ?? null,
+  };
   return {
     ...next,
-    verification: {
-      qaPassed: previous.verification?.qaPassed ?? null,
-      applied: previous.verification?.applied ?? null,
-      humanAccepted: previous.verification?.humanAccepted ?? null,
-    },
+    // 已人工验收的包不再被文档措辞打回"待验收"。
+    stage: verification.humanAccepted === true ? "done" : next.stage,
+    verification,
     // 归档一旦成立，import 不会把它打回活跃（即使 TODO 表里删了行）。
     archived: Boolean(previous.archived) || Boolean(next.archived),
     archivedAt: previous.archivedAt ?? (next.archived ? new Date().toISOString() : null),
@@ -302,8 +309,12 @@ async function cmdImport() {
     previous = undefined;
   }
   const state = buildState(parseTodo(markdown), previous);
-  if (state.counts.total !== 52) {
-    process.stderr.write(`警告: 解析到 ${state.counts.total} 个主工作包（含归档），文档声称 52。\n`);
+  // Compare against the count claimed in the TODO doc instead of a hard-coded total.
+  const claimed = markdown.match(/共\s*\*\*(\d+)\*\*\s*项/)?.[1];
+  if (claimed && Number(claimed) !== state.counts.total) {
+    process.stderr.write(
+      `警告: 解析到 ${state.counts.total} 个主工作包（含归档），文档声称 ${claimed}。\n`,
+    );
   }
   await mkdir(STATE_DIR, { recursive: true });
   await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
@@ -597,6 +608,70 @@ async function cmdTask(id, args) {
   process.stdout.write(`${lines.join("\n")}\n`);
 }
 
+async function cmdAccept(id, args) {
+  const noteIndex = args.indexOf("--note");
+  const note = noteIndex >= 0 ? String(args[noteIndex + 1] ?? "").trim() : "";
+  const evidenceIndex = args.indexOf("--evidence");
+  const evidence = evidenceIndex >= 0 ? String(args[evidenceIndex + 1] ?? "").trim() : undefined;
+  const byIndex = args.indexOf("--by");
+  const by = byIndex >= 0 ? String(args[byIndex + 1] ?? "").trim() : "用户";
+  const force = args.includes("--force");
+  const dry = args.includes("--dry");
+  if (!id) {
+    process.stderr.write('用法: node scripts/workflow/state.mjs accept <ID> --note "谁在何时确认了什么" [--evidence <路径/sha>] [--by <人>] [--force] [--dry]\n');
+    process.exit(2);
+  }
+  if (!note) {
+    process.stderr.write("accept 必须给 --note 记录人工验收依据（将来要能回答凭什么算验收）\n");
+    process.exit(2);
+  }
+  const state = await loadState();
+  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === id.toUpperCase());
+  if (!pkg) {
+    process.stderr.write(`未知任务: ${id}\n`);
+    process.exit(1);
+  }
+  if (pkg.archived) {
+    process.stderr.write(`${pkg.id} 已归档，不能重复验收\n`);
+    process.exit(1);
+  }
+  const verification = (pkg.verification ??= { qaPassed: null, applied: null, humanAccepted: null });
+  if (verification.humanAccepted === true) {
+    process.stdout.write(`${pkg.id} 已经是人工验收状态（${verification.humanAcceptedAt ?? "时间未知"}）\n`);
+    return;
+  }
+  const evidenceComplete = verification.qaPassed === true && verification.applied === true;
+  if (!evidenceComplete && !force) {
+    process.stderr.write(
+      `拒绝验收 ${pkg.id}: 需要 QA 通过 + 已 Apply 事实（当前 qaPassed=${verification.qaPassed ?? "null"}, applied=${verification.applied ?? "null"}）。` +
+        "若确有历史人工验收记录、只是缺回执，用 --force 并在 --note 里写清依据。\n",
+    );
+    process.exit(1);
+  }
+  const plan = {
+    id: pkg.id,
+    acceptedAt: new Date().toISOString(),
+    acceptedBy: by,
+    note,
+    evidence: evidence ?? null,
+    forced: !evidenceComplete,
+  };
+  if (dry) {
+    process.stdout.write(`${JSON.stringify({ dryRun: true, ...plan }, null, 2)}\n`);
+    return;
+  }
+  verification.humanAccepted = true;
+  verification.humanAcceptedAt = plan.acceptedAt;
+  verification.humanAcceptedBy = plan.acceptedBy;
+  verification.humanAcceptedNote = plan.note;
+  verification.humanAcceptedEvidence = plan.evidence;
+  verification.humanAcceptedForced = plan.forced;
+  pkg.stage = "done";
+  state.updatedAt = plan.acceptedAt;
+  await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  process.stdout.write(`已登记人工验收 ${pkg.id}：${note}${plan.forced ? "（--force 补登历史验收）" : ""}\n`);
+}
+
 async function cmdArchive(id, args) {
   if (!id) {
     process.stderr.write('用法: node scripts/workflow/state.mjs archive <ID> --note "归档理由" [--evidence <manifest sha>] [--dry]\n');
@@ -711,6 +786,9 @@ switch (command) {
   case "task":
     await cmdTask(rest[0], rest.slice(1));
     break;
+  case "accept":
+    await cmdAccept(rest[0], rest.slice(1));
+    break;
   case "archive":
     await cmdArchive(rest[0], rest.slice(1));
     break;
@@ -718,6 +796,6 @@ switch (command) {
     await cmdRestore(rest[0], rest.slice(1));
     break;
   default:
-    process.stderr.write("usage: node scripts/workflow/state.mjs <import|check|board|task <ID>>\n");
+    process.stderr.write("usage: node scripts/workflow/state.mjs <import|check|board|task <ID>|accept <ID>|archive <ID>|restore <ID>>\n");
     process.exit(2);
 }

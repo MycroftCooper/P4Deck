@@ -102,7 +102,7 @@ check("注册了标题插槽", slotRegistrations.some((entry) => entry.declarati
 const snapshot = await buildSnapshot(WORKSPACE);
 const html = renderToStaticMarkup(react.createElement(module.BoardView, { snapshot, status: "ready", error: null }));
 check("渲染出标题", html.includes("工作流看板"));
-check("渲染出 52 计数", html.includes("共 52 个主工作包"), "");
+check("渲染出主工作包计数", /共 \d+ 个主工作包/.test(html), "");
 check("渲染出 Agent（LEAD/BE）", html.includes("LEAD") && html.includes("BE"));
 check("渲染出里程碑", html.includes("CON06") || html.includes("批次里程碑"));
 check("渲染出任务卡（CL-01/UI-07）", html.includes("CL-01") || html.includes("UI-07"));

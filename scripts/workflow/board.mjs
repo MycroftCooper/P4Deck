@@ -25,12 +25,15 @@ const STAGE_LABELS = {
   "in-progress": "进行中",
   blocked: "阻塞",
   implemented: "实现待验收",
+  "awaiting_accept": "待人工验收",
+  "awaiting_apply": "待应用",
+  unverified: "未登记验收",
   partial: "部分实现",
   todo: "待实现",
   proposed: "待确认",
   done: "已完成",
 };
-const STAGE_ORDER = ["in-progress", "blocked", "implemented", "partial", "todo", "proposed", "done"];
+const STAGE_ORDER = ["in-progress", "blocked", "awaiting_accept", "awaiting_apply", "unverified", "partial", "todo", "proposed", "done"];
 const TYPE_LABELS = { bug: "Bug", feature: "需求", refactor: "重构" };
 
 async function readJson(filePath, fallback) {
@@ -53,6 +56,19 @@ async function readMetrics() {
   }
 }
 
+
+/** 把 stage=implemented 的包按验收事实拆成三个真实桶，避免"实现待验收"混装。 */
+function packageStage(pkg) {
+  const verification = pkg.verification ?? {};
+  if (verification.humanAccepted === true) return "done";
+  if (pkg.stage === "implemented") {
+    if (verification.qaPassed === true && verification.applied === true) return "awaiting_accept";
+    if (verification.qaPassed === true) return "awaiting_apply";
+    return "unverified";
+  }
+  return pkg.stage ?? "proposed";
+}
+
 async function buildSnapshot() {
   const state = await readJson(STATE_FILE, undefined);
   if (!state) {
@@ -66,7 +82,8 @@ async function buildSnapshot() {
   const byStage = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, 0]));
   const moduleMap = new Map();
   for (const pkg of state.packages) {
-    byStage[pkg.stage ?? "proposed"] = (byStage[pkg.stage ?? "proposed"] ?? 0) + 1;
+    const displayStage = packageStage(pkg);
+    byStage[displayStage] = (byStage[displayStage] ?? 0) + 1;
     if (pkg.archived) continue;
     const bucket = moduleMap.get(pkg.module) ?? 0;
     moduleMap.set(pkg.module, bucket + 1);
@@ -83,7 +100,8 @@ async function buildSnapshot() {
         type: pkg.type,
         owner: pkg.owner,
         priority: pkg.priority,
-        stage: pkg.stage,
+        stage: packageStage(pkg),
+        rawStage: pkg.stage,
         module: pkg.module,
         evidence: pkg.evidence.length,
         note: pkg.note,
@@ -177,7 +195,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 input[type=search] { background: var(--panel); border: 1px solid var(--line); color: var(--text);
   border-radius: 6px; padding: 6px 10px; width: 260px; font: inherit; }
 .hint { color: var(--muted); font-size: 11px; }
-.board { display: grid; grid-template-columns: repeat(7, minmax(200px, 1fr)); gap: 10px;
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;
   overflow-x: auto; padding-bottom: 8px; margin-top: 10px; }
 .col { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 120px;
   display: flex; flex-direction: column; }
@@ -248,6 +266,7 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
   var TYPE_LABELS = ${JSON.stringify(TYPE_LABELS)};
   var STAGE_COLOR = {
     "in-progress": "var(--busy)", blocked: "var(--danger)", implemented: "var(--accent)",
+    "awaiting_accept": "var(--accent)", "awaiting_apply": "var(--warn)", unverified: "var(--muted)",
     partial: "var(--warn)", todo: "var(--idle)", proposed: "var(--idle)", done: "var(--muted)"
   };
   var AGENT_LABEL = { working: "工作中", waiting: "等待依赖", blocked: "阻塞", idle: "空闲" };

@@ -19,16 +19,22 @@ window.__ModuleLoader__.load({
 			"in-progress": "进行中",
 			blocked: "阻塞",
 			implemented: "实现待验收",
+			"awaiting_accept": "待人工验收",
+			"awaiting_apply": "待应用",
+			unverified: "未登记验收",
 			partial: "部分实现",
 			todo: "待实现",
 			proposed: "待确认",
 			done: "已完成"
 		};
-		const STAGE_ORDER = ["in-progress", "blocked", "implemented", "partial", "todo", "proposed", "done"];
+		const STAGE_ORDER = ["in-progress", "blocked", "awaiting_accept", "awaiting_apply", "unverified", "partial", "todo", "proposed", "done"];
 		const STAGE_COLOR = {
 			"in-progress": "#1f5f8b",
 			blocked: "#9b2c2c",
 			implemented: "#2f6f4f",
+			"awaiting_accept": "#2f6f4f",
+			"awaiting_apply": "#8a5a00",
+			unverified: "rgba(128,128,128,0.8)",
 			partial: "#8a5a00",
 			todo: "rgba(128,128,128,0.8)",
 			proposed: "rgba(128,128,128,0.8)",
