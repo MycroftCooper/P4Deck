@@ -73,8 +73,22 @@ function classify(payload) {
   return undefined;
 }
 
+// 候选目录里常带 target/node_modules 等构建产物，递归扫它们会从几百毫秒变两分钟。
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "target",
+  "target-qa",
+  "dist",
+  ".git",
+  ".local",
+  ".cache",
+  "artifacts",
+  ".pnpm-store",
+  "coverage",
+]);
+
 async function walkJson(dir, depth = 0) {
-  if (depth > 6) return [];
+  if (depth > 5) return [];
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -84,8 +98,12 @@ async function walkJson(dir, depth = 0) {
   const found = [];
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...(await walkJson(full, depth + 1)));
-    else if (entry.name.endsWith(".json")) found.push(full);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      found.push(...(await walkJson(full, depth + 1)));
+    } else if (entry.name.endsWith(".json")) {
+      found.push(full);
+    }
   }
   return found;
 }
@@ -100,6 +118,33 @@ async function readJsonFile(filePath) {
   }
 }
 
+/** 候选目录里的回执只会出现在少数位置：根、evidence/、source/ 根、source/evidence/。
+ *  不再递归整个 source 树（127 个候选 × 全仓副本 = 十几万次 readdir）。 */
+async function candidateReceipts(dir) {
+  const found = [];
+  const scan = async (target, depth) => {
+    let entries;
+    try {
+      entries = await readdir(target, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(target, entry.name);
+      if (entry.isDirectory()) {
+        if (depth > 0 && !SKIP_DIRS.has(entry.name)) await scan(full, depth - 1);
+      } else if (entry.name.endsWith(".json")) {
+        found.push(full);
+      }
+    }
+  };
+  await scan(dir, 0);
+  await scan(path.join(dir, "evidence"), 2);
+  await scan(path.join(dir, "source"), 0);
+  await scan(path.join(dir, "source", "evidence"), 2);
+  return found;
+}
+
 /** 从 TEMP 的候选目录收集可识别回执到 artifacts/evidence/<dir>/。 */
 async function collectFromTemp() {
   const tempRoot = os.tmpdir();
@@ -112,11 +157,18 @@ async function collectFromTemp() {
   } catch {
     return copied;
   }
+  // 只处理"像回执"的 JSON：候选里大量结果是页面截图数据/构建产物，逐个 parse 太慢。
+  const RECEIPT_NAME = /(manifest|approval|apply|handoff|receipt|verify|qa)/i;
   for (const dir of dirs) {
-    for (const file of await walkJson(dir)) {
+    for (const file of await candidateReceipts(dir)) {
+      if (!RECEIPT_NAME.test(path.basename(file))) continue;
       const payload = await readJsonFile(file);
       const kind = classify(payload);
       if (!kind) continue;
+      if (dryRun) {
+        copied += 1;
+        continue;
+      }
       const targetDir = path.join(EVIDENCE_DIR, path.basename(dir));
       await mkdir(targetDir, { recursive: true });
       const target = path.join(targetDir, `${kind}-${path.basename(file, ".json")}.json`);

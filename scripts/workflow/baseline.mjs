@@ -15,7 +15,27 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const BASELINE_FILE = process.env.P4DECK_BASELINE ?? path.join(ROOT, "artifacts", "workflow", "baseline.json");
 const ROOTS = ["src", "src-tauri", "scripts", "tools", "tests", "ForAIDoc"];
 const ROOT_FILES = ["package.json", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "tsconfig.tests.json", "vite.config.ts"];
-const SKIP = /(^|\/)(node_modules|target|dist|artifacts|\.git|test-results|playwright-report|\.cache)(\/|$)/;
+const SKIP_SEGMENTS = new Set([
+  "node_modules",
+  "target",
+  "target-qa",
+  "dist",
+  "artifacts",
+  ".git",
+  ".local",
+  "test-results",
+  "playwright-report",
+  ".cache",
+  "coverage",
+  ".pnpm-store",
+]);
+const SKIP_SUFFIX = [".tsbuildinfo", ".log"];
+
+/** 按路径段判断，避免 src-tauri/target(46GB) 之类被当成源码扫描。 */
+function shouldSkip(rel) {
+  if (rel.split("/").some((segment) => SKIP_SEGMENTS.has(segment))) return true;
+  return SKIP_SUFFIX.some((suffix) => rel.endsWith(suffix));
+}
 
 async function walk(dir, out = []) {
   let entries;
@@ -27,7 +47,7 @@ async function walk(dir, out = []) {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     const rel = path.relative(ROOT, full).split(path.sep).join("/");
-    if (SKIP.test(rel)) continue;
+    if (shouldSkip(rel)) continue;
     if (entry.isDirectory()) await walk(full, out);
     else out.push(rel);
   }
