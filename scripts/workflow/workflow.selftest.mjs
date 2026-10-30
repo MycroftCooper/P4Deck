@@ -213,6 +213,25 @@ const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), 
 });
 check("accept 必须给 --note", acceptNoNote.status === 2, String(acceptNoNote.status));
 
+// 发布脚本：默认 dry-run；版本不一致必须拒绝。
+const packageVersion = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version;
+const releaseDry = spawnSync(
+  process.execPath,
+  [path.join(HERE, "release.mjs"), "--version", packageVersion, "--skip-gate", "--allow-dirty"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+check(
+  "release 默认 dry-run 输出计划",
+  releaseDry.status === 0 && releaseDry.stdout.includes('"dryRun": true'),
+  releaseDry.stderr.trim(),
+);
+const releaseBad = spawnSync(
+  process.execPath,
+  [path.join(HERE, "release.mjs"), "--version", "0.0.0", "--skip-gate", "--allow-dirty"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+check("release 拒绝版本不一致", releaseBad.status === 1, String(releaseBad.status));
+
 // 看板必须把"实现待验收"拆成证据齐/待应用/未登记三个桶。
 const boardRun = spawnSync(process.execPath, [path.join(HERE, "board.mjs")], { cwd: ROOT, encoding: "utf8" });
 const boardHtml = (await import("node:fs")).readFileSync(

@@ -39,6 +39,8 @@
 
 ## 2. 发布通道：一个发布任务的生命周期（9 步，仅发版）
 
+> 分支：日常提交在 `dev`；发布走 `pnpm wf:release --version x.y.z --apply`（dev→master `--no-ff` + `v*` tag，默认 dry-run，带门禁校验）。
+
 ```
 ① LEAD：state.batch.slices + 任务单（state.mjs task <ID> --for <ROLE> --message）
 ② 转发：一条消息，不写文档
