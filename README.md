@@ -67,7 +67,7 @@ pnpm dev:desktop:qa
 # 或 P4Deck-Dev.cmd qa / P4Deck-Dev.command qa
 ```
 
-该命令先启动仓库的本地 P4 fixture（Windows 走 `scripts/p4d-fixture.ps1 start`，macOS 走 `scripts/p4d-fixture.sh start`），再用 QA 配置启动 `tauri dev`；保留现有 QA 配置的应用标识以便继续使用原隔离工作区。QA 前端端口为 `1423`，默认与普通桌面开发共用 `src-tauri/target`（同一 dev profile，依赖复用，省约 5GB；切换只重编应用 crate），因此两者**不要同时运行**；确需并行时设置 `P4DECK_QA_TARGET_DIR=src-tauri/target-qa` 显式隔离。首次使用时在 QA 窗口连接 `127.0.0.1:16661`，用户 `p4deck-fixture-admin`，工作区 `p4deck-fixture`，字符集 `none`；CLI、Tickets、Trust 文件路径见 `.local/p4d-fixture/env.ps1`。本机已有的 `p4deck-qa-ui-20261020` 隔离工作区可以继续使用。
+该命令先启动仓库的本地 P4 fixture（Windows 走 `scripts/p4d-fixture.ps1 start`，macOS 走 `scripts/p4d-fixture.sh start`），再用 QA 配置启动 `tauri dev`；保留现有 QA 配置的应用标识以便继续使用原隔离工作区。QA 前端端口为 `1423`，并使用独立的 `CARGO_TARGET_DIR=src-tauri/target-qa`，因此普通桌面开发（1422）和 QA 开发可以同时运行，互不覆盖调试构建（代价是多占约 5GB 依赖构建，`cache.mjs clean --target-qa` 可清）。首次使用时在 QA 窗口连接 `127.0.0.1:16661`，用户 `p4deck-fixture-admin`，工作区 `p4deck-fixture`，字符集 `none`；CLI、Tickets、Trust 文件路径见 `.local/p4d-fixture/env.ps1`。本机已有的 `p4deck-qa-ui-20261020` 隔离工作区可以继续使用。
 
 ## Windows 独立包与交付安装包
 
