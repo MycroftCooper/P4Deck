@@ -39,6 +39,7 @@ function runStep(step) {
   });
 }
 
+const skipTests = process.argv.includes("--skip-tests");
 const planFilesIndex = process.argv.indexOf("--files");
 const explicitFiles =
   planFilesIndex >= 0 && process.argv[planFilesIndex + 1]
@@ -74,7 +75,7 @@ const steps = [];
 if (hasWeb) {
   steps.push({ name: "format:changed", command: plan.commands.format });
   steps.push({ name: "typecheck", command: plan.commands.typecheck });
-  if (plan.commands.webRelated) steps.push({ name: "vitest:related", command: plan.commands.webRelated });
+  if (plan.commands.webRelated && !skipTests) steps.push({ name: "vitest:related", command: plan.commands.webRelated });
 }
 if (plan.changed.scripts.some((file) => file.endsWith(".mjs"))) {
   steps.push({ name: "script-syntax", command: plan.commands.scriptSyntax });

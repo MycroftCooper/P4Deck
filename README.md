@@ -35,8 +35,9 @@ P4Deck 当前支持在“新建 Workspace”时选择标准同步或 P4VFS 虚�
 
 pnpm install --frozen-lockfile
 ./scripts/doctor.sh
-pnpm dev          # 浏览器开发预览
-pnpm dev:desktop # 桌面开发：前端热更新，Rust 改动自动重启
+pnpm dev           # 浏览器 Mock 预览，端口 1420
+pnpm dev:desktop   # 桌面开发，端口 1422；前端热更新，Rust 改动自动重启
+pnpm dev:desktop:qa # 隔离 QA 桌面开发，端口 1423；先起本地 p4d fixture
 ```
 
 Windows 使用 `.\scripts\setup-windows.ps1 -Check` 和 `.\scripts\setup-windows.ps1`。当前机器只做前端 Mock 开发时，可用 `.\scripts\doctor.ps1 -FrontendOnly`。初始化脚本会跳过兼容的已有工具，遇到不兼容版本时停止，不会擅自覆盖。详见 [开发环境与新设备部署](ForAIDoc/Coder/开发环境.md)。
@@ -55,7 +56,7 @@ pnpm dev:desktop
 
 保持启动终端运行，按 Ctrl+C 停止。修改 React、CSS、前端文案会直接热更新；修改 Rust 后由 Tauri 自动重编译并重启桌面窗口。首次启动需要编译 Debug 程序，后续使用增量编译。日常修改无需执行 `build:desktop:win`，也无需更换 exe。
 
-桌面开发使用 `127.0.0.1:1422`；`pnpm dev` 的浏览器 Mock 和浏览器测试仍使用 `1420`，两者可同时运行，并各自使用独立的 Vite 依赖缓存。Windows 启动器也支持 `P4Deck-Dev.cmd browser`。如果启动时前端脚本加载失败，窗口会显示错误和重新加载按钮；加载超过 10 秒也会提供重试入口。
+桌面开发使用 `127.0.0.1:1422`；`pnpm dev` 的浏览器 Mock 和浏览器测试仍使用 `1420`，QA 桌面开发使用 `1423`。三者端口互不冲突，可同时运行，并各自使用独立的 Vite 依赖缓存。Windows 启动器支持 `P4Deck-Dev.cmd browser` 与 `P4Deck-Dev.cmd qa`，macOS 启动器同样支持 `P4Deck-Dev.command browser` 与 `P4Deck-Dev.command qa`。如果启动时前端脚本加载失败，窗口会显示错误和重新加载按钮；加载超过 10 秒也会提供重试入口。
 
 桌面开发服务为前端资源返回完整响应并禁用 HTTP 磁盘缓存，避免 WebView2 遇到损坏的缓存正文时因 `304 / ERR_CACHE_READ_FAILURE` 启动失败。Vite 的编译与依赖缓存、热更新以及 IndexedDB 中的业务快照继续保留；此规则只用于桌面开发服务。依赖预构建从 `index.html` 入口扫描，避免遍历 Rust 的 `target` 构建产物。可用 `pnpm exec playwright test tests/browser/desktop-dev-server.spec.ts` 回归这一启动路径。
 
@@ -63,31 +64,52 @@ pnpm dev:desktop
 
 ```powershell
 pnpm dev:desktop:qa
-# 或 P4Deck-Dev.cmd qa
+# 或 P4Deck-Dev.cmd qa / P4Deck-Dev.command qa
 ```
 
-此 Windows 命令先启动仓库的本地 P4 fixture，再使用独立的 QA 设置目录启动桌面开发窗口；保留现有 QA 配置的应用标识以便继续使用原隔离工作区。首次使用时在 QA 窗口连接 `127.0.0.1:16661`，用户 `p4deck-fixture-admin`，工作区 `p4deck-fixture`，字符集 `none`；CLI、Tickets、Trust 文件路径见 `.tools/p4d-fixture/env.ps1`。本机已有的 `p4deck-qa-ui-20261020` 隔离工作区可以继续使用。普通桌面开发和 QA 开发共用一个调试构建，同一时间运行其中一个。
+该命令先启动仓库的本地 P4 fixture（Windows 走 `scripts/p4d-fixture.ps1 start`，macOS 走 `scripts/p4d-fixture.sh start`），再用 QA 配置启动 `tauri dev`；保留现有 QA 配置的应用标识以便继续使用原隔离工作区。QA 前端端口为 `1423`，默认与普通桌面开发共用 `src-tauri/target`（同一 dev profile，依赖复用，省约 5GB；切换只重编应用 crate），因此两者**不要同时运行**；确需并行时设置 `P4DECK_QA_TARGET_DIR=src-tauri/target-qa` 显式隔离。首次使用时在 QA 窗口连接 `127.0.0.1:16661`，用户 `p4deck-fixture-admin`，工作区 `p4deck-fixture`，字符集 `none`；CLI、Tickets、Trust 文件路径见 `.local/p4d-fixture/env.ps1`。本机已有的 `p4deck-qa-ui-20261020` 隔离工作区可以继续使用。
 
-## Windows 独立包（交付时使用）
+## Windows 独立包与交付安装包
 
 ```powershell
+# 独立 exe：内嵌前端资源，关闭终端和开发服务器后仍可直接双击运行
 pnpm build:desktop:win
 .\artifacts\desktop\P4Deck.exe
+
+# 交付用 NSIS 安装包
+pnpm package:desktop:win
+.\artifacts\delivery\P4Deck-<version>-<commit7>\<安装包>.exe
 ```
 
-此命令生成内嵌前端资源的独立 exe，关闭终端和开发服务器后仍可直接双击运行。输出固定为 `artifacts\desktop\P4Deck.exe`，后续 `pnpm tauri dev` 不会覆盖它。
+`pnpm build:desktop:win` 使用 `tauri build --no-bundle`，只产出独立 exe；输出固定为 `artifacts\desktop\P4Deck.exe`，同时写一份带版本与提交号的 `P4Deck-<version>-<commit7>.exe` 和 `artifact-info.json`（version、gitHead、gitDirty、size、sha256），后续 `pnpm tauri dev` 不会覆盖它。它不是安装包，不能当成体验包交付。
+
+`pnpm package:desktop:win` 构建 NSIS 安装包到 `artifacts\delivery\P4Deck-<version>-<commit7>\`，目录内含安装包、`SHA256SUMS.txt`、`使用说明.txt` 和 `artifact-info.json`。默认使用 WebView2 `downloadBootstrapper`（安装时需要联网，包体小）；加 `--offline-webview2` 改为内嵌离线 WebView2 安装器（约 215MB，安装无需联网），交付目录名带 `-offline` 后缀，例如 `node scripts/package-desktop.mjs --offline-webview2`。
+
+两种入口都会先运行 `pnpm validate:versions` 校验 `package.json`、`tauri.conf.json`、`Cargo.toml` 三处版本一致，并默认拒绝脏工作树；确需从有未提交改动的工作树构建时显式加 `--allow-dirty`，该标记会写入 `artifact-info.json`。`artifacts/` 整体被 Git 忽略，旧的 `artifacts/package-*` 目录只保留在磁盘上，不再进入版本库。
 
 `pnpm dev:desktop` 生成的 `src-tauri\target\debug\p4deck.exe` 依赖本地开发服务器，仅用于开发；请通过启动器或开发命令启动整个环境，不要单独双击这个 Debug exe。
 
 ## 检查
 
 ```bash
-pnpm build
-pnpm test:web     # 当前机器可执行
-pnpm check:web    # 当前机器可执行
-pnpm test         # 前端 + Rust，需要完整桌面环境
-pnpm check        # TypeScript + Cargo，需要完整桌面环境
+pnpm ci:quick          # 本地快速门禁：Web 组与 Rust 组并行，失败不中断，只打摘要
+pnpm ci:local          # 基础组 + 浏览器/桌面构建、桌面包审计、串行性能门禁；默认遇错即停
+pnpm ci:bundle         # 快速自检（约 10 秒）：版本一致性 + desktop 构建 + bundle 审计
+pnpm validate:versions # 校验三处版本号一致
+
+pnpm build             # 浏览器构建（含 Mock backend，用于 Web 预览）
+pnpm build:desktop     # 桌面构建（编译期移除 Mock backend）
+pnpm test:web          # 前端单测，当前机器可执行
+pnpm check:web         # TypeScript 类型检查，当前机器可执行
+pnpm test              # 前端 + Rust，需要完整桌面环境
+pnpm check             # TypeScript + Cargo，需要完整桌面环境
 ```
+
+`ci:quick` 默认并行跑 Web 组（前端契约、版本一致性及其测试、`ci-step-result`、主题对比、Prettier、`tsc`、Vitest）与 Rust 组（rustfmt、Clippy、`cargo test --quiet`），失败不中断，一次跑完再汇总；`ci:local` 默认 fail-fast，浏览器/桌面构建与前后端性能门禁串行执行。安静模式下每步只输出一行 `✓/✗ 名称 耗时`，失败时附摘要与日志路径，最后一行是紧凑 JSON。
+
+完整子进程输出写到 `artifacts/ci/logs/<mode>/<step>.log`；机器可读摘要分别写入 `artifacts/ci/quick-latest.json`、`artifacts/ci/local-latest.json`，其中 `validate:bundle` 断言桌面 `dist` 中不含 mock backend 代码。常用选项：`--verbose`（不捕获输出，直接查看子进程完整输出）、`--continue` / `--fail-fast`、`--serial`（关闭 Web/Rust 并行）、`--timeout-ms <毫秒>`（单步超时，默认 900000）、`--files a,b`（全为 `.md`/`.txt` 或 `ForAIDoc/` 文档时按 docs-only 直接成功退出）。
+
+本项目只有本地门禁，不配置远端 CI：日常用 `pnpm wf:fast`，freeze 前用 `pnpm ci:quick`，交付候选用 `pnpm ci:local`，改完打包或前端 mock 相关再用 `pnpm ci:bundle` 快速自检。
 
 ## 文档
 
@@ -97,9 +119,12 @@ pnpm check        # TypeScript + Cargo，需要完整桌面环境
 - [开发路线图](ForAIDoc/PM/开发路线图.md)
 - [技术架构](ForAIDoc/Coder/技术架构.md)
 - [开发环境](ForAIDoc/Coder/开发环境.md)
+- [本地门禁与发布配置](ForAIDoc/Coder/本地门禁与发布配置.md)
+- [Windows 体验包交付](ForAIDoc/Coder/Windows体验包交付.md)
 - [P4VFS 虚拟 Workspace](ForAIDoc/Coder/P4VFS虚拟Workspace.md)
 - [体验与界面规范](ForAIDoc/Designer/体验与界面规范.md)
 
 ## 架构边界
 
 React 只负责界面和交互状态，不能直接启动进程或读取任意文件。前端通过受限的 Tauri Commands 调用 Rust；Rust 负责命令策略、并发、取消、脱敏和 P4 输出解析。首版通过 `p4 -ztag -Mj` 读取结构化输出。
+

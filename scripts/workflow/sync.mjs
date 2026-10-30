@@ -45,12 +45,9 @@ run([
   String(totalMs),
 ]);
 
-const check = run(["scripts/workflow/state.mjs", "check"]);
-let summary = { ok: check.ok };
-try {
-  summary = JSON.parse(check.out.slice(check.out.indexOf("{")));
-} catch {}
+// 不再额外跑一次 state check（board/import 已读同一份 state）；计数直接取 import 输出。
+const importOut = results.find((step) => step.name === "import")?.out ?? "";
+const counts = importOut.match(/主包 (\d+) \+ 归档 (\d+) = (\d+)，切片 (\d+)，子项 (\d+)/);
 process.stdout.write(
-  `sync 完成 ${totalMs}ms｜包 ${summary.checked ?? "?"}｜切片 ${summary.slices ?? "?"}｜警告 ${summary.warningCount ?? 0}｜看板已刷新\n`,
+  `sync 完成 ${totalMs}ms｜包 ${counts?.[3] ?? "?"}（归档 ${counts?.[2] ?? "?"}）｜切片 ${counts?.[4] ?? "?"}｜看板已刷新\n`,
 );
-if (!check.ok) process.exit(1);

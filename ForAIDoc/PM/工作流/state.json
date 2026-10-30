@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-29T14:57:26.922Z",
+  "updatedAt": "2026-10-30T07:41:46.747Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -23,7 +23,7 @@
         "owner": "BE",
         "exit": "联合 QA 通过 → 与 ACTION 一起 Apply",
         "evidence": "artifacts/evidence",
-        "note": "QA 已过（20 文件 manifest），待一次联合应用",
+        "note": "QA 通过（20 文件 EEFA0274），等待最终一次性 Apply（用户裁决：全矩阵完成后再 Apply）",
         "qaPassed": true
       },
       {
@@ -33,7 +33,7 @@
         "owner": "BE",
         "exit": "冻结 + QA 通过",
         "evidence": "artifacts/evidence",
-        "note": "作为 S1B 基线"
+        "note": "完成，作为 S1B 基线；已含入 B1 批（C1B17F0B）"
       },
       {
         "id": "S1B",
@@ -42,16 +42,17 @@
         "owner": "BE",
         "exit": "跨窗互斥 / 排队取消零写 / 解除边界 通过 QA",
         "evidence": "artifacts/evidence",
-        "note": "host57 / FE+pure98 仅模块证据"
+        "note": "BE+FE 冻结并 QA PASS；已含入 v2/B1 批"
       },
       {
         "id": "S2a",
         "label": "ACTION S2a：SHELF 真实入口",
-        "status": "qa_with_gap",
+        "status": "awaiting_apply",
         "owner": "BE",
         "exit": "完整基线配置下重跑全 TS + 联合 QA",
         "evidence": "artifacts/evidence",
-        "note": "53mock/17hash 通过；候选缺 vite.config.ts 导致 TS18003"
+        "note": "BE+FE QA PASS，完整 TS 已在 joint v2/B1 批闭环；已含入 B1 批 C1B17F0B",
+        "qaPassed": true
       },
       {
         "id": "S2b",
@@ -60,16 +61,18 @@
         "owner": "BE",
         "exit": "NOOP-01 闭环：retained/no-op 有可验证事实来源 + 新 hash QA",
         "evidence": "artifacts/evidence",
-        "note": "正常保留正向验收未闭环"
+        "note": "NOOP-01 闭环（retained 事实来源 wire 9E1FD2E7），BE+FE QA PASS；已含入 B1 批",
+        "qaPassed": true
       },
       {
         "id": "S3",
         "label": "ACTION 技术阶段3：全矩阵迁移",
-        "status": "in_progress",
+        "status": "awaiting_apply",
         "owner": "BE",
         "exit": "逐行 入口→adapter→host 链有证据，旧路径退出",
         "evidence": "artifacts/evidence",
-        "note": "S3a host 24 纯测/6hash；REG01 仅注册覆盖"
+        "note": "S3a/S3-local/S4a/S4b/S4c/S4d 已冻并结合 B1 批 QA PASS（C1B17F0B）；剩余矩阵（CL 写/提交/控制面）S4f/S4g 施工中",
+        "qaPassed": true
       },
       {
         "id": "UPD",
@@ -78,7 +81,7 @@
         "owner": "BE",
         "exit": "本批结束后再议",
         "evidence": "artifacts/evidence",
-        "note": "暂停，保留离线检查点"
+        "note": "暂停（保留离线检查点），本批结束再议"
       }
     ]
   },
@@ -275,7 +278,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -445,7 +448,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -546,7 +549,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -580,7 +583,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": null,
         "humanAccepted": null
       },
@@ -613,7 +616,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": null,
         "humanAccepted": null
       },
@@ -716,7 +719,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": null,
         "humanAccepted": null
       },
@@ -749,7 +752,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -782,7 +785,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -816,7 +819,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -917,7 +920,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": null,
         "humanAccepted": null
       },
@@ -1018,7 +1021,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -1184,7 +1187,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -1696,7 +1699,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },
@@ -1727,7 +1730,7 @@
       "archived": false,
       "migrated": true,
       "verification": {
-        "qaPassed": null,
+        "qaPassed": true,
         "applied": true,
         "humanAccepted": null
       },

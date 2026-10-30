@@ -75,7 +75,8 @@
     "fixture:status:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 status",
     "fixture:stop:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 stop",
     "fixture:destroy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 destroy",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "wf:close": "node scripts/workflow/close.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.85.5",
