@@ -6,7 +6,7 @@ import type {
   RevisionGraphNode,
   RevisionReference,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export function makeReviewScope(
   runtime: RuntimeInfo,

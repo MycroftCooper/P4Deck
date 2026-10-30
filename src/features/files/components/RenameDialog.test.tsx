@@ -6,7 +6,7 @@ import type {
   RenameMovePreflight,
   RenameMoveTargetSnapshot,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { RenameDialog } from "./RenameDialog";
 
 const harness = dialogHarness();
@@ -107,7 +107,7 @@ it("runs Preview → Review → Confirming → Result and binds the reviewed tok
     />,
   );
   await changeTarget("C:\\workspace\\b.txt");
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   expect(document.body.textContent).toContain("//depot/main/b.txt");
   expect(document.body.textContent).toContain("预检通过");
   await act(async () => dialogButton("确认重命名 / 移动").click());
@@ -141,11 +141,11 @@ it("invalidates a reviewed token whenever destination input changes", async () =
     />,
   );
   await changeTarget("C:\\workspace\\b.txt");
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   expect(dialogButton("确认重命名 / 移动")).toBeTruthy();
   await changeTarget("C:\\workspace\\c.txt");
   expect(dialogButton("确认重命名 / 移动")).toBeUndefined();
-  expect(dialogButton("预检并审阅")).toBeTruthy();
+  expect(dialogButton("开始预检")).toBeTruthy();
 });
 
 it("renders case-only and target-exists blockers without exposing confirm", async () => {
@@ -172,7 +172,7 @@ it("renders case-only and target-exists blockers without exposing confirm", asyn
     />,
   );
   await changeTarget("C:\\workspace\\A.txt");
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   expect(document.body.textContent).toContain("Case-only rename is blocked");
   expect(document.body.textContent).toContain("Destination exists");
   expect(dialogButton("确认重命名 / 移动").disabled).toBe(true);
@@ -204,7 +204,7 @@ it("shows structured command failure and performs the requested refresh", async 
     />,
   );
   await changeTarget("C:\\workspace\\b.txt");
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   await act(async () => dialogButton("确认重命名 / 移动").click());
   expect(document.body.textContent).toContain("commandFailure");
   expect(document.body.textContent).toContain("Refresh both paths");

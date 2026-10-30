@@ -1,0 +1,66 @@
+{
+  "at": "2026-10-28T10:01:31.1191798Z",
+  "status": "T01 QA snapshot complete; all ten paths released; limitations in QA-T01-report.md",
+  "files": [
+    {
+      "path": "src/app/styles/branch-mappings.css",
+      "expected": "e13d0521bc9ffabb0e7f63347349b6e4162f981372c00c8bb69eeffe9dd276e9",
+      "actual": "e13d0521bc9ffabb0e7f63347349b6e4162f981372c00c8bb69eeffe9dd276e9",
+      "matches": true
+    },
+    {
+      "path": "src/app/styles/workbench.css",
+      "expected": "3602e47d4ebc0f7f6415ca031844444714b6d1d8e21ea1b8398928bcde0d4c0c",
+      "actual": "3602e47d4ebc0f7f6415ca031844444714b6d1d8e21ea1b8398928bcde0d4c0c",
+      "matches": true
+    },
+    {
+      "path": "src/app/styles/settings.css",
+      "expected": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+      "actual": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+      "matches": true
+    },
+    {
+      "path": "src/app/shell/CommandBar.tsx",
+      "expected": "b7c46cde7206baa112d1dbcd7859d55ab0377f07bd64edd8e9934799269d6b16",
+      "actual": "db83854321fa4139466edb48005442865a6157a7c85ae2aae524760fa1bed4ba",
+      "matches": false
+    },
+    {
+      "path": "src/app/shell/CommandBar.test.tsx",
+      "expected": "6099abd6ee9e7f16f34b17a32e649d0e428de0003b8e7c5028988675a64fa2ea",
+      "actual": "6099abd6ee9e7f16f34b17a32e649d0e428de0003b8e7c5028988675a64fa2ea",
+      "matches": true
+    },
+    {
+      "path": "src/features/browsers/BranchMappingsPage.tsx",
+      "expected": "f3991b020c5a05c898f2e78f7e9169405c8fd23645c02a544106d1a1b8f0a009",
+      "actual": "f3991b020c5a05c898f2e78f7e9169405c8fd23645c02a544106d1a1b8f0a009",
+      "matches": true
+    },
+    {
+      "path": "src/features/browsers/BranchMappingsPage.test.tsx",
+      "expected": "f1e68e214da828d6173beaa1bec9aa940892b748241f6bcc1f187f16971dc1a9",
+      "actual": "f1e68e214da828d6173beaa1bec9aa940892b748241f6bcc1f187f16971dc1a9",
+      "matches": true
+    },
+    {
+      "path": "src/features/changelists/components/PendingPage.tsx",
+      "expected": "265a85b1311c841ef359a4e199349006cebf52f050a2dfd1420377d32461a75b",
+      "actual": "a87bbcfa30cbed6b7794ec68987ab4c74142a1ab392be646bc1814ef132de762",
+      "matches": false
+    },
+    {
+      "path": "src/features/settings/ConnectionProfilesCard.tsx",
+      "expected": "43faa94c8c2144554e4514b739e9f015b693d4617ef5d80bfae984dc931e3642",
+      "actual": "ca0b75c01a71e4ab1dc52c7507cc52289bca32ee684f7d0fd86f0931b1864753",
+      "matches": false
+    },
+    {
+      "path": "src/features/settings/SettingsPage.test.tsx",
+      "expected": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779",
+      "actual": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779",
+      "matches": true
+    }
+  ]
+}

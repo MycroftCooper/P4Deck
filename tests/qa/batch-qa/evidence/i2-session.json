@@ -1,0 +1,139 @@
+{
+  "checks": [
+    {
+      "name": "frozen-hashes",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-native-bridge",
+      "pass": true
+    },
+    {
+      "name": "default-disabled",
+      "pass": true
+    },
+    {
+      "name": "multiple-disabled",
+      "pass": true,
+      "data": "C12"
+    },
+    {
+      "name": "single-numbered-entry",
+      "pass": true
+    },
+    {
+      "name": "unverified-not-started",
+      "pass": true
+    },
+    {
+      "name": "no-simulation-controls-in-product",
+      "pass": true,
+      "data": [
+        "",
+        "Refresh connection identity",
+        "Launch company submission (disabled)",
+        "Close"
+      ]
+    },
+    {
+      "name": "narrow-dialog-contained",
+      "pass": true
+    },
+    {
+      "name": "switch-closes-old-dialog",
+      "pass": true
+    },
+    {
+      "name": "path-memory-only",
+      "pass": true
+    },
+    {
+      "name": "normal-submit-target",
+      "pass": true
+    },
+    {
+      "name": "identity-rejected:numeric",
+      "pass": true
+    },
+    {
+      "name": "identity-rejected:missing",
+      "pass": true
+    },
+    {
+      "name": "identity-rejected:error",
+      "pass": true
+    },
+    {
+      "name": "loading-refresh-disabled",
+      "pass": true
+    },
+    {
+      "name": "late-old-snapshot-ignored",
+      "pass": true
+    },
+    {
+      "name": "explicit-retry-still-disabled",
+      "pass": true
+    },
+    {
+      "name": "no-page-errors",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-external-requests",
+      "pass": true,
+      "data": []
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "requests": [
+    "http://127.0.0.1:1437/i2.html",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/i2-fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/i2-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/fixture.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/companySubmit/CompanySubmitDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/companySubmit/CompanySubmitPreparation.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/companySubmit/CompanySubmitPreview.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/companySubmit/useCompanySubmitSnapshot.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/companySubmit/model.ts"
+  ],
+  "identity": {
+    "pid": 68396,
+    "config": "src/test/preview-audit/vite.config.mjs",
+    "host": "127.0.0.1",
+    "port": 1437,
+    "address": {
+      "address": "127.0.0.1",
+      "family": "IPv4",
+      "port": 1437
+    }
+  },
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "p4deck",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.9",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
@@ -19,6 +19,7 @@
     "build:desktop": "node scripts/build-frontend.mjs --mode desktop",
     "build:desktop:win": "node scripts/build-desktop.mjs",
     "package:desktop:win": "node scripts/package-desktop.mjs",
+    "publish:update": "node scripts/publish-update.mjs",
     "preview": "vite preview",
     "check:web": "tsc -b --pretty false",
     "check": "tsc -b --pretty false && cargo check --manifest-path src-tauri/Cargo.toml",
@@ -82,8 +83,11 @@
   "dependencies": {
     "@tanstack/react-query": "^5.85.5",
     "@tanstack/react-virtual": "^3.14.9",
-    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "2.8.4",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "dockview-react": "^8.3.1",
@@ -95,7 +99,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.64.0",
-    "@tauri-apps/cli": "^2.8.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.19.2",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",

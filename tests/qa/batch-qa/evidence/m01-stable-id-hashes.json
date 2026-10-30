@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-28T09:37:41.140Z",
+  "hashes": {
+    "src/app/context-menu/model.test.ts": "f20685d8112db04feb4bf2226046d58f53b075ad151d5f442a8d14618d2fbc91",
+    "src/app/context-menu/catalog.ts": "d9661c3f3599fc50184527af8ecaf0da4879e7d416ed44646f0a483371792192",
+    "src/app/context-menu/labels.ts": "746189efba5bb4a08bef04b27c8df8fc7c66bee3c78a6cb894e9eee9b0892507",
+    "ForAIDoc/Designer/右键菜单对象与菜单项总表.md": "ab5890ace5bf77128daae58361f45c8ab71b574533857ba2356aa61fac3dfb43"
+  }
+}

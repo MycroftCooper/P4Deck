@@ -7,7 +7,7 @@ import type {
   ConnectionWorkspaceCandidate,
   ConnectionWorkspaceDirectoryResult,
   P4Context,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { connectionPresentation } from "./connectionWizard";
 
 type DirectoryKind = "user" | "workspace";

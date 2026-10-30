@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $FixtureScript = Join-Path $PSScriptRoot "p4d-fixture.ps1"
-$FixtureRoot = Join-Path $RepoRoot ".tools\p4d-fixture"
+$FixtureRoot = Join-Path $RepoRoot ".local\p4d-fixture"
 $P4 = Join-Path $FixtureRoot "bin\p4.exe"
 $P4d = Join-Path $FixtureRoot "bin\p4d.exe"
 $Tickets = Join-Path $FixtureRoot "tickets"

@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
+import {
+  emptyOpenedSelection,
+  selectOpenedFile,
+  type SelectedOpenedFile,
+} from "../selectedFiles";
+import type { WorkspaceNode } from "../../../shared/contracts";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
@@ -9,7 +15,7 @@ import {
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
 import { messages } from "../../../shared/i18n";
-import type { PendingFile, RuntimeInfo } from "../../../shared/contracts/types";
+import type { PendingFile, RuntimeInfo } from "../../../shared/contracts";
 import { CommandContext } from "../../../app/shell/CommandContext";
 import { PendingFileList } from "./PendingFileList";
 
@@ -81,6 +87,8 @@ async function renderTable(
   drag = vi.fn(),
   focus = vi.fn(),
   changeId = 42,
+  shelf = false,
+  onShelf = vi.fn(),
 ) {
   await act(async () =>
     root.render(
@@ -89,6 +97,8 @@ async function renderTable(
           <CommandContext.Provider value={focus}>
             <PendingFileList
               files={files}
+              shelf={shelf}
+              onShelf={onShelf}
               changeId={changeId}
               refresh={vi.fn()}
               onDragFiles={drag}
@@ -217,58 +227,65 @@ it("combines state and case-insensitive suffix filters, includes extensionless f
   expect(host.textContent).toContain("No matching files");
 });
 
-it("windows 100,000 pending files and preserves keyboard focus and selection", { timeout: 15_000 }, async () => {
-  const files: PendingFile[] = Array.from({ length: 100_000 }, (_, index) => ({
-    depotPath: `//depot/长路径/${String(index).padStart(6, "0")}/file-${index}.txt`,
-    action: index % 3 === 0 ? "add" : index % 3 === 1 ? "edit" : "delete",
-    state: index % 3 === 0 ? "openedAdd" : "openedEdit",
-  }));
-  await act(async () =>
-    root.render(
-      <ContextMenuProvider scope="pending-files" zh={false}>
-        <MenuEnvironment.Provider value={environment}>
-          <PendingFileList files={files} changeId={42} refresh={vi.fn()} />
-        </MenuEnvironment.Provider>
-      </ContextMenuProvider>,
-    ),
-  );
-  await act(
-    async () =>
-      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
-  );
-  const list = host.querySelector<HTMLElement>(
-    '[data-testid="pending-file-virtual-list"]',
-  )!;
-  let rows = list.querySelectorAll<HTMLElement>('.pending-file[role="row"]');
-  expect(rows.length).toBeGreaterThan(1);
-  expect(rows.length).toBeLessThan(40);
-  expect(
-    list.querySelector<HTMLElement>(".pending-file-spacer")!.style.height,
-  ).toBe("3000000px");
-
-  await act(async () => {
-    rows[0].focus();
-    rows[0].dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+it(
+  "windows 100,000 pending files and preserves keyboard focus and selection",
+  { timeout: 15_000 },
+  async () => {
+    const files: PendingFile[] = Array.from(
+      { length: 100_000 },
+      (_, index) => ({
+        depotPath: `//depot/长路径/${String(index).padStart(6, "0")}/file-${index}.txt`,
+        action: index % 3 === 0 ? "add" : index % 3 === 1 ? "edit" : "delete",
+        state: index % 3 === 0 ? "openedAdd" : "openedEdit",
+      }),
     );
-  });
-  await act(
-    async () =>
-      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
-  );
-  const next = list.querySelector<HTMLElement>(
-    '[data-pending-file-index="1"]',
-  )!;
-  expect(document.activeElement).toBe(next);
-  await act(async () =>
-    next.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    ),
-  );
-  expect(next.getAttribute("aria-selected")).toBe("true");
-  rows = list.querySelectorAll<HTMLElement>('.pending-file[role="row"]');
-  expect(rows.length).toBeLessThan(40);
-});
+    await act(async () =>
+      root.render(
+        <ContextMenuProvider scope="pending-files" zh={false}>
+          <MenuEnvironment.Provider value={environment}>
+            <PendingFileList files={files} changeId={42} refresh={vi.fn()} />
+          </MenuEnvironment.Provider>
+        </ContextMenuProvider>,
+      ),
+    );
+    await act(
+      async () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    const list = host.querySelector<HTMLElement>(
+      '[data-testid="pending-file-virtual-list"]',
+    )!;
+    let rows = list.querySelectorAll<HTMLElement>('.pending-file[role="row"]');
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.length).toBeLessThan(40);
+    expect(
+      list.querySelector<HTMLElement>(".pending-file-spacer")!.style.height,
+    ).toBe("3000000px");
+
+    await act(async () => {
+      rows[0].focus();
+      rows[0].dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    await act(
+      async () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    const next = list.querySelector<HTMLElement>(
+      '[data-pending-file-index="1"]',
+    )!;
+    expect(document.activeElement).toBe(next);
+    await act(async () =>
+      next.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      ),
+    );
+    expect(next.getAttribute("aria-selected")).toBe("true");
+    rows = list.querySelectorAll<HTMLElement>('.pending-file[role="row"]');
+    expect(rows.length).toBeLessThan(40);
+  },
+);
 
 it("freezes selected opened files for drag while shelves remain non-draggable", async () => {
   const files: PendingFile[] = [
@@ -368,3 +385,121 @@ it("marks only a complete pending file selection as a whole changelist", async (
     wholeChangelistId: 0,
   });
 });
+
+it("shares selection across three working CL tables while preserving exact sources and drag paths", async () => {
+  const drag = vi.fn(),
+    submit = vi.fn();
+  const all: WorkspaceNode[] = [0, 12, 25].map((id, index) => ({
+    id: tableFiles[index].depotPath,
+    depotPath: tableFiles[index].depotPath,
+    name: "fixture",
+    relativePath: "fixture",
+    absolutePath: "",
+    kind: "file",
+    state: "openedEdit",
+    changelistId: id,
+  }));
+  function Tables() {
+    const [state, setState] = useState(emptyOpenedSelection("scope"));
+    const shared = {
+      state,
+      nodes: all,
+      clear: () => setState(emptyOpenedSelection("scope")),
+      change: (
+        rows: readonly SelectedOpenedFile[],
+        path: string,
+        gesture = {},
+      ) => {
+        const next = selectOpenedFile(state, "scope", rows, path, gesture);
+        setState(next);
+        return next.files;
+      },
+    };
+    return (
+      <ContextMenuProvider scope="cross-files" zh={false}>
+        <MenuEnvironment.Provider value={environment}>
+          {[0, 12, 25].map((id, index) => (
+            <PendingFileList
+              key={id}
+              changeId={id}
+              files={[tableFiles[index]]}
+              refresh={vi.fn()}
+              sharedSelection={shared}
+              onSubmitSelected={submit}
+              onDragFiles={drag}
+            />
+          ))}
+        </MenuEnvironment.Provider>
+      </ContextMenuProvider>
+    );
+  }
+  await act(async () => root.render(<Tables />));
+  const rows = [...host.querySelectorAll<HTMLElement>(".pending-file")];
+  for (let i = 0; i < rows.length; i++)
+    await act(async () => {
+      rows[i].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, ctrlKey: i > 0 }),
+      );
+    });
+  expect(
+    host.querySelectorAll('.pending-file[aria-selected="true"]'),
+  ).toHaveLength(3);
+  await act(async () => {
+    rows[0].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+  });
+  const action = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((node) => node.textContent?.includes("Submit selected files"))!;
+  expect(action).toBeTruthy();
+  await act(async () => action.click());
+  expect(submit).toHaveBeenCalledWith(
+    all.map((node) => ({
+      depotPath: node.depotPath,
+      originalChangeId: node.changelistId,
+    })),
+  );
+});
+
+it.each(["Unshelve", "Delete"])(
+  "shelf %s menu preserves same-CL Ctrl/Shift selection and replaces on an unselected row",
+  async (label) => {
+    const onShelf = vi.fn();
+    await renderTable(tableFiles, vi.fn(), vi.fn(), 42, true, onShelf);
+    const rows = [...host.querySelectorAll<HTMLElement>(".pending-file.shelf")];
+    await act(async () => rows[0].click());
+    await act(async () => {
+      rows[1].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, ctrlKey: true }),
+      );
+    });
+    await act(async () => {
+      rows[2].dispatchEvent(
+        new MouseEvent("click", { bubbles: true, shiftKey: true }),
+      );
+    });
+    const selectedPaths = rows.slice(1, 3).map((row) => {
+      const name = row
+        .querySelector(".pending-file-name")!
+        .getAttribute("title");
+      return tableFiles.find((file) => file.clientPath?.endsWith("/" + name))!
+        .depotPath;
+    });
+    await act(async () => {
+      rows[1].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    let menuItem = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ].find((node) => node.textContent?.includes(label))!;
+    expect(menuItem).toBeTruthy();
+    await act(async () => menuItem.click());
+    expect(onShelf.mock.calls[0][1]).toEqual(selectedPaths);
+    await act(async () => {
+      rows[3].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    menuItem = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ].find((node) => node.textContent?.includes(label))!;
+    await act(async () => menuItem.click());
+    expect(onShelf.mock.calls[1][1]).toHaveLength(1);
+  },
+);

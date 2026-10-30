@@ -4,7 +4,7 @@ import type {
   OperationEvent,
   OperationResult,
   P4Context,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import type { messages } from "../../shared/i18n";
 import { storage } from "../../shared/lib/storage";
 import { subscribeSafely } from "../../shared/lib/subscription";

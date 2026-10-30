@@ -299,7 +299,7 @@ impl ConfigBackupService {
         let pending_path = self.pending_path();
         let bytes = match read_limited(&pending_path, MAX_BUNDLE_BYTES) {
             Ok(bytes) => bytes,
-            Err(_error) if !pending_path.exists() => return Ok(self.read_restore_status()?),
+            Err(_error) if !pending_path.exists() => return self.read_restore_status(),
             Err(error) => return Err(self.fail_pending("unreadable-pending.json", None, error)),
         };
         let manifest: PendingRestoreManifest = match serde_json::from_slice(&bytes) {
@@ -403,16 +403,12 @@ impl ConfigBackupService {
     }
 
     fn apply_bundle(&self, bundle: &BackupBundle) -> Result<(), String> {
-        self.apply_bundle_with(
-            bundle,
-            |path, bytes| atomic_write(path, bytes),
-            |path| {
-                if path.exists() {
-                    fs::remove_file(path).map_err(|error| error.to_string())?;
-                }
-                Ok(())
-            },
-        )
+        self.apply_bundle_with(bundle, atomic_write, |path| {
+            if path.exists() {
+                fs::remove_file(path).map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        })
     }
 
     fn apply_bundle_with(

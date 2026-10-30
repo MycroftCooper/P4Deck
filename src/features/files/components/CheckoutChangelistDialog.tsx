@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
-import type { PendingChange } from "../../../shared/contracts/types";
+import type { PendingChange } from "../../../shared/contracts";
 
 export interface CheckoutDestination {
   changelistId: number;

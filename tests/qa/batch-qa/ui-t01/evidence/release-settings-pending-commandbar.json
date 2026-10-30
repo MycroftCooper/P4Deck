@@ -1,0 +1,53 @@
+{
+  "status": "released for FE-I3; later changes require new snapshot",
+  "timeUtc": "2026-10-28T09:59:31.7530069Z",
+  "files": [
+    {
+      "path": "src/features/settings/ConnectionProfilesCard.tsx",
+      "expected": "43faa94c8c2144554e4514b739e9f015b693d4617ef5d80bfae984dc931e3642",
+      "actual": "43faa94c8c2144554e4514b739e9f015b693d4617ef5d80bfae984dc931e3642",
+      "matches": true
+    },
+    {
+      "path": "src/app/styles/settings.css",
+      "expected": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+      "actual": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+      "matches": true
+    },
+    {
+      "path": "src/features/settings/SettingsPage.test.tsx",
+      "expected": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779",
+      "actual": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779",
+      "matches": true
+    },
+    {
+      "path": "src/features/changelists/components/PendingPage.tsx",
+      "expected": "265a85b1311c841ef359a4e199349006cebf52f050a2dfd1420377d32461a75b",
+      "actual": "265a85b1311c841ef359a4e199349006cebf52f050a2dfd1420377d32461a75b",
+      "matches": true
+    },
+    {
+      "path": "src/app/styles/workbench.css",
+      "expected": "3602e47d4ebc0f7f6415ca031844444714b6d1d8e21ea1b8398928bcde0d4c0c",
+      "actual": "3602e47d4ebc0f7f6415ca031844444714b6d1d8e21ea1b8398928bcde0d4c0c",
+      "matches": true
+    },
+    {
+      "path": "src/app/shell/CommandBar.tsx",
+      "expected": "b7c46cde7206baa112d1dbcd7859d55ab0377f07bd64edd8e9934799269d6b16",
+      "actual": "b7c46cde7206baa112d1dbcd7859d55ab0377f07bd64edd8e9934799269d6b16",
+      "matches": true
+    },
+    {
+      "path": "src/app/shell/CommandBar.test.tsx",
+      "expected": "6099abd6ee9e7f16f34b17a32e649d0e428de0003b8e7c5028988675a64fa2ea",
+      "actual": "6099abd6ee9e7f16f34b17a32e649d0e428de0003b8e7c5028988675a64fa2ea",
+      "matches": true
+    }
+  ],
+  "evidence": [
+    "attempt2-results.json: settings checks passed before unrelated narrow Pending assertion failure",
+    "remaining-results.json: 53 passed; Pending and CommandBar covered"
+  ],
+  "limits": "Synthetic browser only; SettingsPage.test and CommandBar.test not rerun independently; no real backend/P4/tool/native; old screenshots do not cover I3."
+}

@@ -1,10 +1,10 @@
 # dsh-p4deck-board
 
-P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI 同源下提供一个只读看板页面，显示任务状态与各 Agent 当前在忙什么。
+P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI 同源下提供看板页面，显示任务状态、功能名与各 Agent 当前在忙什么；可直接点「验收完成 / 取消」把结果写回 `state.json`。
 
-- 只注册同源 GET 路由，**不连 P4、不写原树、不收集凭据**。
-- 数据只读 3 个文件：`ForAIDoc/PM/工作流/state.json`（任务真值）、`运行状态.json`（Agent/里程碑）、`artifacts/workflow/metrics.jsonl`（量测）。
-- 页面每 5 秒拉一次 `/p4deck-board/api/snapshot`，无需重启或手动刷新。
+- 同源路由，**不连 P4、不收集凭据**；只在用户点击按钮时写 `state.json` / `人类待办.json`。
+- 数据读 3 个文件：`ForAIDoc/PM/工作流/state.json`（任务真值）、`运行状态.json`（Agent/里程碑）、`artifacts/workflow/metrics.jsonl`（量测）。
+- 数据由文件监听 + SSE 驱动，变化才刷新；EventSource 不可用时退回 30 秒轮询。
 
 ## 安装（用 GUI 的 Plugins 页，不改安装包）
 
@@ -17,11 +17,15 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
    ```
 
 4. 点 **Install**，完成后点 **Enable now**。
-5. **重启 DeepSeek Harness**（或至少对窗口按 Ctrl+R 重载一次）。
+5. **完全退出 DeepSeek Harness 再重新打开**（托盘退出/关闭主进程；只关窗口或按 Ctrl+R 不够）。
 
-> 重要：DSH 的插件树在**进程启动时组合**，并且客户端 bundle 只在启动时构建。
-> 因此首次安装、或包的 `package.json`/`lib/client.js` 被替换后，**必须重启**才能看到侧栏条目；
-> 只改面板里的数据（`state.json` / `运行状态.json`）不需要重启，面板每 5 秒自刷新。
+> 重要：DSH 的插件树和宿主路由在**进程启动时**组合，客户端 bundle 也只在启动时构建。
+> 只重载窗口会出现“页面是新版、宿主还是旧代码”的半新状态，点验收按钮就会 HTTP 405。
+> 因此首次安装、或 `lib/index.js` / `lib/client.js` 被替换后，**必须完全退出 DSH 再启动**；
+> 只改数据文件（`state.json` / `运行状态.json`）不需要重启。
+>
+> 页面自己也会检测这种半新状态：检测到旧宿主时会显示红色重启提示并隐藏按钮；
+> 也可以跑 `node tools/dsh-p4deck-board/verify.mjs`，看到 `验收按钮=无` 就是宿主没重启。
 
 ## 打开面板
 
@@ -41,10 +45,15 @@ P4Deck 工作流看板的 **DSH 宿主插件**：在 DeepSeek Harness Web GUI �
 | `GET /p4deck-board/api/events` | SSE：数据文件变化时推一帧（事件驱动） |
 | `GET /p4deck-board` | 看板页面 |
 | `GET /p4deck-board/` | 看板页面 |
-| `GET /p4deck-board/api/snapshot` | 快照 JSON（`cache-control: no-store`） |
+| `GET /p4deck-board/api/snapshot` | 快照 JSON（`cache-control: no-store`；含 `scope` 功能名与验收事实） |
+| `POST /p4deck-board/api/packages/accept` | body `{id}`：看板点「验收完成」，写 `state.json`；缺 QA/Apply 时按用户点击 force 补登 |
+| `POST /p4deck-board/api/packages/cancel` | body `{id, reason?}`：看板点「取消」，归档并标记“取消范围”（不写 humanAccepted，不算验收通过） |
+| `POST /p4deck-board/api/human-todos/toggle` | body `{id}`：勾选人类待办 |
 | 其他方法 | 405 |
 | 其他子路径 | 404 |
 | `state.json` 缺失 | 503 + 错误原因 |
+
+> 只有「待人工验收 / 未登记验收」卡片显示「验收完成」；未验收的活跃卡片显示「取消」。按钮写的是真实 `state.json`，写入后会触发 SSE 刷新。取消的项会出现在归档区并标「已取消（未验收）」。
 
 ## 配置
 
@@ -71,14 +80,14 @@ dsh.cmd --profile <tmp> --dump-config | Select-String p4deck
 ## 自测（不需要 dsh 运行时）
 
 ```powershell
-node tools/dsh-p4deck-board/selftest.mjs         # 宿主侧：路由/快照/边界，15 项
-node tools/dsh-p4deck-board/selftest-client.mjs   # 客户端侧：bundle 加载/插槽注册/真实 React 渲染，16 项
+node tools/dsh-p4deck-board/selftest.mjs         # 宿主侧：路由/快照/验收/取消/边界
+node tools/dsh-p4deck-board/selftest-client.mjs   # 客户端侧：bundle 加载/插槽注册/真实 React 渲染
 ```
 
-客户端自测用假 `window.__ModuleLoader__` + 假 `require` 载入真实 `lib/client.js`，再用项目自带的 `react-dom/server` 渲染纯视图，断言标题、52 计数、Agent、里程碑、任务卡与加载/错误态。
+客户端自测用假 `window.__ModuleLoader__` + 假 `require` 载入真实 `lib/client.js`，再用项目自带的 `react-dom/server` 渲染纯视图，断言标题、功能名、验收/取消按钮、Agent、里程碑、任务卡与加载/错误态。
 
 ## 已知边界
 
 - 面板是**右侧栏标签页**（`sidebarRightTabs` + `sidebar.right.pane.tab`），数据走同源 `fetch(/p4deck-board/api/snapshot)`；离线展示仍可用 HTML 看板。
 - 若安装后报错，先看 Plugins 页的诊断；常见原因是 `dsh.client.inject` 指向的 `@deepseek-ai/dsh-client-ui-sidebar-right` 未被启用。
-- 本插件不改变 `state.json`；状态仍由 `node scripts/workflow/state.mjs ...` 维护。
+- 本插件只在用户点击「验收完成 / 取消」或勾选人类待办时写文件；其余状态仍由 `node scripts/workflow/state.mjs ...` 维护。取消归档不满足 `archive` 命令的 humanAccepted 前置，属于看板专用的“取消范围”记录。

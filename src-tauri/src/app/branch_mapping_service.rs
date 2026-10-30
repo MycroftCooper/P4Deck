@@ -194,6 +194,15 @@ impl BranchMappingService {
             request_error(BranchMappingRequestErrorCode::InvalidQuery, message)
         })?;
         let (context, generation) = self.contexts.snapshot();
+        if query
+            .expected_generation
+            .is_some_and(|expected| expected != generation)
+        {
+            return Err(request_error(
+                BranchMappingRequestErrorCode::ConnectionChanged,
+                "Connection changed before mapping inspection.",
+            ));
+        }
         let profile = self.contexts.active_profile_id();
         self.ensure_active(&query.operation_id, &context, generation, &profile)?;
         let detail = self
@@ -445,9 +454,32 @@ impl BranchMappingService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses confirm_admitted with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm(
         &self,
         confirmation: BranchMutationConfirmation,
+        app: Option<&AppHandle>,
+    ) -> BranchMutationResult {
+        let (context, _) = self.contexts.snapshot();
+        let guard = self.repository.lock_mutations(&context.server).await;
+        self.confirm_admitted(confirmation, &guard, app).await
+    }
+
+    pub async fn confirm_admitted(
+        &self,
+        confirmation: BranchMutationConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> BranchMutationResult {
+        self.confirm_inner(confirmation, Some(guard), app).await
+    }
+
+    async fn confirm_inner(
+        &self,
+        confirmation: BranchMutationConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> BranchMutationResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -493,7 +525,14 @@ impl BranchMappingService {
         }
         let root_id = safe_operation_id(confirmation.operation_id.as_deref(), "branch-mutation");
         let group = self.runner.begin_operation_group(root_id.clone());
-        let guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         if group.ensure_active().is_err() {
             return cancelled(root_id);
         }
@@ -551,14 +590,14 @@ impl BranchMappingService {
                         &context,
                         record.target.desired.as_ref().expect("write target"),
                         write_id.clone(),
-                        &guard,
+                        guard,
                         app,
                     )
                     .await
             }
             BranchMutationMode::Delete => {
                 self.repository
-                    .delete(&context, &record.target.name, write_id.clone(), &guard, app)
+                    .delete(&context, &record.target.name, write_id.clone(), guard, app)
                     .await
             }
         };

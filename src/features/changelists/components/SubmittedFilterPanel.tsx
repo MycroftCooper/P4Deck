@@ -8,6 +8,8 @@ import type {
 
 interface Props {
   typeControl?: ReactNode;
+  defaultSelected?: boolean;
+  tagOptions?: string[];
   zh: boolean;
   mock: boolean;
   streamOptions: string[];
@@ -25,6 +27,7 @@ interface Props {
 
 export function SubmittedFilterPanel(props: Props) {
   const [selectedId, setSelectedId] = useState("");
+  const [tagText, setTagText] = useState("");
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState("");
   const [confirmation, setConfirmation] = useState<
@@ -97,6 +100,7 @@ export function SubmittedFilterPanel(props: Props) {
       entry,
       ...props.savedFilters.filter((item) => item.id !== id),
     ]);
+    props.onDraftChange(entry.filter);
     setSelectedId(id);
     setName(normalized);
     setNameError("");
@@ -172,6 +176,75 @@ export function SubmittedFilterPanel(props: Props) {
         <div className="submitted-filter-grid">
           {props.typeControl}
           {field("keyword", text.keyword)}
+          <div className="submitted-filter-field">
+            <span>{props.zh ? "标签" : "Tags"}</span>
+            <details className="submitted-stream-picker">
+              <summary>
+                <span>
+                  {props.draft.tags?.join(", ") ||
+                    (props.zh ? "不限标签" : "All tags")}
+                </span>
+                <ChevronDown size={14} aria-hidden="true" />
+              </summary>
+              <div className="submitted-stream-options">
+                <input
+                  value={tagText}
+                  aria-label={
+                    props.zh ? "输入标签并回车" : "Enter a tag and press Enter"
+                  }
+                  placeholder={
+                    props.zh ? "输入标签并回车" : "Enter a tag and press Enter"
+                  }
+                  onChange={(event) => setTagText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key !== "Enter" ||
+                      event.nativeEvent.isComposing ||
+                      event.keyCode === 229
+                    )
+                      return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const tag = tagText.trim();
+                    if (tag && !(props.draft.tags ?? []).includes(tag))
+                      update("tags", [...(props.draft.tags ?? []), tag]);
+                    if (tag) setTagText("");
+                  }}
+                />
+                {[
+                  ...new Set([
+                    ...(props.tagOptions ?? []),
+                    ...(props.draft.tags ?? []),
+                  ]),
+                ].map((tag) => (
+                  <label key={tag} title={tag}>
+                    <input
+                      type="checkbox"
+                      checked={props.draft.tags?.includes(tag) ?? false}
+                      onChange={(event) =>
+                        update(
+                          "tags",
+                          event.target.checked
+                            ? [...(props.draft.tags ?? []), tag]
+                            : (props.draft.tags ?? []).filter(
+                                (value) => value !== tag,
+                              ),
+                        )
+                      }
+                    />
+                    {tag}
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => update("tags", [])}
+                >
+                  {props.zh ? "清空" : "Clear"}
+                </button>
+              </div>
+            </details>
+          </div>
           {field("users", text.users)}
           <div className="submitted-scope-row">
             {field("depotPath", text.depotPath, "//depot/main/...")}
@@ -328,9 +401,22 @@ export function SubmittedFilterPanel(props: Props) {
             <Bookmark size={16} aria-hidden="true" />
             <select
               aria-label={text.saved}
-              value={selectedId}
+              value={
+                props.defaultSelected
+                  ? "builtin:mine"
+                  : selectedId
+                    ? `saved:${selectedId}`
+                    : ""
+              }
               onChange={(event) => {
-                const id = event.target.value;
+                if (event.target.value === "builtin:mine") {
+                  setSelectedId("");
+                  setName("");
+                  setConfirmation(undefined);
+                  props.onReset();
+                  return;
+                }
+                const id = event.target.value.replace(/^saved:/, "");
                 setSelectedId(id);
                 setConfirmation(undefined);
                 const item = props.savedFilters.find(
@@ -338,14 +424,17 @@ export function SubmittedFilterPanel(props: Props) {
                 );
                 setName(item?.name ?? "");
                 setNameError("");
-                if (item && id !== selectedId) {
+                if (item && (id !== selectedId || props.defaultSelected)) {
                   props.onDraftChange({ ...item.filter });
                 }
               }}
             >
               <option value="">{text.none}</option>
+              <option value="builtin:mine">
+                {props.zh ? "我的提交（默认）" : "My submissions (default)"}
+              </option>
               {props.savedFilters.map((item) => (
-                <option key={item.id} value={item.id}>
+                <option key={item.id} value={`saved:${item.id}`}>
                   {item.name}
                 </option>
               ))}

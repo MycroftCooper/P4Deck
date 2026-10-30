@@ -28,7 +28,7 @@ git lfs status
 - `node_modules/`
 - `src-tauri/target/`
 - `dist/`
-- `.tools/`
+- `.local/`
 - `.pnpm-store/`
 - `.env`、P4 Ticket、Trust、密码、签名证书
 
@@ -50,7 +50,7 @@ tar \
   --exclude='P4Deck/node_modules' \
   --exclude='P4Deck/src-tauri/target' \
   --exclude='P4Deck/dist' \
-  --exclude='P4Deck/.tools' \
+  --exclude='P4Deck/.local' \
   --exclude='P4Deck/.env' \
   -czf P4Deck-source-migration.tar.gz P4Deck
 ```
@@ -203,7 +203,7 @@ p4 login -s
 
 ### 5.3 本地 p4d Fixture
 
-仓库已提供原生 PowerShell Fixture：`scripts/p4d-fixture.ps1`。它使用项目内固定版本的 `p4.exe` 和 `p4d.exe`，只监听 `127.0.0.1:16661`，并将 Server Root、Workspace、日志、Ticket、Trust 和 P4ENVIRO 隔离在 `.tools/p4d-fixture`。它不会注册 Windows 服务、修改系统 PATH 或复用用户工作环境的 P4 配置。
+仓库已提供原生 PowerShell Fixture：`scripts/p4d-fixture.ps1`。它使用项目内固定版本的 `p4.exe` 和 `p4d.exe`，只监听 `127.0.0.1:16661`，并将 Server Root、Workspace、日志、Ticket、Trust 和 P4ENVIRO 隔离在 `.local/p4d-fixture`。它不会注册 Windows 服务、修改系统 PATH 或复用用户工作环境的 P4 配置。
 
 ```powershell
 pnpm fixture:setup:win
@@ -250,4 +250,4 @@ pnpm fixture:stop:win
 
 ### 能否直接复制整个项目目录
 
-不建议。至少应排除 `node_modules`、`src-tauri/target`、`dist` 和 `.tools`。最佳方式仍是先形成 Git Commit 并从私有远端恢复。
+不建议。至少应排除 `node_modules`、`src-tauri/target`、`dist` 和 `.local`。最佳方式仍是先形成 Git Commit 并从私有远端恢复。

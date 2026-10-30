@@ -1,4 +1,4 @@
-import type { P4Context } from "../../shared/contracts/types";
+import type { P4Context } from "../../shared/contracts";
 
 /** Clipboard input is data, never a shell command or a P4 filespec. */
 export function cleanAddress(text: string): string {

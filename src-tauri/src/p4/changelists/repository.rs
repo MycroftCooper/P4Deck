@@ -184,7 +184,7 @@ impl ChangelistRepository {
                     app,
                 )
                 .await?;
-            let mut batch = parser::parse_change_events(&result.events);
+            let mut batch = parser::parse_submitted_page(&result.events)?;
             batch.sort_by_key(|change| std::cmp::Reverse(change.id));
             batch.dedup_by_key(|change| change.id);
             if let Some(upper) = upper_change_id {
@@ -321,6 +321,44 @@ impl ChangelistRepository {
         Ok(metadata)
     }
 
+    /// Exact numbered-CL identity, without scanning unrelated pending changes.
+    pub async fn pending_identity(
+        &self,
+        context: &P4Context,
+        change_id: i64,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<PendingChange, String> {
+        let result = self
+            .run(
+                context,
+                command::pending_metadata_invocation(&[change_id])?,
+                Some(operation_id),
+                app,
+            )
+            .await?;
+        let spec = parser::parse_pending_metadata(&result.events)
+            .remove(&change_id)
+            .ok_or_else(|| format!("p4 describe omitted changelist {change_id}"))?;
+        if spec.id != change_id
+            || spec.user != context.user
+            || spec.client != context.client
+            || spec.status != "pending"
+        {
+            return Err("Changelist is outside the current pending user/client scope".into());
+        }
+        Ok(PendingChange {
+            id: spec.id,
+            description: spec.description,
+            user: spec.user,
+            client: spec.client,
+            status: spec.status,
+            updated_at: None,
+            jobs: spec.jobs,
+            files: Vec::new(),
+            shelved_files: Vec::new(),
+        })
+    }
     pub async fn query_pending(
         &self,
         context: P4Context,
@@ -440,6 +478,43 @@ impl ChangelistRepository {
                 {
                     let facts = crate::p4::locks::parser::file_facts(&lock_status.events);
                     parser::merge_lock_status(&mut opened_files, &facts);
+                }
+            }
+        }
+        if !opened_files.is_empty() {
+            let resolve_invocation = command::P4Invocation {
+                command: "resolve",
+                args: vec!["-n".into()],
+                input: None,
+            };
+            // Text mode: `resolve -n` prints plain <path> - merging lines, not marshal JSON.
+            if let Ok(result) = self
+                .run_mode(
+                    &context,
+                    resolve_invocation,
+                    child_operation("resolve-preview"),
+                    OutputMode::Text,
+                    app,
+                )
+                .await
+            {
+                let preview = parser::parse_resolve_preview(&result.events);
+                for (_, file) in opened_files.iter_mut() {
+                    let by_client = file
+                        .client_path
+                        .as_deref()
+                        .map(parser::normalize_client_path)
+                        .is_some_and(|path| {
+                            preview
+                                .client_paths
+                                .iter()
+                                .any(|local| local == &path || local.ends_with(&path))
+                        });
+                    // resolve -n prints the *local* path first; the depot token is the merge source,
+                    // which may live in another stream, so client-path matching is authoritative.
+                    if by_client || preview.depot_paths.contains(&file.depot_path) {
+                        file.resolve = Some("unresolved".into());
+                    }
                 }
             }
         }

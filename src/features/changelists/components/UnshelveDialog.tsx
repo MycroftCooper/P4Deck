@@ -1,3 +1,4 @@
+import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -7,7 +8,7 @@ import type {
   UnshelvePreflightRequest,
   WorkflowConfirmation,
   WorkflowResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import {
   PreflightStatus,
@@ -15,10 +16,17 @@ import {
 } from "../../../app/dialogs/PreflightStatus";
 import { TargetList } from "../../../app/dialogs/TargetList";
 import type { ShelfRequest } from "./ShelfDialog";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
 import {
-  publishWorkflowFailure,
-  publishWorkflowResult,
-} from "../workflowRefresh";
+  lookupWorkflowAction,
+  type WorkflowActionLookup,
+} from "../../actions/workflowReceipt";
+import {
+  boundedRefresh,
+  runShelfUnshelve,
+  workflowConnectionMatchesTarget,
+  type ShelfUnshelveLifecycle,
+} from "../shelfUnshelveLifecycle";
 
 type Phase =
   | "idle"
@@ -27,7 +35,8 @@ type Phase =
   | "blocked"
   | "stale"
   | "running"
-  | "success"
+  | "completed"
+  | "unknown"
   | "failed";
 
 export function UnshelveDialog({
@@ -41,6 +50,8 @@ export function UnshelveDialog({
   loadWorkspaces = () => backend.listUserWorkspaces(),
   check = (value) => backend.preflightUnshelve(value),
   execute = (value) => backend.confirmUnshelve(value),
+  connection = () => backend.companySubmitConnectionSnapshot(),
+  lookup = lookupWorkflowAction,
 }: {
   request: ShelfRequest;
   changes: PendingChange[];
@@ -52,6 +63,13 @@ export function UnshelveDialog({
   loadWorkspaces?(): Promise<ClientWorkspace[]>;
   check?(request: UnshelvePreflightRequest): Promise<UnshelvePreflight>;
   execute?(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
+  /** Exact dispatching connection snapshot; captured once per confirm. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<WorkflowActionLookup>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
@@ -71,9 +89,12 @@ export function UnshelveDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<UnshelvePreflight>();
   const [result, setResult] = useState<WorkflowResult>();
+  const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [message, setMessage] = useState("");
   const generation = useRef(0);
   const running = useRef(false);
+  const operationId = useRef<string | undefined>(undefined);
   const loadWorkspacesRef = useRef(loadWorkspaces);
   const staleConnection = snapshot.connectionKey !== connectionKey;
   const sourceChanged =
@@ -136,6 +157,9 @@ export function UnshelveDialog({
     running.current = false;
     setPreflight(undefined);
     setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
+    operationId.current = undefined;
     setMessage("");
     setAck(false);
     setPhase("idle");
@@ -155,6 +179,8 @@ export function UnshelveDialog({
     setPhase("checking");
     setMessage("");
     setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
     setAck(false);
     try {
       const value = await check({
@@ -217,21 +243,54 @@ export function UnshelveDialog({
     running.current = true;
     setPhase("running");
     setMessage("");
+    setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
+    // One UUID for this dispatch; it is reused by receipt lookup, never by a retry.
+    const id = crypto.randomUUID();
+    operationId.current = id;
     try {
-      const value = await execute({
-        token: preflight.token,
-        target: preflight.target,
-      });
-      if (epoch !== generation.current) return;
-      setResult(value);
-      setMessage(value.message);
-      const succeeded =
-        value.outcome === "succeeded" &&
-        value.files.length === snapshot.paths.length &&
-        value.files.every((file) => file.state === "succeeded");
-      setPhase(succeeded ? "success" : "failed");
-      await publishWorkflowResult(value, preflight.target, connectionKey);
-      if (!succeeded) {
+      const dispatching = await connection();
+      if (epoch !== generation.current || invalidated) return;
+      if (
+        !workflowConnectionMatchesTarget(
+          preflight.target,
+          dispatching,
+          "unshelve",
+        )
+      )
+        throw new Error(
+          tr(
+            "源连接身份与预检目标不一致，未执行任何 Unshelve。",
+            "Source connection identity changed; nothing was unshelved.",
+          ),
+        );
+      const run = await runShelfUnshelve(
+        { token: preflight.token, target: preflight.target, operationId: id },
+        "unshelve",
+        {
+          connection: dispatching,
+          connectionKey,
+          execute,
+          lookup,
+          refresh: (key, target, value) => boundedRefresh(key, target, value),
+        },
+      );
+      if (epoch !== generation.current || invalidated) return;
+      setResult(run.result);
+      setLifecycle(run.lifecycle);
+      setRefreshFailed(!run.refreshSucceeded);
+      if (run.lifecycle.state === "commandCompleted") setPhase("completed");
+      else if (run.lifecycle.state === "legacy")
+        setPhase(
+          run.lifecycle.outcome === "succeeded"
+            ? "completed"
+            : run.lifecycle.outcome === "unknown"
+              ? "unknown"
+              : "failed",
+        );
+      else setPhase("unknown");
+      if (run.lifecycle.state !== "commandCompleted") {
         setPreflight(undefined);
         setAck(false);
       }
@@ -241,11 +300,17 @@ export function UnshelveDialog({
         setPhase("failed");
         setPreflight(undefined);
         setAck(false);
-        await publishWorkflowFailure(connectionKey);
       }
     } finally {
       running.current = false;
     }
+  }
+
+  /** Cancellation is the existing IPC with the SAME operationId (never a new id). */
+  async function cancel() {
+    const id = operationId.current;
+    if (!id || !running.current) return;
+    await backend.cancelOperation(id).catch(() => undefined);
   }
 
   const status: PreflightState = !snapshot.paths.length
@@ -261,7 +326,7 @@ export function UnshelveDialog({
                 kind:
                   phase === "ready" ||
                   phase === "running" ||
-                  phase === "success"
+                  phase === "completed"
                     ? "ready"
                     : "blocked",
                 blockers: preflight.blockers.map(
@@ -291,6 +356,11 @@ export function UnshelveDialog({
           <button disabled={busy} onClick={onDismiss}>
             {tr("关闭", "Close")}
           </button>
+          {phase === "running" && (
+            <button onClick={() => void cancel()}>
+              {tr("取消操作", "Cancel operation")}
+            </button>
+          )}
           <button
             disabled={
               busy ||
@@ -298,7 +368,7 @@ export function UnshelveDialog({
               !snapshot.paths.length ||
               !targetWorkspace ||
               !validTarget ||
-              phase === "success"
+              phase === "completed"
             }
             onClick={() => void inspect()}
           >
@@ -385,7 +455,12 @@ export function UnshelveDialog({
       </DialogNotice>
       {preflight?.mappings.length ? (
         <div className="workflow-mapping-scroll">
-          <table className="workflow-mapping-table">
+          <ResizableTable
+            tableId="unshelve-mappings"
+            defaults={[240, 240, 180]}
+            minimums={[120, 120, 100]}
+            className="workflow-mapping-table"
+          >
             <thead>
               <tr>
                 <th>{tr("来源", "Source")}</th>
@@ -415,7 +490,7 @@ export function UnshelveDialog({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResizableTable>
         </div>
       ) : null}
       {!result && <PreflightStatus state={status} zh={zh} />}
@@ -440,36 +515,64 @@ export function UnshelveDialog({
           )}
         </DialogNotice>
       )}
-      {message && (result || phase === "success") && (
+      {message && (
         <DialogNotice error={phase === "failed"}>{message}</DialogNotice>
       )}
-      {result && (
-        <>
-          {result.outcome !== "succeeded" && (
-            <DialogNotice error>
-              {tr("结果：", "Outcome: ")}
-              {result.outcome}
-              {result.failure ? ` · ${result.failure}` : ""} ·{" "}
-              {result.refresh.reason}
-            </DialogNotice>
+      {lifecycle?.state === "commandCompleted" && (
+        <DialogNotice>
+          {tr(
+            "命令已完成（仅命令级生命周期）。Unshelve 的逐文件/目标 CL/Resolve 状态没有权威事实，不能据此认定完成；请以刷新后的目标工作区、Pending 与 Resolve 状态为准。",
+            "Command completed (command-level lifecycle only). Per-file unshelve state, target CL and Resolve state have no authoritative fact here, so this is not a per-file success; rely on the refreshed target workspace, Pending and Resolve state.",
           )}
-          {result.files.map((file) => (
-            <DialogNotice
-              key={file.depotPath}
-              error={file.state !== "succeeded"}
-            >
-              {file.state} · {file.depotPath} · {file.message}
-            </DialogNotice>
-          ))}
-          {!!result.operationIds.length && (
-            <p className="workflow-context">
-              {tr("操作记录", "Operations")} {result.operationIds.join(", ")}
-              {result.logReference
-                ? ` · ${tr("日志", "Log")} ${result.logReference}`
-                : ""}
-            </p>
+        </DialogNotice>
+      )}
+      {lifecycle?.state === "unknown" && (
+        <DialogNotice error>
+          {tr(
+            "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对目标工作区/Pending/Resolve，不要直接重复确认。",
+            "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the target workspace/Pending/Resolve before confirming again.",
           )}
-        </>
+        </DialogNotice>
+      )}
+      {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
+        <DialogNotice error>
+          {tr("结果：", "Outcome: ")}
+          {lifecycle.outcome}
+          {result?.failure ? ` · ${result.failure}` : ""} ·{" "}
+          {result?.refresh.reason}
+        </DialogNotice>
+      )}
+      {(lifecycle?.state === "legacy"
+        ? lifecycle.outcome === "partial"
+          ? lifecycle.files.filter((file) => file.state === "succeeded")
+          : lifecycle.files
+        : (lifecycle?.files ?? [])
+      ).map((file) => (
+        <DialogNotice key={file.depotPath} error={file.state !== "succeeded"}>
+          {file.state} · {file.depotPath} · {file.message}
+        </DialogNotice>
+      ))}
+      {lifecycle && result?.message && (
+        <DialogNotice error={lifecycle.state === "unknown"}>
+          {result.message}
+        </DialogNotice>
+      )}
+      {refreshFailed && (
+        <DialogNotice error>
+          {tr(
+            "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
+            "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
+          )}
+        </DialogNotice>
+      )}
+      {(lifecycle?.operationId || result?.operationIds.length) && (
+        <p className="workflow-context">
+          {tr("操作记录", "Operations")}{" "}
+          {lifecycle?.operationId ?? result?.operationIds.join(", ")}
+          {result?.logReference
+            ? ` · ${tr("日志", "Log")} ${result.logReference}`
+            : ""}
+        </p>
       )}
     </Dialog>
   );

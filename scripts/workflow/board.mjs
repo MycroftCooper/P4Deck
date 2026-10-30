@@ -103,6 +103,8 @@ async function buildSnapshot() {
         stage: packageStage(pkg),
         rawStage: pkg.stage,
         module: pkg.module,
+        scope: pkg.scope,
+        statusRaw: pkg.statusRaw,
         evidence: pkg.evidence.length,
         note: pkg.note,
       })),
@@ -113,9 +115,11 @@ async function buildSnapshot() {
         type: pkg.type,
         owner: pkg.owner,
         module: pkg.module,
+        scope: pkg.scope,
         archivedAt: pkg.archivedAt,
         archiveReason: pkg.archiveReason,
         archiveEvidence: pkg.archiveEvidence,
+        canceled: pkg.verification?.canceled === true,
         note: pkg.note,
       })),
     humanTodos: todos.items ?? [],
@@ -204,6 +208,9 @@ input[type=search] { background: var(--panel); border: 1px solid var(--line); co
 .col .cards { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .card { border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; background: var(--bg); }
 .card .id { font-weight: 600; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.card .scope { margin-top: 3px; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.card .snippet { margin-top: 2px; color: var(--muted); font-size: 11px; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .meta { margin-top: 3px; color: var(--muted); font-size: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
 .todos { display: flex; flex-direction: column; gap: 6px; }
 .todo { display: flex; align-items: baseline; gap: 9px; border: 1px solid var(--line); border-radius: 6px;
@@ -352,7 +359,7 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       var items = snapshot.packages.filter(function (pkg) {
         if (pkg.stage !== stage) return false;
         if (!query) return true;
-        return [pkg.id, pkg.owner, pkg.module, pkg.note].join(" ").toLowerCase().indexOf(query) >= 0;
+        return [pkg.id, pkg.owner, pkg.module, pkg.scope, pkg.note].join(" ").toLowerCase().indexOf(query) >= 0;
       });
       var col = el("div", "col");
       var head = el("h3");
@@ -371,6 +378,8 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
           id.appendChild(el("span", "tag " + pkg.priority.toLowerCase(), pkg.priority));
         }
         card.appendChild(id);
+        if (pkg.scope) card.appendChild(el("div", "scope", pkg.scope));
+        if (pkg.note) card.appendChild(el("div", "snippet", pkg.note));
         var meta = el("div", "meta");
         meta.appendChild(el("span", "owner", pkg.owner || "—"));
         if (pkg.module) meta.appendChild(el("span", null, pkg.module));
@@ -445,7 +454,9 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       id.appendChild(document.createTextNode(pkg.id));
       if (pkg.type) id.appendChild(el("span", "tag " + pkg.type, TYPE_LABELS[pkg.type] || pkg.type));
       card.appendChild(id);
+      if (pkg.scope) card.appendChild(el("div", "scope", pkg.scope));
       card.appendChild(el("div", "meta", "归档于 " + fmt(pkg.archivedAt) + " · " + (pkg.archiveReason || "历史迁移项")));
+      if (pkg.canceled) card.appendChild(el("div", "meta", "已取消（未验收）"));
       if (pkg.archiveEvidence) card.appendChild(el("div", "meta", "证据 " + pkg.archiveEvidence));
       host.appendChild(card);
     });

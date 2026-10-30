@@ -1,4 +1,4 @@
-import type { FileActionResult } from "../../shared/contracts/types";
+import type { FileActionResult } from "../../shared/contracts";
 
 /** A resolved bridge promise does not imply that the P4 process succeeded. */
 export function fileActionFeedback(

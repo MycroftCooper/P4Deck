@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { RuntimeInfo, ShelfDetail } from "../../../shared/contracts/types";
+import type { RuntimeInfo, ShelfDetail } from "../../../shared/contracts";
 import { ShelfDetailPage } from "./ShelfDetailPage";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
 
@@ -317,4 +317,37 @@ it("cancels and isolates stale shelf responses across a runtime generation chang
   expect(host.textContent).toContain("current generation");
   expect(host.textContent).not.toContain("stale generation");
   expect(backend.cancelOperation).toHaveBeenCalled();
+});
+
+it("keeps resizing in the shelf file list and leaves code-preview columns independent", async () => {
+  await act(async () =>
+    root.render(
+      <ShelfDetailPage
+        target={`42::${encodeURIComponent(detail.files[0].depotPath)}`}
+        runtime={runtime}
+        zh={false}
+      />,
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(
+    host.querySelectorAll('.shelf-file-scroll [role="separator"]'),
+  ).toHaveLength(2);
+  expect(host.querySelectorAll('.diff-scroll [role="separator"]')).toHaveLength(
+    0,
+  );
+  const code = host.querySelector<HTMLElement>(".diff-line")!;
+  expect(code).not.toBeNull();
+  expect(code.style.gridTemplateColumns).toBe("");
+  const before = code.style.cssText;
+  await act(async () =>
+    host
+      .querySelector('.shelf-file-scroll [role="separator"]')!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+      ),
+  );
+  expect(host.querySelector<HTMLElement>(".diff-line")!.style.cssText).toBe(
+    before,
+  );
 });

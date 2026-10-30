@@ -1,0 +1,156 @@
+{
+  "checks": [
+    {
+      "name": "graph-hashes-current",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-bridge:settingslight1200",
+      "pass": true
+    },
+    {
+      "name": "settings-inline:light1200User",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 517,
+          "y": 665.375,
+          "w": 344.046875,
+          "h": 38,
+          "bg": "rgb(246, 248, 247)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 869.046875,
+          "y": 665.375,
+          "w": 78.953125,
+          "h": 38,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "settings-no-new:Userlight1200",
+      "pass": true
+    },
+    {
+      "name": "settings-keyboard-browse:Userlight1200",
+      "pass": true
+    },
+    {
+      "name": "settings-inline:light1200Workspace",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 68,
+          "y": 745.375,
+          "w": 344.046875,
+          "h": 38,
+          "bg": "rgb(246, 248, 247)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 420.046875,
+          "y": 745.375,
+          "w": 78.953125,
+          "h": 38,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "settings-no-new:Workspacelight1200",
+      "pass": true
+    },
+    {
+      "name": "settings-keyboard-browse:Workspacelight1200",
+      "pass": true
+    },
+    {
+      "name": "root-retained:light1200",
+      "pass": true
+    }
+  ],
+  "errors": [
+    "TypeError: Cannot read properties of undefined (reading 'matchedCount')"
+  ],
+  "blocked": [],
+  "requests": [
+    "http://127.0.0.1:1437/?page=settings&theme=light",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=f6cea515",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=ff4ef722",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=f6cea515",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionProfilesCard.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/CommandBar.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/command-stubs.tsx",
+    "http://127.0.0.1:1437/settings-stubs.tsx",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/settings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/commands.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=6c69785c",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=6c69785c",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=c38117f4",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionDirectoryDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=1e9194a4",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=f6cea515",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/commandPolicy.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx"
+  ],
+  "identity": {
+    "pid": 91936,
+    "config": "src/test/batch-qa/ui-t01/vite.config.mjs",
+    "address": {
+      "address": "127.0.0.1",
+      "family": "IPv4",
+      "port": 1437
+    }
+  },
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "failure": "TimeoutError: locator.waitFor: Timeout 7000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('dialog').getByRole('option').filter({ hasText: 'chosen-user' }) to be visible\u001b[22m\n"
+}

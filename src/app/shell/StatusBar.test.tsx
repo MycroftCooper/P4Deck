@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { OperationEvent } from "../../shared/contracts/types";
+import type { OperationEvent } from "../../shared/contracts";
 import { ContextMenuProvider } from "../context-menu/ContextMenu";
 import { StatusBar } from "./StatusBar";
 
@@ -171,4 +171,70 @@ it("closes on Escape and outside click and stops observing after unmount", async
   );
   expect(host.querySelector(".task-list")).toBeNull();
   expect(stop).not.toHaveBeenCalled();
+});
+
+it("opens the passive status panel from a separate icon button placed after the P4 idle button, keeps three rows and never nests it in P4 tasks", async () => {
+  await render();
+  const icon = () =>
+    host.querySelector<HTMLButtonElement>(".passive-server-trigger")!;
+  const p4 = () => host.querySelector<HTMLButtonElement>(".p4-status")!;
+  expect(icon()).toBeTruthy();
+  // the status icon comes after the P4 idle/progress button, not before it
+  expect(
+    p4().compareDocumentPosition(icon()) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(host.querySelectorAll(".passive-server-status")).toHaveLength(1);
+  expect(
+    host
+      .querySelector(".passive-server-status")
+      ?.getAttribute("data-status-icon"),
+  ).toBe("unknown");
+  expect(icon().getAttribute("aria-expanded")).toBe("false");
+  expect(icon().getAttribute("aria-controls")).toBeNull();
+  expect(host.querySelector(".passive-server-panel")).toBeNull();
+  // the P4 tasks button no longer embeds the passive icon
+  expect(trigger().querySelector(".passive-server-status")).toBeNull();
+  await act(async () => icon().click());
+  expect(icon().getAttribute("aria-expanded")).toBe("true");
+  expect(icon().getAttribute("aria-controls")).toBeTruthy();
+  const panel = host.querySelector<HTMLElement>(".passive-server-panel")!;
+  expect(panel).toBeTruthy();
+  expect(panel.querySelectorAll(".passive-server-details > div")).toHaveLength(
+    3,
+  );
+  expect(host.querySelector(".task-list")).toBeNull();
+  // P4 tasks opens independently and contains no passive status content
+  await act(async () => trigger().click());
+  expect(host.querySelector(".task-list")).toBeTruthy();
+  expect(host.querySelector(".task-list .passive-server-details")).toBeNull();
+  expect(host.querySelector(".task-list")!.contains(panel)).toBe(false);
+  // toggling the icon closes only the status panel
+  await act(async () => icon().click());
+  expect(host.querySelector(".passive-server-panel")).toBeNull();
+  expect(host.querySelector(".task-list")).toBeTruthy();
+  expect(backend.workspaceDiskUsage).not.toHaveBeenCalled();
+  expect(backend.cancelOperation).not.toHaveBeenCalled();
+  expect(logs).not.toHaveBeenCalled();
+});
+
+it("closes the passive status panel on Escape and outside click with focus return", async () => {
+  await render();
+  const icon = () =>
+    host.querySelector<HTMLButtonElement>(".passive-server-trigger")!;
+  await act(async () => icon().click());
+  await act(async () =>
+    host
+      .querySelector(".passive-server-panel")!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      ),
+  );
+  expect(host.querySelector(".passive-server-panel")).toBeNull();
+  expect(document.activeElement).toBe(icon());
+  await act(async () => icon().click());
+  expect(host.querySelector(".passive-server-panel")).toBeTruthy();
+  await act(async () =>
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })),
+  );
+  expect(host.querySelector(".passive-server-panel")).toBeNull();
 });

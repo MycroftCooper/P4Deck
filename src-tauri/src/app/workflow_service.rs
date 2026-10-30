@@ -779,6 +779,7 @@ impl WorkflowService {
             .inspect_shelf(
                 &context,
                 request.change_id,
+                request.mode,
                 &request.depot_paths,
                 &format!("shelf-preflight-{}", Uuid::new_v4()),
                 app,
@@ -815,9 +816,29 @@ impl WorkflowService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses `confirm_shelf_admitted` with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm_shelf(
         &self,
         confirmation: WorkflowConfirmation,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_shelf_inner(confirmation, None, app).await
+    }
+    pub async fn confirm_shelf_admitted(
+        &self,
+        confirmation: WorkflowConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_shelf_inner(confirmation, Some(guard), app)
+            .await
+    }
+    async fn confirm_shelf_inner(
+        &self,
+        confirmation: WorkflowConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> WorkflowResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -848,12 +869,20 @@ impl WorkflowService {
                 "The connection or workspace changed after preflight.",
             );
         }
-        let guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         let inspection = self
             .repository
             .inspect_shelf(
                 &context,
                 request.change_id,
+                request.mode,
                 &request.depot_paths,
                 &format!("shelf-recheck-{}", Uuid::new_v4()),
                 app,
@@ -891,7 +920,7 @@ impl WorkflowService {
         let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
-            .execute_shelf(&context, &request, operation_id.clone(), &guard, app)
+            .execute_shelf(&context, &request, operation_id.clone(), guard, app)
             .await;
         self.clear_shelf_details();
         self.invalidate(
@@ -899,12 +928,44 @@ impl WorkflowService {
             &request.depot_paths,
             InvalidationReason::ChangelistMutation,
         );
-        operation_result(
+        let revalidated = self
+            .revalidate_shelf_after_write(&context, &request, &record.content_digest, app)
+            .await;
+        shelf_unshelve_result(
             &record.target,
             execution,
             operation_id,
-            "Shelf operation completed.",
+            revalidated,
+            "Shelf command completed; refresh the shelf before relying on membership.",
         )
+    }
+
+    /// Write-after recheck for SHELF: the command-level lifecycle is only
+    /// accepted as confirmed when the shelf state can be re-inspected and the
+    /// content digest moved away from the reviewed one. No per-file success is
+    /// inferred here; this only separates known from unknown.
+    async fn revalidate_shelf_after_write(
+        &self,
+        context: &P4Context,
+        request: &ShelfPreflightRequest,
+        reviewed_digest: &str,
+        app: Option<&AppHandle>,
+    ) -> bool {
+        match self
+            .repository
+            .inspect_shelf(
+                context,
+                request.change_id,
+                request.mode,
+                &request.depot_paths,
+                &format!("shelf-postwrite-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            Ok(inspection) => evaluate_shelf(request, inspection).digest != reviewed_digest,
+            Err(_) => false,
+        }
     }
 
     pub async fn preflight_unshelve(
@@ -964,9 +1025,31 @@ impl WorkflowService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses `confirm_unshelve_admitted` with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm_unshelve(
         &self,
         confirmation: WorkflowConfirmation,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_unshelve_inner(confirmation, None, app).await
+    }
+
+    pub async fn confirm_unshelve_admitted(
+        &self,
+        confirmation: WorkflowConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_unshelve_inner(confirmation, Some(guard), app)
+            .await
+    }
+
+    async fn confirm_unshelve_inner(
+        &self,
+        confirmation: WorkflowConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> WorkflowResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -992,7 +1075,14 @@ impl WorkflowService {
                 "The source connection changed after preflight.",
             );
         }
-        let guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         let inspection = self
             .repository
             .inspect_unshelve(
@@ -1039,6 +1129,13 @@ impl WorkflowService {
                 "The source shelf or target workspace changed after preflight.",
             );
         }
+        if self.contexts.snapshot() != (context.clone(), generation) {
+            return rejected(
+                &record.target,
+                WorkflowFailureCode::ContextChanged,
+                "The active connection changed during Unshelve confirmation.",
+            );
+        }
         let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
@@ -1046,7 +1143,7 @@ impl WorkflowService {
                 &evaluation.target_context,
                 &request,
                 operation_id.clone(),
-                &guard,
+                guard,
                 app,
             )
             .await;
@@ -1055,12 +1152,41 @@ impl WorkflowService {
             &request.depot_paths,
             InvalidationReason::ChangelistMutation,
         );
-        operation_result(
+        let revalidated = self
+            .revalidate_unshelve_after_write(&context, &request, &record.content_digest, app)
+            .await;
+        shelf_unshelve_result(
             &record.target,
             execution,
             operation_id,
-            "Unshelve completed; files may still require Resolve.",
+            revalidated,
+            "Unshelve command completed; refresh the target changelist/workspace and check Resolve before relying on per-file state.",
         )
+    }
+
+    /// Write-after recheck for UNSHELVE: same rules as SHELF. Only a readable
+    /// post-write state whose digest changed can confirm the command-level
+    /// lifecycle; no requested path is ever marked as per-file success.
+    async fn revalidate_unshelve_after_write(
+        &self,
+        context: &P4Context,
+        request: &UnshelvePreflightRequest,
+        reviewed_digest: &str,
+        app: Option<&AppHandle>,
+    ) -> bool {
+        match self
+            .repository
+            .inspect_unshelve(
+                context,
+                request,
+                &format!("unshelve-postwrite-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            Ok(inspection) => evaluate_unshelve(request, inspection).digest != reviewed_digest,
+            Err(_) => false,
+        }
     }
 
     pub async fn preflight_resolve(
@@ -1396,7 +1522,10 @@ impl WorkflowService {
         let operation_id = valid_operation_id(confirmation.operation_id);
         let operation = self.repository.begin_operation_group(operation_id.clone());
         let (context, _) = self.contexts.snapshot();
-        let _guard = self.repository.lock_mutations(&context.server).await;
+        let guard = self
+            .repository
+            .lock_write_transaction(&context, &operation_id)
+            .await?;
         self.ensure_manual_target_current(&session_record)?;
         operation.ensure_active()?;
         let recheck = self
@@ -1461,6 +1590,7 @@ impl WorkflowService {
             &[session_record.session.depot_path.clone()],
             InvalidationReason::FileMutation,
         );
+        guard.finish(saved.durability_confirmed)?;
         Ok(ManualMergeSaveResult {
             outcome: if saved.durability_confirmed {
                 WorkflowOutcome::Succeeded
@@ -2711,6 +2841,7 @@ fn rejected(
     message: impl Into<String>,
 ) -> WorkflowResult {
     WorkflowResult {
+        execution: None,
         outcome: WorkflowOutcome::Rejected,
         failure: Some(failure),
         message: message.into(),
@@ -2735,6 +2866,7 @@ fn rejected(
 
 fn rejected_manual(failure: WorkflowFailureCode, message: impl Into<String>) -> WorkflowResult {
     WorkflowResult {
+        execution: None,
         outcome: WorkflowOutcome::Rejected,
         failure: Some(failure),
         message: message.into(),
@@ -2808,65 +2940,157 @@ fn reopen_file_result(
     }
 }
 
+/// SHELF create/replace/update and UNSHELVE have no authoritative per-file
+/// facts. The optimistic boundary is intent/progress only: a clean command
+/// lifecycle plus a revalidated post-write state can be confirmed at command
+/// level, but no requested path is ever projected as per-file success.
+fn shelf_unshelve_result(
+    target: &WorkflowTargetSnapshot,
+    result: Result<OperationResult, String>,
+    operation_id: String,
+    revalidated: bool,
+    success: &str,
+) -> WorkflowResult {
+    let clean = result.as_ref().is_ok_and(|operation| {
+        operation.exit_code == 0
+            && !operation.events.iter().any(|event| {
+                matches!(
+                    event.kind,
+                    EventKind::Error | EventKind::Cancelled | EventKind::Warning
+                ) || event
+                    .message
+                    .as_deref()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                    .is_some_and(|value| {
+                        value.get("code").and_then(|code| code.as_str()) == Some("error")
+                            || value
+                                .get("severity")
+                                .and_then(|severity| {
+                                    severity.as_i64().or_else(|| {
+                                        severity.as_str().and_then(|text| text.parse().ok())
+                                    })
+                                })
+                                .is_some_and(|severity| severity >= 2)
+                    })
+            })
+    });
+    let confirmed = clean && revalidated;
+    let message = if confirmed {
+        success
+    } else {
+        "The command may have completed, but the shelf/unshelve state could not be revalidated. Individual outcomes are unconfirmed; refresh and inspect before any manual retry."
+    };
+    let outcome = if confirmed {
+        WorkflowOutcome::Succeeded
+    } else {
+        WorkflowOutcome::Unknown
+    };
+    let state = if confirmed {
+        "commandCompleted"
+    } else {
+        "unknown"
+    };
+    WorkflowResult {
+        execution: Some(WorkflowExecution {
+            kind: target.kind.clone(),
+            operation_id: operation_id.clone(),
+            state: state.into(),
+            outcome,
+            files: Vec::new(),
+        }),
+        outcome,
+        failure: if confirmed {
+            None
+        } else {
+            Some(WorkflowFailureCode::UncertainOutcome)
+        },
+        message: message.into(),
+        operation_ids: vec![operation_id.clone()],
+        log_reference: Some(operation_id),
+        files: Vec::new(),
+        refresh: refresh(
+            target.depot_paths.clone(),
+            "Refresh shelf detail, Pending changes and review caches; do not treat this result as per-file success.",
+        ),
+    }
+}
+
+/// Generic command-level result builder kept for unit tests and non-shelf
+/// command lifecycles. SHELF/UNSHELVE now use `shelf_unshelve_result`, which
+/// adds the lifecycle envelope and claims no per-file success.
+#[allow(dead_code)]
 fn operation_result(
     target: &WorkflowTargetSnapshot,
     result: Result<OperationResult, String>,
     operation_id: String,
     success: &str,
 ) -> WorkflowResult {
-    match result {
-        Ok(operation) if operation.exit_code == 0 => WorkflowResult {
-            outcome: WorkflowOutcome::Succeeded,
-            failure: None,
-            message: success.into(),
-            operation_ids: vec![operation_id.clone()],
-            log_reference: Some(operation_id.clone()),
-            files: target
-                .depot_paths
-                .iter()
-                .map(|path| WorkflowFileResult {
-                    depot_path: path.clone(),
-                    state: WorkflowFileState::Succeeded,
-                    message: success.into(),
-                    operation_id: Some(operation_id.clone()),
-                })
-                .collect(),
-            refresh: refresh(
-                target.depot_paths.clone(),
-                "Refresh affected changelist and workspace views.",
-            ),
+    // A failed/cancelled batch can have mutated some paths. Without a per-file
+    // authoritative post-state, neither failure nor completion is proven for them.
+    // Do not infer acknowledgements from localized human-readable output.
+    let confirmed = result.as_ref().is_ok_and(|operation| {
+        operation.exit_code == 0
+            && !operation.events.iter().any(|event| {
+                matches!(
+                    event.kind,
+                    EventKind::Error | EventKind::Cancelled | EventKind::Warning
+                ) || event
+                    .message
+                    .as_deref()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                    .is_some_and(|value| {
+                        value.get("code").and_then(|code| code.as_str()) == Some("error")
+                            || value
+                                .get("severity")
+                                .and_then(|severity| {
+                                    severity.as_i64().or_else(|| {
+                                        severity.as_str().and_then(|text| text.parse().ok())
+                                    })
+                                })
+                                .is_some_and(|severity| severity >= 2)
+                    })
+            })
+    });
+    let message = if confirmed {
+        success
+    } else {
+        "Some files may have changed; individual outcomes are unconfirmed. Refresh and inspect before any manual retry."
+    };
+    WorkflowResult {
+        execution: None,
+        outcome: if confirmed {
+            WorkflowOutcome::Succeeded
+        } else {
+            WorkflowOutcome::Unknown
         },
-        Ok(operation) => {
-            let cancelled = operation
-                .events
-                .iter()
-                .any(|event| matches!(event.kind, EventKind::Cancelled));
-            WorkflowResult { outcome: if cancelled { WorkflowOutcome::Cancelled } else { WorkflowOutcome::Failed }, failure: Some(if cancelled { WorkflowFailureCode::Cancelled } else { WorkflowFailureCode::CommandFailure }), message: if cancelled { "Operation was cancelled.".into() } else { "The server rejected the operation.".into() }, operation_ids: vec![operation_id.clone()], log_reference: Some(operation_id.clone()), files: target.depot_paths.iter().map(|path| WorkflowFileResult { depot_path: path.clone(), state: if cancelled { WorkflowFileState::Cancelled } else { WorkflowFileState::Failed }, message: "Refresh before retrying because a partial server-side change is possible.".into(), operation_id: Some(operation_id.clone()) }).collect(), refresh: refresh(target.depot_paths.clone(), "Failure or cancellation may be partial; refresh before retrying.") }
-        }
-        Err(_) => WorkflowResult {
-            outcome: WorkflowOutcome::Unknown,
-            failure: Some(WorkflowFailureCode::UncertainOutcome),
-            message: "The command outcome is uncertain.".into(),
-            operation_ids: vec![operation_id.clone()],
-            log_reference: Some(operation_id.clone()),
-            files: target
-                .depot_paths
-                .iter()
-                .map(|path| WorkflowFileResult {
-                    depot_path: path.clone(),
-                    state: WorkflowFileState::Unknown,
-                    message: "Refresh before any retry.".into(),
-                    operation_id: Some(operation_id.clone()),
-                })
-                .collect(),
-            refresh: refresh(
-                target.depot_paths.clone(),
-                "The outcome is uncertain; refresh all related state.",
-            ),
+        failure: if confirmed {
+            None
+        } else {
+            Some(WorkflowFailureCode::UncertainOutcome)
         },
+        message: message.into(),
+        operation_ids: vec![operation_id.clone()],
+        log_reference: Some(operation_id.clone()),
+        files: target
+            .depot_paths
+            .iter()
+            .map(|path| WorkflowFileResult {
+                depot_path: path.clone(),
+                state: if confirmed {
+                    WorkflowFileState::Succeeded
+                } else {
+                    WorkflowFileState::Unknown
+                },
+                message: message.into(),
+                operation_id: Some(operation_id.clone()),
+            })
+            .collect(),
+        refresh: refresh(
+            target.depot_paths.clone(),
+            "Refresh affected changelist and workspace views before retrying.",
+        ),
     }
 }
-
 fn file_result(
     path: String,
     result: Result<OperationResult, String>,
@@ -2941,6 +3165,7 @@ fn result_from_files(
         _ => Some(WorkflowFailureCode::CommandFailure),
     };
     WorkflowResult {
+        execution: None,
         outcome,
         failure,
         message: message.into(),
@@ -2967,6 +3192,183 @@ fn refresh(paths: Vec<String>, reason: impl Into<String>) -> WorkflowRefreshAdvi
 mod tests {
     use super::*;
 
+    #[test]
+    fn shelf_i01_batch_errors_never_claim_per_file_failure_or_success() {
+        let target = WorkflowTargetSnapshot {
+            kind: "unshelve".into(),
+            server: "synthetic".into(),
+            user: "tester".into(),
+            client: "workspace".into(),
+            workspace: r"C:\synthetic".into(),
+            context_generation: 1,
+            source_change_id: Some(7),
+            target_change_id: Some(9),
+            depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+        };
+        for (exit_code, kind, message, expected) in [
+            (0, EventKind::Completed, "", WorkflowOutcome::Succeeded),
+            (
+                1,
+                EventKind::Error,
+                "one file may have changed",
+                WorkflowOutcome::Unknown,
+            ),
+            (0, EventKind::Error, "error", WorkflowOutcome::Unknown),
+            (
+                0,
+                EventKind::Cancelled,
+                "cancelled",
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Stdout,
+                r#"{"severity":3,"data":"denied"}"#,
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Stdout,
+                r#"{"severity":"2","data":"warning"}"#,
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Warning,
+                "output truncated",
+                WorkflowOutcome::Unknown,
+            ),
+        ] {
+            let operation = OperationResult {
+                operation_id: "synthetic".into(),
+                exit_code,
+                duration_ms: 0,
+                events: vec![crate::domain::OperationEvent {
+                    operation_id: "synthetic".into(),
+                    kind,
+                    message: Some(message.into()),
+                    progress: None,
+                    timestamp: String::new(),
+                }],
+            };
+            let result = operation_result(&target, Ok(operation), "synthetic".into(), "done");
+            assert_eq!(result.outcome, expected);
+            assert_eq!(result.files.len(), 2);
+            assert!(result.files.iter().all(|file| file.state
+                == if expected == WorkflowOutcome::Succeeded {
+                    WorkflowFileState::Succeeded
+                } else {
+                    WorkflowFileState::Unknown
+                }));
+        }
+        assert_eq!(
+            operation_result(&target, Err("transport".into()), "id".into(), "done").outcome,
+            WorkflowOutcome::Unknown
+        );
+    }
+    #[test]
+    fn shelf_unshelve_result_never_claims_per_file_success() {
+        let target = WorkflowTargetSnapshot {
+            kind: "shelf".into(),
+            server: "synthetic".into(),
+            user: "tester".into(),
+            client: "workspace".into(),
+            workspace: r"C:\synthetic".into(),
+            context_generation: 1,
+            source_change_id: Some(7),
+            target_change_id: None,
+            depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+        };
+        let clean = OperationResult {
+            operation_id: "synthetic".into(),
+            exit_code: 0,
+            duration_ms: 0,
+            events: vec![],
+        };
+        let confirmed = shelf_unshelve_result(
+            &target,
+            Ok(clean.clone()),
+            "synthetic-op".into(),
+            true,
+            "done",
+        );
+        assert_eq!(confirmed.outcome, WorkflowOutcome::Succeeded);
+        assert!(confirmed
+            .files
+            .iter()
+            .all(|file| file.state == WorkflowFileState::Unknown));
+        let unverified =
+            shelf_unshelve_result(&target, Ok(clean), "synthetic-op".into(), false, "done");
+        assert_eq!(unverified.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(
+            unverified.failure,
+            Some(WorkflowFailureCode::UncertainOutcome)
+        );
+        assert!(unverified
+            .files
+            .iter()
+            .all(|file| file.state == WorkflowFileState::Unknown));
+    }
+    #[test]
+    fn shelf_i01_delete_scope_permission_and_stale_digest() {
+        let mut current = change();
+        current.shelved_files = current.files.clone();
+        let request = ShelfPreflightRequest {
+            change_id: 7,
+            depot_paths: vec!["//depot/a".into()],
+            mode: ShelfMode::Delete,
+            replace: false,
+        };
+        let inspect = |change, permission| ShelfInspection {
+            change,
+            permission,
+            facts: Vec::new(),
+            shelf_facts: Vec::new(),
+            operation_ids: Vec::new(),
+        };
+        let first = evaluate_shelf(
+            &request,
+            inspect(Some(current.clone()), PermissionAssessment::Allowed),
+        );
+        assert!(first.blockers.is_empty());
+        assert_eq!(first.scope.delete_paths, request.depot_paths);
+        assert!(first.scope.create_paths.is_empty());
+        assert!(first.scope.replace_paths.is_empty());
+        let denied = evaluate_shelf(
+            &request,
+            inspect(
+                Some(current.clone()),
+                PermissionAssessment::Denied(request.depot_paths.clone()),
+            ),
+        );
+        assert!(denied
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::PermissionDenied));
+        let unknown = evaluate_shelf(
+            &request,
+            inspect(Some(current.clone()), PermissionAssessment::Unknown),
+        );
+        assert!(unknown
+            .warnings
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::PermissionUnknown));
+        current.shelved_files.clear();
+        let stale = evaluate_shelf(
+            &request,
+            inspect(Some(current), PermissionAssessment::Allowed),
+        );
+        assert_ne!(first.digest, stale.digest);
+        assert!(stale
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::FileNotShelved));
+        let absent = evaluate_shelf(&request, inspect(None, PermissionAssessment::Allowed));
+        assert!(absent
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::ChangeNotFound));
+    }
     fn shelf_test_service() -> (WorkflowService, std::path::PathBuf) {
         let directory = std::env::temp_dir().join(format!(
             "p4deck-shelf-cursor-{}-{}",
@@ -3057,6 +3459,7 @@ mod tests {
                 lock_owner: None,
                 other_open: Vec::new(),
                 exclusive_open: None,
+                resolve: None,
             }],
             shelved_files: Vec::new(),
         }
@@ -3320,6 +3723,7 @@ mod tests {
                 lock_owner: None,
                 other_open: Vec::new(),
                 exclusive_open: None,
+                resolve: None,
             }],
             ..change()
         };

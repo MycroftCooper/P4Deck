@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CommandPalette } from "./CommandPalette";
+import { resetShortcutOverrides, setShortcutOverride } from "./keymap";
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -19,6 +20,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  resetShortcutOverrides();
 });
 
 it("lists catalog commands, exposes disabled reasons, filters, and executes", async () => {
@@ -116,4 +118,23 @@ it("supports listbox navigation, traps Tab, Escape, and restores focus", async (
   await act(async () => Promise.resolve());
   expect(document.activeElement).toBe(source);
   source.remove();
+});
+
+it("shows the user keymap override for a command label", async () => {
+  setShortcutOverride("view.refresh", "Mod+Shift+9");
+  await act(async () =>
+    root.render(
+      <CommandPalette
+        open
+        zh={false}
+        environment={{ detached: false, runtimeReady: true }}
+        onClose={vi.fn()}
+        onExecute={vi.fn()}
+      />,
+    ),
+  );
+  const refresh = [
+    ...host.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.includes("Refresh Current Data"))!;
+  expect(refresh.querySelector("kbd")?.textContent).toContain("Ctrl+Shift+9");
 });

@@ -14,6 +14,15 @@ export const storage = {
       /* Keep in-memory state usable. */
     }
   },
+  /** Like setItem but reports failure so callers can notify instead of silently losing data. */
+  setItemChecked(key: string, value: string): boolean {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
   removeItem(key: string): void {
     try {
       localStorage.removeItem(key);

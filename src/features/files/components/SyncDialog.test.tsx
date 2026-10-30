@@ -7,7 +7,7 @@ import type {
   SyncPreviewPlan,
   SyncResult,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { SyncDialog } from "./SyncDialog";
 
 const harness = dialogHarness();

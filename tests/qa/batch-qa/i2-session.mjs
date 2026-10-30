@@ -1,0 +1,41 @@
+import {createServer} from 'vite';
+import {chromium} from '@playwright/test';
+import {readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+const out=new URL('./evidence/',import.meta.url);
+const r={checks:[],errors:[],blocked:[],requests:[],identity:{pid:process.pid,config:'tests/qa/preview-audit/vite.config.mjs',host:'127.0.0.1',port:1437},cleanup:{}};
+const check=(name,pass,data)=>{r.checks.push({name,pass,data});if(!pass)throw Error(name);};
+let server,browser;
+try{
+ const freeze=JSON.parse(await readFile('src/features/companySubmit/i2-handoff.json'));const changed=[];for(const[p,h]of Object.entries(freeze.hashes))if(createHash('sha256').update(await readFile(p)).digest('hex')!==h)changed.push(p);check('frozen-hashes',!changed.length,changed);
+ server=await createServer({configFile:r.identity.config});await server.listen();r.identity.address=server.httpServer.address();
+ browser=await chromium.launch({channel:'msedge',headless:true});const context=await browser.newContext({viewport:{width:1100,height:820},serviceWorkers:'block'});
+ await context.route('**/*',route=>{const url=route.request().url();r.requests.push(url);if(new URL(url).origin==='http://127.0.0.1:1437')return route.continue();r.blocked.push(url);return route.abort();});
+ const page=await context.newPage();page.on('pageerror',e=>r.errors.push(String(e)));
+ const launch=()=>page.getByRole('button',{name:'Launch company submission (disabled)',exact:true});
+ const menu=async id=>{await page.locator('[data-pending-change="'+id+'"]').click({button:'right'});return page.getByRole('button',{name:'Company preview',exact:true});};
+ const open=async id=>{await(await menu(id)).click();await page.getByRole('dialog').waitFor();};
+ await page.goto('http://127.0.0.1:1437/i2.html');await page.locator('[data-pending-change="10"]').waitFor();
+ check('no-native-bridge',await page.evaluate(()=>!('__TAURI_INTERNALS__'in window)));
+ check('default-disabled',await(await menu(0)).isDisabled());
+ await page.locator('[data-pending-change="2"]').click();await page.locator('[data-pending-change="10"]').click({modifiers:['Control']});
+ check('multiple-disabled',await(await menu(10)).isDisabled(),await page.evaluate(()=>window.i2Audit.menu.scope));
+ await page.evaluate(()=>window.qaSwitch());await page.waitForTimeout(150);await open(10);await page.getByText('A local-drive absolute .exe path is required.',{exact:true}).waitFor();
+ check('single-numbered-entry',await page.getByRole('dialog').innerText().then(t=>t.includes('CL 10'))&&await page.evaluate(()=>window.i2Audit.reads===1));
+ const path=page.getByRole('textbox',{name:'Local absolute .exe path'});await path.fill('C:\\Synthetic Tools\\submit.exe');
+ check('unverified-not-started',await launch().isDisabled()&&await page.getByText('Awaiting host planning; tool availability unverified.',{exact:true}).isVisible());
+ check('no-simulation-controls-in-product',await page.getByRole('dialog').getByRole('button').allTextContents().then(a=>a.length===4&&!a.some(t=>/simulate|reserved|running/i.test(t))),await page.getByRole('dialog').getByRole('button').allTextContents());
+ await page.screenshot({path:fileURLToPath(new URL('i2-wide.png',out))});await page.setViewportSize({width:390,height:700});await page.screenshot({path:fileURLToPath(new URL('i2-narrow.png',out))});
+ check('narrow-dialog-contained',await page.getByRole('dialog').boundingBox().then(b=>b.x>=0&&b.x+b.width<=391&&b.y>=0&&b.y+b.height<=701));
+ await page.evaluate(()=>window.qaSwitch());check('switch-closes-old-dialog',await page.getByRole('dialog').count()===0);
+ await open(10);check('path-memory-only',await path.inputValue()==='');await page.getByRole('button',{name:'Close',exact:true}).last().click();
+ await page.getByRole('button',{name:'Submit CL 10',exact:true}).click();check('normal-submit-target',await page.evaluate(()=>JSON.stringify(window.i2Audit.normal)==='[["submit",{"type":"pending","id":10,"count":1}]]'));
+ for(const mode of ['numeric','missing','error']){await page.evaluate(mode=>window.i2Audit.mode=mode,mode);await open(10);await page.getByText('Connection identity unavailable; real launch remains disabled.',{exact:true}).waitFor();check('identity-rejected:'+mode,await launch().isDisabled());await page.getByRole('button',{name:'Close',exact:true}).last().click();}
+ await page.evaluate(()=>{window.i2Audit.mode='deferred';});await open(10);await page.getByText('Reading host connection identity…',{exact:true}).waitFor();check('loading-refresh-disabled',await page.getByRole('button',{name:'Refresh connection identity',exact:true}).isDisabled());
+ await page.evaluate(()=>window.qaSwitch());await page.evaluate(()=>window.i2Audit.mode='error');await open(100);await page.getByText('Connection identity unavailable; real launch remains disabled.',{exact:true}).waitFor();
+ await page.evaluate(()=>window.i2Audit.queue[0].resolve(window.exactSnapshot));await page.waitForTimeout(150);check('late-old-snapshot-ignored',await page.getByText('Connection identity unavailable; real launch remains disabled.',{exact:true}).isVisible());
+ await page.evaluate(()=>window.i2Audit.mode='ready');await page.getByRole('button',{name:'Refresh connection identity',exact:true}).click();await page.getByText('A local-drive absolute .exe path is required.',{exact:true}).waitFor();check('explicit-retry-still-disabled',await launch().isDisabled());
+ check('no-page-errors',r.errors.length===0,r.errors);check('no-external-requests',r.blocked.length===0,r.blocked);
+ await context.close();
+}catch(e){r.failure=String(e);process.exitCode=1;}finally{if(browser){await browser.close();r.cleanup.browserClosed=true;}if(server){await server.close();r.cleanup.serverClosed=true;}await writeFile(new URL('i2-session.json',out),JSON.stringify(r,null,2));console.log(JSON.stringify({checks:r.checks,errors:r.errors,failure:r.failure,cleanup:r.cleanup}));}

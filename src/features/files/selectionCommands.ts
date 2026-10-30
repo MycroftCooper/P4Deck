@@ -1,7 +1,4 @@
-import type {
-  FileActionRequest,
-  WorkspaceNode,
-} from "../../shared/contracts/types";
+import type { FileActionRequest, WorkspaceNode } from "../../shared/contracts";
 import { pathKey } from "./address";
 import { nodeKey } from "./selection";
 

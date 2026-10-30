@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   BranchMappingDraft,
   BranchMappingPage,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   branchMappingError,
   isBranchMappingSnapshot,

@@ -183,7 +183,7 @@ fn bounded_version_output(executable: &std::path::Path) -> Option<std::process::
     }
 }
 
-fn resolve_executable(explicit: Option<&str>) -> Option<PathBuf> {
+pub(crate) fn resolve_executable(explicit: Option<&str>) -> Option<PathBuf> {
     let requested = explicit.map(str::trim).filter(|value| !value.is_empty());
     if let Some(requested) = requested {
         let path = PathBuf::from(requested);
@@ -196,7 +196,29 @@ fn resolve_executable(explicit: Option<&str>) -> Option<PathBuf> {
                 .flatten()
         });
     }
-    search_path(if cfg!(windows) { "p4.exe" } else { "p4" })
+    search_path(if cfg!(windows) { "p4.exe" } else { "p4" }).or_else(|| {
+        if !cfg!(windows) {
+            return None;
+        }
+        standard_installation(
+            ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
+                .into_iter()
+                .filter_map(std::env::var_os)
+                .map(PathBuf::from),
+            |path| path.is_file(),
+        )
+    })
+}
+
+fn standard_installation(
+    roots: impl IntoIterator<Item = PathBuf>,
+    is_file: impl Fn(&std::path::Path) -> bool,
+) -> Option<PathBuf> {
+    roots
+        .into_iter()
+        .filter(|root| root.is_absolute())
+        .map(|root| root.join("Perforce").join("p4.exe"))
+        .find(|path| is_file(path))
 }
 
 fn search_path(name: &str) -> Option<PathBuf> {
@@ -228,23 +250,21 @@ fn append_context(command: &mut Command, context: &P4Context) {
     ] {
         command.env_remove(name);
     }
-    // Removing P4CHARSET exposes the Windows registry fallback. An omitted
-    // draft charset must not turn a non-Unicode connection into a Unicode one.
-    command.env(
-        "P4CHARSET",
-        context
-            .charset
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .unwrap_or("none"),
-    );
+    // Removing P4CHARSET exposes the Windows registry fallback. An omitted draft charset must
+    // not fall back to "none": Helix servers store descriptions in Unicode, and "none" makes P4
+    // emit raw bytes (mojibake) or the literal "untranslatable" for CJK text. Default to utf8
+    // unless the profile explicitly asks for another charset (including "none").
+    let charset = context
+        .charset
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("utf8");
+    command.env("P4CHARSET", charset);
     command.args(["-p", &context.server, "-u", &context.user]);
     if !context.client.is_empty() {
         command.args(["-c", &context.client]);
     }
-    if let Some(charset) = context.charset.as_deref().filter(|value| !value.is_empty()) {
-        command.args(["-C", charset]);
-    }
+    command.args(["-C", charset]);
     if let Some(cwd) = context.cwd.as_deref().filter(|value| !value.is_empty()) {
         command.args(["-d", cwd]);
     }
@@ -520,8 +540,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn standard_cli_discovery_is_bounded_and_does_not_execute() {
+        let root = std::env::temp_dir().join("synthetic-program-files");
+        let first = root.join("first");
+        let second = root.join("second");
+        let expected = second.join("Perforce").join("p4.exe");
+        assert_eq!(
+            standard_installation([first, second], |path| path == expected),
+            Some(expected)
+        );
+        assert!(standard_installation([root], |_| false).is_none());
+        assert!(standard_installation([PathBuf::from("relative")], |_| true).is_none());
+    }
+
+    #[test]
     fn draft_charset_overrides_registry_and_environment_defaults() {
-        for (charset, expected) in [(None, "none"), (Some(""), "none"), (Some("utf8"), "utf8")] {
+        for (charset, expected) in [(None, "utf8"), (Some(""), "utf8"), (Some("utf8"), "utf8")] {
             let context = P4Context {
                 charset: charset.map(str::to_owned),
                 ..P4Context::default()

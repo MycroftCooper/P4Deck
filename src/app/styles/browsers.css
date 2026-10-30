@@ -370,3 +370,31 @@
 .history-page > .query-bar {
   margin-top: 0;
 }
+
+/* Header and virtual rows share exact tracks; handles never participate in row selection. */
+.resizable-columns > span {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+}
+.resizable-columns .history-column-resizer {
+  right: -6px;
+}
+
+.shared-resize-header {
+  display: grid;
+  padding: 7px;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.shared-resize-header > div {
+  padding-right: 10px;
+}
+.branch-view-section {
+  overflow-x: auto;
+}

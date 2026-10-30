@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, createRef, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -8,7 +8,7 @@ import type {
   LogPolicy,
   OperationEvent,
   OperationRecord,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { DiagnosticsView } from "./DiagnosticsView";
 import { LogView } from "./LogView";
 import {
@@ -32,6 +32,7 @@ const backend = vi.hoisted(() => ({
   subscribeDiagnosticAlerts: vi.fn(),
   runP4: vi.fn(),
   cancelOperation: vi.fn(),
+  companySubmitConnectionSnapshot: vi.fn(),
 }));
 vi.mock("../../../infrastructure/backend", () => ({
   backend,
@@ -85,7 +86,24 @@ beforeEach(() => {
   localStorage.clear();
   Object.values(backend).forEach((mock) => mock.mockReset());
   backend.getLogPolicy.mockResolvedValue(policy);
-  backend.setLogPolicy.mockResolvedValue(policy);
+  backend.companySubmitConnectionSnapshot.mockResolvedValue({
+    profileId: "fixture",
+    generation: "1",
+    server: "fixture:1666",
+    user: "tester",
+    client: "fixture-client",
+  });
+  backend.setLogPolicy.mockResolvedValue({
+    kind: "logPolicySet",
+    operationId: "op-policy",
+    state: "committed",
+    outcome: "succeeded",
+    artifact: { exists: true, sizeBytes: 128, sha256: "C".repeat(64) },
+    details: policy,
+    optimistic: "intentOnly",
+    message: "saved",
+    legacy: policy,
+  });
   backend.queryLogPage.mockResolvedValue({ entries: [] });
   backend.subscribeLogsCleared.mockResolvedValue(() => undefined);
   backend.queryOperationJournal.mockResolvedValue({ records: [] });
@@ -105,10 +123,21 @@ beforeEach(() => {
     invalidationReasons: { ManualRefresh: 1 },
   });
   backend.exportDiagnostics.mockResolvedValue({
-    path: "C:\\safe\\p4deck-diagnostic.json",
-    sizeBytes: 1024,
-    truncated: false,
-    format: "json",
+    kind: "diagnosticsExport",
+    operationId: "op-export",
+    state: "committed",
+    outcome: "succeeded",
+    artifact: {
+      path: "C:\\safe\\p4deck-diagnostic.json",
+      fileName: "p4deck-diagnostic.json",
+      exists: true,
+      sizeBytes: 1024,
+      sha256: "B".repeat(64),
+    },
+    details: { format: "json", truncated: false, sizeBytes: 1024 },
+    optimistic: "intentOnly",
+    message: "exported",
+    legacy: null,
   });
   backend.subscribeOperationEvents.mockImplementation(
     async (_callback: (event: OperationEvent) => void) => () => undefined,
@@ -209,6 +238,49 @@ it("applies real log filters, cursor retry, stale isolation, and accessible narr
   );
 });
 
+it("renders a cancelled log as a non-error Cancelled row and filters by the cancelled level", async () => {
+  const cancelledEntry: LogEntry = { ...log("cancelled"), level: "cancelled" };
+  backend.queryLogPage.mockResolvedValue({ entries: [cancelledEntry] });
+  const props: ComponentProps<typeof LogView> = {
+    zh: false,
+    connectionKey: "connection-a",
+    refreshKey: 0,
+    onOperationFilter: vi.fn(),
+    onOpenJournal: vi.fn(),
+  };
+  await act(async () => root.render(<LogView {...props} />));
+  await flush();
+  expect(host.textContent).toContain("Cancelled");
+  expect(host.querySelector("tr.cancelled td:nth-child(2)")?.textContent).toBe(
+    "Cancelled",
+  );
+  const row = host.querySelector("tr.cancelled");
+  expect(row).toBeTruthy();
+  expect(row!.getAttribute("data-level")).toBe("cancelled");
+  // The cancelled row is not styled as an error row.
+  expect(host.querySelector("tr.error")).toBeNull();
+  const levelSelect = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="Log level"]',
+  )!;
+  const option = [...levelSelect.options].find(
+    (item) => item.value === "cancelled",
+  );
+  expect(option?.textContent).toBe("Cancelled");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.set!.call(levelSelect, "cancelled");
+    levelSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flush();
+  expect(backend.queryLogPage).toHaveBeenLastCalledWith(
+    expect.objectContaining({ levels: ["cancelled"] }),
+  );
+  // Filter request for cancelled shows only the cancelled entry.
+  expect(host.textContent).toContain("safe message cancelled");
+});
+
 it("clears visible logs immediately and ignores stale loads after all logs are deleted", async () => {
   let cleared!: () => void;
   backend.subscribeLogsCleared.mockImplementation(
@@ -275,11 +347,12 @@ it("validates policy and rolls the form back after a failed save", async () => {
   });
   await act(async () => button("保存策略").click());
   await flush();
-  expect(backend.setLogPolicy).toHaveBeenCalledWith(
-    expect.objectContaining({ retentionDays: 20 }),
-  );
+  expect(backend.setLogPolicy).toHaveBeenCalledWith({
+    policy: expect.objectContaining({ retentionDays: 20 }),
+    operationId: expect.any(String),
+  });
   expect(retention.value).toBe("14");
-  expect(host.textContent).toContain("已恢复原策略");
+  expect(host.textContent).toContain("保存结果不确定");
 });
 
 it("never auto-expands logs and only marks unviewed errors", async () => {
@@ -770,13 +843,16 @@ it("refreshes real cache counters and reports safe export success and failure", 
   expect(host.textContent).toContain("2.0 KiB");
   await act(async () => button("Export").click());
   await flush();
-  expect(backend.exportDiagnostics).toHaveBeenCalledWith({});
+  expect(backend.exportDiagnostics).toHaveBeenCalledWith({
+    request: {},
+    operationId: expect.any(String),
+  });
   expect(host.textContent).toContain("C:\\safe\\p4deck-diagnostic.json");
   expect(host.textContent).not.toMatch(/hunter2|ticket-value|AA:BB:CC:DD/);
   backend.exportDiagnostics.mockRejectedValueOnce(new Error("write denied"));
   await act(async () => button("Export").click());
   await flush();
-  expect(host.textContent).toContain("Export failed: Error: write denied");
+  expect(host.textContent).toContain("Export outcome uncertain");
   expect(host.querySelector('[role="status"]')).toBeTruthy();
   expect(
     host.querySelector("section[aria-labelledby=cache-heading]"),

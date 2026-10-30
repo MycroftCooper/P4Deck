@@ -1,18 +1,14 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { expect, it, vi } from "vitest";
-import {
-  dialogHarness,
-  dialogButton,
-  chooseSelect,
-} from "../../../app/dialogs/testHarness";
+import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { ResolveDialog } from "./ResolveDialog";
 import type {
   ResolveConflictDetail,
   ResolvePreflight,
   WorkflowResult,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 
 const harness = dialogHarness();
 const nodes: WorkspaceNode[] = ["a", "b"].map((name) => ({
@@ -98,7 +94,25 @@ const result = (
   },
 });
 
-it("shows only backend-approved executable strategies and executes each file", async () => {
+/** P4V-style action buttons are matched by visible prefix (labels carry full-width parentheses). */
+const action = (label: string) => {
+  const button = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".resolve-option-row button, .resolve-additional > button",
+    ),
+  ].find((candidate) => candidate.textContent?.trim().startsWith(label));
+  if (!button) throw new Error(`action button not found: ${label}`);
+  return button;
+};
+const fileRow = (label: string) => {
+  const row = [
+    ...document.querySelectorAll<HTMLButtonElement>(".resolve-file-row"),
+  ].find((candidate) => candidate.textContent?.includes(label));
+  if (!row) throw new Error(`file row not found: ${label}`);
+  return row;
+};
+
+it("shows only backend-approved strategies and executes each file", async () => {
   const check = vi
     .fn()
     .mockResolvedValue(preflight([conflict("a"), conflict("b")]));
@@ -116,18 +130,20 @@ it("shows only backend-approved executable strategies and executes each file", a
       execute={execute}
     />,
   );
+  await act(async () => {
+    await Promise.resolve();
+  });
   await act(async () => dialogButton("检查冲突").click());
-  const optionValues = [
-    ...document.querySelectorAll<HTMLOptionElement>("dialog option"),
-  ].map((option) => option.value);
-  expect(optionValues).toEqual(["", "safe", "acceptYours"]);
-  await chooseSelect("safe");
-  await act(async () => dialogButton("下一项").click());
-  await chooseSelect("acceptYours");
+  // acceptTheirs is not approved for this fixture, so its P4V action stays disabled.
+  expect(action("接受来源").disabled).toBe(true);
+  await act(async () => action("接受合并结果").click());
+  await act(async () => fileRow("/workspace/b").click());
+  await act(async () => action("接受目标").click());
   await act(async () => dialogButton("执行逐文件计划").click());
   expect(execute).toHaveBeenCalledExactlyOnceWith({
     token: "resolve-token",
     target: expect.objectContaining({ kind: "resolve" }),
+    operationId: expect.any(String),
     resolutions: [
       { depotPath: "//depot/a", strategy: "safe" },
       { depotPath: "//depot/b", strategy: "acceptYours" },
@@ -161,11 +177,14 @@ it("keeps blocked and unknown conflicts non-executable", async () => {
       check={check}
     />,
   );
+  await act(async () => {
+    await Promise.resolve();
+  });
   await act(async () => dialogButton("检查冲突").click());
   expect(document.body.textContent).toContain("后端标记为阻塞");
-  expect(document.body.textContent).toContain("没有后端允许的可执行策略");
+  expect(document.body.textContent).toContain("此文件当前不可执行");
   expect(dialogButton("执行逐文件计划").disabled).toBe(true);
-  await act(async () => dialogButton("下一项").click());
+  await act(async () => fileRow("/workspace/b").click());
   expect(document.body.textContent).toContain("冲突状态未知");
   expect(dialogButton("执行逐文件计划").disabled).toBe(true);
 });
@@ -185,10 +204,13 @@ it("does not present partial or post-verification unknown outcomes as success", 
       execute={execute}
     />,
   );
+  await act(async () => {
+    await Promise.resolve();
+  });
   await act(async () => dialogButton("检查冲突").click());
-  await chooseSelect("safe");
-  await act(async () => dialogButton("下一项").click());
-  await chooseSelect("safe");
+  await act(async () => action("接受合并结果").click());
+  await act(async () => fileRow("/workspace/b").click());
+  await act(async () => action("接受合并结果").click());
   await act(async () => dialogButton("执行逐文件计划").click());
   expect(document.body.textContent).toContain("结果：partial");
   expect(document.body.textContent).toContain("unknown · //depot/b");
@@ -222,8 +244,11 @@ it("prevents duplicate execution and protects an unexecuted plan on close", asyn
       execute={execute}
     />,
   );
+  await act(async () => {
+    await Promise.resolve();
+  });
   await act(async () => dialogButton("检查冲突").click());
-  await chooseSelect("safe");
+  await act(async () => action("接受合并结果").click());
   await act(async () => dialogButton("关闭").click());
   expect(close).not.toHaveBeenCalled();
   await act(async () => dialogButton("继续编辑").click());

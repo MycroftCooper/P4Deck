@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useUnsavedEditor } from "../../../app/closeGuard";
 import { backend } from "../../../infrastructure/backend";
 import type {
   ManualMergeSaveResult,
@@ -6,9 +7,19 @@ import type {
   ManualMergeOpenRequest,
   ManualMergeValidation,
   WorkflowResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { DialogNotice } from "../../../app/dialogs/Dialog";
 import { publishWorkflowResult } from "../../changelists/workflowRefresh";
+import {
+  beginMergeIntent,
+  lifecycleOf,
+  mergeRemaining,
+  mergeResolveSucceeded,
+  mergeSaveCommitted,
+  mergeStepOperationId,
+  settleMergeIntent,
+  unwrapMergeLegacy,
+} from "../../actions/mergeResolveLifecycle";
 
 interface ConflictBlock {
   id: string;
@@ -63,7 +74,9 @@ export function ManualMergeEditor({
   connectionKey: string;
   zh: boolean;
   onFinished?(result: WorkflowResult): void;
-  openSession?(request: ManualMergeOpenRequest): Promise<ManualMergeSession>;
+  openSession?(
+    request: ManualMergeOpenRequest,
+  ): Promise<ManualMergeSession | unknown>;
   cancelOperation?(operationId: string): Promise<unknown>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
@@ -84,6 +97,16 @@ export function ManualMergeEditor({
   const activeConnection = useRef(connectionKey);
   activeConnection.current = connectionKey;
   const result = history[historyIndex] ?? "";
+  const [savedBaseline, setSavedBaseline] = useState<string>();
+  useUnsavedEditor(
+    !session || savedBaseline === undefined
+      ? "unknown"
+      : result !== savedBaseline
+        ? "dirty"
+        : "clean",
+    `${connectionKey}:${depotPath}`,
+    "manualMerge",
+  );
   const conflicts = useMemo(() => blocks(result), [result]);
   const current =
     conflicts[Math.min(blockIndex, Math.max(0, conflicts.length - 1))];
@@ -93,6 +116,7 @@ export function ManualMergeEditor({
     const currentOperationRoot = `manual-merge-${Date.now()}-${Math.random()}`;
     operationRoot.current = currentOperationRoot;
     setSession(undefined);
+    setSavedBaseline(undefined);
     setHistory([]);
     setHistoryIndex(-1);
     setBlockIndex(0);
@@ -101,22 +125,42 @@ export function ManualMergeEditor({
     setAcknowledge(false);
     setMessage("");
     setBusy(true);
-    void openSession({
-      depotPath,
-      operationId: `${currentOperationRoot}:open`,
-    })
-      .then((value) => {
+    const openOperationId = mergeStepOperationId(currentOperationRoot, "open");
+    beginMergeIntent({
+      kind: "manualMergeSession",
+      operationId: openOperationId,
+      targetKey: connectionKey,
+    });
+    void openSession({ depotPath, operationId: openOperationId } as never)
+      .then((raw: unknown) => {
+        settleMergeIntent(openOperationId);
         if (
           currentEpoch !== epoch.current ||
           activeConnection.current !== connectionKey
         )
           return;
+        const lifecycle = lifecycleOf(raw);
+        if (
+          lifecycle &&
+          lifecycle.state !== "legacy" &&
+          lifecycle.state !== "intent"
+        ) {
+          // Open is read-only intent: unknown/rejected never shows a usable session.
+          setMessage(lifecycle.message);
+          return;
+        }
+        const value =
+          unwrapMergeLegacy<ManualMergeSession>(raw) ??
+          (raw as ManualMergeSession);
         setSession(value);
+        // Yours is the actual disk snapshot; Result may be an unsaved merge.
+        setSavedBaseline(value.yours);
         setHistory([value.result]);
         setHistoryIndex(0);
         setMessage("");
       })
       .catch((cause) => {
+        settleMergeIntent(openOperationId);
         if (
           currentEpoch === epoch.current &&
           activeConnection.current === connectionKey
@@ -186,22 +230,47 @@ export function ManualMergeEditor({
     if (!session || busy) return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
+    const operationId = mergeStepOperationId(operationRoot.current, "validate");
+    beginMergeIntent({
+      kind: "manualMergeSession",
+      operationId,
+      targetKey: connectionKey,
+    });
     setBusy(true);
     setMessage("");
     try {
-      const value = await backend.validateManualMerge({
+      const raw: unknown = await backend.validateManualMerge({
         sessionId: session.sessionId,
         result,
-        operationId: `${operationRoot.current}:validate`,
+        operationId,
       });
+      settleMergeIntent(operationId);
       if (
         requestEpoch !== epoch.current ||
         requestConnection !== activeConnection.current
       )
         return;
+      const lifecycle = lifecycleOf(raw);
+      const value = unwrapMergeLegacy<ManualMergeValidation>(raw);
+      if (
+        lifecycle &&
+        lifecycle.state !== "legacy" &&
+        lifecycle.state !== "intent"
+      ) {
+        // Validate is read-only intent; it may never assert a saved/valid result on unknown.
+        setMessage(lifecycle.message);
+        return;
+      }
+      if (!value) {
+        setMessage(
+          tr("未收到可识别的校验结果", "No recognizable validation result"),
+        );
+        return;
+      }
       setValidation(value);
       setMessage(value.message);
     } catch (cause) {
+      settleMergeIntent(operationId);
       if (
         requestEpoch === epoch.current &&
         requestConnection === activeConnection.current
@@ -220,35 +289,63 @@ export function ManualMergeEditor({
     if (!session || !validation?.token || busy) return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
+    const operationId = mergeStepOperationId(operationRoot.current, "save");
+    beginMergeIntent({
+      kind: "manualMergeSave",
+      operationId,
+      targetKey: connectionKey,
+    });
     setBusy(true);
     setMessage("");
     try {
-      const value = await backend.confirmManualMergeSave({
+      const raw: unknown = await backend.confirmManualMergeSave({
         token: validation.token,
         sessionId: session.sessionId,
         resultDigest: validation.resultDigest,
-        operationId: `${operationRoot.current}:save`,
+        operationId,
       });
+      settleMergeIntent(operationId);
       if (
         requestEpoch !== epoch.current ||
         requestConnection !== activeConnection.current
       )
         return;
-      setSaveResult(value);
-      setValidation(undefined);
-      setMessage(value.message);
-      await publishWorkflowResult(
-        {
-          outcome: value.outcome,
-          message: value.message,
-          operationIds: [value.operationId],
-          files: [],
-          refresh: value.refresh,
-        },
-        session.target,
-        connectionKey,
+      const lifecycle = lifecycleOf(raw);
+      const value = unwrapMergeLegacy<ManualMergeSaveResult>(raw);
+      if (!value) {
+        setMessage(tr("未收到可识别的保存结果", "No recognizable save result"));
+        return;
+      }
+      // Save is local content write: only committed CAS digest may render "saved".
+      const committed = lifecycle
+        ? mergeSaveCommitted(lifecycle)
+        : value.outcome === "succeeded";
+      setSaveResult(
+        committed
+          ? value
+          : { ...value, outcome: "unknown", resolveToken: undefined },
       );
+      if (committed) setSavedBaseline(result);
+      setValidation(undefined);
+      setMessage(
+        lifecycle && !committed
+          ? `${lifecycle.message} · ${tr("本地保存未被权威证实", "local save is not proven")}`
+          : value.message,
+      );
+      if (!lifecycle)
+        await publishWorkflowResult(
+          {
+            outcome: value.outcome,
+            message: value.message,
+            operationIds: [value.operationId],
+            files: [],
+            refresh: value.refresh,
+          },
+          session.target,
+          connectionKey,
+        );
     } catch (cause) {
+      settleMergeIntent(operationId);
       if (
         requestEpoch === epoch.current &&
         requestConnection === activeConnection.current
@@ -269,24 +366,51 @@ export function ManualMergeEditor({
     if (!session || !saveResult?.resolveToken || !acknowledge || busy) return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
+    const operationId = mergeStepOperationId(operationRoot.current, "resolve");
+    beginMergeIntent({
+      kind: "manualMergeResolve",
+      operationId,
+      targetKey: connectionKey,
+    });
     setBusy(true);
     setMessage("");
     try {
-      const value = await backend.confirmManualMergeResolve({
+      const raw: unknown = await backend.confirmManualMergeResolve({
         token: saveResult.resolveToken,
         sessionId: session.sessionId,
         resultDigest: saveResult.resultDigest,
         acknowledge: true,
-        operationId: `${operationRoot.current}:resolve`,
+        operationId,
       });
+      settleMergeIntent(operationId);
       if (
         requestEpoch !== epoch.current ||
         requestConnection !== activeConnection.current
       )
         return;
+      const lifecycle = lifecycleOf(raw);
+      const value =
+        unwrapMergeLegacy<WorkflowResult>(raw) ?? (raw as WorkflowResult);
+      if (
+        lifecycle &&
+        lifecycle.state !== "legacy" &&
+        !mergeResolveSucceeded(lifecycle)
+      ) {
+        // Partial/unknown must keep remaining conflicts visible; never fake success.
+        const remaining = mergeRemaining(lifecycle);
+        setMessage(
+          `${lifecycle.message}${
+            remaining.length
+              ? ` · ${tr("仍有未解决/未证实", "still unresolved/unproven")}: ${remaining.map((f) => f.depotPath).join(", ")}`
+              : ""
+          }`,
+        );
+        return;
+      }
       setMessage(value.message);
       onFinished?.(value);
     } catch (cause) {
+      settleMergeIntent(operationId);
       if (
         requestEpoch === epoch.current &&
         requestConnection === activeConnection.current

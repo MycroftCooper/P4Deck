@@ -6,7 +6,7 @@ import type {
   ConnectionStatus,
   P4Context,
   RecoveryAction,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export interface ConnectionPresentation {
   title: string;
@@ -24,10 +24,10 @@ const stateCopy: Record<
   }
 > = {
   cliMissing: {
-    zh: ["找不到 P4 CLI", "请安装 p4，或填写受信任的 p4 可执行文件绝对路径。"],
+    zh: ["找不到 P4 CLI", "可重新检测已有安装，或从官方页面获取 P4 CLI。"],
     en: [
       "P4 CLI not found",
-      "Install p4 or configure the absolute path to a trusted p4 executable.",
+      "Check for an existing installation or obtain P4 CLI from the official page.",
     ],
     tone: "danger",
   },

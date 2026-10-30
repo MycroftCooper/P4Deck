@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { resolveSelection } from "../../features/files/resolveSelection";
 import { nodeKey } from "../../features/files/selection";
 import { resolveAddress } from "../../features/files/resolveAddress";

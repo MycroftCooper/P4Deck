@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-fixture_dir="${P4DECK_FIXTURE_DIR:-$repo_dir/.tools/p4d-fixture}"
+fixture_dir="${P4DECK_FIXTURE_DIR:-$repo_dir/.local/p4d-fixture}"
 server_root="$fixture_dir/server"
 client_root="$fixture_dir/workspace"
 port="${P4DECK_FIXTURE_PORT:-16661}"
@@ -83,7 +83,7 @@ stop() {
 
 destroy() {
   stop || true
-  [[ "$fixture_dir" == "$repo_dir/.tools/p4d-fixture" || "$fixture_dir" == /private/tmp/* || "$fixture_dir" == /tmp/* ]] || { echo "拒绝删除未验证路径：$fixture_dir" >&2; exit 1; }
+  [[ "$fixture_dir" == "$repo_dir/.local/p4d-fixture" || "$fixture_dir" == /private/tmp/* || "$fixture_dir" == /tmp/* ]] || { echo "拒绝删除未验证路径：$fixture_dir" >&2; exit 1; }
   rm -rf "$fixture_dir"
   echo "Fixture 已销毁。"
 }

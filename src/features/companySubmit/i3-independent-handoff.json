@@ -1,0 +1,35 @@
+{
+  "batch": "CL06-I3",
+  "stage": "independent adaptation complete; shared entry integration pending QA release",
+  "wireSource": [
+    "src-tauri/src/app/custom_submit.rs StartRequest/Session",
+    "src-tauri/src/ipc/commands.rs custom_submit_start/custom_submit_status"
+  ],
+  "tests": {
+    "files": 3,
+    "passed": 22,
+    "failed": 0,
+    "typescript": "passed",
+    "diffCheck": "passed"
+  },
+  "files": {
+    "src/features/companySubmit/customSubmit.ts": "c36c48a5efeabb19fa6fdf9107500fe18dfaf2ef912c85ca0ddf2c6b719ccfd9",
+    "src/features/companySubmit/customSubmit.test.ts": "dd6188d6484059c5fef2cd8eac5882ab8e70f9dc6fb21d21ec1c8025f3711a5c",
+    "src/features/companySubmit/useCustomSubmit.ts": "2bae2060516116ab38df825f286f5785c3d2c37a410b9f18552170c41f48f287",
+    "src/features/companySubmit/useCustomSubmit.test.tsx": "1d725e412631d282562e04997601d7c3d69b9b82d35e360f43b5ab9301298b5c",
+    "src/features/companySubmit/CustomSubmitStatusDialog.tsx": "e5d98c8e335cdf103b92dab9c4930124f8beb57286cf346bf6dd32592b574219",
+    "src/features/companySubmit/snapshotAdapter.test.ts": "19c2f977561f402a20ac2dee9fe983c336dc104311392c4c694da7d8c16552cf",
+    "src/infrastructure/backend/contract.ts": "055cb940d00a5889a0d1e42ccc5e3569fe3e01f652bcb508d4e0b3a5bb504b35",
+    "src/infrastructure/backend/tauriBackend.ts": "839d73c65226c70a418fca5f194946e9ae146f88a905ed4aa33ec6788e732e22",
+    "src/infrastructure/backend/mockBackend.ts": "d2a5c1faddb5813c83d7871664b333bdfcb11e4b2cc7d013884f22e9b21739d3",
+    "src/shared/contracts.ts": "d373be9baa3ac10faa312c42ecc87d8c695da2e23a54e70d0b7670e99bd2089a"
+  },
+  "pending": [
+    "QA release hashes for ConnectionProfilesCard, SettingsPage.test, PendingPage, CommandBar and actual frozen closure",
+    "Add persisted settings input after P4 executable; verify switching and save normalization",
+    "Integrate useCustomSubmit into original submit dispatch, preserving native only for empty active configuration",
+    "Remove separate preview menu entry and visible legacy company terminology; update affected menu contracts with PM/QA",
+    "Integrated mock and final visual QA"
+  ],
+  "safety": "No real launcher, product, P4 or company executable invoked. T01 all ten hashes unchanged."
+}

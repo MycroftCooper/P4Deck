@@ -155,9 +155,32 @@ impl SubmitService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses `confirm_admitted` with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm(
         &self,
         confirmation: SubmitConfirmation,
+        app: Option<&AppHandle>,
+    ) -> SubmitResult {
+        let (context, _) = self.contexts.snapshot();
+        let guard = self.repository.lock_mutations(&context.server).await;
+        self.confirm_admitted(confirmation, &guard, app).await
+    }
+
+    pub async fn confirm_admitted(
+        &self,
+        confirmation: SubmitConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> SubmitResult {
+        self.confirm_inner(confirmation, Some(guard), app).await
+    }
+
+    async fn confirm_inner(
+        &self,
+        confirmation: SubmitConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> SubmitResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -198,9 +221,16 @@ impl SubmitService {
             );
         }
 
-        // Hold the runner's server mutation lane from revalidation through submit. This prevents
+        // Hold the unified server mutation lane from revalidation through submit. This prevents
         // any other GUI mutation from slipping between the checked snapshot and the command.
-        let mutation_guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         let reinspection = self
             .repository
             .inspect(
@@ -258,7 +288,7 @@ impl SubmitService {
                 change_id,
                 operation_id.clone(),
                 evaluation.summary.file_count,
-                &mutation_guard,
+                guard,
                 app,
             )
             .await;
@@ -276,19 +306,48 @@ impl SubmitService {
         );
 
         match execution {
-            Ok(execution) if execution.operation.exit_code == 0 => SubmitResult {
-                outcome: SubmitOutcome::Submitted,
-                change_id,
-                submitted_change_id: execution.submitted_change_id.or(Some(change_id)),
-                failure: None,
-                message: format!("Changelist {change_id} was submitted."),
-                operation_id: Some(operation_id.clone()),
-                log_reference: Some(operation_id),
-                refresh: refresh_advice(
-                    evaluation.summary.depot_paths,
-                    "Submit completed; refresh pending, submitted and workspace views.",
-                ),
-            },
+            Ok(execution) if execution.operation.exit_code == 0 => {
+                match execution.submitted_change_id {
+                    Some(submitted_change_id) => SubmitResult {
+                        execution: Some(submit_execution(
+                            &operation_id,
+                            SubmitOutcome::Submitted,
+                            "commandCompleted",
+                        )),
+                        outcome: SubmitOutcome::Submitted,
+                        change_id,
+                        submitted_change_id: Some(submitted_change_id),
+                        failure: None,
+                        message: format!(
+                            "Changelist {change_id} was submitted as changelist {submitted_change_id}."
+                        ),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id.clone()),
+                        refresh: refresh_advice(
+                            evaluation.summary.depot_paths,
+                            "Submit completed; refresh pending, submitted and workspace views.",
+                        ),
+                    },
+                    None => SubmitResult {
+                        execution: Some(submit_execution(
+                            &operation_id,
+                            SubmitOutcome::Unknown,
+                            "unknown",
+                        )),
+                        outcome: SubmitOutcome::Unknown,
+                        change_id,
+                        submitted_change_id: None,
+                        failure: Some(SubmitFailureCode::UncertainOutcome),
+                        message: "The submit command exited cleanly but the resulting changelist identity was not authoritative; treat the outcome as unknown and refresh before any retry.".into(),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id.clone()),
+                        refresh: refresh_advice(
+                            evaluation.summary.depot_paths,
+                            "Refresh pending/submitted views and verify the changelist state before taking another action.",
+                        ),
+                    },
+                }
+            }
             Ok(execution) => {
                 let cancelled = execution
                     .operation
@@ -300,18 +359,20 @@ impl SubmitService {
                 } else {
                     classify_failure(&execution.diagnostic_text)
                 };
+                let outcome = if cancelled {
+                    SubmitOutcome::Cancelled
+                } else {
+                    SubmitOutcome::Failed
+                };
                 SubmitResult {
-                    outcome: if cancelled {
-                        SubmitOutcome::Cancelled
-                    } else {
-                        SubmitOutcome::Failed
-                    },
+                    execution: Some(submit_execution(&operation_id, outcome, "unknown")),
+                    outcome,
                     change_id,
                     submitted_change_id: None,
                     failure: Some(failure),
                     message: failure_message(failure).into(),
                     operation_id: Some(operation_id.clone()),
-                    log_reference: Some(operation_id),
+                    log_reference: Some(operation_id.clone()),
                     refresh: refresh_advice(
                         evaluation.summary.depot_paths,
                         "Submit did not complete cleanly; refresh before retrying because files or locks may have changed.",
@@ -319,13 +380,18 @@ impl SubmitService {
                 }
             }
             Err(_) => SubmitResult {
+                execution: Some(submit_execution(
+                    &operation_id,
+                    SubmitOutcome::Unknown,
+                    "unknown",
+                )),
                 outcome: SubmitOutcome::Unknown,
                 change_id,
                 submitted_change_id: None,
                 failure: Some(SubmitFailureCode::UncertainOutcome),
                 message: failure_message(SubmitFailureCode::UncertainOutcome).into(),
                 operation_id: Some(operation_id.clone()),
-                log_reference: Some(operation_id),
+                log_reference: Some(operation_id.clone()),
                 refresh: refresh_advice(
                     evaluation.summary.depot_paths,
                     "The command outcome is uncertain; refresh all related views before taking another action.",
@@ -591,6 +657,16 @@ fn sha256_hex(bytes: &[u8]) -> String {
         .collect()
 }
 
+fn submit_execution(operation_id: &str, outcome: SubmitOutcome, state: &str) -> SubmitExecution {
+    SubmitExecution {
+        kind: "submit".into(),
+        operation_id: operation_id.to_string(),
+        state: state.to_string(),
+        outcome,
+        files: Vec::new(),
+    }
+}
+
 fn rejected(
     change_id: i64,
     failure: SubmitFailureCode,
@@ -598,6 +674,7 @@ fn rejected(
     depot_paths: Vec<String>,
 ) -> SubmitResult {
     SubmitResult {
+        execution: None,
         outcome: SubmitOutcome::Rejected,
         change_id,
         submitted_change_id: None,
@@ -690,6 +767,7 @@ mod tests {
                     lock_owner: None,
                     other_open: Vec::new(),
                     exclusive_open: None,
+                    resolve: None,
                 })
                 .collect(),
             shelved_files: Vec::new(),
@@ -777,5 +855,18 @@ mod tests {
             .warnings
             .iter()
             .any(|issue| issue.code == SubmitIssueCode::FileStateUnknown));
+    }
+
+    #[test]
+    fn submit_execution_envelope_is_command_level_only() {
+        let submitted = submit_execution("op", SubmitOutcome::Submitted, "commandCompleted");
+        assert_eq!(submitted.kind, "submit");
+        assert_eq!(submitted.state, "commandCompleted");
+        assert!(submitted.files.is_empty());
+        let unknown = submit_execution("op", SubmitOutcome::Unknown, "unknown");
+        assert_eq!(unknown.state, "unknown");
+        assert!(unknown.files.is_empty());
+        let rejected_result = rejected(7, SubmitFailureCode::TokenUnknown, "x", Vec::new());
+        assert!(rejected_result.execution.is_none());
     }
 }

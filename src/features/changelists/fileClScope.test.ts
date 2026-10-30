@@ -1,9 +1,6 @@
 import { expect, it } from "vitest";
 import { fileClScope } from "./fileClScope";
-import type {
-  PendingChange,
-  WorkspaceNode,
-} from "../../shared/contracts/types";
+import type { PendingChange, WorkspaceNode } from "../../shared/contracts";
 const nodes: WorkspaceNode[] = ["a", "b"].map((name) => ({
   id: name,
   name,

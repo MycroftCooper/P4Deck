@@ -4,12 +4,30 @@ import { backend } from "../../../infrastructure/backend";
 import type {
   CacheDiagnostics,
   DiagnosticExportResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
+import {
+  lookupControlPlaneAction,
+  type ControlPlaneActionLookup,
+} from "../../actions/workflowReceipt";
+import {
+  controlPlaneCommitted,
+  controlPlaneDetails,
+  controlPlaneLegacy,
+  runControlPlaneAction,
+} from "../../settings/controlPlaneLifecycle";
 
 interface Props {
   zh: boolean;
   connectionKey: string;
   native: boolean;
+  /** Exact dispatching connection snapshot; captured once per export. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<ControlPlaneActionLookup>;
 }
 
 function bytes(value: number) {
@@ -18,7 +36,13 @@ function bytes(value: number) {
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function DiagnosticsView({ zh, connectionKey, native }: Props) {
+export function DiagnosticsView({
+  zh,
+  connectionKey,
+  native,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
+}: Props) {
   const [cache, setCache] = useState<CacheDiagnostics>();
   const [cacheError, setCacheError] = useState("");
   const [cacheBusy, setCacheBusy] = useState(false);
@@ -57,18 +81,56 @@ export function DiagnosticsView({ zh, connectionKey, native }: Props) {
     setExportStatus(
       zh ? "正在导出脱敏诊断…" : "Exporting redacted diagnostics…",
     );
+    const operationId = crypto.randomUUID();
     try {
-      const result = await backend.exportDiagnostics({});
-      setExportResult(result);
-      setExportStatus(
-        result.simulated
-          ? zh
-            ? "Mock 模拟完成；未写入文件。"
-            : "Mock simulation complete; no file was written."
-          : zh
-            ? "诊断导出完成。"
-            : "Diagnostic export completed.",
-      );
+      const dispatching = await (
+        connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
+      )();
+      const run = await runControlPlaneAction({
+        kind: "diagnosticsExport",
+        operationId,
+        connection: dispatching,
+        execute: () => backend.exportDiagnostics({ request: {}, operationId }),
+        lookup: lookupReceipt ?? lookupControlPlaneAction,
+      });
+      const result = run.result;
+      if (controlPlaneCommitted(result)) {
+        const artifact = result.artifact;
+        const details = controlPlaneDetails<{
+          truncated?: boolean;
+          format?: string;
+          simulated?: boolean;
+        }>(result);
+        setExportResult({
+          path: artifact.path ?? "—",
+          sizeBytes: artifact.sizeBytes,
+          truncated: details?.truncated === true,
+          format: "json",
+        });
+        setExportStatus(
+          zh
+            ? "诊断导出已完成（路径/大小/sha256 由回读确认；未读取导出内容）。"
+            : "Diagnostic export verified by readback (path/size/sha256; content never read).",
+        );
+      } else if (result.state === "legacy") {
+        const legacy = controlPlaneLegacy<DiagnosticExportResult>(result);
+        if (legacy) setExportResult(legacy);
+        setExportStatus(
+          legacy?.simulated
+            ? zh
+              ? "Mock 模拟完成；未写入文件。"
+              : "Mock simulation complete; no file was written."
+            : zh
+              ? "诊断导出完成（旧版结果）。"
+              : "Diagnostic export completed (legacy result).",
+        );
+      } else {
+        setExportStatus(
+          zh
+            ? "导出结果不确定：文件可能已写入但回读未确认。已用同一操作号查询持久回执；请核对导出目录，不要换新操作号重试。"
+            : "Export outcome uncertain: the file may exist but readback did not confirm it. The durable receipt was queried with the same operation id; inspect the export folder before any retry with a new id.",
+        );
+      }
     } catch (cause) {
       setExportStatus(
         `${zh ? "导出失败：" : "Export failed: "}${String(cause)}`,

@@ -1,3 +1,6 @@
+import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
+import { submittedDescriptionParts } from "../submittedTags";
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { classifySubmission, submissionKindLabel } from "../submittedReport";
 import { SubmittedChangeFiles } from "./SubmittedChangeFiles";
 import { useChangeDetails } from "./ChangeDetailsDialog";
@@ -11,19 +14,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  ChevronDown,
-  ChevronRight,
-  GitMerge,
-  RefreshCw,
-  ShieldAlert,
-  ShieldQuestion,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import type {
   ChangelistSummary,
   ClAction,
   SubmittedChangeDetail,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
@@ -36,6 +32,7 @@ import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 type Copy = (typeof messages)[keyof typeof messages];
 
 interface Props {
+  traceCandidates?: ChangelistSummary[];
   expansionScope: string;
   t: Copy;
   changes: ChangelistSummary[];
@@ -60,7 +57,18 @@ interface Props {
 
 export function ChangelistPage(props: Props) {
   const { t, changes } = props;
+  const columns = useColumnWidths(
+    [120, 110, 400, 160, 160],
+    [90, 90, 160, 100, 120],
+    { id: "submitted" },
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [trace, setTrace] = useState<{
+    changeId: number;
+    sourceChange: ChangelistSummary;
+    owner: string;
+    source?: HTMLElement;
+  }>();
   const menu = useContextMenu();
   const openChangeDetails = useChangeDetails();
   const inspect = (id: number, source?: HTMLElement | null) =>
@@ -100,19 +108,41 @@ export function ChangelistPage(props: Props) {
   );
   const focus = useCommandFocus();
   const headerTarget = useContext(PageHeaderActionsContext);
+  const [measured, setMeasured] = useState<{
+    scope: string;
+    heights: Map<number, number>;
+  }>({ scope: props.expansionScope, heights: new Map() });
+  const rowHeight = (id: number) =>
+    expanded.has(id)
+      ? 64 +
+        (measured.scope === props.expansionScope
+          ? (measured.heights.get(id) ?? 40)
+          : 40)
+      : 64;
+  const reportHeight = (id: number, height: number) =>
+    setMeasured((previous) => {
+      const heights =
+        previous.scope === props.expansionScope
+          ? previous.heights
+          : new Map<number, number>();
+      if (heights.get(id) === height) return previous;
+      return {
+        scope: props.expansionScope,
+        heights: new Map(heights).set(id, height),
+      };
+    });
   const virtualizer = useVirtualizer({
     count: changes.length,
     getScrollElement: () => scrollRef.current,
     getItemKey: (index) => changes[index].id,
-    estimateSize: (index) => (expanded.has(changes[index].id) ? 324 : 64),
+    estimateSize: (index) => rowHeight(changes[index].id),
     overscan: 10,
     initialRect: { width: 800, height: 480 },
   });
-  // Both sections have fixed CSS heights. Never cache a zero DOM measurement
-  // from a hidden dock tab; it would give every subsequent row the same start.
+  // Positive content measurements survive hidden tabs; the 64px CL row never collapses to zero.
   useLayoutEffect(() => {
     virtualizer.measure();
-  }, [virtualizer, expansion, props.expansionScope, changes]);
+  }, [virtualizer, expansion, props.expansionScope, changes, measured]);
   const measuredRows = virtualizer.getVirtualItems();
   const visibleRows = measuredRows.length
     ? measuredRows
@@ -121,17 +151,11 @@ export function ChangelistPage(props: Props) {
         key: changes[index].id,
         start: changes
           .slice(0, index)
-          .reduce(
-            (height, change) => height + (expanded.has(change.id) ? 324 : 64),
-            0,
-          ),
-        size: expanded.has(changes[index].id) ? 324 : 64,
+          .reduce((height, change) => height + rowHeight(change.id), 0),
+        size: rowHeight(changes[index].id),
         end: changes
           .slice(0, index + 1)
-          .reduce(
-            (height, change) => height + (expanded.has(change.id) ? 324 : 64),
-            0,
-          ),
+          .reduce((height, change) => height + rowHeight(change.id), 0),
         lane: 0,
       }));
   const changeMenu = (change: ChangelistSummary) =>
@@ -148,6 +172,14 @@ export function ChangelistPage(props: Props) {
               : "C03",
       () => ({
         查看详情: action((source) => inspect(change.id, source)),
+        追踪合并去向: action((source) =>
+          setTrace({
+            changeId: change.id,
+            sourceChange: change,
+            owner: props.expansionScope,
+            source,
+          }),
+        ),
         "展开/折叠": action(() => toggle(change.id)),
         "复制 CL 编号": copy(change.id),
         "复制来源 CL 编号": copy(change.id),
@@ -186,6 +218,18 @@ export function ChangelistPage(props: Props) {
 
   return (
     <section className="main-content">
+      {trace?.owner === props.expansionScope && (
+        <DescriptionTraceDialog
+          key={trace.owner + trace.changeId}
+          changeId={trace.changeId}
+          sourceChange={trace.sourceChange}
+          seedCandidates={props.traceCandidates ?? props.changes}
+          runtime={env.runtime}
+          zh={env.preferences.zh}
+          source={trace.source}
+          onClose={() => setTrace(undefined)}
+        />
+      )}
       {headerTarget &&
         createPortal(
           <>
@@ -223,19 +267,32 @@ export function ChangelistPage(props: Props) {
         style={{ gridTemplateColumns: "minmax(0, 1fr)" }}
       >
         <div className="cl-panel">
-          <TableHeader
-            className="cl-table-head"
-            columns={[
-              { id: "change", label: "CL" },
-              { id: "status", label: t.status },
-              { id: "user", label: t.user },
-              { id: "count", label: t.files },
-              { id: "time", label: t.time },
-            ]}
-          />
+          <div
+            className="submitted-table-header"
+            style={{ minWidth: columns.style.minWidth }}
+          >
+            <TableHeader
+              className="cl-table-head"
+              resize={columns}
+              columns={[
+                { id: "change", label: "CL" },
+                {
+                  id: "submissionKind",
+                  label: env.preferences.zh ? "提交类型" : "Submission type",
+                },
+                {
+                  id: "description",
+                  label: env.preferences.zh ? "描述" : "Description",
+                },
+                { id: "user", label: t.user },
+                { id: "time", label: t.time },
+              ]}
+            />
+          </div>
           <div
             ref={scrollRef}
             className="virtual-scroll"
+            style={{ minWidth: columns.style.minWidth }}
             data-testid="cl-virtual-list"
             tabIndex={0}
             {...menu("C14", () => ({
@@ -260,7 +317,7 @@ export function ChangelistPage(props: Props) {
             <div
               className="virtual-spacer"
               style={{
-                height: `${virtualizer.getTotalSize() || changes.length * 64}px`,
+                height: `${virtualizer.getTotalSize() || changes.reduce((sum, change) => sum + rowHeight(change.id), 0)}px`,
               }}
             >
               {visibleRows.map((row) => {
@@ -272,10 +329,11 @@ export function ChangelistPage(props: Props) {
                     className="submitted-change-row"
                     style={{
                       transform: `translateY(${row.start}px)`,
-                      height: expanded.has(change.id) ? 324 : 64,
+                      height: rowHeight(change.id),
                     }}
                   >
                     <button
+                      style={columns.style}
                       className={`cl-row ${selection.isSelected(change) || props.selected === change.id ? "selected" : ""}`}
                       onFocus={() =>
                         focus({ type: "submitted", id: change.id })
@@ -296,60 +354,52 @@ export function ChangelistPage(props: Props) {
                         }
                       }}
                     >
-                      <span className="cl-description">
+                      <span
+                        className="submitted-cl-number"
+                        title={String(change.id)}
+                      >
                         <strong>{change.id}</strong>
-                        <em
-                          className="submission-kind-tag"
-                          title={`${submissionKindLabel(classifySubmission(change.description).kind, env.preferences.zh)} · ${classifySubmission(change.description).reason}`}
-                        >
-                          {submissionKindLabel(
-                            classifySubmission(change.description).kind,
-                            env.preferences.zh,
-                          )}
-                        </em>
-                        <span>{change.description}</span>
-                        {change.mergeClassification === "reliableMerge" ? (
-                          <em className="merge-tag">
-                            <GitMerge size={11} />
-                            {t.merge}
-                          </em>
-                        ) : null}
-                        {change.mergeClassification === "suspectedMerge" ? (
-                          <em
-                            className="merge-tag suspected"
-                            title={t.suspectedHint}
-                          >
-                            <ShieldAlert size={11} />
-                            {t.suspected}
-                          </em>
-                        ) : null}
-                        {change.mergeClassification === "unknown" ? (
-                          <em
-                            className="merge-tag unknown"
-                            title={t.unknownHint}
-                          >
-                            <ShieldQuestion size={11} />
-                            {t.unknownClassification}
-                          </em>
-                        ) : null}
-                      </span>
-                      <span>
-                        <i className={`status-pill ${change.status}`}>
-                          {change.status === "submitted"
-                            ? t.submitted
-                            : change.status === "pending"
-                              ? t.pending
-                              : t.shelved}
-                        </i>
                       </span>
                       <span
-                        className="muted-cell"
+                        className="submission-kind-tag"
+                        title={submissionKindLabel(
+                          classifySubmission(change.description).kind,
+                          env.preferences.zh,
+                        )}
+                      >
+                        {submissionKindLabel(
+                          classifySubmission(change.description).kind,
+                          env.preferences.zh,
+                        )}
+                      </span>
+                      <span
+                        className="cl-description"
+                        title={change.description}
+                      >
+                        <span>
+                          {submittedDescriptionParts(change.description).map(
+                            (part, index) =>
+                              part.tag ? (
+                                <span
+                                  key={index}
+                                  className="submitted-description-tag"
+                                  title={part.tag}
+                                >
+                                  {part.tag}
+                                </span>
+                              ) : (
+                                part.text
+                              ),
+                          )}
+                        </span>
+                      </span>
+                      <span
+                        className="submitted-author"
                         title={`${change.user} · ${change.client}`}
                       >
                         {change.user}
                         <small>{change.client}</small>
                       </span>
-                      <span className="count-cell">{change.fileCount}</span>
                       <time>
                         {new Intl.DateTimeFormat(undefined, {
                           month: "short",
@@ -387,6 +437,8 @@ export function ChangelistPage(props: Props) {
                         cache={fileCache.current.entries}
                         runtime={env.runtime}
                         zh={env.preferences.zh}
+                        outerScroll={scrollRef}
+                        onHeight={(height) => reportHeight(change.id, height)}
                       />
                     )}
                   </div>

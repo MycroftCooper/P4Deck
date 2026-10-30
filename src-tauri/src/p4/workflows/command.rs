@@ -53,6 +53,27 @@ pub fn reopen(change: i64, path: &str) -> Result<Invocation, String> {
     scoped("reopen", vec!["-c".into(), target], &[path.to_owned()])
 }
 
+pub fn reopen_batch(change: i64, paths: &[String]) -> Result<Invocation, String> {
+    if !(0..=9_007_199_254_740_991).contains(&change) {
+        return Err("Invalid target CL".into());
+    }
+    validate_exact_paths(paths)?;
+    if paths.len() > 128 || paths.iter().map(|p| p.len() + 1).sum::<usize>() > 24 * 1024 {
+        return Err("Reopen batch exceeds explicit inline limits".into());
+    }
+    scoped(
+        "reopen",
+        vec![
+            "-c".into(),
+            if change == 0 {
+                "default".into()
+            } else {
+                change.to_string()
+            },
+        ],
+        paths,
+    )
+}
 pub fn protects(paths: &[String]) -> Result<Invocation, String> {
     scoped("protects", vec!["-M".into()], paths)
 }
@@ -85,6 +106,7 @@ pub fn shelf(
     replace: bool,
 ) -> Result<Invocation, String> {
     ensure_numbered(change)?;
+    validate_exact_paths(paths)?;
     let mut args = match mode {
         ShelfMode::CreateOrUpdate => vec!["-c".into(), change.to_string()],
         ShelfMode::Delete => vec!["-d".into(), "-c".into(), change.to_string()],
@@ -94,6 +116,7 @@ pub fn shelf(
         // server-supported way to overwrite only the explicitly selected shelved files.
         args.push("-f".into());
     }
+    args.insert(0, "-Af".into());
     scoped("shelve", args, paths)
 }
 
@@ -104,6 +127,7 @@ pub fn unshelve(
     preview: bool,
 ) -> Result<Invocation, String> {
     ensure_numbered(source)?;
+    validate_exact_paths(paths)?;
     if target < 0 {
         return Err("target changelist must be Default (0) or numbered".into());
     }
@@ -121,6 +145,7 @@ pub fn unshelve(
             target.to_string()
         },
     ]);
+    args.push("-Af".into());
     scoped("unshelve", args, paths)
 }
 
@@ -197,6 +222,16 @@ pub fn validate_paths(paths: &[String]) -> Result<Vec<String>, String> {
     Ok(paths)
 }
 
+pub fn validate_exact_paths(paths: &[String]) -> Result<Vec<String>, String> {
+    let paths = validate_paths(paths)?;
+    if paths
+        .iter()
+        .any(|path| path.contains(['*', '#', '@']) || path.contains("...") || path.ends_with('/'))
+    {
+        return Err("shelf operations require exact escaped depot file paths, without wildcards or revision selectors".into());
+    }
+    Ok(paths)
+}
 fn ensure_numbered(change: i64) -> Result<(), String> {
     (change > 0)
         .then_some(())
@@ -220,13 +255,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shelf_i01_exact_file_scope_and_streaming() {
+        let paths = vec!["//depot/b".into(), "//depot/a".into(), "//depot/b".into()];
+        assert_eq!(
+            shelf(7, &paths, ShelfMode::Delete, false).unwrap().args,
+            ["-Af", "-d", "-c", "7", "//depot/a", "//depot/b"]
+        );
+        assert_eq!(
+            unshelve(7, 9, &paths, false).unwrap().args,
+            ["-s", "7", "-c", "9", "-Af", "//depot/a", "//depot/b"]
+        );
+        let many: Vec<_> = (0..140).map(|n| format!("//depot/file{n:03}")).collect();
+        let streamed = shelf(7, &many, ShelfMode::Delete, false).unwrap();
+        assert_eq!(streamed.argument_input, Some(many));
+        assert_eq!(streamed.args, ["-Af", "-d", "-c", "7"]);
+    }
+
+    #[test]
+    fn shelf_i01_rejects_empty_patterns_and_revision_ranges() {
+        assert!(shelf(7, &[], ShelfMode::Delete, false).is_err());
+        for path in [
+            "//depot/...",
+            "//depot/*",
+            "//depot/a#1",
+            "//depot/a@7",
+            "//depot/",
+        ] {
+            let paths = vec![path.into()];
+            assert!(shelf(7, &paths, ShelfMode::Delete, false).is_err());
+            assert!(unshelve(7, 0, &paths, true).is_err());
+            assert!(unshelve(7, 0, &paths, false).is_err());
+        }
+        assert!(shelf(
+            7,
+            &["//depot/a%23%40%2A b".into()],
+            ShelfMode::Delete,
+            false
+        )
+        .is_ok());
+        assert!(unshelve(0, 9, &["//depot/a".into()], false).is_err());
+    }
+    #[test]
     fn explicit_scopes_and_safe_flags_are_preserved() {
         let paths = vec!["//depot/a b.txt".into()];
         assert_eq!(
             shelf(7, &paths, ShelfMode::CreateOrUpdate, true)
                 .unwrap()
                 .args,
-            ["-c", "7", "-f", "//depot/a b.txt"]
+            ["-Af", "-c", "7", "-f", "//depot/a b.txt"]
         );
         assert_eq!(unshelve(7, 0, &paths, true).unwrap().args[0], "-n");
         assert!(resolve("//depot/a", ResolveStrategy::MergePreview).is_err());

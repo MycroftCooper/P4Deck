@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GlobalSearchItem } from "../../shared/contracts/types";
+import type { GlobalSearchItem } from "../../shared/contracts";
 import {
   GLOBAL_SEARCH_KINDS,
   highlightedSegments,

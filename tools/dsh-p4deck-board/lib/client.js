@@ -11,6 +11,8 @@ window.__ModuleLoader__.load({
 		const BOARD_KIND = "p4deckBoard";
 		const API = "/p4deck-board/api/snapshot";
 		const TOGGLE = "/p4deck-board/api/human-todos/toggle";
+		const ACCEPT = "/p4deck-board/api/packages/accept";
+		const CANCEL = "/p4deck-board/api/packages/cancel";
 		const EVENTS = "/p4deck-board/api/events";
 		const LINE = "1px solid rgba(128,128,128,0.32)";
 		const MUTED = "rgba(128,128,128,0.95)";
@@ -65,7 +67,7 @@ window.__ModuleLoader__.load({
 		}
 
 		/** 纯视图：只吃 snapshot，便于单测与复用。 */
-		function BoardView({ snapshot, status, error, onToggle }) {
+		function BoardView({ snapshot, status, error, onToggle, onAccept, onCancel, hostOutdated }) {
 			if (!snapshot) {
 				return h(
 					"div",
@@ -92,6 +94,16 @@ window.__ModuleLoader__.load({
 			};
 			const sectionTitle = { fontSize: 11, letterSpacing: "0.06em", color: MUTED, margin: "14px 0 6px" };
 			const card = { border: LINE, borderRadius: 6, padding: "6px 8px", marginBottom: 6, background: "rgba(128,128,128,0.05)" };
+			const actionButton = (color) => ({
+				fontFamily: "inherit",
+				fontSize: 10.5,
+				padding: "2px 7px",
+				borderRadius: 4,
+				border: LINE,
+				background: "transparent",
+				color,
+				cursor: "pointer",
+			});
 
 			return h(
 				"div",
@@ -108,6 +120,23 @@ window.__ModuleLoader__.load({
 					{ style: { color: MUTED, fontSize: 11, marginTop: 2 } },
 					(status === "stale" ? "数据可能过期 · " : "") + "共 " + counts.total + " 个主工作包",
 				),
+				hostOutdated
+					? h(
+							"div",
+							{
+								style: {
+									marginTop: 6,
+									padding: "6px 8px",
+									border: "1px solid #9b2c2c",
+									borderRadius: 6,
+									color: "#9b2c2c",
+									fontSize: 11,
+									lineHeight: 1.4,
+								},
+							},
+							"⚠ 页面已是新版，但 DSH 宿主插件还是旧代码（点按钮会 HTTP 405）。请完全退出 DSH 再重新启动，不是只关窗口或刷新页面。",
+						)
+					: null,
 
 				h("div", { style: sectionTitle }, "AGENT 在忙什么"),
 				...agents.map((agent) =>
@@ -207,10 +236,13 @@ window.__ModuleLoader__.load({
 							}),
 							(STAGE_LABELS[stage] || stage) + " " + items.length,
 						),
-						...items.map((pkg) =>
-							h(
+						...items.map((pkg) => {
+							const actionable = pkg.stage === "awaiting_accept" || pkg.stage === "unverified";
+							const showAccept = actionable && typeof onAccept === "function" && !hostOutdated;
+							const showCancel = pkg.stage !== "done" && typeof onCancel === "function" && !hostOutdated;
+							return h(
 								"div",
-								{ key: pkg.id, style: { ...card, padding: "5px 7px" }, title: pkg.note || "" },
+								{ key: pkg.id, style: { ...card, padding: "6px 7px" }, title: pkg.note || "" },
 								h(
 									"div",
 									{ style: { display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" } },
@@ -218,8 +250,63 @@ window.__ModuleLoader__.load({
 									pkg.priority ? h("span", { style: { color: MUTED, fontSize: 10 } }, pkg.priority) : null,
 									h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, pkg.owner || ""),
 								),
-							),
-						),
+								pkg.scope
+									? h("div", { style: { marginTop: 2, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35 } }, pkg.scope)
+									: null,
+								pkg.note
+									? h(
+											"div",
+											{
+												style: {
+													marginTop: 2,
+													color: MUTED,
+													fontSize: 10.5,
+													display: "-webkit-box",
+													WebkitLineClamp: 2,
+													WebkitBoxOrient: "vertical",
+													overflow: "hidden",
+												},
+											},
+											pkg.note,
+										)
+									: null,
+								showAccept || showCancel || pkg.stage === "done"
+									? h(
+											"div",
+											{ style: { display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap", alignItems: "center" } },
+											showAccept
+												? h(
+														"button",
+														{
+															type: "button",
+															style: actionButton("#2f6f4f"),
+															onClick: (event) => {
+																event.stopPropagation();
+																onAccept(pkg);
+															},
+														},
+														"验收完成",
+													)
+												: null,
+											showCancel
+												? h(
+														"button",
+														{
+															type: "button",
+															style: actionButton("#9b2c2c"),
+															onClick: (event) => {
+																event.stopPropagation();
+																onCancel(pkg);
+															},
+														},
+														"取消",
+													)
+												: null,
+											pkg.stage === "done" ? h("span", { style: { color: MUTED, fontSize: 10 } }, "已验收") : null,
+										)
+									: null,
+							);
+						}),
 					);
 				}),
 
@@ -234,7 +321,9 @@ window.__ModuleLoader__.load({
 							h("strong", { style: { fontSize: 12 } }, pkg.id),
 							h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, fmtTime(pkg.archivedAt)),
 						),
+						pkg.scope ? h("div", { style: { marginTop: 2, fontSize: 11, fontWeight: 600 } }, pkg.scope) : null,
 						h("div", { style: { color: MUTED, fontSize: 10, marginTop: 1 } }, pkg.archiveReason || "历史迁移项"),
+						pkg.canceled ? h("div", { style: { color: "#9b2c2c", fontSize: 10, marginTop: 1 } }, "已取消（未验收）") : null,
 					),
 				),
 				archived.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
@@ -248,7 +337,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function useSnapshot() {
-			const [state, setState] = react.useState({ status: "loading", snapshot: null, error: null });
+			const [state, setState] = react.useState({ status: "loading", snapshot: null, error: null, hostOutdated: false });
 			const [nonce, setNonce] = react.useState(0);
 			react.useEffect(() => {
 				let alive = true;
@@ -257,13 +346,21 @@ window.__ModuleLoader__.load({
 						const response = await fetch(API, { cache: "no-store", credentials: "same-origin" });
 						if (!response.ok) throw new Error("HTTP " + response.status);
 						const snapshot = await response.json();
-						if (alive) setState({ status: "ready", snapshot, error: null });
+						// 新宿主对 GET 验收接口返回 405（只接受 POST）；旧宿主直接 404。
+						// 这样页面重启前就能正确提示“需要重启”，而不是等用户点了才弹 405。
+						let hostOutdated = false;
+						try {
+							const probe = await fetch(ACCEPT, { method: "GET", cache: "no-store", credentials: "same-origin" });
+							hostOutdated = probe.status === 404;
+						} catch {}
+						if (alive) setState({ status: "ready", snapshot, error: null, hostOutdated });
 					} catch (error) {
 						if (!alive) return;
 						setState((previous) => ({
 							status: previous.snapshot ? "stale" : "error",
 							snapshot: previous.snapshot,
 							error: String(error && error.message ? error.message : error),
+							hostOutdated: previous.hostOutdated === true,
 						}));
 					}
 				};
@@ -301,7 +398,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function BoardBody() {
-			const { status, snapshot, error, reload } = useSnapshot();
+			const { status, snapshot, error, hostOutdated, reload } = useSnapshot();
 			const onToggle = react.useCallback(
 				async (id) => {
 					try {
@@ -317,7 +414,60 @@ window.__ModuleLoader__.load({
 				},
 				[reload],
 			);
-			return h(BoardView, { snapshot, status, error, onToggle });
+			const runAction = react.useCallback(
+				async (url, pkg, confirmText) => {
+					if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm(confirmText)) {
+						return;
+					}
+					try {
+						const response = await fetch(url, {
+							method: "POST",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({ id: pkg.id }),
+							credentials: "same-origin",
+						});
+						const result = await response.json().catch(() => ({}));
+						if (response.status === 405) {
+							throw new Error("宿主插件还是旧代码（HTTP 405）；请完全退出 DSH 后重新启动，不是只关窗口或刷新页面。");
+						}
+						if (response.status === 404) {
+							throw new Error("宿主缺少验收接口（HTTP 404）；请确认 dsh-p4deck-board 已更新并重启 DSH。");
+						}
+						if (!response.ok || result.ok === false) {
+							throw new Error(result.reason || "HTTP " + response.status);
+						}
+					} catch (actionError) {
+						if (typeof window !== "undefined" && typeof window.alert === "function") {
+							window.alert("操作失败：" + (actionError && actionError.message ? actionError.message : actionError));
+						}
+					} finally {
+						reload();
+					}
+				},
+				[reload],
+			);
+			const onAccept = react.useCallback(
+				(pkg) => {
+					const forced = !(pkg.qaPassed && pkg.applied);
+					const text =
+						"确认把 " +
+						pkg.id +
+						" 标为人工验收通过？" +
+						(forced ? "\n\n注意：这项没有 QA/Apply 回执，会按一键补登记录。" : "");
+					return runAction(ACCEPT, pkg, text);
+				},
+				[runAction],
+			);
+			const onCancel = react.useCallback(
+				(pkg) =>
+					runAction(
+						CANCEL,
+						pkg,
+						"确认取消 " + pkg.id + " 并归档？\n\n取消后不再出现在活跃看板（记“取消范围”，不算验收通过）。",
+					),
+				[runAction],
+			);
+			return h(BoardView, { snapshot, status, error, onToggle, onAccept, onCancel, hostOutdated });
 		}
 
 		function BoardTitle() {

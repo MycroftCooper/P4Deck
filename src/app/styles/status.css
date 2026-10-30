@@ -40,8 +40,18 @@
 }
 .statusbar.status-meters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) auto auto;
+  /* 磁盘、P4 进度、自动刷新、页面控件；磁盘列吃掉剩余空间。 */
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 16px;
+}
+.app-version {
+  align-self: center;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
 }
 .disk-status,
 .p4-status {
@@ -57,7 +67,7 @@
 }
 .p4-operations {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   min-width: 0;
   gap: 6px;
@@ -199,16 +209,16 @@
   border-radius: 4px;
   overflow: hidden;
   background: var(--border);
-  accent-color: #299568;
+  accent-color: var(--accent);
 }
 .status-meters progress::-webkit-progress-bar {
   background: var(--border);
 }
 .status-meters progress::-webkit-progress-value {
-  background: #299568;
+  background: var(--accent);
 }
 .status-meters progress::-moz-progress-bar {
-  background: #299568;
+  background: var(--accent);
 }
 .disk-status.low-space progress {
   accent-color: #dc4545;
@@ -270,6 +280,10 @@
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 4px;
     padding-inline: 6px;
+  }
+  /* Narrow windows keep the layout stable; the version stays available via the desktop About UI. */
+  .app-version {
+    display: none;
   }
   .disk-status progress,
   .disk-status > span:last-child,

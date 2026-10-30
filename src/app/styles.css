@@ -19,6 +19,7 @@
 @import "./styles/branch-mappings.css";
 @import "./styles/status.css";
 @import "./styles/dropdowns.css";
+@import "./styles/scrollbars.css";
 .runtime-error,
 .tool-error {
   position: fixed;

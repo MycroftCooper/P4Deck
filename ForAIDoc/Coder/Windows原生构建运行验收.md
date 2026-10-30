@@ -58,8 +58,8 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 | User | `p4deck-fixture-admin` |
 | Client | `p4deck-fixture` |
 | Charset | `none` |
-| P4 path | `D:\GitCode\P4Deck\.tools\p4d-fixture\bin\p4.exe` |
-| Ticket path | `D:\GitCode\P4Deck\.tools\p4d-fixture\tickets`（只记录路径，未读取内容） |
+| P4 path | `D:\GitCode\P4Deck\.local\p4d-fixture\bin\p4.exe` |
+| Ticket path | `D:\GitCode\P4Deck\.local\p4d-fixture\tickets`（只记录路径，未读取内容） |
 | P4D PID | `50676`（本轮记录时） |
 
 服务端 `info` 会把地址规范化显示为本机主机名加端口；本轮实际 `P4PORT`、TCP listener 与所有显式 CLI 上下文仍然都是 `127.0.0.1:16661`。没有连接个人或生产 Server。
@@ -104,7 +104,7 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 - 退役旧构建中，管理员强制解锁唯一 mutation 是 `p4 unlock -f -c 4449 //depot/p4deck-native-lock/other-owner.txt`。执行后的独立 `opened -a` 仍保留 owner/client/change（符合 unlock 不改变 opened record），`fstat -Ol` 已无 `otherLock`/`ourLock`；这些只作为历史审计证据保留，当前源码和生成物不得提供同类入口。
 - 退役旧构建曾发现结果页关闭后 Files 行未自动刷新，手工刷新后恢复；`707e51e` 当时修复了该问题。由于管理员强制解锁能力现已整体移除，此项不再是当前产品阻塞，也无需针对当前产品复验该 UI。
 
-首次打开、profile 尚未激活时，前端曾观察到 cwd 落在 debug exe 目录并提示“not client root”。激活 `p4deck-fixture` 后，后端日志中的 workspace 与扫描根已切换为 `D:\GitCode\P4Deck\.tools\p4d-fixture\workspace`，因此该现象属于环境上下文尚未被 profile 替换的启动阶段，不是本轮继续修改代码的证据。最终 UI 展示仍由前端验收记录确认。
+首次打开、profile 尚未激活时，前端曾观察到 cwd 落在 debug exe 目录并提示“not client root”。激活 `p4deck-fixture` 后，后端日志中的 workspace 与扫描根已切换为 `D:\GitCode\P4Deck\.local\p4d-fixture\workspace`，因此该现象属于环境上下文尚未被 profile 替换的启动阶段，不是本轮继续修改代码的证据。最终 UI 展示仍由前端验收记录确认。
 
 ## 5. 当前结论与未验证项
 

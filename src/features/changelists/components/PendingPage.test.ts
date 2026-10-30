@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import type {
   PendingChange,
   PendingChangeMutationResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { mergePendingMutation } from "./PendingPage";
 
 const change = (id: number, description = `CL ${id}`): PendingChange => ({

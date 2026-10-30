@@ -1,3 +1,6 @@
+import { recordFrontendOperationLog } from "../../../infrastructure/backend/frontendOperationLog";
+import { pathKey } from "../address";
+import { nextRevealStep, type ResourceReveal } from "../resourceReveal";
 import {
   useContext,
   useEffect,
@@ -15,7 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import type { WorkspaceNode } from "../../../shared/contracts/types";
+import type { WorkspaceNode } from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 import { useFileMenu } from "../../../app/context-menu/useFileMenu";
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
@@ -45,7 +48,11 @@ export function ResourceExplorer({
   checkingConnection = false,
   onNavigate,
   resizeHandle,
+  reveal,
+  onRevealConsumed,
 }: {
+  reveal?: ResourceReveal;
+  onRevealConsumed?(id: number): void;
   resizeHandle?: ReactNode;
   collapsed: boolean;
   onToggle(): void;
@@ -150,6 +157,104 @@ export function ResourceExplorer({
     overscan: 8,
     getItemKey: (index) => rows[index].key,
   });
+  const revealSeen = useRef("");
+  const revealDone = useRef("");
+
+  const revealKey = reveal ? `${reveal.connectionKey}\0${reveal.id}` : "";
+  const cancelReveal = () => {
+    if (!reveal || reveal.connectionKey !== connectionKey) return;
+    revealDone.current = revealKey;
+    onRevealConsumed?.(reveal.id);
+  };
+  useEffect(() => {
+    if (
+      !reveal ||
+      reveal.connectionKey !== connectionKey ||
+      revealDone.current === revealKey
+    )
+      return;
+    if (revealSeen.current !== revealKey) {
+      revealSeen.current = revealKey;
+
+      setFilter("");
+      setRootOpen((old) => ({ ...old, workspace: true }));
+      return;
+    }
+    if (
+      collapsed ||
+      mode !== "workspace" ||
+      !rootOpen.workspace ||
+      filter ||
+      !ready
+    )
+      return;
+    const finish = (message?: string) => {
+      revealDone.current = revealKey;
+      if (message) {
+        const operationId = crypto.randomUUID();
+        void recordFrontendOperationLog({
+          eventId: `${operationId}-navigation`,
+          operationId,
+          action: "addressNavigation",
+          phase: "navigation",
+          outcome: "failed",
+          code: "operationFailed",
+          targetCount: 1,
+        });
+      }
+      onRevealConsumed?.(reveal.id);
+    };
+    if (blocked) {
+      finish(
+        zh
+          ? "工作区不可用，无法定位"
+          : "Workspace unavailable; cannot locate target",
+      );
+      return;
+    }
+    if (pathKey(reveal.path) === pathKey(root.absolutePath)) {
+      setActivePath("");
+      select([root], root);
+      finish();
+      return;
+    }
+    const step = nextRevealStep(reveal.path, tree.folders, tree.expanded);
+    if (step.kind === "wait") return;
+    if (step.kind === "error") {
+      finish(step.message);
+      return;
+    }
+    if (step.kind === "expand") {
+      tree.toggle(step.path, true);
+      return;
+    }
+    const index = rows.findIndex(
+      (row) => row.kind === "node" && row.key === step.path,
+    );
+    const row = rows[index];
+    if (!row || row.kind !== "node" || !scrollRef.current?.clientHeight) return;
+    // Consume before selection/render updates. Programmatic scroll events do not cancel.
+    revealDone.current = revealKey;
+    virtual.scrollToIndex(index, { align: "auto" });
+    setActivePath(row.key);
+    select([row.node], row.node);
+    onRevealConsumed?.(reveal.id);
+  }, [
+    revealKey,
+    connectionKey,
+    collapsed,
+    mode,
+    rootOpen.workspace,
+    filter,
+    ready,
+    blocked,
+    tree.folders,
+    tree.expanded,
+    rows,
+    virtual,
+    select,
+    zh,
+  ]);
   const focusedPath = nodeRows.some((row) => row.key === activePath)
     ? activePath
     : nodeRows[0]?.key;
@@ -207,7 +312,10 @@ export function ResourceExplorer({
       {resizeHandle}
       <button
         className="resource-collapse"
-        onClick={onToggle}
+        onClick={() => {
+          cancelReveal();
+          onToggle();
+        }}
         aria-expanded={!collapsed}
         aria-label={title}
         title={title}
@@ -218,7 +326,10 @@ export function ResourceExplorer({
         className="resource-tabs"
         tabIndex={0}
         {...menu("T05", () => ({
-          "折叠/展开资源栏": action(onToggle),
+          "折叠/展开资源栏": action(() => {
+            cancelReveal();
+            onToggle();
+          }),
           刷新当前资源视图: action(refresh),
         }))}
       >
@@ -226,7 +337,10 @@ export function ResourceExplorer({
           <div className="resource-tab" key={tab}>
             <button
               className={mode === tab ? "active" : ""}
-              onClick={() => onModeChange(tab)}
+              onClick={() => {
+                cancelReveal();
+                onModeChange(tab);
+              }}
             >
               {tab === "workspace" ? t.workspaceTree : t.depotTree}
             </button>
@@ -238,7 +352,10 @@ export function ResourceExplorer({
         <input
           aria-label={zh ? "筛选资源文件" : "Filter resource files"}
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => {
+            cancelReveal();
+            setFilter(event.target.value);
+          }}
           placeholder={
             zh
               ? "筛选已展开的文件和目录…"
@@ -261,7 +378,10 @@ export function ResourceExplorer({
           className="tree-toggle"
           aria-label={`${rootOpen[mode] ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${root.name}`}
           aria-expanded={rootOpen[mode]}
-          onClick={() => setRootOpen((old) => ({ ...old, [mode]: !old[mode] }))}
+          onClick={() => {
+            cancelReveal();
+            setRootOpen((old) => ({ ...old, [mode]: !old[mode] }));
+          }}
         >
           <ChevronRight
             size={12}
@@ -300,6 +420,9 @@ export function ResourceExplorer({
         )}
         <div
           className="tree-list"
+          onWheelCapture={cancelReveal}
+          onTouchStartCapture={cancelReveal}
+          onPointerDownCapture={cancelReveal}
           ref={scrollRef}
           role="tree"
           aria-label={mode === "depot" ? "Depot" : t.workspaceTree}
@@ -307,6 +430,18 @@ export function ResourceExplorer({
           aria-busy={tree.root.loading}
           {...blankMenu}
           onKeyDown={(event) => {
+            if (
+              [
+                "ArrowDown",
+                "ArrowUp",
+                "PageDown",
+                "PageUp",
+                "Home",
+                "End",
+                "Escape",
+              ].includes(event.key)
+            )
+              cancelReveal();
             blankMenu.onKeyDown(event);
             if (!event.defaultPrevented) selection.onKeyDown(event);
           }}

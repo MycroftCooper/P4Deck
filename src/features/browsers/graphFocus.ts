@@ -2,7 +2,7 @@ import type {
   RevisionGraph,
   RevisionGraphEdge,
   RevisionGraphNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export type GraphFocusMode = "target" | "sources";
 export const GRAPH_BUDGET = 20;

@@ -1,6 +1,23 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { defaultUi, readUiPreferences, toggleAutoRefresh } from "./preferences";
+import {
+  defaultUi,
+  readUiPreferences,
+  saveUiPreferences,
+  toggleAutoRefresh,
+} from "./preferences";
 afterEach(() => vi.unstubAllGlobals());
+it("migrates old accent preferences and restores only valid literal colors", () => {
+  for (const accentColor of [undefined, null, "red", "#abc", "url(x)"]) {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ accentColor }),
+    });
+    expect(readUiPreferences().accentColor).toBe(defaultUi.accentColor);
+  }
+  vi.stubGlobal("localStorage", {
+    getItem: () => JSON.stringify({ accentColor: "#ABCDEF" }),
+  });
+  expect(readUiPreferences().accentColor).toBe("#abcdef");
+});
 it("defaults to asking for a checkout CL and only restores an explicit true preference", () => {
   for (const checkoutUseDefault of [undefined, false, "true", 1, null]) {
     vi.stubGlobal("localStorage", {
@@ -83,4 +100,50 @@ it("remembers a custom interval when paused and can resume an interval disabled 
       autoRefreshMinutes: 0,
     }),
   ).toMatchObject({ autoRefresh: true, autoRefreshMinutes: 5 });
+});
+
+it("defaults the background to the theme and restores only literal tones", () => {
+  vi.stubGlobal("localStorage", {
+    getItem: () => JSON.stringify({ backgroundTone: undefined }),
+  });
+  expect(readUiPreferences().backgroundTone).toBe("");
+  vi.stubGlobal("localStorage", {
+    getItem: () => JSON.stringify({ backgroundTone: "#ABCDEF" }),
+  });
+  expect(readUiPreferences().backgroundTone).toBe("#abcdef");
+  for (const backgroundTone of [
+    null,
+    12,
+    "red",
+    "#abc",
+    "",
+    "url(x)",
+    "#12345678",
+  ]) {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ backgroundTone }),
+    });
+    expect(readUiPreferences().backgroundTone).toBe("");
+  }
+});
+
+it("verifies the preference round-trip and reports refused storage", () => {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+  });
+  expect(saveUiPreferences({ ...defaultUi, backgroundTone: "#2b3442" })).toBe(
+    true,
+  );
+  expect(JSON.parse(store.get("p4deck.ui") ?? "{}").backgroundTone).toBe(
+    "#2b3442",
+  );
+  vi.stubGlobal("localStorage", {
+    getItem: () => null,
+    setItem: () => {},
+  });
+  expect(saveUiPreferences(defaultUi)).toBe(false);
 });

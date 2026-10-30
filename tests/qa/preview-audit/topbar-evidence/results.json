@@ -1,0 +1,54 @@
+{
+  "checks": [
+    {
+      "width": 1440,
+      "height": 870,
+      "scale": 1,
+      "headerHeight": 44,
+      "buttonWidth": 308.234375,
+      "within": true,
+      "contentHeight": 727,
+      "duplicate": false,
+      "bridge": false,
+      "settingsUsable": true
+    },
+    {
+      "width": 900,
+      "height": 670,
+      "scale": 1,
+      "headerHeight": 44,
+      "buttonWidth": 308.234375,
+      "within": true,
+      "contentHeight": 527,
+      "duplicate": false,
+      "bridge": false,
+      "settingsUsable": true
+    },
+    {
+      "width": 390,
+      "height": 670,
+      "scale": 1,
+      "headerHeight": 44,
+      "buttonWidth": 328,
+      "within": true,
+      "contentHeight": 527,
+      "duplicate": false,
+      "bridge": false,
+      "settingsUsable": true
+    },
+    {
+      "width": 1066,
+      "height": 636,
+      "scale": 1.5,
+      "headerHeight": 44,
+      "buttonWidth": 308.234375,
+      "within": true,
+      "contentHeight": 493,
+      "duplicate": false,
+      "bridge": false,
+      "settingsUsable": true
+    }
+  ],
+  "errors": [],
+  "blocked": []
+}

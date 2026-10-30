@@ -28,6 +28,10 @@ const STAGE_PATTERNS = [
   ["已实现且有相应验收证据", "done"],
   ["已实现待验收", "implemented"],
   ["限定dev人工通过", "implemented"],
+  // TODO 状态列里"已验收（用户…）"仅是文档叙述，仍需 state.mjs accept 补登记；
+  // 映射成 implemented 让它在看板里继续显示为待登记，避免被静默当成已完成。
+  ["已验收", "implemented"],
+  ["部分验收", "partial"],
   ["部分实现", "partial"],
   ["待实现", "todo"],
   ["受阻", "blocked"],
@@ -247,6 +251,7 @@ function mergePackage(previous, next) {
     };
   }
   const verification = {
+    ...(previous.verification ?? {}),
     qaPassed: previous.verification?.qaPassed ?? null,
     applied: previous.verification?.applied ?? null,
     humanAccepted: previous.verification?.humanAccepted ?? null,
@@ -289,9 +294,9 @@ function buildState({ main, archived, subitems }, previous) {
     },
     batch,
     counts: {
-      main: main.length,
-      archived: archived.length,
-      total: main.length + archived.length,
+      main: packages.filter((entry) => !entry.archived).length,
+      archived: packages.filter((entry) => entry.archived).length,
+      total: packages.length,
       subitems: subitems.length,
       slices: batch.slices.length,
     },
@@ -355,6 +360,19 @@ function summarize(state) {
   const slices = Object.fromEntries(SLICE_STAGES.map((stage) => [stage, 0]));
   for (const slice of state.batch?.slices ?? []) slices[slice.status] = (slices[slice.status] ?? 0) + 1;
   return { byStage, byModule, slices };
+}
+
+/** archive/restore 之后同步 counts，避免看板标题继续用导入时的旧数字。 */
+function refreshCounts(state) {
+  state.counts = {
+    ...(state.counts ?? {}),
+    main: state.packages.filter((entry) => !entry.archived).length,
+    archived: state.packages.filter((entry) => entry.archived).length,
+    total: state.packages.length,
+    subitems: state.subitems.length,
+    slices: (state.batch?.slices ?? []).length,
+  };
+  return state.counts;
 }
 
 async function cmdCheck(args) {
@@ -476,7 +494,11 @@ async function cmdBoard(args = []) {
       `| ${slice.label ?? slice.id} | ${SLICE_LABELS[slice.status] ?? slice.status} | ${slice.owner} | ${truncate(slice.exit, 40)} | ${truncate(slice.note, 40)} |`,
     );
   }
-  lines.push("", "## 状态分布（52 主工作包口径，含 2 个已完成归档）", "");
+  lines.push(
+    "",
+    `## 状态分布（全部 ${state.counts.total}：活跃 ${state.counts.main} + 归档 ${state.counts.archived}）`,
+    "",
+  );
   lines.push("| 状态 | 数量 |", "|---|---:|");
   for (const stage of STAGES) lines.push(`| ${stage} | ${summary.byStage[stage] ?? 0} |`);
   lines.push("", "## 模块分布", "");
@@ -502,14 +524,14 @@ async function cmdBoard(args = []) {
     lines.push("> 勾选方式：`node scripts/workflow/human-todos.mjs toggle <ID>`，或用 HTML 看板 / DSH 面板直接点。");
   }
   lines.push("", "## 主工作包（活跃）", "");
-  lines.push("| ID | 类型 | 负责人 | 优先级 | 状态 | 验收 | 剩余步骤 |", "|---|---|---|---|---|---|---|");
+  lines.push("| ID | 功能 | 类型 | 负责人 | 优先级 | 状态 | 验收 | 剩余步骤 |", "|---|---|---|---|---|---|---|---|");
   for (const pkg of state.packages.filter((entry) => !entry.archived)) {
     const verification = pkg.verification ?? {};
     const marks = [verification.qaPassed ? "QA" : "", verification.applied ? "已应用" : "", verification.humanAccepted ? "人验" : ""]
       .filter(Boolean)
       .join("/");
     lines.push(
-      `| ${pkg.id} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
+      `| ${pkg.id} | ${truncate(pkg.scope, 28)} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
     );
   }
   lines.push("", "## 关联子项（不单独计数）", "");
@@ -714,6 +736,7 @@ async function cmdArchive(id, args) {
     return;
   }
   Object.assign(pkg, { archived: true, ...plan });
+  refreshCounts(state);
   state.updatedAt = plan.archivedAt;
   await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   process.stdout.write(`已归档 ${pkg.id}：${note}\n`);
@@ -737,6 +760,7 @@ async function cmdRestore(id, args) {
   pkg.archivedBy = null;
   pkg.archiveEvidence = null;
   pkg.archiveReason = note ? `恢复：${note}` : "恢复为活跃任务";
+  refreshCounts(state);
   state.updatedAt = new Date().toISOString();
   await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   process.stdout.write(`已恢复 ${pkg.id} 为活跃任务\n`);

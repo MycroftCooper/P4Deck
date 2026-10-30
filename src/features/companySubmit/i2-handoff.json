@@ -1,0 +1,32 @@
+{
+  "status": "FE I2 implementation frozen for QA; real launch disabled",
+  "hashes": {
+    "src/features/changelists/components/PendingPage.tsx": "28805f397fd93db52b3f063ee20e7eff5381c5a2a1d7dc18b46100a34960588c",
+    "src/app/context-menu/catalog.ts": "d9661c3f3599fc50184527af8ecaf0da4879e7d416ed44646f0a483371792192",
+    "src/app/context-menu/labels.ts": "eb58d7a12be8199408b21f08caa3f383c2f1869b6526c44df8a39721a85cd4ba",
+    "src/infrastructure/backend/contract.ts": "54bc3cc2e9ab4a381fe82d34c306a6045a64a7a8d3f3874551890286dad40762",
+    "src/infrastructure/backend/tauriBackend.ts": "29b506836d7100ce410ad537137bf81cc33bfecc82691bceb8de02303c033efe",
+    "src/infrastructure/backend/mockBackend.ts": "bc3d8cc8d498925ce07b99839b67a3a37e2336e65b83e8734a8fc43802c7c372",
+    "src/features/companySubmit/CompanySubmitDialog.tsx": "22df82d621c796a70cbc7aff5e78718e208528d993dc192d21514d3d3ad5221b",
+    "src/features/companySubmit/CompanySubmitPreparation.test.tsx": "261b4793499d3a4337ee3c350316b3e41ee222b182e1df221333aa0cad1668af",
+    "src/features/companySubmit/CompanySubmitPreparation.tsx": "75342ec43060a037f0f038b2a079259f9ef25f384e0bde48b087d5bfb0908dad",
+    "src/features/companySubmit/CompanySubmitPreview.test.tsx": "a02b1be309aed8fe604c320ab662e07b58d363cd8ee9a1df1a023bf95ed3e39f",
+    "src/features/companySubmit/CompanySubmitPreview.tsx": "42869419af1794059e4aa592d7e61291bf6a54bccef839c570fa2b481d65e9a6",
+    "src/features/companySubmit/model.test.ts": "07ea14bf213100c2a22d440d22784901e180ff581231ee20b5bbbc388ffeed29",
+    "src/features/companySubmit/model.ts": "d8a1424e093e3de7d4f401310c61611ddd02ec01c98f4af4e62ebb87f508361b",
+    "src/features/companySubmit/PendingCompanySubmit.test.tsx": "fc5661bd1d9df8c58b50041a2afafcc2d397547508d5562807d0006110b0160e",
+    "src/features/companySubmit/snapshotAdapter.test.ts": "768e0b4aa774281db0894cf7fb85743f845bafde1b5972c6704f126841ed7d7a",
+    "src/features/companySubmit/useCompanySubmitSnapshot.ts": "8cd94ed74d46309e5929079c9e44102392712b9683a6e63c19ec988e58297911"
+  },
+  "validation": {
+    "typescript": "nonincremental passed",
+    "diffCheck": "passed",
+    "browser": "not run in this integration batch; QA owns dedicated config",
+    "targetedMockPassed": 93
+  },
+  "knownFailures": [
+    "context-menu/model.test.ts inventory order: PM document lacks appended company preview items C01-10 C02-14 C12-04",
+    "context-menu/model.test.ts English translation: existing 重命名工作区… label missing mapping"
+  ],
+  "boundary": "Only no-argument host connection snapshot is wired. No planning/spawn IPC or tool evidence invented. Paths are memory-only. QA shared release hashes verified before edits."
+}

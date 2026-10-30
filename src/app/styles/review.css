@@ -669,3 +669,76 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.graph-investigation-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.graph-investigation-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.graph-investigation-fields input,
+.graph-investigation-fields select {
+  min-width: 0;
+  width: 100%;
+}
+.graph-investigation-fields .graph-investigation-check {
+  flex-direction: row;
+  align-items: center;
+}
+.graph-investigation-check input {
+  width: auto;
+}
+.graph-investigation-fields p {
+  overflow-wrap: anywhere;
+}
+.graph-investigation-results {
+  max-height: 340px;
+  overflow: auto;
+}
+.graph-investigation-results table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.graph-investigation-results th,
+.graph-investigation-results td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.graph-investigation-results small {
+  display: block;
+  color: var(--muted);
+}
+
+.review-graph g.compare-first circle {
+  fill: #e8f0ff;
+  stroke: #2e6ba4;
+  stroke-width: 3px;
+}
+.review-graph g.compare-last circle {
+  fill: #fff0d4;
+  stroke: #9b6112;
+  stroke-width: 3px;
+}
+:root[data-theme="dark"] .review-graph g.compare-first circle {
+  fill: #20384c;
+  stroke: #91c9ff;
+}
+:root[data-theme="dark"] .review-graph g.compare-last circle {
+  fill: #4a3820;
+  stroke: #efca79;
+}
+.review-graph g:focus-visible circle {
+  stroke-width: 5px;
+}

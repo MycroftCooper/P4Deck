@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-28T09:19:45.344Z",
+  "changed": [],
+  "hashes": {
+    "src/features/changelists/components/PendingPage.tsx": "28805f397fd93db52b3f063ee20e7eff5381c5a2a1d7dc18b46100a34960588c",
+    "src/app/context-menu/catalog.ts": "d9661c3f3599fc50184527af8ecaf0da4879e7d416ed44646f0a483371792192",
+    "src/app/context-menu/labels.ts": "eb58d7a12be8199408b21f08caa3f383c2f1869b6526c44df8a39721a85cd4ba",
+    "src/infrastructure/backend/contract.ts": "54bc3cc2e9ab4a381fe82d34c306a6045a64a7a8d3f3874551890286dad40762",
+    "src/infrastructure/backend/tauriBackend.ts": "29b506836d7100ce410ad537137bf81cc33bfecc82691bceb8de02303c033efe",
+    "src/infrastructure/backend/mockBackend.ts": "bc3d8cc8d498925ce07b99839b67a3a37e2336e65b83e8734a8fc43802c7c372",
+    "src/features/companySubmit/CompanySubmitDialog.tsx": "22df82d621c796a70cbc7aff5e78718e208528d993dc192d21514d3d3ad5221b",
+    "src/features/companySubmit/CompanySubmitPreparation.test.tsx": "261b4793499d3a4337ee3c350316b3e41ee222b182e1df221333aa0cad1668af",
+    "src/features/companySubmit/CompanySubmitPreparation.tsx": "75342ec43060a037f0f038b2a079259f9ef25f384e0bde48b087d5bfb0908dad",
+    "src/features/companySubmit/CompanySubmitPreview.test.tsx": "a02b1be309aed8fe604c320ab662e07b58d363cd8ee9a1df1a023bf95ed3e39f",
+    "src/features/companySubmit/CompanySubmitPreview.tsx": "42869419af1794059e4aa592d7e61291bf6a54bccef839c570fa2b481d65e9a6",
+    "src/features/companySubmit/model.test.ts": "07ea14bf213100c2a22d440d22784901e180ff581231ee20b5bbbc388ffeed29",
+    "src/features/companySubmit/model.ts": "d8a1424e093e3de7d4f401310c61611ddd02ec01c98f4af4e62ebb87f508361b",
+    "src/features/companySubmit/PendingCompanySubmit.test.tsx": "fc5661bd1d9df8c58b50041a2afafcc2d397547508d5562807d0006110b0160e",
+    "src/features/companySubmit/snapshotAdapter.test.ts": "768e0b4aa774281db0894cf7fb85743f845bafde1b5972c6704f126841ed7d7a",
+    "src/features/companySubmit/useCompanySubmitSnapshot.ts": "8cd94ed74d46309e5929079c9e44102392712b9683a6e63c19ec988e58297911",
+    "src/test/preview-audit/vite.config.mjs": "fb07f8ba571fbf113fe020ff583153ecaddf5b14ec7952f1eaab74fb0b8db3fb",
+    "src-tauri/src/app/company_submit_golden_v1.json": "6ff9d6fc9f98427ee9d6f07cd335670c574575ed5b1544798127a2c991c4ef75",
+    "src/features/changelists/components/SubmitDialog.tsx": "a867407db992ad6860ff9c37e7e2531bf14e39c580f47597ede54fcd7d7de24e",
+    "src/app/dialogs/useCommandDialogs.tsx": "4a33e73940030bdf309a7f6379eeb879e957966d9df23c6e50737a22895468d9",
+    "ForAIDoc/Designer/右键菜单对象与菜单项总表.md": "86f3d844f9df075f53323014cdbc8fe3987578feab223e6bfc32e0fc5c94a338",
+    "src/test/batch-qa/i2-fixture.tsx": "2f1075152f114bb2de981640348ea79c8a191dcbac9fee80949ac9d2430920f5",
+    "src/shared/i18n/index.ts": "2909889c811d50a4ce77cf3c3a4a64125e0e5a32e1bd2b0c09da4096fea1e5ad",
+    "src/test/batch-qa/i2-stubs.tsx": "3ff6af017d248a68b2b0feec75220fc02419b7ec78f9cd3f3b8fd9b439489e1b",
+    "src/app/styles/tokens.css": "55511abef225dcd0254ea0c92e0385ed1a26df7ab3db873d42abfc7f31a04477",
+    "src/app/styles/workbench.css": "6b32e80323188600ba317e87bc5d3029eae0e01ab96f7aa1dbf62109ac621d6c",
+    "src/app/styles/dialogs.css": "daa9319599f789feabb2ef23c17eb2ba1650361a834985040b2188fd031448d9",
+    "src/test/preview-audit/fixture.css": "7bbd572da64ccf58a885130137ccbeb7a27cd791763c384635cceee13eece477",
+    "src/test/preview-audit/pending-stubs.tsx": "b57f4ae56e64cff90b44c95d9acd887a5737dcc02ef1fda2d2e37b46437a026c",
+    "src/shared/lib/storage.ts": "90316446bdd4356af3c00e34aaf0c3c162747e8da45848e9c035faa77f0333c6",
+    "src/app/context-menu/useRecordSelection.ts": "c63a181d4f589fb524f4498cebbf0695c416a77c3563bdce9c6694b47129e124",
+    "src/features/changelists/pendingFilterState.ts": "ff836975528f69365cf3bc14e698ba10b82d8cd2c76ff52a9961fd55a0446bf9",
+    "src/app/dialogs/Dialog.tsx": "3b396d79f2e1f071f9729f893e814e6ffe272610d7b6235c575049fad2e343aa"
+  },
+  "releaseLabels": {
+    "path": "src/app/context-menu/labels.ts",
+    "hash": "eb58d7a12be8199408b21f08caa3f383c2f1869b6526c44df8a39721a85cd4ba",
+    "status": "released for PM-assigned FE UI02-B01 minimal translation fix; new hash must be retested"
+  },
+  "reusedSubmitChain": [
+    {
+      "path": "src/features/changelists/components/SubmitDialog.tsx",
+      "match": true
+    },
+    {
+      "path": "src/app/dialogs/useCommandDialogs.tsx",
+      "match": true
+    }
+  ]
+}

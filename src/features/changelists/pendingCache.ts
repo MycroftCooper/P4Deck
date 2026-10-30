@@ -6,7 +6,7 @@ import type {
   PendingChangeMutationResult,
   PendingChangeQueryStats,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { appCache } from "../../shared/cache/appCache";
 import { snapshotKey, workspaceScope } from "../../shared/cache/policy";
 import {
@@ -59,7 +59,10 @@ const pendingAvailable = (runtime: RuntimeInfo) =>
   !!runtime.context.client.trim();
 
 /** Reads every cursor page of one server snapshot. */
-async function fetchSnapshot(signal: AbortSignal): Promise<PendingSnapshot> {
+async function fetchSnapshot(
+  signal: AbortSignal,
+  current: () => boolean = () => true,
+): Promise<PendingSnapshot> {
   const operationId = crypto.randomUUID();
   const cancel = () =>
     void backend.cancelOperation(operationId).catch(() => undefined);
@@ -71,10 +74,12 @@ async function fetchSnapshot(signal: AbortSignal): Promise<PendingSnapshot> {
   try {
     while (true) {
       signal.throwIfAborted();
+      if (!current()) throw new Error("Pending refresh connection changed");
       const page = await backend.queryPendingChanges(
         pendingQuery(0, operationId, "", cursor),
       );
       signal.throwIfAborted();
+      if (!current()) throw new Error("Pending refresh connection changed");
       for (const change of [
         ...(page.defaultChange ? [page.defaultChange] : []),
         ...page.items,
@@ -241,4 +246,29 @@ export function usePendingCache(runtime: RuntimeInfo, enabled: boolean) {
     changes: query.data?.changes ?? empty,
     updateChanges,
   };
+}
+
+export class PendingExitRefreshPartial extends Error {}
+
+/** One main-window refresh after a confirmed tool-parent exit; no submit inference. */
+export async function refreshPendingAfterToolExit(
+  runtime: RuntimeInfo,
+  current: () => boolean,
+) {
+  const key = pendingSnapshotKey(runtime);
+  await appCache.cancelQueries({ queryKey: key, exact: true });
+  if (!current()) return;
+  const snapshot = await appCache.fetchQuery({
+    queryKey: key,
+    staleTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const value = await fetchSnapshot(signal, current);
+      signal.throwIfAborted();
+      if (!current()) throw Error("Pending refresh connection changed");
+      return value;
+    },
+  });
+  if (snapshot.partial || snapshot.stats.truncatedBySafetyLimit)
+    throw new PendingExitRefreshPartial("Pending refresh incomplete");
 }

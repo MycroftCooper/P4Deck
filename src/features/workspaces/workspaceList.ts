@@ -1,8 +1,5 @@
 import { backend } from "../../infrastructure/backend";
-import type {
-  ClientWorkspace,
-  RuntimeInfo,
-} from "../../shared/contracts/types";
+import type { ClientWorkspace, RuntimeInfo } from "../../shared/contracts";
 import { appCache } from "../../shared/cache/appCache";
 import { serverScope, snapshotKey } from "../../shared/cache/policy";
 import { writePersisted } from "../../shared/cache/persistentStore";

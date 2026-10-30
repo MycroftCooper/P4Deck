@@ -11,8 +11,53 @@ const documented = spec
   .split("\n")
   .filter((line) => /^\| [FHCVSW TU]\d{2} \|/.test(line));
 
+// PM M01: action IDs are stable identities, independent of display position.
+// Explicit order comes from the reviewed document, never from the catalog.
+function parseStableIds(text: string) {
+  const declared = new Map<string, string[]>();
+  for (const line of text.split("\n")) {
+    if (!line.includes("menu-stable-ids")) continue;
+    const match = line
+      .trim()
+      .match(/^<!-- menu-stable-ids ([A-Z]\d{2}): (.*?) -->$/);
+    if (!match) throw new Error("Malformed stable-ID declaration");
+    const [, object, list] = match;
+    if (declared.has(object))
+      throw new Error("Duplicate stable-ID declaration");
+    const ids = list.split(",").map((id) => id.trim());
+    if (ids.some((id) => !new RegExp(`^${object}-\\d{2}$`).test(id)))
+      throw new Error("Missing or wrong-object stable ID");
+    if (new Set(ids).size !== ids.length)
+      throw new Error("Duplicate stable ID");
+    declared.set(object, ids);
+  }
+  return declared;
+}
+
+function expectedIds(
+  declared: Map<string, string[]>,
+  object: string,
+  count: number,
+) {
+  const ids = declared.get(object);
+  if (ids && ids.length !== count) throw new Error("Stable-ID count mismatch");
+  return (
+    ids ??
+    Array.from(
+      { length: count },
+      (_, i) => `${object}-${String(i + 1).padStart(2, "0")}`,
+    )
+  );
+}
+
 it("registers every object and every leaf from the product inventory in order", () => {
+  const stableIds = parseStableIds(spec);
+  const documentedObjects = documented.map((line) => line.split("|")[1].trim());
   expect(documented).toHaveLength(Object.keys(menuCatalog).length);
+  expect(new Set(documentedObjects).size).toBe(documentedObjects.length);
+  expect(
+    [...stableIds.keys()].every((object) => documentedObjects.includes(object)),
+  ).toBe(true);
   for (const line of documented) {
     const cells = line.split("|").map((value) => value.trim());
     const object = cells[1] as MenuObjectId;
@@ -20,14 +65,35 @@ it("registers every object and every leaf from the product inventory in order", 
       .map((v) => v.trim())
       .filter((v) => /^[☐☑]/u.test(v))
       .map((v) => v.replace(/^[☐☑]\s*/u, ""));
+    expect(new Set(labels).size, object).toBe(labels.length);
     expect(
       menuCatalog[object].items.map((item) => item.label),
       object,
     ).toEqual(labels);
     expect(menuCatalog[object].items.map((item) => item.id)).toEqual(
-      labels.map((_, i) => `${object}-${String(i + 1).padStart(2, "0")}`),
+      expectedIds(stableIds, object, labels.length),
     );
   }
+});
+
+it("preserves documented stable-ID order and the default rule for undeclared objects", () => {
+  const ids = parseStableIds("<!-- menu-stable-ids C09: C09-09,C09-01 -->");
+  expect(expectedIds(ids, "C09", 2)).toEqual(["C09-09", "C09-01"]);
+  expect(expectedIds(ids, "F01", 2)).toEqual(["F01-01", "F01-02"]);
+  expect(() => expectedIds(ids, "C09", 3)).toThrow("count mismatch");
+});
+
+it.each([
+  ["missing ID", "<!-- menu-stable-ids C09: C09-09, -->"],
+  ["duplicate ID", "<!-- menu-stable-ids C09: C09-09,C09-09 -->"],
+  ["wrong object", "<!-- menu-stable-ids C09: C09-09,F01-01 -->"],
+  ["malformed declaration", "<!-- menu-stable-ids C09 C09-09 -->"],
+  [
+    "duplicate declaration",
+    "<!-- menu-stable-ids C09: C09-09 -->\n<!-- menu-stable-ids C09: C09-01 -->",
+  ],
+])("rejects invalid stable-ID metadata: %s", (_name, text) => {
+  expect(() => parseStableIds(text)).toThrow();
 });
 
 for (const object of Object.keys(menuCatalog) as MenuObjectId[]) {

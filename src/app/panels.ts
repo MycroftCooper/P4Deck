@@ -1,5 +1,5 @@
 import { messages } from "../shared/i18n";
-import type { GlobalSearchTarget } from "../shared/contracts/types";
+import type { GlobalSearchTarget } from "../shared/contracts";
 
 export const pageDefinitions = {
   files: {
@@ -97,6 +97,7 @@ export function targetForPage(page: PageId, depot?: string, local?: string) {
     : (depot ?? local);
 }
 export interface RevisionComparison {
+  rightPath?: string;
   left: number;
   right: number;
 }
@@ -115,9 +116,20 @@ export function normalizePanelTarget(value: unknown): PanelTarget {
     Number.isSafeInteger(params.comparison.left) &&
     Number.isSafeInteger(params.comparison.right) &&
     params.comparison.left > 0 &&
-    params.comparison.right > params.comparison.left
+    (params.comparison.rightPath
+      ? params.comparison.right > 0 &&
+        typeof params.comparison.rightPath === "string" &&
+        params.comparison.rightPath.startsWith("//") &&
+        !/[#@\r\n\0*]/.test(params.comparison.rightPath) &&
+        !params.comparison.rightPath.includes("...") &&
+        (params.comparison.rightPath !== params.target ||
+          params.comparison.right !== params.comparison.left)
+      : params.comparison.right > params.comparison.left)
       ? {
           comparison: {
+            ...(params.comparison.rightPath
+              ? { rightPath: params.comparison.rightPath }
+              : {}),
             left: params.comparison.left,
             right: params.comparison.right,
           },

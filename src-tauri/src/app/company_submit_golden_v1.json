@@ -1,0 +1,958 @@
+{
+  "contractVersion": 1,
+  "notice": "Synthetic test facts only. toolEvidence is host-owned, never an IPC input or proof of a real file.",
+  "cases": [
+    {
+      "name": "plain",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": true,
+        "plan": {
+          "changeId": "42",
+          "executablePath": "C:\\Synthetic Tools\\submit.exe",
+          "argv": [
+            "-c",
+            "42",
+            "-p",
+            "ssl:fixture.invalid:1666",
+            "-u",
+            "mock user",
+            "-C",
+            "mock-client"
+          ],
+          "connection": {
+            "profileId": "fixture",
+            "generation": "3",
+            "server": "ssl:fixture.invalid:1666",
+            "user": "mock user",
+            "client": "mock-client"
+          },
+          "realStartAllowed": false,
+          "blockers": [
+            "cwdUnverified",
+            "authenticationUnverified",
+            "sessionLifetimeUnverified",
+            "dynamicExecutionNotAuthorized"
+          ]
+        }
+      }
+    },
+    {
+      "name": "leading-zero",
+      "request": {
+        "changeIds": [
+          "00042"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": true,
+        "plan": {
+          "changeId": "42",
+          "executablePath": "C:\\Synthetic Tools\\submit.exe",
+          "argv": [
+            "-c",
+            "42",
+            "-p",
+            "ssl:fixture.invalid:1666",
+            "-u",
+            "mock user",
+            "-C",
+            "mock-client"
+          ],
+          "connection": {
+            "profileId": "fixture",
+            "generation": "3",
+            "server": "ssl:fixture.invalid:1666",
+            "user": "mock user",
+            "client": "mock-client"
+          },
+          "realStartAllowed": false,
+          "blockers": [
+            "cwdUnverified",
+            "authenticationUnverified",
+            "sessionLifetimeUnverified",
+            "dynamicExecutionNotAuthorized"
+          ]
+        }
+      }
+    },
+    {
+      "name": "above-js-safe",
+      "request": {
+        "changeIds": [
+          "9007199254740993"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": true,
+        "plan": {
+          "changeId": "9007199254740993",
+          "executablePath": "C:\\Synthetic Tools\\submit.exe",
+          "argv": [
+            "-c",
+            "9007199254740993",
+            "-p",
+            "ssl:fixture.invalid:1666",
+            "-u",
+            "mock user",
+            "-C",
+            "mock-client"
+          ],
+          "connection": {
+            "profileId": "fixture",
+            "generation": "3",
+            "server": "ssl:fixture.invalid:1666",
+            "user": "mock user",
+            "client": "mock-client"
+          },
+          "realStartAllowed": false,
+          "blockers": [
+            "cwdUnverified",
+            "authenticationUnverified",
+            "sessionLifetimeUnverified",
+            "dynamicExecutionNotAuthorized"
+          ]
+        }
+      }
+    },
+    {
+      "name": "u64-max",
+      "request": {
+        "changeIds": [
+          "18446744073709551615"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": true,
+        "plan": {
+          "changeId": "18446744073709551615",
+          "executablePath": "C:\\Synthetic Tools\\submit.exe",
+          "argv": [
+            "-c",
+            "18446744073709551615",
+            "-p",
+            "ssl:fixture.invalid:1666",
+            "-u",
+            "mock user",
+            "-C",
+            "mock-client"
+          ],
+          "connection": {
+            "profileId": "fixture",
+            "generation": "3",
+            "server": "ssl:fixture.invalid:1666",
+            "user": "mock user",
+            "client": "mock-client"
+          },
+          "realStartAllowed": false,
+          "blockers": [
+            "cwdUnverified",
+            "authenticationUnverified",
+            "sessionLifetimeUnverified",
+            "dynamicExecutionNotAuthorized"
+          ]
+        }
+      }
+    },
+    {
+      "name": "overflow",
+      "request": {
+        "changeIds": [
+          "18446744073709551616"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "default",
+      "request": {
+        "changeIds": [
+          "default"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "zero",
+      "request": {
+        "changeIds": [
+          "0"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "signed",
+      "request": {
+        "changeIds": [
+          "+42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "fraction",
+      "request": {
+        "changeIds": [
+          "4.2"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "empty",
+      "request": {
+        "changeIds": [
+          ""
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "control-cl",
+      "request": {
+        "changeIds": [
+          "42\n"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidChangeId"
+      }
+    },
+    {
+      "name": "unc",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "\\\\fixture\\tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidExecutablePath"
+      }
+    },
+    {
+      "name": "device",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "\\\\?\\C:\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidExecutablePath"
+      }
+    },
+    {
+      "name": "relative",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidExecutablePath"
+      }
+    },
+    {
+      "name": "dot",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\tools\\..\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidExecutablePath"
+      }
+    },
+    {
+      "name": "control-path",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\tools\\bad\n.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidExecutablePath"
+      }
+    },
+    {
+      "name": "empty-profile",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidConnection"
+      }
+    },
+    {
+      "name": "blank-profile",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": " ",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidConnection"
+      }
+    },
+    {
+      "name": "control-user",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock\nuser",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidConnection"
+      }
+    },
+    {
+      "name": "old-generation",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "2",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "connectionChanged"
+      }
+    },
+    {
+      "name": "overflow-generation",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "18446744073709551616",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "invalidConnection"
+      }
+    },
+    {
+      "name": "unknown-tool",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "unknown"
+      },
+      "expected": {
+        "ok": false,
+        "error": "toolUnverified"
+      }
+    },
+    {
+      "name": "missing-tool",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "missing"
+      },
+      "expected": {
+        "ok": false,
+        "error": "toolMissing"
+      }
+    },
+    {
+      "name": "directory-tool",
+      "request": {
+        "changeIds": [
+          "42"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "notFile"
+      },
+      "expected": {
+        "ok": false,
+        "error": "toolNotFile"
+      }
+    },
+    {
+      "name": "multi",
+      "request": {
+        "changeIds": [
+          "42",
+          "43"
+        ],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "singleNumberedChangeRequired"
+      }
+    },
+    {
+      "name": "no-selection",
+      "request": {
+        "changeIds": [],
+        "executablePath": "C:\\Synthetic Tools\\submit.exe",
+        "connection": {
+          "profileId": "fixture",
+          "generation": "3",
+          "server": "ssl:fixture.invalid:1666",
+          "user": "mock user",
+          "client": "mock-client"
+        }
+      },
+      "currentConnection": {
+        "profileId": "fixture",
+        "generation": "3",
+        "server": "ssl:fixture.invalid:1666",
+        "user": "mock user",
+        "client": "mock-client"
+      },
+      "toolEvidence": {
+        "kind": "file",
+        "path": "C:\\Synthetic Tools\\submit.exe",
+        "identity": "synthetic-file-v1"
+      },
+      "expected": {
+        "ok": false,
+        "error": "singleNumberedChangeRequired"
+      }
+    }
+  ],
+  "sessionStates": [
+    {
+      "state": "reserved"
+    },
+    {
+      "state": "running"
+    },
+    {
+      "state": "notStarted"
+    },
+    {
+      "exitCode": 0,
+      "state": "outcomeUnknown"
+    },
+    {
+      "exitCode": null,
+      "state": "outcomeUnknown"
+    }
+  ]
+}

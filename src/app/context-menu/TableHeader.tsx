@@ -1,3 +1,5 @@
+import { ColumnResizer } from "./ColumnResizer";
+import type { useColumnWidths } from "./useColumnWidths";
 import { useContextMenu } from "./ContextMenu";
 import type { MenuBindings } from "./model";
 
@@ -38,26 +40,43 @@ export function tableMenuBindings(
 export function TableHeader({
   className,
   columns,
+  resize,
 }: {
   className: string;
   columns: MenuColumn[];
+  resize?: ReturnType<typeof useColumnWidths>;
 }) {
   const menu = useContextMenu();
   return (
     <div
-      className={className}
+      className={`${className}${resize ? " resizable-columns" : ""}`}
+      data-table-id={resize?.id}
+      style={resize?.style}
       tabIndex={0}
-      {...menu("T08", () => tableMenuBindings(columns))}
+      {...menu("T08", () => ({
+        ...tableMenuBindings(columns),
+        ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+      }))}
     >
-      {columns.map((column) => (
+      {columns.map((column, index) => (
         <span
           key={column.id}
           tabIndex={0}
-          {...menu("T08", () => tableMenuBindings(columns, column), {
-            title: column.label,
-          })}
+          {...menu(
+            "T08",
+            () => ({
+              ...tableMenuBindings(columns, column),
+              ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+            }),
+            {
+              title: column.label,
+            },
+          )}
         >
           {column.label}
+          {resize && (
+            <ColumnResizer resize={resize} index={index} label={column.label} />
+          )}
         </span>
       ))}
     </div>

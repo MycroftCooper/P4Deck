@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
-$FixtureRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".tools\p4d-fixture"))
+$FixtureRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".local\p4d-fixture"))
 $BinRoot = Join-Path $FixtureRoot "bin"
 $ServerRoot = Join-Path $FixtureRoot "server"
 $ClientRoot = Join-Path $FixtureRoot "workspace"
@@ -587,7 +587,7 @@ switch ($Action) {
     }
     "destroy" {
         Stop-Fixture
-        $expected = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".tools\p4d-fixture"))
+        $expected = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".local\p4d-fixture"))
         if ($FixtureRoot -ne $expected -or -not $FixtureRoot.StartsWith($RepoRoot + [IO.Path]::DirectorySeparatorChar)) {
             throw "Refusing to remove unexpected fixture directory: $FixtureRoot"
         }

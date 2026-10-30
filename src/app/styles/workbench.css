@@ -468,6 +468,21 @@ button {
   flex: 1;
   min-width: 160px;
 }
+.pending-query-bar > .search-field {
+  max-width: none;
+  color: var(--text);
+  font-size: 11px;
+}
+.pending-query-bar > button {
+  height: 35px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.branch-mapping-query > button:not(:disabled):hover,
+.pending-query-bar > button:not(:disabled):hover {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
 .pending-load-more {
   display: block;
   margin: 10px auto;
@@ -1000,6 +1015,14 @@ button {
 .integration-evidence code {
   overflow-wrap: anywhere;
 }
+/* The revision list reuses the shared resizable header, but it does not carry
+   one of the list-specific column classes; give it the grid it declares. */
+.revision-file-list .workspace-head {
+  display: grid;
+  align-items: center;
+  gap: 0;
+  padding: 0 6px;
+}
 .revision-file-scroll {
   position: relative;
   height: min(280px, 35vh);
@@ -1346,6 +1369,13 @@ button {
 }
 .diagnostic-table tr.warning td:nth-child(2) {
   color: var(--warning);
+}
+/* UI LOG-01: cancellation is a non-error outcome; grey (never red) and excluded from error tone. */
+.diagnostic-table tr.cancelled td:nth-child(2) {
+  color: var(--muted);
+}
+.log-row.cancelled strong {
+  color: var(--muted);
 }
 .journal-table th:nth-child(1) {
   width: 82px;
@@ -1739,10 +1769,6 @@ button {
     background 0.12s,
     color 0.12s;
 }
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--panel-3) transparent;
-}
 .app-shell {
   grid-template-rows: 60px minmax(0, 1fr) 38px 28px;
 }
@@ -1751,51 +1777,21 @@ button {
 }
 .topbar {
   padding: 0 22px;
-  background: var(--panel-2);
-  grid-template-columns: auto minmax(0, 1fr) 138px;
+  background: var(--chrome);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 24px;
+}
+.titlebar-version {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 .brand {
   gap: 11px;
   font-size: 16px;
   letter-spacing: -0.5px;
-}
-.topbar.custom-titlebar {
-  padding-right: 0;
-}
-.topbar.system-drag {
-  app-region: drag;
-}
-.topbar.system-drag .connection,
-.topbar.system-drag .window-controls {
-  app-region: no-drag;
-}
-.window-controls {
-  display: flex;
-  align-self: stretch;
-  justify-self: end;
-  -webkit-app-region: no-drag;
-}
-.window-controls button {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-}
-.window-controls button:hover {
-  background: var(--hover);
-}
-.window-controls .window-close:hover {
-  background: #c42b1c;
-  color: #fff;
-}
-.window-controls button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -3px;
 }
 .brand-mark {
   width: 32px;
@@ -1823,7 +1819,7 @@ button {
   grid-template-columns: 232px minmax(0, 1fr);
 }
 .resource-explorer {
-  background: var(--panel-2);
+  background: var(--chrome);
   grid-template-rows: 56px 48px 42px minmax(0, 1fr);
 }
 .resource-tabs {
@@ -2252,9 +2248,17 @@ button {
 .primary {
   color: var(--panel);
 }
+.pending-page {
+  display: flex;
+  flex-direction: column;
+}
+.pending-page > :not(.pending-list) {
+  flex-shrink: 0;
+}
 .pending-list {
   margin-top: 12px;
-  height: calc(100% - 126px);
+  flex: 1 1 0;
+  min-height: 0;
 }
 .pending-card {
   margin-bottom: 0;
@@ -2388,7 +2392,7 @@ button {
 .statusbar {
   font-size: 10px;
   padding: 0 18px;
-  background: var(--panel-2);
+  background: var(--chrome);
 }
 .statusbar > span {
   white-space: nowrap;
@@ -2495,14 +2499,7 @@ button {
     gap: 10px;
     padding-inline: 10px;
   }
-  .topbar.custom-titlebar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-  .window-controls button {
-    width: 36px;
-  }
-  .brand strong,
-  .titlebar-reserved {
+  .brand strong {
     display: none;
   }
   .connection-picker,
@@ -2863,15 +2860,15 @@ button {
   place-items: center;
 }
 .submitted-change-files {
-  height: 260px;
+  height: auto;
   padding: 8px 12px;
-  overflow: auto;
+  overflow: visible;
   background: var(--panel-2);
   border-top: 1px solid var(--border);
 }
 .submitted-change-files .revision-file-list {
-  height: 100%;
-  min-height: 160px;
+  height: auto;
+  min-height: 0;
 }
 
 .submitted-kind-filter small {
@@ -3182,4 +3179,572 @@ button {
 }
 .submitted-date-range {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Submitted: one classification, separate CL/type/description columns.
+   Horizontal scrolling belongs to the shared panel; vertical row offsets are unchanged. */
+.submitted-page .cl-panel {
+  min-width: 0;
+  overflow-x: auto;
+}
+.submitted-table-header,
+.submitted-page .cl-panel > .virtual-scroll {
+  min-width: 840px;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.submitted-table-header {
+  overflow-y: hidden;
+}
+.submitted-page .cl-table-head,
+.submitted-page .cl-row {
+  grid-template-columns: 120px 105px minmax(220px, 1fr) 130px 135px;
+  min-width: 0;
+  gap: 10px;
+}
+.submitted-page .cl-table-head {
+  height: 37px;
+}
+.submitted-page .submitted-change-row {
+  min-width: 0;
+}
+.submitted-page .submitted-change-row .cl-description {
+  padding-left: 0;
+}
+.submitted-cl-number {
+  padding-left: 28px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.submitted-page .cl-row > .submission-kind-tag {
+  font-size: inherit;
+  min-width: 0;
+}
+
+.submitted-change-files:has(.submitted-files-count) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.submitted-change-files .submitted-files-count {
+  margin: 0;
+  flex: none;
+  color: var(--muted);
+}
+.submitted-change-files:has(.submitted-files-count) .revision-file-list {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.submitted-change-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.submitted-change-files > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.submitted-change-files .revision-file-list,
+.submitted-change-files:has(.submitted-files-count) .revision-file-list {
+  flex: none;
+  height: auto;
+  min-height: 0;
+}
+
+/* Submitted data columns share one resizable template. */
+.submitted-page .cl-row,
+.submitted-page .cl-table-head {
+  gap: 12px;
+}
+.submitted-page .submitted-author {
+  color: var(--text);
+  font-size: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.submitted-author small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+.submitted-description-tag {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 5px;
+  margin-inline: 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.accent-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.accent-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.accent-previews,
+.accent-settings > small {
+  grid-column: 1 / -1;
+}
+.accent-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Shelf controls use the CL chevron and theme without an independent boxed +/- control. */
+.pending-body h4.pending-shelf-heading {
+  flex-wrap: wrap;
+  text-transform: none;
+}
+.pending-shelf-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+.pending-shelf-toggle:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.pending-shelf-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+.pending-shelf-actions button {
+  color: var(--text);
+  min-height: 28px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.pending-shelf-actions button:not(:disabled):hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+
+/* MOVE only: no empty cancel footer; the body owns target selection and confirmation. */
+.workflow-dialog:has(.move-workflow) > .workflow-dialog-footer {
+  display: none;
+}
+.move-workflow {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+.move-workflow .move-destinations {
+  max-height: 55dvh;
+}
+.move-file-preview {
+  max-height: 22dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.move-destinations button[aria-pressed="true"] {
+  background: var(--selected);
+  border-color: var(--accent);
+}
+
+.pending-move-status,
+.pending-move-temporary {
+  max-height: 18dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+.pending-move-status > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.pending-move-temporary ul {
+  margin: 4px 0;
+}
+
+/* Log toolbar: one aligned row; inputs/selects/buttons share 28px height, search grows. */
+.log-toolbar {
+  align-items: center;
+}
+.log-toolbar > .muted {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+}
+.log-toolbar .log-search {
+  flex: 1 1 200px;
+  min-width: 120px;
+  height: 28px;
+}
+.log-toolbar .log-command {
+  flex: 0 1 160px;
+  min-width: 110px;
+  height: 28px;
+}
+.log-toolbar > select,
+.log-toolbar > button {
+  flex: 0 0 auto;
+  height: 28px;
+}
+.log-toolbar .log-follow-tail {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  white-space: nowrap;
+}
+.log-toolbar .log-follow-tail input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+
+/* Base-select controls in the log toolbar: keep the closed text vertically centered and the
+   picker icon from hugging the border (WebView2 uses appearance: base-select). */
+.log-toolbar > select {
+  flex: 0 0 auto;
+  min-width: 96px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 26px;
+}
+.log-toolbar > select::picker-icon {
+  color: var(--muted);
+  margin-inline-start: 6px;
+}
+
+/* Shelf action buttons: icon + short label, aligned. */
+.pending-shelf-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Non-blocking bottom-center notices for direct writes (no modal confirmations). */
+.app-notice-host {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(640px, 92vw);
+}
+.app-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+.app-notice.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.app-notice button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* P4V-style pending CL indicator: this changelist has files that need resolve. */
+/* Header spans default to flex:1; the badge must not stretch into a bar. */
+.pending-card > header > .pending-resolve-badge {
+  flex: 0 0 14px;
+  width: 14px;
+  min-width: 0;
+  height: 14px;
+  justify-self: start;
+  overflow: hidden;
+}
+
+.pending-resolve-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  justify-self: start;
+  width: 14px;
+  height: 14px;
+  overflow: hidden;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #b42338;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* P4V-style Resolve dialog: wide modal with method, file table and per-file options. */
+.workflow-dialog:has(.resolve-p4v) {
+  width: min(980px, 94vw);
+  max-height: 88vh;
+}
+.resolve-p4v {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.resolve-method {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.resolve-method label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.resolve-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.resolve-whitespace {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.resolve-whitespace select {
+  min-width: 340px;
+}
+.resolve-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.resolve-file-table {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.resolve-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 120px;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.resolve-file-row + .resolve-file-row {
+  border-top: 1px solid var(--border);
+}
+.resolve-file-head {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--panel-strong, var(--panel));
+  cursor: default;
+}
+button.resolve-file-row:not(:disabled):hover {
+  background: var(--hover);
+}
+.resolve-file-row.is-current {
+  background: var(--selection, var(--hover));
+}
+.resolve-file-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resolve-empty {
+  margin: 0;
+  padding: 10px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.resolve-current {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.resolve-current h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.resolve-current h4 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.resolve-recommended {
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+.resolve-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.resolve-additional {
+  position: relative;
+}
+.resolve-additional summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.resolve-additional summary::-webkit-details-marker {
+  display: none;
+}
+.resolve-additional[open] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Compact P4V-style Resolve layout: label column + control column, dense spacing. */
+.resolve-p4v {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+}
+.resolve-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.resolve-row-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.resolve-row-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.resolve-methods label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.resolve-select {
+  max-width: 420px;
+}
+.resolve-files-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 2px 0 4px;
+}
+.resolve-files-count {
+  color: var(--text-muted);
+}
+.resolve-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 110px;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.resolve-file-placeholder {
+  color: var(--text-muted);
+}
+.resolve-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+.resolve-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.resolve-options-title {
+  font-weight: 600;
+}
+.resolve-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+.resolve-option-row > span {
+  color: var(--text);
+}
+.resolve-versions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.resolve-versions p {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }

@@ -1,4 +1,4 @@
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { pathKey } from "./address";
 export const nodeKey = (node: WorkspaceNode) =>
   node.depotPath

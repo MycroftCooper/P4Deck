@@ -1,0 +1,247 @@
+import { hasResourceConflict } from "./resourceOverlap";
+import { invoke } from "@tauri-apps/api/core";
+import { backend } from "../../infrastructure/backend";
+import {
+  recordFrontendOperationLog,
+  type FrontendOperationLog,
+} from "../../infrastructure/backend/frontendOperationLog";
+import type {
+  RuntimeInfo,
+  WorkspaceNode,
+  FileActionRequest,
+  WorkflowResult,
+} from "../../shared/contracts";
+import type { ConnectionSnapshot } from "../companySubmit/model";
+import { selectionRequest } from "../files/selectionCommands";
+import { readSnapshot } from "../../shared/cache/snapshots";
+import {
+  pendingSnapshotKey,
+  type PendingSnapshot,
+} from "../changelists/pendingCache";
+import { blockedMovePaths } from "../changelists/moveOptimism";
+import {
+  acceptRemovalObservation,
+  finishRemovalObservation,
+} from "./shelfObservation";
+import { removalLedger } from "./actionStore";
+import {
+  lookupWorkflowAction,
+  validWorkflowReceipt,
+  type WorkflowActionLookup,
+} from "./workflowReceipt";
+/** Expand only a complete observed Pending scope; never invent a depot mapping or wildcard. */
+export function revertTargets(
+  nodes: WorkspaceNode[],
+  snapshot?: PendingSnapshot,
+): WorkspaceNode[] {
+  const result: WorkspaceNode[] = [];
+  for (const node of nodes) {
+    if (node.kind !== "directory") {
+      result.push({ ...node });
+      continue;
+    }
+    if (!snapshot || snapshot.partial)
+      throw Error("Complete pending snapshot required for folder revert");
+    const depot = node.depotPath?.replace(/\/$/, "");
+    const local = node.absolutePath
+      ?.replaceAll("\\", "/")
+      .replace(/\/$/, "")
+      .toLowerCase();
+    if (!depot && !local) throw Error("Unmapped folder");
+    for (const cl of snapshot.changes)
+      for (const file of cl.files) {
+        const client = file.clientPath?.replaceAll("\\", "/").toLowerCase();
+        if (
+          (depot && file.depotPath.startsWith(depot + "/")) ||
+          (!depot && local && client?.startsWith(local + "/"))
+        )
+          result.push({
+            ...node,
+            id: file.depotPath,
+            name: file.depotPath.split("/").at(-1)!,
+            kind: "file",
+            depotPath: file.depotPath,
+            absolutePath: file.clientPath ?? "",
+            changelistId: cl.id,
+          });
+      }
+  }
+  if (
+    !result.length ||
+    result.some(
+      (n) =>
+        !n.depotPath?.startsWith("//") ||
+        n.depotPath.includes("...") ||
+        /[#@*]/.test(n.depotPath),
+    )
+  )
+    throw Error("Exact escaped depot file paths required");
+  return [...new Map(result.map((n) => [n.depotPath!, n])).values()];
+}
+export interface RevertPort {
+  connection(): Promise<ConnectionSnapshot>;
+  execute(
+    request: FileActionRequest,
+    connection: ConnectionSnapshot,
+  ): Promise<WorkflowResult>;
+  lookup(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<WorkflowActionLookup>;
+  report(event: FrontendOperationLog): void;
+}
+export const revertPort: RevertPort = {
+  connection: () => backend.companySubmitConnectionSnapshot(),
+  execute: (request, connection) =>
+    invoke("confirm_revert_action", { request, connection }),
+  lookup: lookupWorkflowAction,
+  report: (event) => {
+    void recordFrontendOperationLog(event);
+  },
+};
+/** Called only after existing confirmation. No modal lifetime, whole-list refresh, or write retry. */
+export function startRevert(
+  scope: string,
+  runtime: RuntimeInfo,
+  nodes: WorkspaceNode[],
+  action: "revert" | "revertUnchanged",
+  current: () => boolean,
+  wholeCl?: number,
+  port: RevertPort = revertPort,
+) {
+  const operationId = crypto.randomUUID();
+  const report = (
+    outcome: FrontendOperationLog["outcome"],
+    code: FrontendOperationLog["code"],
+  ) =>
+    port.report({
+      eventId: `${operationId}-execute`,
+      operationId,
+      action: "otherOperation",
+      phase: "execute",
+      outcome,
+      code,
+      targetCount: Math.min(1000, nodes.length),
+    });
+  const observed = readSnapshot<PendingSnapshot>(pendingSnapshotKey(runtime));
+  let targets: WorkspaceNode[];
+  try {
+    targets = revertTargets(nodes, observed?.data);
+  } catch {
+    report("failed", "invalidTarget");
+    return false;
+  }
+  const sources = new Map<string, number>();
+  for (const target of targets) {
+    const cached =
+      observed?.data.changes.filter((cl) =>
+        cl.files.some((f) => f.depotPath === target.depotPath),
+      ) ?? [];
+    const id = cached.length === 1 ? cached[0].id : target.changelistId;
+    if (id === undefined || !Number.isSafeInteger(id) || id < 0) {
+      report("failed", "invalidTarget");
+      return false;
+    }
+    sources.set(target.depotPath!, id);
+  }
+  if (!current()) {
+    report("failed", "contextChanged");
+    return false;
+  }
+  if (
+    hasResourceConflict(
+      blockedMovePaths(scope),
+      targets.map((n) => n.depotPath!),
+    )
+  ) {
+    report("failed", "preflightBlocked");
+    return false;
+  }
+  const request = {
+    ...selectionRequest(action, targets, operationId, wholeCl),
+    paths: targets.map((n) => n.depotPath!),
+  };
+  if (
+    !acceptRemovalObservation(
+      "revert",
+      scope,
+      operationId,
+      0,
+      request.paths,
+      runtime,
+      sources,
+    )
+  ) {
+    report("failed", "preflightBlocked");
+    return false;
+  }
+  queueMicrotask(() => {
+    void (async () => {
+      let connection: ConnectionSnapshot | undefined,
+        dispatched = false,
+        result: WorkflowResult | undefined;
+      try {
+        connection = await port.connection();
+        if (
+          !current() ||
+          connection.server !== runtime.context.server ||
+          connection.user !== runtime.context.user ||
+          connection.client !== runtime.context.client
+        )
+          throw Error("context changed");
+        const record = removalLedger.get(operationId)!;
+        removalLedger.update(
+          operationId,
+          {
+            ...record.data,
+            execution: {
+              ...record.data.execution!,
+              confirmation: structuredClone(request),
+              connection,
+            },
+          },
+          "running",
+        );
+        dispatched = true;
+        result = await port.execute(request, connection);
+      } catch {
+        if (dispatched && connection) {
+          try {
+            const lookup = { operationId, connection };
+            const found = await port.lookup(lookup);
+            if (
+              found.kind === "found" &&
+              validWorkflowReceipt(lookup, found.receipt, "revert") &&
+              found.receipt.state === "settled" &&
+              found.receipt.result
+            ) {
+              result = found.receipt.result;
+              const record = removalLedger.get(operationId)!;
+              removalLedger.update(operationId, record.data, "unknown", {
+                revision: found.receipt.revision,
+                payloadDigest: found.receipt.payloadDigest,
+              });
+            }
+          } catch {
+            /* No write retry. */
+          }
+        }
+        if (!result)
+          report(
+            dispatched ? "unknown" : "failed",
+            dispatched ? "uncertainOutcome" : "contextChanged",
+          );
+      } finally {
+        if (result && result.outcome !== "succeeded")
+          report(
+            result.files.some((f) => f.state === "succeeded")
+              ? "partial"
+              : "unknown",
+            "uncertainOutcome",
+          );
+        finishRemovalObservation(operationId, runtime, result, !dispatched);
+      }
+    })();
+  });
+  return true;
+}

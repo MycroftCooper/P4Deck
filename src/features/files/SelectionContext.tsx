@@ -5,7 +5,7 @@ import {
   useRef,
   type KeyboardEvent,
 } from "react";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import {
   containsNode,
   nodeKey,

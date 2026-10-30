@@ -1,15 +1,24 @@
-import { useChangeDetails } from "../../features/changelists/components/ChangeDetailsDialog";
+import { startGenericFileAction } from "../../features/actions/genericFileTask";
+import { discardGenericFileProjectionsForTarget } from "../../features/actions/genericFileProjection";
+import { revertTargets, startRevert } from "../../features/actions/revertTask";
+import {
+  cancelLocalDelete,
+  localDeleteRecord,
+  startLocalDelete,
+} from "../../features/actions/localDeleteTask";
+import type { PendingSnapshot } from "../../features/changelists/pendingCache";
+import { useCustomSubmit } from "../../features/companySubmit/useCustomSubmit";
 import { historyDiffTarget } from "./commandPolicy";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { fileActionFeedback } from "./fileActionFeedback";
 import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 import {
   cachedPendingChanges,
   pendingSnapshotKey,
 } from "../../features/changelists/pendingCache";
 import { invalidateData } from "../../shared/cache/dataEffects";
-import { isFresh } from "../../shared/cache/snapshots";
+import { isFresh, readSnapshot } from "../../shared/cache/snapshots";
 import { commandActions } from "../actions/actionCatalog";
+import { startKeymapPersistence } from "../commands/keymapPersistence";
 import {
   refreshFileLockFacts,
   useCommandDialogs,
@@ -18,8 +27,6 @@ import type { OperationConfirmation } from "../dialogs/OperationConfirmDialog";
 import {
   Settings,
   ArrowRight,
-  AlertCircle,
-  Check,
   ClipboardPaste,
   CloudDownload,
   Copy,
@@ -33,7 +40,6 @@ import {
   LoaderCircle,
   RefreshCw,
   RotateCcw,
-  Send,
   SquarePen,
   AppWindow,
   Columns2,
@@ -51,7 +57,7 @@ import {
   readClipboardText,
   writeClipboardText,
 } from "../../infrastructure/clipboard";
-import type { RuntimeInfo, WorkspaceNode } from "../../shared/contracts/types";
+import type { RuntimeInfo, WorkspaceNode } from "../../shared/contracts";
 import { subscribeSafely } from "../../shared/lib/subscription";
 import { cleanAddress } from "../../features/files/address";
 import { workspaceCache } from "../../features/files/workspaceQueries";
@@ -77,7 +83,6 @@ const groups: {
   [
     { id: "refresh", icon: RefreshCw, zh: "刷新", en: "Refresh" },
     { id: "getLatest", icon: CloudDownload, zh: "获取最新", en: "Get latest" },
-    { id: "submit", icon: Send, zh: "提交 CL", en: "Submit CL" },
   ],
   [
     { id: "checkout", icon: SquarePen, zh: "签出", en: "Checkout" },
@@ -102,7 +107,7 @@ interface Props {
   navigationActions?: ReactNode;
   settingsActive?: boolean;
   onBusyChange(value: boolean): void;
-  onOpenOperations(): void;
+  onOpenOperations(error?: string): void;
   registerCommand(
     handler:
       | ((id: CommandId, target?: CommandTarget, source?: HTMLElement) => void)
@@ -134,8 +139,8 @@ export function CommandBar({
   onBusyChange,
   onOpenOperations,
 }: Props) {
+  const customSubmit = useCustomSubmit(connectionKey, backend);
   const menu = useContextMenu();
-  const openChangeDetails = useChangeDetails();
   const { preferences, openPage } = useMenuEnvironment();
   const localCapabilities = useLocalPathCapabilities(
     target,
@@ -150,8 +155,17 @@ export function CommandBar({
         : "";
   const targetKey = commandTargetKey(target);
   const [address, setAddress] = useState(targetPath);
+  const addressInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // Route frontend-only failures to the host log without opening a panel.
+  const openOperations = useRef(onOpenOperations);
+  openOperations.current = onOpenOperations;
+  useEffect(() => {
+    if (error) openOperations.current(error);
+  }, [error]);
+  useEffect(() => {
+    if (targetError) openOperations.current(targetError);
+  }, [targetError, connectionKey]);
   const [locating, setLocating] = useState(false);
   const running = useRef<string | undefined>(undefined);
   const navigation = useRef(0);
@@ -216,11 +230,28 @@ export function CommandBar({
     navigation.current++;
     setLocating(false);
   }, [targetPath, targetKey]);
+  // P4V Jump to Address Bar (Alt+L / Ctrl+G) is dispatched by the app catalog
+  // through this window event so the shared shortcut path stays in one place.
+  useEffect(() => {
+    const focus = () => {
+      const input = addressInput.current;
+      if (!input || input.disabled) return;
+      input.focus();
+      input.select();
+    };
+    window.addEventListener("p4deck:focus-address", focus);
+    return () => window.removeEventListener("p4deck:focus-address", focus);
+  }, []);
+  // Load the profile keymap once per window; Settings edits persist through the
+  // shared keymap store and are restored here on the next startup/profile switch.
+  useEffect(
+    () => startKeymapPersistence(runtime.activeProfileId),
+    [runtime.activeProfileId],
+  );
   useEffect(() => {
     navigation.current++;
     generation.current++;
     setError("");
-    setNotice("");
     setLocating(false);
   }, [connectionKey]);
   useEffect(
@@ -247,7 +278,6 @@ export function CommandBar({
   const attempt = (work: () => Promise<void>) => {
     const epoch = generation.current;
     setError("");
-    setNotice("");
     void work().catch((cause) => {
       if (epoch === generation.current) setError(String(cause));
     });
@@ -312,6 +342,7 @@ export function CommandBar({
     // A menu can execute a locked target different from the toolbar selection.
     // Only refresh focus if that exact target is still selected when it completes.
     const targetKey = commandTargetKey(target);
+    discardGenericFileProjectionsForTarget(connectionKey, targetKey);
     const reason = commandReason(
       id,
       target,
@@ -374,6 +405,9 @@ export function CommandBar({
       return;
     }
     if (id === "submit" && target.type === "pending") {
+      const ids = Number.isSafeInteger(target.id) ? [String(target.id)] : [];
+      if (await customSubmit.handle(ids, target.selectedSubmitExpectation))
+        return;
       dialogs.open({
         kind: "submit",
         id: target.id,
@@ -383,8 +417,12 @@ export function CommandBar({
       return;
     }
     if (id === "cancel") {
-      if (running.current && operation?.cancellable)
-        await backend.cancelOperation(running.current);
+      if (running.current && operation?.cancellable) {
+        if (localDeleteRecord(running.current))
+          cancelLocalDelete(running.current);
+        else await backend.cancelOperation(running.current);
+      }
+      // Cancel is a request signal: it never implies a rollback or that nothing ran.
       return;
     }
     if (
@@ -464,6 +502,11 @@ export function CommandBar({
           preferences.setUi((ui) => ({ ...ui, checkoutUseDefault: true }));
       }
     }
+    if ((id === "revert" || id === "revertUnchanged") && target.type === "file")
+      nodes = revertTargets(
+        nodes,
+        readSnapshot<PendingSnapshot>(pendingSnapshotKey(runtime))?.data,
+      );
     const mutation = ["add", "delete", "revert"].includes(id);
     if (
       ["delete", "revert"].includes(id) ||
@@ -482,6 +525,73 @@ export function CommandBar({
       latest.current.connectionKey !== connectionKey
     )
       return;
+    if (
+      (id === "revert" || id === "revertUnchanged") &&
+      target.type === "file"
+    ) {
+      startRevert(
+        connectionKey,
+        runtime,
+        nodes,
+        id,
+        () =>
+          actionEpoch === generation.current &&
+          latest.current.connectionKey === connectionKey,
+        target.wholeChangelistId,
+      );
+      return;
+    }
+    if (
+      target.type === "file" &&
+      id === "delete" &&
+      nodes.length > 0 &&
+      nodes.every((n) => n.state === "untracked" || n.state === "ignored")
+    ) {
+      const label = zh ? "正在删除本地文件…" : "Deleting local files…";
+      startLocalDelete(
+        connectionKey,
+        runtime,
+        nodes.map((n) => n.absolutePath).filter((p): p is string => !!p),
+        () =>
+          actionEpoch === generation.current &&
+          latest.current.connectionKey === connectionKey,
+        undefined,
+        {
+          onStarted: (operationId) => {
+            running.current = operationId;
+            setOperation({ id: operationId, label, cancellable: true });
+          },
+          onSettled: (operationId) => {
+            if (running.current === operationId) {
+              running.current = undefined;
+              setOperation(undefined);
+            }
+          },
+        },
+      );
+      return;
+    }
+    if (
+      target.type === "file" &&
+      (id === "checkout" || id === "add" || id === "delete")
+    ) {
+      const request = {
+        ...selectionRequest(id, nodes),
+        ...(id === "checkout" ? { changelistId: checkoutChangeId } : {}),
+      };
+      startGenericFileAction(
+        connectionKey,
+        runtime,
+        request,
+        affectedPathAliases(request.paths, nodes) ?? request.paths,
+        () =>
+          actionEpoch === generation.current &&
+          latest.current.connectionKey === connectionKey,
+        undefined,
+        targetKey,
+      );
+      return;
+    }
     if (running.current)
       throw new Error(
         zh
@@ -507,38 +617,13 @@ export function CommandBar({
       label: zh ? entry.zh : entry.en,
       cancellable: id !== "refresh",
     });
-    let completionMessage = zh ? "刷新完成" : "Refresh completed";
     let affectedPaths: readonly string[] | undefined;
     let feedbackCompleted = false;
     try {
-      if (id !== "refresh") {
-        if (
-          target.type === "file" &&
-          ["checkout", "add", "delete", "revert", "revertUnchanged"].includes(
-            id,
-          )
-        ) {
-          const result = await backend.performFileAction({
-            ...selectionRequest(
-              id as
-                "checkout" | "add" | "delete" | "revert" | "revertUnchanged",
-              nodes,
-              operationId,
-              id === "revert" ? target.wholeChangelistId : undefined,
-            ),
-            ...(id === "checkout" ? { changelistId: checkoutChangeId } : {}),
-          });
-          affectedPaths = affectedPathAliases(result.affectedPaths, nodes);
-          const feedback = fileActionFeedback(result, zh);
-          if (feedback.failed) throw new Error(feedback.message);
-          completionMessage = feedback.message;
-        }
-      }
       if (id === "refresh") await refreshFileLockFacts(connectionKey);
 
       // The mutation is now confirmed. Return the toolbar to its idle state
       // before cache invalidation and reconciliation, which are background work.
-      if (epoch === generation.current) setNotice(completionMessage);
       running.current = undefined;
       setOperation(undefined);
       feedbackCompleted = true;
@@ -645,6 +730,7 @@ export function CommandBar({
               : "LOCATION"}
         </span>
         <input
+          ref={addressInput}
           aria-label={zh ? "统一地址栏" : "Address"}
           placeholder={
             zh
@@ -687,7 +773,6 @@ export function CommandBar({
           onClick={() =>
             attempt(async () => {
               await writeClipboardText(targetPath);
-              setNotice(zh ? "地址已复制" : "Address copied");
             })
           }
         >
@@ -713,24 +798,6 @@ export function CommandBar({
           role="toolbar"
           aria-label={zh ? "对象操作" : "Object actions"}
         >
-          {openChangeDetails &&
-            (target.type === "pending" || target.type === "submitted") && (
-              <div className="command-group">
-                <button
-                  title={zh ? "查看 CL 详情" : "View changelist details"}
-                  aria-label={zh ? "查看 CL 详情" : "View changelist details"}
-                  onClick={(event) =>
-                    openChangeDetails(
-                      { kind: target.type, changeId: target.id },
-                      event.currentTarget,
-                    )
-                  }
-                >
-                  <Eye size={17} />
-                  <span>{zh ? "CL 详情" : "CL details"}</span>
-                </button>
-              </div>
-            )}
           {groups.map((group, index) => (
             <div className="command-group" key={index}>
               {group.map(({ id, icon: Icon, zh: cn, en }) => {
@@ -779,43 +846,6 @@ export function CommandBar({
               })}
             </div>
           ))}
-        </div>
-        <div className="command-status-slot">
-          {(error || targetError || notice || operation) && (
-            <button
-              type="button"
-              className={`command-status ${operation ? "is-running" : error || targetError ? "is-error" : "is-success"}`}
-              title={operation?.label || error || targetError || notice}
-              aria-label={
-                operation
-                  ? zh
-                    ? "操作进行中，查看操作记录"
-                    : "Operation in progress, view operations"
-                  : error || targetError
-                    ? zh
-                      ? "操作失败，查看操作记录"
-                      : "Operation failed, view operations"
-                    : zh
-                      ? "操作完成，查看操作记录"
-                      : "Operation completed, view operations"
-              }
-              onClick={onOpenOperations}
-            >
-              {operation ? (
-                <LoaderCircle size={17} className="spin" />
-              ) : error || targetError ? (
-                <AlertCircle size={17} />
-              ) : (
-                <Check size={17} />
-              )}
-              <span
-                className="sr-only"
-                role={error || targetError ? "alert" : "status"}
-              >
-                {operation?.label || error || targetError || notice}
-              </span>
-            </button>
-          )}
         </div>
         {navigationActions && (
           <div className="command-navigation-slot">{navigationActions}</div>

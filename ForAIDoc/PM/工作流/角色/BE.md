@@ -3,7 +3,7 @@
 ## 写域
 
 - 可写：`src-tauri/**`、构建配置；候选快照由 BE 唯一创建。
-- 不写：`src/**`（FE 所有）、`src/test/batch-qa/**`（QA 所有）、包版本/发布链（需 LEAD 授权）。
+- 不写：`src/**`（FE 所有）、`tests/qa/batch-qa/**`（QA 所有）、包版本/发布链（需 LEAD 授权）。
 
 ## 禁做
 

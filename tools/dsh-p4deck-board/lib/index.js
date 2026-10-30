@@ -103,8 +103,13 @@ export async function buildSnapshot(workspace) {
         stage: packageStage(pkg),
         rawStage: pkg.stage,
         module: pkg.module,
+        scope: pkg.scope,
+        statusRaw: pkg.statusRaw,
         evidence: (pkg.evidence ?? []).length,
         note: pkg.note,
+        qaPassed: pkg.verification?.qaPassed === true,
+        applied: pkg.verification?.applied === true,
+        humanAccepted: pkg.verification?.humanAccepted === true,
       })),
     archived: state.packages
       .filter((pkg) => pkg.archived)
@@ -113,9 +118,11 @@ export async function buildSnapshot(workspace) {
         type: pkg.type,
         owner: pkg.owner,
         module: pkg.module,
+        scope: pkg.scope,
         archivedAt: pkg.archivedAt,
         archiveReason: pkg.archiveReason,
         archiveEvidence: pkg.archiveEvidence,
+        canceled: pkg.verification?.canceled === true,
         note: pkg.note,
       })),
     humanTodos: todos.items ?? [],
@@ -166,6 +173,14 @@ display:flex;justify-content:space-between}
 .todo-text{flex:1 1 auto}.todo-meta{color:var(--muted);font-size:11px;white-space:nowrap}
 .card{border:1px solid var(--line);border-radius:6px;padding:7px 8px;background:var(--bg)}
 .card .id{font-weight:600;font-size:12px}.card .meta{margin-top:3px;color:var(--muted);font-size:11px}
+.card .scope{margin-top:2px;font-size:11.5px;font-weight:600}
+.card .note{margin-top:2px;color:var(--muted);font-size:11px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+button.act{font:inherit;font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer}
+button.act.accept{border-color:var(--accent);color:var(--accent)}
+button.act.cancel{border-color:var(--danger);color:var(--danger)}
+button.act:disabled{opacity:.5;cursor:default}
+.card .canceled{color:var(--danger)}
 .tag{font-size:10px;border:1px solid var(--line);border-radius:3px;padding:0 5px;margin-left:6px;color:var(--muted)}
 .tag.bug{color:var(--danger);border-color:var(--danger)}.tag.feature{color:var(--accent);border-color:var(--accent)}
 footer{margin-top:18px;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:11px}
@@ -205,8 +220,19 @@ function renderArchived(s){
  items.forEach(function(p){var c=el("div","card");c.title=p.note||"";
   var id=el("div","id");id.appendChild(document.createTextNode(p.id));
   if(p.type){id.appendChild(el("span","tag "+p.type,p.type));}c.appendChild(id);
+  if(p.scope){c.appendChild(el("div","scope",p.scope));}
   c.appendChild(el("div","meta","归档于 "+fmt(p.archivedAt)+" · "+(p.archiveReason||"历史迁移项")));
+  if(p.canceled){c.appendChild(el("div","meta canceled","已取消（未验收）"));}
   host.appendChild(c);});
+}
+function postAction(kind,id,warnForce){
+ var verb=kind==="accept"?"验收完成":"取消";
+ var extra=kind==="accept"&&warnForce?"\n\n注意：这项没有 QA/Apply 回执，会按“一键补登”记录。":"";
+ if(!confirm("确认把 "+id+" 标记为「"+verb+"」？"+extra))return;
+ fetch("${ROUTE}/api/packages/"+kind,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:id})})
+  .then(function(r){return r.json().then(function(j){if(!r.ok||j.ok===false)throw new Error(j.reason||("HTTP "+r.status));return j;});})
+  .then(function(){tick();})
+  .catch(function(e){alert("操作失败: "+e.message);});
 }
 function render(s){
  document.getElementById("batch").textContent=s.batch.id;
@@ -230,10 +256,25 @@ function render(s){
   items.forEach(function(p){var c=el("div","card");c.title=p.note||"";
    var id=el("div","id");id.appendChild(document.createTextNode(p.id));
    if(p.type){id.appendChild(el("span","tag "+p.type,p.type));}c.appendChild(id);
-   c.appendChild(el("div","meta",(p.owner||"—")+" · "+(p.priority||"")+" · 证据 "+(p.evidence||0)));cards.appendChild(c);});
+   if(p.scope){c.appendChild(el("div","scope",p.scope));}
+   if(p.note){c.appendChild(el("div","note",p.note));}
+   c.appendChild(el("div","meta",(p.owner||"—")+" · "+(p.priority||"")+" · 证据 "+(p.evidence||0)));
+   var actions=el("div","actions");
+   if(p.stage==="awaiting_accept"||p.stage==="unverified"){
+    var ab=el("button","act accept","验收完成");ab.title="标记为人工验收通过（缺 QA/Apply 会一键补登）";
+    ab.addEventListener("click",function(){postAction("accept",p.id,p.stage==="unverified");});
+    actions.appendChild(ab);
+   }
+   if(p.stage!=="done"){
+    var cb=el("button","act cancel","取消");cb.title="取消该功能范围并归档（不要求验收）";
+    cb.addEventListener("click",function(){postAction("cancel",p.id,false);});
+    actions.appendChild(cb);
+   }
+   if(actions.children.length)c.appendChild(actions);
+   cards.appendChild(c);});
   col.appendChild(cards);b.appendChild(col);});
  renderArchived(s);
- document.getElementById("footer").textContent="来源：state.json（真值）· 运行状态.json · 人类待办.json；每 5 秒自动刷新。";
+ document.getElementById("footer").textContent="来源：state.json（真值）· 运行状态.json · 人类待办.json；验收/取消按钮直接写 state.json。";
 }
 function tick(){fetch("${ROUTE}/api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(render)
  .catch(function(e){document.getElementById("footer").textContent="读取失败: "+e;});}
@@ -295,6 +336,31 @@ function makeHandler(workspace) {
       res.write(": connected\n\n");
       clients.add(res);
       req.on("close", () => clients.delete(res));
+      return;
+    }
+    if (url.pathname === `${ROUTE}/api/packages/accept` || url.pathname === `${ROUTE}/api/packages/cancel`) {
+      if (req.method !== "POST") {
+        res.writeHead(405, { allow: "POST" });
+        res.end();
+        return;
+      }
+      const isAccept = url.pathname.endsWith("/accept");
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 16 * 1024) req.destroy();
+      });
+      req.on("end", async () => {
+        try {
+          const payload = JSON.parse(raw || "{}");
+          const result = isAccept
+            ? await acceptPackage(workspace, payload.id)
+            : await cancelPackage(workspace, payload.id, payload.reason);
+          sendJson(res, result.status ?? (result.ok ? 200 : 400), result);
+        } catch (error) {
+          sendJson(res, 400, { ok: false, reason: String(error?.message ?? error) });
+        }
+      });
       return;
     }
     if (url.pathname === `${ROUTE}/api/human-todos/toggle`) {
@@ -368,6 +434,92 @@ async function toggleTodoFile(workspace, id) {
   doc.updatedAt = new Date().toISOString();
   await writeFile(file, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
   return { ok: true, item };
+}
+
+function stateFile(workspace) {
+  return path.join(workspace, "ForAIDoc", "PM", "工作流", "state.json");
+}
+
+/** archive/restore 之后同步 counts；看板按钮直接写 state，因此也走同一套口径。 */
+function refreshCounts(state) {
+  state.counts = {
+    ...(state.counts ?? {}),
+    main: state.packages.filter((entry) => !entry.archived).length,
+    archived: state.packages.filter((entry) => entry.archived).length,
+    total: state.packages.length,
+    subitems: (state.subitems ?? []).length,
+    slices: (state.batch?.slices ?? []).length,
+  };
+}
+
+async function loadStateFile(workspace) {
+  const state = await readJson(stateFile(workspace), undefined);
+  if (!state) throw new Error(`找不到 ${stateFile(workspace)}`);
+  return state;
+}
+
+async function saveStateFile(workspace, state) {
+  await writeFile(stateFile(workspace), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+/** 看板「验收完成」：等价于 LEAD 执行 state.mjs accept；缺 QA/Apply 时按用户点击 force 补登。 */
+async function acceptPackage(workspace, id) {
+  const wanted = String(id ?? "").trim();
+  if (!wanted) return { ok: false, status: 400, reason: "缺少任务 ID" };
+  const state = await loadStateFile(workspace);
+  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === wanted.toUpperCase());
+  if (!pkg) return { ok: false, status: 404, reason: `未知任务 ${wanted}` };
+  if (pkg.archived) return { ok: false, status: 400, reason: `${pkg.id} 已归档，不能重复验收` };
+  const verification = (pkg.verification ??= {});
+  if (verification.humanAccepted === true) {
+    return { ok: true, status: 200, alreadyAccepted: true, id: pkg.id, note: verification.humanAcceptedNote ?? null };
+  }
+  if (pkg.stage !== "implemented") {
+    return { ok: false, status: 400, reason: `${pkg.id} 当前状态 ${pkg.stage ?? "未知"}，只能验收“已实现待验收”的项` };
+  }
+  const evidenceComplete = verification.qaPassed === true && verification.applied === true;
+  const now = new Date().toISOString();
+  const note = `用户在看板点击「验收完成」（${now.slice(0, 19).replace("T", " ")}）${evidenceComplete ? "" : "；无 QA/Apply 回执，按一键补登"}`;
+  verification.humanAccepted = true;
+  verification.humanAcceptedAt = now;
+  verification.humanAcceptedBy = "用户";
+  verification.humanAcceptedNote = note;
+  verification.humanAcceptedEvidence = null;
+  verification.humanAcceptedForced = !evidenceComplete;
+  pkg.stage = "done";
+  state.updatedAt = now;
+  refreshCounts(state);
+  await saveStateFile(workspace, state);
+  return { ok: true, status: 200, id: pkg.id, forced: !evidenceComplete, note };
+}
+
+/** 看板「取消」：不要求验收，直接归档并记为取消范围（不写 humanAccepted）。 */
+async function cancelPackage(workspace, id, reason) {
+  const wanted = String(id ?? "").trim();
+  if (!wanted) return { ok: false, status: 400, reason: "缺少任务 ID" };
+  const state = await loadStateFile(workspace);
+  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === wanted.toUpperCase());
+  if (!pkg) return { ok: false, status: 404, reason: `未知任务 ${wanted}` };
+  if (pkg.archived) return { ok: true, status: 200, alreadyArchived: true, id: pkg.id };
+  const verification = (pkg.verification ??= {});
+  if (verification.humanAccepted === true) {
+    return { ok: false, status: 400, reason: `${pkg.id} 已人工验收，不能直接取消` };
+  }
+  const now = new Date().toISOString();
+  const archiveReason = String(reason ?? "").trim() || "用户在看板点击取消（不要求验收）";
+  pkg.archived = true;
+  pkg.archivedAt = now;
+  pkg.archivedBy = "用户";
+  pkg.archiveReason = archiveReason;
+  pkg.archiveEvidence = null;
+  verification.canceled = true;
+  verification.canceledAt = now;
+  verification.canceledBy = "用户";
+  verification.canceledNote = archiveReason;
+  state.updatedAt = now;
+  refreshCounts(state);
+  await saveStateFile(workspace, state);
+  return { ok: true, status: 200, id: pkg.id, archived: true, reason: archiveReason };
 }
 
 /** cordis 宿主插件入口。 */

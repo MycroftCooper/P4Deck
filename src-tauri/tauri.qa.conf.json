@@ -2,6 +2,10 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "P4Deck QA",
   "identifier": "dev.p4deck.qa20261020",
+  "build": {
+    "beforeDevCommand": "node ./scripts/dev-frontend.mjs --port 1423",
+    "devUrl": "http://127.0.0.1:1423"
+  },
   "app": {
     "windows": [
       {

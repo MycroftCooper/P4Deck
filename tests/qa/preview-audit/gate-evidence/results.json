@@ -1,0 +1,91 @@
+{
+  "checks": [
+    {
+      "label": "initial-focus-1100",
+      "pass": true
+    },
+    {
+      "label": "no-bypass-1100",
+      "pass": true
+    },
+    {
+      "label": "focus-contained-1100",
+      "pass": true
+    },
+    {
+      "label": "dialog-within-1100",
+      "pass": true
+    },
+    {
+      "label": "denied-close-retains-1100",
+      "pass": true
+    },
+    {
+      "label": "draft-retained-1100",
+      "pass": true
+    },
+    {
+      "label": "cli-boundary-1100",
+      "pass": true
+    },
+    {
+      "label": "validation-failure-blocked-1100",
+      "pass": true
+    },
+    {
+      "label": "success-releases-1100",
+      "pass": true
+    },
+    {
+      "label": "initial-focus-390",
+      "pass": true
+    },
+    {
+      "label": "no-bypass-390",
+      "pass": true
+    },
+    {
+      "label": "focus-contained-390",
+      "pass": true
+    },
+    {
+      "label": "dialog-within-390",
+      "pass": true
+    },
+    {
+      "label": "denied-close-retains-390",
+      "pass": true
+    },
+    {
+      "label": "draft-retained-390",
+      "pass": true
+    },
+    {
+      "label": "cli-boundary-390",
+      "pass": true
+    },
+    {
+      "label": "validation-failure-blocked-390",
+      "pass": true
+    },
+    {
+      "label": "success-releases-390",
+      "pass": true
+    },
+    {
+      "label": "loading-no-prompt",
+      "pass": true
+    },
+    {
+      "label": "persisted-offline-releases",
+      "pass": true
+    },
+    {
+      "label": "load-error-retry",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "hash": "774bb3e8215538833de9e2610586e7c0428213b3c03528f870b2282e97311042"
+}

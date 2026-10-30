@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { parentPath } from "../../features/files/address";
 import {
   reconcileSelection,
@@ -15,6 +15,17 @@ export function useWorkspaceSelection(
 ) {
   const [selection, setSelection] = useState<FileSelection>({ nodes: [] });
   const [directory, setDirectory] = useState<string>();
+  const revealSequence = useRef(0);
+  const [reveal, setReveal] = useState<{
+    id: number;
+    connectionKey: string;
+    path: string;
+  }>();
+  const consumeReveal = useCallback(
+    (id: number) =>
+      setReveal((current) => (current?.id === id ? undefined : current)),
+    [],
+  );
   const command = useCommandTarget(
     connectionKey,
     root,
@@ -40,6 +51,7 @@ export function useWorkspaceSelection(
   useEffect(() => {
     setSelection({ nodes: [] });
     setDirectory(undefined);
+    setReveal(undefined);
   }, [connectionKey]);
   const navigate = useCallback(
     (node: WorkspaceNode) => {
@@ -48,16 +60,27 @@ export function useWorkspaceSelection(
           ? node.absolutePath || node.depotPath
           : parentPath(node.absolutePath || node.depotPath || "");
       setDirectory(next === root ? undefined : next);
+      setReveal(
+        node.absolutePath
+          ? {
+              id: ++revealSequence.current,
+              connectionKey,
+              path: node.absolutePath,
+            }
+          : undefined,
+      );
       openFiles();
       select([node], node);
     },
-    [root, openFiles, select],
+    [root, openFiles, select, connectionKey],
   );
   const context = useMemo(
     () => ({ nodes: selection.nodes, select }),
     [selection.nodes, select],
   );
   return {
+    reveal,
+    consumeReveal,
     selectedFile: selection.primary,
     directory,
     command,

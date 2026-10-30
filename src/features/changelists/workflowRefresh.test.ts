@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import type {
   PendingChange,
   WorkflowTargetSnapshot,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { mergeWorkflowPending } from "./workflowRefresh";
 
 const change = (

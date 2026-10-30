@@ -3,7 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { backend } from "../../../infrastructure/backend";
-import type { ManualMergeSession } from "../../../shared/contracts/types";
+const closeGuard = vi.hoisted(() => ({
+  state: vi.fn((_state: string, _scope?: string) => () => {}),
+}));
+vi.mock("../../../app/closeGuard", () => ({
+  useUnsavedEditor: closeGuard.state,
+}));
+import type { ManualMergeSession } from "../../../shared/contracts";
 import {
   ManualMergeEditor,
   manualMergeBlocksForTest,
@@ -67,6 +73,53 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.restoreAllMocks();
+});
+
+it("compares the merge result against disk Yours, then advances the baseline only after successful save", async () => {
+  vi.spyOn(backend, "openManualMerge").mockResolvedValue(
+    session("save", "merged\n"),
+  );
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue(undefined);
+  vi.spyOn(backend, "validateManualMerge").mockResolvedValue({
+    valid: true,
+    unresolvedBlocks: 0,
+    resultDigest: "digest",
+    token: "token",
+    expiresAt: Date.now() + 60000,
+    message: "ok",
+  });
+  vi.spyOn(backend, "confirmManualMergeSave").mockResolvedValue({
+    outcome: "succeeded",
+    message: "saved",
+    resultDigest: "digest",
+    resolveExpiresAt: 0,
+    operationId: "synthetic-save",
+    refresh: {
+      pendingChanges: false,
+      workspaceStatus: false,
+      depotPaths: [],
+      reason: "synthetic",
+    },
+  });
+  await act(async () =>
+    root.render(
+      <ManualMergeEditor
+        depotPath="//synthetic/file"
+        connectionKey="save"
+        zh={false}
+      />,
+    ),
+  );
+  expect(closeGuard.state.mock.lastCall?.[0]).toBe("dirty");
+  const click = async (text: string) =>
+    act(async () =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === text)!
+        .click(),
+    );
+  await click("Validate result");
+  await click("Confirm atomic save");
+  expect(closeGuard.state.mock.lastCall?.[0]).toBe("clean");
 });
 
 it("resolves only the selected block when surrounding text repeats", () => {

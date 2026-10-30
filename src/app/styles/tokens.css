@@ -18,14 +18,19 @@
   background: var(--bg);
 }
 :root {
-  --bg: #f3f5f4;
+  --bg: #f2f5f3;
   --panel: #ffffff;
-  --panel-2: #f7f9f8;
-  --panel-3: #e9eeeb;
-  --border: #e1e7e4;
-  --text: #23352d;
-  --muted: #62746b;
-  --faint: #85958d;
+  --panel-2: #f6f8f7;
+  --panel-3: #edf1ef;
+  /* Chrome aliases: the theme-following frame. A custom background overrides
+     these inline (2–6% away from --bg) while the defaults keep the old look. */
+  --chrome: var(--panel-2);
+  --chrome-2: var(--panel-3);
+  --chrome-command: var(--panel);
+  --border: #d5ddd8;
+  --text: #22312a;
+  --muted: #53665b;
+  --faint: #5c6e64;
   --accent: #15785b;
   --on-accent: #ffffff;
   --accent-soft: #e4f3ec;
@@ -34,18 +39,24 @@
   --success: #21774f;
   --warning: #996218;
   --danger: #c24848;
-  --shadow: #173b2410;
+  --shadow: #14271c14;
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --radius-dialog: 8px;
+  --overlay-shadow: 0 16px 48px #14271c26;
+  --toolbar-tool-size: 49px;
+  --toolbar-tool-padding: 5px 8px;
   font-size: 13px;
 }
 :root[data-theme="dark"] {
-  --bg: #141a18;
-  --panel: #19211e;
-  --panel-2: #161d1a;
-  --panel-3: #28332e;
-  --border: #2b3630;
-  --text: #e1eae5;
-  --muted: #b4c4ba;
-  --faint: #a0b2a6;
+  --bg: #141917;
+  --panel: #1b211e;
+  --panel-2: #171d1a;
+  --panel-3: #28332d;
+  --border: #354139;
+  --text: #edf3ef;
+  --muted: #bbc9c0;
+  --faint: #a8bbb0;
   --disabled-opacity: 0.65;
   --accent: #88d6b0;
   --on-accent: #14211b;
@@ -56,12 +67,24 @@
   --warning: #dcbd79;
   --danger: #ed9990;
   --terminal: #111713;
-  --shadow: #00000030;
+  --shadow: #00000045;
+  --overlay-shadow: 0 16px 48px #00000055;
 }
 
 /* Explicit opacity avoids the browser dimming already-secondary placeholder text. */
 :root[data-theme="dark"] input::placeholder,
 :root[data-theme="dark"] textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Shared focus and placeholder treatment; no sizing or layout overrides. */
+.app-shell :where(button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+input::placeholder,
+textarea::placeholder {
   color: var(--muted);
   opacity: 1;
 }

@@ -9,7 +9,7 @@ import {
   SquarePen,
   CloudDownload,
 } from "lucide-react";
-import type { FileAction, WorkspaceNode } from "../../shared/contracts/types";
+import type { FileAction, WorkspaceNode } from "../../shared/contracts";
 import type { messages } from "../../shared/i18n";
 type T = (typeof messages)[keyof typeof messages];
 export const fileActions: {

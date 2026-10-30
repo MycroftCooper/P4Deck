@@ -1,8 +1,14 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type {
   PendingChange,
+  SubmitResult,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
+import {
+  lookupSubmitAction,
+  validSubmitReceipt,
+} from "../../features/actions/workflowReceipt";
+import { unknownSubmitResult } from "../../features/changelists/submitLifecycle";
 import {
   CheckoutChangelistDialog,
   type CheckoutDestination,
@@ -12,7 +18,7 @@ import { queryAllPendingChanges } from "../../features/changelists/pendingQuerie
 import { SubmitDialog } from "../../features/changelists/components/SubmitDialog";
 import { FileClWorkflow } from "../../features/changelists/components/FileClWorkflow";
 import { RenameDialog } from "../../features/files/components/RenameDialog";
-import { FileLockDialog } from "../../features/files/components/FileLockDialog";
+import { startFileLockDirect } from "../../features/actions/directFileLock";
 import { ResolveDialog } from "../../features/files/components/ResolveDialog";
 import {
   SyncDialog,
@@ -33,7 +39,7 @@ import {
 } from "../../features/files/workspaceQueries";
 import { invalidateData } from "../../shared/cache/dataEffects";
 import { stableConnectionKey } from "../../shared/cache/connectionKey";
-import { commandActions } from "../actions/actionCatalog";
+import { commandActions } from "../commands/actionCatalog";
 
 type Origin = { source: HTMLElement | null };
 type PreviewRequest = Origin &
@@ -80,6 +86,33 @@ export async function refreshFileLockFacts(connectionKey: string) {
     // History, Diff and Rev Graph data can show the old lock owner.
     workspaceCache.invalidateQueries({ queryKey: ["target"] }),
   ]);
+}
+
+/**
+ * Lock/unlock runs immediately: no preflight dialog and no confirm modal. The optimistic row
+ * projection is applied by the task; any refusal rolls it back and is reported once.
+ */
+function DirectFileLock({
+  nodes,
+  operation,
+  connectionKey,
+  onDismiss,
+  onRefresh,
+}: {
+  nodes: WorkspaceNode[];
+  operation: "lock" | "unlock";
+  connectionKey: string;
+  onDismiss(): void;
+  onRefresh(): Promise<void> | void;
+}) {
+  const once = useRef(false);
+  useEffect(() => {
+    if (once.current) return;
+    once.current = true;
+    startFileLockDirect(nodes, operation, connectionKey, { onRefresh });
+    onDismiss();
+  }, []);
+  return null;
 }
 
 /** One command modal at a time, across all documents hosted by this app instance. */
@@ -152,12 +185,10 @@ export function useCommandDialogs(
         break;
       case "fileLock":
         element = (
-          <FileLockDialog
+          <DirectFileLock
             nodes={request.nodes}
             operation={request.operation}
-            source={request.source}
             connectionKey={connectionKey}
-            zh={zh}
             onDismiss={close}
             onRefresh={() => {
               void invalidateData(["pending", "submitted"], {
@@ -239,29 +270,75 @@ export function useCommandDialogs(
               return changes.find((change) => change.id === request.id);
             }}
             check={(changeId) => backend.preflightSubmit({ changeId })}
-            submit={async (confirmation) => {
+            submit={async (confirmation, connection) => {
               const refreshWorkspace = (affectedPaths?: readonly string[]) =>
                 invalidateData(["pending", "workspaceStatus", "depot"], {
                   connectionKey,
                   affectedPaths,
                 });
-              let result;
+              const refreshSubmitted = () =>
+                invalidateData(["submitted"]).catch(() => undefined);
+              // Exactly one bounded refresh for this dispatch, driven by the
+              // final (or recovered) result's advice; never a second one.
+              const applyAdvice = async (result: SubmitResult) => {
+                if (
+                  result.refresh.pendingChanges ||
+                  result.refresh.workspaceStatus
+                )
+                  await refreshWorkspace(result.refresh.depotPaths).catch(
+                    () => undefined,
+                  );
+                if (result.refresh.submittedChanges) await refreshSubmitted();
+              };
+              /**
+               * Same-operationId durable receipt recovery. A new id is never
+               * created here: `settled` means persisted, not submitted.
+               */
+              const recover = async (
+                operationId: string,
+                changeId: number,
+                depotPaths: readonly string[],
+              ): Promise<SubmitResult> => {
+                try {
+                  const request = { operationId, connection };
+                  const lookup = await lookupSubmitAction(request);
+                  if (
+                    lookup.kind === "found" &&
+                    validSubmitReceipt(request, lookup.receipt) &&
+                    lookup.receipt.state === "settled" &&
+                    lookup.receipt.result
+                  )
+                    return lookup.receipt.result;
+                } catch {
+                  /* Receipt lookup never retries the write. */
+                }
+                return unknownSubmitResult(changeId, operationId, depotPaths);
+              };
+              let result: SubmitResult;
               try {
                 result = await backend.confirmSubmit(confirmation);
-              } catch (cause) {
-                void refreshWorkspace().catch(() => undefined);
-                throw cause;
-              }
-              if (
-                result.refresh.pendingChanges ||
-                result.refresh.workspaceStatus
-              ) {
-                void refreshWorkspace(result.refresh.depotPaths).catch(
-                  () => undefined,
+              } catch {
+                // The write may have reached the host. Refresh once from the
+                // recovered result's advice (or the conservative default).
+                result = await recover(
+                  confirmation.operationId!,
+                  confirmation.target.changeId,
+                  [],
                 );
+                await applyAdvice(result);
+                return result;
               }
-              if (result.refresh.submittedChanges)
-                void invalidateData(["submitted"]).catch(() => undefined);
+              if (result.execution?.state === "unknown") {
+                // Host persisted an uncertain result; query by identity once so
+                // a settled authoritative result can replace the display.
+                const recovered = await recover(
+                  confirmation.operationId!,
+                  result.changeId,
+                  result.refresh.depotPaths,
+                );
+                if (recovered !== result) result = recovered;
+              }
+              await applyAdvice(result);
               return result;
             }}
           />

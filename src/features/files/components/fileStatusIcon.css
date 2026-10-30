@@ -12,6 +12,41 @@
   vertical-align: middle;
   color: var(--muted);
 }
+/* Semantic badge palette (UI-10). Backgrounds carry the meaning; ownership is conveyed by the
+   label/title and never overrides the status colour. Light theme uses white text on solid dark
+   tones; dark theme uses near-black text on lighter tones (WCAG AA ≥ 4.5:1 for the 9px bold glyph). */
+:root {
+  --file-badge-success: #1a7f37;
+  --file-badge-success-fg: #ffffff;
+  --file-badge-danger: #b42338;
+  --file-badge-danger-fg: #ffffff;
+  --file-badge-warning: #9a4d00;
+  --file-badge-warning-fg: #ffffff;
+  --file-badge-amber: #8a5100;
+  --file-badge-amber-fg: #ffffff;
+  --file-badge-neutral: #57606a;
+  --file-badge-neutral-fg: #ffffff;
+  --file-badge-purple: #6e40c9;
+  --file-badge-purple-fg: #ffffff;
+  --file-badge-teal: #196c5b;
+  --file-badge-teal-fg: #ffffff;
+}
+:root[data-theme="dark"] {
+  --file-badge-success: #3fb950;
+  --file-badge-success-fg: #07130a;
+  --file-badge-danger: #f85149;
+  --file-badge-danger-fg: #1a0606;
+  --file-badge-warning: #d29922;
+  --file-badge-warning-fg: #1f1403;
+  --file-badge-amber: #bb8009;
+  --file-badge-amber-fg: #1a1202;
+  --file-badge-neutral: #8b949e;
+  --file-badge-neutral-fg: #0d1117;
+  --file-badge-purple: #bc8cff;
+  --file-badge-purple-fg: #14081f;
+  --file-badge-teal: #39c5a3;
+  --file-badge-teal-fg: #04120d;
+}
 .file-status-icon .file-badge {
   position: absolute;
   display: flex;
@@ -21,13 +56,48 @@
   height: 11px;
   padding: 0 1px;
   border-radius: 3px;
-  background: #526071;
-  color: #fff;
+  background: var(--file-badge-neutral);
+  color: var(--file-badge-neutral-fg);
   font:
     700 9px/1 system-ui,
     sans-serif;
   box-shadow: 0 0 0 1px var(--bg, #fff);
   box-sizing: border-box;
+}
+.file-status-icon .file-badge[data-tone="success"] {
+  background: var(--file-badge-success);
+  color: var(--file-badge-success-fg);
+}
+.file-status-icon .file-badge[data-tone="danger"] {
+  background: var(--file-badge-danger);
+  color: var(--file-badge-danger-fg);
+}
+.file-status-icon .file-badge[data-tone="warning"] {
+  background: var(--file-badge-warning);
+  color: var(--file-badge-warning-fg);
+}
+.file-status-icon .file-badge[data-tone="amber"] {
+  background: var(--file-badge-amber);
+  color: var(--file-badge-amber-fg);
+}
+.file-status-icon .file-badge[data-tone="neutral"] {
+  background: var(--file-badge-neutral);
+  color: var(--file-badge-neutral-fg);
+}
+.file-status-icon .file-badge[data-tone="purple"] {
+  background: var(--file-badge-purple);
+  color: var(--file-badge-purple-fg);
+}
+.file-status-icon .file-badge[data-tone="teal"] {
+  background: var(--file-badge-teal);
+  color: var(--file-badge-teal-fg);
+}
+/* Ownership must not repaint a status badge (e.g. checkout/edit stays green even when yours). */
+.file-status-icon .owner-self,
+.file-status-icon .owner-other,
+.file-status-icon .owner-shelf,
+.file-status-icon .owner-none {
+  background: inherit;
 }
 .file-status-icon .slot-0 {
   right: -1px;
@@ -40,26 +110,4 @@
 .file-status-icon .slot-2 {
   right: -1px;
   top: 0;
-}
-.file-status-icon .owner-self {
-  background: #b42338;
-}
-.file-status-icon .owner-other {
-  background: #185caa;
-}
-.file-status-icon .owner-shelf,
-.file-status-icon .badge-shelf {
-  background: #7542a3;
-}
-.file-status-icon .badge-latest {
-  background: #217344;
-}
-.file-status-icon .badge-resolve,
-.file-status-icon .badge-error {
-  background: #b42338;
-}
-.file-status-icon .badge-outOfDate,
-.file-status-icon .badge-modified,
-.file-status-icon .badge-stale {
-  background: #8a5100;
 }

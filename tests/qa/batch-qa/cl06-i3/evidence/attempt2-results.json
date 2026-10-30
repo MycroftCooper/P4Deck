@@ -1,0 +1,40 @@
+{
+  "checks": [
+    {
+      "name": "dependency-hashes",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "tool-after-p4:light1200",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light1200User",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light1200Workspace",
+      "pass": true
+    },
+    {
+      "name": "saved-path:light1200",
+      "pass": true
+    },
+    {
+      "name": "save-no-launch:light1200",
+      "pass": true
+    },
+    {
+      "name": "root-retained:light1200",
+      "pass": false
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "failure": "Error: root-retained:light1200"
+}

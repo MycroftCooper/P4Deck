@@ -1,14 +1,18 @@
+import { ConnectionSpecCreateDialog } from "../settings/ConnectionSpecCreateDialog";
+import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
+import type { WorkspaceMutationRequest } from "../../shared/contracts";
+import { useColumnWidths } from "../../app/context-menu/useColumnWidths";
 import { FixedPageHeader } from "../../app/docking/chrome";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Monitor, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
-import type { P4VfsStatus, RuntimeInfo } from "../../shared/contracts/types";
+import type { P4VfsStatus, RuntimeInfo } from "../../shared/contracts";
 import type { messages } from "../../shared/i18n";
 
 import { useContextMenu } from "../../app/context-menu/ContextMenu";
 import { TableHeader } from "../../app/context-menu/TableHeader";
-import { action, copy } from "../../app/context-menu/bindings";
+import { action } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
 import { appCache } from "../../shared/cache/appCache";
 import { useViewRefresh } from "../../shared/cache/useViewRefresh";
@@ -25,6 +29,13 @@ export function WorkspacePage({
   onRuntime(runtime: RuntimeInfo): void;
 }) {
   const zh = t.files === "文件";
+  const columns = useColumnWidths(
+    [260, 110, 140, 300, 190],
+    [140, 80, 90, 140, 150],
+    { id: "workspaces" },
+  );
+  const [createOpen, setCreateOpen] = useState(false);
+  const [mutation, setMutation] = useState<WorkspaceMutationRequest>();
   const [search, setSearch] = useState("");
   const [selectedName, setSelectedName] = useState("");
   const [switchError, setError] = useState("");
@@ -123,6 +134,8 @@ export function WorkspacePage({
     // Stream or workspace switches can change rows; keep them visible meanwhile.
     void appCache.invalidateQueries({ queryKey: workspaceListKey(runtime) });
     setSearch("");
+    setCreateOpen(false);
+    setMutation(undefined);
     setError("");
     if (switchTarget.current === runtime.context.client) {
       setSelectedName(runtime.context.client);
@@ -139,16 +152,16 @@ export function WorkspacePage({
       restoreSwitchFocus.current = false;
     }
   }, [switching]);
-  const switchToSelected = async () => {
-    if (!selected || selected.name === runtime.context.client) return;
+  const switchToSelected = async (name = selected?.name) => {
+    if (!name || switching || name === runtime.context.client) return;
     setSwitching(true);
     setSwitchPhase("verifying");
     setError("");
-    switchTarget.current = selected.name;
+    switchTarget.current = name;
     try {
       const next = await backend.switchWorkspace({
         expectedGeneration: runtime.contextGeneration,
-        client: selected.name,
+        client: name,
       });
       setSwitchPhase("committing");
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -197,6 +210,25 @@ export function WorkspacePage({
             }}
           />
         </label>
+        {selected && (
+          <button
+            ref={switchButton}
+            disabled={switching || selected.name === runtime.context.client}
+            onClick={() => void switchToSelected()}
+          >
+            {switching
+              ? zh
+                ? "正在验证并切换…"
+                : "Verifying and switching…"
+              : selected.name === runtime.context.client
+                ? zh
+                  ? "当前工作区"
+                  : "Current workspace"
+                : zh
+                  ? "切换到此工作区"
+                  : "Switch to this workspace"}
+          </button>
+        )}
         <span className="owner-scope">
           {zh ? "归属：当前用户" : "Owner: current user"}
         </span>
@@ -291,7 +323,7 @@ export function WorkspacePage({
           {error}
         </div>
       )}
-      <div className={`workspace-layout ${selected ? "with-detail" : ""}`}>
+      <div className="workspace-layout">
         <section className="workspace-panel" aria-busy={loading}>
           <div
             className="workspace-table-scroll"
@@ -305,6 +337,7 @@ export function WorkspacePage({
           >
             <TableHeader
               className="workspace-columns workspace-head"
+              resize={columns}
               columns={[
                 { id: "name", label: "Workspace" },
                 { id: "owner", label: "Owner" },
@@ -315,7 +348,10 @@ export function WorkspacePage({
             />
             <div
               className="virtual-spacer"
-              style={{ height: virtual.getTotalSize(), minWidth: 750 }}
+              style={{
+                height: virtual.getTotalSize(),
+                minWidth: columns.style.minWidth,
+              }}
             >
               {virtual.getVirtualItems().map((row) => {
                 const item = filtered[row.index];
@@ -324,6 +360,7 @@ export function WorkspacePage({
                     key={item.name}
                     className={`workspace-columns workspace-row ${selection.isSelected(item) ? "selected" : ""}`}
                     style={{
+                      ...columns.style,
                       height: row.size,
                       transform: `translateY(${row.start}px)`,
                     }}
@@ -333,25 +370,70 @@ export function WorkspacePage({
                       setSelectedName(item.name);
                     }}
                     {...menu(
-                      selection.targets(item).length > 1 ? "W02" : "W01",
+                      "W01",
                       () => ({
-                        查看详情: action(() => setSelectedName(item.name)),
-                        复制名称: copy(item.name),
-                        复制根路径: copy(item.root),
-                        "复制 Stream 路径": copy(item.stream),
-                        刷新: action(reload),
-                        复制名称列表: copy(
-                          selection
-                            .targets(item)
-                            .map((value) => value.name)
-                            .join("\n"),
-                        ),
-                        复制根路径列表: copy(
-                          selection
-                            .targets(item)
-                            .map((value) => value.root)
-                            .join("\n"),
-                        ),
+                        "切换到此工作区…": {
+                          label: zh
+                            ? `切换到工作区 '${item.name}'`
+                            : `Switch to Workspace '${item.name}'`,
+                          ...action(
+                            () => switchToSelected(item.name),
+                            !ready ||
+                              switching ||
+                              item.name === runtime.context.client
+                              ? zh
+                                ? "当前不可切换"
+                                : "Switch unavailable"
+                              : undefined,
+                          ),
+                        },
+                        "新建工作区…": {
+                          label: zh ? "新建工作区…" : "New Workspace...",
+                          ...action(
+                            () => setCreateOpen(true),
+                            !ready
+                              ? zh
+                                ? "连接不可用"
+                                : "Connection unavailable"
+                              : undefined,
+                          ),
+                        },
+                        "重命名工作区…": {
+                          label: zh
+                            ? `重命名工作区 '${item.name}'`
+                            : `Rename Workspace '${item.name}'`,
+                          ...action(
+                            () =>
+                              setMutation({
+                                action: "rename",
+                                workspace: item.name,
+                                expectedGeneration: runtime.contextGeneration,
+                              }),
+                            !ready || item.name === runtime.context.client
+                              ? zh
+                                ? "请先切换到其他工作区"
+                                : "Switch to another workspace first"
+                              : undefined,
+                          ),
+                        },
+                        "删除工作区…": {
+                          label: zh
+                            ? `删除工作区 '${item.name}'`
+                            : `Delete Workspace '${item.name}'`,
+                          ...action(
+                            () =>
+                              setMutation({
+                                action: "delete",
+                                workspace: item.name,
+                                expectedGeneration: runtime.contextGeneration,
+                              }),
+                            !ready || item.name === runtime.context.client
+                              ? zh
+                                ? "请先切换到其他工作区"
+                                : "Switch to another workspace first"
+                              : undefined,
+                          ),
+                        },
                       }),
                       {
                         title: item.name,
@@ -362,17 +444,19 @@ export function WorkspacePage({
                       },
                     )}
                   >
-                    <span>
+                    <span title={item.name}>
                       <Monitor size={16} />
                       <strong>{item.name}</strong>
                       {item.name === runtime.context.client && (
                         <em>{zh ? "当前" : "Current"}</em>
                       )}
                     </span>
-                    <span>{item.owner || "—"}</span>
-                    <span>{item.host || (zh ? "不限主机" : "Any host")}</span>
+                    <span title={item.owner}>{item.owner || "—"}</span>
+                    <span title={item.host}>
+                      {item.host || (zh ? "不限主机" : "Any host")}
+                    </span>
                     <span title={item.root}>{item.root}</span>
-                    <time>{date(item.updated)}</time>
+                    <time title={date(item.updated)}>{date(item.updated)}</time>
                   </button>
                 );
               })}
@@ -404,83 +488,36 @@ export function WorkspacePage({
             </span>
           </footer>
         </section>
-        {selected && (
-          <aside className="file-details workspace-details">
-            <div className="detail-caption">
-              {zh ? "工作区详情" : "Workspace details"}
-              <button aria-label={t.close} onClick={() => setSelectedName("")}>
-                ×
-              </button>
-            </div>
-            <div className="file-preview-icon">
-              <Monitor size={30} />
-            </div>
-            <h2>{selected.name}</h2>
-            <dl>
-              {[
-                ["Owner", selected.owner],
-                ["Host", selected.host || (zh ? "不限主机" : "Any host")],
-                [
-                  "Stream",
-                  selected.stream || (zh ? "传统工作区" : "Classic workspace"),
-                ],
-                ...(selected.name === runtime.context.client
-                  ? [
-                      [
-                        zh ? "同步方式" : "Sync mode",
-                        vfsStatus?.mode === "virtual"
-                          ? vfsStatus.ready
-                            ? "P4VFS"
-                            : zh
-                              ? "P4VFS（未就绪）"
-                              : "P4VFS (not ready)"
-                          : vfsStatus?.mode === "standard"
-                            ? zh
-                              ? "标准同步"
-                              : "Standard sync"
-                            : zh
-                              ? "未知"
-                              : "Unknown",
-                      ],
-                    ]
-                  : []),
-                [zh ? "更新时间" : "Updated", date(selected.updated)],
-                [zh ? "访问时间" : "Accessed", date(selected.accessed)],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value || "—"}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="detail-path-label">ROOT</div>
-            <p className="detail-path">{selected.root}</p>
-            <div className="detail-path-label">
-              {zh ? "描述" : "DESCRIPTION"}
-            </div>
-            <p className="workspace-description">
-              {selected.description || "—"}
-            </p>
-            <button
-              ref={switchButton}
-              disabled={switching || selected.name === runtime.context.client}
-              onClick={() => void switchToSelected()}
-            >
-              {switching
-                ? zh
-                  ? "正在验证并切换…"
-                  : "Verifying and switching…"
-                : selected.name === runtime.context.client
-                  ? zh
-                    ? "当前工作区"
-                    : "Current workspace"
-                  : zh
-                    ? "切换到此工作区"
-                    : "Switch to this workspace"}
-            </button>
-          </aside>
-        )}
       </div>
+      {createOpen && (
+        <ConnectionSpecCreateDialog
+          key={runtime.contextGeneration}
+          kind="workspace"
+          context={{ ...runtime.context, client: "" }}
+          requestGeneration={runtime.contextGeneration}
+          source={null}
+          zh={zh}
+          onDismiss={() => setCreateOpen(false)}
+          onCreated={() => {
+            setCreateOpen(false);
+            void reload();
+          }}
+        />
+      )}
+      {mutation && (
+        <WorkspaceMutationDialog
+          key={`${runtime.contextGeneration}:${mutation.workspace}:${mutation.action}`}
+          request={mutation}
+          zh={zh}
+          onClose={() => setMutation(undefined)}
+          onDone={() => {
+            setMutation(undefined);
+            setSelectedName("");
+            selection.clear();
+            void reload();
+          }}
+        />
+      )}
     </section>
   );
 }

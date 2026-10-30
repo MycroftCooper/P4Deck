@@ -1,0 +1,24 @@
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+body {
+  --panel: #fff;
+  --panel-2: #f6f8fa;
+  --text: #222;
+  --muted: #666;
+  --border: #ccc;
+  font-family: Arial, sans-serif;
+}
+.virtual-spacer {
+  position: relative;
+}
+.spacer {
+  flex: 1;
+}

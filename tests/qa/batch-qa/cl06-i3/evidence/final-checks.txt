@@ -1,0 +1,8 @@
+2026-10-28 QA-I3 final checkpoint
+TSC_EXIT=0 (nonincremental tsconfig.app.json)
+DIFF_EXIT=0 (scoped QA folder)
+HANDOFF_FILES=22
+HASH_MISMATCHES=0
+QA_LISTENERS_1437=0
+browser-results.json: 56 passed, zero failed/errors/external requests; browser and server closed
+menu-final.json: 72 passed, zero failed

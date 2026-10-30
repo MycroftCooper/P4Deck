@@ -14,6 +14,7 @@ export const ALL_DATA_DOMAINS: readonly DataDomain[] = [
 ];
 
 export interface InvalidateDataOptions {
+  refetchType?: "active" | "none";
   connectionKey?: string;
   /**
    * P4-confirmed paths. When present, only directory snapshots that can contain
@@ -58,15 +59,16 @@ function invalidateDirectoryQueries(
   prefixes: readonly string[],
   stableKey: string,
   affectedPaths: readonly string[] | undefined,
+  refetchType: "active" | "none" = "active",
 ) {
   const scoped = affectedPaths && affectedPaths.length > 0;
   return prefixes.map((prefix) =>
     appCache.invalidateQueries({
+      refetchType,
       predicate: (query) =>
         query.queryKey[0] === prefix &&
         query.queryKey[1] === stableKey &&
-        (!scoped ||
-          directoryIsAffected(query.queryKey[2], affectedPaths)),
+        (!scoped || directoryIsAffected(query.queryKey[2], affectedPaths)),
     }),
   );
 }
@@ -82,9 +84,9 @@ export function invalidateData(
   const affected = new Set(domains);
   const work: Promise<unknown>[] = [];
   // Pending and Submitted merge results and manage cursors behind these events.
-  if (affected.has("pending"))
+  if (affected.has("pending") && options.refetchType !== "none")
     window.dispatchEvent(new Event("p4deck:pending-refresh"));
-  if (affected.has("submitted"))
+  if (affected.has("submitted") && options.refetchType !== "none")
     window.dispatchEvent(new Event("p4deck:submitted-refresh"));
   const key = options.connectionKey;
   if (key) {
@@ -95,6 +97,7 @@ export function invalidateData(
           ["workspace-files", "workspace-directory"],
           stableKey,
           options.affectedPaths,
+          options.refetchType,
         ),
       );
     if (affected.has("depot"))
@@ -103,12 +106,14 @@ export function invalidateData(
           ["depot-files"],
           stableKey,
           options.affectedPaths,
+          options.refetchType,
         ),
       );
     if (affected.has("localCapabilities"))
       work.push(
         appCache.invalidateQueries({
           queryKey: ["local-path-capabilities", key],
+          refetchType: options.refetchType,
         }),
       );
   }

@@ -73,7 +73,7 @@ for (const width of [1280, 390]) {
 
     await expect(header(0)).toBeVisible();
     const expansionGap = await header(0).evaluate(async (element) => {
-      element.click();
+      (element as HTMLElement).click();
       // Read the committed layout before ResizeObserver's asynchronous delivery.
       await Promise.resolve();
       const first = element.closest(".pending-card")!.getBoundingClientRect();

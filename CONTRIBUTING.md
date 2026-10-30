@@ -9,7 +9,7 @@ pnpm test
 pnpm check
 ```
 
-也可用 `pnpm ci:quick` 依次执行本地静态检查和测试；发布候选使用 `pnpm ci:local` 加跑构建与前后端性能门禁。详细边界见 [本地门禁与发布配置骨架](ForAIDoc/Coder/本地门禁与发布配置.md)。
+也可用 `pnpm ci:quick` 一次跑完本地静态检查和测试：默认 Web 组与 Rust 组并行、失败不中断，stdout 只打每步结果、失败摘要和一行紧凑 JSON，完整日志在 `artifacts/ci/logs/<mode>/<step>.log`。发布候选使用 `pnpm ci:local`（默认 fail-fast）加跑构建、桌面 bundle 的 mock 剔除检查和串行前后端性能门禁；只改打包或前端 mock 相关时可用 `pnpm ci:bundle` 快速自检（约 10 秒）。打包前先跑 `pnpm validate:versions`，详细边界见 [本地门禁与发布配置](ForAIDoc/Coder/本地门禁与发布配置.md)。
 
 ## 分支
 

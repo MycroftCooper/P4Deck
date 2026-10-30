@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { runWithRetry, type RetryBinding } from "../../shared/lib/retry";
 import { workspaceCache } from "../../features/files/workspaceQueries";
 import { markSnapshotsStale } from "../../shared/cache/dataEffects";

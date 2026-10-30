@@ -21,6 +21,7 @@ pub struct LogStore {
     directory: PathBuf,
     legacy_path: PathBuf,
     session: Mutex<LogSession>,
+    frontend_events: Mutex<std::collections::BTreeMap<String, String>>,
 }
 struct LogSession {
     file: Option<File>,
@@ -46,6 +47,7 @@ impl LogStore {
         Ok(Self {
             directory,
             legacy_path: legacy_path.to_owned(),
+            frontend_events: Mutex::new(std::collections::BTreeMap::new()),
             session: Mutex::new(LogSession {
                 file: Some(file),
                 path,
@@ -54,6 +56,14 @@ impl LogStore {
                 policy,
                 last_prune: Instant::now(),
             }),
+        })
+    }
+    pub fn push_frontend_once(&self, entry: LogEntry) -> Result<bool, &'static str> {
+        let facts = serde_json::to_string(&(&entry.operation_id, &entry.command, &entry.message))
+            .map_err(|_| "logWriteFailed")?;
+        let mut events = self.frontend_events.lock();
+        frontend_once(&mut events, entry.id.clone(), facts, || {
+            self.push(entry).map_err(|_| "logWriteFailed")
         })
     }
     pub fn directory(&self) -> &Path {
@@ -540,5 +550,102 @@ mod tests {
             serde_json::from_str::<LogEntry>(line).unwrap();
         }
         assert!(text.contains("finished"));
+    }
+
+    #[test]
+    fn query_filters_and_persistence_cover_the_cancelled_level() {
+        let fixture = Fixture::new();
+        let store = LogStore::open(&fixture.path).unwrap();
+        let mut cancelled = entry("cancelled-one");
+        cancelled.level = LogLevel::Cancelled;
+        cancelled.command = "p4 sync //depot/main/...".into();
+        cancelled.message = "operation was cancelled".into();
+        store.push(cancelled).unwrap();
+        let mut failed = entry("failed-one");
+        failed.level = LogLevel::Error;
+        failed.command = "p4 submit -c 42".into();
+        failed.message = "p4: submit failed".into();
+        store.push(failed).unwrap();
+
+        let cancelled_only = store.query(&LogQuery {
+            levels: Some(vec![LogLevel::Cancelled]),
+            ..Default::default()
+        });
+        assert_eq!(cancelled_only.len(), 1);
+        assert_eq!(cancelled_only[0].id, "cancelled-one");
+        assert_eq!(cancelled_only[0].level, LogLevel::Cancelled);
+
+        let errors_only = store.query(&LogQuery {
+            levels: Some(vec![LogLevel::Error]),
+            ..Default::default()
+        });
+        assert_eq!(errors_only.len(), 1);
+        assert_eq!(errors_only[0].level, LogLevel::Error);
+
+        // The persisted session line carries the new wire value for later sessions/export.
+        let text = fs::read_to_string(&store.session.lock().path).unwrap();
+        assert!(text.contains("\"level\":\"cancelled\""));
+    }
+}
+
+fn frontend_once(
+    events: &mut std::collections::BTreeMap<String, String>,
+    id: String,
+    facts: String,
+    write: impl FnOnce() -> Result<(), &'static str>,
+) -> Result<bool, &'static str> {
+    if let Some(previous) = events.get(&id) {
+        return if previous == &facts {
+            Ok(false)
+        } else {
+            Err("eventConflict")
+        };
+    }
+    if events.len() >= 4096 {
+        return Err("eventLimit");
+    }
+    write()?;
+    events.insert(id, facts);
+    Ok(true)
+}
+#[cfg(test)]
+mod frontend_once_tests {
+    use super::*;
+    #[test]
+    fn failed_write_does_not_claim_recorded_or_reserve_event() {
+        let mut events = std::collections::BTreeMap::new();
+        assert_eq!(
+            frontend_once(&mut events, "id".into(), "facts".into(), || Err(
+                "logWriteFailed"
+            )),
+            Err("logWriteFailed")
+        );
+        assert!(events.is_empty());
+        assert_eq!(
+            frontend_once(&mut events, "id".into(), "facts".into(), || Ok(())),
+            Ok(true)
+        );
+        assert_eq!(
+            frontend_once(&mut events, "id".into(), "facts".into(), || panic!(
+                "duplicate write"
+            )),
+            Ok(false)
+        );
+    }
+    #[test]
+    fn capacity_refuses_new_events_without_evicting_ids() {
+        let mut events = (0..4096).map(|i| (i.to_string(), "f".into())).collect();
+        assert_eq!(
+            frontend_once(&mut events, "new".into(), "f".into(), || panic!(
+                "capacity write"
+            )),
+            Err("eventLimit")
+        );
+        assert_eq!(
+            frontend_once(&mut events, "0".into(), "f".into(), || panic!(
+                "duplicate write"
+            )),
+            Ok(false)
+        );
     }
 }

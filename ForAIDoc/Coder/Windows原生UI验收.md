@@ -31,7 +31,7 @@ WIN-P0-01 的首轮构建/启动证据已取得。旧隔离验收 PID 已正常�
 | 场景 | 原生窗口实际操作与结果 | 交叉证据/边界 |
 |---|---|---|
 | Profile 与 IPC | 在设置中创建并保存 `p4deck-fixture` profile，填写 fixture Server/User/Client 与 ticket **路径**；草稿和保存后的活动 profile 均显示服务器连接及当前登录票据验证通过 | 后端日志确认 GUI IPC 统一指向 `127.0.0.1:16661`、`p4deck-fixture`，connection ID 一致；没有读取 ticket 内容，也没有自动化登录或安全设置 |
-| Workspace 校正 | 初始未激活 profile 时曾把 debug exe 目录当 cwd，并出现非 Client Root 提示；激活 profile 后 Files/Workspace 切到 `D:\GitCode\P4Deck\.tools\p4d-fixture\workspace`，错误上下文消失 | 这是 profile 激活后的真实上下文切换，不应把首屏 debug cwd 解释成最终 workspace 已验证 |
+| Workspace 校正 | 初始未激活 profile 时曾把 debug exe 目录当 cwd，并出现非 Client Root 提示；激活 profile 后 Files/Workspace 切到 `D:\GitCode\P4Deck\.local\p4d-fixture\workspace`，错误上下文消失 | 这是 profile 激活后的真实上下文切换，不应把首屏 debug cwd 解释成最终 workspace 已验证 |
 | 七类 Global Search | 在原生 Search 页看到 Submitted、Pending、Workspace、Depot、Job、Stream、Shelf 七类；搜索 `p4deck-native`，显示 5 个 fixture Stream、Shelf 4447/4448，并显示 Shelf 有界深搜的 partial 提示 | 结果字段来自正式后端；partial 类别没有拖垮其他类别。`deep-path` 唯一 Shelf 点击到详情尚未完成 |
 | Search → Stream | 点击 `Native Main` 结果后进入正式 Streams 页面，并带入精确路径 `//p4deck-native-stream/main` | 证明 Stream 搜索结果的显式状态导航在该 build 的原生窗口可用 |
 | Stream Graph | 打开正式 Stream Graph；可访问树呈现 5 个节点及 parent→child 关系：main、dev、task、virtual、release；选择 Native Release 后详情显示 path、owner、type、parent、ParentView/flow 字段 | 未发现虚构父节点或 merge/copy 状态。缩放、完整键盘导航、popout 和窄屏未形成通过证据 |

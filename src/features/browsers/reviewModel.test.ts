@@ -1,5 +1,5 @@
 import { historyMenuQueue } from "./reviewModel";
-import type { FileRevision } from "../../shared/contracts/types";
+import type { FileRevision } from "../../shared/contracts";
 import { describe, expect, it } from "vitest";
 import {
   graphNodeDiffPair,

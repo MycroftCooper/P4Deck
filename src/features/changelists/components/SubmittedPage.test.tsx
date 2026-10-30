@@ -1,3 +1,4 @@
+import { appCache } from "../../../shared/cache/appCache";
 import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 import { ChangeDetailsContext } from "./ChangeDetailsDialog";
 // @vitest-environment jsdom
@@ -15,7 +16,7 @@ import type {
   ChangelistSummary,
   RuntimeInfo,
   SubmittedChangeDetail,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import {
   conservativeDetailClassification,
   isSubmittedSnapshot,
@@ -30,6 +31,50 @@ const backend = vi.hoisted(() => ({
   performClAction: vi.fn(),
   mutatePendingChange: vi.fn(),
 }));
+it("opens description destination investigation from the right-clicked submitted CL", async () => {
+  const prototype = HTMLDialogElement.prototype;
+  const originalShow = Object.getOwnPropertyDescriptor(prototype, "showModal");
+  const originalClose = Object.getOwnPropertyDescriptor(prototype, "close");
+  Object.defineProperty(prototype, "showModal", {
+    configurable: true,
+    value: function (this: HTMLDialogElement) {
+      this.open = true;
+    },
+  });
+  Object.defineProperty(prototype, "close", {
+    configurable: true,
+    value: function (this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
+  try {
+    await render("mock");
+    await act(async () =>
+      row(101).dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          clientX: 10,
+          clientY: 10,
+        }),
+      ),
+    );
+    const entry = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ].find((item) => item.textContent?.includes("追踪合并去向"));
+    expect(entry).toBeTruthy();
+    await click(entry!);
+    expect(document.body.textContent).toContain("CL 引用链");
+    expect(document.body.textContent).toContain("CL 101");
+    expect(document.body.textContent).not.toContain("查询集成记录");
+  } finally {
+    await act(async () => root.render(null));
+    if (originalShow)
+      Object.defineProperty(prototype, "showModal", originalShow);
+    else Reflect.deleteProperty(prototype, "showModal");
+    if (originalClose) Object.defineProperty(prototype, "close", originalClose);
+    else Reflect.deleteProperty(prototype, "close");
+  }
+});
 vi.mock("../../../infrastructure/backend", () => ({ backend }));
 
 const runtime: RuntimeInfo = {
@@ -240,6 +285,15 @@ it("keeps submitted rows and selection visible until a refresh succeeds, includi
 });
 
 beforeEach(() => {
+  appCache.clear();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -304,6 +358,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 it("reopens from the cache without P4 and revalidates behind the rows after a reconnect", async () => {
@@ -397,7 +452,7 @@ it("debounces a full filter mapping, cancels the old request, and ignores stale 
   const latest = backend.queryChangelists.mock.calls[1][0];
   expect(latest).toMatchObject({
     keyword: "second",
-    users: [],
+    users: [runtime.context.user],
     clients: [],
     mergeClassifications: [],
     hideReliableMerges: false,
@@ -425,7 +480,9 @@ it("uses a single user and cached current context without Job controls or extra 
   await render();
   await enter(input("用户"), "alice");
   await click(
-    host.querySelector<HTMLInputElement>(".submitted-stream-options input")!,
+    host.querySelector<HTMLInputElement>(
+      ".submitted-scope-row .submitted-stream-options input",
+    )!,
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
   const query = backend.queryChangelists.mock.calls.at(-1)![0];
@@ -442,8 +499,9 @@ it("uses a single user and cached current context without Job controls or extra 
 it("disables unknown current stream and blocks a multiuser query", async () => {
   await render();
   expect(
-    host.querySelector<HTMLInputElement>(".submitted-stream-options input")!
-      .disabled,
+    host.querySelector<HTMLInputElement>(
+      ".submitted-scope-row .submitted-stream-options input",
+    )!.disabled,
   ).toBe(true);
   backend.queryChangelists.mockClear();
   await enter(input("用户"), "alice,bob");
@@ -861,7 +919,7 @@ it("portals the CL address into the fixed title bar and preserves exact Go To be
   }
 });
 
-it("has one classification control, resets it to All and does not hide integrations in the query", async () => {
+it("has one classification control, resets it to Ordinary and does not hide integrations in the query", async () => {
   await render();
   const select = host.querySelector<HTMLSelectElement>(
     ".submitted-kind-filter select",
@@ -885,7 +943,7 @@ it("has one classification control, resets it to All and does not hide integrati
     )!,
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
-  expect(select.value).toBe("all");
+  expect(select.value).toBe("ordinary");
   expect(host.querySelectorAll(".cl-row")).toHaveLength(changes.length);
   expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
     mergeClassifications: [],
@@ -913,7 +971,7 @@ it("multi-selects cached streams, deduplicates current and clears all filters", 
   await render();
   expect(host.textContent).not.toContain("仅当前 Client");
   const options = host.querySelectorAll<HTMLInputElement>(
-    ".submitted-stream-options input",
+    ".submitted-scope-row .submitted-stream-options input",
   );
   for (const option of options) await click(option);
   await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
@@ -924,11 +982,14 @@ it("multi-selects cached streams, deduplicates current and clears all filters", 
   await click(
     [
       ...host.querySelectorAll<HTMLButtonElement>(
-        ".submitted-stream-options button",
+        ".submitted-scope-row .submitted-stream-options button",
       ),
     ].find((button) => button.textContent === "清空")!,
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  await act(async () =>
+    window.dispatchEvent(new Event("p4deck:submitted-refresh")),
+  );
   expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
     clients: [],
     streams: [],
@@ -941,7 +1002,7 @@ it("loads Stream options only on request and exposes failures for retry", async 
   const load = () =>
     [
       ...host.querySelectorAll<HTMLButtonElement>(
-        ".submitted-stream-options button",
+        ".submitted-scope-row .submitted-stream-options button",
       ),
     ].find((button) => button.textContent === "读取列表")!;
   const pending = deferred<never>();
@@ -957,7 +1018,7 @@ it("loads Stream options only on request and exposes failures for retry", async 
   expect(host.textContent).toContain("暂无缓存的 Stream 选项");
 });
 
-it("clears explicit streams across connections and resolves the current shortcut again", async () => {
+it("resets streams to unrestricted on a new connection", async () => {
   const { appCache } = await import("../../../shared/cache/appCache");
   const { workspaceListKey } = await import("../../workspaces/workspaceList");
   const { serverScope, snapshotKey } =
@@ -970,7 +1031,7 @@ it("clears explicit streams across connections and resolves the current shortcut
   ]);
   await render();
   for (const option of host.querySelectorAll<HTMLInputElement>(
-    ".submitted-stream-options input",
+    ".submitted-scope-row .submitted-stream-options input",
   ))
     await click(option);
   const next = {
@@ -982,9 +1043,12 @@ it("clears explicit streams across connections and resolves the current shortcut
     { name: "workspace", root: "x", host: "", stream: "//new/main" },
   ]);
   await render("tauri", "zh-CN", undefined, next);
+  await act(async () =>
+    window.dispatchEvent(new Event("p4deck:submitted-refresh")),
+  );
   expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
     clients: [],
-    streams: ["//new/main"],
+    streams: [],
   });
   expect(
     host.querySelector(".submitted-stream-picker")?.textContent,
@@ -1022,7 +1086,7 @@ it("keeps Depot Path and Stream together, with both dates in their own paired ro
   ).toHaveLength(2);
 });
 
-it("keeps distinct fixed-height result rows across expansion, collapse and resize", async () => {
+it("keeps distinct content-height result rows across expansion, collapse and resize", async () => {
   await render();
   const boxes = () => [
     ...host.querySelectorAll<HTMLElement>(".submitted-change-row"),
@@ -1042,7 +1106,8 @@ it("keeps distinct fixed-height result rows across expansion, collapse and resiz
   await click(
     boxes()[0].querySelector<HTMLButtonElement>(".submitted-expand")!,
   );
-  expect(boxes()[0].style.height).toBe("324px");
+  expect(Number.parseFloat(boxes()[0].style.height)).toBeGreaterThan(64);
+  expect(boxes()[0].style.height).not.toBe("324px");
   assertSeparated();
   await act(async () => {
     host.querySelector<HTMLDetailsElement>(".submitted-filters")!.open = false;
@@ -1054,4 +1119,184 @@ it("keeps distinct fixed-height result rows across expansion, collapse and resiz
   );
   expect(boxes()[0].style.height).toBe("64px");
   assertSeparated();
+});
+
+it("separates CL and submission type and removes status and legacy merge badges", async () => {
+  await render();
+  const header = host.querySelector(".cl-table-head")!;
+  expect([...header.children].map((cell) => cell.textContent)).toEqual([
+    "CL",
+    "提交类型",
+    "描述",
+    "用户",
+    "时间",
+  ]);
+  const row = host.querySelector(".cl-row")!;
+  expect(row.children).toHaveLength(5);
+  expect(row.children[0].textContent).toBe(String(changes[0].id));
+  expect(row.children[1].textContent).toBe("普通提交");
+  expect(row.querySelector(".merge-tag")).toBeNull();
+  expect(row.querySelector(".status-pill")).toBeNull();
+  expect(row.querySelector(".count-cell")).toBeNull();
+  expect(row.children[2].textContent).toBe(changes[0].description);
+});
+
+it("reflows multiple expanded rows from positive content measurements and ignores hidden zero sizes", async () => {
+  const callbacks = new Map<Element, () => void>();
+  const heights = new Map<number, number>([
+    [101, 37],
+    [102, 77],
+  ]);
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  const bounds = vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      if (this.matches(".submitted-change-files")) {
+        const id = Number(
+          this.getAttribute("aria-label")?.match(/CL (\d+)/)?.[1],
+        );
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 840,
+          bottom: heights.get(id) ?? 0,
+          width: 840,
+          height: heights.get(id) ?? 0,
+          toJSON: () => ({}),
+        };
+      }
+      return original.call(this);
+    });
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe(node: Element) {
+        if (node.matches(".submitted-change-files"))
+          callbacks.set(node, () =>
+            this.callback([], this as unknown as ResizeObserver),
+          );
+      }
+      unobserve(node: Element) {
+        callbacks.delete(node);
+      }
+      disconnect() {}
+      constructor(private callback: ResizeObserverCallback) {}
+    },
+  );
+  try {
+    await render();
+    const rows = () => [
+      ...host.querySelectorAll<HTMLElement>(".submitted-change-row"),
+    ];
+    await click(rows()[0].querySelector(".submitted-expand")!);
+    await click(rows()[1].querySelector(".submitted-expand")!);
+    const check = () => {
+      const current = rows();
+      for (let i = 1; i < current.length; i++) {
+        const top = (node: HTMLElement) =>
+          Number(node.style.transform.match(/translateY\(([-\d.]+)px\)/)![1]);
+        expect(top(current[i])).toBeGreaterThanOrEqual(
+          top(current[i - 1]) + parseFloat(current[i - 1].style.height),
+        );
+      }
+    };
+    for (const fileCount of [0, 1, 2, 50]) {
+      heights.set(101, 37 + fileCount * 40);
+      await act(async () => callbacks.forEach((run) => run()));
+      expect(rows()[0].style.height).toBe(`${64 + 37 + fileCount * 40}px`);
+      check();
+    }
+    heights.set(101, 0);
+    await act(async () => callbacks.forEach((run) => run()));
+    expect(rows()[0].style.height).toBe("2101px");
+    check();
+    await click(rows()[0].querySelector(".submitted-expand")!);
+    expect(rows()[0].style.height).toBe("64px");
+    check();
+    await act(async () => {
+      host.querySelector<HTMLDivElement>(".virtual-scroll")!.scrollTop = 100;
+      window.dispatchEvent(new Event("resize"));
+    });
+    check();
+  } finally {
+    bounds.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("filters handwritten tags locally and resizes header and rows with the same template", async () => {
+  backend.queryChangelists.mockImplementation(async (query) =>
+    page(
+      [
+        { ...changes[0], description: "[CODE] first [DOC]" },
+        { ...changes[1], description: "[DOC] second" },
+      ],
+      query.requestGeneration,
+    ),
+  );
+  await render();
+  const calls = backend.queryChangelists.mock.calls.length;
+  const tagInput = host.querySelector<HTMLInputElement>(
+    '[aria-label="输入标签并回车"]',
+  )!;
+  await enter(tagInput, " CODE ");
+  await act(async () =>
+    tagInput.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        isComposing: true,
+      }),
+    ),
+  );
+  expect(row(102)).toBeTruthy();
+  await act(async () =>
+    tagInput.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(backend.queryChangelists.mock.calls.length).toBe(calls);
+  expect(row(101)).toBeTruthy();
+  expect(row(102)).toBeUndefined();
+  expect(row(101).querySelectorAll(".submitted-description-tag")).toHaveLength(
+    2,
+  );
+  const separator = host.querySelector('[role="separator"]')!;
+  await act(async () =>
+    separator.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  expect(
+    (host.querySelector(".cl-table-head") as HTMLElement).style
+      .gridTemplateColumns,
+  ).toBe(row(101).style.gridTemplateColumns);
+});
+it("defaults and resets to current-user ordinary submissions without stream restrictions", async () => {
+  await render();
+  expect(input("用户").value).toBe(runtime.context.user);
+  expect(
+    (host.querySelector(".submitted-kind-filter select") as HTMLSelectElement)
+      .value,
+  ).toBe("ordinary");
+  expect(backend.queryChangelists.mock.calls.at(-1)![0]).toMatchObject({
+    users: [runtime.context.user],
+    streams: [],
+    clients: [],
+    keyword: "",
+  });
+  await enter(input("用户"), "custom");
+  await click(
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+      button.textContent?.includes("重置为默认"),
+    )!,
+  );
+  expect(input("用户").value).toBe(runtime.context.user);
+  await render("tauri", "zh-CN", undefined, {
+    context: { ...runtime.context, user: "other" },
+  });
+  expect(input("用户").value).toBe("other");
 });

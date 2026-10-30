@@ -1,0 +1,72 @@
+/* Shared native scrollbars; neutral contrast is independent of accent colour. */
+:root {
+  --scrollbar-track: #e8ecef;
+  --scrollbar-thumb: #697681;
+  --scrollbar-hover: #4b5965;
+  --scrollbar-active: #34434f;
+}
+:root[data-theme="dark"] {
+  --scrollbar-track: #20282f;
+  --scrollbar-thumb: #8997a4;
+  --scrollbar-hover: #b0bcc6;
+  --scrollbar-active: #d0dae2;
+}
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid var(--scrollbar-track);
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-active);
+}
+.dockview-theme-light.dockview-theme-p4deck {
+  --dv-scrollbar-background-color: var(--scrollbar-thumb);
+  --dv-tabs-container-scrollbar-color: var(--scrollbar-thumb);
+}
+.dockview-theme-p4deck .dv-scrollable .dv-scrollbar {
+  background-color: var(--scrollbar-thumb);
+  border: 1px solid var(--scrollbar-track);
+  transition: background-color 0.12s;
+}
+.dockview-theme-p4deck .dv-scrollable .dv-scrollbar-horizontal {
+  height: 10px;
+}
+.dockview-theme-p4deck .dv-scrollable .dv-scrollbar-vertical {
+  width: 10px;
+}
+.dockview-theme-p4deck .dv-scrollable .dv-scrollbar:hover {
+  background-color: var(--scrollbar-hover);
+}
+.dockview-theme-p4deck .dv-scrollable .dv-scrollbar:active {
+  background-color: var(--scrollbar-active);
+}
+.dockview-theme-p4deck .dv-tabs-container,
+.dockview-theme-p4deck .dv-tabs-overflow-container {
+  scrollbar-width: auto;
+}
+.dockview-theme-p4deck .dv-tabs-container::-webkit-scrollbar,
+.dockview-theme-p4deck .dv-tabs-overflow-container::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+/* Chromium gives standard scrollbar-color precedence over pseudo-elements. */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: auto;
+  }
+}

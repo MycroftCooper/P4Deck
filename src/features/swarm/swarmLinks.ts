@@ -1,9 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { backend } from "../../infrastructure/backend";
-import type {
-  OpenSwarmLinkRequest,
-  RuntimeInfo,
-} from "../../shared/contracts/types";
+import type { OpenSwarmLinkRequest, RuntimeInfo } from "../../shared/contracts";
 
 export type SwarmLinkTarget =
   | {

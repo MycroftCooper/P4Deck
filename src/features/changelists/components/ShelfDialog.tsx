@@ -1,21 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { invalidateShelfObservations } from "../../actions/shelfObservation";
+import { useContext, useEffect, useRef, useState } from "react";
+import { MenuEnvironment } from "../../../app/context-menu/environment";
+import { DeleteShelfDialog } from "./DeleteShelfDialog";
+import { shelfIdentity } from "../deleteShelfTask";
+import { startShelveDirect } from "../shelveDirectTask";
 import { backend } from "../../../infrastructure/backend";
 import type {
   ShelfPreflight,
   ShelfPreflightRequest,
   WorkflowConfirmation,
   WorkflowResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import {
   PreflightStatus,
   type PreflightState,
 } from "../../../app/dialogs/PreflightStatus";
 import { TargetList } from "../../../app/dialogs/TargetList";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
 import {
-  publishWorkflowFailure,
-  publishWorkflowResult,
-} from "../workflowRefresh";
+  lookupWorkflowAction,
+  type WorkflowActionLookup,
+} from "../../actions/workflowReceipt";
+import {
+  boundedRefresh,
+  runShelfUnshelve,
+  workflowConnectionMatchesTarget,
+  type ShelfUnshelveLifecycle,
+} from "../shelfUnshelveLifecycle";
 
 export interface ShelfRequest {
   changeId: number;
@@ -32,10 +44,62 @@ type Phase =
   | "blocked"
   | "stale"
   | "running"
-  | "success"
+  | "completed"
+  | "unknown"
   | "failed";
 
-export function ShelfDialog({
+export function ShelfDialog(props: Parameters<typeof ShelfWorkflowDialog>[0]) {
+  if (props.request.mode === "delete")
+    return (
+      <DeleteShelfDialog
+        request={props.request}
+        connectionKey={props.connectionKey}
+        zh={props.zh}
+        onDismiss={props.onDismiss}
+      />
+    );
+  // Nested/audited shelf flows (cross-CL group choice or an injected preflight
+  // port) keep the explicit review dialog with "back to CL groups"; the plain
+  // one-click entry from the Pending page keeps the direct shelf command.
+  if (props.onBack || props.check) return <ShelfWorkflowDialog {...props} />;
+  return <DirectShelve {...props} />;
+}
+/** Direct shelve: no dialog, no FE preflight; the host command owns its internal preflight. */
+function DirectShelve({
+  request,
+  connectionKey,
+  onDismiss,
+}: Parameters<typeof ShelfWorkflowDialog>[0]) {
+  const env = useContext(MenuEnvironment);
+  const once = useRef(false);
+  useEffect(() => {
+    if (once.current) return;
+    once.current = true;
+    try {
+      const context = env?.getOperationContext?.();
+      if (!context || !env?.reportOperationError) return;
+      startShelveDirect(
+        {
+          connectionKey,
+          changeId: request.changeId,
+          paths: [...new Set(request.paths)].sort(),
+          ...shelfIdentity(context.runtime),
+        },
+        {
+          current: () => env.getOperationContext!(),
+          connection: backend.companySubmitConnectionSnapshot,
+          lookup: lookupWorkflowAction,
+          report: env.reportOperationError,
+          execute: (directRequest) => backend.shelveFiles(directRequest),
+        },
+      );
+    } finally {
+      onDismiss();
+    }
+  }, [connectionKey, env, onDismiss, request.changeId, request.paths]);
+  return null;
+}
+function ShelfWorkflowDialog({
   request,
   connectionKey,
   demo = false,
@@ -44,6 +108,8 @@ export function ShelfDialog({
   onBack,
   check = (value) => backend.preflightShelf(value),
   execute = (value) => backend.confirmShelf(value),
+  connection = () => backend.companySubmitConnectionSnapshot(),
+  lookup = lookupWorkflowAction,
 }: {
   request: ShelfRequest;
   connectionKey: string;
@@ -53,6 +119,13 @@ export function ShelfDialog({
   onBack?(): void;
   check?(request: ShelfPreflightRequest): Promise<ShelfPreflight>;
   execute?(confirmation: WorkflowConfirmation): Promise<WorkflowResult>;
+  /** Exact dispatching connection snapshot; captured once per confirm. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<WorkflowActionLookup>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
@@ -65,9 +138,12 @@ export function ShelfDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<ShelfPreflight>();
   const [result, setResult] = useState<WorkflowResult>();
+  const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [message, setMessage] = useState("");
   const generation = useRef(0);
   const running = useRef(false);
+  const operationId = useRef<string | undefined>(undefined);
   const staleConnection = snapshot.connectionKey !== connectionKey;
   const sourceChanged =
     request.changeId !== snapshot.changeId ||
@@ -105,6 +181,9 @@ export function ShelfDialog({
     running.current = false;
     setPreflight(undefined);
     setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
+    operationId.current = undefined;
     setMessage("");
     setPhase("idle");
   };
@@ -122,6 +201,8 @@ export function ShelfDialog({
     setPhase("checking");
     setMessage("");
     setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
     try {
       const value = await check({
         changeId: snapshot.changeId,
@@ -181,21 +262,52 @@ export function ShelfDialog({
     running.current = true;
     setPhase("running");
     setMessage("");
+    setResult(undefined);
+    setLifecycle(undefined);
+    setRefreshFailed(false);
+    // One UUID for this dispatch; it is reused by receipt lookup, never by a retry.
+    const id = crypto.randomUUID();
+    operationId.current = id;
     try {
-      const value = await execute({
-        token: preflight.token,
-        target: preflight.target,
-      });
+      const dispatching = await connection();
       if (epoch !== generation.current || invalidated) return;
-      setResult(value);
-      setMessage(value.message);
-      const succeeded =
-        value.outcome === "succeeded" &&
-        value.files.length === snapshot.paths.length &&
-        value.files.every((file) => file.state === "succeeded");
-      setPhase(succeeded ? "success" : "failed");
-      await publishWorkflowResult(value, preflight.target, connectionKey);
-      if (!succeeded) {
+      if (
+        !workflowConnectionMatchesTarget(preflight.target, dispatching, "shelf")
+      )
+        throw new Error(
+          tr(
+            "连接身份与预检目标不一致，未执行任何搁置操作。",
+            "Connection identity changed; nothing was shelved.",
+          ),
+        );
+      // A newer explicit shelf action retires older visual shelf-delete claims.
+      invalidateShelfObservations(connectionKey, request.paths);
+      const run = await runShelfUnshelve(
+        { token: preflight.token, target: preflight.target, operationId: id },
+        "shelf",
+        {
+          connection: dispatching,
+          connectionKey,
+          execute,
+          lookup,
+          refresh: (key, target, value) => boundedRefresh(key, target, value),
+        },
+      );
+      if (epoch !== generation.current || invalidated) return;
+      setResult(run.result);
+      setLifecycle(run.lifecycle);
+      setRefreshFailed(!run.refreshSucceeded);
+      if (run.lifecycle.state === "commandCompleted") setPhase("completed");
+      else if (run.lifecycle.state === "legacy")
+        setPhase(
+          run.lifecycle.outcome === "succeeded"
+            ? "completed"
+            : run.lifecycle.outcome === "unknown"
+              ? "unknown"
+              : "failed",
+        );
+      else setPhase("unknown");
+      if (run.lifecycle.state !== "commandCompleted") {
         setPreflight(undefined);
         setAck(false);
       }
@@ -205,11 +317,17 @@ export function ShelfDialog({
         setPhase("failed");
         setPreflight(undefined);
         setAck(false);
-        await publishWorkflowFailure(connectionKey);
       }
     } finally {
       running.current = false;
     }
+  }
+
+  /** Cancellation is the existing IPC with the SAME operationId (never a new id). */
+  async function cancel() {
+    const id = operationId.current;
+    if (!id || !running.current) return;
+    await backend.cancelOperation(id).catch(() => undefined);
   }
 
   const status: PreflightState = !snapshot.paths.length
@@ -225,7 +343,7 @@ export function ShelfDialog({
                 kind:
                   phase === "ready" ||
                   phase === "running" ||
-                  phase === "success"
+                  phase === "completed"
                     ? "ready"
                     : "blocked",
                 blockers: preflight.blockers.map(
@@ -265,13 +383,18 @@ export function ShelfDialog({
           <button data-dialog-autofocus disabled={busy} onClick={onDismiss}>
             {tr("关闭", "Close")}
           </button>
+          {phase === "running" && (
+            <button onClick={() => void cancel()}>
+              {tr("取消操作", "Cancel operation")}
+            </button>
+          )}
           <button
             disabled={
               busy ||
               invalidated ||
               snapshot.changeId <= 0 ||
               !snapshot.paths.length ||
-              phase === "success"
+              phase === "completed"
             }
             onClick={() => void inspect()}
           >
@@ -375,36 +498,77 @@ export function ShelfDialog({
           )}
         </DialogNotice>
       )}
-      {message && (result || phase === "success") && (
+      {message && (
         <DialogNotice error={phase === "failed"}>{message}</DialogNotice>
       )}
-      {result && (
-        <>
-          {result.outcome !== "succeeded" && (
-            <DialogNotice error>
-              {tr("结果：", "Outcome: ")}
-              {result.outcome}
-              {result.failure ? ` · ${result.failure}` : ""} ·{" "}
-              {result.refresh.reason}
-            </DialogNotice>
+      {lifecycle?.state === "commandCompleted" && (
+        <DialogNotice>
+          {tr(
+            "命令已完成（仅命令级生命周期）。逐文件搁置状态没有权威事实，不能据此认定搁置成功；请以刷新后的搁置详情与 Pending 为准。",
+            "Command completed (command-level lifecycle only). Per-file shelf state has no authoritative fact here, so this is not a per-file success; rely on the refreshed shelf detail and Pending.",
           )}
-          {result.files.map((file) => (
-            <DialogNotice
-              key={file.depotPath}
-              error={file.state !== "succeeded"}
-            >
-              {file.state} · {file.depotPath} · {file.message}
-            </DialogNotice>
-          ))}
-          {!!result.operationIds.length && (
-            <p className="workflow-context">
-              {tr("操作记录", "Operations")} {result.operationIds.join(", ")}
-              {result.logReference
-                ? ` · ${tr("日志", "Log")} ${result.logReference}`
-                : ""}
-            </p>
+        </DialogNotice>
+      )}
+      {lifecycle?.state === "unknown" && (
+        <DialogNotice error>
+          {tr(
+            "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对搁置/CL 状态，不要直接重复确认。",
+            "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the shelf/CL before confirming again.",
           )}
-        </>
+        </DialogNotice>
+      )}
+      {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
+        <DialogNotice error>
+          {tr("结果：", "Outcome: ")}
+          {lifecycle.outcome}
+          {result?.failure ? ` · ${result.failure}` : ""} ·{" "}
+          {result?.refresh.reason}
+        </DialogNotice>
+      )}
+      {lifecycle?.state === "legacy" && lifecycle.outcome === "partial" && (
+        <DialogNotice>
+          {tr(
+            "部分完成：仅下列 succeeded 行有逐文件事实，其余仍未知。",
+            "Partial: only the succeeded rows below have per-file facts; the rest stay unknown.",
+          )}
+        </DialogNotice>
+      )}
+      {(lifecycle?.state === "legacy"
+        ? lifecycle.outcome === "partial"
+          ? lifecycle.files.filter((file) => file.state === "succeeded")
+          : lifecycle.files
+        : (lifecycle?.files ?? [])
+      ).map((file) => (
+        <DialogNotice key={file.depotPath} error={file.state !== "succeeded"}>
+          {file.state} · {file.depotPath} · {file.message}
+        </DialogNotice>
+      ))}
+      {lifecycle?.state !== "legacy" && !!lifecycle?.files.length && (
+        <p className="workflow-context">
+          {tr("逐文件权威事实", "Per-file facts")} {lifecycle.files.length}
+        </p>
+      )}
+      {lifecycle && result?.message && (
+        <DialogNotice error={lifecycle.state === "unknown"}>
+          {result.message}
+        </DialogNotice>
+      )}
+      {refreshFailed && (
+        <DialogNotice error>
+          {tr(
+            "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
+            "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
+          )}
+        </DialogNotice>
+      )}
+      {(lifecycle?.operationId || result?.operationIds.length) && (
+        <p className="workflow-context">
+          {tr("操作记录", "Operations")}{" "}
+          {lifecycle?.operationId ?? result?.operationIds.join(", ")}
+          {result?.logReference
+            ? ` · ${tr("日志", "Log")} ${result.logReference}`
+            : ""}
+        </p>
       )}
     </Dialog>
   );

@@ -3,7 +3,7 @@ import type {
   RevisionGraph,
   RevisionGraphNode,
   RevisionGraphEdge,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   edgeIncludesSource,
   focusEvidence,

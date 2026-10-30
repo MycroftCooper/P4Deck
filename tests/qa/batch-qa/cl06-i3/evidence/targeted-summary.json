@@ -1,0 +1,32 @@
+[
+  {
+    "name": "D:/GitCode/P4Deck/src/app/context-menu/model.test.ts",
+    "passed": 71,
+    "failed": 1
+  },
+  {
+    "name": "D:/GitCode/P4Deck/src/app/shell/CommandBar.customSubmit.test.tsx",
+    "passed": 5,
+    "failed": 0
+  },
+  {
+    "name": "D:/GitCode/P4Deck/src/features/companySubmit/customSubmit.test.ts",
+    "passed": 13,
+    "failed": 0
+  },
+  {
+    "name": "D:/GitCode/P4Deck/src/features/companySubmit/useCustomSubmit.test.tsx",
+    "passed": 7,
+    "failed": 0
+  },
+  {
+    "name": "D:/GitCode/P4Deck/src/features/settings/SettingsPage.test.tsx",
+    "passed": 34,
+    "failed": 0
+  },
+  {
+    "name": "D:/GitCode/P4Deck/src/features/changelists/components/SubmitDialog.test.tsx",
+    "passed": 11,
+    "failed": 0
+  }
+]

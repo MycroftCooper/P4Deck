@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
+import { backend } from "../../../infrastructure/backend";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
 import type {
   PendingChange,
   SubmitConfirmation,
   SubmitPreflight,
   SubmitResult,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
+import {
+  submitConnectionMatchesTarget,
+  submitLifecycle,
+  type SubmitLifecycle,
+} from "../submitLifecycle";
 import { requestDesktopAttention } from "../../../app/notifications/notifications";
 
 export type SubmitCheck = SubmitPreflight;
@@ -20,8 +27,16 @@ interface Props {
   onDismiss(): void;
   loadSummary(): Promise<PendingChange | undefined>;
   check?(id: number): Promise<SubmitCheck>;
-  /** Adapter must atomically revalidate token, connection and whole-CL scope. */
-  submit?(confirmation: SubmitConfirmation): Promise<SubmitResult>;
+  /**
+   * Adapter must atomically revalidate token, connection and whole-CL scope,
+   * and own the single bounded refresh/unknown-receipt recovery.
+   */
+  submit?(
+    confirmation: SubmitConfirmation,
+    connection: ConnectionSnapshot,
+  ): Promise<SubmitResult>;
+  /** Exact dispatching connection snapshot; captured once per confirm. */
+  connection?(): Promise<ConnectionSnapshot>;
 }
 type Phase =
   | "summary"
@@ -32,7 +47,8 @@ type Phase =
   | "stale"
   | "failed"
   | "submitting"
-  | "success";
+  | "unknown"
+  | "submitted";
 
 export function SubmitDialog(props: Props) {
   const { zh, onDismiss } = props;
@@ -47,10 +63,12 @@ export function SubmitDialog(props: Props) {
   const [summary, setSummary] = useState<PendingChange>();
   const [check, setCheck] = useState<SubmitCheck>();
   const [submitResult, setSubmitResult] = useState<SubmitResult>();
+  const [lifecycle, setLifecycle] = useState<SubmitLifecycle>();
   const [message, setMessage] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const generation = useRef(0);
   const running = useRef(false);
+  const operationId = useRef<string | undefined>(undefined);
   const staleConnection = origin.connectionKey !== props.connectionKey;
   const latestConnection = useRef(props.connectionKey);
   latestConnection.current = props.connectionKey;
@@ -114,6 +132,8 @@ export function SubmitDialog(props: Props) {
     setMessage("");
     setCheck(undefined);
     setSubmitResult(undefined);
+    setLifecycle(undefined);
+    operationId.current = undefined;
     setAcknowledged(false);
     try {
       const result = await props.check(origin.id);
@@ -191,28 +211,56 @@ export function SubmitDialog(props: Props) {
     setPhase("submitting");
     setMessage("");
     setSubmitResult(undefined);
+    setLifecycle(undefined);
+    // One UUID for this dispatch; a receipt lookup must reuse it and a new
+    // user-initiated submit gets a new one only after an explicit new preflight.
+    const id = crypto.randomUUID();
+    operationId.current = id;
     try {
-      const result = await props.submit({
-        token: check.token!,
-        target: check.target,
-      });
+      const dispatching = await (
+        props.connection ?? (() => backend.companySubmitConnectionSnapshot())
+      )();
       if (
-        epoch === generation.current &&
-        latestConnection.current === origin.connectionKey
-      ) {
-        setSubmitResult(result);
-        setMessage(result.message);
-        setPhase(result.outcome === "submitted" ? "success" : "failed");
-        if (result.outcome !== "submitted") {
-          requestDesktopAttention({
-            key: `submit-result:${origin.id}:${result.operationId ?? result.outcome}`,
-            title: tr("Submit 需要处理", "Submit needs attention"),
-            body: result.message,
-            kind: "failure",
-          });
-          setCheck(undefined);
-          setAcknowledged(false);
-        }
+        epoch !== generation.current ||
+        latestConnection.current !== origin.connectionKey
+      )
+        return;
+      if (!submitConnectionMatchesTarget(check.target, dispatching))
+        throw new Error(
+          tr(
+            "连接身份与提交预检目标不一致，未执行提交。",
+            "Connection identity changed; nothing was submitted.",
+          ),
+        );
+      const result = await props.submit(
+        { token: check.token!, target: check.target, operationId: id },
+        dispatching,
+      );
+      if (
+        epoch !== generation.current ||
+        latestConnection.current !== origin.connectionKey
+      )
+        return;
+      const life = submitLifecycle(result, id);
+      setSubmitResult(result);
+      setLifecycle(life);
+      setMessage(result.message);
+      setPhase(
+        life.state === "submitted"
+          ? "submitted"
+          : life.state === "unknown"
+            ? "unknown"
+            : "failed",
+      );
+      if (life.state !== "submitted") {
+        requestDesktopAttention({
+          key: `submit-result:${origin.id}:${life.operationId ?? life.state}`,
+          title: tr("Submit 需要处理", "Submit needs attention"),
+          body: result.message,
+          kind: "failure",
+        });
+        setCheck(undefined);
+        setAcknowledged(false);
       }
     } catch (error) {
       if (epoch === generation.current) {
@@ -224,6 +272,12 @@ export function SubmitDialog(props: Props) {
     } finally {
       running.current = false;
     }
+  }
+  /** Cancellation uses the existing IPC with the SAME operationId (never a new id). */
+  async function cancel() {
+    const id = operationId.current;
+    if (!id || !running.current) return;
+    await backend.cancelOperation(id).catch(() => undefined);
   }
   const busy = phase === "checking" || phase === "submitting";
   return (
@@ -242,6 +296,11 @@ export function SubmitDialog(props: Props) {
           <button disabled={busy} onClick={onDismiss}>
             {tr("关闭", "Close")}
           </button>
+          {phase === "submitting" && (
+            <button onClick={() => void cancel()}>
+              {tr("取消操作", "Cancel operation")}
+            </button>
+          )}
           <button
             disabled={
               !props.check ||
@@ -249,7 +308,7 @@ export function SubmitDialog(props: Props) {
               staleConnection ||
               origin.id <= 0 ||
               phase === "summary" ||
-              phase === "success"
+              phase === "submitted"
             }
             onClick={() => void inspect()}
           >
@@ -355,20 +414,48 @@ export function SubmitDialog(props: Props) {
         </DialogNotice>
       ))}
       {message && (
-        <DialogNotice error={phase === "failed"}>{message}</DialogNotice>
-      )}
-      {submitResult && submitResult.outcome !== "submitted" && (
-        <DialogNotice error>
-          {tr("结果：", "Outcome: ")}
-          {submitResult.outcome}
-          {submitResult.failure ? ` · ${submitResult.failure}` : ""}.{" "}
-          {submitResult.refresh.reason}
+        <DialogNotice error={phase === "failed" || phase === "unknown"}>
+          {message}
         </DialogNotice>
       )}
-      {submitResult?.operationId && (
+      {lifecycle?.state === "submitted" && (
+        <DialogNotice>
+          {tr("提交结果（权威）：", "Authoritative submit result: ")}
+          CL {lifecycle.submittedChangeId}
+          {lifecycle.submittedChangeId !== submitResult?.changeId
+            ? ""
+            : ` ${tr("（原 CL 号）", "(same change id)")}`}
+          {!lifecycle.envelope
+            ? tr(
+                " · 旧版结果（无命令级 envelope）",
+                " · legacy result (no command envelope)",
+              )
+            : ""}
+        </DialogNotice>
+      )}
+      {phase === "unknown" && (
+        <DialogNotice error>
+          {tr(
+            "结果不确定：提交可能已到达服务器。已用同一操作号查询持久回执，并以真实结果/刷新纠正；请先核对 Pending/Submitted，不要用新操作号直接重试。",
+            "Outcome uncertain: the submit may have reached the server. The durable receipt was queried with the same operation id and corrected from real data; inspect Pending/Submitted before any retry with a new operation id.",
+          )}
+        </DialogNotice>
+      )}
+      {submitResult &&
+        lifecycle?.state !== "submitted" &&
+        lifecycle?.state !== "unknown" && (
+          <DialogNotice error>
+            {tr("结果：", "Outcome: ")}
+            {submitResult.outcome}
+            {submitResult.failure ? ` · ${submitResult.failure}` : ""}.{" "}
+            {submitResult.refresh.reason}
+          </DialogNotice>
+        )}
+      {(lifecycle?.operationId ?? submitResult?.operationId) && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")} {submitResult.operationId}
-          {submitResult.logReference
+          {tr("操作记录", "Operation")}{" "}
+          {lifecycle?.operationId ?? submitResult?.operationId}
+          {submitResult?.logReference
             ? ` · ${tr("日志", "Log")} ${submitResult.logReference}`
             : ""}
         </p>

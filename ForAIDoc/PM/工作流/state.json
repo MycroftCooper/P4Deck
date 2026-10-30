@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-30T12:55:24.668Z",
+  "updatedAt": "2026-10-30T14:45:00.522Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -96,10 +96,10 @@
     ]
   },
   "counts": {
-    "main": 54,
-    "archived": 2,
-    "total": 56,
-    "subitems": 28,
+    "main": 55,
+    "archived": 4,
+    "total": 59,
+    "subitems": 32,
     "slices": 7
   },
   "packages": [
@@ -368,7 +368,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：Dock/popout、快捷键、页签恢复",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -386,11 +386,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:44.772Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：Dock/popout 分屏、页签恢复、快捷键已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -406,7 +406,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：全项目统一表格UI与可复用可拖列宽（用户已批准扩大范围）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1（打包前）",
       "evidence": [
@@ -425,11 +425,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:44.975Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：全项目表格统一列宽已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -445,7 +445,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "连接与工作区",
       "scope": "连接与工作区：移除详情侧栏、四项行菜单（用户已批准）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -463,11 +463,11 @@
       "verification": {
         "qaPassed": null,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.134Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：Workspace 行菜单已合入并发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -557,7 +557,7 @@
       "owner": "BE",
       "module": "连接与工作区",
       "scope": "连接与工作区：P4VFS 新建虚拟 Workspace",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P2",
       "evidence": [
@@ -569,21 +569,21 @@
       "deps": [
         "SAFE-02"
       ],
-      "archived": false,
+      "archived": true,
       "migrated": true,
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:53.953Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户决定取消范围：P4VFS 虚拟 Workspace 不在私用主链路，本项不验收、不再排期；此登记仅作为归档前提，非验收通过",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
+      "archivedAt": "2026-10-30T14:43:54.283Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "用户 2026-10-30 取消范围：P4VFS 虚拟 Workspace 不在私用主链路，不要求验收",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
@@ -708,7 +708,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "文件与版本",
       "scope": "文件与版本：Diff、Revision Graph 与精确历史比较",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -727,11 +727,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.300Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：指定 revision 的精确 Diff/Revision Graph 已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -747,7 +747,7 @@
       "owner": "FE",
       "module": "History",
       "scope": "History：四列表格、年日期、拖列宽、描述展开、FIFO 两选",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -764,11 +764,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.457Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：History 四列表格、拖列宽、FIFO 双选已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -897,8 +897,8 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "CL 工作流",
       "scope": "CL 工作流：Shelf/Unshelve/Resolve/手工文本合并",
-      "stage": "implemented",
-      "statusRaw": "已实现待验收",
+      "stage": "partial",
+      "statusRaw": "部分验收（用户 2026-10-30：Shelf/Unshelve 通过；Resolve/手工文本合并不通过，待返工）",
       "priority": "P1",
       "evidence": [
         "src-tauri/src/app/workflow_service.rs",
@@ -972,7 +972,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "CL 工作流",
       "scope": "CL 工作流：全局 CL 详情弹窗与 Go To CL",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -990,11 +990,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.628Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：全局 CL 详情弹窗与 Go To CL 已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1010,7 +1010,7 @@
       "owner": "FE",
       "module": "Submitted 与周报",
       "scope": "Submitted 与周报：单用户筛选、无 Client/Job、预设迁移与即时应用",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1027,11 +1027,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.807Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：Submitted 单用户筛选与预设迁移已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1085,7 +1085,7 @@
       "owner": "FE",
       "module": "Submitted 与周报",
       "scope": "Submitted 与周报：普通/疑似 CI/自动生成分类",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1102,11 +1102,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:47.115Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确验收通过：Submitted 普通/疑似 CI/自动生成分类",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1122,7 +1122,7 @@
       "owner": "FE",
       "module": "Submitted 与周报",
       "scope": "Submitted 与周报：单用户日期区间生成周报提示词",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1140,11 +1140,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:45.968Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：周报提示词生成已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1273,7 +1273,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "搜索与分支",
       "scope": "搜索与分支：Stream 切换与只读 Graph",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1290,11 +1290,11 @@
       "verification": {
         "qaPassed": null,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.109Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：Stream 切换与只读 Graph 已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1384,7 +1384,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "工具与可靠性",
       "scope": "工具与可靠性：共享缓存、取消/代次隔离、大列表性能",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1403,11 +1403,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.419Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：共享缓存/取消/代次隔离/大列表性能为内部项，已随 0.1.x 发布使用；按既有证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1423,7 +1423,7 @@
       "owner": "BE",
       "module": "工具与可靠性",
       "scope": "工具与可靠性：Swarm 安全链接",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P2",
       "evidence": [
@@ -1433,21 +1433,21 @@
       "note": "只做URL打开、无API/评论/创建Review；本轮禁止外部请求，安全测试先mock，真实外部验收另授权",
       "depsRaw": "明确外部验收授权",
       "deps": [],
-      "archived": false,
+      "archived": true,
       "migrated": true,
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:54.142Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户决定取消范围：Swarm 安全链接不在私用主链路，本项不验收、不再排期；此登记仅作为归档前提，非验收通过",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
+      "archivedAt": "2026-10-30T14:43:54.428Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "用户 2026-10-30 取消范围：Swarm 安全链接不在私用主链路，不要求验收",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
@@ -1634,7 +1634,7 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：Appearance主题色预设＋自定义（用户已批准）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1654,11 +1654,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.270Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确接受 A 组历史补登：Appearance 主题色预设+自定义已随 0.1.x 发布使用；按既有文档证据补登（未做本轮新验收）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1713,8 +1713,8 @@
       "owner": "BE",
       "module": "阶段收口",
       "scope": "阶段收口：其他设备可用的Windows体验包（候选已交付，安装未验）",
-      "stage": "implemented",
-      "statusRaw": "已实现待验收",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-10-30：Windows 体验包安装/启动/卸载/跨设备通过）",
       "priority": "P1",
       "evidence": [
         "ForAIDoc/Coder/Windows体验包交付.md"
@@ -1727,11 +1727,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:35:55.295Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户人工验收通过：Windows 体验包安装/启动/卸载/跨设备；依据 TODO 状态列与当前批次决议，QA/Apply 回执缺失，force 补登历史验收",
+        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1747,7 +1747,7 @@
       "owner": "FE",
       "module": "连接与工作区",
       "scope": "连接与工作区：无生效P4配置的强制启动引导（用户已批准）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收（合成UI已通过）",
       "priority": "P1",
       "evidence": [
@@ -1762,11 +1762,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.923Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确验收通过：无有效 P4 配置的强制启动引导",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1783,7 +1783,7 @@
       "module": "CL工作流",
       "scope": "CL工作流：Pending编号数值正倒序按钮（用户已批准）",
       "stage": "done",
-      "statusRaw": "限定dev人工通过（其余范围保留）",
+      "statusRaw": "已验收（用户 2026-10-30：CL 编号排序验证通过）",
       "priority": "P1",
       "evidence": [
         "tests/qa/preview-audit/pending-evidence/results.json",
@@ -1818,7 +1818,7 @@
       "module": "界面与导航",
       "scope": "界面与导航：全局横纵滚动条对比与边界（UI优化）",
       "stage": "done",
-      "statusRaw": "已实现待验收（本次滚动条清晰人工通过）",
+      "statusRaw": "已验收（用户 2026-10-30：全页面/窄窗滚动条通过）",
       "priority": "P1",
       "evidence": [
         "tests/qa/preview-audit/scroll-evidence/coverage.json",
@@ -1852,8 +1852,8 @@
       "owner": "BE调研；后续FE/BE由PM分阶段派单",
       "module": "CL工作流",
       "scope": "CL工作流：自定义提交工具配置与原提交入口分流",
-      "stage": "in-progress",
-      "statusRaw": "进行中（I3 QA及用户人工启动通过，连续会话等边界保留）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-10-30：公司自定义提交工具验证通过）",
       "priority": "P1（先调研）",
       "evidence": [
         "ForAIDoc/PM/并行交接.md"
@@ -1866,11 +1866,11 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:36:15.046Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户人工验收批次：公司自定义提交工具验证通过（当前批次决议第 1 条）；深度调研/真实工具执行不在本次范围，QA/Apply 回执缺失，force 补登",
+        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1995,8 +1995,8 @@
       "owner": "BE＋FE（PM拆领取范围）",
       "module": "交付",
       "scope": "交付：自动升级（GitHub Releases public + 标题栏提示 + 下载安装重启）",
-      "stage": "in-progress",
-      "statusRaw": "进行中（R→S）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-10-30：0.1.7→0.1.8 真机自动升级+自动重启成功）",
       "priority": "P1，用户列第一优先",
       "evidence": [
         "src-tauri/tauri.conf.json",
@@ -2010,11 +2010,11 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:35:55.175Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户确认 0.1.7→0.1.8 真机自动升级成功（下载/确认安装/passive 自动重启，设置页显示 v0.1.8）；QA/Apply 回执齐，补登记",
+        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md"
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -2056,6 +2056,112 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T12:46:42.377Z"
+    },
+    {
+      "id": "UI-11",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "界面与导航",
+      "scope": "界面与导航：标签页 session（首启只开待提交、重启恢复上次标签）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P1，0.1.9",
+      "evidence": [
+        "src/app/hooks/usePageNavigation.ts",
+        "src/app/App.tsx"
+      ],
+      "note": "新用户首次启动只自动打开 Pending，其它页面不预开；之后启动恢复上次关闭前的标签集合+激活页；未知/损坏/超量回退 Pending；仅主窗口持久化；不触发恢复查询风暴；测试覆盖负向（其它页未开）/恢复/回退/幂等",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T13:45:02.576Z"
+    },
+    {
+      "id": "UI-14",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "界面与导航",
+      "scope": "界面与导航：设置页自适应填满 + 模块折叠 + 设置导航",
+      "stage": "done",
+      "statusRaw": "已实现待验收",
+      "priority": "P1，0.1.9",
+      "evidence": [
+        "src/features/settings/SettingsPage.tsx",
+        "src/features/settings/SettingsNav.tsx",
+        "src/features/settings/SettingsSection.tsx"
+      ],
+      "note": "右侧空白填充（导航+内容两栏、auto-fit 多列、表单 max-width 480）；8 模块折叠（aria-expanded/持久化/损坏回退全展开）；sticky 导航+scroll-spy+键盘；窄屏降级；tsc 0、定向 12 文件 85 用例过；真实视觉/窄窗待人工验收",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.578Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确验收通过：设置页自适应填满+模块折叠+设置导航（0.1.9）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T14:05:35.096Z"
+    },
+    {
+      "id": "UI-15",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "BE＋FE",
+      "module": "界面与导航",
+      "scope": "界面与导航：P4 可执行文件/自定义提交工具加文件选择按钮",
+      "stage": "done",
+      "statusRaw": "已实现待验收",
+      "priority": "P1，0.1.9",
+      "evidence": [
+        "src/features/settings/ConnectionProfilesCard.tsx",
+        "src/features/settings/executablePicker.ts"
+      ],
+      "note": "tauri-plugin-dialog 2.8.4 双侧接入+仅 dialog:allow-open；两字段后浏览按钮（桌面显示、取消/失败安全、不自动保存）；tsc 0、picker 9 用例 + SettingsPage 38 通过；真实桌面点击待人工验收",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-30T14:43:46.731Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-10-30 用户明确验收通过：P4 可执行文件/自定义提交工具文件选择按钮（0.1.9）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-30T14:05:35.100Z"
     },
     {
       "id": "KEY-01",
@@ -2164,6 +2270,19 @@
   ],
   "subitems": [
     {
+      "id": "CL-03-R01",
+      "parentId": "CL-03",
+      "type": "feature",
+      "typeRaw": "功能需求（返工）",
+      "owner": "FE＋BE",
+      "priority": "功能需求（返工）",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "待用户补充失败现象后定",
+      "note": "无 | Resolve/手工文本合并验收不通过（用户 2026-10-30）：需重做冲突解决与手工文本合并的交互/结果核对，保留 CAS/备份/冲突保留语义；返工后重新验收 | 用户失败场景/截图；UI-08 可能合并处理",
+      "migrated": true
+    },
+    {
       "id": "CON-01-F01",
       "parentId": "CON-01",
       "type": "feature",
@@ -2236,7 +2355,7 @@
       "owner": "FE；QA协作",
       "priority": "P1，当前批内最小收尾",
       "statusRaw": "已验收（英文＋稳定ID套件72/72）",
-      "stage": "partial",
+      "stage": "implemented",
       "depsRaw": "QA-I2 labels冻结安全交接",
       "note": "既有“重命名工作区…”缺英文映射导致菜单测试失败；仅补映射/定向回归，新hash重冻结；菜单C01-10/C02-14/C12-04及C09/W01文档漂移PM已补，收尾批一次复验，不混算产品Bug",
       "migrated": true
@@ -2473,6 +2592,45 @@
       "stage": "todo",
       "depsRaw": "UI-09-1",
       "note": "截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户确认后关闭",
+      "migrated": true
+    },
+    {
+      "id": "UI-09-3",
+      "parentId": "UI-09",
+      "type": "feature",
+      "typeRaw": "功能需求（UI）",
+      "owner": "FE",
+      "priority": "P1，0.1.9",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-09-1",
+      "note": "自定义背景色后，工具栏/标题栏/标签栏/侧栏/状态栏也要跟随（同色系 3-4 级层次、略有区别）；默认“跟随主题”外观保持不变；深浅主题可读性/对比度证据",
+      "migrated": true
+    },
+    {
+      "id": "UI-11-1",
+      "parentId": "UI-11",
+      "type": "feature",
+      "typeRaw": "功能需求（首启默认）",
+      "owner": "FE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "无",
+      "note": "无 session 记录时只打开 Pending；移除“默认全开标签”行为；保留连接 gate/深链/通知导航",
+      "migrated": true
+    },
+    {
+      "id": "UI-11-2",
+      "parentId": "UI-11",
+      "type": "feature",
+      "typeRaw": "功能需求（session 恢复）",
+      "owner": "FE",
+      "priority": "P1",
+      "statusRaw": "待实现",
+      "stage": "todo",
+      "depsRaw": "UI-11-1",
+      "note": "持久化打开页+激活页（仅主窗口、上限、版本容错）；启动恢复并过滤未知页；关闭页面同步；损坏回退 Pending；测试幂等",
       "migrated": true
     },
     {

@@ -1,0 +1,154 @@
+import { useId, useRef, useState } from "react";
+import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
+import { useUnsavedEditor } from "../../../app/closeGuard";
+import type { SelectedOpenedFile } from "../selectedFiles";
+
+interface Props {
+  files: readonly SelectedOpenedFile[];
+  workspace: string;
+  routeLabel: string;
+  zh: boolean;
+  source?: HTMLElement | null;
+  busy?: boolean;
+  error?: string;
+  onDismiss(): void;
+  /** UI draft callback only. Host request/result mapping belongs to the coordinator. */
+  onConfirm(description: string): void;
+}
+export function SelectedFilesPreviewDialog({
+  files,
+  workspace,
+  routeLabel,
+  zh,
+  source,
+  busy = false,
+  error,
+  onDismiss,
+  onConfirm,
+}: Props) {
+  const tr = (cn: string, en: string) => (zh ? cn : en);
+  const [description, setDescription] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const [discard, setDiscard] = useState(false);
+  const submitted = useRef(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const formId = useId();
+  const clearUnsaved = useUnsavedEditor(
+    description ? "dirty" : "clean",
+    "",
+    "changelistDescription",
+  );
+  const dismiss = () => {
+    if (!busy) description ? setDiscard(true) : onDismiss();
+  };
+  return (
+    <Dialog
+      title={tr("提交选中文件", "Submit selected files")}
+      source={source}
+      zh={zh}
+      busy={busy}
+      onRequestClose={dismiss}
+      footer={
+        <>
+          <button type="button" disabled={busy} onClick={dismiss}>
+            {tr("取消", "Cancel")}
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            className="primary"
+            disabled={busy || confirmed || !files.length}
+          >
+            {tr("创建并移动，继续提交", "Create and move, continue to submit")}
+          </button>
+        </>
+      }
+    >
+      <div className="workflow-context">
+        {tr("工作区", "Workspace")}: {workspace} · {files.length}{" "}
+        {tr("个文件", "files")} · {routeLabel}
+      </div>
+      <p>
+        {tr(
+          "目标：新建编号 CL。取消后续提交时，文件保留在新 CL；移动不完整或结果未知时不会继续提交。",
+          "Target: a new numbered CL. Cancelling submission leaves files in the new CL. Incomplete or unknown moves do not continue to submission.",
+        )}
+      </p>
+      <ul
+        style={{ maxHeight: "30vh", overflow: "auto" }}
+        aria-label={tr("仅选中文件及原 CL", "Selected files and original CL")}
+      >
+        {files.map((file) => (
+          <li key={file.depotPath} style={{ overflowWrap: "anywhere" }}>
+            <strong>
+              {file.originalChangeId === 0
+                ? "Default"
+                : `CL ${file.originalChangeId}`}
+            </strong>{" "}
+            — {file.depotPath}
+          </li>
+        ))}
+      </ul>
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (busy || submitted.current || !files.length) return;
+          if (!description.trim()) {
+            setInvalid(true);
+            return;
+          }
+          submitted.current = true;
+          setConfirmed(true);
+          onConfirm(description.trim());
+          clearUnsaved(); // The coordinator owns the captured draft, including failures.
+        }}
+      >
+        <fieldset disabled={busy || confirmed}>
+          <label>
+            {tr("描述（必填）", "Description (required)")}
+            <textarea
+              rows={5}
+              autoFocus
+              data-dialog-autofocus
+              value={description}
+              aria-invalid={invalid}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setInvalid(false);
+              }}
+            />
+          </label>
+        </fieldset>
+      </form>
+      {invalid && (
+        <DialogNotice error>
+          {tr("请填写 CL 描述。", "Enter a changelist description.")}
+        </DialogNotice>
+      )}
+      {error && <DialogNotice error>{error}</DialogNotice>}
+      {discard && (
+        <DialogNotice>
+          <span>
+            {tr(
+              "放弃描述并取消？尚未创建或移动文件。",
+              "Discard the description? No files have been created or moved.",
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              clearUnsaved();
+              onDismiss();
+            }}
+          >
+            {tr("放弃并关闭", "Discard and close")}
+          </button>
+          <button type="button" onClick={() => setDiscard(false)}>
+            {tr("继续编辑", "Keep editing")}
+          </button>
+        </DialogNotice>
+      )}
+    </Dialog>
+  );
+}

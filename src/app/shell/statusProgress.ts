@@ -1,4 +1,4 @@
-import type { DiskUsage, OperationEvent } from "../../shared/contracts/types";
+import type { DiskUsage, OperationEvent } from "../../shared/contracts";
 export function diskMetrics(disk: DiskUsage) {
   if (
     !Number.isFinite(disk.total) ||

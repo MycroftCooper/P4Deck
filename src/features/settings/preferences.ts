@@ -1,7 +1,12 @@
 import { storage } from "../../shared/lib/storage";
+import { defaultAccent, normalizeAccent } from "./accent";
+import { defaultBackgroundTone, normalizeBackgroundTone } from "./background";
 export const sidebarMinWidth = 200;
 export const sidebarMaxWidth = 600;
 export interface UiPreferences {
+  accentColor: string;
+  /** Empty string follows the theme; otherwise a validated `#rrggbb` tone. */
+  backgroundTone: string;
   activityBarText: boolean;
   toolbarText: boolean;
   compact: boolean;
@@ -15,6 +20,8 @@ export interface UiPreferences {
   checkoutUseDefault: boolean;
 }
 export const defaultUi: UiPreferences = {
+  accentColor: defaultAccent,
+  backgroundTone: defaultBackgroundTone,
   activityBarText: true,
   toolbarText: true,
   compact: false,
@@ -31,6 +38,9 @@ export function readUiPreferences(): UiPreferences {
   try {
     const p = JSON.parse(storage.getItem("p4deck.ui") ?? "{}");
     return {
+      accentColor: normalizeAccent(p.accentColor) ?? defaultAccent,
+      backgroundTone:
+        normalizeBackgroundTone(p.backgroundTone) ?? defaultBackgroundTone,
       activityBarText:
         typeof p.activityBarText === "boolean" ? p.activityBarText : true,
       toolbarText: typeof p.toolbarText === "boolean" ? p.toolbarText : true,
@@ -64,4 +74,15 @@ export function toggleAutoRefresh(ui: UiPreferences): UiPreferences {
     autoRefresh: !ui.autoRefresh || ui.autoRefreshMinutes === 0,
     autoRefreshMinutes: ui.autoRefreshMinutes || defaultUi.autoRefreshMinutes,
   };
+}
+
+/**
+ * Persist UI preferences and verify the round-trip. `storage` is best-effort
+ * (disabled storage/quota silently no-op), so callers use the result to tell
+ * the user that the appearance change may not survive a restart.
+ */
+export function saveUiPreferences(ui: UiPreferences): boolean {
+  const value = JSON.stringify(ui);
+  storage.setItem("p4deck.ui", value);
+  return storage.getItem("p4deck.ui") === value;
 }

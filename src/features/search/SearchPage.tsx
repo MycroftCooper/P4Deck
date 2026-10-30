@@ -19,7 +19,7 @@ import type {
   GlobalSearchKind,
   GlobalSearchResult,
   GlobalSearchTarget,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   errorMessage,
   GLOBAL_SEARCH_KINDS,

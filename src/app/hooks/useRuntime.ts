@@ -6,7 +6,7 @@ import type {
   ConnectionStatus,
   P4Context,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { subscribeSafely } from "../../shared/lib/subscription";
 import {
   contextIdentity,

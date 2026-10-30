@@ -1,9 +1,10 @@
+import { ContextMenuProvider } from "../../app/context-menu/ContextMenu";
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { messages } from "../../shared/i18n";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { WorkspacePage } from "./WorkspacePage";
 
 const backend = vi.hoisted(() => ({
@@ -87,7 +88,11 @@ function Harness({ mode = "tauri" }: { mode?: RuntimeInfo["mode"] }) {
 
 async function render(mode: RuntimeInfo["mode"] = "tauri") {
   await act(async () => {
-    root.render(<Harness mode={mode} />);
+    root.render(
+      <ContextMenuProvider scope="workspace-test" zh={true}>
+        <Harness mode={mode} />
+      </ContextMenuProvider>,
+    );
     await Promise.resolve();
   });
 }
@@ -248,7 +253,7 @@ it("keeps the old runtime, detail, data, and focus when switching fails", async 
   expect(applied).not.toHaveBeenCalled();
   expect(host.textContent).toContain("仍保留 main-client 与现有页面数据");
   expect(host.textContent).toContain("切换失败，原 Workspace 保持不变");
-  expect(host.textContent).toContain("Dev");
+  expect(host.textContent).toContain("dev-client");
   expect(host.querySelector('[aria-current="true"]')).toBeNull();
   expect(document.activeElement).toBe(switchButton);
 });
@@ -263,4 +268,55 @@ it("keeps row buttons keyboard focusable and provides polite switch status", asy
       '.workspace-switch-status[role="status"][aria-live="polite"]',
     ),
   ).toBeTruthy();
+});
+
+it("removes workspace detail and keeps matching resizable header/row tracks", async () => {
+  await render();
+  const row = host.querySelector<HTMLButtonElement>(".workspace-row")!;
+  await act(async () => row.click());
+  expect(host.querySelector(".workspace-details")).toBeNull();
+  expect(host.querySelector(".with-detail")).toBeNull();
+  const handles = host.querySelectorAll('[role="separator"]');
+  expect(handles).toHaveLength(5);
+  await act(async () =>
+    handles[0].dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  expect(
+    (host.querySelector(".workspace-head") as HTMLElement).style
+      .gridTemplateColumns,
+  ).toBe(row.style.gridTemplateColumns);
+  expect(row.style.gridTemplateColumns).toContain("270px");
+});
+
+it("row menu has exactly four actions and binds Switch to the right-clicked row", async () => {
+  backend.switchWorkspace.mockRejectedValue(
+    new Error("test stops before runtime switch"),
+  );
+  await render();
+  await act(async () => button("main-client").click());
+  await act(async () =>
+    button("dev-client").dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        clientX: 20,
+        clientY: 20,
+      }),
+    ),
+  );
+  const actions = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ];
+  expect(actions.map((item) => item.textContent)).toEqual([
+    "切换到工作区 'dev-client'",
+    "新建工作区…",
+    "重命名工作区 'dev-client'",
+    "删除工作区 'dev-client'",
+  ]);
+  await act(async () => actions[0].click());
+  expect(backend.switchWorkspace).toHaveBeenCalledWith({
+    expectedGeneration: 7,
+    client: "dev-client",
+  });
 });

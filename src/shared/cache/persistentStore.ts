@@ -128,3 +128,26 @@ if (typeof window !== "undefined") {
     flushNow();
   });
 }
+
+/** Mark matching display snapshots stale without loading or querying their workspace. */
+export async function invalidatePersisted(matches: (id: string) => boolean) {
+  for (const [id, entry] of pending)
+    if (matches(id)) pending.set(id, { ...entry, updatedAt: 0 });
+  await flushPersisted();
+  const db = await openDatabase();
+  if (!db) return;
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const cursor = tx.objectStore(STORE).openCursor();
+    cursor.onsuccess = () => {
+      const c = cursor.result;
+      if (!c) return;
+      if (typeof c.key === "string" && matches(c.key))
+        c.update({ ...c.value, updatedAt: 0 });
+      c.continue();
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () =>
+      reject(Error("Snapshot invalidation failed"));
+  });
+}

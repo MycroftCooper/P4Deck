@@ -1,4 +1,6 @@
 const english: Record<string, string> = {
+  提交选中文件: "Submit selected files",
+  追踪合并去向: "Trace integration destinations",
   "预览 CL": "View submitted CL",
   获取这个版本: "Get this revision",
   刷新: "Refresh",
@@ -136,6 +138,7 @@ const english: Record<string, string> = {
   重新执行搜索: "Search again",
   切换到此工作区: "Switch to this workspace",
   编辑工作区: "Edit workspace",
+  重命名工作区: "Rename workspace",
   复制配置新建工作区: "Create workspace from configuration",
   删除工作区: "Delete workspace",
   系统中定位根目录: "Reveal root folder",

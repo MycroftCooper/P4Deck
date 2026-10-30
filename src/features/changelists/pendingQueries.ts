@@ -4,7 +4,7 @@ import type {
   PendingChangePage,
   PendingChangeQuery,
   PendingChangeMutationResult,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export const PENDING_PAGE_SIZE = 100;
 

@@ -567,9 +567,20 @@ impl ChangelistService {
         app: Option<&AppHandle>,
     ) -> SubmittedChangeDetail {
         let (context, generation) = self.contexts.snapshot();
+        if request
+            .expected_generation
+            .is_some_and(|expected| expected != generation)
+        {
+            return unavailable_detail(
+                request.change_id,
+                "Connection changed before CL inspection.",
+            );
+        }
         let key = submitted_cache_key(&context, generation, request.change_id);
-        if let Some(detail) = self.submitted_details.get(&key, now_ms()) {
-            return detail;
+        if !request.refresh {
+            if let Some(detail) = self.submitted_details.get(&key, now_ms()) {
+                return detail;
+            }
         }
         let detail = match self
             .repository
@@ -864,6 +875,7 @@ mod tests {
             lock_owner: None,
             other_open: Vec::new(),
             exclusive_open: None,
+            resolve: None,
         };
         PendingChange {
             id,

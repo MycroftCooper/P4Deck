@@ -1,0 +1,130 @@
+.file-preview-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px;
+  background: var(--panel);
+  gap: 12px;
+}
+.preview-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.preview-heading h1 {
+  font-size: 22px;
+  margin: 8px 0;
+}
+.preview-heading p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.preview-heading button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-preview-page .history-path {
+  margin: 0;
+}
+.preview-note,
+.preview-footer {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.preview-toolbar button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.preview-text {
+  height: 100%;
+  overflow: auto;
+  contain: strict;
+  background: var(--panel-2);
+}
+.preview-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  min-width: 100%;
+  width: max-content;
+  white-space: pre;
+  font:
+    12px/24px ui-monospace,
+    monospace;
+}
+.preview-line > span {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 62px;
+  padding: 0 12px;
+  text-align: right;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.preview-line code {
+  padding: 0 14px;
+  font: inherit;
+  tab-size: 4;
+}
+.preview-image {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  background-color: var(--panel-2);
+  background-image: conic-gradient(
+    var(--border) 25%,
+    transparent 0 50%,
+    var(--border) 0 75%,
+    transparent 0
+  );
+  background-size: 20px 20px;
+}
+.preview-image img {
+  display: block;
+  max-width: none;
+  margin: auto;
+}
+.preview-image.fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-image.fit img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.preview-empty {
+  padding: 30px;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.preview-empty p {
+  line-height: 1.7;
+}

@@ -34,14 +34,18 @@ function listeningPorts(pids) {
 function probe(port, path) {
   return new Promise((resolve) => {
     const request = http.get({ host: "127.0.0.1", port, path, timeout: 2000 }, (response) => {
+      let body = "";
+      response.on("data", (chunk) => {
+        if (body.length < 4096) body += chunk;
+      });
+      response.on("end", () => resolve({ status: response.statusCode, body }));
       response.resume();
-      resolve(response.statusCode);
     });
     request.on("timeout", () => {
       request.destroy();
-      resolve("TIMEOUT");
+      resolve({ status: "TIMEOUT", body: "" });
     });
-    request.on("error", (error) => resolve(error.code ?? "ERR"));
+    request.on("error", (error) => resolve({ status: error.code ?? "ERR", body: "" }));
   });
 }
 
@@ -57,12 +61,19 @@ let ok = false;
 for (const port of ports) {
   const page = await probe(port, "/p4deck-board");
   const api = await probe(port, "/p4deck-board/api/snapshot");
-  const html = typeof page === "number" && page === 200;
-  const json = typeof api === "number" && api === 200;
-  console.log(`  :${port}  /p4deck-board=${page}  /api/snapshot=${api}  ${html && json ? "✅ 可用" : ""}`);
+  const html = Number(page.status) === 200;
+  const json = Number(api.status) === 200;
+  const newButtons = html && page.body.includes("验收完成");
+  const hasScope = json && api.body.includes('"scope"');
+  console.log(
+    `  :${port}  /p4deck-board=${page.status}  /api/snapshot=${api.status}  验收按钮=${newButtons ? "有" : "无"}  功能名=${hasScope ? "有" : "无"}`,
+  );
   if (html && json) {
     ok = true;
     console.log(`\n看板入口: http://127.0.0.1:${port}/p4deck-board`);
+    if (!newButtons || !hasScope) {
+      console.log("  提示：路由通了但跑的还是旧插件代码；重启 DSH 后才会出现「验收完成/取消」按钮和功能名。");
+    }
   }
 }
 

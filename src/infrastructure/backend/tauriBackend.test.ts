@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+﻿import { beforeEach, expect, it, vi } from "vitest";
 
 const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
@@ -16,7 +16,7 @@ it("uses fixed native log commands and subscribes to log deletion across windows
   await tauriBackend.openLogsFolder();
   expect(invoke).toHaveBeenLastCalledWith("open_logs_folder");
   await tauriBackend.deleteAllLogs();
-  expect(invoke).toHaveBeenLastCalledWith("delete_all_logs");
+  expect(invoke).toHaveBeenLastCalledWith("delete_all_logs", { request: {} });
   const callback = vi.fn();
   await tauriBackend.subscribeLogsCleared(callback);
   expect(listen).toHaveBeenLastCalledWith("logs-cleared", callback);
@@ -32,16 +32,19 @@ it("routes configuration backup commands through narrow native commands", async 
     localStorage: [{ key: "p4deck.ui", value: '{"compact":true}' }],
   };
   invoke.mockResolvedValue({ backup: { fileName: "safe.json" } });
-  await tauriBackend.createConfigBackup(create);
+  await tauriBackend.createConfigBackup({ request: create, operationId: "op" });
   expect(invoke).toHaveBeenLastCalledWith("create_config_backup", {
-    request: create,
+    request: { request: create, operationId: "op" },
   });
   await tauriBackend.listConfigBackups();
   expect(invoke).toHaveBeenLastCalledWith("list_config_backups");
   const restore = { fileName: "safe.json", localStorage: create.localStorage };
-  await tauriBackend.restoreConfigBackup(restore);
-  expect(invoke).toHaveBeenLastCalledWith("restore_config_backup", {
+  await tauriBackend.restoreConfigBackup({
     request: restore,
+    operationId: "op",
+  });
+  expect(invoke).toHaveBeenLastCalledWith("restore_config_backup", {
+    request: { request: restore, operationId: "op" },
   });
   await tauriBackend.openConfigBackupsFolder();
   expect(invoke).toHaveBeenLastCalledWith("open_config_backups_folder");
@@ -427,4 +430,28 @@ it("routes single-revision Undo preview and confirmation through dedicated comma
   const confirmation = { target: request, token: "reviewed" };
   await tauriBackend.confirmUndo(confirmation);
   expect(invoke).toHaveBeenLastCalledWith("confirm_undo", { confirmation });
+});
+
+it("serializes the strict revision graph envelope without routing tags", async () => {
+  const request = {
+    scope: {
+      server: "mock",
+      user: "u",
+      client: "c",
+      workspace: "",
+      contextGeneration: 1,
+      fileIdentity: "//mock/main/file",
+    },
+    revisionLimit: 100,
+    cursor: "page-2",
+    refresh: true,
+    operationId: "graph-test",
+  };
+  await tauriBackend.getRevisionGraph(request);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("get_revision_graph", {
+    request,
+  });
+  expect(JSON.parse(JSON.stringify(invoke.mock.calls[0][1]))).toEqual({
+    request,
+  });
 });

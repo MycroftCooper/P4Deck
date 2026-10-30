@@ -171,6 +171,7 @@ mod tests {
                 let result = files
                     .diff(
                         crate::domain::DiffRequest {
+                            right_file_identity: None,
                             scope: scope.clone(),
                             left: crate::domain::RevisionReference::Have,
                             right: crate::domain::RevisionReference::Workspace,
@@ -206,6 +207,7 @@ mod tests {
             let cached = files
                 .diff(
                     crate::domain::DiffRequest {
+                        right_file_identity: None,
                         scope,
                         left: crate::domain::RevisionReference::Have,
                         right: crate::domain::RevisionReference::Workspace,
@@ -362,6 +364,7 @@ mod tests {
                         crate::domain::ConnectionSpecKind::UserSelf,
                         ConnectionSpecCreateConfirmation {
                             token: user_preflight.token.clone().unwrap(),
+                            operation_id: None,
                             context: user_context,
                             request_generation: 13,
                             state_digest: user_preflight.state_digest,
@@ -418,6 +421,7 @@ mod tests {
             let created_profiles = connection
                 .create_profile(
                     CreateConnectionProfileRequest {
+                        operation_id: None,
                         expected_revision: 0,
                         name: "Root resolution fixture".into(),
                         context: wrong_draft.clone(),
@@ -442,6 +446,7 @@ mod tests {
             let updated = connection
                 .update_profile(
                     UpdateConnectionProfileRequest {
+                        operation_id: None,
                         expected_revision: created_profiles.revision,
                         id: profile.id.clone(),
                         name: profile.name.clone(),
@@ -540,6 +545,7 @@ mod tests {
             }
             let stale_confirmation = ConnectionSpecCreateConfirmation {
                 token: stale_preflight.token.clone().unwrap(),
+                operation_id: None,
                 context: draft.clone(),
                 request_generation: 21,
                 state_digest: stale_preflight.state_digest,
@@ -676,6 +682,7 @@ mod tests {
                 crate::domain::ConnectionSpecKind::Workspace,
                 ConnectionSpecCreateConfirmation {
                     token: preflight.token.unwrap(),
+                    operation_id: None,
                     context: context.clone(),
                     request_generation: generation,
                     state_digest: preflight.state_digest,
@@ -750,6 +757,7 @@ mod tests {
                     trust_path: Some(trust.to_string_lossy().into_owned()),
                     tickets_path: Some(tickets.to_string_lossy().into_owned()),
                     swarm_base_url: None,
+                    custom_submit_executable_path: String::new(),
                 },
                 workspace_root,
                 runtime_root,
@@ -942,6 +950,7 @@ mod tests {
         let created = connection
             .create_profile(
                 CreateConnectionProfileRequest {
+                    operation_id: None,
                     expected_revision: initial.revision,
                     name: "Fixture alternate".into(),
                     context: alternate.clone(),
@@ -961,6 +970,7 @@ mod tests {
         let active = connection
             .set_active_profile(
                 SetActiveConnectionProfileRequest {
+                    operation_id: None,
                     expected_revision: created.revision,
                     id: alternate_id.clone(),
                 },
@@ -986,6 +996,7 @@ mod tests {
         let with_bad = connection
             .create_profile(
                 CreateConnectionProfileRequest {
+                    operation_id: None,
                     expected_revision: current.revision,
                     name: "Unavailable".into(),
                     context: unavailable,
@@ -1004,6 +1015,7 @@ mod tests {
         let failed = connection
             .set_active_profile(
                 SetActiveConnectionProfileRequest {
+                    operation_id: None,
                     expected_revision: with_bad.revision,
                     id: bad_id.clone(),
                 },
@@ -1024,6 +1036,7 @@ mod tests {
         connection
             .set_active_profile(
                 SetActiveConnectionProfileRequest {
+                    operation_id: None,
                     expected_revision: before_return.revision,
                     id: original_id.clone(),
                 },
@@ -1034,12 +1047,14 @@ mod tests {
         let revision = connection.profiles().revision;
         let cleaned = connection
             .delete_profile(DeleteConnectionProfileRequest {
+                operation_id: None,
                 expected_revision: revision,
                 id: bad_id,
             })
             .map_err(|error| error.to_string())?;
         let cleaned = connection
             .delete_profile(DeleteConnectionProfileRequest {
+                operation_id: None,
                 expected_revision: cleaned.revision,
                 id: alternate_id,
             })
@@ -2762,6 +2777,7 @@ mod tests {
         )?;
         let logged_out = connection
             .logout(AuthenticationRequest {
+                operation_id: None,
                 context: context.clone(),
                 confirmed: true,
             })
@@ -2780,6 +2796,7 @@ mod tests {
         )?;
         let logged_in = connection
             .login(LoginRequest {
+                operation_id: None,
                 context: context.clone(),
                 password: "p4deck-local-only".into(),
                 confirmed: true,
@@ -3236,6 +3253,7 @@ mod tests {
             let detail = service
                 .detail(
                     BranchMappingDetailQuery {
+                        expected_generation: None,
                         operation_id: "branch-e2e-detail".into(),
                         request_generation: 82,
                         name: MAP.into(),
@@ -5144,6 +5162,8 @@ mod tests {
         let ordinary = changelists
             .submitted_detail(
                 crate::domain::SubmittedChangeDetailRequest {
+                    expected_generation: None,
+                    refresh: false,
                     change_id: ordinary_id,
                     operation_id: "be008-ordinary-detail".into(),
                 },
@@ -5187,6 +5207,8 @@ mod tests {
         let integrated = changelists
             .submitted_detail(
                 crate::domain::SubmittedChangeDetailRequest {
+                    expected_generation: None,
+                    refresh: false,
                     change_id: branch_id,
                     operation_id: "be008-integrated-detail".into(),
                 },
@@ -5577,6 +5599,7 @@ mod tests {
         let depot_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope("//depot/p4deck-submit-e2e/success.txt"),
                     left: crate::domain::RevisionReference::Revision { revision: 1 },
                     right: crate::domain::RevisionReference::Head,
@@ -5622,6 +5645,7 @@ mod tests {
             let diff = files
                 .diff(
                     crate::domain::DiffRequest {
+                        right_file_identity: None,
                         scope: review_scope(special_depot),
                         left: crate::domain::RevisionReference::Have,
                         right: crate::domain::RevisionReference::Workspace,
@@ -5661,6 +5685,7 @@ mod tests {
         let workspace_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope(special_depot),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Workspace,
@@ -5677,6 +5702,7 @@ mod tests {
         let have_head = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope(special_depot),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Head,
@@ -5702,6 +5728,7 @@ mod tests {
         let empty_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope("//depot/p4deck-submit-e2e/review/empty.txt"),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Workspace,
@@ -5718,6 +5745,7 @@ mod tests {
         let binary_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope("//depot/p4deck-submit-e2e/review/binary.bin"),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Head,
@@ -5734,6 +5762,7 @@ mod tests {
         let large_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope("//depot/p4deck-submit-e2e/review/large.txt"),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Workspace,
@@ -5752,6 +5781,7 @@ mod tests {
         let missing_diff = files
             .diff(
                 crate::domain::DiffRequest {
+                    right_file_identity: None,
                     scope: review_scope(special_depot),
                     left: crate::domain::RevisionReference::Have,
                     right: crate::domain::RevisionReference::Workspace,

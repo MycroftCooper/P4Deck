@@ -12,7 +12,6 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use std::{
     collections::HashMap,
-    path::PathBuf,
     process::Stdio,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -56,6 +55,7 @@ struct ServerLimits {
 pub struct MutationGuard {
     server: String,
     _permit: OwnedSemaphorePermit,
+    lease: Option<crate::persistence::operation_journal::admission::WriteLease>,
 }
 
 /// Keeps a logical multi-command operation cancellable between child P4
@@ -101,7 +101,22 @@ impl ServerLimits {
     }
 }
 
+struct StreamLifetime(Arc<AtomicUsize>);
+impl StreamLifetime {
+    fn new(count: Arc<AtomicUsize>) -> Self {
+        count.fetch_add(1, Ordering::SeqCst);
+        Self(count)
+    }
+}
+impl Drop for StreamLifetime {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 pub struct P4Runner {
+    status_observer: Mutex<Option<Arc<super::server_status::Observer>>>,
+    stream_tasks: Arc<AtomicUsize>,
     operations: Mutex<HashMap<String, CancellationToken>>,
     operation_groups: Mutex<HashMap<String, usize>>,
     operation_group_sequence: AtomicUsize,
@@ -113,26 +128,124 @@ pub struct P4Runner {
 }
 
 impl P4Runner {
+    pub(crate) async fn manual_server_check(
+        &self,
+        expected: super::server_status::Scope,
+        request_id: String,
+    ) -> super::server_status::ManualReceipt {
+        use super::server_status::ManualReceipt;
+        let Some(observer) = self.status_observer.lock().clone() else {
+            return ManualReceipt {
+                status: "unavailable",
+                snapshot: None,
+            };
+        };
+        let Some(context) = observer.manual_context(&expected) else {
+            return ManualReceipt {
+                status: "contextChanged",
+                snapshot: Some(observer.snapshot()),
+            };
+        };
+        let _guard = match observer.manual.reserve(&request_id) {
+            Ok(guard) => guard,
+            Err(status) => {
+                return ManualReceipt {
+                    status,
+                    snapshot: Some(observer.snapshot()),
+                }
+            }
+        };
+        let id = Uuid::new_v4().to_string();
+        let result = self
+            .run_inner(
+                P4CommandRequest {
+                    operation_id: Some(id.clone()),
+                    source: OperationSource::Gui,
+                    command: "info".into(),
+                    args: vec!["-s".into()],
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(10_000),
+                    input: None,
+                },
+                None,
+                None,
+                None,
+                false,
+                Some(expected.clone()),
+            )
+            .await;
+        if result.is_err() {
+            if let Some(token) = self.operations.lock().remove(&id) {
+                token.cancel();
+            }
+            let _ = self.logs.push(LogEntry {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now().to_rfc3339(),
+                level: LogLevel::Error,
+                operation_id: id,
+                source: OperationSource::Gui,
+                server: context.server,
+                workspace: context.client,
+                command: "info -s (manual status check)".into(),
+                message: "Manual connection check did not complete; no automatic retry.".into(),
+                duration_ms: None,
+                repeat_count: 1,
+            });
+        }
+        let snapshot = observer.snapshot();
+        let status = if snapshot.scope != expected {
+            "contextChanged"
+        } else if result.as_ref().is_ok_and(|r| r.exit_code == 0) {
+            "completed"
+        } else {
+            "failed"
+        };
+        ManualReceipt {
+            status,
+            snapshot: Some(snapshot),
+        }
+    }
+    pub(crate) fn attach_status(&self, observer: Arc<super::server_status::Observer>) {
+        *self.status_observer.lock() = Some(observer);
+    }
+    pub(crate) fn server_status(&self) -> Option<super::server_status::Snapshot> {
+        self.status_observer.lock().as_ref().map(|o| o.snapshot())
+    }
+    #[cfg(any(test, feature = "backend-perf"))]
     pub fn new(logs: Arc<LogStore>, journal: Arc<OperationJournal>) -> Self {
-        Self {
+        Self::try_new(logs, journal).expect("failed to create the P4 child process lifetime job")
+    }
+
+    pub(crate) fn try_new(
+        logs: Arc<LogStore>,
+        journal: Arc<OperationJournal>,
+    ) -> std::io::Result<Self> {
+        Ok(Self {
+            status_observer: Mutex::new(None),
+            stream_tasks: Arc::new(AtomicUsize::new(0)),
             operations: Mutex::new(HashMap::new()),
             operation_groups: Mutex::new(HashMap::new()),
             operation_group_sequence: AtomicUsize::new(0),
             pending_cancellations: Mutex::new(HashMap::new()),
             server_limits: Mutex::new(HashMap::new()),
-            child_job: super::process::ChildProcessJob::new()
-                .expect("failed to create the P4 child process lifetime job"),
+            child_job: super::process::ChildProcessJob::new()?,
             logs,
             journal,
-        }
+        })
     }
 
-    pub fn cancel(&self, id: &str) {
+    /// Requests cancellation for the exact operation id and its children.
+    /// Returns how many live cancellation registrations matched; a zero result
+    /// is not proof that no work previously ran.
+    pub fn cancel(&self, id: &str) -> usize {
         let operations = self.operations.lock();
         let prefix = format!("{id}:");
+        let mut matched = 0usize;
         for (operation_id, token) in operations.iter() {
             if operation_id == id || operation_id.starts_with(&prefix) {
                 token.cancel();
+                matched += 1;
             }
         }
         drop(operations);
@@ -148,6 +261,13 @@ impl P4Runner {
             }
         }
         pending.insert(id.to_owned(), Instant::now());
+        matched
+    }
+
+    /// 供关闭路径接入读取"是否仍有在途命令"；当前尚无调用点。
+    #[allow(dead_code)]
+    pub(crate) fn close_busy(&self) -> bool {
+        !self.operations.lock().is_empty() || self.stream_tasks.load(Ordering::SeqCst) > 0
     }
 
     pub fn cancel_all(&self) -> usize {
@@ -254,7 +374,7 @@ impl P4Runner {
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         request.operation_id = Some(id.clone());
         let result = self
-            .run_inner(request, app, progress_total, argument_input, false)
+            .run_inner(request, app, progress_total, argument_input, false, None)
             .await;
         if result.is_err() {
             if let Some(token) = self.operations.lock().remove(&id) {
@@ -277,6 +397,7 @@ impl P4Runner {
         MutationGuard {
             server: server.to_owned(),
             _permit: permit,
+            lease: None,
         }
     }
 
@@ -310,7 +431,7 @@ impl P4Runner {
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         request.operation_id = Some(id.clone());
         let result = self
-            .run_inner(request, app, progress_total, argument_input, true)
+            .run_inner(request, app, progress_total, argument_input, true, None)
             .await;
         if result.is_err() {
             if let Some(token) = self.operations.lock().remove(&id) {
@@ -328,8 +449,12 @@ impl P4Runner {
         progress_total: Option<usize>,
         argument_input: Option<Vec<String>>,
         mutation_already_locked: bool,
+        manual_scope: Option<super::server_status::Scope>,
     ) -> Result<OperationResult, RunnerError> {
         validate(&request, argument_input.as_deref())?;
+        let observer = self.status_observer.lock().clone();
+        let observation_scope = observer.as_ref().and_then(|o| o.capture(&request.context));
+        let quality_bucket = super::server_status::bucket(&request, argument_input.is_some());
         let input_for_redaction = argument_input
             .as_ref()
             .map(|values| values.join("\n"))
@@ -343,13 +468,9 @@ impl P4Runner {
             .operation_id
             .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let executable = request
-            .context
-            .executable
-            .as_ref()
-            .map(PathBuf::from)
-            .or_else(discover_p4)
-            .ok_or(RunnerError::NotFound)?;
+        let executable =
+            super::connection::resolve_executable(request.context.executable.as_deref())
+                .ok_or(RunnerError::NotFound)?;
         let read_only = is_read_only_request(&request);
         let category = if read_only {
             OperationCategory::Query
@@ -459,7 +580,24 @@ impl P4Runner {
             .stdin(Stdio::piped())
             .kill_on_drop(true);
         apply_credential_environment(&mut command, &request.context);
-        let mut child = match command.spawn() {
+        let execution_started = Instant::now(); // Excludes all local semaphore queue time.
+        let spawn_result = if let Some(expected) = manual_scope.as_ref() {
+            observer
+                .as_ref()
+                .and_then(|o| o.launch_manual(expected, &request.context, || command.spawn()))
+        } else {
+            Some(command.spawn())
+        };
+        let Some(spawn_result) = spawn_result else {
+            self.operations.lock().remove(&operation_id);
+            let _ = self.journal.finish(
+                &operation_id,
+                JournalState::Cancelled,
+                Some(OperationFailureKind::Cancelled),
+            );
+            return Err(RunnerError::Cancelled);
+        };
+        let mut child = match spawn_result {
             Ok(child) => child,
             Err(error) => {
                 self.operations.lock().remove(&operation_id);
@@ -499,7 +637,9 @@ impl P4Runner {
         let stdout_app = app.cloned();
         let stdout_budget = output_budget.clone();
         let stdout_redactor = redactor.clone();
+        let stdout_lifetime = StreamLifetime::new(self.stream_tasks.clone());
         let stdout_task = tokio::spawn(async move {
+            let _lifetime = stdout_lifetime;
             read_stream(
                 stdout,
                 stdout_id,
@@ -514,7 +654,9 @@ impl P4Runner {
         let stderr_id = operation_id.clone();
         let stderr_app = app.cloned();
         let stderr_redactor = redactor.clone();
+        let stderr_lifetime = StreamLifetime::new(self.stream_tasks.clone());
         let stderr_task = tokio::spawn(async move {
+            let _lifetime = stderr_lifetime;
             read_stream(
                 stderr,
                 stderr_id,
@@ -547,10 +689,22 @@ impl P4Runner {
                         JournalState::Failed,
                         Some(failure),
                     );
+                    if let (Some(observer), Some(scope)) = (&observer, &observation_scope) {
+                        observer.record(super::server_status::Observation {
+                            scope,
+                            request: &request.context,
+                            elapsed: execution_started.elapsed().as_millis() as u64,
+                            bucket: quality_bucket,
+                            outcome: super::server_status::Outcome::Timeout,
+                            access_success: false,
+                            manual: manual_scope.is_some(),
+                        });
+                    }
                     return Err(RunnerError::Timeout);
                 }
             }
         };
+        let execution_ms = execution_started.elapsed().as_millis() as u64;
         let stdout_events = stdout_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
         let stderr_events = stderr_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
         let stdout_text = event_text(&stdout_events);
@@ -558,6 +712,28 @@ impl P4Runner {
         events.extend(stdout_events);
         events.extend(stderr_events);
         let exit_code = status.code().unwrap_or(-1);
+        if !was_cancelled
+            && super::server_status::remote(&request.command)
+            && !request
+                .args
+                .iter()
+                .any(|a| matches!(a.as_str(), "-h" | "--help" | "--version"))
+        {
+            if let (Some(observer), Some(scope)) = (&observer, &observation_scope) {
+                let bounded = stdout_text.len().saturating_add(stderr_text.len()) <= 65_536;
+                // Classify only errors, never arbitrary successful file content as diagnostics.
+                let result = super::server_status::classify(exit_code, &stdout_text, &stderr_text);
+                observer.record(super::server_status::Observation {
+                    scope,
+                    request: &request.context,
+                    elapsed: execution_ms,
+                    bucket: if bounded { quality_bucket } else { None },
+                    outcome: result,
+                    access_success: matches!(result, super::server_status::Outcome::Success),
+                    manual: manual_scope.is_some(),
+                });
+            }
+        }
         let completed = event_with_progress(
             &operation_id,
             EventKind::Completed,
@@ -568,13 +744,7 @@ impl P4Runner {
         events.push(completed);
         let duration_ms = started_at.elapsed().as_millis() as u64;
         self.operations.lock().remove(&operation_id);
-        let level = if exit_code != 0 {
-            LogLevel::Error
-        } else if !stderr_text.is_empty() {
-            LogLevel::Warning
-        } else {
-            LogLevel::Info
-        };
+        let level = log_level(was_cancelled, exit_code, &stderr_text);
         let message = if !stderr_text.is_empty() {
             &stderr_text
         } else {
@@ -593,7 +763,7 @@ impl P4Runner {
             duration_ms: Some(duration_ms),
             repeat_count: 1,
         });
-        if matches!(level, LogLevel::Warning | LogLevel::Error) {
+        if emits_diagnostic_alert(&level) {
             if let Some(app) = app {
                 let _ = app.emit(
                     "diagnostic-alert",
@@ -630,6 +800,36 @@ impl P4Runner {
             .or_insert_with(|| Arc::new(ServerLimits::new()))
             .clone()
     }
+
+    pub async fn lock_write_transaction(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+    ) -> Result<MutationGuard, String> {
+        let mut guard = self
+            .lock_mutations_cancellable(&context.server, operation_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        guard.lease = Some(self.journal.begin_write(context.into(), operation_id)?);
+        Ok(guard)
+    }
+}
+
+#[cfg(test)]
+mod close_lifetime_tests {
+    use super::*;
+    #[test]
+    fn ui07_output_tasks_remain_counted_after_parent_command_scope_ends() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let pending_reader = {
+            let reader = StreamLifetime::new(count.clone());
+            assert_eq!(count.load(Ordering::SeqCst), 1);
+            reader
+        };
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        drop(pending_reader);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
 }
 
 fn journal_failure(stderr: &str) -> OperationFailureKind {
@@ -652,6 +852,26 @@ fn timeout_failure(read_only: bool) -> OperationFailureKind {
     } else {
         OperationFailureKind::Unknown
     }
+}
+
+/// Classifies a finished P4 command for the log. Cancellation outranks the exit code: a
+/// cancelled command usually exits non-zero, but that is a user action, not a failure.
+fn log_level(was_cancelled: bool, exit_code: i32, stderr_text: &str) -> LogLevel {
+    if was_cancelled {
+        LogLevel::Cancelled
+    } else if exit_code != 0 {
+        LogLevel::Error
+    } else if !stderr_text.is_empty() {
+        LogLevel::Warning
+    } else {
+        LogLevel::Info
+    }
+}
+
+/// Diagnostics alerts are reserved for real problems; a cancelled command must not raise
+/// an alert or count as an error in the log.
+fn emits_diagnostic_alert(level: &LogLevel) -> bool {
+    matches!(level, LogLevel::Warning | LogLevel::Error)
 }
 
 fn apply_credential_environment(command: &mut Command, context: &P4Context) {
@@ -848,6 +1068,7 @@ fn is_read_only(command: &str) -> bool {
             | "have"
             | "help"
             | "info"
+            | "integrated"
             | "jobs"
             | "opened"
             | "print"
@@ -916,12 +1137,6 @@ fn emit(app: Option<&AppHandle>, event: &OperationEvent) {
     if let Some(app) = app {
         let _ = app.emit("operation-event", event);
     }
-}
-fn discover_p4() -> Option<PathBuf> {
-    let name = if cfg!(windows) { "p4.exe" } else { "p4" };
-    std::env::split_paths(&std::env::var_os("PATH")?)
-        .map(|dir| dir.join(name))
-        .find(|path| path.is_file())
 }
 #[cfg(test)]
 mod tests {
@@ -1204,6 +1419,7 @@ mod tests {
     #[test]
     fn unknown_commands_are_treated_as_mutations() {
         assert!(is_read_only("fstat"));
+        assert!(is_read_only("integrated"));
         assert!(!is_read_only("sync"));
         assert!(!is_read_only("some-future-command"));
     }
@@ -1325,5 +1541,65 @@ mod tests {
         drop(pre_cancelled);
         drop(runner);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn cancelled_commands_are_logged_as_cancelled_not_errors() {
+        // A cancelled command exits non-zero; the cancellation still outranks the exit code.
+        assert_eq!(log_level(true, 1, ""), LogLevel::Cancelled);
+        // Cancellation also outranks a zero exit and any stderr output.
+        assert_eq!(log_level(true, 0, ""), LogLevel::Cancelled);
+        assert_eq!(log_level(true, 1, "p4: canceled"), LogLevel::Cancelled);
+        assert_eq!(log_level(true, 0, "some warning"), LogLevel::Cancelled);
+    }
+
+    #[test]
+    fn ordinary_failures_and_warnings_keep_their_levels() {
+        assert_eq!(log_level(false, 1, ""), LogLevel::Error);
+        assert_eq!(log_level(false, 1, "boom"), LogLevel::Error);
+        assert_eq!(log_level(false, 0, "warning text"), LogLevel::Warning);
+        assert_eq!(log_level(false, 0, ""), LogLevel::Info);
+    }
+
+    #[test]
+    fn cancelled_operations_do_not_raise_diagnostic_alerts() {
+        assert!(!emits_diagnostic_alert(&LogLevel::Cancelled));
+        assert!(!emits_diagnostic_alert(&LogLevel::Info));
+        assert!(emits_diagnostic_alert(&LogLevel::Warning));
+        assert!(emits_diagnostic_alert(&LogLevel::Error));
+    }
+}
+
+impl MutationGuard {
+    pub fn finish(&self, verified: bool) -> Result<(), String> {
+        match &self.lease {
+            Some(lease) => lease.finish(verified),
+            None => Ok(()),
+        }
+    }
+}
+
+impl P4Runner {
+    pub async fn lock_mutations_cancellable(
+        &self,
+        server: &str,
+        operation_id: &str,
+    ) -> Result<MutationGuard, RunnerError> {
+        let token = self.token_for_operation(operation_id);
+        let permit = acquire(
+            self.limits_for(server).mutations.clone(),
+            &token,
+            operation_id,
+            None,
+        )
+        .await?;
+        if token.is_cancelled() {
+            return Err(RunnerError::Cancelled);
+        }
+        Ok(MutationGuard {
+            server: server.to_owned(),
+            _permit: permit,
+            lease: None,
+        })
     }
 }

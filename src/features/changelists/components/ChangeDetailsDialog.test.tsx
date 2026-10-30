@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act } from "react";
 import { SubmittedGoTo } from "./SubmittedGoTo";
 import { afterEach, expect, it, vi } from "vitest";
@@ -7,7 +7,7 @@ import { backend } from "../../../infrastructure/backend";
 import type {
   RuntimeInfo,
   SubmittedChangeDetail,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import {
   ChangeDetailsContext,
   useChangeDetailsDialog,
@@ -231,4 +231,94 @@ it("Go To sends exact numbers, reports not found and ignores a slower previous n
   expect(document.querySelector("dialog")?.textContent).not.toContain(
     "DESCRIPTION-17",
   );
+});
+
+it("renders CL files through the shared ResizableTable with draggable, aligned columns", async () => {
+  localStorage.clear();
+  vi.spyOn(backend, "getSubmittedChangeDetail").mockResolvedValue({
+    ...detail(17),
+    files: [
+      {
+        depotPath: "//depot/a.txt",
+        action: "edit",
+        revision: 3,
+        fileType: "text",
+      },
+      { depotPath: "//depot/b.bin", action: "move/add", revision: 4 },
+    ],
+  });
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  await harness.render(<Host />);
+  await act(async () => open({ kind: "submitted", changeId: 17 }));
+  const table = document.querySelector<HTMLTableElement>(
+    'table[data-table-id="change-details-files"]',
+  )!;
+  expect(table).toBeTruthy();
+  expect(
+    [...table.querySelectorAll("thead th")].map((cell) => cell.textContent),
+  ).toEqual(["文件名称", "路径", "类型", "动作", "版本"]);
+  // Shared ColumnResizer handles are injected into every header cell.
+  const resizers = [
+    ...table.querySelectorAll<HTMLElement>(
+      'thead [role="separator"].history-column-resizer',
+    ),
+  ];
+  expect(resizers).toHaveLength(5);
+  expect(resizers[0].getAttribute("aria-label")).toContain("Resize 文件名称");
+  expect(resizers[0].getAttribute("aria-valuenow")).toBe("220");
+  expect(resizers[1].getAttribute("aria-label")).toContain("Resize 路径");
+  // Colgroup carries the resizable widths (table-layout: fixed).
+  expect(table.style.tableLayout).toBe("fixed");
+  const cols = [...table.querySelectorAll<HTMLTableColElement>("colgroup col")];
+  expect(cols).toHaveLength(5);
+  expect(cols[0].getAttribute("style")).toContain("220px");
+  expect(cols[1].getAttribute("style")).toContain("300px");
+  // Live resize: keyboard arrow widens the file-name column and rewrites colgroup.
+  await act(async () =>
+    resizers[0].dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  expect(
+    document
+      .querySelector<HTMLTableElement>(
+        'table[data-table-id="change-details-files"]',
+      )!
+      .querySelector<HTMLTableColElement>("colgroup col")!
+      .getAttribute("style"),
+  ).toContain("230px");
+  // Double-click resets back to the shared defaults.
+  await act(async () =>
+    resizers[0].dispatchEvent(new MouseEvent("dblclick", { bubbles: true })),
+  );
+  expect(
+    document
+      .querySelector<HTMLTableElement>(
+        'table[data-table-id="change-details-files"]',
+      )!
+      .querySelector<HTMLTableColElement>("colgroup col")!
+      .getAttribute("style"),
+  ).toContain("220px");
+  // A dedicated file-name column shows the basename (with status icon/title),
+  // while the path column carries only the directory and never repeats the name.
+  const rows = [...table.querySelectorAll<HTMLTableRowElement>("tbody tr")];
+  expect(rows).toHaveLength(2);
+  expect(rows[0].querySelector(".file-status-icon")).toBeTruthy();
+  expect(
+    rows[0].querySelector<HTMLElement>('[title="a.txt · text"]')?.textContent,
+  ).toBe("a.txt");
+  const cells = [...rows[0].querySelectorAll("td")].map(
+    (cell) => cell.textContent,
+  );
+  expect(cells[0]).toBe("a.txt");
+  expect(cells[1]).toBe("//depot/");
+  expect(cells[1]).not.toContain("a.txt");
+  expect(cells[2]).toContain("text");
+  expect(cells[3]).toContain("edit");
+  expect(cells[4]).toContain("#3");
+  expect(rows[0].querySelectorAll("td")[1].getAttribute("title")).toBe(
+    "//depot/a.txt",
+  );
+  expect(rows[1].querySelectorAll("td")[0].textContent).toBe("b.bin");
+  expect(rows[1].querySelectorAll("td")[4].textContent).toBe("#4");
 });

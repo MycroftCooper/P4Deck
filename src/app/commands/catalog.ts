@@ -1,5 +1,6 @@
 import type { PageId } from "../panels";
 import type { CommandId } from "../shell/commandPolicy";
+import { getShortcutOverrides, type ShortcutOverrides } from "./keymap";
 
 export type AppCommandId =
   | "app.commandPalette"
@@ -10,11 +11,14 @@ export type AppCommandId =
   | "changelist.submit"
   | "changelist.shelf"
   | "changelist.moveFiles"
+  | "view.files"
   | "view.pending"
   | "view.submitted"
   | "view.search"
   | "view.workspaces"
   | "view.streams"
+  | "view.streamgraph"
+  | "view.branchMappings"
   | "view.diagnostics"
   | "file.diff"
   | "file.history"
@@ -38,7 +42,8 @@ export type AppCommandId =
   | "tools.popoutP4Log"
   | "view.settings"
   | "refresh.toggleAuto"
-  | "panel.dockBack";
+  | "panel.dockBack"
+  | "navigation.focusAddress";
 
 export type AppCommandGroup =
   "app" | "connection" | "changes" | "navigation" | "file" | "tools";
@@ -50,7 +55,10 @@ export interface AppCommandDefinition {
   group: AppCommandGroup;
   zh: string;
   en: string;
+  /** Primary, user-editable key binding. */
   shortcut?: string;
+  /** Default P4V-compatible alternate keys; dispatched but not user-editable. */
+  aliases?: readonly string[];
   allowInEditable?: boolean;
   risk: AppCommandRisk;
   confirmation: AppCommandConfirmation;
@@ -97,6 +105,7 @@ export const appCommands: readonly AppCommandDefinition[] = [
     "Refresh Current Data",
     {
       shortcut: "Mod+R",
+      aliases: ["F5"],
       requires: "runtime",
     },
   ),
@@ -148,11 +157,18 @@ export const appCommands: readonly AppCommandDefinition[] = [
       execution: { kind: "shell", command: "moveFiles" },
     },
   ),
+  command("view.files", "navigation", "打开 Depot 文件", "Open Depot Files", {
+    shortcut: "Mod+9",
+    requires: "mainWindow",
+    execution: { kind: "page", page: "files" },
+  }),
   command("view.pending", "navigation", "打开待提交", "Open Pending", {
+    shortcut: "Mod+1",
     requires: "mainWindow",
     execution: { kind: "page", page: "pending" },
   }),
   command("view.submitted", "navigation", "打开已提交", "Open Submitted", {
+    shortcut: "Mod+2",
     requires: "mainWindow",
     execution: { kind: "page", page: "submitted" },
   }),
@@ -162,25 +178,54 @@ export const appCommands: readonly AppCommandDefinition[] = [
     execution: { kind: "page", page: "search" },
   }),
   command("view.workspaces", "navigation", "打开 Workspace", "Open Workspace", {
+    shortcut: "Mod+5",
     requires: "mainWindow",
     execution: { kind: "page", page: "workspaces" },
   }),
   command("view.streams", "navigation", "打开分支流", "Open Streams", {
+    shortcut: "Mod+7",
     requires: "mainWindow",
     execution: { kind: "page", page: "streams" },
   }),
+  command(
+    "view.streamgraph",
+    "navigation",
+    "打开分支流图",
+    "Open Stream Graph",
+    {
+      shortcut: "Mod+Shift+M",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "streamgraph" },
+    },
+  ),
+  command(
+    "view.branchMappings",
+    "navigation",
+    "打开分支映射",
+    "Open Branch Mappings",
+    {
+      shortcut: "Mod+3",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "branchmappings" },
+    },
+  ),
   command("view.diagnostics", "tools", "打开诊断", "Open Diagnostics", {
+    shortcut: "Mod+I",
     execution: { kind: "tool", tool: "diagnostics" },
   }),
   command("file.diff", "file", "打开差异", "Open Diff", {
+    shortcut: "Mod+D",
+    aliases: ["Mod+Shift+D"],
     requires: "file",
     execution: { kind: "shell", command: "diff" },
   }),
   command("file.history", "file", "打开历史记录", "Open History", {
+    shortcut: "Mod+T",
     requires: "file",
     execution: { kind: "shell", command: "history" },
   }),
   command("file.revgraph", "file", "打开修订图", "Open Rev Graph", {
+    shortcut: "Mod+Shift+R",
     requires: "file",
     execution: { kind: "shell", command: "revgraph" },
   }),
@@ -208,6 +253,7 @@ export const appCommands: readonly AppCommandDefinition[] = [
     }),
   ),
   command("file.reveal", "file", "在系统中定位", "Reveal in System", {
+    shortcut: "Mod+Shift+S",
     requires: "file",
     execution: { kind: "shell", command: "reveal" },
   }),
@@ -261,6 +307,17 @@ export const appCommands: readonly AppCommandDefinition[] = [
     requires: "mainWindow",
     execution: { kind: "page", page: "settings" },
   }),
+  command(
+    "navigation.focusAddress",
+    "navigation",
+    "跳转到地址栏",
+    "Jump to Address Bar",
+    {
+      shortcut: "Alt+L",
+      aliases: ["Mod+G"],
+      requires: "mainWindow",
+    },
+  ),
   command(
     "refresh.toggleAuto",
     "app",
@@ -359,17 +416,48 @@ export function normalizedShortcut(
     .join("+");
 }
 
-export function shortcutConflicts(platform: ShortcutPlatform): string[] {
+/** Primary shortcut plus P4V-compatible default aliases, in display order. */
+export function commandShortcuts(
+  command: AppCommandDefinition,
+  overrides: ShortcutOverrides = getShortcutOverrides(),
+): readonly string[] {
+  const overridden = Object.prototype.hasOwnProperty.call(
+    overrides,
+    command.id,
+  );
+  const primary = overridden
+    ? (overrides[command.id] ?? undefined)
+    : command.shortcut;
+  // Clearing a binding removes its default aliases too; replacing the primary
+  // keeps the read-only P4V aliases (documented default compatibility keys).
+  const aliases =
+    overridden && overrides[command.id] === null ? [] : (command.aliases ?? []);
+  return primary ? [primary, ...aliases] : aliases;
+}
+
+export function shortcutConflictsFor(
+  definitions: readonly AppCommandDefinition[],
+  platform: ShortcutPlatform,
+  overrides: ShortcutOverrides = getShortcutOverrides(),
+): string[] {
   const seen = new Map<string, AppCommandId>();
   const conflicts: string[] = [];
-  for (const item of appCommands) {
-    if (!item.shortcut) continue;
-    const normalized = normalizedShortcut(item.shortcut, platform);
-    const previous = seen.get(normalized);
-    if (previous) conflicts.push(`${previous} / ${item.id}: ${normalized}`);
-    else seen.set(normalized, item.id);
+  for (const item of definitions) {
+    for (const shortcut of commandShortcuts(item, overrides)) {
+      const normalized = normalizedShortcut(shortcut, platform);
+      const previous = seen.get(normalized);
+      if (previous) conflicts.push(`${previous} / ${item.id}: ${normalized}`);
+      else seen.set(normalized, item.id);
+    }
   }
   return conflicts;
+}
+
+export function shortcutConflicts(
+  platform: ShortcutPlatform,
+  overrides: ShortcutOverrides = getShortcutOverrides(),
+): string[] {
+  return shortcutConflictsFor(appCommands, platform, overrides);
 }
 
 export function commandForShortcut(
@@ -384,6 +472,7 @@ export function commandForShortcut(
     : navigator.platform.toLowerCase().includes("linux")
       ? "linux"
       : "windows",
+  overrides: ShortcutOverrides = getShortcutOverrides(),
 ): AppCommandId | undefined {
   if (
     (platform === "mac" && event.ctrlKey) ||
@@ -399,14 +488,91 @@ export function commandForShortcut(
     .filter(Boolean)
     .sort()
     .join("+");
-  const found = appCommands.find(
-    (item) =>
-      item.shortcut &&
-      normalizedShortcut(item.shortcut, platform) === modifiers,
+  const found = appCommands.find((item) =>
+    commandShortcuts(item, overrides).some(
+      (shortcut) => normalizedShortcut(shortcut, platform) === modifiers,
+    ),
   );
   if (!found || (isEditable(event.target) && !found.allowInEditable))
     return undefined;
   return found.id;
+}
+
+const modifierOnlyKeys = new Set([
+  "Shift",
+  "Control",
+  "Alt",
+  "Meta",
+  "CapsLock",
+  "Fn",
+  "FnLock",
+  "Hyper",
+  "Super",
+  "Symbol",
+  "OS",
+]);
+
+/** Printable/function keys that may be stored in the keymap. */
+function normalizedShortcutKey(key: string): string | undefined {
+  if (/^[a-z]$/i.test(key)) return key.toUpperCase();
+  if (/^[0-9]$/.test(key)) return key;
+  if (/^F([1-9]|1[0-9]|2[0-4])$/i.test(key)) return key.toUpperCase();
+  if ([",", ".", "/", ";", "'", "[", "]", "-", "=", "`", "\\"].includes(key))
+    return key;
+  return undefined;
+}
+
+/**
+ * Canonical catalog key string for a captured keydown, or `undefined` when the
+ * combination cannot be bound. Mirrors commandForShortcut platform handling:
+ * Windows/Linux use Ctrl for Mod, macOS uses Cmd; other Ctrl/Meta combinations
+ * are rejected instead of silently producing a different binding.
+ */
+export function shortcutFromEvent(
+  event: Pick<
+    KeyboardEvent,
+    "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
+  platform: ShortcutPlatform,
+): string | undefined {
+  if (!event.key || modifierOnlyKeys.has(event.key)) return undefined;
+  if (platform === "mac" && event.ctrlKey) return undefined;
+  if (platform !== "mac" && event.metaKey) return undefined;
+  const mod = platform === "mac" ? event.metaKey : event.ctrlKey;
+  const key = normalizedShortcutKey(event.key);
+  if (!key) return undefined;
+  // Require Ctrl/Cmd, Alt or a function key so printable text cannot become a
+  // global shortcut outside inputs.
+  if (!mod && !event.altKey && !/^F\d{1,2}$/.test(key)) return undefined;
+  return [
+    ...(mod ? ["Mod"] : []),
+    ...(event.altKey ? ["Alt"] : []),
+    ...(event.shiftKey ? ["Shift"] : []),
+    key,
+  ].join("+");
+}
+
+/**
+ * Validates a canonical keymap string (as stored by shortcutFromEvent) without
+ * a platform, used when loading persisted keymaps and migration data.
+ */
+export function isValidShortcut(shortcut: string): boolean {
+  if (typeof shortcut !== "string" || !shortcut.trim()) return false;
+  const parts = shortcut.split("+");
+  if (parts.length > 4) return false;
+  const key = normalizedShortcutKey(parts[parts.length - 1]);
+  if (!key) return false;
+  const modifiers = parts.slice(0, -1);
+  if (
+    !modifiers.every((modifier) => ["Mod", "Alt", "Shift"].includes(modifier))
+  )
+    return false;
+  if (new Set(modifiers).size !== modifiers.length) return false;
+  return (
+    modifiers.includes("Mod") ||
+    modifiers.includes("Alt") ||
+    /^F\d{1,2}$/.test(key)
+  );
 }
 
 export function shortcutLabel(shortcut: string, mac = false) {

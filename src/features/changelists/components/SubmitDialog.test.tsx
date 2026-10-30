@@ -1,12 +1,27 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, type ComponentProps } from "react";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SubmitDialog, type SubmitCheck } from "./SubmitDialog";
-import type { SubmitResult } from "../../../shared/contracts/types";
+import { backend } from "../../../infrastructure/backend";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
+import type {
+  SubmitConfirmation,
+  SubmitResult,
+} from "../../../shared/contracts";
 
 const root = dialogHarness();
 const dismiss = vi.fn();
+const connectionSnapshot = {
+  profileId: "fixture",
+  generation: "1",
+  server: "server:1666",
+  user: "tester",
+  client: "workspace",
+};
+const provideConnection = async () => connectionSnapshot;
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 beforeEach(() => {
   dismiss.mockClear();
 });
@@ -69,6 +84,7 @@ async function render(
         zh
         onDismiss={dismiss}
         loadSummary={async () => result().change}
+        connection={provideConnection}
         {...overrides}
       />,
     ),
@@ -107,29 +123,44 @@ it("shows loading before a summary arrives and failure if it is missing", async 
   expect(button("确认提交整个 CL").disabled).toBe(true);
 });
 it("requires explicit whole-CL acknowledgement and passes the exact checked target to an adapter", async () => {
-  const submit = vi.fn(async () => ({
-    outcome: "submitted" as const,
-    changeId: 10,
-    submittedChangeId: 10,
-    message: "Submitted CL 10",
-    refresh: {
-      pendingChanges: true,
-      submittedChanges: true,
-      workspaceStatus: true,
-      depotPaths: ["//depot/a"],
-      reason: "refresh",
-    },
-  }));
+  const submit = vi.fn(
+    async (
+      _confirmation: SubmitConfirmation,
+      _connection: ConnectionSnapshot,
+    ) => ({
+      outcome: "submitted" as const,
+      changeId: 10,
+      submittedChangeId: 10,
+      message: "Submitted CL 10",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: ["//depot/a"],
+        reason: "refresh",
+      },
+    }),
+  );
   await render({ check: async () => result(), submit });
   await click("重新预检");
   expect(document.body.textContent).toContain("Review warning");
   expect(button("确认提交整个 CL").disabled).toBe(true);
   await acknowledge();
   await click("确认提交整个 CL");
-  expect(submit).toHaveBeenCalledExactlyOnceWith({
+  const confirmation = submit.mock.calls[0][0] as {
+    token: string;
+    target: ReturnType<typeof result>["target"];
+    operationId: string;
+  };
+  expect(confirmation).toMatchObject({
     token: "snapshot-token",
     target: result().target,
   });
+  expect(confirmation.operationId).toMatch(uuidPattern);
+  expect(submit).toHaveBeenCalledOnce();
+  expect(submit.mock.calls[0][1]).toEqual(connectionSnapshot);
+  expect(document.body.textContent).toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain("CL 10");
   expect(document.body.textContent).toContain("Submitted CL 10");
   expect(button("确认提交整个 CL").disabled).toBe(true);
 });
@@ -269,9 +300,11 @@ it("shows structured target mismatch and uncertain execution outcomes without su
   await click("重新预检");
   await acknowledge();
   await click("确认提交整个 CL");
-  expect(document.body.textContent).toContain("unknown · uncertainOutcome");
+  expect(document.body.textContent).toContain("Server outcome is unknown");
+  expect(document.body.textContent).toContain("结果不确定");
   expect(document.body.textContent).toContain("submit-op");
   expect(document.body.textContent).toContain("submit-log");
+  expect(document.body.textContent).not.toContain("提交结果（权威）");
   expect(button("确认提交整个 CL").disabled).toBe(true);
 });
 it("prevents duplicate submit execution while confirmation is in flight", async () => {
@@ -324,4 +357,203 @@ it("locks duplicate checks and lets the user close after a connection change", a
   await act(async () => finish(result()));
   expect(document.body.textContent).toContain("连接已改变");
   expect(button("确认提交整个 CL").disabled).toBe(true);
+});
+
+it("shows the authoritative submitted change id from the envelope, not a fake success", async () => {
+  const submit = vi.fn(async (confirmation: SubmitConfirmation) => ({
+    execution: {
+      kind: "submit" as const,
+      operationId: confirmation.operationId!,
+      state: "commandCompleted" as const,
+      outcome: "submitted" as const,
+      files: [],
+    },
+    outcome: "submitted" as const,
+    changeId: 10,
+    submittedChangeId: 42,
+    message: "Changelist 10 was submitted as changelist 42.",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  }));
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(document.body.textContent).toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain("CL 42");
+  expect(document.body.textContent).toContain("changelist 42");
+});
+
+it("never presents a commandCompleted envelope without an authoritative submitted change id", async () => {
+  const submit = vi.fn(async (confirmation: SubmitConfirmation) => ({
+    execution: {
+      kind: "submit" as const,
+      operationId: confirmation.operationId!,
+      state: "commandCompleted" as const,
+      outcome: "submitted" as const,
+      files: [],
+    },
+    outcome: "submitted" as const,
+    changeId: 10,
+    message: "Command finished without a provable new changelist.",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  }));
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(document.body.textContent).toContain("结果不确定");
+  expect(document.body.textContent).not.toContain("提交结果（权威）");
+});
+
+it("keeps intent/progress only while the submit is in flight and blocks duplicates", async () => {
+  let finish!: (value: SubmitResult) => void;
+  const submit = vi.fn(
+    () =>
+      new Promise<SubmitResult>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  const confirm = button("确认提交整个 CL");
+  await act(async () => {
+    confirm.click();
+    confirm.click();
+  });
+  expect(submit).toHaveBeenCalledOnce();
+  expect(document.body.textContent).toContain("正在提交");
+  expect(document.body.textContent).not.toContain("提交结果（权威）");
+  expect(confirm.disabled).toBe(true);
+  await act(async () =>
+    finish({
+      outcome: "unknown",
+      changeId: 10,
+      failure: "uncertainOutcome",
+      message: "lost",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: [],
+        reason: "refresh",
+      },
+    }),
+  );
+});
+
+it("refuses to dispatch when the dispatching connection does not match the reviewed target", async () => {
+  const submit = vi.fn(async () => {
+    throw new Error("must not run");
+  });
+  await render({
+    check: async () => result(),
+    submit,
+    connection: async () => ({ ...connectionSnapshot, server: "other:1666" }),
+  });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(submit).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("未执行提交");
+});
+
+it("cancels with the same operationId and never redispatches", async () => {
+  const cancelOperation = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  let finish!: (value: SubmitResult) => void;
+  const submit = vi.fn(
+    (_confirmation: SubmitConfirmation) =>
+      new Promise<SubmitResult>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render({ check: async () => result(), submit });
+  await click("重新预检");
+  await acknowledge();
+  const confirm = button("确认提交整个 CL");
+  await act(async () => {
+    confirm.click();
+    await Promise.resolve();
+  });
+  const operationId = (submit.mock.calls[0][0] as { operationId: string })
+    .operationId;
+  expect(operationId).toMatch(uuidPattern);
+  await click("取消操作");
+  expect(cancelOperation).toHaveBeenCalledExactlyOnceWith(operationId);
+  await act(async () =>
+    finish({
+      outcome: "unknown",
+      changeId: 10,
+      failure: "uncertainOutcome",
+      message: "cancelled or unknown",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: [],
+        reason: "refresh",
+      },
+    }),
+  );
+  expect(submit).toHaveBeenCalledOnce();
+  expect(document.body.textContent).toContain("结果不确定");
+  cancelOperation.mockRestore();
+});
+
+it("shows a legacy submitted result as legacy authority and a pre-dispatch rejection as failure", async () => {
+  const submitted = vi.fn(async () => ({
+    outcome: "submitted" as const,
+    changeId: 10,
+    submittedChangeId: 10,
+    message: "Submitted CL 10",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: true,
+      workspaceStatus: true,
+      depotPaths: ["//depot/a"],
+      reason: "refresh",
+    },
+  }));
+  await render({ check: async () => result(), submit: submitted });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(document.body.textContent).toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain("旧版结果");
+});
+
+it("shows a pre-dispatch rejection as a failure without claiming submission", async () => {
+  const rejected = vi.fn(async () => ({
+    outcome: "rejected" as const,
+    changeId: 10,
+    failure: "tokenExpired" as const,
+    message: "The preflight expired.",
+    refresh: {
+      pendingChanges: true,
+      submittedChanges: false,
+      workspaceStatus: true,
+      depotPaths: [],
+      reason: "Run preflight again.",
+    },
+  }));
+  await render({ check: async () => result(), submit: rejected });
+  await click("重新预检");
+  await acknowledge();
+  await click("确认提交整个 CL");
+  expect(document.body.textContent).toContain("rejected · tokenExpired");
+  expect(document.body.textContent).not.toContain("提交结果（权威）");
 });

@@ -197,9 +197,12 @@ for (const jsonFile of ["tools/dsh-p4deck-board/package.json", "package.json", "
 }
 
 // 人工验收命令：dry-run 不落盘；没有 --note 必须拒绝。
+// 不要写死某个 ID：它可能已经被人工验收过，accept 会提前返回。
+const acceptTarget =
+  stateOnDisk.packages.find((pkg) => !pkg.archived && pkg.verification?.humanAccepted !== true)?.id ?? "CL-04";
 const acceptDry = spawnSync(
   process.execPath,
-  [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force", "--note", "selftest", "--dry"],
+  [path.join(HERE, "state.mjs"), "accept", acceptTarget, "--force", "--note", "selftest", "--dry"],
   { cwd: ROOT, encoding: "utf8" },
 );
 check(
@@ -207,7 +210,7 @@ check(
   acceptDry.status === 0 && acceptDry.stdout.includes('"dryRun": true'),
   acceptDry.stderr.trim(),
 );
-const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force"], {
+const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "accept", acceptTarget, "--force"], {
   cwd: ROOT,
   encoding: "utf8",
 });

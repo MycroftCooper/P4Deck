@@ -1,3 +1,5 @@
+import { ActionAdmission } from "../../actions/ActionAdmission";
+import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { RefreshCw } from "lucide-react";
@@ -7,11 +9,12 @@ import type {
   OperationCategory,
   OperationFailureKind,
   OperationRecord,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 
 const PAGE_SIZE = 50;
 
 interface Props {
+  native?: boolean;
   zh: boolean;
   connectionKey: string;
   focusOperationId?: string;
@@ -91,6 +94,7 @@ export function operationRecoveryGuidance(
 }
 
 export function OperationJournalView({
+  native,
   zh,
   connectionKey,
   focusOperationId,
@@ -193,6 +197,11 @@ export function OperationJournalView({
 
   return (
     <div className="diagnostic-view journal-view">
+      <ActionAdmission
+        native={native ?? false}
+        zh={zh}
+        connectionKey={connectionKey}
+      />
       <div
         className="diagnostic-toolbar"
         aria-label={zh ? "操作筛选" : "Operation filters"}
@@ -289,7 +298,10 @@ export function OperationJournalView({
         className="diagnostic-scroll"
         data-testid="journal-virtual-list"
       >
-        <table
+        <ResizableTable
+          tableId="operation-journal"
+          defaults={[100, 280, 180, 90, 300, 120]}
+          minimums={[80, 160, 120, 70, 160, 90]}
           className="diagnostic-table journal-table"
           aria-rowcount={records.length + 1}
         >
@@ -376,7 +388,7 @@ export function OperationJournalView({
               </tr>
             )}
           </tbody>
-        </table>
+        </ResizableTable>
         {!records.length && !loading && !error && (
           <div className="empty-state">
             {zh ? "暂无匹配操作" : "No matching operations"}

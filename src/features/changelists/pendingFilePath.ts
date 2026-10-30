@@ -1,4 +1,4 @@
-import type { PendingFile, P4Context } from "../../shared/contracts/types";
+import type { PendingFile, P4Context } from "../../shared/contracts";
 
 /** Display mapped paths without changing the depot identity used by operations. */
 export function pendingFilePath(file: PendingFile, context: P4Context): string {

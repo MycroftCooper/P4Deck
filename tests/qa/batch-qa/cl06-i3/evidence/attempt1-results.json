@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "name": "dependency-hashes",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "tool-after-p4:light1200",
+      "pass": false
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "failure": "Error: tool-after-p4:light1200"
+}
