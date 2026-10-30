@@ -60,6 +60,21 @@ try {
   const verifyOk = run(["verify", "--manifest", manifestPath]);
   check("verify 干净通过", verifyOk.code === 0 && verifyOk.stdout.includes("PASS"), verifyOk.stdout.trim());
 
+  // PowerShell 5.1 的 Set-Content -Encoding utf8 会写 BOM；手工写 manifest/qa-approval 是文档姿势，必须能读。
+  const bomManifestPath = path.join(workDir, "manifest-bom.json");
+  await writeFile(bomManifestPath, `\uFEFF${await readFile(manifestPath, "utf8")}`, "utf8");
+  const verifyBomManifest = run(["verify", "--manifest", bomManifestPath]);
+  check("manifest 带 BOM 仍可读", verifyBomManifest.code === 0, verifyBomManifest.stdout.trim());
+
+  const qaBomPath = path.join(workDir, "qa-bom.json");
+  await writeFile(
+    qaBomPath,
+    `\uFEFF${JSON.stringify({ passed: true, manifestSha256: manifest.manifestSha256, originalApplied: false })}`,
+    "utf8",
+  );
+  const verifyBomQa = run(["verify", "--manifest", manifestPath, "--qa", qaBomPath]);
+  check("qa-approval 带 BOM 仍可读", verifyBomQa.code === 0, verifyBomQa.stdout.trim());
+
   // QA 绑定：hash 不一致必须拒绝
   const qaBadPath = path.join(workDir, "qa-bad.json");
   await writeFile(qaBadPath, JSON.stringify({ passed: true, manifestSha256: "0".repeat(64), originalApplied: false }));

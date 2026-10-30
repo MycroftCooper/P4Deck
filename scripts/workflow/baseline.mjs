@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASELINE_FILE = process.env.P4DECK_BASELINE ?? path.join(ROOT, "artifacts", "workflow", "baseline.json");
 const ROOTS = ["src", "src-tauri", "scripts", "tools", "tests", "ForAIDoc"];
-const ROOT_FILES = ["package.json", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "tsconfig.tests.json", "vite.config.ts"];
+const ROOT_FILES = ["package.json", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "vite.config.ts"];
 const SKIP_SEGMENTS = new Set([
   "node_modules",
   "target",

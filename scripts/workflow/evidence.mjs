@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const STATE_FILE = path.join(ROOT, "ForAIDoc", "PM", "工作流", "state.json");
@@ -112,7 +113,7 @@ async function readJsonFile(filePath) {
   try {
     const info = await stat(filePath);
     if (info.size > MAX_RECEIPT_BYTES) return undefined;
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse(stripBom(await readFile(filePath, "utf8")));
   } catch {
     return undefined;
   }

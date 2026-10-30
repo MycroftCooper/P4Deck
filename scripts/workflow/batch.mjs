@@ -15,6 +15,7 @@ import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "workflow");
@@ -87,7 +88,7 @@ function parseArgs(argv) {
 }
 
 async function loadJson(filePath) {
-  return JSON.parse(await readFile(filePath, "utf8"));
+  return JSON.parse(stripBom(await readFile(filePath, "utf8")));
 }
 
 async function writeReceipt(batchId, name, payload) {

@@ -12,6 +12,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { readTodos, toggleTodo, TODOS_FILE } from "./human-todos.mjs";
+const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKFLOW_DIR = path.join(ROOT, "ForAIDoc", "PM", "工作流");
@@ -34,7 +35,7 @@ const TYPE_LABELS = { bug: "Bug", feature: "需求", refactor: "重构" };
 
 async function readJson(filePath, fallback) {
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse(stripBom(await readFile(filePath, "utf8")));
   } catch {
     return fallback;
   }

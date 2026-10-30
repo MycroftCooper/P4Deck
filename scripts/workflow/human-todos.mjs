@@ -12,13 +12,14 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TODOS_FILE = process.env.P4DECK_TODOS ?? path.join(ROOT, "ForAIDoc", "PM", "工作流", "人类待办.json");
 
 export async function readTodos(file = TODOS_FILE) {
   try {
-    return JSON.parse(await readFile(file, "utf8"));
+    return JSON.parse(stripBom(await readFile(file, "utf8")));
   } catch {
     return { schemaVersion: 1, updatedAt: new Date().toISOString(), items: [] };
   }

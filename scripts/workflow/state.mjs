@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TODO_DOC = path.join(ROOT, "ForAIDoc", "PM", "Windows本机私用TODO.md");
@@ -296,7 +297,7 @@ async function cmdImport() {
   const markdown = await readFile(TODO_DOC, "utf8");
   let previous;
   try {
-    previous = JSON.parse(await readFile(STATE_FILE, "utf8"));
+    previous = JSON.parse(stripBom(await readFile(STATE_FILE, "utf8")));
   } catch {
     previous = undefined;
   }
@@ -312,12 +313,12 @@ async function cmdImport() {
 }
 
 async function loadState() {
-  return JSON.parse(await readFile(STATE_FILE, "utf8"));
+  return JSON.parse(stripBom(await readFile(STATE_FILE, "utf8")));
 }
 
 async function readJson(filePath, fallback) {
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    return JSON.parse(stripBom(await readFile(filePath, "utf8")));
   } catch {
     return fallback;
   }
