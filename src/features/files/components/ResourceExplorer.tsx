@@ -105,6 +105,9 @@ export function ResourceExplorer({
     state: "controlled",
     kind: "directory",
   };
+  // Selecting the configured root makes toolbar actions (e.g. Get Latest) target
+  // the whole workspace; the empty-cwd guard keeps "no usable path" unreadable.
+  const [rootSelectNotice, setRootSelectNotice] = useState("");
   const refresh = () => tree.refresh();
   const blankMenu = useDirectoryMenu(
     mode === "workspace" ? undefined : "",
@@ -132,6 +135,7 @@ export function ResourceExplorer({
           : connectionPresentation(env.runtime.connection, zh).detail
         : "";
   const notice =
+    rootSelectNotice ||
     connectionNotice ||
     (!tree.root.loaded
       ? tree.root.loading
@@ -166,6 +170,34 @@ export function ResourceExplorer({
     revealDone.current = revealKey;
     onRevealConsumed?.(reveal.id);
   };
+  const rootSelected = selection.isSelected(root);
+  const selectRoot = () => {
+    if (mode === "workspace" && !root.absolutePath) {
+      setRootSelectNotice(
+        zh
+          ? "未配置工作区根目录，请先选择工作区。"
+          : "No workspace root configured. Select a workspace first.",
+      );
+      return;
+    }
+    setRootSelectNotice("");
+    cancelReveal();
+    select([root], root);
+  };
+  // The root keeps its F05 (workspace) / F10 (depot) menu, but opening it first
+  // selects the root so the following menu/toolbar command targets the workspace.
+  const rootMenu =
+    mode === "workspace"
+      ? fileMenu([root], root, {
+          object: "F05",
+          refresh,
+          onOpen: selectRoot,
+        })
+      : menu("F10", () => ({
+          "刷新 Depot 列表": action(refresh),
+          全选当前可见结果: action(() => select(items)),
+          清除选择: action(() => select([])),
+        }));
   useEffect(() => {
     if (
       !reveal ||
@@ -364,21 +396,42 @@ export function ResourceExplorer({
         />
       </label>
       <div
-        className="tree-root"
+        className={`tree-root${rootSelected ? " selected" : ""}`}
         tabIndex={0}
-        {...(mode === "workspace"
-          ? fileMenu([root], root, { object: "F05", refresh })
-          : menu("F10", () => ({
-              "刷新 Depot 列表": action(refresh),
-              全选当前可见结果: action(() => select(items)),
-              清除选择: action(() => select([])),
-            })))}
+        role="treeitem"
+        aria-level={1}
+        aria-selected={rootSelected}
+        aria-expanded={mode === "workspace" ? rootOpen[mode] : undefined}
+        {...rootMenu}
+        onClick={(event) => {
+          if ((event.target as Element).closest(".tree-toggle")) return;
+          selectRoot();
+        }}
+        onKeyDown={(event) => {
+          rootMenu.onKeyDown(event);
+          if (event.defaultPrevented) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectRoot();
+          } else if (event.key === "ArrowRight") {
+            event.preventDefault();
+            cancelReveal();
+            setRootOpen((old) => ({ ...old, [mode]: true }));
+          } else if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            cancelReveal();
+            setRootOpen((old) => ({ ...old, [mode]: false }));
+          } else if (event.key === "Escape") {
+            cancelReveal();
+          }
+        }}
       >
         <button
           className="tree-toggle"
           aria-label={`${rootOpen[mode] ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${root.name}`}
           aria-expanded={rootOpen[mode]}
-          onClick={() => {
+          onClick={(event) => {
+            event.stopPropagation();
             cancelReveal();
             setRootOpen((old) => ({ ...old, [mode]: !old[mode] }));
           }}

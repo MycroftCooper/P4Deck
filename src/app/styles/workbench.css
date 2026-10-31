@@ -147,6 +147,16 @@ button {
 .tree-root {
   display: flex;
   align-items: center;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tree-root:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.tree-root.selected {
+  background: var(--selected);
+  color: var(--accent);
 }
 .tree-list {
   min-height: 0;
