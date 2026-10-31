@@ -1,4 +1,4 @@
-* {
+﻿* {
   box-sizing: border-box;
 }
 html,
@@ -3198,7 +3198,9 @@ button {
 }
 .submitted-page .cl-table-head,
 .submitted-page .cl-row {
-  grid-template-columns: 120px 105px minmax(220px, 1fr) 130px 135px;
+  grid-template-columns:
+    110px 100px minmax(200px, 1fr) 120px 150px
+    135px;
   min-width: 0;
   gap: 10px;
 }
@@ -3260,19 +3262,17 @@ button {
 .submitted-page .cl-table-head {
   gap: 12px;
 }
-.submitted-page .submitted-author {
+.submitted-page .submitted-user,
+.submitted-page .submitted-workspace {
   color: var(--text);
   font-size: inherit;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.submitted-author small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--muted);
-  font-size: 11px;
+.submitted-page .submitted-workspace .submitted-description-tag {
+  max-width: none;
 }
 .submitted-description-tag {
   display: inline-block;

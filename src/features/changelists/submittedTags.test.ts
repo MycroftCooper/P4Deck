@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+﻿import { expect, it } from "vitest";
 import {
   submittedTags,
   matchesSubmittedTags,
@@ -54,5 +54,25 @@ it("renders repeated tags at their original positions without changing the sourc
   expect(parts.filter((part) => part.tag).map((part) => part.tag)).toEqual([
     "CODE",
     "CODE",
+  ]);
+});
+
+it("tags vxdx build markers for display while leaving submittedTags/filtering untouched", () => {
+  const source = "fix v2d0 and V1D7, keep [CODE]";
+  const parts = submittedDescriptionParts(source);
+  expect(parts.map((part) => part.text).join("")).toBe(source);
+  expect(parts.filter((part) => part.tag).map((part) => part.tag)).toEqual([
+    "v2d0",
+    "V1D7",
+    "CODE",
+  ]);
+  // Display-only: version markers are not filtered/tagged in the query logic.
+  expect(submittedTags(source)).toEqual(["CODE"]);
+  expect(matchesSubmittedTags(source, ["v2d0"])).toBe(false);
+  // Workspace-style strings split into text + tag without changing case.
+  const workspace = submittedDescriptionParts("xxx_v2d0_project");
+  expect(workspace.map((part) => part.text).join("")).toBe("xxx_v2d0_project");
+  expect(workspace.filter((part) => part.tag).map((part) => part.tag)).toEqual([
+    "v2d0",
   ]);
 });

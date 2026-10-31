@@ -1,4 +1,4 @@
-import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
+﻿import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
 import { submittedDescriptionParts } from "../submittedTags";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { classifySubmission, submissionKindLabel } from "../submittedReport";
@@ -58,8 +58,8 @@ interface Props {
 export function ChangelistPage(props: Props) {
   const { t, changes } = props;
   const columns = useColumnWidths(
-    [120, 110, 400, 160, 160],
-    [90, 90, 160, 100, 120],
+    [110, 100, 360, 120, 200, 150],
+    [80, 80, 180, 80, 120, 110],
     { id: "submitted" },
   );
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -285,6 +285,10 @@ export function ChangelistPage(props: Props) {
                   label: env.preferences.zh ? "描述" : "Description",
                 },
                 { id: "user", label: t.user },
+                {
+                  id: "workspace",
+                  label: env.preferences.zh ? "工作区" : "Workspace",
+                },
                 { id: "time", label: t.time },
               ]}
             />
@@ -393,12 +397,27 @@ export function ChangelistPage(props: Props) {
                           )}
                         </span>
                       </span>
-                      <span
-                        className="submitted-author"
-                        title={`${change.user} · ${change.client}`}
-                      >
+                      <span className="submitted-user" title={change.user}>
                         {change.user}
-                        <small>{change.client}</small>
+                      </span>
+                      <span
+                        className="submitted-workspace"
+                        title={change.client}
+                      >
+                        {submittedDescriptionParts(change.client).map(
+                          (part, index) =>
+                            part.tag ? (
+                              <span
+                                key={index}
+                                className="submitted-description-tag"
+                                title={part.tag}
+                              >
+                                {part.tag}
+                              </span>
+                            ) : (
+                              part.text
+                            ),
+                        )}
                       </span>
                       <time>
                         {new Intl.DateTimeFormat(undefined, {

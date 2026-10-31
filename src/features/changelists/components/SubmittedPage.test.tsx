@@ -1,4 +1,4 @@
-import { appCache } from "../../../shared/cache/appCache";
+﻿import { appCache } from "../../../shared/cache/appCache";
 import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 import { ChangeDetailsContext } from "./ChangeDetailsDialog";
 // @vitest-environment jsdom
@@ -1129,10 +1129,11 @@ it("separates CL and submission type and removes status and legacy merge badges"
     "提交类型",
     "描述",
     "用户",
+    "工作区",
     "时间",
   ]);
   const row = host.querySelector(".cl-row")!;
-  expect(row.children).toHaveLength(5);
+  expect(row.children).toHaveLength(6);
   expect(row.children[0].textContent).toBe(String(changes[0].id));
   expect(row.children[1].textContent).toBe("普通提交");
   expect(row.querySelector(".merge-tag")).toBeNull();
@@ -1299,4 +1300,60 @@ it("defaults and resets to current-user ordinary submissions without stream rest
     context: { ...runtime.context, user: "other" },
   });
   expect(input("用户").value).toBe("other");
+});
+
+it("splits user and workspace into independent cells and tags vxdx markers", async () => {
+  backend.queryChangelists.mockImplementation(async (query) =>
+    page(
+      [
+        {
+          ...changes[0],
+          description: "fix v2d0 now",
+          user: "alice",
+          client: "xxx_v2d0_project",
+        },
+        {
+          ...changes[1],
+          description: "Release V1D7",
+          user: "bob",
+          client: "workspace",
+        },
+      ],
+      query.requestGeneration,
+    ),
+  );
+  await render();
+  const header = host.querySelector(".cl-table-head")!;
+  expect([...header.children].map((cell) => cell.textContent)).toEqual([
+    "CL",
+    "提交类型",
+    "描述",
+    "用户",
+    "工作区",
+    "时间",
+  ]);
+  const first = row(101);
+  expect(first.children).toHaveLength(6);
+  expect(first.children[3].textContent).toBe("alice");
+  expect(first.children[3].getAttribute("title")).toBe("alice");
+  expect(first.children[4].textContent).toBe("xxx_v2d0_project");
+  expect(first.children[4].getAttribute("title")).toBe("xxx_v2d0_project");
+  const descriptionTags = [
+    ...first.children[2].querySelectorAll(".submitted-description-tag"),
+  ];
+  expect(descriptionTags).toHaveLength(1);
+  expect(descriptionTags[0].textContent).toBe("v2d0");
+  const workspaceTags = [
+    ...first.children[4].querySelectorAll(".submitted-description-tag"),
+  ];
+  expect(workspaceTags).toHaveLength(1);
+  expect(workspaceTags[0].textContent).toBe("v2d0");
+  // Case-insensitive match keeps the original casing in the tag span.
+  const second = row(102);
+  expect(
+    [...second.children[2].querySelectorAll(".submitted-description-tag")].map(
+      (tag) => tag.textContent,
+    ),
+  ).toEqual(["V1D7"]);
+  expect(second.children[3].textContent).toBe("bob");
 });
