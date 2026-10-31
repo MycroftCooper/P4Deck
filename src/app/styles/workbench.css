@@ -1,4 +1,4 @@
-﻿* {
+* {
   box-sizing: border-box;
 }
 html,
@@ -331,6 +331,10 @@ button {
 .file-state.conflicted {
   color: var(--danger);
   background: #c7444418;
+}
+.file-state-stale {
+  margin-left: 2px;
+  color: var(--warning);
 }
 .inspector {
   position: absolute;
@@ -3508,6 +3512,11 @@ button {
   height: 14px;
   justify-self: start;
   overflow: hidden;
+  /* The header's generic span rule sets a muted foreground; the warning badge must stay
+     white-on-red or the exclamation disappears. */
+  color: #fff;
+  background: #b42338;
+  line-height: 1;
 }
 
 .pending-resolve-badge {
@@ -3530,8 +3539,17 @@ button {
 
 /* P4V-style Resolve dialog: wide modal with method, file table and per-file options. */
 .workflow-dialog:has(.resolve-p4v) {
-  width: min(980px, 94vw);
+  width: min(1120px, 94vw);
   max-height: 88vh;
+}
+.workflow-dialog:has(.resolve-p4v) .workflow-dialog-heading {
+  padding: 12px 16px;
+}
+.workflow-dialog:has(.resolve-p4v) .workflow-dialog-heading h2 {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .resolve-p4v {
   display: flex;
@@ -3577,7 +3595,8 @@ button {
 .resolve-file-table {
   border: 1px solid var(--border);
   border-radius: 4px;
-  overflow: hidden;
+  overflow: auto;
+  max-height: 190px;
 }
 .resolve-file-row {
   display: grid;
@@ -3623,7 +3642,6 @@ button.resolve-file-row:not(:disabled):hover {
   flex-direction: column;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
 }
 .resolve-current h3 {
   margin: 0;
@@ -3637,11 +3655,123 @@ button.resolve-file-row:not(:disabled):hover {
   color: var(--text-muted);
 }
 .resolve-recommended {
-  padding: 8px;
-  border-radius: 4px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-size: 12px;
+}
+.resolve-recommended strong {
+  font-size: 12px;
+}
+.resolve-recommended p {
+  margin: 0;
+  color: var(--text);
+}
+.resolve-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.resolve-section-title::after {
+  content: none;
+}
+.resolve-version-graph {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+.resolve-version-art {
+  position: relative;
+  min-height: 118px;
+}
+.resolve-node {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+}
+.resolve-node-base {
+  top: 1px;
+  left: 13px;
+  background: #f0c000;
+  border-radius: 2px;
+}
+.resolve-node-source {
+  top: 27px;
+  left: 22px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid #6b8cff;
+}
+.resolve-node-target {
+  top: 55px;
+  left: 7px;
+  background: #2f9d63;
+  border-radius: 50%;
+}
+.resolve-node-merged {
+  top: 88px;
+  left: 14px;
+  background: #9aa3ad;
+  transform: rotate(45deg);
+}
+.resolve-link {
+  position: absolute;
+  left: 19px;
+  width: 1px;
+  background: var(--border);
+}
+.resolve-link-1 {
+  top: 14px;
+  height: 14px;
+}
+.resolve-link-2 {
+  top: 41px;
+  height: 15px;
+}
+.resolve-link-3 {
+  top: 69px;
+  height: 20px;
+}
+.resolve-version-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.resolve-version-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  font-size: 12px;
+}
+.resolve-version-row strong {
+  font-weight: 600;
+}
+.resolve-version-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.resolve-version-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resolve-version-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-raw-preview summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 .resolve-options {
   display: flex;
@@ -3677,28 +3807,369 @@ button.resolve-file-row:not(:disabled):hover {
   gap: 10px;
   font-size: 12px;
 }
-.resolve-row {
+.resolve-merge {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.resolve-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.resolve-sidebar-head {
+  display: flex;
+  flex: 0 0 32px;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+}
+.resolve-sidebar-head strong {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.workflow-dialog .resolve-sidebar-head label {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-sidebar-head input {
+  margin: 0;
+}
+.resolve-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+}
+.resolve-list-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+}
+.resolve-list-item.is-current {
+  background: var(--accent-soft);
+}
+.resolve-list-item > input {
+  margin-top: 3px;
+}
+.resolve-list-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.resolve-list-copy strong {
+  font-size: 12px;
+}
+.resolve-list-copy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resolve-list-copy em {
+  font-size: 11px;
+  font-style: normal;
+}
+.resolve-list-copy em.auto {
+  color: var(--accent);
+}
+.resolve-list-copy em.manual {
+  color: var(--warning);
+}
+.resolve-list-empty,
+.resolve-list-note {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.resolve-preview-head h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.resolve-preview-head p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 11px;
+  word-break: break-all;
+}
+.resolve-banner {
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+.resolve-banner strong {
+  display: block;
+  color: var(--accent);
+  font-size: 13px;
+}
+.resolve-banner p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.resolve-banner.is-warning {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+.resolve-banner.is-warning strong {
+  color: var(--warning);
+}
+.resolve-base-card,
+.resolve-merged-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.resolve-base-card > span,
+.resolve-base-card > small,
+.resolve-merged-card > span,
+.resolve-merged-card > small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-base-card strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  word-break: break-all;
+}
+.resolve-version-card strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  word-break: break-all;
+}
+.resolve-base-card {
+  border-color: #b9a3e3;
+  background: color-mix(in srgb, #6e40c9 8%, transparent);
+}
+.resolve-merged-card {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.resolve-version-card.is-source {
+  border-color: #9bb8f0;
+  background: color-mix(in srgb, #2b6fd6 8%, transparent);
+}
+.resolve-version-card.is-target {
+  border-color: #e0c27a;
+  background: color-mix(in srgb, #b77900 9%, transparent);
+}
+.resolve-merge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.resolve-merge-head strong {
+  font-size: 15px;
+}
+.resolve-merge-head span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-merge-stats {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 2px;
+}
+.resolve-merge-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.resolve-merge-stats span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-merge-stats strong {
+  font-size: 16px;
+}
+.resolve-merge-arrow {
+  color: var(--text-muted);
+  font-size: 20px;
+}
+.resolve-merged-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
 }
-.resolve-row-label {
-  font-weight: 600;
-  color: var(--text);
-}
-.resolve-row-control {
+.resolve-version-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
-.resolve-methods label {
-  display: inline-flex;
+.resolve-base-card > span,
+.resolve-version-card > span {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+.resolve-version-card small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-path {
+  min-width: 0;
+}
+.resolve-path summary {
+  overflow: hidden;
+  font-weight: 600;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resolve-path p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.resolve-version-card strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.resolve-version-card em {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+}
+.resolve-tabs {
+  display: flex;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.resolve-tabs button {
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.resolve-tabs button.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.resolve-code {
+  min-height: 110px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+.resolve-code pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font:
+    12px/1.5 ui-monospace,
+    monospace;
+}
+.resolve-code p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.resolve-details summary {
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.resolve-details p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-batch-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-action-row {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
 }
-.resolve-select {
-  max-width: 420px;
+.resolve-action-row strong {
+  display: block;
+  font-size: 13px;
+}
+.resolve-action-row p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.resolve-action-row > button {
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+.resolve-preview-empty {
+  padding: 30px;
+  color: var(--text-muted);
+}
+.resolve-manual {
+  margin-top: 12px;
 }
 .resolve-files-head {
   display: flex;
@@ -3726,12 +4197,6 @@ button.resolve-file-row:not(:disabled):hover {
 .resolve-file-placeholder {
   color: var(--text-muted);
 }
-.resolve-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-}
 .resolve-options {
   display: flex;
   flex-direction: column;
@@ -3757,4 +4222,35 @@ button.resolve-file-row:not(:disabled):hover {
   margin: 0;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+/* P4V Resolve: four version panes, auto-resolve action and immediate-per-file buttons. */
+.resolve-auto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.resolve-auto .primary {
+  min-height: 28px;
+}
+.resolve-versions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.resolve-option-row button {
+  min-width: 140px;
+}
+.resolve-additional > button {
+  min-height: 26px;
+}
+@media (max-width: 760px) {
+  .resolve-versions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

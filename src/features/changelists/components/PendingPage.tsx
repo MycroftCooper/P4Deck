@@ -116,6 +116,17 @@ const openedStates: Record<string, WorkspaceNode["state"]> = {
   "move/add": "openedMoveAdd",
   "move/delete": "openedMoveDelete",
 };
+/**
+ * F10: the only durable release entry for an unknown write fence is the
+ * Operation Log's ActionAdmission list, so every blocked hint must point there
+ * instead of reading as a permanent dead end.
+ */
+const withAdmissionHint = (text: string, zh: boolean) =>
+  `${text} ${
+    zh
+      ? "可到「工具 → 操作日志」解除写入阻塞。"
+      : "Release write blocks under Tools → Operation Log."
+  }`;
 
 /** Unshelve runs immediately into the current workspace/default CL: no dialog, no FE preflight. */
 function DirectUnshelve({
@@ -320,15 +331,18 @@ export function PendingPage({
   const openSelectedSubmit = async (files: readonly SelectedOpenedFile[]) => {
     if (!ready || openingSelected.current || !files.length) return;
     if (files.some((file) => blockedPaths.has(file.depotPath))) {
+      const blockedText = formatBlockedPaths(
+        files.map((file) => file.depotPath),
+        blockedDetails,
+        t.files === "文件",
+      );
+      const zh = t.files === "文件";
       setError(
-        formatBlockedPaths(
-          files.map((file) => file.depotPath),
-          blockedDetails,
-          t.files === "文件",
-        ) ??
-          (t.files === "文件"
+        blockedText
+          ? withAdmissionHint(blockedText, zh)
+          : zh
             ? "选中文件有未确认项，请先核实。"
-            : "Selected files have unresolved items; verify them first."),
+            : "Selected files have unresolved items; verify them first.",
       );
       return;
     }
@@ -1010,8 +1024,21 @@ export function PendingPage({
         ?.focus(),
     );
   };
-  const changeMenu = (change: PendingChange) =>
-    menu(
+  const changeMenu = (change: PendingChange) => {
+    const conflictNodes: WorkspaceNode[] = change.files
+      .filter((file) => file.resolve === "unresolved")
+      .map((file) => ({
+        id: file.depotPath,
+        name: file.depotPath.split("/").pop() ?? file.depotPath,
+        kind: "file",
+        state: "conflicted",
+        absolutePath: file.clientPath ?? "",
+        relativePath: file.clientPath ?? file.depotPath,
+        depotPath: file.depotPath,
+        revision: file.revision,
+        changelistId: change.id,
+      }));
+    return menu(
       selection.targets(change).length > 1
         ? "C12"
         : change.id === 0
@@ -1025,6 +1052,27 @@ export function PendingPage({
             source,
           ),
         ),
+        "解决冲突…": conflictNodes.length
+          ? {
+              ...action(
+                (source) =>
+                  run(
+                    "resolve",
+                    {
+                      type: "file",
+                      node: conflictNodes[0],
+                      nodes: conflictNodes,
+                    },
+                    source,
+                  ),
+                connectionReason,
+              ),
+              emphasis: "primary" as const,
+            }
+          : {
+              reason:
+                "该 CL 没有需要 Resolve 的文件 / No files in this CL need resolve",
+            },
         "复制标识 default": copy("default"),
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),
@@ -1128,6 +1176,7 @@ export function PendingPage({
         onOpen: () => selection.context(change),
       },
     );
+  };
   const headerActions =
     headerTarget &&
     createPortal(
@@ -1507,11 +1556,16 @@ export function PendingPage({
             const zh = t.files === "文件";
             const label = change.id ? `CL ${change.id}` : "Default";
             const unavailable =
-              formatBlockedPaths(
-                change.files.map((file) => file.depotPath),
-                blockedDetails,
-                zh,
-              ) ??
+              (() => {
+                const blockedText = formatBlockedPaths(
+                  change.files.map((file) => file.depotPath),
+                  blockedDetails,
+                  zh,
+                );
+                return blockedText
+                  ? withAdmissionHint(blockedText, zh)
+                  : undefined;
+              })() ??
               (!ready
                 ? zh
                   ? "连接尚未就绪"

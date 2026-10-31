@@ -113,7 +113,8 @@ it("unknown result uses one same-operationId lookup and never re-dispatches", as
       kind: "found",
       receipt: {
         operationId: request.operationId,
-        kind: "shelf",
+        // Host `shelve_files` reserves the receipt as `shelve` (not `shelf`).
+        kind: "shelve",
         connection: request.connection,
         state: "settled",
         result: success(f.intent.paths),

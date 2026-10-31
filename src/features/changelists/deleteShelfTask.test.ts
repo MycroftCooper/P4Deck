@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { startDeleteShelf, type DeleteShelfIntent } from "./deleteShelfTask";
 import { removalLedger } from "../actions/actionStore";
-import { blockedMovePaths } from "./moveOptimism";
+import { blockedMovePaths, blockedPathDetails } from "./moveOptimism";
 import type {
   RuntimeInfo,
   ShelfPreflight,
@@ -170,7 +170,8 @@ it("lost response performs one durable lookup with original identity and never r
       kind: "found" as const,
       receipt: {
         ...request,
-        kind: "shelf" as const,
+        // Host `delete_shelved_revisions` reserves the receipt as `shelfDelete`.
+        kind: "shelfDelete" as const,
         payloadDigest: "a".repeat(64),
         revision: "2",
         state: "settled" as const,
@@ -193,19 +194,20 @@ it("lost response performs one durable lookup with original identity and never r
 
 it("commandCompleted delete stays command-level, refreshes once and releases admission", async () => {
   const f = fixture();
-  const envelope: WorkflowResult = {
-    ...f.result,
-    outcome: "succeeded",
-    files: [],
-    execution: {
-      kind: "shelf",
-      operationId: "envelope-id",
-      state: "commandCompleted",
+  f.deps.execute.mockImplementation(
+    async (request: { operationId: string }) => ({
+      ...f.result,
       outcome: "succeeded",
       files: [],
-    },
-  };
-  f.deps.execute.mockResolvedValue(envelope);
+      execution: {
+        kind: "shelf" as const,
+        operationId: request.operationId,
+        state: "commandCompleted" as const,
+        outcome: "succeeded" as const,
+        files: [],
+      },
+    }),
+  );
   startDeleteShelf(f.intent, f.deps);
   await flush();
   await flush();
@@ -221,11 +223,67 @@ it("commandCompleted delete stays command-level, refreshes once and releases adm
     .getSnapshot()
     .find((item) => item.operationId === operationId)!;
   expect(record.data.execution?.admissionReleased).toBe(true);
-  // No per-file success was inferred: the overlay item stays unknown.
-  expect(record.data.items.every((item) => item.outcome === "unknown")).toBe(
+  // A command-level success is authoritative: no per-file fact is needed.
+  expect(record.data.items.every((item) => item.outcome === "confirmed")).toBe(
     true,
   );
-  expect(blockedMovePaths(f.intent.connectionKey).has("//synthetic/a")).toBe(
-    false,
+  expect(blockedMovePaths(f.intent.connectionKey).size).toBe(0);
+  expect(blockedPathDetails(f.intent.connectionKey).size).toBe(0);
+});
+
+it("dialog delete host rejection settles as known not-applied and never blocks", async () => {
+  const f = fixture();
+  f.deps.execute.mockResolvedValue({
+    outcome: "failed",
+    failure: "preflightBlocked",
+    message: "Shelved delete preflight is not ready; nothing was deleted.",
+    operationIds: [],
+    files: [],
+    refresh: { pendingChanges: true },
+  } as unknown as WorkflowResult);
+  startDeleteShelf(f.intent, f.deps);
+  await flush();
+  await flush();
+  const operationId = f.deps.execute.mock.calls[0][0].operationId as string;
+  expect(f.deps.report).toHaveBeenCalledWith(
+    expect.objectContaining({ outcome: "failed", code: "operationFailed" }),
   );
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.operationId === operationId)!;
+  expect(
+    record.data.items.map((item) => [item.outcome, item.ioComplete]),
+  ).toEqual([["notApplied", true]]);
+  expect(record.data.execution?.admissionReleased).toBe(true);
+  expect(blockedPathDetails(f.intent.connectionKey).size).toBe(0);
+});
+
+it("dialog delete never trusts a command envelope from another operation", async () => {
+  const f = fixture();
+  f.deps.execute.mockResolvedValue({
+    ...f.result,
+    outcome: "succeeded",
+    files: [],
+    execution: {
+      kind: "shelf",
+      operationId: "another-operation",
+      state: "commandCompleted",
+      outcome: "succeeded",
+      files: [],
+    },
+  });
+  startDeleteShelf(f.intent, f.deps);
+  await flush();
+  await flush();
+  // The dialog path always refreshes once; the envelope mismatch only means the
+  // result is never accepted as command-level success.
+  expect(f.deps.report).toHaveBeenCalledOnce();
+  const operationId = f.deps.execute.mock.calls[0][0].operationId as string;
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.operationId === operationId)!;
+  expect(record.data.items.every((item) => item.outcome !== "confirmed")).toBe(
+    true,
+  );
+  expect(record.data.execution?.admissionReleased).toBeUndefined();
 });

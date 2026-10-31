@@ -156,7 +156,18 @@ export function useFileMenu() {
           () => env.searchInDirectory(node.depotPath || node.absolutePath),
           node.depotPath || node.absolutePath ? undefined : "没有目录路径",
         );
-      return { ...bindings, ...options.bindings };
+      const merged = { ...bindings, ...options.bindings };
+      const needsResolve = resolved.some(
+        (item) =>
+          item.state === "conflicted" || item.status?.resolve === "unresolved",
+      );
+      const resolveItem = merged["解决冲突…"];
+      if (needsResolve && resolveItem && !resolveItem.reason)
+        merged["解决冲突…"] = {
+          ...resolveItem,
+          emphasis: "primary",
+        };
+      return merged;
     };
     return menu(
       object,

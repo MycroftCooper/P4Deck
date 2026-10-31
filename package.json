@@ -1,7 +1,7 @@
 {
   "name": "p4deck",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
@@ -50,8 +50,9 @@
     "wf:task": "node scripts/workflow/state.mjs task",
     "wf:tests": "node scripts/workflow/select-tests.mjs",
     "wf:fast": "node scripts/workflow/ci-fast.mjs",
+    "wf:agile": "node scripts/workflow/agile.mjs",
     "wf:selftest": "node scripts/workflow/batch.selftest.mjs",
-    "wf:selftest:all": "node scripts/workflow/batch.selftest.mjs && node scripts/workflow/workflow.selftest.mjs && node tools/dsh-p4deck-board/selftest.mjs && node tools/dsh-p4deck-board/selftest-client.mjs",
+    "wf:selftest:all": "node scripts/workflow/batch.selftest.mjs && node scripts/workflow/workflow.selftest.mjs && node scripts/workflow/deps.selftest.mjs && node tools/dsh-p4deck-board/selftest.mjs && node tools/dsh-p4deck-board/selftest-client.mjs",
     "wf:evidence": "node scripts/workflow/evidence.mjs",
     "wf:evidence:collect": "node scripts/workflow/evidence.mjs --collect-temp",
     "wf:ownership": "node scripts/workflow/ownership.mjs",
@@ -81,6 +82,7 @@
     "wf:release": "node scripts/workflow/release.mjs"
   },
   "dependencies": {
+    "@pierre/diffs": "1.6.2",
     "@tanstack/react-query": "^5.85.5",
     "@tanstack/react-virtual": "^3.14.9",
     "@tauri-apps/api": "^2.12.4",

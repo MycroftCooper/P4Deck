@@ -92,6 +92,7 @@ pnpm package:desktop:win
 ## 检查
 
 ```bash
+pnpm wf:agile --files <a,b> --role <FE|BE|LEAD> --title "一句话"  # 日常默认：定向门禁 + 证据 + 5 分钟验收清单
 pnpm ci:quick          # 本地快速门禁：Web 组与 Rust 组并行，失败不中断，只打摘要
 pnpm ci:local          # 基础组 + 浏览器/桌面构建、桌面包审计、串行性能门禁；默认遇错即停
 pnpm ci:bundle         # 快速自检（约 10 秒）：版本一致性 + desktop 构建 + bundle 审计
@@ -109,7 +110,7 @@ pnpm check             # TypeScript + Cargo，需要完整桌面环境
 
 完整子进程输出写到 `artifacts/ci/logs/<mode>/<step>.log`；机器可读摘要分别写入 `artifacts/ci/quick-latest.json`、`artifacts/ci/local-latest.json`，其中 `validate:bundle` 断言桌面 `dist` 中不含 mock backend 代码。常用选项：`--verbose`（不捕获输出，直接查看子进程完整输出）、`--continue` / `--fail-fast`、`--serial`（关闭 Web/Rust 并行）、`--timeout-ms <毫秒>`（单步超时，默认 900000）、`--files a,b`（全为 `.md`/`.txt` 或 `ForAIDoc/` 文档时按 docs-only 直接成功退出）。
 
-本项目只有本地门禁，不配置远端 CI：日常用 `pnpm wf:fast`，freeze 前用 `pnpm ci:quick`，交付候选用 `pnpm ci:local`，改完打包或前端 mock 相关再用 `pnpm ci:bundle` 快速自检。发布用 `pnpm wf:release --version <semver> --apply`（默认 dry-run）。
+本项目只有本地门禁，不配置远端 CI：日常小改动走 `pnpm wf:agile`（只有发版才需要全量流程），freeze 前用 `pnpm ci:quick`，交付候选用 `pnpm ci:local`，改完打包或前端 mock 相关再用 `pnpm ci:bundle` 快速自检。发布用 `pnpm wf:release --version <semver> --apply`（默认 dry-run）。
 
 ## 分支模型
 

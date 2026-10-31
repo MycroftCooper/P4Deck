@@ -12,6 +12,8 @@ import {
   shelfIdentity,
 } from "../changelists/deleteShelfTask";
 import {
+  acceptShelfObservation,
+  finishShelfObservation,
   projectShelfChanges,
   shelfObservation,
   useRemovalActions,
@@ -284,4 +286,63 @@ it("new shelf intent prevents late old success from merging into cache", async (
   expect(
     readSnapshot<PendingSnapshot>(f.key)!.data.changes[0].shelvedFiles,
   ).toHaveLength(2);
+});
+
+it("per-file facts win over the command-level fallback (never fake success)", () => {
+  const f = setup();
+  const operationId = crypto.randomUUID();
+  expect(
+    acceptShelfObservation(
+      f.scope,
+      operationId,
+      11,
+      ["//fixture/a"],
+      f.runtime,
+    ),
+  ).toBe(true);
+  finishShelfObservation(operationId, f.runtime, {
+    ...f.result,
+    outcome: "succeeded",
+    execution: {
+      kind: "shelf",
+      operationId,
+      state: "commandCompleted",
+      outcome: "succeeded",
+      files: [],
+    },
+    files: [{ depotPath: "//fixture/a", state: "failed", message: "" }],
+  });
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.operationId === operationId)!;
+  expect(record.data.items[0].outcome).toBe("unknown");
+  expect(record.data.execution?.admissionReleased).toBeUndefined();
+  expect(blockedMovePaths(f.scope).has("//fixture/a")).toBe(true);
+});
+
+it("a deterministic host rejection never keeps the removal claim", () => {
+  const f = setup();
+  const operationId = crypto.randomUUID();
+  expect(
+    acceptShelfObservation(
+      f.scope,
+      operationId,
+      11,
+      ["//fixture/a"],
+      f.runtime,
+    ),
+  ).toBe(true);
+  finishShelfObservation(operationId, f.runtime, {
+    ...f.result,
+    outcome: "failed",
+    failure: "preflightBlocked",
+    execution: undefined,
+    files: [],
+  });
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.operationId === operationId)!;
+  expect(record.data.items.map((item) => item.outcome)).toEqual(["notApplied"]);
+  expect(record.data.execution?.admissionReleased).toBe(true);
+  expect(blockedMovePaths(f.scope).size).toBe(0);
 });

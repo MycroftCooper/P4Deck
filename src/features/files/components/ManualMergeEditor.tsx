@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { backend } from "../../../infrastructure/backend";
+import { messages } from "../../../shared/i18n";
 import type {
+  ExternalMergeToolInfo,
   ManualMergeSaveResult,
   ManualMergeSession,
   ManualMergeOpenRequest,
@@ -16,7 +18,6 @@ import {
   mergeRemaining,
   mergeResolveSucceeded,
   mergeSaveCommitted,
-  mergeStepOperationId,
   settleMergeIntent,
   unwrapMergeLegacy,
 } from "../../actions/mergeResolveLifecycle";
@@ -80,6 +81,7 @@ export function ManualMergeEditor({
   cancelOperation?(operationId: string): Promise<unknown>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
+  const copy = messages[zh ? "zh-CN" : "en-US"];
   const [session, setSession] = useState<ManualMergeSession>();
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -91,6 +93,12 @@ export function ManualMergeEditor({
   const [acknowledge, setAcknowledge] = useState(false);
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
+  const [externalTool, setExternalTool] = useState<ExternalMergeToolInfo>();
+  const [externalBusy, setExternalBusy] = useState(false);
+  const [externalNotice, setExternalNotice] = useState<{
+    text: string;
+    error: boolean;
+  }>();
   const epoch = useRef(0);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const operationRoot = useRef(`manual-merge-${Date.now()}-${Math.random()}`);
@@ -124,8 +132,28 @@ export function ManualMergeEditor({
     setSaveResult(undefined);
     setAcknowledge(false);
     setMessage("");
+    setExternalTool(undefined);
+    setExternalBusy(false);
+    setExternalNotice(undefined);
     setBusy(true);
-    const openOperationId = mergeStepOperationId(currentOperationRoot, "open");
+    // Detection only inspects the filesystem; it never starts P4Merge.
+    void backend
+      .detectExternalMergeTool()
+      .then((info) => {
+        if (
+          currentEpoch === epoch.current &&
+          activeConnection.current === connectionKey
+        )
+          setExternalTool(info);
+      })
+      .catch(() => {
+        if (
+          currentEpoch === epoch.current &&
+          activeConnection.current === connectionKey
+        )
+          setExternalTool({ available: false });
+      });
+    const openOperationId = crypto.randomUUID();
     beginMergeIntent({
       kind: "manualMergeSession",
       operationId: openOperationId,
@@ -227,10 +255,10 @@ export function ManualMergeEditor({
   };
 
   const validate = async () => {
-    if (!session || busy) return;
+    if (!session || busy || externalBusy) return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
-    const operationId = mergeStepOperationId(operationRoot.current, "validate");
+    const operationId = crypto.randomUUID();
     beginMergeIntent({
       kind: "manualMergeSession",
       operationId,
@@ -286,10 +314,10 @@ export function ManualMergeEditor({
   };
 
   const save = async () => {
-    if (!session || !validation?.token || busy) return;
+    if (!session || !validation?.token || busy || externalBusy) return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
-    const operationId = mergeStepOperationId(operationRoot.current, "save");
+    const operationId = crypto.randomUUID();
     beginMergeIntent({
       kind: "manualMergeSave",
       operationId,
@@ -363,10 +391,17 @@ export function ManualMergeEditor({
   };
 
   const resolve = async () => {
-    if (!session || !saveResult?.resolveToken || !acknowledge || busy) return;
+    if (
+      !session ||
+      !saveResult?.resolveToken ||
+      !acknowledge ||
+      busy ||
+      externalBusy
+    )
+      return;
     const requestEpoch = epoch.current;
     const requestConnection = connectionKey;
-    const operationId = mergeStepOperationId(operationRoot.current, "resolve");
+    const operationId = crypto.randomUUID();
     beginMergeIntent({
       kind: "manualMergeResolve",
       operationId,
@@ -425,6 +460,67 @@ export function ManualMergeEditor({
     }
   };
 
+  const runExternalMergeTool = async () => {
+    if (!session || busy || externalBusy || !externalTool?.available) return;
+    const requestEpoch = epoch.current;
+    const requestConnection = connectionKey;
+    setExternalBusy(true);
+    setExternalNotice({ text: copy.externalMergeRunning, error: false });
+    try {
+      const value = await backend.runExternalMerge({
+        sessionId: session.sessionId,
+        result,
+      });
+      if (
+        requestEpoch !== epoch.current ||
+        requestConnection !== activeConnection.current
+      )
+        return;
+      // P4Merge only supplies a candidate: fill Result, never validate/save.
+      if (value.status === "completed" && value.result !== undefined) {
+        commit(value.result);
+        setExternalNotice({ text: copy.externalMergeCompleted, error: false });
+      } else if (value.status === "unchanged") {
+        setExternalNotice({ text: copy.externalMergeUnchanged, error: false });
+      } else if (value.status === "timeout") {
+        setExternalNotice({
+          text: value.reason ?? copy.externalMergeTimeout,
+          error: true,
+        });
+      } else if (value.status === "notInstalled") {
+        setExternalNotice({
+          text: value.reason ?? copy.externalMergeNotInstalled,
+          error: true,
+        });
+      } else if (value.status === "cancelled") {
+        setExternalNotice({
+          text: value.reason ?? copy.externalMergeCancelled,
+          error: true,
+        });
+      } else {
+        const detail = value.reason ?? copy.externalMergeFailed;
+        const exit =
+          value.exitCode === undefined ? "" : ` · exit ${value.exitCode}`;
+        setExternalNotice({
+          text: `${copy.externalMergeFailed}: ${detail}${exit}`,
+          error: true,
+        });
+      }
+    } catch (cause) {
+      if (
+        requestEpoch === epoch.current &&
+        requestConnection === activeConnection.current
+      )
+        setExternalNotice({ text: String(cause), error: true });
+    } finally {
+      if (
+        requestEpoch === epoch.current &&
+        requestConnection === activeConnection.current
+      )
+        setExternalBusy(false);
+    }
+  };
+
   if (!session)
     return (
       <DialogNotice error={!!message}>
@@ -445,13 +541,22 @@ export function ManualMergeEditor({
         {session.theirsSource.depotPath}#{session.theirsSource.revision}
       </div>
       <div className="manual-merge-toolbar">
-        <button disabled={!current || busy} onClick={() => accept("yours")}>
+        <button
+          disabled={!current || busy || externalBusy}
+          onClick={() => accept("yours")}
+        >
           {tr("采用当前块 Yours", "Accept block Yours")}
         </button>
-        <button disabled={!current || busy} onClick={() => accept("theirs")}>
+        <button
+          disabled={!current || busy || externalBusy}
+          onClick={() => accept("theirs")}
+        >
           {tr("采用当前块 Theirs", "Accept block Theirs")}
         </button>
-        <button disabled={!current || busy} onClick={() => accept("both")}>
+        <button
+          disabled={!current || busy || externalBusy}
+          onClick={() => accept("both")}
+        >
           {tr("采用当前块 Both", "Accept block Both")}
         </button>
         <button
@@ -470,7 +575,7 @@ export function ManualMergeEditor({
           {tr("未解决", "Unresolved")}: {conflicts.length}
         </span>
         <button
-          disabled={historyIndex <= 0 || busy}
+          disabled={historyIndex <= 0 || busy || externalBusy}
           onClick={() => {
             setHistoryIndex((value) => value - 1);
             setValidation(undefined);
@@ -479,7 +584,7 @@ export function ManualMergeEditor({
           {tr("撤销", "Undo")}
         </button>
         <button
-          disabled={historyIndex >= history.length - 1 || busy}
+          disabled={historyIndex >= history.length - 1 || busy || externalBusy}
           onClick={() => {
             setHistoryIndex((value) => value + 1);
             setValidation(undefined);
@@ -518,6 +623,7 @@ export function ManualMergeEditor({
             value={result}
             aria-label="Result"
             spellCheck={false}
+            readOnly={externalBusy}
             onChange={(event) => commit(event.target.value)}
             onKeyDown={(event) => {
               if (
@@ -556,12 +662,43 @@ export function ManualMergeEditor({
         </label>
       </div>
       <div className="manual-merge-actions">
-        <button disabled={busy || !!saveResult} onClick={() => void validate()}>
+        <button
+          disabled={busy || externalBusy || !externalTool?.available}
+          title={
+            externalTool?.available
+              ? (externalTool.executable ?? copy.externalMerge)
+              : (externalTool?.reason ?? copy.externalMergeUnavailable)
+          }
+          onClick={() => void runExternalMergeTool()}
+        >
+          {externalBusy ? copy.externalMergeRunning : copy.externalMerge}
+        </button>
+        {!externalTool && (
+          <span className="manual-merge-external-hint">
+            {copy.externalMergeDetecting}
+          </span>
+        )}
+        {externalTool && !externalTool.available && (
+          <span className="manual-merge-external-hint">
+            {externalTool.reason ?? copy.externalMergeUnavailable}
+          </span>
+        )}
+        {externalTool?.available && externalTool.reason && (
+          <span className="manual-merge-external-hint">
+            {externalTool.reason}
+          </span>
+        )}
+        <button
+          disabled={busy || externalBusy || !!saveResult}
+          onClick={() => void validate()}
+        >
           {tr("验证待保存结果", "Validate result")}
         </button>
         <button
           className="primary"
-          disabled={busy || !validation?.valid || !validation.token}
+          disabled={
+            busy || externalBusy || !validation?.valid || !validation.token
+          }
           onClick={() => void save()}
         >
           {tr("确认原子保存", "Confirm atomic save")}
@@ -581,7 +718,7 @@ export function ManualMergeEditor({
             </label>
             <button
               className="primary"
-              disabled={busy || !acknowledge}
+              disabled={busy || externalBusy || !acknowledge}
               onClick={() => void resolve()}
             >
               {tr("标记为已解决并复核", "Mark resolved and verify")}
@@ -589,6 +726,11 @@ export function ManualMergeEditor({
           </>
         )}
       </div>
+      {externalNotice && (
+        <DialogNotice error={externalNotice.error}>
+          {externalNotice.text}
+        </DialogNotice>
+      )}
       {saveResult?.backupPath && (
         <p className="workflow-context">
           {tr("可恢复备份", "Recoverable backup")}: {saveResult.backupPath}

@@ -289,6 +289,147 @@ impl SyncService {
         }
     }
 
+    /// Direct Get Latest: no preview, no token, no preflight inspection.
+    ///
+    /// The command always targets `#head` without `-f`. P4 itself reports
+    /// writable/opened conflicts (and may schedule a resolve), so the result is
+    /// mapped from the real exit code/runner error and never faked as success.
+    pub async fn sync_latest(
+        &self,
+        request: SyncPreviewRequest,
+        app: Option<&AppHandle>,
+    ) -> SyncResult {
+        let (context, generation) = self.contexts.snapshot();
+        let latest = SyncPreviewRequest {
+            paths: request.paths.clone(),
+            revision: SyncRevisionSpec {
+                kind: SyncRevisionKind::Head,
+                value: None,
+            },
+            force: false,
+            parallel_threads: request.parallel_threads,
+            operation_id: request.operation_id.clone(),
+        };
+        let target = match target_snapshot(&context, generation, &latest) {
+            Ok(target) => target,
+            Err(message) => {
+                return SyncResult {
+                    outcome: SyncOutcome::Failed,
+                    failure: Some(SyncFailureCode::CommandFailure),
+                    message: format!("Get Latest was rejected before running p4 sync: {message}"),
+                    operation_id: None,
+                    log_reference: None,
+                    affected_paths: request.paths,
+                    counts: SyncPlanCounts::default(),
+                    refresh_workspace: true,
+                    refresh_depot: true,
+                };
+            }
+        };
+
+        let operation_id = valid_operation_id(request.operation_id)
+            .unwrap_or_else(|| format!("sync-latest-{}", Uuid::new_v4()));
+        let (args, input) = execution_arguments(&target);
+        let mutation_guard = self.runner.lock_mutations(&context.server).await;
+        let execution = self
+            .runner
+            .run_with_mutation_guard_and_input(
+                P4CommandRequest {
+                    operation_id: Some(operation_id.clone()),
+                    source: OperationSource::Gui,
+                    command: "sync".into(),
+                    args,
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(600_000),
+                    input: None,
+                },
+                app,
+                None,
+                input,
+                &mutation_guard,
+            )
+            .await;
+
+        let paths = target.paths.clone();
+        self.status_cache.invalidate(
+            &context.server,
+            &context.user,
+            &context.client,
+            &paths,
+            &[
+                StatusQueryKind::WorkspaceStatus,
+                StatusQueryKind::Opened,
+                StatusQueryKind::Reconcile,
+            ],
+            InvalidationReason::FileMutation,
+        );
+
+        match execution {
+            Ok(operation) if operation.exit_code == 0 => SyncResult {
+                outcome: SyncOutcome::Succeeded,
+                failure: None,
+                message: "Get Latest completed.".into(),
+                operation_id: Some(operation_id.clone()),
+                log_reference: Some(operation_id),
+                affected_paths: paths,
+                counts: SyncPlanCounts::default(),
+                refresh_workspace: true,
+                refresh_depot: true,
+            },
+            Ok(operation) => {
+                let text = event_text(&operation);
+                let cancelled = operation
+                    .events
+                    .iter()
+                    .any(|event| matches!(event.kind, EventKind::Cancelled));
+                let failure = if cancelled {
+                    SyncFailureCode::Cancelled
+                } else {
+                    classify_failure(&text)
+                };
+                SyncResult {
+                    outcome: if cancelled {
+                        SyncOutcome::Cancelled
+                    } else if operation.events.iter().any(|event| {
+                        matches!(event.kind, EventKind::Stdout) && event.message.is_some()
+                    }) {
+                        SyncOutcome::Partial
+                    } else {
+                        SyncOutcome::Failed
+                    },
+                    failure: Some(failure),
+                    message: failure_message(failure).into(),
+                    operation_id: Some(operation_id.clone()),
+                    log_reference: Some(operation_id),
+                    affected_paths: paths,
+                    counts: SyncPlanCounts::default(),
+                    refresh_workspace: true,
+                    refresh_depot: true,
+                }
+            }
+            Err(error) => {
+                let text = error.to_string();
+                let failure = classify_failure(&text);
+                SyncResult {
+                    outcome: if failure == SyncFailureCode::Cancelled {
+                        SyncOutcome::Cancelled
+                    } else {
+                        SyncOutcome::Unknown
+                    },
+                    failure: Some(failure),
+                    message: failure_message(failure).into(),
+                    operation_id: Some(operation_id.clone()),
+                    log_reference: Some(operation_id),
+                    affected_paths: paths,
+                    counts: SyncPlanCounts::default(),
+                    refresh_workspace: true,
+                    refresh_depot: true,
+                }
+            }
+        }
+    }
+
     fn plan_from_evaluation(
         &self,
         target: SyncTargetSnapshot,
@@ -1196,5 +1337,215 @@ mod tests {
             .blockers
             .iter()
             .any(|issue| issue.code == SyncIssueCode::WritableClobber));
+    }
+
+    use crate::persistence::{log_store::LogStore, operation_journal::OperationJournal};
+    use std::path::PathBuf;
+
+    struct LatestHarness {
+        directory: PathBuf,
+        service: SyncService,
+        cache: Arc<StatusCache>,
+    }
+
+    impl Drop for LatestHarness {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.directory);
+        }
+    }
+
+    fn latest_harness(label: &str, prepare: impl FnOnce(&Path) -> PathBuf) -> LatestHarness {
+        let directory =
+            std::env::temp_dir().join(format!("p4deck-sync-latest-{label}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = prepare(&directory);
+        let contexts = Arc::new(ContextStore::load(&directory).unwrap());
+        contexts
+            .save(P4Context {
+                executable: Some(executable.to_string_lossy().into_owned()),
+                server: "fake:1666".into(),
+                user: "alice".into(),
+                client: "main".into(),
+                cwd: Some(directory.to_string_lossy().into_owned()),
+                ..Default::default()
+            })
+            .unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("logs.sqlite")).unwrap());
+        let journal =
+            Arc::new(OperationJournal::open(&directory.join("operations.sqlite")).unwrap());
+        let runner = Arc::new(P4Runner::new(logs, journal));
+        let cache = Arc::new(StatusCache::new(15_000, 8, 1024 * 1024));
+        let service = SyncService::with_ttl(runner, contexts, cache.clone(), 120_000);
+        LatestHarness {
+            directory,
+            service,
+            cache,
+        }
+    }
+
+    /// Deterministic fake `p4` (no real Perforce): records the full argument line
+    /// and optionally prints one stdout line before the chosen exit code.
+    fn fake_p4(directory: &Path, exit_code: i32, stdout: Option<&str>) -> PathBuf {
+        let calls = directory.join("calls.txt");
+        #[cfg(windows)]
+        {
+            let executable = directory.join("fake-p4.cmd");
+            let echo = stdout
+                .map(|line| format!("echo {line}\r\n"))
+                .unwrap_or_default();
+            let script = format!(
+                "@echo off\r\necho %*>>\"{}\"\r\n{echo}exit /b {exit_code}\r\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            executable
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let executable = directory.join("fake-p4");
+            let echo = stdout
+                .map(|line| format!("printf '%s\\n' '{line}'\n"))
+                .unwrap_or_default();
+            let script = format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{}\"\n{echo}exit {exit_code}\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&executable, permissions).unwrap();
+            executable
+        }
+    }
+
+    fn recorded_calls(directory: &Path) -> Vec<String> {
+        std::fs::read_to_string(directory.join("calls.txt"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    fn latest_request() -> SyncPreviewRequest {
+        SyncPreviewRequest {
+            paths: vec!["//depot/main/...".into()],
+            revision: SyncRevisionSpec {
+                kind: SyncRevisionKind::Head,
+                value: None,
+            },
+            force: false,
+            parallel_threads: None,
+            operation_id: Some("get-latest-test".into()),
+        }
+    }
+
+    #[tokio::test]
+    async fn sync_latest_runs_one_plain_head_sync_and_invalidates_status() {
+        let harness = latest_harness("success", |directory| {
+            fake_p4(
+                directory,
+                0,
+                Some(r#"{"depotFile":"//depot/main/a","action":"updated"}"#),
+            )
+        });
+        let mut request = latest_request();
+        // Get Latest semantics are authoritative: force/change requests are
+        // coerced to the plain head sync instead of passing -f/@42 through.
+        request.force = true;
+        request.revision = SyncRevisionSpec {
+            kind: SyncRevisionKind::Change,
+            value: Some("42".into()),
+        };
+        let result = harness.service.sync_latest(request, None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Succeeded);
+        assert_eq!(result.failure, None);
+        assert_eq!(result.operation_id.as_deref(), Some("get-latest-test"));
+        assert_eq!(result.affected_paths, vec!["//depot/main/...".to_string()]);
+        assert!(result.refresh_workspace);
+        assert!(result.refresh_depot);
+
+        let calls = recorded_calls(&harness.directory);
+        assert_eq!(
+            calls.len(),
+            1,
+            "sync_latest must not run a preview/inspection command: {calls:?}"
+        );
+        let line = &calls[0];
+        assert!(line.contains(" sync "), "unexpected invocation: {line}");
+        assert!(line.contains("//depot/main/...#head"), "{line}");
+        assert!(!line.contains("@42"), "{line}");
+        let arguments = line.split_whitespace().collect::<Vec<_>>();
+        assert!(!arguments.contains(&"-n"), "{line}");
+        assert!(!arguments.contains(&"-f"), "{line}");
+        assert!(!line.contains("fstat"), "{line}");
+
+        let diagnostics = harness.cache.diagnostics();
+        assert_eq!(
+            diagnostics
+                .invalidation_reasons
+                .get("FileMutation")
+                .copied(),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_latest_reports_nonzero_exit_as_failed_without_faking_success() {
+        let harness = latest_harness("exit-code", |directory| fake_p4(directory, 3, None));
+        let result = harness.service.sync_latest(latest_request(), None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert_eq!(result.failure, Some(SyncFailureCode::CommandFailure));
+        assert!(result.message.contains("did not complete cleanly"));
+        assert_eq!(recorded_calls(&harness.directory).len(), 1);
+        assert_eq!(
+            harness
+                .cache
+                .diagnostics()
+                .invalidation_reasons
+                .get("FileMutation")
+                .copied(),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_latest_reports_runner_error_as_unknown() {
+        let harness = latest_harness("spawn-error", |directory| directory.join("missing-p4.exe"));
+        let result = harness.service.sync_latest(latest_request(), None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Unknown);
+        assert!(result.failure.is_some());
+        assert_eq!(
+            harness
+                .cache
+                .diagnostics()
+                .invalidation_reasons
+                .get("FileMutation")
+                .copied(),
+            Some(1),
+            "status cache is invalidated even when the runner errors"
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_latest_rejects_unsafe_targets_before_running_p4() {
+        let harness = latest_harness("invalid-target", |directory| fake_p4(directory, 0, None));
+        let mut request = latest_request();
+        request.paths = vec!["-f //depot/main/...".into()];
+        let result = harness.service.sync_latest(request, None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert!(result
+            .message
+            .contains("Get Latest was rejected before running p4 sync"));
+        assert!(
+            recorded_calls(&harness.directory).is_empty(),
+            "p4 must not run"
+        );
+        assert!(harness.cache.diagnostics().invalidation_reasons.is_empty());
     }
 }

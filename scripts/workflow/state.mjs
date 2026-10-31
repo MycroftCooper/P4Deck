@@ -4,21 +4,37 @@
 //   node scripts/workflow/state.mjs import               从 TODO 迁移（保留已有 verification / 批次切片）
 //   node scripts/workflow/state.mjs check [--strict]     校验状态库（可挂进 CI）
 //   node scripts/workflow/state.mjs board                渲染 Markdown 看板
+//   node scripts/workflow/state.mjs queue [--for ROLE] [--ready|--waiting]
+//   node scripts/workflow/state.mjs next [--for ROLE]     下一个就绪任务
 //   node scripts/workflow/state.mjs task <ID> [--for FE|BE|QA|LEAD] [--json|--message]
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+  childrenOf,
+  completionMap,
+  dependentsOf,
+  findDependencyCycles,
+  findParentCycles,
+  isHumanDep,
+  isTaskSatisfied,
+  parentIdOf,
+  priorityRank,
+  readinessMap,
+  sortReady,
+  todoIndex,
+} from "./deps.mjs";
 const stripBom = (text) => (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const TODO_DOC = path.join(ROOT, "ForAIDoc", "PM", "Windows本机私用TODO.md");
+const TODO_DOC = process.env.P4DECK_TODO_DOC ?? path.join(ROOT, "ForAIDoc", "PM", "Windows本机私用TODO.md");
 const STATE_DIR = path.join(ROOT, "ForAIDoc", "PM", "工作流");
-const STATE_FILE = path.join(STATE_DIR, "state.json");
-const BOARD_FILE = path.join(STATE_DIR, "看板.md");
+const STATE_FILE = process.env.P4DECK_STATE ?? path.join(STATE_DIR, "state.json");
+const BOARD_FILE = process.env.P4DECK_BOARD ?? path.join(STATE_DIR, "看板.md");
 const OWNERSHIP_FILE = path.join(STATE_DIR, "ownership.json");
 const ARTIFACT_DIR = path.join(ROOT, "artifacts", "workflow");
-const TODOS_FILE = path.join(STATE_DIR, "人类待办.json");
+const TODOS_FILE = process.env.P4DECK_TODOS ?? path.join(STATE_DIR, "人类待办.json");
 
 const STAGES = ["done", "implemented", "partial", "in-progress", "todo", "blocked", "proposed"];
 const TYPES = ["bug", "feature", "refactor"];
@@ -275,12 +291,25 @@ function mergePackage(previous, next) {
   };
 }
 
-function buildState({ main, archived, subitems }, previous) {
+function buildState({ main, archived, subitems }, previous, todoIds = new Set()) {
   const known = new Set(main.map((entry) => entry.id));
   const previousById = new Map((previous?.packages ?? []).map((pkg) => [pkg.id, pkg]));
   for (const entry of [...main, ...archived]) {
-    entry.deps = extractDeps(entry.depsRaw).filter((dep) => known.has(dep) && dep !== entry.id);
+    entry.deps = extractDeps(entry.depsRaw).filter(
+      (dep) => (known.has(dep) || todoIds.has(dep)) && dep !== entry.id,
+    );
   }
+  const previousSubitems = new Map((previous?.subitems ?? []).map((item) => [item.id, item]));
+  const mergedSubitems = subitems.map((item) => {
+    const before = previousSubitems.get(item.id);
+    if (!before?.verification?.humanAccepted) return item;
+    return {
+      ...item,
+      stage: "done",
+      verification: before.verification,
+      note: item.note || before.note || "",
+    };
+  });
   const packages = [...main, ...archived].map((entry) => mergePackage(previousById.get(entry.id), entry));
   const batch = previous?.batch ? { ...defaultBatch(), ...previous.batch } : defaultBatch();
   if (!Array.isArray(batch.slices) || batch.slices.length === 0) batch.slices = DEFAULT_SLICES;
@@ -297,11 +326,11 @@ function buildState({ main, archived, subitems }, previous) {
       main: packages.filter((entry) => !entry.archived).length,
       archived: packages.filter((entry) => entry.archived).length,
       total: packages.length,
-      subitems: subitems.length,
+      subitems: mergedSubitems.length,
       slices: batch.slices.length,
     },
     packages,
-    subitems,
+    subitems: mergedSubitems,
   };
 }
 
@@ -313,7 +342,11 @@ async function cmdImport() {
   } catch {
     previous = undefined;
   }
-  const state = buildState(parseTodo(markdown), previous);
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const todoIds = new Set(
+    (todos.items ?? []).map((item) => String(item.id ?? "").toUpperCase()).filter(Boolean),
+  );
+  const state = buildState(parseTodo(markdown), previous, todoIds);
   // Compare against the count claimed in the TODO doc instead of a hard-coded total.
   const claimed = markdown.match(/共\s*\*\*(\d+)\*\*\s*项/)?.[1];
   if (claimed && Number(claimed) !== state.counts.total) {
@@ -377,6 +410,8 @@ function refreshCounts(state) {
 
 async function cmdCheck(args) {
   const state = await loadState();
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const todoIds = new Set((todos.items ?? []).map((item) => String(item.id ?? "").toUpperCase()));
   const strict = args.includes("--strict");
   const errors = [];
   const warnings = [];
@@ -389,7 +424,13 @@ async function cmdCheck(args) {
     if (!TYPES.includes(pkg.type)) errors.push(`${pkg.id}: 未知类型 ${pkg.typeRaw}`);
     if (!STAGES.includes(pkg.stage)) errors.push(`${pkg.id}: 未知状态 ${pkg.statusRaw}`);
     if (!pkg.owner || !pkg.owner.trim()) errors.push(`${pkg.id}: 缺负责人`);
-    for (const dep of pkg.deps) if (!known.has(dep)) errors.push(`${pkg.id}: 依赖不存在 ${dep}`);
+    for (const dep of pkg.deps) {
+      if (isHumanDep(dep)) {
+        if (!todoIds.has(String(dep).toUpperCase())) errors.push(`${pkg.id}: 依赖的人类待办不存在 ${dep}`);
+        continue;
+      }
+      if (!known.has(dep)) errors.push(`${pkg.id}: 依赖不存在 ${dep}`);
+    }
     for (const evidence of pkg.evidence) {
       try {
         await readFile(path.join(ROOT, evidence));
@@ -406,6 +447,26 @@ async function cmdCheck(args) {
     }
   }
 
+  const allEntries = [...state.packages, ...state.subitems];
+  const allIds = new Set(allEntries.map((entry) => entry.id));
+  const seenSubitems = new Set();
+  for (const item of state.subitems) {
+    if (seenSubitems.has(item.id)) errors.push(`重复子项 ID: ${item.id}`);
+    seenSubitems.add(item.id);
+    if (!STAGES.includes(item.stage)) errors.push(`${item.id}: 未知子项状态 ${item.statusRaw}`);
+    if (!item.owner || !item.owner.trim()) errors.push(`${item.id}: 缺负责人`);
+    const parentId = parentIdOf(item);
+    if (!parentId) errors.push(`${item.id}: 缺父任务`);
+    else if (!allIds.has(parentId)) errors.push(`${item.id}: 父任务不存在 ${parentId}`);
+    else if (parentId === item.id) errors.push(`${item.id}: 父任务不能是自己`);
+    for (const dep of item.deps ?? []) {
+      if (isHumanDep(dep)) {
+        if (!todoIds.has(String(dep).toUpperCase())) errors.push(`${item.id}: 依赖的人类待办不存在 ${dep}`);
+      } else if (!known.has(dep)) {
+        errors.push(`${item.id}: 依赖不存在 ${dep}`);
+      }
+    }
+  }
   if (!state.batch?.id) errors.push("batch 缺 id");
   if (!state.batch?.goal) errors.push("batch 缺 goal");
   if (!state.batch?.stopCondition) errors.push("batch 缺停机条件");
@@ -421,6 +482,19 @@ async function cmdCheck(args) {
   if (!(state.batch?.slices ?? []).length) errors.push("batch 缺切片列表");
   const mainCount = state.packages.filter((entry) => !entry.archived).length;
   if (mainCount === 0) errors.push("没有主工作包");
+  for (const cycle of findDependencyCycles(state.packages)) {
+    errors.push(`依赖环: ${cycle.join(" -> ")}`);
+  }
+  for (const cycle of findParentCycles(allEntries)) {
+    errors.push(`父子环: ${cycle.join(" -> ")}`);
+  }
+  const completion = completionMap(allEntries);
+  const readiness = readinessMap(allEntries, todos);
+  const activeEntries = allEntries.filter(
+    (entry) => !entry.archived && !(completion.get(entry.id)?.satisfied ?? isTaskSatisfied(entry)),
+  );
+  const readyCount = activeEntries.filter((entry) => readiness.get(entry.id)?.ready).length;
+  const parentCount = state.packages.filter((entry) => (completion.get(entry.id)?.childrenTotal ?? 0) > 0).length;
 
   const summary = summarize(state);
   const verbose = args.includes("--verbose");
@@ -436,6 +510,9 @@ async function cmdCheck(args) {
     subitems: state.subitems.length,
     byStage: summary.byStage,
     bySlice: summary.slices,
+    ready: readyCount,
+    waiting: activeEntries.length - readyCount,
+    parents: parentCount,
     errors,
     warningCount: warnings.length,
     warnings: shownWarnings,
@@ -471,6 +548,10 @@ const SLICE_LABELS = {
 
 async function cmdBoard(args = []) {
   const state = await loadState();
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const allEntries = [...state.packages, ...state.subitems];
+  const completion = completionMap(allEntries);
+  const readiness = readinessMap(allEntries, todos);
   const summary = summarize(state);
   // 极简视图：给 agent 用，只有 id/状态/优先级/负责人，避免拉整份看板。
   if (args.includes("--compact")) {
@@ -509,32 +590,53 @@ async function cmdBoard(args = []) {
       .join(" ");
     lines.push(`| ${moduleName} | ${bucket.total} | ${detail} |`);
   }
-  lines.push("", "## 人类待办（只有用户能勾选）", "");
-  const todos = await readJson(TODOS_FILE, { items: [] });
+  lines.push("", "## 人类待办（只有用户能勾选，完成后从链上移除）", "");
   const openTodos = (todos.items ?? []).filter((item) => !item.done);
   const doneTodos = (todos.items ?? []).filter((item) => item.done);
-  if (!openTodos.length && !doneTodos.length) {
-    lines.push("（暂无）");
+  if (!openTodos.length) {
+    lines.push("（没有未完成的人类待办）");
   } else {
-    lines.push("| 完成 | ID | 待办 | 说明 |", "|---|---|---|---|");
-    for (const item of [...openTodos, ...doneTodos]) {
-      lines.push(`| ${item.done ? "[x]" : "[ ]"} | ${item.id} | ${truncate(item.text, 60)} | ${truncate(item.note, 40)} |`);
+    lines.push("| ID | 待办 | 说明 | 阻塞任务 |", "|---|---|---|---|");
+    for (const item of openTodos) {
+      const blocked = dependentsOf(item.id, state.packages).filter(
+        (pkg) => !pkg.archived && !(completion.get(pkg.id)?.satisfied ?? isTaskSatisfied(pkg)),
+      );
+      lines.push(
+        `| ${item.id} | ${truncate(item.text, 60)} | ${truncate(item.note, 40)} | ${blocked.length ? blocked.map((pkg) => pkg.id).join("、") : "—"} |`,
+      );
     }
     lines.push("");
-    lines.push("> 勾选方式：`node scripts/workflow/human-todos.mjs toggle <ID>`，或用 HTML 看板 / DSH 面板直接点。");
+    lines.push("> 勾选方式：`node scripts/workflow/human-todos.mjs toggle <ID>`，或用 HTML 看板 / DSH 面板直接点。打钩后会立即解锁下游任务并刷新本看板。");
+  }
+  if (doneTodos.length) {
+    lines.push("");
+    lines.push(`> 已完成并移出阻塞链：${doneTodos.map((item) => item.id).join("、")}`);
   }
   lines.push("", "## 主工作包（活跃）", "");
-  lines.push("| ID | 功能 | 类型 | 负责人 | 优先级 | 状态 | 验收 | 剩余步骤 |", "|---|---|---|---|---|---|---|---|");
+  lines.push(
+    "| ID | 功能 | 类型 | 负责人 | 优先级 | 状态 | 就绪 | 验收 | 剩余步骤 |",
+    "|---|---|---|---|---|---|---|---|---|",
+  );
   for (const pkg of state.packages.filter((entry) => !entry.archived)) {
     const verification = pkg.verification ?? {};
     const marks = [verification.qaPassed ? "QA" : "", verification.applied ? "已应用" : "", verification.humanAccepted ? "人验" : ""]
       .filter(Boolean)
       .join("/");
+    const state_ = readiness.get(pkg.id);
+    const comp = completion.get(pkg.id) ?? { satisfied: false, derived: false, childrenTotal: 0, childrenDone: 0 };
+    const childProgress = comp.childrenTotal ? `子任务 ${comp.childrenDone}/${comp.childrenTotal}` : "";
+    const readyText = comp.satisfied
+      ? comp.derived
+        ? `✅ 完成（子任务 ${comp.childrenDone}/${comp.childrenTotal}）`
+        : "完成"
+      : state_?.ready
+        ? childProgress || "✅ 就绪"
+        : `⏳ 等 ${state_.waiting.map((item) => item.id).join("、")}${childProgress ? `（${childProgress}）` : ""}`;
     lines.push(
-      `| ${pkg.id} | ${truncate(pkg.scope, 28)} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
+      `| ${pkg.id} | ${truncate(pkg.scope, 28)} | ${pkg.type ?? "?"} | ${truncate(pkg.owner, 18)} | ${truncate(pkg.priority, 12)} | ${pkg.stage ?? "?"} | ${readyText} | ${marks || "—"} | ${truncate(pkg.note, 50)} |`,
     );
   }
-  lines.push("", "## 关联子项（不单独计数）", "");
+  lines.push("", "## 关联子项 / 子任务（完成聚合，不单独计数）", "");
   lines.push("| 子项 | 父项 | 类型 | 负责人 | 状态 |", "|---|---|---|---|---|");
   for (const item of state.subitems) {
     lines.push(`| ${item.id} | ${item.parentId} | ${item.type ?? "?"} | ${truncate(item.owner, 18)} | ${item.stage} |`);
@@ -582,6 +684,18 @@ async function cmdTask(id, args) {
   const role = roleIndex >= 0 ? String(args[roleIndex + 1] ?? "").toUpperCase() : undefined;
   const scope = role ? await roleScope(role) : "按 ownership.json 解析";
   const commands = ["node scripts/workflow/ci-fast.mjs --files <本片改动>", "node scripts/workflow/ownership.mjs check --role " + (role ?? "FE")];
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const allEntries = [...state.packages, ...state.subitems];
+  const readiness = readinessMap(allEntries, todos).get(pkg.id) ?? {
+    ready: true,
+    satisfied: false,
+    waiting: [],
+  };
+  const completion = completionMap(allEntries).get(pkg.id) ?? {
+    childrenTotal: 0,
+    childrenDone: 0,
+    derived: false,
+  };
   const ticket = {
     id: pkg.id,
     type: pkg.type,
@@ -591,6 +705,12 @@ async function cmdTask(id, args) {
     scope: pkg.scope,
     writeScope: scope,
     deps: pkg.deps ?? [],
+    ready: readiness.ready,
+    satisfied: readiness.satisfied,
+    waitingOn: readiness.waiting.map((item) => item.id),
+    childrenTotal: completion.childrenTotal,
+    childrenDone: completion.childrenDone,
+    derivedComplete: completion.derived,
     exit: pkg.note || "见 TODO 表剩余步骤",
     forbidden: "生产 P4（含只读）/ 真实工具 / 打包发布 / 改写他人写域 / 整文件覆盖共享文件",
     evidence: pkg.evidence ?? [],
@@ -602,11 +722,18 @@ async function cmdTask(id, args) {
     return;
   }
   if (args.includes("--message")) {
+    const depText = ticket.deps.length ? ticket.deps.join("、") : "无";
+    const childText = ticket.childrenTotal ? `；子任务 ${ticket.childrenDone}/${ticket.childrenTotal}` : "";
+    const depState = ticket.satisfied
+      ? "完成"
+      : readiness.ready
+        ? "就绪"
+        : `等待 ${ticket.waitingOn.join("、")}`;
     const lines = [
       `任务 ${ticket.id} ｜ ${ticket.type} ｜ ${ticket.priority} ｜ ${ticket.module}`,
       `范围 ${truncate(ticket.scope, 90)}`,
       `写域 ${truncate(ticket.writeScope, 120)}`,
-      `依赖 ${ticket.deps.length ? ticket.deps.join("、") : "无"}`,
+      `依赖 ${depText}（${depState}${childText}）`,
       `退出 ${truncate(ticket.exit, 120)}`,
       `禁做 ${ticket.forbidden}`,
       `门禁 ${ticket.gates.join(" ； ")}`,
@@ -648,30 +775,42 @@ async function cmdAccept(id, args) {
     process.exit(2);
   }
   const state = await loadState();
-  const pkg = state.packages.find((entry) => entry.id.toUpperCase() === id.toUpperCase());
-  if (!pkg) {
+  const allEntries = [...state.packages, ...state.subitems];
+  const target = allEntries.find((entry) => entry.id.toUpperCase() === id.toUpperCase());
+  if (!target) {
     process.stderr.write(`未知任务: ${id}\n`);
     process.exit(1);
   }
-  if (pkg.archived) {
-    process.stderr.write(`${pkg.id} 已归档，不能重复验收\n`);
+  if (target.archived) {
+    process.stderr.write(`${target.id} 已归档，不能重复验收\n`);
     process.exit(1);
   }
-  const verification = (pkg.verification ??= { qaPassed: null, applied: null, humanAccepted: null });
+  const beforeChildren = completionMap(allEntries);
+  const children = childrenOf(target.id, allEntries).filter(
+    (child) => !(beforeChildren.get(child.id)?.satisfied ?? isTaskSatisfied(child)),
+  );
+  if (children.length) {
+    process.stderr.write(
+      `拒绝验收 ${target.id}: 还有 ${children.length} 个子任务未完成（${children.map((child) => child.id).join("、")}）。` +
+        "父任务必须等所有子任务完成；先逐个验收子任务。\n",
+    );
+    process.exit(1);
+  }
+  const verification = (target.verification ??= { qaPassed: null, applied: null, humanAccepted: null });
   if (verification.humanAccepted === true) {
-    process.stdout.write(`${pkg.id} 已经是人工验收状态（${verification.humanAcceptedAt ?? "时间未知"}）\n`);
+    process.stdout.write(`${target.id} 已经是人工验收状态（${verification.humanAcceptedAt ?? "时间未知"}）\n`);
     return;
   }
   const evidenceComplete = verification.qaPassed === true && verification.applied === true;
   if (!evidenceComplete && !force) {
     process.stderr.write(
-      `拒绝验收 ${pkg.id}: 需要 QA 通过 + 已 Apply 事实（当前 qaPassed=${verification.qaPassed ?? "null"}, applied=${verification.applied ?? "null"}）。` +
+      `拒绝验收 ${target.id}: 需要 QA 通过 + 已 Apply 事实（当前 qaPassed=${verification.qaPassed ?? "null"}, applied=${verification.applied ?? "null"}）。` +
         "若确有历史人工验收记录、只是缺回执，用 --force 并在 --note 里写清依据。\n",
     );
     process.exit(1);
   }
   const plan = {
-    id: pkg.id,
+    id: target.id,
     acceptedAt: new Date().toISOString(),
     acceptedBy: by,
     note,
@@ -682,16 +821,40 @@ async function cmdAccept(id, args) {
     process.stdout.write(`${JSON.stringify({ dryRun: true, ...plan }, null, 2)}\n`);
     return;
   }
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const beforeCompletion = completionMap(allEntries);
+  const before = readinessMap(allEntries, todos);
+  const dependentIds = dependentsOf(target.id, allEntries)
+    .filter((entry) => !entry.archived)
+    .map((entry) => entry.id);
+  const parentId = parentIdOf(target);
+  const parent = parentId ? allEntries.find((entry) => entry.id === parentId) : undefined;
   verification.humanAccepted = true;
   verification.humanAcceptedAt = plan.acceptedAt;
   verification.humanAcceptedBy = plan.acceptedBy;
   verification.humanAcceptedNote = plan.note;
   verification.humanAcceptedEvidence = plan.evidence;
   verification.humanAcceptedForced = plan.forced;
-  pkg.stage = "done";
+  target.stage = "done";
   state.updatedAt = plan.acceptedAt;
+  const afterCompletion = completionMap(allEntries);
+  const after = readinessMap(allEntries, todos);
   await writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  process.stdout.write(`已登记人工验收 ${pkg.id}：${note}${plan.forced ? "（--force 补登历史验收）" : ""}\n`);
+  process.stdout.write(`已登记人工验收 ${target.id}：${note}${plan.forced ? "（--force 补登历史验收）" : ""}\n`);
+  const unlocked = dependentIds.filter((depId) => !before.get(depId)?.ready && after.get(depId)?.ready);
+  if (unlocked.length) process.stdout.write(`解锁下游任务：${unlocked.join("、")}\n`);
+  if (parent) {
+    const progress = afterCompletion.get(parent.id);
+    if (!beforeCompletion.get(parent.id)?.satisfied && progress?.satisfied) {
+      process.stdout.write(`父任务汇总完成：${parent.id}（子任务 ${progress.childrenDone}/${progress.childrenTotal}）\n`);
+      const parentUnlocked = dependentsOf(parent.id, allEntries)
+        .filter((entry) => !entry.archived && !before.get(entry.id)?.ready && after.get(entry.id)?.ready)
+        .map((entry) => entry.id);
+      if (parentUnlocked.length) process.stdout.write(`顺带解锁：${parentUnlocked.join("、")}\n`);
+    } else if (progress?.childrenTotal) {
+      process.stdout.write(`父任务 ${parent.id} 进度：子任务 ${progress.childrenDone}/${progress.childrenTotal}\n`);
+    }
+  }
 }
 
 async function cmdArchive(id, args) {
@@ -713,6 +876,15 @@ async function cmdArchive(id, args) {
   if (pkg.archived) {
     process.stdout.write(`${pkg.id} 已经归档（${pkg.archivedAt ?? "时间未知"}）\n`);
     return;
+  }
+  const pendingChildren = childrenOf(pkg.id, [...state.packages, ...state.subitems]).filter(
+    (child) => !(completionMap([...state.packages, ...state.subitems]).get(child.id)?.satisfied ?? isTaskSatisfied(child)),
+  );
+  if (pendingChildren.length) {
+    process.stderr.write(
+      `拒绝归档 ${pkg.id}: 还有 ${pendingChildren.length} 个子任务未完成（${pendingChildren.map((child) => child.id).join("、")}）\n`,
+    );
+    process.exit(1);
   }
   if (pkg.verification?.humanAccepted !== true) {
     process.stderr.write(
@@ -766,31 +938,119 @@ async function cmdRestore(id, args) {
   process.stdout.write(`已恢复 ${pkg.id} 为活跃任务\n`);
 }
 
-/** 角色队列：一次给出"我该干哪些"，替代翻看板/state.json。 */
+/** 角色队列：一次给出"我该干哪些"，并标出依赖链上的就绪/等待。 */
 async function cmdQueue(args) {
   const roleIndex = args.indexOf("--for");
   const role = roleIndex >= 0 ? String(args[roleIndex + 1] ?? "").toUpperCase() : undefined;
   const state = await loadState();
-  const rows = state.packages.filter(
-    (pkg) => !pkg.archived && (!role || String(pkg.owner ?? "").toUpperCase().includes(role)),
-  );
-  const tasks = rows.map((pkg) => ({
-    id: pkg.id,
-    stage: pkg.stage,
-    priority: pkg.priority,
-    owner: pkg.owner,
-    type: pkg.type,
-    module: pkg.module,
-  }));
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const allEntries = [...state.packages, ...state.subitems];
+  const readiness = readinessMap(allEntries, todos);
+  const completion = completionMap(allEntries);
+  const onlyReady = args.includes("--ready");
+  const onlyWaiting = args.includes("--waiting");
+  const rows = allEntries
+    .filter(
+      (pkg) =>
+        !pkg.archived &&
+        !(completion.get(pkg.id)?.satisfied ?? isTaskSatisfied(pkg)) &&
+        (!role || String(pkg.owner ?? "").toUpperCase().includes(role)),
+    )
+    .filter((pkg) => {
+      const ready = readiness.get(pkg.id)?.ready === true;
+      if (onlyReady && !ready) return false;
+      if (onlyWaiting && ready) return false;
+      return true;
+    });
+  const tasks = rows.map((pkg) => {
+    const state_ = readiness.get(pkg.id) ?? { ready: true, waiting: [] };
+    const child = completion.get(pkg.id) ?? { childrenTotal: 0, childrenDone: 0 };
+    return {
+      id: pkg.id,
+      stage: pkg.stage,
+      priority: pkg.priority,
+      owner: pkg.owner,
+      type: pkg.type,
+      module: pkg.module ?? "关联子项",
+      parent: parentIdOf(pkg),
+      ready: state_.ready,
+      waitingOn: state_.waiting.map((item) => item.id),
+      childrenTotal: child.childrenTotal,
+      childrenDone: child.childrenDone,
+    };
+  });
+  const readyCount = tasks.filter((task) => task.ready).length;
   if (args.includes("--json")) {
-    process.stdout.write(`${JSON.stringify({ role: role ?? "ALL", count: tasks.length, tasks }, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        { role: role ?? "ALL", count: tasks.length, ready: readyCount, waiting: tasks.length - readyCount, tasks },
+        null,
+        2,
+      )}\n`,
+    );
     return;
   }
-  const lines = [`队列 ${role ?? "全部"}：${tasks.length} 个活跃任务`];
+  const lines = [
+    `队列 ${role ?? "全部"}：${tasks.length} 个活跃任务（就绪 ${readyCount} / 等待 ${tasks.length - readyCount}）`,
+  ];
   for (const task of tasks) {
-    lines.push(`${task.id}  ${task.stage}  ${task.priority}  ${truncate(task.owner, 16)}  ${truncate(task.module, 14)}`);
+    const childInfo = task.childrenTotal ? `（子任务 ${task.childrenDone}/${task.childrenTotal}）` : "";
+    const parentInfo = task.parent ? `（子项 → ${task.parent}）` : "";
+    const marker = task.ready ? `READY${childInfo}` : `WAIT ${task.waitingOn.join("、")}${childInfo}`;
+    lines.push(
+      `${task.id}  ${task.stage}  ${task.priority}  ${truncate(task.owner, 16)}  ${truncate(task.module, 14)}  ${marker}${parentInfo}`,
+    );
   }
   process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+/** 下一个可开工任务：按优先级取第一个就绪项。 */
+async function cmdNext(args) {
+  const roleIndex = args.indexOf("--for");
+  const role = roleIndex >= 0 ? String(args[roleIndex + 1] ?? "").toUpperCase() : undefined;
+  const state = await loadState();
+  const todos = await readJson(TODOS_FILE, { items: [] });
+  const allEntries = [...state.packages, ...state.subitems];
+  const readiness = readinessMap(allEntries, todos);
+  const completion = completionMap(allEntries);
+  const active = allEntries.filter(
+    (pkg) =>
+      !pkg.archived &&
+      !(completion.get(pkg.id)?.satisfied ?? isTaskSatisfied(pkg)) &&
+      (!role || String(pkg.owner ?? "").toUpperCase().includes(role)),
+  );
+  const ready = sortReady(active, readiness);
+  const next = ready[0];
+  if (args.includes("--json")) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          role: role ?? "ALL",
+          readyCount: ready.length,
+          task: next
+            ? { id: next.id, stage: next.stage, priority: next.priority, owner: next.owner, module: next.module }
+            : null,
+          waiting: active.filter((pkg) => !readiness.get(pkg.id)?.ready).map((pkg) => ({
+            id: pkg.id,
+            waitingOn: readiness.get(pkg.id)?.waiting.map((item) => item.id) ?? [],
+          })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+  if (!next) {
+    process.stdout.write(`没有就绪任务（角色 ${role ?? "全部"}）。\n`);
+    return;
+  }
+  process.stdout.write(
+    `下一个就绪任务：${next.id}  ${next.stage}  ${next.priority}  ${truncate(next.owner, 16)}  ${truncate(next.module, 14)}\n`,
+  );
+  if (ready.length > 1) {
+    process.stdout.write(`（另有 ${ready.length - 1} 个就绪：${ready.slice(1, 6).map((pkg) => pkg.id).join("、")}）\n`);
+  }
 }
 
 const [command, ...rest] = process.argv.slice(2);
@@ -807,6 +1067,9 @@ switch (command) {
   case "queue":
     await cmdQueue(rest);
     break;
+  case "next":
+    await cmdNext(rest);
+    break;
   case "task":
     await cmdTask(rest[0], rest.slice(1));
     break;
@@ -820,6 +1083,8 @@ switch (command) {
     await cmdRestore(rest[0], rest.slice(1));
     break;
   default:
-    process.stderr.write("usage: node scripts/workflow/state.mjs <import|check|board|task <ID>|accept <ID>|archive <ID>|restore <ID>>\n");
+    process.stderr.write(
+      "usage: node scripts/workflow/state.mjs <import|check|board|queue [--for ROLE] [--ready|--waiting]|next [--for ROLE]|task <ID>|accept <ID>|archive <ID>|restore <ID>>\n",
+    );
     process.exit(2);
 }

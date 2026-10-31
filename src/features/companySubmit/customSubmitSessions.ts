@@ -25,6 +25,26 @@ export function releaseCustomSubmitChange(
   active.delete(key);
 }
 
+/**
+ * Release a terminal tool window by its exact requestId+changeId. The opaque
+ * scope used at claim time may have changed with a connection/view generation,
+ * so this scans claims instead of assuming the current scope. Idempotent and
+ * request-scoped: stale or duplicate exits cannot free another session.
+ */
+export function releaseCustomSubmitRequest(
+  requestId: string,
+  changeId: string,
+): boolean {
+  const suffix = `\u0000${changeId}`;
+  let released = false;
+  for (const [key, activeRequest] of [...active])
+    if (activeRequest === requestId && key.endsWith(suffix)) {
+      active.delete(key);
+      released = true;
+    }
+  return released;
+}
+
 /** Test isolation only: clear per-connection occupancy. */
 export function resetCustomSubmitSessions(): void {
   active.clear();

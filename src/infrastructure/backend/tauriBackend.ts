@@ -161,6 +161,7 @@ export const tauriBackend: Backend = {
       | import("../../shared/contracts").SyncResult
       | import("../../shared/contracts").LocalIoActionResult
     >("confirm_sync", { confirmation }),
+  syncLatest: (request) => invoke("sync_latest", { request }),
   getFilePreview: (path) => invoke("get_file_preview", { path }),
   getDiff: (request) => invoke("get_diff", { request }),
   getFileHistory: (request) => invoke("get_file_history", { request }),
@@ -199,6 +200,7 @@ export const tauriBackend: Backend = {
       | import("../../shared/contracts").WorkflowResult
       | import("../../shared/contracts").MergeResolveActionResult
     >("confirm_resolve", { confirmation }),
+  resolveStats: (request) => invoke("resolve_stats", { request }),
   openManualMerge: (request) =>
     invoke<
       | import("../../shared/contracts").ManualMergeSession
@@ -219,4 +221,13 @@ export const tauriBackend: Backend = {
       | import("../../shared/contracts").WorkflowResult
       | import("../../shared/contracts").MergeResolveActionResult
     >("confirm_manual_merge_resolve", { confirmation }),
+  detectExternalMergeTool: () =>
+    invoke<import("../../shared/contracts").ExternalMergeToolInfo>(
+      "detect_external_merge_tool",
+    ),
+  runExternalMerge: (request) =>
+    invoke<import("../../shared/contracts").ExternalMergeResult>(
+      "run_external_merge",
+      { request },
+    ),
 };

@@ -6,6 +6,12 @@ import {
   type FileBadgeId,
 } from "./fileDecorations";
 
+it("uses a yellow badge for older/not-synced revisions", () => {
+  expect(fileBadgeTone("outOfDate")).toBe("yellow");
+  expect(fileBadgeTone("notSynced")).toBe("yellow");
+  expect(fileBadgeTone("modified")).toBe("amber");
+});
+
 it("does not infer modified or latest from checkout or controlled alone", () => {
   expect(fileBadges({ state: "openedEdit" })).toEqual([
     { id: "edit", owner: "self" },
@@ -147,8 +153,8 @@ it("UI-10 semantic palette: checkout/add/move-target green; delete/conflict/erro
     locked: "warning",
     globalLock: "warning",
     exclusive: "warning",
-    outOfDate: "amber",
-    notSynced: "amber",
+    outOfDate: "yellow",
+    notSynced: "yellow",
     modified: "amber",
     integrate: "amber",
     latest: "teal",

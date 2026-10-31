@@ -29,7 +29,7 @@ export function startFileLockDirect(
   ].sort();
   const report = (
     phase: "preflight" | "execute" | "refresh",
-    outcome: "failed" | "unknown",
+    outcome: "failed" | "partial" | "unknown",
     code: "preflightBlocked" | "operationFailed" | "uncertainOutcome",
   ) =>
     void recordFrontendOperationLog({
@@ -83,18 +83,34 @@ export function startFileLockDirect(
         operationId,
       });
       settleFileLockProjection(operationId, result, false);
-      if (result.outcome !== "succeeded" && result.outcome !== "partial") {
-        withdrawFileLockProjection(operationId);
+      // `partial` means a mix of acknowledged and failed/blocked rows: the
+      // overlay already keeps only acknowledged rows, but the user must be told
+      // once that the requested files were NOT all locked/unlocked.
+      if (result.outcome !== "succeeded") {
+        if (result.outcome !== "partial")
+          withdrawFileLockProjection(operationId);
         notifyUser(
-          writeFailureText(result.message, {
-            zh: "锁定失败。",
-            en: "Lock request failed.",
-          }),
+          writeFailureText(
+            result.message,
+            result.outcome === "partial"
+              ? {
+                  zh: "部分文件未完成，本次操作只部分生效。",
+                  en: "Only part of the operation completed; some files were not affected.",
+                }
+              : {
+                  zh: "锁定失败。",
+                  en: "Lock request failed.",
+                },
+          ),
           "error",
         );
         report(
           "execute",
-          result.outcome === "unknown" ? "unknown" : "failed",
+          result.outcome === "unknown"
+            ? "unknown"
+            : result.outcome === "partial"
+              ? "partial"
+              : "failed",
           result.outcome === "unknown" ? "uncertainOutcome" : "operationFailed",
         );
       }

@@ -11,11 +11,14 @@ import type {
 import {
   acceptShelfObservation,
   finishShelfObservation,
+  knownNotAppliedWorkflowResult,
 } from "../actions/shelfObservation";
 import { blockedMovePaths } from "./moveOptimism";
 import { removalLedger } from "../actions/actionStore";
 import {
   validWorkflowReceipt,
+  workflowCommandCompleted,
+  workflowEnvelopeTrusted,
   type WorkflowActionLookup,
 } from "../actions/workflowReceipt";
 import type { ConnectionSnapshot } from "../companySubmit/model";
@@ -213,7 +216,7 @@ export function startDeleteShelf(
             const lookup = await dependencies.lookup(request);
             if (
               lookup.kind === "found" &&
-              validWorkflowReceipt(request, lookup.receipt) &&
+              validWorkflowReceipt(request, lookup.receipt, "shelfDelete") &&
               lookup.receipt.state === "settled" &&
               lookup.receipt.result
             ) {
@@ -232,29 +235,42 @@ export function startDeleteShelf(
             /* Receipt lookup never retries the write. */
           }
         }
-        const lifecycle = completedResult?.execution;
-        const commandCompleted = lifecycle?.state === "commandCompleted";
+        // Command-level success is trusted only with an exact envelope for this
+        // dispatch; a deterministic host rejection is a known "nothing written".
+        const facts = completedResult ?? result;
+        const lifecycle = facts.execution;
+        const commandCompleted = workflowCommandCompleted(
+          facts,
+          operationId,
+          "shelf",
+        );
+        const knownNoOp = knownNotAppliedWorkflowResult(facts);
+        const envelopeMismatch =
+          !!lifecycle && !workflowEnvelopeTrusted(facts, operationId, "shelf");
         unknown = commandCompleted
           ? false
-          : lifecycle?.state === "unknown" ||
-            result.files.some((f) => f.state === "unknown") ||
-            result.files.length !== snapshot.paths.length;
+          : knownNoOp
+            ? false
+            : envelopeMismatch ||
+              lifecycle?.state === "unknown" ||
+              facts.files.some((f) => f.state === "unknown") ||
+              facts.files.length !== snapshot.paths.length;
         const success =
           commandCompleted ||
-          (result.outcome === "succeeded" &&
+          (facts.outcome === "succeeded" &&
             !unknown &&
-            result.files.every(
+            facts.files.every(
               (f) =>
                 f.state === "succeeded" && snapshot.paths.includes(f.depotPath),
             ) &&
-            new Set(result.files.map((f) => f.depotPath)).size ===
+            new Set(facts.files.map((f) => f.depotPath)).size ===
               snapshot.paths.length);
         if (!success)
           report(
             "execute",
             unknown
               ? "unknown"
-              : result.files.some((f) => f.state === "succeeded")
+              : facts.files.some((f) => f.state === "succeeded")
                 ? "partial"
                 : "failed",
             unknown ? "uncertainOutcome" : "operationFailed",
@@ -268,7 +284,7 @@ export function startDeleteShelf(
               const lookup = await dependencies.lookup(request);
               if (
                 lookup.kind === "found" &&
-                validWorkflowReceipt(request, lookup.receipt) &&
+                validWorkflowReceipt(request, lookup.receipt, "shelfDelete") &&
                 lookup.receipt.state === "settled" &&
                 lookup.receipt.result
               ) {
@@ -290,24 +306,8 @@ export function startDeleteShelf(
           code,
         );
       } finally {
-        // A command-level completed delete has no per-file facts; releasing the
-        // admission lets later context actions proceed while the row overlay is
-        // corrected by one bounded authoritative refresh (never a fake success).
-        if (completedResult?.execution?.state === "commandCompleted") {
-          const record = removalLedger.get(operationId);
-          if (record?.data.execution)
-            removalLedger.update(
-              operationId,
-              {
-                ...record.data,
-                execution: {
-                  ...record.data.execution,
-                  admissionReleased: true,
-                },
-              },
-              record.phase,
-            );
-        }
+        // `finishShelfObservation` settles the items and releases the local
+        // admission for command-level success on both delete call paths.
         finishShelfObservation(
           operationId,
           originalRuntime,
@@ -406,16 +406,22 @@ export function startDeleteShelfDirect(
       let connection: ConnectionSnapshot | undefined;
       let completedResult: WorkflowResult | undefined;
       let success = false;
+      /**
+       * F9: a command-level success must be the exact envelope of this dispatch
+       * (same operationId, `kind: "shelf"`, self-consistent outcome). A present but
+       * mismatched envelope is never downgraded to the legacy per-file path.
+       */
       const succeeded = (result: WorkflowResult) =>
-        result.execution?.state === "commandCompleted" ||
-        (result.outcome === "succeeded" &&
-          result.files.length === snapshot.paths.length &&
-          result.files.every(
-            (f) =>
-              f.state === "succeeded" && snapshot.paths.includes(f.depotPath),
-          ) &&
-          new Set(result.files.map((f) => f.depotPath)).size ===
-            snapshot.paths.length);
+        result.execution
+          ? workflowCommandCompleted(result, operationId, "shelf")
+          : result.outcome === "succeeded" &&
+            result.files.length === snapshot.paths.length &&
+            result.files.every(
+              (f) =>
+                f.state === "succeeded" && snapshot.paths.includes(f.depotPath),
+            ) &&
+            new Set(result.files.map((f) => f.depotPath)).size ===
+              snapshot.paths.length;
       const recover = async () => {
         if (!connection || !dependencies.lookup) return;
         try {
@@ -423,7 +429,7 @@ export function startDeleteShelfDirect(
           const lookup = await dependencies.lookup(request);
           if (
             lookup.kind === "found" &&
-            validWorkflowReceipt(request, lookup.receipt) &&
+            validWorkflowReceipt(request, lookup.receipt, "shelfDelete") &&
             lookup.receipt.state === "settled" &&
             lookup.receipt.result
           ) {
@@ -453,7 +459,10 @@ export function startDeleteShelfDirect(
           depotPaths: snapshot.paths,
         });
         success = succeeded(completedResult);
-        if (!success) await recover();
+        // A deterministic host rejection is already settled evidence that nothing
+        // was written; a same-id receipt lookup cannot improve it.
+        if (!success && !knownNotAppliedWorkflowResult(completedResult))
+          await recover();
         if (!success)
           dependencies.report({
             eventId: `${operationId}-execute`,
@@ -480,6 +489,7 @@ export function startDeleteShelfDirect(
       } finally {
         // Success => removal is confirmed and one bounded active refetch replaces caches.
         // Failure/unknown => finish maps to unknown (row visible/reconcilable), no rollback claim.
+        // A host rejection is settled inside `finishShelfObservation` (known no-op).
         finishShelfObservation(
           operationId,
           originalRuntime,

@@ -1,4 +1,5 @@
-﻿import { beforeEach, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { beforeEach, expect, it, vi } from "vitest";
 
 const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
@@ -210,6 +211,32 @@ it("passes typed sync preview and confirmation requests through narrow commands"
   };
   await tauriBackend.confirmSync(confirmation);
   expect(invoke).toHaveBeenLastCalledWith("confirm_sync", { confirmation });
+});
+
+it("routes one-click Get Latest through the narrow sync_latest command", async () => {
+  const request = {
+    paths: ["//depot/main/a.txt"],
+    revision: { kind: "head" as const, value: "" },
+    operationId: "get-latest-42",
+  };
+  invoke.mockResolvedValue({
+    outcome: "succeeded",
+    message: "ok",
+    affectedPaths: request.paths,
+    counts: {
+      added: 0,
+      updated: 1,
+      deleted: 0,
+      upToDate: 0,
+      warnings: 0,
+      conflicts: 0,
+    },
+    refreshWorkspace: true,
+    refreshDepot: true,
+  });
+  const result = await tauriBackend.syncLatest(request);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("sync_latest", { request });
+  expect(result.outcome).toBe("succeeded");
 });
 
 it("passes a generation-bound P4VFS inspection request through its narrow command", async () => {
@@ -454,4 +481,51 @@ it("serializes the strict revision graph envelope without routing tags", async (
   expect(JSON.parse(JSON.stringify(invoke.mock.calls[0][1]))).toEqual({
     request,
   });
+});
+
+it("detects and runs the external merge tool through narrow commands", async () => {
+  invoke.mockResolvedValueOnce({
+    available: true,
+    executable: "C:\\Program Files\\Perforce\\p4merge.exe",
+    source: "commonPath",
+  });
+  const info = await tauriBackend.detectExternalMergeTool();
+  expect(invoke).toHaveBeenLastCalledWith("detect_external_merge_tool");
+  expect(info).toEqual({
+    available: true,
+    executable: "C:\\Program Files\\Perforce\\p4merge.exe",
+    source: "commonPath",
+  });
+
+  const request = { sessionId: "session-1", result: "reviewed\n" };
+  invoke.mockResolvedValueOnce({
+    status: "completed",
+    result: "merged\n",
+    exitCode: 0,
+    operationIds: [],
+  });
+  const result = await tauriBackend.runExternalMerge(request);
+  expect(invoke).toHaveBeenLastCalledWith("run_external_merge", { request });
+  expect(result.status).toBe("completed");
+  expect(result.result).toBe("merged\n");
+});
+
+it("routes read-only resolve stats through resolve_stats", async () => {
+  const request = {
+    depotPath: "//depot/a",
+    baseDepotPath: "//depot/a",
+    baseRevision: 2,
+    sourceDepotPath: "//depot/a",
+    sourceRevision: 3,
+    targetPath: "C:/workspace/a",
+  };
+  invoke.mockResolvedValue({
+    base: { revision: 2, change: 41 },
+    source: { revision: 3, diffBlocks: 2 },
+    target: { baseRevision: 2, diffBlocks: 4 },
+    conflicts: 3,
+  });
+  const stats = await tauriBackend.resolveStats(request);
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("resolve_stats", { request });
+  expect(stats.conflicts).toBe(3);
 });

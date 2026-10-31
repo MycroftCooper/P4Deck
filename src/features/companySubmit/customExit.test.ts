@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+﻿import { beforeEach, describe, it, expect, vi } from "vitest";
 import {
   createCustomExitConsumer,
   validParentExit,
@@ -139,5 +139,57 @@ describe("parent exit", () => {
     expect(validParentExit(value)).toBe(false);
     await createCustomExitConsumer(port).receive(value);
     expect(port.invalidate).not.toHaveBeenCalled();
+  });
+});
+
+import {
+  claimCustomSubmitChange,
+  isCustomSubmitChangeActive,
+  resetCustomSubmitSessions,
+} from "./customSubmitSessions";
+
+describe("parent exit occupancy", () => {
+  beforeEach(() => resetCustomSubmitSessions());
+
+  it("releases the exited request before refreshing, even when refresh fails", async () => {
+    const { port } = fixture();
+    claimCustomSubmitChange("a", "42", "request-1");
+    let releasedBeforeRefresh = false;
+    port.refresh = vi.fn(async () => {
+      releasedBeforeRefresh = !isCustomSubmitChangeActive("a", "42");
+      throw Error("synthetic");
+    });
+    await createCustomExitConsumer(port).receive(event);
+    expect(releasedBeforeRefresh).toBe(true);
+    expect(isCustomSubmitChangeActive("a", "42")).toBe(false);
+    expect(port.report).toHaveBeenCalledOnce();
+  });
+
+  it("releases a terminal exit whose exit code is unavailable", async () => {
+    const { port } = fixture();
+    claimCustomSubmitChange("a", "42", "request-1");
+    await createCustomExitConsumer(port).receive({ ...event, exitCode: null });
+    expect(isCustomSubmitChangeActive("a", "42")).toBe(false);
+  });
+
+  it("never releases a different request or changelist", async () => {
+    const { port } = fixture();
+    claimCustomSubmitChange("a", "42", "request-1");
+    claimCustomSubmitChange("a", "43", "request-2");
+    claimCustomSubmitChange("b", "42", "request-3");
+    await createCustomExitConsumer(port).receive(event);
+    expect(isCustomSubmitChangeActive("a", "42")).toBe(false);
+    expect(isCustomSubmitChangeActive("a", "43")).toBe(true);
+    expect(isCustomSubmitChangeActive("b", "42")).toBe(true);
+  });
+
+  it("does not release occupancy for a malformed exit event", async () => {
+    const { port } = fixture();
+    claimCustomSubmitChange("a", "42", "request-1");
+    await createCustomExitConsumer(port).receive({
+      ...event,
+      changeId: "default",
+    });
+    expect(isCustomSubmitChangeActive("a", "42")).toBe(true);
   });
 });

@@ -18,19 +18,6 @@ const backend = vi.hoisted(() => ({
   cancelOperation: vi.fn(async () => undefined),
 }));
 vi.mock("../../../infrastructure/backend", () => ({ backend }));
-vi.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: ({ count }: { count: number }) => ({
-    getTotalSize: () => count * 24,
-    scrollToIndex: vi.fn(),
-    getVirtualItems: () =>
-      Array.from({ length: count }, (_, index) => ({
-        index,
-        key: index,
-        start: index * 24,
-        size: 24,
-      })),
-  }),
-}));
 
 const runtime: RuntimeInfo = {
   mode: "tauri",
@@ -99,7 +86,7 @@ function diff(text: string): DiffResult {
     path: "//depot/file.txt",
     left: side("left"),
     right: side("right"),
-    unified: `@@ -0,0 +1 @@\n+${text}\n`,
+    unified: `--- left\n+++ right\n@@ -0,0 +1 @@\n+${text}\n`,
     stats: { additions: 1, deletions: 0, hunks: 1 },
     binary: false,
     unsupported: false,
@@ -108,6 +95,31 @@ function diff(text: string): DiffResult {
     partial: false,
     operationIds: [],
   };
+}
+
+function renderer() {
+  return host.querySelector<HTMLElement>("diffs-container");
+}
+
+function shadowText() {
+  return renderer()?.shadowRoot?.textContent ?? "";
+}
+
+function sideColumn(side: "left" | "right") {
+  return renderer()?.shadowRoot?.querySelector<HTMLElement>(
+    side === "left" ? "code[data-deletions]" : "code[data-additions]",
+  );
+}
+
+/** The shadow renderer highlights asynchronously; wait for the expected text. */
+async function waitForShadowText(text: string) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (shadowText().includes(text)) return true;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+  return false;
 }
 
 let host: HTMLDivElement;
@@ -203,63 +215,46 @@ it.each(["diff", "revgraph"] as const)(
   },
 );
 
-it("renders source lines on their own side and synchronizes scrolling without reading P4 again", async () => {
+it("renders source lines on their own side through the split diff renderer", async () => {
   const result = diff("");
   result.unified =
-    "@@ -8,3 +8,4 @@\n shared before\n-old value\n+new value\n+extra line\n shared after\n";
+    "--- left\n+++ right\n@@ -8,3 +8,4 @@\n shared before\n-old value\n+new value\n+extra line\n shared after\n";
+  result.leftText =
+    "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nshared before\nold value\nshared after\n";
+  result.rightText =
+    "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nshared before\nnew value\nextra line\nshared after\n";
   backend.getDiff.mockResolvedValue(result);
   await render("diff", "//depot/file.txt");
-  const left = host.querySelector<HTMLElement>('.diff-pane[data-side="left"]')!;
-  const right = host.querySelector<HTMLElement>(
-    '.diff-pane[data-side="right"]',
-  )!;
-  expect(left.textContent).toContain("old value");
-  expect(left.textContent).not.toContain("new value");
-  expect(left.textContent).not.toContain("extra line");
-  expect(right.textContent).toContain("new value");
-  expect(right.textContent).toContain("extra line");
-  expect(right.textContent).not.toContain("old value");
-  expect(
-    [...left.querySelectorAll(".diff-line-number")].map(
-      (line) => line.textContent,
-    ),
-  ).toEqual(["", "8", "9", "", "10"]);
-  expect(
-    [...right.querySelectorAll(".diff-line-number")].map(
-      (line) => line.textContent,
-    ),
-  ).toEqual(["", "8", "9", "10", "11"]);
-  expect(left.querySelector(".empty")?.textContent).toBe("");
-  const leftScroll = left.querySelector<HTMLDivElement>(".diff-side-scroll")!;
-  const rightScroll = right.querySelector<HTMLDivElement>(".diff-side-scroll")!;
-  await act(async () => {
-    leftScroll.scrollTop = 240;
-    leftScroll.dispatchEvent(new Event("scroll"));
-  });
-  expect(rightScroll.scrollTop).toBe(240);
-  await act(async () => {
-    rightScroll.scrollTop = 96;
-    rightScroll.dispatchEvent(new Event("scroll"));
-  });
-  expect(leftScroll.scrollTop).toBe(96);
+  expect(await waitForShadowText("old value")).toBe(true);
+  const left = sideColumn("left");
+  const right = sideColumn("right");
+  expect(left).toBeTruthy();
+  expect(right).toBeTruthy();
+  expect(left!.textContent).toContain("old value");
+  expect(left!.textContent).not.toContain("new value");
+  expect(left!.textContent).not.toContain("extra line");
+  expect(right!.textContent).toContain("new value");
+  expect(right!.textContent).toContain("extra line");
+  expect(right!.textContent).not.toContain("old value");
   expect(backend.getDiff).toHaveBeenCalledTimes(1);
 });
 
 it("shows missing final newlines on the affected side", async () => {
   const result = diff("");
-  result.unified = "@@ -1 +1 @@\n-same\n+same\n\\ No newline at end of file\n";
+  result.unified =
+    "--- left\n+++ right\n@@ -1 +1 @@\n-same\n+same\n\\ No newline at end of file\n";
   backend.getDiff.mockResolvedValue(result);
   await render("diff", "//depot/file.txt");
-  expect(
-    host.querySelector('.diff-pane[data-side="left"] .diff-eof-marker'),
-  ).toBeNull();
-  expect(
-    host.querySelector('.diff-pane[data-side="right"] .diff-eof-marker')
-      ?.textContent,
-  ).toBe("No newline at end of file");
+  expect(await waitForShadowText("No newline at end of file")).toBe(true);
+  const left = sideColumn("left");
+  const right = sideColumn("right");
+  expect(left?.querySelector("[data-no-newline]")).toBeNull();
+  expect(right?.querySelector("[data-no-newline]")?.textContent).toBe(
+    "No newline at end of file",
+  );
 });
 
-it("keeps identical and binary results out of the text panes", async () => {
+it("keeps identical and binary results out of the text renderer", async () => {
   backend.getDiff.mockResolvedValueOnce({
     ...diff(""),
     unified: "",
@@ -267,7 +262,7 @@ it("keeps identical and binary results out of the text panes", async () => {
   });
   await render("diff", "//depot/same.txt");
   expect(host.textContent).toContain("Both sides are identical");
-  expect(host.querySelector(".diff-split")).toBeNull();
+  expect(renderer()).toBeNull();
 
   backend.getDiff.mockResolvedValueOnce({
     ...diff(""),
@@ -277,7 +272,7 @@ it("keeps identical and binary results out of the text panes", async () => {
   });
   await render("diff", "//depot/image.bin");
   expect(host.textContent).toContain("Binary file");
-  expect(host.querySelector(".diff-split")).toBeNull();
+  expect(renderer()).toBeNull();
 });
 
 it("hides an old path immediately, cancels it, and ignores its late graph result", async () => {
@@ -471,17 +466,17 @@ it("cancels selector and generation owners; a late old error cannot hide the new
   });
   await act(async () => second.resolve(diff("SELECTOR LATEST")));
   await act(async () => first.reject(new Error("SELECTOR OLD ERROR")));
-  expect(host.textContent).toContain("SELECTOR LATEST");
-  expect(host.textContent).not.toContain("SELECTOR OLD ERROR");
+  expect(await waitForShadowText("SELECTOR LATEST")).toBe(true);
+  expect(shadowText()).not.toContain("SELECTOR OLD ERROR");
 
   await render("diff", "//depot/a.txt", {
     ...runtime,
     activeProfileId: "profile-b",
     contextGeneration: 8,
   });
-  expect(host.textContent).not.toContain("SELECTOR LATEST");
+  expect(shadowText()).not.toContain("SELECTOR LATEST");
   await act(async () => third.resolve(diff("GENERATION LATEST")));
-  expect(host.textContent).toContain("GENERATION LATEST");
+  expect(await waitForShadowText("GENERATION LATEST")).toBe(true);
 });
 
 it("cancels the active backend operation when unmounted", async () => {

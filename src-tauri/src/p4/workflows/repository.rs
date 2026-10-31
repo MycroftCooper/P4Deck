@@ -560,6 +560,64 @@ impl WorkflowRepository {
             .await
     }
 
+    /// P4's own `Diff chunks:` summary from `p4 resolve -n`. JSON marshal
+    /// (`-Mj`) omits the human summary, so this one call deliberately uses
+    /// plain text output and parses the same line P4V's dialog shows.
+    pub async fn resolve_diff_counts(
+        &self,
+        context: &P4Context,
+        depot_path: &str,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<Option<parser::ResolveDiffCounts>, String> {
+        command::ensure_context(context)?;
+        let invocation = command::resolve_interactive(depot_path)?;
+        let result = self
+            .runner
+            .run_with_progress(
+                P4CommandRequest {
+                    operation_id: Some(operation_id),
+                    source: OperationSource::Gui,
+                    command: invocation.command.into(),
+                    args: invocation.args,
+                    context: context.clone(),
+                    output_mode: OutputMode::Text,
+                    timeout_ms: Some(120_000),
+                    input: Some("s\n".into()),
+                },
+                app,
+                None,
+                None,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(parser::resolve_diff_counts(&parser::preview_lines(
+            &result.events,
+        )))
+    }
+
+    /// Read-only metadata for the latest revision of one depot file.
+    pub async fn filelog_revision(
+        &self,
+        context: &P4Context,
+        depot_path: &str,
+        revision: i64,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<parser::FilelogRevision, String> {
+        command::ensure_context(context)?;
+        let result = self
+            .checked_named(
+                context,
+                command::filelog_revision(depot_path, revision)?,
+                operation_id,
+                app,
+            )
+            .await?;
+        parser::filelog_revision(&result.events)
+            .ok_or_else(|| "p4 filelog returned no revision metadata".into())
+    }
+
     async fn workspace_context(
         &self,
         context: &P4Context,
@@ -760,6 +818,7 @@ fn project_shelf_membership(
         state: None,
         client_path: fact.client_path.clone(),
         revision: None,
+        head_revision: None,
         file_type: Some(fact.file_type.clone()),
         lock_ownership: None,
         lock_owner: None,

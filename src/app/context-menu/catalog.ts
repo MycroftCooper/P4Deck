@@ -1116,6 +1116,11 @@ export const menuCatalog = {
         phase: "later",
       },
       { id: "C02-13", label: "在 Swarm 中打开", phase: "initial" },
+      {
+        id: "C02-14",
+        label: "解决冲突…",
+        phase: "initial",
+      },
     ],
   },
   C03: {

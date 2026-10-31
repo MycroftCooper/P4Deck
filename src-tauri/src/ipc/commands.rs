@@ -2097,6 +2097,18 @@ pub async fn preview_sync(
     Ok(state.sync.preview(request, Some(&app)).await)
 }
 
+/// Direct Get Latest: no preview dialog/token; the service runs plain `p4 sync`
+/// and maps the real exit code/runner error (never faked success).
+#[tauri::command]
+pub async fn sync_latest(
+    _admission: crate::close_guard::Admission,
+    request: SyncPreviewRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<SyncResult, String> {
+    Ok(state.sync.sync_latest(request, Some(&app)).await)
+}
+
 #[tauri::command]
 pub async fn confirm_sync(
     _admission: crate::close_guard::Admission,
@@ -2947,6 +2959,16 @@ pub async fn preflight_resolve(
 }
 
 #[tauri::command]
+pub async fn resolve_stats(
+    _admission: crate::close_guard::Admission,
+    request: ResolveStatsRequest,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<ResolveStats, String> {
+    Ok(state.workflows.resolve_stats(request, Some(&app)).await)
+}
+
+#[tauri::command]
 pub async fn confirm_resolve(
     _admission: crate::close_guard::Admission,
     confirmation: ResolveConfirmation,
@@ -3282,6 +3304,26 @@ pub async fn confirm_manual_merge_resolve(
     }
     Ok(result)
 }
+#[tauri::command]
+pub fn detect_external_merge_tool(
+    _admission: crate::close_guard::Admission,
+    state: State<'_, AppState>,
+) -> ExternalMergeToolInfo {
+    state.workflows.detect_external_merge_tool()
+}
+
+#[tauri::command]
+pub async fn run_external_merge(
+    _admission: crate::close_guard::Admission,
+    request: ExternalMergeRunRequest,
+    state: State<'_, AppState>,
+) -> Result<ExternalMergeRunResult, String> {
+    let workflows = state.workflows.clone();
+    tauri::async_runtime::spawn_blocking(move || workflows.run_external_merge(request))
+        .await
+        .map_err(|error| format!("External merge invocation did not complete: {error}"))?
+}
+
 #[tauri::command]
 pub async fn open_local_path(
     _admission: crate::close_guard::Admission,

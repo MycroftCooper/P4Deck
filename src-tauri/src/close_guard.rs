@@ -474,7 +474,11 @@ mod tests {
     fn ui07_every_business_command_has_host_admission() {
         let source = include_str!("ipc/commands.rs");
         let commands: Vec<_> = source.split("#[tauri::command]").skip(1).collect();
-        assert_eq!(commands.len(), 115); // v2 full IPC (112) + S4h shelf-direct (shelve/unshelve/delete-shelved-revisions); all must stay admission-guarded.
+        // 115 previous business commands + MERGE-01 external merge
+        // (detect_external_merge_tool, run_external_merge) + GETLATEST-DIRECT
+        // (sync_latest) + RESOLVE-STATS (resolve_stats). Every command must keep
+        // taking `_admission`; never bypass the host admission check.
+        assert_eq!(commands.len(), 119);
         for command in commands {
             let signature = command.split('{').next().unwrap();
             assert!(

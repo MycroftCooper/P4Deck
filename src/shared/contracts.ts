@@ -2030,6 +2030,8 @@ export interface PendingFile {
   state?: FileState;
   clientPath?: string;
   revision?: number;
+  /** Depot head revision from fstat; absent when unknown (never fabricated). */
+  headRevision?: number;
   fileType?: string;
   lockOwnership?: FileLockOwnership;
   lockOwner?: string;
@@ -2488,6 +2490,40 @@ export interface ResolveConfirmation extends WorkflowConfirmation {
   resolutions: ResolveSelection[];
 }
 
+/** Additive readonly detail for the P4V Resolve version panes; absent fields stay placeholders. */
+export interface ResolveStatsRequest {
+  depotPath: string;
+  baseDepotPath?: string;
+  baseRevision?: number;
+  sourceDepotPath?: string;
+  sourceRevision?: number;
+  targetPath?: string;
+}
+
+export interface ResolveVersionStats {
+  depotPath?: string;
+  revision?: number;
+  change?: number;
+  user?: string;
+  time?: string;
+  description?: string;
+  diffBlocks?: number;
+}
+
+export interface ResolveTargetStats {
+  path?: string;
+  baseRevision?: number;
+  diffBlocks?: number;
+}
+
+export interface ResolveStats {
+  base: ResolveVersionStats;
+  source: ResolveVersionStats;
+  target: ResolveTargetStats;
+  /** Conflict blocks reported by the host; undefined means the host did not count them. */
+  conflicts?: number;
+}
+
 export interface ManualMergeOpenRequest {
   depotPath: string;
   operationId?: string;
@@ -2557,6 +2593,34 @@ export interface ManualMergeResolveConfirmation {
   resultDigest: string;
   acknowledge: boolean;
   operationId?: string;
+}
+/** Installed external merge tool (P4Merge) detection result. Never starts the GUI. */
+export type ExternalMergeToolSource = "env" | "commonPath" | "path";
+export interface ExternalMergeToolInfo {
+  available: boolean;
+  executable?: string;
+  source?: ExternalMergeToolSource;
+  reason?: string;
+}
+export interface ExternalMergeRequest {
+  sessionId: string;
+  result: string;
+  operationId?: string;
+}
+export type ExternalMergeStatus =
+  | "completed"
+  | "unchanged"
+  | "cancelled"
+  | "failed"
+  | "timeout"
+  | "notInstalled";
+/** Candidate result from P4Merge; it must still be reviewed, validated, and saved. */
+export interface ExternalMergeResult {
+  status: ExternalMergeStatus;
+  result?: string;
+  exitCode?: number;
+  reason?: string;
+  operationIds: string[];
 }
 /** S4c host lifecycle envelope. `optimistic` is always "intentOnly"; success needs committed facts/digest. */
 export type MergeResolveKind =

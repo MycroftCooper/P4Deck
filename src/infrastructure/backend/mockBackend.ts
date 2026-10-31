@@ -3640,6 +3640,37 @@ export const mockBackend: Backend = {
       refreshDepot: true,
     };
   },
+  async syncLatest(request) {
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const paths = [...new Set(request.paths)].sort();
+    const counts = {
+      added: 0,
+      updated: paths.length,
+      deleted: 0,
+      upToDate: 0,
+      warnings: 0,
+      conflicts: 0,
+    };
+    emitMockLog(
+      "info",
+      "gui",
+      "p4 sync //... (simulated)",
+      `${paths.length} simulated path(s).`,
+      operationId,
+      1,
+    );
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: Get Latest was simulated. No real files or P4 server were changed.",
+      operationId,
+      logReference: operationId,
+      affectedPaths: paths,
+      counts,
+      refreshWorkspace: true,
+      refreshDepot: true,
+    };
+  },
   async getFilePreview(path) {
     if (/\.(png|jpe?g|gif|webp)$/i.test(path))
       return {
@@ -4692,6 +4723,10 @@ export const mockBackend: Backend = {
       "resolve",
     );
   },
+  async resolveStats() {
+    // Browser Mock has no P4 metadata: the dialog keeps its "not returned" placeholders.
+    return { base: {}, source: {}, target: {} };
+  },
   async openManualMerge() {
     throw new Error(
       "Browser Mock cannot open a manual merge session because it has no authoritative Perforce resolve record.",
@@ -4705,6 +4740,18 @@ export const mockBackend: Backend = {
   },
   async confirmManualMergeResolve() {
     throw new Error("Browser Mock does not resolve Perforce records.");
+  },
+  async detectExternalMergeTool() {
+    return {
+      available: false,
+      reason:
+        "Browser Mock has no native process adapter, so it cannot detect or launch P4Merge.",
+    };
+  },
+  async runExternalMerge() {
+    throw new Error(
+      "Browser Mock cannot launch P4Merge; no external process was started and no result was simulated.",
+    );
   },
 };
 

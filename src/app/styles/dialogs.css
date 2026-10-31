@@ -257,6 +257,12 @@
   gap: 6px;
 }
 
+.manual-merge-external-hint {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .manual-merge-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

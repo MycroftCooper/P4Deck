@@ -3,7 +3,12 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 import { dialogHarness } from "../../app/dialogs/testHarness";
 import { useCustomSubmit } from "./useCustomSubmit";
-import { resetCustomSubmitSessions } from "./customSubmitSessions";
+import { createCustomExitConsumer } from "./customExit";
+import {
+  isCustomSubmitChangeActive,
+  releaseCustomSubmitRequest,
+  resetCustomSubmitSessions,
+} from "./customSubmitSessions";
 import type { Backend } from "../../infrastructure/backend/contract";
 import type { CustomSubmitSession } from "./customSubmit";
 const root = dialogHarness();
@@ -252,4 +257,34 @@ it("CL07 matching custom expectation launches only the new CL", async () => {
   expect(f.port.customSubmitStart).toHaveBeenCalledWith(
     expect.objectContaining({ changeId: "99", connection }),
   );
+});
+
+it("a normal tool exit frees the same CL for a deliberate relaunch", async () => {
+  const f = await mount();
+  await act(async () => {
+    await f.get().handle(["42"]);
+  });
+  const request = f.port.customSubmitStart.mock.calls[0][0];
+  expect(isCustomSubmitChangeActive("one", "42")).toBe(true);
+  const consumer = createCustomExitConsumer({
+    owner: true,
+    scope: () => "one",
+    snapshot: async () => connection,
+    invalidate: async () => undefined,
+    refresh: async () => undefined,
+    report: () => undefined,
+  });
+  await consumer.receive({
+    requestId: request.requestId,
+    changeId: "42",
+    connection,
+    exitCode: 0,
+  });
+  expect(isCustomSubmitChangeActive("one", "42")).toBe(false);
+  // Idempotent: a duplicate exit cannot release anything twice.
+  expect(releaseCustomSubmitRequest(request.requestId, "42")).toBe(false);
+  await act(async () => {
+    await f.get().handle(["42"]);
+  });
+  expect(f.port.customSubmitStart).toHaveBeenCalledTimes(2);
 });

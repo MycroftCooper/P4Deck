@@ -195,6 +195,66 @@ it("shows file names before paths, sorts by displayed relative paths, and keeps 
   expect(drag.mock.calls[0][0]).toEqual(["//depot/aaa.cs"]);
 });
 
+it("marks opened edit rows as needing get latest only when have is behind head", async () => {
+  const files: PendingFile[] = [
+    {
+      depotPath: "//depot/behind.txt",
+      clientPath: "//workspace/behind.txt",
+      action: "edit",
+      state: "openedEdit",
+      revision: 79,
+      headRevision: 80,
+    },
+    {
+      depotPath: "//depot/current.txt",
+      clientPath: "//workspace/current.txt",
+      action: "edit",
+      state: "openedEdit",
+      revision: 80,
+      headRevision: 80,
+    },
+    {
+      depotPath: "//depot/unknown.txt",
+      clientPath: "//workspace/unknown.txt",
+      action: "edit",
+      state: "openedEdit",
+      revision: 79,
+    },
+  ];
+  await renderTable(files);
+  const rowFor = (name: string) =>
+    [...host.querySelectorAll<HTMLElement>(".pending-file")].find(
+      (row) => row.querySelector(".pending-file-name")?.textContent === name,
+    )!;
+
+  const behind = rowFor("behind.txt");
+  expect(behind.querySelector(".pending-file-status")?.textContent).toBe(
+    "edit · Needs get latest",
+  );
+  expect(behind.querySelector('[data-badge="outOfDate"]')).not.toBeNull();
+  expect(
+    behind.querySelector(".file-status-icon")?.getAttribute("aria-label"),
+  ).toContain("Older revision");
+
+  // Head equals have: synced-to-head row must not claim a stale revision.
+  const current = rowFor("current.txt");
+  expect(current.querySelector(".pending-file-status")?.textContent).toBe(
+    "edit",
+  );
+  expect(current.querySelector('[data-badge="outOfDate"]')).toBeNull();
+  expect(
+    current.querySelector(".file-status-icon")?.getAttribute("aria-label"),
+  ).toContain("Synced to head");
+
+  // Missing head is unknown: never fabricate current/out-of-date.
+  const unknown = rowFor("unknown.txt");
+  expect(unknown.querySelector(".pending-file-status")?.textContent).toBe(
+    "edit",
+  );
+  expect(unknown.querySelector('[data-badge="outOfDate"]')).toBeNull();
+  expect(unknown.querySelector('[data-badge="latest"]')).toBeNull();
+});
+
 it("combines state and case-insensitive suffix filters, includes extensionless files and clears hidden selections", async () => {
   await renderTable(tableFiles);
   const first = host.querySelector<HTMLElement>(".pending-file")!;

@@ -119,7 +119,7 @@ export function startShelveDirect(
             const lookup = await dependencies.lookup(request);
             if (
               lookup.kind === "found" &&
-              validWorkflowReceipt(request, lookup.receipt) &&
+              validWorkflowReceipt(request, lookup.receipt, "shelve") &&
               lookup.receipt.state === "settled" &&
               lookup.receipt.result
             ) {

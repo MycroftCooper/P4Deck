@@ -9,13 +9,24 @@ import type {
   ControlPlaneActionResult,
   StreamSwitchResult,
   SubmitResult,
+  WorkflowExecution,
   WorkflowResult,
   WorkspaceMutationResult,
 } from "../../shared/contracts";
 
+/**
+ * Literal receipt `kind` values the host stores via Rust `reserve_action`
+ * (`src-tauri/src/ipc/commands.rs`): shelf (2455), shelfDelete (2503),
+ * shelve (2640), unshelve (2787/2903), revert (3798). `workflow_action_lookup`
+ * returns the stored string unchanged, so callers must pass the exact kind for
+ * their command family instead of relying on a default.
+ */
+export type WorkflowActionReceiptKind =
+  "shelf" | "shelve" | "shelfDelete" | "unshelve" | "revert";
+
 export interface WorkflowActionReceipt {
   operationId: string;
-  kind: "shelf" | "revert" | "unshelve";
+  kind: WorkflowActionReceiptKind;
   connection: ConnectionSnapshot;
   payloadDigest: string;
   revision: string;
@@ -35,7 +46,7 @@ export const lookupWorkflowAction = (request: {
 export function validWorkflowReceipt(
   request: { operationId: string; connection: ConnectionSnapshot },
   receipt: WorkflowActionReceipt,
-  kind: "shelf" | "revert" | "unshelve" = "shelf",
+  kind: WorkflowActionReceiptKind,
 ) {
   return (
     receipt.operationId === request.operationId &&
@@ -45,6 +56,40 @@ export function validWorkflowReceipt(
     canonicalRevision(receipt.revision) &&
     /^[a-f0-9]{64}$/.test(receipt.payloadDigest) &&
     ["running", "settled", "interrupted"].includes(receipt.state)
+  );
+}
+
+/**
+ * A command envelope is only evidence for the dispatch that produced it: same
+ * operationId, the expected `execution.kind`, and a self-consistent outcome.
+ * An absent envelope is a legacy payload (never a success by itself).
+ */
+export function workflowEnvelopeTrusted(
+  result: WorkflowResult | undefined,
+  operationId: string,
+  kind: WorkflowExecution["kind"],
+) {
+  const execution = result?.execution;
+  return (
+    !execution ||
+    (!!result &&
+      execution.operationId === operationId &&
+      execution.kind === kind &&
+      execution.outcome === result.outcome)
+  );
+}
+
+/** `commandCompleted` alone is command lifecycle; trust it only with an exact envelope. */
+export function workflowCommandCompleted(
+  result: WorkflowResult | undefined,
+  operationId: string,
+  kind: WorkflowExecution["kind"],
+) {
+  const execution = result?.execution;
+  return (
+    !!execution &&
+    execution.state === "commandCompleted" &&
+    workflowEnvelopeTrusted(result, operationId, kind)
   );
 }
 

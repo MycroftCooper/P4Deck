@@ -103,6 +103,16 @@ export const messages = {
     noSelection: "请先在 Workspace 中选择文件",
     shelves: "已搁置文件",
     openedFiles: "Opened Files",
+    externalMerge: "用 P4Merge 合并",
+    externalMergeDetecting: "正在检测 P4Merge…",
+    externalMergeUnavailable: "未检测到 P4Merge",
+    externalMergeRunning: "等待 P4Merge 完成…",
+    externalMergeCompleted: "已读回 P4Merge 结果，请复核后验证/保存",
+    externalMergeUnchanged: "P4Merge 未修改结果，编辑器内容保持不变",
+    externalMergeCancelled: "P4Merge 未保存结果即被关闭，未写入任何文件",
+    externalMergeTimeout: "P4Merge 超时未保存结果，未写入任何文件",
+    externalMergeFailed: "P4Merge 未完成",
+    externalMergeNotInstalled: "未检测到 P4Merge，无法启动外部合并",
     streamSoon: "Stream 工作台将在后续批次接入真实操作。",
   },
   "en-US": {
@@ -209,6 +219,19 @@ export const messages = {
     noSelection: "Select a Workspace file first",
     shelves: "Shelved Files",
     openedFiles: "Opened Files",
+    externalMerge: "Merge with P4Merge",
+    externalMergeDetecting: "Detecting P4Merge…",
+    externalMergeUnavailable: "P4Merge was not detected",
+    externalMergeRunning: "Waiting for P4Merge…",
+    externalMergeCompleted:
+      "Read back the P4Merge result; review it before validate/save",
+    externalMergeUnchanged: "P4Merge did not change the result",
+    externalMergeCancelled:
+      "P4Merge closed without saving; nothing was written to disk",
+    externalMergeTimeout:
+      "P4Merge did not save in time; nothing was written to disk",
+    externalMergeFailed: "P4Merge did not complete",
+    externalMergeNotInstalled: "P4Merge was not detected",
     streamSoon:
       "The Stream workbench will connect real operations in a later batch.",
   },

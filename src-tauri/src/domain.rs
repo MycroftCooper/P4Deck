@@ -2782,6 +2782,9 @@ pub struct PendingFile {
     pub client_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<i64>,
+    /// Depot head revision from fstat; absent when unknown (never fabricated).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3398,6 +3401,65 @@ pub struct ResolveConfirmation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResolveStatsRequest {
+    pub depot_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_depot_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_revision: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_depot_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_revision: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
+}
+
+/// Read-only stats for one side of a resolve. Every field is optional because
+/// missing/unreadable content is reported as unknown, never fabricated.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveVersionStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depot_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    /// RFC 3339 when P4 provided a parseable epoch timestamp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_blocks: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveTargetStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_revision: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_blocks: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveStats {
+    pub base: ResolveVersionStats,
+    pub source: ResolveVersionStats,
+    pub target: ResolveTargetStats,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflicts: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ManualMergeOpenRequest {
     pub depot_path: String,
     #[serde(default)]
@@ -3499,6 +3561,60 @@ pub struct ManualMergeResolveConfirmation {
     pub acknowledge: bool,
     #[serde(default)]
     pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalMergeToolSource {
+    Env,
+    CommonPath,
+    Path,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalMergeToolInfo {
+    pub available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executable: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<ExternalMergeToolSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalMergeRunRequest {
+    pub session_id: String,
+    pub result: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalMergeStatus {
+    Completed,
+    Unchanged,
+    Cancelled,
+    Failed,
+    Timeout,
+    NotInstalled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalMergeRunResult {
+    pub status: ExternalMergeStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub operation_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

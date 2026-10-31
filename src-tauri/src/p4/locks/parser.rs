@@ -19,6 +19,10 @@ pub struct FileFact {
     pub ownership: FileLockOwnership,
     pub lock_owner: Option<String>,
     pub other_open: Vec<String>,
+    /// `haveRev` from fstat: the synced revision, absent when it is unknown.
+    pub have_revision: Option<i64>,
+    /// `headRev` from fstat: the depot head revision, absent when it is unknown.
+    pub head_revision: Option<i64>,
 }
 
 pub fn mappings(events: &[OperationEvent]) -> Vec<Mapping> {
@@ -58,6 +62,8 @@ pub fn file_facts(events: &[OperationEvent]) -> Vec<FileFact> {
                 ownership,
                 lock_owner: other_lock_owner(&value),
                 other_open,
+                have_revision: number(&value, "haveRev"),
+                head_revision: number(&value, "headRev"),
             })
         })
         .collect()
@@ -180,6 +186,15 @@ fn string(value: &Value, key: &str) -> Option<String> {
     value.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
+/// fstat emits revision numbers as JSON strings; accept numbers as well.
+fn number(value: &Value, key: &str) -> Option<i64> {
+    value.get(key).and_then(|value| {
+        value
+            .as_i64()
+            .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+    })
+}
+
 fn change_id(value: &Value) -> i64 {
     match value.get("change").and_then(Value::as_str) {
         None | Some("default") => 0,
@@ -265,5 +280,26 @@ mod tests {
         )]);
         assert_eq!(other[0].lock_owner.as_deref(), Some("bob@other"));
         assert_eq!(other[0].other_open, ["bob@other"]);
+    }
+
+    #[test]
+    fn parses_have_and_head_revisions_and_keeps_missing_ones_unknown() {
+        let facts = file_facts(&[event(
+            r#"{"depotFile":"//depot/a","haveRev":"79","headRev":"80"}"#,
+        )]);
+        assert_eq!(facts[0].have_revision, Some(79));
+        assert_eq!(facts[0].head_revision, Some(80));
+
+        // Numeric JSON values are accepted too.
+        let facts = file_facts(&[event(
+            r#"{"depotFile":"//depot/b","haveRev":3,"headRev":4}"#,
+        )]);
+        assert_eq!(facts[0].have_revision, Some(3));
+        assert_eq!(facts[0].head_revision, Some(4));
+
+        // Absence stays None (unknown), never a fabricated current revision.
+        let facts = file_facts(&[event(r#"{"depotFile":"//depot/c","action":"edit"}"#)]);
+        assert_eq!(facts[0].have_revision, None);
+        assert_eq!(facts[0].head_revision, None);
     }
 }

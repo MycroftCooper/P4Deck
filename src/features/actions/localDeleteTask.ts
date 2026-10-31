@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { backend } from "../../infrastructure/backend";
 import type { FileActionResult, RuntimeInfo } from "../../shared/contracts";
+import { sameSubmitIdentity } from "../changelists/selectedSubmit";
+import { canonicalRevision } from "./ledger";
 import type { ConnectionSnapshot } from "../companySubmit/model";
 
 /** Per-row truth for the local-trash route. States come only from execution.files[]. */
@@ -19,12 +22,29 @@ export interface LocalDeleteRecord {
   readonly busy: boolean;
   readonly cancelRequested?: boolean;
   readonly outcome?: LocalDeleteOutcome;
+  /** Dispatch transport; a host fence release must match it before releasing claims. */
+  readonly transport?: { server: string; user: string; client: string };
+  /** Set only by an explicit host `action_release_unknown` for this operation/scope. */
+  readonly admissionReleased?: boolean;
 }
 export interface LocalDeleteRequest {
   action: "deleteLocal";
   paths: string[];
   operationId: string;
 }
+/** Durable `fileAction` receipt returned by `workflow_action_lookup`. */
+export interface LocalDeleteReceipt {
+  operationId: string;
+  kind: string;
+  connection: ConnectionSnapshot;
+  payloadDigest: string;
+  revision: string;
+  state: "running" | "settled" | "interrupted";
+  result: FileActionResult | null;
+}
+export type LocalDeleteReceiptLookup =
+  | { kind: "found"; receipt: LocalDeleteReceipt }
+  | { kind: "notFound" | "scopeMismatch" | "storageUnavailable" };
 export interface LocalDeletePort {
   connection(): Promise<ConnectionSnapshot>;
   execute(
@@ -34,12 +54,19 @@ export interface LocalDeletePort {
   cancel(
     operationId: string,
   ): Promise<void | import("../../shared/contracts").CancelOperationResult>;
+  /** Identity-only receipt read; never re-dispatches the write. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<LocalDeleteReceiptLookup>;
 }
 export const localDeletePort: LocalDeletePort = {
   connection: () => backend.companySubmitConnectionSnapshot(),
   execute: (request, connection) =>
     backend.performFileAction(request, connection),
   cancel: (operationId) => backend.cancelOperation(operationId),
+  lookup: (request) =>
+    invoke<LocalDeleteReceiptLookup>("workflow_action_lookup", { request }),
 };
 let records: readonly LocalDeleteRecord[] = [];
 const listeners = new Set<() => void>();
@@ -63,6 +90,57 @@ function update(
 export const localDeleteRecord = (operationId: string) =>
   records.find((record) => record.operationId === operationId);
 /**
+ * Host command failures that are raised before a durable receipt/fence exists
+ * (`Err(String)` from preflight/plan/lease validation). Only these classes may
+ * downgrade "invoke rejected" to "nothing was written"; transport, panic and
+ * storage errors are never pre-dispatch evidence.
+ */
+const PRE_DISPATCH_ERROR_PATTERNS: readonly RegExp[] = [
+  /^invalidConnection\b/i,
+  /^connectionChanged\b/i,
+  /^contextChanged\b/i,
+  /^preflightBlocked\b/i,
+  /^targetMismatch\b/i,
+  /^token(?:Unknown|Expired)\b/i,
+  /^operationIdPayloadConflict\b/i,
+  /^actionPayloadTooLarge\b/i,
+  /^actionReceiptCapacityReached\b/i,
+  /^admissionEvidenceCapacityReached\b/i,
+  /^at least one path is required\b/i,
+  /^duplicate file path:/i,
+  /^invalid file path:/i,
+  /^Workspace Root\b/i,
+  /^path escapes workspace root$/i,
+  /^A connection snapshot is required\b/i,
+  /^GUI .* must use the /i,
+  /^Local trash\b/i,
+  /^Existing operation is running or interrupted\b/i,
+  /\(os error \d+\)$/i,
+];
+export function isPreDispatchHostError(error: unknown) {
+  const message = (
+    error instanceof Error ? error.message : String(error ?? "")
+  ).trim();
+  return PRE_DISPATCH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+/** Identity/shape check for a recovered receipt; `settled` is never a success claim by itself. */
+function trustedReceipt(
+  receipt: LocalDeleteReceipt,
+  operationId: string,
+  connection: ConnectionSnapshot,
+) {
+  return (
+    receipt.kind === "fileAction" &&
+    receipt.operationId === operationId &&
+    sameSubmitIdentity(receipt.connection, connection) &&
+    typeof receipt.revision === "string" &&
+    canonicalRevision(receipt.revision) &&
+    /^[a-f0-9]{64}$/.test(receipt.payloadDigest) &&
+    receipt.state === "settled" &&
+    !!receipt.result
+  );
+}
+/**
  * Cancel through the existing `cancel_operation` channel with the SAME operationId used for
  * dispatch. Exactly one cancel call per in-flight operation; settled operations cannot be cancelled.
  */
@@ -78,6 +156,36 @@ export function cancelLocalDelete(
     ),
   );
   void port.cancel(operationId).catch(() => undefined);
+  return true;
+}
+/**
+ * Host fence release (`action_release_unknown`) for the local-trash claim: the
+ * same operationId + transport scope downgrades every unknown row to the
+ * terminal `blocked` state, so `localDeleteBlockedPaths` stops blocking the
+ * submit/revert/move/shelve entries. Other operations, busy records and other
+ * scopes are never touched. Idempotent.
+ */
+export function releaseLocalDeleteAdmission(
+  operationId: string,
+  scope: { server: string; user: string; client: string },
+): boolean {
+  const record = localDeleteRecord(operationId);
+  if (!record || record.busy || record.admissionReleased) return false;
+  if (
+    record.transport &&
+    (record.transport.server !== scope.server ||
+      record.transport.user !== scope.user ||
+      record.transport.client !== scope.client)
+  )
+    return false;
+  if (!record.rows.some((row) => row.state === "unknown")) return false;
+  update(operationId, (r) => ({
+    ...r,
+    admissionReleased: true,
+    rows: r.rows.map((row) =>
+      row.state === "unknown" ? { ...row, state: "blocked" as const } : row,
+    ),
+  }));
   return true;
 }
 export const localDeleteHiddenPathsForTests = (scope: string) =>
@@ -121,8 +229,11 @@ export function resetLocalDeleteForTests() {
 /**
  * One caller-visible entry for the local-trash route: generate ONE operationId before dispatch,
  * send the exact connection snapshot, and map truth strictly from execution.files[] (never from
- * affectedPaths). No receipt lookup, no automatic retry, no automatic refresh/dialog side effects.
- * Cancellation reuses the existing `cancel_operation` channel with the same operationId.
+ * affectedPaths). No automatic retry and no automatic refresh/dialog side effects. Cancellation
+ * reuses the existing `cancel_operation` channel with the same operationId. An invoke rejection is
+ * corrected by ONE same-operationId receipt lookup: found+settled settles from the receipt; a
+ * pre-dispatch host error with no receipt releases the claim as `notDispatched`; anything else
+ * stays unknown and keeps its host fence for explicit release.
  */
 export function startLocalDelete(
   scope: string,
@@ -148,6 +259,11 @@ export function startLocalDelete(
       operationId,
       scope,
       busy: true,
+      transport: {
+        server: runtime.context.server,
+        user: runtime.context.user,
+        client: runtime.context.client,
+      },
       rows: unique.map((path) => ({ path, state: "pending" as const })),
     },
   ]);
@@ -159,10 +275,11 @@ export function startLocalDelete(
         paths: unique,
         operationId,
       };
-      let result: FileActionResult | undefined;
+      let connection: ConnectionSnapshot | undefined;
       let dispatched = false;
+      let result: FileActionResult | undefined;
       try {
-        const connection = await port.connection();
+        connection = await port.connection();
         if (
           !current() ||
           connection.server !== runtime.context.server ||
@@ -172,27 +289,46 @@ export function startLocalDelete(
           throw Error("context changed");
         dispatched = true;
         result = await port.execute(request, connection);
-      } catch {
-        // Zero I/O (context drift / connection failure before dispatch): withdraw every intent.
-        // After dispatch, a transport failure is not "nothing happened": rows stay unknown and visible.
-        update(operationId, (r) => ({
-          ...r,
-          busy: false,
-          outcome: dispatched ? "unknown" : "notDispatched",
-          rows: r.rows.map((row) => {
-            if (!dispatched) return { ...row, state: "blocked" as const };
-            return row.state === "succeeded"
-              ? row
-              : { ...row, state: "unknown" as const };
-          }),
-        }));
-        hooks?.onSettled?.(
-          operationId,
-          dispatched ? "unknown" : "notDispatched",
-        );
-        return;
+      } catch (error) {
+        // The write may have reached the host: query the durable receipt by the
+        // SAME operationId (never a new id) before deciding the outcome.
+        let receiptMissing = false;
+        if (dispatched && connection && port.lookup) {
+          try {
+            const found = await port.lookup({ operationId, connection });
+            if (found.kind === "found") {
+              if (trustedReceipt(found.receipt, operationId, connection))
+                result = found.receipt.result ?? undefined;
+            } else if (found.kind === "notFound") receiptMissing = true;
+          } catch {
+            /* A read failure is never permission to retry or to release blindly. */
+          }
+        }
+        if (!result) {
+          // Zero I/O (context drift / connection failure before dispatch): withdraw every intent.
+          // After dispatch, a transport failure is not "nothing happened": rows stay unknown and
+          // visible. Only a classified pre-dispatch host error plus a missing receipt releases it.
+          const rejectedBeforeWrite =
+            dispatched && receiptMissing && isPreDispatchHostError(error);
+          const settled: LocalDeleteOutcome =
+            !dispatched || rejectedBeforeWrite ? "notDispatched" : "unknown";
+          update(operationId, (r) => ({
+            ...r,
+            busy: false,
+            outcome: settled,
+            rows: r.rows.map((row) => {
+              if (settled === "notDispatched")
+                return { ...row, state: "blocked" as const };
+              return row.state === "succeeded"
+                ? row
+                : { ...row, state: "unknown" as const };
+            }),
+          }));
+          hooks?.onSettled?.(operationId, settled);
+          return;
+        }
       }
-      const execution = result?.execution;
+      const execution = result.execution;
       const files = execution?.files ?? [];
       const byPath = new Map<string, (typeof files)[number]>();
       let duplicate = false;

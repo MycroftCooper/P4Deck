@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 import { releaseLocalMoveAdmission } from "../changelists/moveOptimism";
+import { releaseLocalDeleteAdmission } from "./localDeleteTask";
 import type {
   AdmissionPort,
   FenceSnapshot,
@@ -31,6 +32,10 @@ export const admissionPort: AdmissionPort = {
   },
   released: (fence) => {
     releaseLocalMoveAdmission(fence.operationId, fence.scope);
+    // Local-trash claims are per-file truth kept in memory: the host fence
+    // release is the only authoritative "verified by the user" event, so the
+    // unknown rows are downgraded here and the blocked paths become usable.
+    releaseLocalDeleteAdmission(fence.operationId, fence.scope);
     const fileAction = fileActionLedger.get(fence.operationId);
     const connection = fileAction?.data.connection;
     if (

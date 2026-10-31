@@ -66,6 +66,42 @@ window.__ModuleLoader__.load({
 			return date.toLocaleString("zh-CN", { hour12: false });
 		}
 
+		const COLLAPSE_KEY = "p4deck-board-collapse";
+		function readCollapsed(id, fallback = true) {
+			try {
+				const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
+				return typeof saved[id] === "boolean" ? saved[id] : fallback;
+			} catch (error) {
+				return fallback;
+			}
+		}
+		function writeCollapsed(id, open) {
+			try {
+				const saved = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}");
+				saved[id] = open;
+				localStorage.setItem(COLLAPSE_KEY, JSON.stringify(saved));
+			} catch (error) {}
+		}
+		/** 可折叠区块：标题点一下收起/展开，状态存在 localStorage。 */
+		function Collapsible({ id, title, titleStyle, children }) {
+			const [open, setOpen] = react.useState(() => readCollapsed(id));
+			return h(
+				"details",
+				{
+					key: id,
+					open,
+					style: { marginTop: 12 },
+					onToggle: (event) => {
+						const next = event.currentTarget.open;
+						setOpen(next);
+						writeCollapsed(id, next);
+					},
+				},
+				h("summary", { style: { ...titleStyle, cursor: "pointer" } }, title),
+				open ? children : null,
+			);
+		}
+
 		/** 纯视图：只吃 snapshot，便于单测与复用。 */
 		function BoardView({ snapshot, status, error, onToggle, onAccept, onCancel, hostOutdated }) {
 			if (!snapshot) {
@@ -138,104 +174,114 @@ window.__ModuleLoader__.load({
 						)
 					: null,
 
-				h("div", { style: sectionTitle }, "AGENT 在忙什么"),
-				...agents.map((agent) =>
-					h(
-						"div",
-						{ key: "agent-" + agent.role, style: card, title: agent.detail || "" },
+				h(Collapsible, {
+					key: "sec-agents",
+					id: "agents",
+					title: "AGENT 在忙什么",
+					titleStyle: sectionTitle,
+					children: agents.map((agent) =>
 						h(
 							"div",
-							{ style: { display: "flex", alignItems: "center", gap: 6 } },
-							h("span", {
-								style: {
-									width: 7,
-									height: 7,
-									borderRadius: "50%",
-									background: AGENT_COLOR[agent.status] || AGENT_COLOR.idle,
-									flex: "0 0 auto",
-								},
-							}),
-							h("strong", null, agent.role),
-							h("span", { style: { color: MUTED, fontSize: 11 } }, AGENT_LABEL[agent.status] || agent.status || ""),
+							{ key: "agent-" + agent.role, style: card, title: agent.detail || "" },
+							h(
+								"div",
+								{ style: { display: "flex", alignItems: "center", gap: 6 } },
+								h("span", {
+									style: {
+										width: 7,
+										height: 7,
+										borderRadius: "50%",
+										background: AGENT_COLOR[agent.status] || AGENT_COLOR.idle,
+										flex: "0 0 auto",
+									},
+								}),
+								h("strong", null, agent.role),
+								h("span", { style: { color: MUTED, fontSize: 11 } }, AGENT_LABEL[agent.status] || agent.status || ""),
+							),
+							h("div", { style: { marginTop: 2, fontWeight: 600 } }, agent.task || "—"),
+							agent.detail ? h("div", { style: { color: MUTED, fontSize: 11, marginTop: 1 } }, agent.detail) : null,
 						),
-						h("div", { style: { marginTop: 2, fontWeight: 600 } }, agent.task || "—"),
-						agent.detail ? h("div", { style: { color: MUTED, fontSize: 11, marginTop: 1 } }, agent.detail) : null,
 					),
-				),
+				}),
 
-				h("div", { style: sectionTitle }, "批次里程碑"),
-				h(
-					"div",
-					{ style: { display: "flex", flexWrap: "wrap", gap: 6 } },
-					...milestones.map((ms) =>
-						h(
-							"span",
-							{
-								key: "ms-" + ms.id,
-								title: ms.note || "",
-								style: { ...card, marginBottom: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 },
-							},
-							h("span", {
-								style: { width: 6, height: 6, borderRadius: "50%", background: STAGE_COLOR[ms.status] || "rgba(128,128,128,0.7)" },
-							}),
-							ms.label,
-							h("span", { style: { color: MUTED } }, "· " + (MS_LABEL[ms.status] || ms.status)),
-						),
-					),
-				),
-
-				h("div", { style: sectionTitle }, "人类待办（只有你能勾）"),
-				...todos.map((todo) =>
-					h(
-						"label",
-						{
-							key: "todo-" + todo.id,
-							title: todo.note || "",
-							style: { ...card, padding: "5px 7px", display: "flex", gap: 8, alignItems: "baseline", cursor: "pointer" },
-						},
-						h("input", {
-							type: "checkbox",
-							checked: Boolean(todo.done),
-							onChange: () => onToggle && onToggle(todo.id),
-							style: { margin: 0 },
-						}),
-						h(
-							"span",
-							{
-								style: {
-									flex: "1 1 auto",
-									textDecoration: todo.done ? "line-through" : "none",
-									color: todo.done ? MUTED : "inherit",
+				h(Collapsible, {
+					key: "sec-milestones",
+					id: "milestones",
+					title: "批次里程碑",
+					titleStyle: sectionTitle,
+					children: h(
+						"div",
+						{ style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+						...milestones.map((ms) =>
+							h(
+								"span",
+								{
+									key: "ms-" + ms.id,
+									title: ms.note || "",
+									style: { ...card, marginBottom: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 },
 								},
-							},
-							todo.text,
+								h("span", {
+									style: { width: 6, height: 6, borderRadius: "50%", background: STAGE_COLOR[ms.status] || "rgba(128,128,128,0.7)" },
+								}),
+								ms.label,
+								h("span", { style: { color: MUTED } }, "· " + (MS_LABEL[ms.status] || ms.status)),
+							),
 						),
-						h("span", { style: { color: MUTED, fontSize: 10, whiteSpace: "nowrap" } }, todo.id),
 					),
-				),
-				todos.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
+				}),
+
+				h(Collapsible, {
+					key: "sec-todos",
+					id: "todos",
+					title: "人类待办（只有你能勾）",
+					titleStyle: sectionTitle,
+					children: [
+						...todos
+							.filter((todo) => !todo.done)
+							.map((todo) =>
+								h(
+									"label",
+									{
+										key: "todo-" + todo.id,
+										title: todo.note || "",
+										style: { ...card, padding: "5px 7px", display: "flex", gap: 8, alignItems: "baseline", cursor: "pointer" },
+									},
+									h("input", {
+										type: "checkbox",
+										checked: false,
+										onChange: () => onToggle && onToggle(todo.id),
+										style: { margin: 0 },
+									}),
+									h("span", { style: { flex: "1 1 auto" } }, todo.text),
+									h(
+										"span",
+										{ style: { color: MUTED, fontSize: 10, whiteSpace: "nowrap" } },
+										todo.id + (todo.blocks && todo.blocks.length ? " · 解锁 " + todo.blocks.join("、") : ""),
+									),
+								),
+							),
+						todos.some((todo) => !todo.done)
+							? null
+							: h("div", { style: { color: MUTED, fontSize: 11 } }, "（没有未完成的人类待办）"),
+						todos.some((todo) => todo.done)
+							? h(
+									"div",
+									{ style: { color: MUTED, fontSize: 10, marginTop: 2 } },
+									"已完成 " + todos.filter((todo) => todo.done).length + " 项，已从阻塞链移除（保留审计）",
+								)
+							: null,
+					],
+				}),
 
 				...STAGE_ORDER.map((stage) => {
 					const items = packages.filter((pkg) => pkg.stage === stage);
 					if (!items.length) return null;
-					return h(
-						"div",
-						{ key: "stage-" + stage },
-						h(
-							"div",
-							{ style: sectionTitle },
-							h("span", {
-								style: {
-									display: "inline-block",
-									width: 6,
-									height: 6,
-									borderRadius: 2,
-									marginRight: 6,
-									background: STAGE_COLOR[stage],
-								},
-							}),
-							(STAGE_LABELS[stage] || stage) + " " + items.length,
-						),
+					return h(Collapsible, {
+						key: "stage-" + stage,
+						id: "stage-" + stage,
+						title: (STAGE_LABELS[stage] || stage) + " " + items.length,
+						titleStyle: sectionTitle,
+						children: [
 						...items.map((pkg) => {
 							const actionable = pkg.stage === "awaiting_accept" || pkg.stage === "unverified";
 							const showAccept = actionable && typeof onAccept === "function" && !hostOutdated;
@@ -253,6 +299,12 @@ window.__ModuleLoader__.load({
 								pkg.scope
 									? h("div", { style: { marginTop: 2, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35 } }, pkg.scope)
 									: null,
+								h(
+									"div",
+									{ style: { marginTop: 1, color: pkg.derivedComplete ? "#2f6f4f" : pkg.ready ? "#2f6f4f" : MUTED, fontSize: 10 } },
+									(pkg.childrenTotal ? "子任务 " + pkg.childrenDone + "/" + pkg.childrenTotal + (pkg.derivedComplete ? "（汇总完成）" : " · ") : "") +
+										(pkg.ready ? "就绪" : "等待 " + (pkg.waitingOn || []).join("、")),
+								),
 								pkg.note
 									? h(
 											"div",
@@ -307,26 +359,36 @@ window.__ModuleLoader__.load({
 									: null,
 							);
 						}),
-					);
+						],
+					});
 				}),
 
-				h("div", { style: { ...sectionTitle, marginTop: 16 } }, "已完成归档（独立区域）"),
-				...archived.map((pkg) =>
-					h(
-						"div",
-						{ key: "arch-" + pkg.id, style: { ...card, padding: "5px 7px" }, title: pkg.note || "" },
-						h(
-							"div",
-							{ style: { display: "flex", gap: 6, alignItems: "baseline" } },
-							h("strong", { style: { fontSize: 12 } }, pkg.id),
-							h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, fmtTime(pkg.archivedAt)),
+				h(Collapsible, {
+					key: "sec-archived",
+					id: "archived",
+					title: "已完成归档（独立区域）",
+					titleStyle: { ...sectionTitle, marginTop: 16 },
+					children: [
+						...archived.map((pkg) =>
+							h(
+								"div",
+								{ key: "arch-" + pkg.id, style: { ...card, padding: "5px 7px" }, title: pkg.note || "" },
+								h(
+									"div",
+									{
+										style: { display: "flex", gap: 6, alignItems: "baseline" },
+									},
+									h("strong", { style: { fontSize: 12 } }, pkg.id),
+									h("span", { style: { marginLeft: "auto", color: MUTED, fontSize: 10 } }, fmtTime(pkg.archivedAt)),
+								),
+								pkg.scope ? h("div", { style: { marginTop: 2, fontSize: 11, fontWeight: 600 } }, pkg.scope) : null,
+								h("div", { style: { color: MUTED, fontSize: 10, marginTop: 1 } }, pkg.archiveReason || "历史迁移项"),
+								pkg.canceled ? h("div", { style: { color: "#9b2c2c", fontSize: 10, marginTop: 1 } }, "已取消（未验收）") : null,
+							),
 						),
-						pkg.scope ? h("div", { style: { marginTop: 2, fontSize: 11, fontWeight: 600 } }, pkg.scope) : null,
-						h("div", { style: { color: MUTED, fontSize: 10, marginTop: 1 } }, pkg.archiveReason || "历史迁移项"),
-						pkg.canceled ? h("div", { style: { color: "#9b2c2c", fontSize: 10, marginTop: 1 } }, "已取消（未验收）") : null,
-					),
-				),
-				archived.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
+						archived.length ? null : h("div", { style: { color: MUTED, fontSize: 11 } }, "（暂无）"),
+					],
+				}),
 
 				h(
 					"div",

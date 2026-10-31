@@ -152,6 +152,55 @@ export const revertPort: RevertPort = {
   workspaceChildren: (dir) =>
     backend.listWorkspaceChildren(dir).then((listing) => listing.items),
 };
+/**
+ * Host pre-dispatch rejections. Both written slices reserve their durable action
+ * receipt BEFORE any write (`reserve_action` → `lock_write_transaction` → write),
+ * so a same-operationId lookup returning `notFound` proves the write path was
+ * never reached. Only the known pre-dispatch failure classes below may use that
+ * proof to settle as "not dispatched"; a generic transport error could still
+ * have reached the host and stays `unknown` until a durable fence/refresh proves
+ * the opposite. Never infer "nothing was written" from the exception alone.
+ *
+ * Shared with `genericFileTask` (same host contract); it lives here because this
+ * slice's write scope is the two task modules.
+ */
+const HOST_PRE_DISPATCH_ERRORS: readonly RegExp[] = [
+  /invalidConnection/i,
+  // Also matches `connectionChangedBeforeDispatch` and message-wrapped variants.
+  /connectionChanged/i,
+  /contextChanged/i,
+  /preflightBlocked/i,
+  /targetMismatch/i,
+  /tokenUnknown|tokenExpired/i,
+  /requestLimit|requestIdConflict/i,
+  /operationIdPayloadConflict/i,
+  /payloadTooLarge|capacityReached|receiptUnavailable/i,
+  /operation was cancelled while waiting to run/i,
+  /operation timed out/i,
+  /p4 CLI was not found/i,
+  /invalid P4 command/i,
+  /requires a stable operationId|stable operationId is required/i,
+  /A connection snapshot is required for modifying file actions/i,
+  /Revert must use confirm_revert_action/i,
+  /GUI changelist moves must use|GUI lock\/unlock must use/i,
+  /Expected (?:revert action|P4 revert)/i,
+  /operationId must be a UUID/i,
+  /rejected before dispatch|nothing was written|nothing was (?:deleted|shelved|reverted)/i,
+];
+/** True only for the host's known "refused before the write path" reasons. */
+export function isHostPreDispatchRejection(error: unknown): boolean {
+  const text =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : error && typeof error === "object" && "message" in error
+          ? String((error as { message?: unknown }).message ?? "")
+          : "";
+  return (
+    !!text && HOST_PRE_DISPATCH_ERRORS.some((pattern) => pattern.test(text))
+  );
+}
 /** Called only after existing confirmation. No modal lifetime, whole-list refresh, or write retry. */
 export function startRevert(
   scope: string,
@@ -218,7 +267,8 @@ export function startRevert(
     void (async () => {
       let connection: ConnectionSnapshot | undefined,
         dispatched = false,
-        result: WorkflowResult | undefined;
+        result: WorkflowResult | undefined,
+        hostRejected = false;
       try {
         // Hide only files the local workspace proves unmodified; modified rows stay
         // visible because the host retains them (no "flash all rows away").
@@ -266,11 +316,13 @@ export function startRevert(
           );
         dispatched = true;
         result = await port.execute(request, connection);
-      } catch {
+      } catch (error) {
+        let receiptMissing = false;
         if (dispatched && connection) {
           try {
             const lookup = { operationId, connection };
             const found = await port.lookup(lookup);
+            if (found.kind === "notFound") receiptMissing = true;
             if (
               found.kind === "found" &&
               validWorkflowReceipt(lookup, found.receipt, "revert") &&
@@ -288,10 +340,19 @@ export function startRevert(
             /* No write retry. */
           }
         }
+        // The durable receipt is reserved before any write, so notFound + a known
+        // pre-dispatch refusal proves no write was dispatched. Anything else
+        // (transport/unknown, or a receipt that exists but is not settled) stays
+        // unknown and waits for the host fence/receipt instead of self-releasing.
+        hostRejected = receiptMissing && isHostPreDispatchRejection(error);
         if (!result)
           report(
-            dispatched ? "unknown" : "failed",
-            dispatched ? "uncertainOutcome" : "contextChanged",
+            !dispatched || hostRejected ? "failed" : "unknown",
+            hostRejected
+              ? "preflightBlocked"
+              : dispatched
+                ? "uncertainOutcome"
+                : "contextChanged",
           );
       } finally {
         if (result && result.outcome !== "succeeded")
@@ -301,7 +362,12 @@ export function startRevert(
               : "unknown",
             "uncertainOutcome",
           );
-        finishRemovalObservation(operationId, runtime, result, !dispatched);
+        finishRemovalObservation(
+          operationId,
+          runtime,
+          result,
+          !dispatched || hostRejected,
+        );
       }
     })();
   });

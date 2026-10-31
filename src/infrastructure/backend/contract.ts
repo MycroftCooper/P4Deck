@@ -100,6 +100,8 @@ import type {
   ResolvePreflight,
   ResolvePreflightRequest,
   ResolveConfirmation,
+  ResolveStats,
+  ResolveStatsRequest,
   ManualMergeOpenRequest,
   ManualMergeSession,
   ManualMergeValidateRequest,
@@ -107,6 +109,9 @@ import type {
   ManualMergeSaveConfirmation,
   ManualMergeSaveResult,
   ManualMergeResolveConfirmation,
+  ExternalMergeToolInfo,
+  ExternalMergeRequest,
+  ExternalMergeResult,
   WorkflowConfirmation,
   WorkflowResult,
   RevisionGraph,
@@ -337,6 +342,8 @@ export interface Backend {
   confirmSync(
     confirmation: SyncConfirmRequest,
   ): Promise<SyncResult | import("../../shared/contracts").LocalIoActionResult>;
+  /** One-click Get Latest: no preview/confirmation; P4 resolves conflicts as usual. */
+  syncLatest(request: SyncPreviewRequest): Promise<SyncResult>;
   getFilePreview(
     path: string,
   ): Promise<import("../../shared/contracts").FilePreview>;
@@ -393,6 +400,8 @@ export interface Backend {
   ): Promise<
     WorkflowResult | import("../../shared/contracts").MergeResolveActionResult
   >;
+  /** Read-only P4V Resolve detail; missing host fields stay placeholders in the UI. */
+  resolveStats(request: ResolveStatsRequest): Promise<ResolveStats>;
   openManualMerge(
     request: ManualMergeOpenRequest,
   ): Promise<
@@ -416,4 +425,6 @@ export interface Backend {
   ): Promise<
     WorkflowResult | import("../../shared/contracts").MergeResolveActionResult
   >;
+  detectExternalMergeTool(): Promise<ExternalMergeToolInfo>;
+  runExternalMerge(request: ExternalMergeRequest): Promise<ExternalMergeResult>;
 }

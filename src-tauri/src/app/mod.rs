@@ -11,6 +11,7 @@ pub mod connection_service;
 pub mod connection_setup_service;
 pub(crate) mod custom_submit;
 pub mod diagnostics;
+pub mod external_merge;
 pub mod file_lock_service;
 pub mod file_service;
 pub mod manual_merge;

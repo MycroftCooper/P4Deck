@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-31T07:13:54.707Z",
+  "updatedAt": "2026-10-31T16:04:36.804Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -96,9 +96,9 @@
     ]
   },
   "counts": {
-    "main": 52,
+    "main": 56,
     "archived": 7,
-    "total": 59,
+    "total": 63,
     "subitems": 32,
     "slices": 7
   },
@@ -483,7 +483,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "连接与工作区",
       "scope": "连接与工作区：多 Profile、连接恢复、Workspace 切换/Root 校正",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -500,11 +500,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T16:04:36.804Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 16:04:36）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -823,7 +824,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "CL 工作流",
       "scope": "CL 工作流：Pending 表单、文件移动/拖放、Default 与分页",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -840,11 +841,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T16:04:16.598Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 16:04:16）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -860,7 +862,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "CL 工作流",
       "scope": "CL 工作流：Submit 预检、执行与结果复核",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -877,11 +879,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T16:04:11.851Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 16:04:11）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -964,6 +967,125 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T11:14:18.235Z"
+    },
+    {
+      "id": "DIFF-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0）",
+      "stage": "done",
+      "statusRaw": "已实现待验收",
+      "priority": "P1",
+      "evidence": [
+        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
+        "src/features/browsers/components/DiffView.tsx"
+      ],
+      "note": "用户 2026-10-31 选定整套替换 @pierre/diffs 1.6.2；保留现有工具栏/搜索/hunk 跳转/引用选择/复制/右键/Swarm 与 partial/truncated 语义，渲染改为库的 split/unified + 词级 + 折叠 + Shiki；不引入 WASM/CDN，CSP 默认不变；删自研行渲染与硬配对；补 jsdom mock 与 Playwright 渲染断言；定向 vitest + `pnpm check:web` + build 通过后交用户视觉验收；不改变后端口径（DiffResult/unified+leftText/rightText）",
+      "depsRaw": "QA-01；SAFE-02",
+      "deps": [
+        "QA-01",
+        "SAFE-02"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T09:46:16.013Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:16）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-31T08:22:55.113Z"
+    },
+    {
+      "id": "DIFF-02",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff）",
+      "stage": "done",
+      "statusRaw": "已实现待验收",
+      "priority": "P1",
+      "evidence": [
+        "src/features/browsers/components/DiffView.tsx",
+        "src/features/browsers/diffNavigation.ts"
+      ],
+      "note": "用户 2026-10-31 指定优先；前端已删除 MultiFileDiff/parseDiffFromFile/PatchDiff 生产用法，改为 parsePatchFiles(Rust unified) → FileDiff + loadDiffFiles；100k 行基准 parse 0.15ms vs 旧 diff 90.32ms（≈602×）、heap 81KB vs 14.59MB，hunk 数一致；全量 1550 tests/check:web/build/prettier 绿；真实窗口视觉待验收；证据 `artifacts/evidence/2026-10-31-DIFF-02/验证摘要.md`",
+      "depsRaw": "QA-01；SAFE-02；DIFF-01",
+      "deps": [
+        "QA-01",
+        "SAFE-02",
+        "DIFF-01"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T09:46:01.443Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:01）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "firstSeenAt": "2026-10-31T09:36:30.567Z",
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null
+    },
+    {
+      "id": "MERGE-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE＋BE（PM拆领取范围）",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：冲突合并工具重做（先接 P4Merge 外部合并，保留现有安全链）",
+      "stage": "done",
+      "statusRaw": "已实现待验收",
+      "priority": "P1",
+      "evidence": [
+        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
+        "src/features/files/components/ManualMergeEditor.tsx",
+        "src-tauri/src/app/workflow_service.rs"
+      ],
+      "note": "用户 2026-10-31 选定先直接调用 P4Merge 确保能用；仅检测已安装不打包；从现有手工会话生成 base/theirs/yours/result 四临时文件，等待 P4Merge 退出后读回 result，放入现有 Result 供用户复核，再走现有 validate/save token + 原子写 + `p4 resolve -ay` 复核；未安装/取消/超时/超限明确降级；不改 resolve 策略与 blocked/unknown 语义；GUI 启动不做自动测试，真机冒烟交用户",
+      "depsRaw": "CL-03；SAFE-02；UI-08（后续 UI 重做再议）",
+      "deps": [
+        "CL-03",
+        "SAFE-02"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T16:03:59.963Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 16:03:59）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-31T08:22:55.114Z"
     },
     {
       "id": "CL-04",
@@ -1676,7 +1798,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "Submitted 与周报",
       "scope": "Submitted 与周报：CI结构化来源CL引用链及自身workspace（用户最新替换需求）",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1695,11 +1817,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T09:45:41.202Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:45:41）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1748,8 +1871,8 @@
       "type": "feature",
       "typeRaw": "功能需求",
       "owner": "FE",
-      "module": "CL工作流",
-      "scope": "CL工作流：Pending编号数值正倒序按钮（用户已批准）",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：Pending编号数值正倒序按钮（用户已批准）",
       "stage": "done",
       "statusRaw": "已验收（用户 2026-10-30：CL 编号排序验证通过）",
       "priority": "P1",
@@ -1818,8 +1941,8 @@
       "type": "feature",
       "typeRaw": "功能需求",
       "owner": "BE调研；后续FE/BE由PM分阶段派单",
-      "module": "CL工作流",
-      "scope": "CL工作流：自定义提交工具配置与原提交入口分流",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：自定义提交工具配置与原提交入口分流",
       "stage": "done",
       "statusRaw": "已验收（用户 2026-10-30：公司自定义提交工具验证通过）",
       "priority": "P1（先调研）",
@@ -1852,8 +1975,8 @@
       "type": "feature",
       "typeRaw": "功能需求",
       "owner": "FE＋BE；QA独立",
-      "module": "CL工作流",
-      "scope": "CL工作流：跨多个Pending CL提交选中文件",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：跨多个Pending CL提交选中文件",
       "stage": "implemented",
       "statusRaw": "已实现待验收（已合入，待用户本地假P4人工验收）",
       "priority": "P1高优先，当前项自然收尾后",
@@ -1928,13 +2051,14 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：设置里支持自定义背景色（主题色之外）",
-      "stage": "todo",
-      "statusRaw": "待实现",
-      "priority": "P2，用户列第三优先",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-10-30：自定义背景色验收通过）",
+      "priority": "P2",
       "evidence": [
-        "src/app/shell/AppControls.tsx"
+        "src/features/settings/BackgroundColorSettings.tsx",
+        "src/features/settings/background.ts"
       ],
-      "note": "设置新增“背景色”自定义（颜色选择/恢复默认），与主题深/浅色兼容，保证文字对比度与选中态可读；持久化到偏好并重启生效；提供少量预设 + 自定义入口；验收含截图（深/浅背景下可读性）",
+      "note": "设置“背景色”：预设 + 取色器/十六进制 + 恢复默认，深浅主题自适应对比度，偏好持久化；0.1.8 已发布并获用户验收；子项 UI-09-1/2/3 分别记录实现与验收",
       "depsRaw": "无",
       "deps": [],
       "archived": false,
@@ -1942,11 +2066,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T08:42:11.818Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户 2026-10-30 确认：0.1.7→0.1.8 自动升级后，自定义背景色功能验收通过（见 当前批次.md 2026-10-30 决议）",
+        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md",
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1962,14 +2087,14 @@
       "owner": "FE",
       "module": "界面与导航",
       "scope": "界面与导航：标签页 session（首启只开待提交、重启恢复上次标签）",
-      "stage": "todo",
-      "statusRaw": "待实现",
+      "stage": "done",
+      "statusRaw": "已实现待验收（0.1.9 已发布）",
       "priority": "P1，0.1.9",
       "evidence": [
         "src/app/hooks/usePageNavigation.ts",
-        "src/app/App.tsx"
+        "src/app/hooks/usePageNavigation.test.ts"
       ],
-      "note": "新用户首次启动只自动打开 Pending，其它页面不预开；之后启动恢复上次关闭前的标签集合+激活页；未知/损坏/超量回退 Pending；仅主窗口持久化；不触发恢复查询风暴；测试覆盖负向（其它页未开）/恢复/回退/幂等",
+      "note": "首启只开 Pending；主窗口持久化打开页+激活页（上限 12、版本容错、未知页过滤、关闭同步、损坏回退、幂等），11 项 vitest 覆盖；0.1.9 已随版本交付，待人工确认重启恢复体验",
       "depsRaw": "无",
       "deps": [],
       "archived": false,
@@ -1977,11 +2102,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T09:45:50.137Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:45:50）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1989,6 +2115,43 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T13:45:02.576Z"
+    },
+    {
+      "id": "UI-13",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "界面与导航",
+      "scope": "界面与导航：标题栏显示应用版本号（0.1.9 补登）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-10-31 看板点验收通过）",
+      "priority": "P1，0.1.9",
+      "evidence": [
+        "src/app/shell/TopBar.tsx",
+        "src/app/shell/useAppVersion.ts",
+        "src/app/shell/TopBar.version.test.tsx"
+      ],
+      "note": "标题栏显示 `P4Deck v<version>`（tooltip 为完整版本号），版本取自运行时 app version，加载中不显示；0.1.9 已发布；2026-10-31 用户在看板点验收通过",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T09:16:49.660Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:16:49）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-10-31T08:42:09.247Z"
     },
     {
       "id": "UI-14",
@@ -2068,14 +2231,15 @@
       "owner": "FE＋BE",
       "module": "界面与导航",
       "scope": "界面与导航：快捷键系统（P4V 对齐 + 设置可配置 + 持久化）",
-      "stage": "todo",
-      "statusRaw": "待实现",
+      "stage": "done",
+      "statusRaw": "已实现待验收（0.1.8 已发布）",
       "priority": "P2",
       "evidence": [
         "src/app/commands/catalog.ts",
-        "ForAIDoc/Designer/统一Action刷新与通知.md"
+        "src/features/settings/ShortcutSettingsCard.tsx",
+        "ForAIDoc/Designer/快捷键P4V映射.md"
       ],
-      "note": "4 个关联子项分别验收：①调研 P4V 默认快捷键（Windows 键位，输出映射/冲突/保留清单）②按 P4V 习惯在 catalog 实现全局+页面快捷键（统一 commandForShortcut，保留输入框保护/平台差异/风险绕过检查）③Settings 新增快捷键分区（命令列表/当前键/录制/冲突检测/恢复默认）④keymap 持久化（本地配置文件跨重启生效，默认=P4V 对齐，含版本迁移与重启验证）",
+      "note": "四阶段（P4V 映射调研、catalog 统一分发、Settings 录制/冲突/恢复默认、keymap 持久化）已在 0.1.8 发布并有 vitest 覆盖；待人工确认默认键位、输入框保护、冲突提示与跨重启生效",
       "depsRaw": "无",
       "deps": [],
       "archived": false,
@@ -2083,11 +2247,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-10-31T10:17:02.478Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 10:17:02）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -2578,10 +2743,10 @@
       "typeRaw": "功能需求（UI）",
       "owner": "FE",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.8 已发布）",
+      "stage": "implemented",
       "depsRaw": "无",
-      "note": "设置“背景色”自定义：预设 + 取色器/十六进制输入、恢复默认；主题深/浅色下文字与选中态对比度检查；偏好持久化、重启生效",
+      "note": "设置“背景色”自定义：预设 + 取色器/十六进制输入、恢复默认；主题深/浅色下文字与选中态对比度检查；偏好持久化、重启生效；BackgroundColorSettings.tsx + background.test.ts 覆盖",
       "migrated": true
     },
     {
@@ -2591,10 +2756,10 @@
       "typeRaw": "功能需求（验收）",
       "owner": "FE；用户",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现且有相应验收证据（用户 2026-10-30 验收背景色）",
+      "stage": "done",
       "depsRaw": "UI-09-1",
-      "note": "截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户确认后关闭",
+      "note": "截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户 2026-10-30 确认背景色功能通过（0.1.8 自动升级后）；UI-09-3 的 chrome 层次另记",
       "migrated": true
     },
     {
@@ -2604,10 +2769,10 @@
       "typeRaw": "功能需求（UI）",
       "owner": "FE",
       "priority": "P1，0.1.9",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.9 已发布，决策名 UI-12）",
+      "stage": "implemented",
       "depsRaw": "UI-09-1",
-      "note": "自定义背景色后，工具栏/标题栏/标签栏/侧栏/状态栏也要跟随（同色系 3-4 级层次、略有区别）；默认“跟随主题”外观保持不变；深浅主题可读性/对比度证据",
+      "note": "自定义背景色后，工具栏/标题栏/标签栏/侧栏/状态栏也要跟随（同色系 3-4 级层次、略有区别）；默认“跟随主题”外观保持不变；BackgroundColorSettings 的浅/深预览已含 chrome 层；待人工确认层次与对比度",
       "migrated": true
     },
     {
@@ -2617,10 +2782,10 @@
       "typeRaw": "功能需求（首启默认）",
       "owner": "FE",
       "priority": "P1",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.9 已发布）",
+      "stage": "implemented",
       "depsRaw": "无",
-      "note": "无 session 记录时只打开 Pending；移除“默认全开标签”行为；保留连接 gate/深链/通知导航",
+      "note": "无 session 记录时只打开 Pending；移除“默认全开标签”行为；保留连接 gate/深链/通知导航；usePageNavigation.test.ts 首启用例覆盖",
       "migrated": true
     },
     {
@@ -2630,10 +2795,10 @@
       "typeRaw": "功能需求（session 恢复）",
       "owner": "FE",
       "priority": "P1",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.9 已发布）",
+      "stage": "implemented",
       "depsRaw": "UI-11-1",
-      "note": "持久化打开页+激活页（仅主窗口、上限、版本容错）；启动恢复并过滤未知页；关闭页面同步；损坏回退 Pending；测试幂等",
+      "note": "持久化打开页+激活页（仅主窗口、上限、版本容错）；启动恢复并过滤未知页；关闭页面同步；损坏回退 Pending；测试幂等；usePageNavigation.test.ts 其余 10 项覆盖",
       "migrated": true
     },
     {
@@ -2643,10 +2808,10 @@
       "typeRaw": "功能需求",
       "owner": "FE；PM",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现且有相应验收证据（映射文档）",
+      "stage": "done",
       "depsRaw": "无",
-      "note": "调研 P4V 默认快捷键（Windows：菜单/工具栏/面板），输出 P4V 键位→P4Deck 命令映射清单、冲突与不迁移项（保留系统/输入法冲突说明）",
+      "note": "调研 P4V 默认快捷键（Windows：菜单/工具栏/面板），输出 P4V 键位→P4Deck 命令映射清单、冲突与不迁移项（保留系统/输入法冲突说明）；产出 [快捷键P4V映射.md](../Designer/快捷键P4V映射.md)",
       "migrated": true
     },
     {
@@ -2656,10 +2821,10 @@
       "typeRaw": "功能需求",
       "owner": "FE",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.8 已发布）",
+      "stage": "implemented",
       "depsRaw": "KEY-01-1",
-      "note": "按 P4V 习惯在 app/commands/catalog.ts 补齐全局+页面快捷键；统一 commandForShortcut 分发，保留输入框保护/平台 Ctrl-Cmd/风险与确认不绕过；冲突测试更新",
+      "note": "按 P4V 习惯在 app/commands/catalog.ts 补齐全局+页面快捷键；统一 commandForShortcut 分发，保留输入框保护/平台 Ctrl-Cmd/风险与确认不绕过；冲突测试更新；keymap.ts + catalog.test.ts 覆盖",
       "migrated": true
     },
     {
@@ -2669,10 +2834,10 @@
       "typeRaw": "功能需求",
       "owner": "FE",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.8 已发布）",
+      "stage": "implemented",
       "depsRaw": "KEY-01-2",
-      "note": "Settings 新增“快捷键”分区：按分组列出命令/当前键/可用条件；点击录制新键；实时冲突提示；恢复默认；不可用原因显示",
+      "note": "Settings 新增“快捷键”分区：按分组列出命令/当前键/可用条件；点击录制新键；实时冲突提示；恢复默认；不可用原因显示；ShortcutSettingsCard.tsx + 10 项测试覆盖",
       "migrated": true
     },
     {
@@ -2682,10 +2847,10 @@
       "typeRaw": "功能需求",
       "owner": "FE",
       "priority": "P2",
-      "statusRaw": "待实现",
-      "stage": "todo",
+      "statusRaw": "已实现待验收（0.1.8 已发布）",
+      "stage": "implemented",
       "depsRaw": "KEY-01-3",
-      "note": "keymap 持久化（本地配置文件，随 profile 独立；版本号/迁移；损坏回退默认）；重启后生效验证；与命令面板标签一致",
+      "note": "keymap 持久化（本地配置文件，随 profile 独立；版本号/迁移；损坏回退默认）；重启后生效验证；与命令面板标签一致；keymapPersistence.ts + 测试覆盖",
       "migrated": true
     }
   ]

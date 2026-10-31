@@ -374,17 +374,92 @@ export function CommandBar({
       });
       return;
     }
-    if (
-      (id === "getLatest" || id === "getRevision") &&
-      target.type === "file"
-    ) {
+    if (id === "getRevision" && target.type === "file") {
       dialogs.open({
         kind: "sync",
         nodes: nodes.map((node) => ({ ...node })),
-        revisionMode: id === "getRevision" ? "choose" : "head",
+        revisionMode: "choose",
         scopeLabel: target.scopeLabel,
         source: source ?? (document.activeElement as HTMLElement | null),
       });
+      return;
+    }
+    if (id === "getLatest" && target.type === "file") {
+      // Direct Get Latest: no safe-sync preview/confirmation. P4 itself reports
+      // conflicts for locally modified files and updates the rest.
+      const operationId = crypto.randomUUID();
+      const epoch = generation.current;
+      running.current = operationId;
+      setOperation({
+        id: operationId,
+        label: zh ? "获取最新" : "Get latest",
+        cancellable: true,
+      });
+      let paths: readonly string[] = [];
+      let failed = true;
+      let failure: unknown;
+      try {
+        paths = selectionRequest("getLatest", nodes).paths;
+        const result = await backend.syncLatest({
+          paths: [...paths],
+          revision: { kind: "head", value: "" },
+          operationId,
+        });
+        if (result.outcome === "succeeded") failed = false;
+        else failure = new Error(result.message);
+      } catch (cause) {
+        failure = cause;
+      } finally {
+        if (running.current === operationId) {
+          running.current = undefined;
+          setOperation(undefined);
+        }
+      }
+      if (failed) {
+        // P4 can partially apply a sync before failing; keep caches honest.
+        void invalidateData(commandActions.getLatest.effects, {
+          connectionKey,
+          affectedPaths: [...paths],
+        }).catch(() => undefined);
+        if (
+          epoch === generation.current &&
+          latest.current.targetKey === targetKey
+        )
+          onFocus({ type: "none" });
+        throw failure instanceof Error ? failure : new Error(String(failure));
+      }
+      void (async () => {
+        await invalidateData(commandActions.getLatest.effects, {
+          connectionKey,
+          affectedPaths: [...paths],
+        });
+        if (epoch !== generation.current) return;
+        if (target.type === "file" && latest.current.targetKey === targetKey) {
+          const updated = await resolveSelection(
+            nodes,
+            connectionKey,
+            runtime.context.cwd,
+          );
+          if (
+            epoch === generation.current &&
+            latest.current.targetKey === targetKey
+          )
+            onFocus({
+              type: "file",
+              node:
+                updated.find((n) => nodeKey(n) === nodeKey(target.node)) ??
+                updated.at(-1)!,
+              nodes: updated,
+            });
+        }
+      })().catch(() => {
+        // Background refresh never turns a completed sync into a failure.
+      });
+      void workspaceCache
+        .invalidateQueries({
+          queryKey: ["local-path-capabilities", connectionKey],
+        })
+        .catch(() => undefined);
       return;
     }
     if (id === "rename" && target.type === "file") {

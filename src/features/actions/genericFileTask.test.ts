@@ -230,3 +230,99 @@ it("destination is included in conflicts before copy execution completes", () =>
     ),
   ).toBe(false);
 });
+
+it("host pre-dispatch rejection with no receipt becomes notDispatched and releases the claim", async () => {
+  const f = fixture();
+  const operationId = crypto.randomUUID();
+  // The host reserves the receipt BEFORE any write; notFound proves the write
+  // path was never reached, so this is a known no-op rather than unknown.
+  vi.mocked(f.port.execute).mockRejectedValue(Error("invalidConnection"));
+  expect(
+    startGenericFileAction(
+      f.scope,
+      f.runtime,
+      { action: "checkout", paths: ["//fixture/a"], operationId },
+      [],
+      () => true,
+      f.port,
+    ),
+  ).toBe(true);
+  await flush();
+  expect(f.port.execute).toHaveBeenCalledOnce();
+  expect(f.port.lookup).toHaveBeenCalledExactlyOnceWith({
+    operationId,
+    connection: f.connection,
+  });
+  expect(fileActionLedger.get(operationId)?.data.outcome).toBe("notDispatched");
+  expect(fileActionLedger.get(operationId)?.data.admissionReleased).toBe(true);
+  expect(blockedMovePaths(f.scope).size).toBe(0);
+  expect(f.port.invalidate).not.toHaveBeenCalled();
+  expect(f.port.report).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ outcome: "failed", code: "preflightBlocked" }),
+  );
+});
+
+it("unrecognized transport failure without a receipt stays unknown and keeps the claim", async () => {
+  const f = fixture();
+  const operationId = crypto.randomUUID();
+  vi.mocked(f.port.execute).mockRejectedValue(Error("lost"));
+  startGenericFileAction(
+    f.scope,
+    f.runtime,
+    { action: "checkout", paths: ["//fixture/a"], operationId },
+    [],
+    () => true,
+    f.port,
+  );
+  await flush();
+  expect(fileActionLedger.get(operationId)?.data.outcome).toBe("unknown");
+  expect(fileActionLedger.get(operationId)?.data.admissionReleased).toBeFalsy();
+  expect(blockedMovePaths(f.scope).has("//fixture/a")).toBe(true);
+  expect(f.port.invalidate).toHaveBeenCalledOnce();
+  expect(f.port.report).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ outcome: "unknown", code: "uncertainOutcome" }),
+  );
+});
+
+it("settled receipt wins over a pre-dispatch-looking failure", async () => {
+  const f = fixture();
+  const operationId = crypto.randomUUID();
+  vi.mocked(f.port.execute).mockRejectedValue(
+    Error("contextChanged: The active connection changed."),
+  );
+  vi.mocked(f.port.lookup).mockImplementation(async () => ({
+    kind: "found" as const,
+    receipt: {
+      operationId,
+      kind: "fileAction" as const,
+      connection: f.connection,
+      payloadDigest: "ab".repeat(32),
+      revision: "5",
+      state: "settled" as const,
+      result: {
+        message: "",
+        affectedPaths: ["//fixture/a"],
+        execution: {
+          operationId,
+          outcome: "commandCompleted" as const,
+          perFileEvidence: "notCollected" as const,
+        },
+      },
+    },
+  }));
+  startGenericFileAction(
+    f.scope,
+    f.runtime,
+    { action: "checkout", paths: ["//fixture/a"], operationId },
+    [],
+    () => true,
+    f.port,
+  );
+  await flush();
+  expect(fileActionLedger.get(operationId)?.data.outcome).toBe(
+    "commandCompleted",
+  );
+  expect(blockedMovePaths(f.scope).size).toBe(0);
+  expect(f.port.invalidate).toHaveBeenCalledOnce();
+  expect(f.port.report).not.toHaveBeenCalled();
+});

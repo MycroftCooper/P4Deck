@@ -72,6 +72,52 @@ function packageStage(pkg) {
   }
   return pkg.stage ?? "proposed";
 }
+
+/** 依赖链就绪计算（与 scripts/workflow/deps.mjs 保持同一语义）。 */
+const HUMAN_DEP_RE = /^T\d{2,}$/i;
+function taskSatisfied(pkg) {
+  return Boolean(pkg?.archived) || pkg?.stage === "done" || pkg?.verification?.humanAccepted === true;
+}
+function readinessFor(pkg, byId, todosById) {
+  const waiting = [];
+  for (const dep of pkg.deps ?? []) {
+    if (HUMAN_DEP_RE.test(dep)) {
+      const item = todosById.get(String(dep).toUpperCase());
+      if (!item || item.done !== true) waiting.push(dep);
+    } else if (!taskSatisfied(byId.get(dep))) {
+      waiting.push(dep);
+    }
+  }
+  return { ready: waiting.length === 0, waiting };
+}
+
+function parentOf(entry) {
+  const raw = entry?.parentId ?? entry?.parent;
+  return raw ? String(raw) : null;
+}
+
+/** 父子完成聚合：自身完成或所有子任务完成。 */
+function completionFor(id, byId, childMap, memo = new Map(), visiting = new Set()) {
+  if (memo.has(id)) return memo.get(id);
+  const entry = byId.get(id);
+  if (!entry) return { satisfied: false, childrenTotal: 0, childrenDone: 0, derived: false };
+  if (visiting.has(id)) return { satisfied: false, childrenTotal: 0, childrenDone: 0, derived: false };
+  visiting.add(id);
+  const children = childMap.get(String(id).toUpperCase()) ?? [];
+  let childrenDone = 0;
+  let all = true;
+  for (const child of children) {
+    const result = completionFor(child.id, byId, childMap, memo, visiting);
+    if (result.satisfied) childrenDone += 1;
+    else all = false;
+  }
+  visiting.delete(id);
+  const stored = taskSatisfied(entry);
+  const satisfied = stored || (children.length > 0 && all);
+  const result = { satisfied, childrenTotal: children.length, childrenDone, derived: !stored && satisfied };
+  memo.set(id, result);
+  return result;
+}
 /** 组合看板快照。state.json 是任务真值，运行状态.json 提供 Agent/里程碑。 */
 export async function buildSnapshot(workspace) {
   const workflowDir = path.join(workspace, "ForAIDoc", "PM", "工作流");
@@ -80,8 +126,19 @@ export async function buildSnapshot(workspace) {
   const runtime = await readJson(path.join(workflowDir, "运行状态.json"), { agents: [], milestones: [], events: [] });
   const todos = await readJson(path.join(workflowDir, "人类待办.json"), { items: [] });
   const metrics = await readMetrics(workspace);
+  const byId = new Map((state.packages ?? []).map((pkg) => [pkg.id, pkg]));
+  const allEntries = [...(state.packages ?? []), ...(state.subitems ?? [])];
+  const byIdAll = new Map(allEntries.map((entry) => [entry.id, entry]));
+  const childMap = new Map();
+  for (const entry of allEntries) {
+    const parentId = parentOf(entry);
+    if (!parentId) continue;
+    childMap.set(parentId.toUpperCase(), [...(childMap.get(parentId.toUpperCase()) ?? []), entry]);
+  }
+  const todosById = new Map(((todos.items ?? [])).map((item) => [String(item.id).toUpperCase(), item]));
 
   const byStage = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, 0]));
+  const completionMemo = new Map();
   const modules = new Map();
   for (const pkg of state.packages) {
     const stage = packageStage(pkg);
@@ -95,22 +152,40 @@ export async function buildSnapshot(workspace) {
     counts: { total: state.packages.length, byStage, modules: [...modules.entries()].map(([mod, total]) => ({ name: mod, total })) },
     packages: state.packages
       .filter((pkg) => !pkg.archived)
-      .map((pkg) => ({
-        id: pkg.id,
-        type: pkg.type,
-        owner: pkg.owner,
-        priority: pkg.priority,
-        stage: packageStage(pkg),
-        rawStage: pkg.stage,
-        module: pkg.module,
-        scope: pkg.scope,
-        statusRaw: pkg.statusRaw,
-        evidence: (pkg.evidence ?? []).length,
-        note: pkg.note,
-        qaPassed: pkg.verification?.qaPassed === true,
-        applied: pkg.verification?.applied === true,
-        humanAccepted: pkg.verification?.humanAccepted === true,
-      })),
+      .map((pkg) => {
+        const readiness = readinessFor(pkg, byId, todosById);
+        const completion = completionFor(pkg.id, byIdAll, childMap, completionMemo);
+        const waiting = [...readiness.waiting];
+        let ready = readiness.ready;
+        if (!completion.satisfied && completion.childrenTotal > completion.childrenDone) {
+          ready = false;
+          for (const child of childMap.get(String(pkg.id).toUpperCase()) ?? []) {
+            if (!completionFor(child.id, byIdAll, childMap, completionMemo).satisfied) waiting.push(child.id);
+          }
+        }
+        return {
+          id: pkg.id,
+          type: pkg.type,
+          owner: pkg.owner,
+          priority: pkg.priority,
+          stage: packageStage(pkg),
+          rawStage: pkg.stage,
+          module: pkg.module,
+          scope: pkg.scope,
+          statusRaw: pkg.statusRaw,
+          evidence: (pkg.evidence ?? []).length,
+          note: pkg.note,
+          deps: pkg.deps ?? [],
+          ready,
+          waitingOn: waiting,
+          childrenTotal: completion.childrenTotal,
+          childrenDone: completion.childrenDone,
+          derivedComplete: completion.derived,
+          qaPassed: pkg.verification?.qaPassed === true,
+          applied: pkg.verification?.applied === true,
+          humanAccepted: pkg.verification?.humanAccepted === true,
+        };
+      }),
     archived: state.packages
       .filter((pkg) => pkg.archived)
       .map((pkg) => ({
@@ -125,7 +200,17 @@ export async function buildSnapshot(workspace) {
         canceled: pkg.verification?.canceled === true,
         note: pkg.note,
       })),
-    humanTodos: todos.items ?? [],
+    humanTodos: (todos.items ?? []).map((item) => ({
+      ...item,
+      blocks: allEntries
+        .filter(
+          (entry) =>
+            !entry.archived &&
+            !completionFor(entry.id, byIdAll, childMap, completionMemo).satisfied &&
+            (entry.deps ?? []).some((dep) => String(dep).toUpperCase() === String(item.id).toUpperCase()),
+        )
+        .map((entry) => entry.id),
+    })),
     agents: runtime.agents ?? [],
     milestones: state.batch?.slices ?? [],
     events: runtime.events ?? [],
@@ -164,8 +249,20 @@ h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute
 .chip.awaiting_apply i{background:var(--warn)}.chip.blocked i{background:var(--danger)}
 .board{display:grid;grid-template-columns:repeat(7,minmax(190px,1fr));gap:10px;overflow-x:auto}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:100px}
-.col h3{margin:0;padding:8px 10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);
-display:flex;justify-content:space-between}
+details.col > summary{margin:0;padding:8px 10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);
+display:flex;justify-content:space-between;cursor:pointer;list-style:none}
+details.col > summary::-webkit-details-marker{display:none}
+details.col > summary::before{content:"▾";font-size:10px;margin-right:6px}
+details.col:not([open]) > summary::before{content:"▸"}
+details.col:not([open]) > summary{border-bottom:0}
+details.sec{margin:20px 0 0}
+details.sec > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;
+font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+details.sec > summary::-webkit-details-marker{display:none}
+details.sec > summary::before{content:"▾";font-size:10px}
+details.sec:not([open]) > summary::before{content:"▸"}
+details.sec > summary:hover{color:var(--text)}
+details.sec[open] > summary{margin-bottom:8px}
 .cards{padding:8px;display:flex;flex-direction:column;gap:6px}
 .todos{display:flex;flex-direction:column;gap:6px}
 .todo{display:flex;align-items:baseline;gap:8px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--panel);cursor:pointer}
@@ -188,30 +285,46 @@ footer{margin-top:18px;border-top:1px solid var(--line);padding-top:10px;color:v
 <header><h1>P4Deck 工作流看板</h1>
 <div class="muted">批次 <b id="batch"></b></div>
 <div class="stamp">数据时间 <span id="stamp"></span></div></header>
-<h2>Agent 在忙什么</h2><div class="agents" id="agents"></div>
-<h2>批次里程碑</h2><div class="ms" id="milestones"></div>
-<h2>人类待办（只有你能勾）</h2><div class="todos" id="todos"></div>
-<h2>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</h2><div class="board" id="board"></div>
-<h2>已完成归档（独立区域）</h2><div class="cards" id="archived"></div>
+<details class="sec" data-sec="agents" open><summary>Agent 在忙什么</summary><div class="agents" id="agents"></div></details>
+<details class="sec" data-sec="milestones" open><summary>批次里程碑</summary><div class="ms" id="milestones"></div></details>
+<details class="sec" data-sec="todos" open><summary>人类待办（只有你能勾）</summary><div class="todos" id="todos"></div></details>
+<details class="sec" data-sec="board" open><summary>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</summary><div class="board" id="board"></div></details>
+<details class="sec" data-sec="archived" open><summary>已完成归档（独立区域）</summary><div class="cards" id="archived"></div></details>
 <footer id="footer"></footer></div>
 <script>
 var META=${meta};
+var COLLAPSE_KEY="p4deck-board-collapse";
+function collapseState(){try{return JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}");}catch(e){return {};}}
+function applyCollapse(root){
+ var state=collapseState();
+ root.querySelectorAll("details[data-sec]").forEach(function(node){
+  var key=node.getAttribute("data-sec");
+  if(state[key]===false)node.open=false;else if(state[key]===true)node.open=true;
+  if(node.dataset.collapseBound==="1")return;
+  node.dataset.collapseBound="1";
+  node.addEventListener("toggle",function(){var next=collapseState();next[key]=node.open;try{localStorage.setItem(COLLAPSE_KEY,JSON.stringify(next));}catch(e){}});
+ });
+}
 function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;}
 function fmt(s){if(!s)return "—";var d=new Date(s);return isNaN(d)?s:d.toLocaleString("zh-CN",{hour12:false});}
 function renderTodos(s){
  var host=document.getElementById("todos");host.innerHTML="";
- var items=s.humanTodos||[];
- if(!items.length){host.appendChild(el("div","empty","（暂无人类待办）"));return;}
- items.forEach(function(t){var row=el("label","todo"+(t.done?" done":""));
-  var box=document.createElement("input");box.type="checkbox";box.checked=!!t.done;
+ var all=s.humanTodos||[];
+ var items=all.filter(function(t){return !t.done;});
+ var done=all.length-items.length;
+ if(!items.length){host.appendChild(el("div","empty","（没有未完成的人类待办）"));}
+ items.forEach(function(t){var row=el("label","todo");
+  var box=document.createElement("input");box.type="checkbox";box.checked=false;
   box.addEventListener("change",function(){
    fetch("${ROUTE}/api/human-todos/toggle",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id:t.id})})
     .then(function(){return fetch("${ROUTE}/api/snapshot",{cache:"no-store"});})
     .then(function(r){return r.json();}).then(render).catch(function(){});
   });
   row.appendChild(box);row.appendChild(el("span","todo-text",t.text));
-  row.appendChild(el("span","todo-meta",t.id+(t.note?" · "+t.note:"")));host.appendChild(row);});
- var hint=el("div","hint","勾选会写回 人类待办.json（只有用户能勾）");host.appendChild(hint);
+  var meta=t.id+(t.note?" · "+t.note:"")+((t.blocks&&t.blocks.length)?" · 解锁 "+t.blocks.join("、"):" · 无下游");
+  row.appendChild(el("span","todo-meta",meta));host.appendChild(row);});
+ if(done)host.appendChild(el("div","hint","已完成 "+done+" 项，已从阻塞链移除（保留审计）"));
+ var hint=el("div","hint","勾选会写回 人类待办.json（只有用户能勾）；下游任务会立即变为就绪");host.appendChild(hint);
 }
 function renderArchived(s){
  var host=document.getElementById("archived");host.innerHTML="";
@@ -250,7 +363,7 @@ function render(s){
   c.appendChild(el("i"));c.appendChild(document.createTextNode(x.label+" · "+(META.msLabel[x.status]||x.status)));m.appendChild(c);});
  var b=document.getElementById("board");b.innerHTML="";
  META.stageOrder.forEach(function(stage){var items=s.packages.filter(function(p){return p.stage===stage;});
-  var col=el("div","col");var h=el("h3");h.appendChild(el("span",null,META.stageLabels[stage]));
+  var col=el("details","col");col.setAttribute("data-sec","stage-"+stage);var h=el("summary");h.appendChild(el("span",null,META.stageLabels[stage]));
   h.appendChild(el("span",null,String(items.length)));col.appendChild(h);
   var cards=el("div","cards");
   items.forEach(function(p){var c=el("div","card");c.title=p.note||"";
@@ -258,7 +371,9 @@ function render(s){
    if(p.type){id.appendChild(el("span","tag "+p.type,p.type));}c.appendChild(id);
    if(p.scope){c.appendChild(el("div","scope",p.scope));}
    if(p.note){c.appendChild(el("div","note",p.note));}
-   c.appendChild(el("div","meta",(p.owner||"—")+" · "+(p.priority||"")+" · 证据 "+(p.evidence||0)));
+   c.appendChild(el("div","meta",(p.owner||"—")+" · "+(p.priority||"")+" · 证据 "+(p.evidence||0)+
+    (p.childrenTotal?" · 子任务 "+p.childrenDone+"/"+p.childrenTotal+(p.derivedComplete?"（汇总完成）":""):"")+
+    (p.ready?" · 就绪":" · 等待 "+(p.waitingOn||[]).join("、"))));
    var actions=el("div","actions");
    if(p.stage==="awaiting_accept"||p.stage==="unverified"){
     var ab=el("button","act accept","验收完成");ab.title="标记为人工验收通过（缺 QA/Apply 会一键补登）";
@@ -273,11 +388,13 @@ function render(s){
    if(actions.children.length)c.appendChild(actions);
    cards.appendChild(c);});
   col.appendChild(cards);b.appendChild(col);});
+ applyCollapse(b);
  renderArchived(s);
  document.getElementById("footer").textContent="来源：state.json（真值）· 运行状态.json · 人类待办.json；验收/取消按钮直接写 state.json。";
 }
 function tick(){fetch("${ROUTE}/api/snapshot",{cache:"no-store"}).then(function(r){return r.json();}).then(render)
  .catch(function(e){document.getElementById("footer").textContent="读取失败: "+e;});}
+applyCollapse(document);
 tick();
 // 事件驱动：宿主 watch 数据文件，变化才推；EventSource 不可用才退回 30s 轮询。
 if(window.EventSource){
@@ -470,6 +587,19 @@ async function acceptPackage(workspace, id) {
   const pkg = state.packages.find((entry) => entry.id.toUpperCase() === wanted.toUpperCase());
   if (!pkg) return { ok: false, status: 404, reason: `未知任务 ${wanted}` };
   if (pkg.archived) return { ok: false, status: 400, reason: `${pkg.id} 已归档，不能重复验收` };
+  const pendingChildren = (state.subitems ?? []).filter(
+    (item) =>
+      String(item.parentId ?? item.parent ?? "").toUpperCase() === pkg.id.toUpperCase() &&
+      item.stage !== "done" &&
+      item.verification?.humanAccepted !== true,
+  );
+  if (pendingChildren.length) {
+    return {
+      ok: false,
+      status: 400,
+      reason: `${pkg.id} 还有 ${pendingChildren.length} 个子任务未完成（${pendingChildren.map((item) => item.id).join("、")}），父任务必须等子任务全部完成`,
+    };
+  }
   const verification = (pkg.verification ??= {});
   if (verification.humanAccepted === true) {
     return { ok: true, status: 200, alreadyAccepted: true, id: pkg.id, note: verification.humanAcceptedNote ?? null };

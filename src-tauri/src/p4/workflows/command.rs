@@ -155,6 +155,12 @@ pub fn resolve_preview(paths: &[String]) -> Result<Invocation, String> {
     scoped("resolve", vec!["-n".into(), "-o".into()], paths)
 }
 
+/// Interactive resolve target. The caller supplies `s` on stdin, so the file
+/// is skipped and never modified; the only purpose is P4's own chunk summary.
+pub fn resolve_interactive(path: &str) -> Result<Invocation, String> {
+    scoped("resolve", Vec::new(), &[path.to_owned()])
+}
+
 pub fn print_to(spec: &str, output: &str) -> Result<Invocation, String> {
     let valid_revision = spec
         .rsplit_once('#')
@@ -186,6 +192,30 @@ pub fn resolve(path: &str, strategy: ResolveStrategy) -> Result<Invocation, Stri
         }
     };
     scoped("resolve", vec![flag.into()], &[path.to_owned()])
+}
+
+/// `p4 filelog -m 1 -t <depot>#<rev>`: latest revision metadata for one file.
+pub fn filelog_revision(depot_path: &str, revision: i64) -> Result<Invocation, String> {
+    if !depot_path.starts_with("//")
+        || depot_path.len() > 4096
+        || depot_path.ends_with('/')
+        || depot_path.contains(['#', '@', '*', '\r', '\n', '\0'])
+    {
+        return Err("filelog requires an explicit depot file path".into());
+    }
+    if revision <= 0 {
+        return Err("filelog requires an explicit positive revision".into());
+    }
+    Ok(Invocation {
+        command: "filelog",
+        args: vec![
+            "-m".into(),
+            "1".into(),
+            "-t".into(),
+            format!("{depot_path}#{revision}"),
+        ],
+        argument_input: None,
+    })
 }
 
 fn scoped(
@@ -325,6 +355,21 @@ mod tests {
             "//depot/a@7#3",
         ] {
             assert!(print_to(invalid, "out").is_err(), "accepted {invalid}");
+        }
+        assert_eq!(
+            filelog_revision("//depot/a b.txt", 3).unwrap().args,
+            ["-m", "1", "-t", "//depot/a b.txt#3"]
+        );
+        for (path, revision) in [
+            ("depot/a", 3),
+            ("//depot/a#2", 3),
+            ("//depot/a", 0),
+            ("//depot/", 3),
+        ] {
+            assert!(
+                filelog_revision(path, revision).is_err(),
+                "accepted {path}#{revision}"
+            );
         }
     }
 }

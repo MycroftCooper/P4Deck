@@ -79,6 +79,39 @@ it("separates local untracked, controlled, opened and conflicted files", () => {
   expect(allowed("getLatest", file("conflicted"))).toBe(false);
   expect(allowed("diff", file("conflicted"))).toBe(true);
 });
+it("enables get latest for opened files that are behind depot", () => {
+  const opened = file("openedEdit");
+  if (opened.type !== "file") throw new Error("fixture");
+  opened.node.revision = 79;
+  opened.node.headRevision = 80;
+  expect(allowed("getLatest", opened)).toBe(true);
+  expect(allowed("getRevision", opened)).toBe(true);
+
+  opened.node.status = {
+    primary: "openedEdit",
+    openedAction: "edit",
+    sync: "outOfDate",
+    resolve: "none",
+    local: "present",
+    completeness: "complete",
+    evidence: [],
+    errors: [],
+  };
+  opened.node.revision = undefined;
+  opened.node.headRevision = undefined;
+  expect(allowed("getLatest", opened)).toBe(true);
+});
+
+it("enables get latest for opened files even when the sync fact is unavailable", () => {
+  const opened = file("openedEdit");
+  if (opened.type !== "file") throw new Error("fixture");
+  opened.node.revision = 80;
+  opened.node.headRevision = 80;
+  expect(allowed("getLatest", opened)).toBe(true);
+  expect(allowed("getRevision", opened)).toBe(true);
+  expect(allowed("getLatest", file("openedAdd"))).toBe(false);
+});
+
 it("enables lock and unlock only for explicit opened files with compatible authoritative state", () => {
   const opened = file("openedEdit");
   if (opened.type !== "file") throw new Error("fixture");

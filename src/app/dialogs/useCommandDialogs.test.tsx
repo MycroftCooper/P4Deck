@@ -368,6 +368,12 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
     ttlMs: 60_000,
     operationIds: [],
   });
+  vi.spyOn(backend, "resolveStats").mockResolvedValue({
+    base: {},
+    source: {},
+    target: {},
+    conflicts: 0,
+  });
   const confirm = vi.spyOn(backend, "confirmResolve").mockResolvedValue({
     outcome: "succeeded",
     message: "Resolved",
@@ -391,8 +397,8 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
     api.open({ kind: "resolve", nodes: [depotNode], source: null }),
   );
   // P4V-style dialog: the conflict list is inspected once automatically on mount.
-  // "检查冲突" is an explicit user re-check, so this test does not click it: exactly one
-  // preflight request and exactly one confirm execution are expected.
+  // Accept executes immediately and success re-inspects the full scope, so the
+  // preflight runs twice while the confirmation runs exactly once.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -401,10 +407,12 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
   });
   const acceptSafe = [
     ...document.querySelectorAll<HTMLButtonElement>("dialog button"),
-  ].find((button) => button.textContent?.includes("接受合并结果"))!;
+  ].find((button) => button.textContent?.includes("接受自动合并"))!;
   await act(async () => acceptSafe.click());
-  await act(async () => dialogButton("执行逐文件计划").click());
-  expect(preflight).toHaveBeenCalledOnce();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(preflight).toHaveBeenCalledTimes(2);
   expect(confirm).toHaveBeenCalledExactlyOnceWith({
     operationId: expect.any(String),
     token: "resolve-token",

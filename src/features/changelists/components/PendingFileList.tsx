@@ -2,6 +2,7 @@ import type { OpenedFileSelection, SelectedOpenedFile } from "../selectedFiles";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
+import { nodeNeedsSync } from "../../files/fileActions";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import {
   useCallback,
@@ -165,7 +166,12 @@ export function PendingFileList({
         absolutePath: "",
         relativePath: path,
         kind: "file",
-        state: file.state ?? "controlled",
+        state:
+          file.resolve === "unresolved"
+            ? "conflicted"
+            : (file.state ?? "controlled"),
+        revision: file.revision,
+        headRevision: file.headRevision,
         changelistId: changeId,
       })),
     [filteredRows, changeId],
@@ -484,6 +490,10 @@ export function PendingFileList({
               const index = row.index;
               const { file, name, path, extension, status } =
                 filteredRows[index];
+              // Only opened-for-edit rows can be brought up to date; unknown or
+              // equal head revisions must not claim "needs get latest".
+              const needsLatest =
+                !shelf && node.state === "openedEdit" && nodeNeedsSync(node);
               const menuTargets = selection.targets(node);
               const wholeChangelistId = wholeChangelistIdFor(menuTargets);
               const menuProps = shelf
@@ -732,6 +742,9 @@ export function PendingFileList({
                     {file.resolve === "unresolved"
                       ? `${statusLabel(status)} · ${zh ? "需要 Resolve" : "Needs resolve"}`
                       : statusLabel(status)}
+                    {needsLatest
+                      ? ` · ${zh ? "需获取最新" : "Needs get latest"}`
+                      : ""}
                   </span>
                   <span role="gridcell" className="pending-file-type">
                     {extension || (zh ? "无后缀" : "No extension")}

@@ -33,7 +33,14 @@ export type FileBadgeId =
 export type FileBadgeOwner = "self" | "other" | "shelf";
 /** UI-10 semantic tone. Backgrounds follow this map only; ownership never repaints a status. */
 export type FileBadgeTone =
-  "success" | "danger" | "warning" | "amber" | "neutral" | "purple" | "teal";
+  | "success"
+  | "danger"
+  | "warning"
+  | "amber"
+  | "yellow"
+  | "neutral"
+  | "purple"
+  | "teal";
 const badgeTones: Record<FileBadgeId, FileBadgeTone> = {
   add: "success",
   edit: "success",
@@ -43,8 +50,8 @@ const badgeTones: Record<FileBadgeId, FileBadgeTone> = {
   branch: "success",
   integrate: "amber",
   latest: "teal",
-  outOfDate: "amber",
-  notSynced: "amber",
+  outOfDate: "yellow",
+  notSynced: "yellow",
   missing: "neutral",
   untracked: "neutral",
   ignored: "neutral",

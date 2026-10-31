@@ -977,3 +977,22 @@ describe("controlled P4 terminal", () => {
     ).toContain(created.backup.fileName);
   });
 });
+
+it("performs a simulated direct Get Latest in the browser mock", async () => {
+  const result = await backend.syncLatest({
+    paths: ["//depot/b.txt", "//depot/a.txt", "//depot/a.txt"],
+    revision: { kind: "head", value: "" },
+    operationId: "mock-get-latest",
+  });
+  expect(result.outcome).toBe("succeeded");
+  expect(result.operationId).toBe("mock-get-latest");
+  expect(result.affectedPaths).toEqual(["//depot/a.txt", "//depot/b.txt"]);
+  expect(result.refreshWorkspace).toBe(true);
+  expect(result.counts.updated).toBe(2);
+  expect(result.message).toContain("Browser Mock only");
+});
+
+it("returns empty resolve stats from the browser mock", async () => {
+  const stats = await backend.resolveStats({ depotPath: "//depot/a" });
+  expect(stats).toEqual({ base: {}, source: {}, target: {} });
+});

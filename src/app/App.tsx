@@ -1,5 +1,4 @@
 import { useCustomExitRefresh } from "../features/companySubmit/useCustomExitRefresh";
-import { releaseCustomSubmitChange } from "../features/companySubmit/customSubmitSessions";
 import { recordFrontendOperationLog } from "../infrastructure/backend/frontendOperationLog";
 import {
   lazy,
@@ -129,7 +128,6 @@ function ConnectedApp({
   // Hydrate locally and keep mutations coherent even while Pending is closed.
   usePendingCacheSync(runtime, connectionKey);
   useCustomExitRefresh(runtime, connectionKey, (event, cause) => {
-    if (event) releaseCustomSubmitChange(connectionKey, event.changeId);
     const operationId = event?.requestId ?? crypto.randomUUID();
     void recordFrontendOperationLog({
       eventId: `${operationId}-exit-refresh`,

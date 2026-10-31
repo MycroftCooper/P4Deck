@@ -1,7 +1,7 @@
 # Windows 本机私用 TODO
 
-> **状态真值已迁移。** 任务/批次状态以 [工作流/state.json](工作流/state.json) 为准（由 `node scripts/workflow/state.mjs import` 从本表机械生成，53 项口径已核对一致）。
-> 本表保留为历史台账与详情来源；改状态请改 state.json 后运行 `node scripts/workflow/state.mjs board` 刷新看板。
+> **状态真值已迁移。** 任务/批次状态以 [工作流/state.json](工作流/state.json) 为准（由 `node scripts/workflow/state.mjs import` 从本表机械生成，62 项口径已核对一致）。
+> 本表保留为历史台账与详情来源；改状态优先改本表再运行 `node scripts/workflow/state.mjs import`（也可直接改 state.json），之后运行 `node scripts/workflow/state.mjs board` 刷新看板。
 > 工作流入口：[工作流/README.md](工作流/README.md)。
 
 > 历史叙事（S2B-QA / ACTION 集成 / 阶段2b / 当前批次调度）已于 2026-10-29T13:40:50.669Z 轮转至 [归档/TODO-叙事-2026-10.md](归档/TODO-叙事-2026-10.md)。
@@ -30,27 +30,36 @@
 
 权威主表新增类型、负责人列，原ID/状态/优先级/证据/依赖保留。负责人表示职责归属而非当前执行授权，实际领取仍按PM队列；范围确认项的PM负责登记，不代表已派开发。旧条目按已知主目标分类：SAFE-01隔离缺口、SUB-05重叠、SUB-06时间语义排查为Bug；OPS-02缓存/取消/性能内部优化归重构优化；其他产品、交付与验收工作包归需求。SUB-06根因尚未证实，Bug分类不等于已经确认日期修法。
 
-混合工作包按下方关联子项执行/验收。**53个主工作包**（新增CL-07跨CL提交选中文件；阶段与Bug子项不重复计数），子项不额外计数为新工作包；单个Bug修复或共享抽取通过，不把父项所有功能/验收一并关闭。同一证据可引用但不能重复计算完成数。原2项完成归档保留对应历史基线，不因分类改变重新宣称最新版本通过。
+混合工作包按下方关联子项执行/验收。**55个活跃主工作包**（新增CL-07跨CL提交选中文件；2026-10-31 新增 DIFF-01/MERGE-01 并补登 UI-13；阶段与Bug子项不重复计数），子项不额外计数为新工作包；单个Bug修复或共享抽取通过，不把父项所有功能/验收一并关闭。同一证据可引用但不能重复计算完成数。原2项完成归档保留对应历史基线，不因分类改变重新宣称最新版本通过。
 
-共 **59** 项：已实现且有相应验收证据 **2**、已实现待验收 **34**、部分实现 **9**、待实现 **6**、进行中（方案/实施分阶段）**3**、受阻 **2**、建议待确认 **2**。本次纳入已授权的 UI-05 主题色、SUB-07 CI来源CL引用链与 PKG-01 Windows体验包；两个完成项独立归档，其余只在下表出现一次。计数按交接已知证据，不表示当前工作树通过编译。
+共 **62** 项（活跃 55 + 归档 7）：已实现且有相应验收证据 **26**、已实现待验收 **13**、部分实现 **10**、待实现 **2**、进行中（方案/实施分阶段）**0**、受阻 **2**、建议待确认 **2**。归档 7 项均已有验收证据；本次纳入已授权的 UI-05 主题色、SUB-07 CI来源CL引用链与 PKG-01 Windows体验包。计数以 state.json 的活跃主工作包为准，不表示当前工作树通过编译。
 
 | 模块 | 总数 | 有证据完成 | 实现待验收 | 部分 | 待实现 | 受阻 | 待确认 | 进行中 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 安全与验收 | 4 | 0 | 0 | 3 | 0 | 1 | 0 | 0 |
-| 界面与导航 | 8 | 0 | 6 | 1 | 1 | 0 | 0 | 0 |
-| 连接与工作区 | 5 | 0 | 4 | 1 | 0 | 0 | 0 | 0 |
-| 文件与版本 | 5 | 0 | 3 | 2 | 0 | 0 | 0 | 0 |
-| History | 2 | 0 | 2 | 0 | 0 | 0 | 0 | 0 |
-| CL 工作流 | 7 | 0 | 6 | 0 | 0 | 0 | 0 | 1 |
-| Submitted 与周报 | 7 | 0 | 6 | 1 | 0 | 0 | 0 | 0 |
-| 搜索与分支 | 3 | 0 | 3 | 0 | 0 | 0 | 0 | 0 |
-| 工具与可靠性 | 5 | 2 | 3 | 0 | 0 | 0 | 0 | 0 |
-| 阶段收口 | 5 | 0 | 1 | 1 | 1 | 1 | 0 | 1 |
+| 界面与导航 | 14 | 10 | 2 | 1 | 1 | 0 | 0 | 0 |
+| 连接与工作区 | 4 | 2 | 1 | 1 | 0 | 0 | 0 | 0 |
+| 文件与版本 | 6 | 2 | 2 | 2 | 0 | 0 | 0 | 0 |
+| History | 2 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+| CL 工作流 | 8 | 3 | 4 | 1 | 0 | 0 | 0 | 0 |
+| Submitted 与周报 | 7 | 5 | 1 | 1 | 0 | 0 | 0 | 0 |
+| 搜索与分支 | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 |
+| 工具与可靠性 | 2 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
+| 阶段收口 | 3 | 0 | 0 | 1 | 1 | 1 | 0 | 0 |
 | 后续候选 | 2 | 0 | 0 | 0 | 0 | 0 | 2 | 0 |
+| **合计** | **55** | **26** | **13** | **10** | **2** | **2** | **2** | **0** |
+
+> 2026-10-31 增补：新增 **DIFF-01**（Diff 工具重做，整套替换 `@pierre/diffs` 1.6.2）与 **MERGE-01**（冲突合并工具重做，先接 P4Merge 外部合并）两个主工作包（活跃 52→54），并补登 **UI-13**（标题栏版本号，0.1.9 已实现，活跃 54→55）；当前活跃 55 + 归档 7 = 62。选型依据见 [预研-Diff与合并工具重做.md](预研-Diff与合并工具重做.md)，明细见唯一任务表。
+>
+> 编号口径：决议与发布记录里的 **UI-12**（背景色 chrome 层次）对应子项 **UI-09-3**，不重复立主包；**UI-13**（标题栏版本号）原先只存在于决议/发布记录，本次补登为主工作包。
 
 ## 唯一任务表
 
 证据列为实际源码或既有验收记录入口；旧日期测试只能证明对应旧版本。通用依赖 WIN-P0-02=最新原生 UI 冒烟、WIN-P0-04=隔离核心写入演练，沿用下方原编号及步骤，不重复计数为新功能。
+
+> **依赖链**：「依赖」列可填任务 ID，也可填人类待办 ID（`T01`…）。填写后运行 `node scripts/workflow/state.mjs import`；任务完成后（accept/归档）或人类待办打钩后，下游任务会在 `queue`/看板自动变为就绪，不会自动改状态。规则见 [工作流 README §1.6](工作流/README.md)。
+>
+> **父子任务**：「关联子项」表（子ID / 父项）即父子关系。父任务在全部子任务完成前不能验收/归档；子任务可单独 `accept`；全部完成时父任务自动汇总完成。已验收的父任务不会因后来新增子任务被降级。
 
 | ID | 类型 | 负责人 | 模块 / 范围 | 状态 | 优先级 | 证据路径 | 剩余步骤与验收标准 | 依赖 |
 |---|---|---|---|---|---|---|---|---|
@@ -77,6 +86,9 @@
 | CL-02 | 功能需求 | FE＋BE（PM拆领取范围） | CL 工作流：Submit 预检、执行与结果复核 | 已实现待验收 | P1 | [submit_service.rs](../../src-tauri/src/app/submit_service.rs)；[FileClWorkflow.tsx](../../src/features/changelists/components/FileClWorkflow.tsx) | 已有旧 fixture 闭环；最新验阻断项/取消/重复确认/连接变化与安全清理 | SAFE-02；WIN-P0-04 |
 | CL-03 | 功能需求 | FE＋BE（PM拆领取范围） | CL 工作流：Shelf/Unshelve/Resolve/手工文本合并 | 部分验收（用户 2026-10-30：Shelf/Unshelve 通过；Resolve/手工文本合并不通过，待返工） | P1 | [workflow_service.rs](../../src-tauri/src/app/workflow_service.rs)；[manual_merge.rs](../../src-tauri/src/app/manual_merge.rs)；[ShelfDetailPage.tsx](../../src/features/changelists/components/ShelfDetailPage.tsx) | 已有旧 fixture；最新原生完整流程及 Shelf deep-path 跳转仍缺，验 CAS/备份/冲突保留 | SAFE-02；WIN-P0-04 |
 | UI-08 | 功能需求 | FE（PM拆领取范围） | 界面与导航：Resolve 对话框与手工合并工具重做（对齐 P4V 与 UGit） | 待实现 | 暂停（后置；2026-10-30 用户调整优先级） | [ResolveDialog.tsx](../../src/features/files/components/ResolveDialog.tsx)；[ManualMergeEditor.tsx](../../src/features/files/components/ManualMergeEditor.tsx) | 用户验收明确判定当前临时实现不达标；先调研出参考规格再重做。参考目标：P4V 老版 Resolve 窗口（[官方说明](https://legacy-docs.perforce.com/doc.current/manuals/v17.2/p4v/branches.resolve.html)）与腾讯 UGit 冲突解决界面（[介绍](https://cloud.tencent.com.cn/developer/article/2482449)）。不改 host resolve 语义/安全边界（blocked/unknown 不执行、token/digest 校验），只重做呈现与交互；与参考截图逐项对照 + 用户验收通过前不关闭 CL-03 | CL-03；UI-08-1 |
+| DIFF-01 | 功能需求 | FE | 文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0） | 已实现待验收 | P1 | [预研-Diff与合并工具重做.md](预研-Diff与合并工具重做.md)；[DiffView.tsx](../../src/features/browsers/components/DiffView.tsx) | 用户 2026-10-31 选定整套替换 @pierre/diffs 1.6.2；保留现有工具栏/搜索/hunk 跳转/引用选择/复制/右键/Swarm 与 partial/truncated 语义，渲染改为库的 split/unified + 词级 + 折叠 + Shiki；不引入 WASM/CDN，CSP 默认不变；删自研行渲染与硬配对；补 jsdom mock 与 Playwright 渲染断言；定向 vitest + `pnpm check:web` + build 通过后交用户视觉验收；不改变后端口径（DiffResult/unified+leftText/rightText） | QA-01；SAFE-02 |
+| DIFF-02 | 重构与代码优化 | FE | 文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff） | 已实现待验收 | P1 | [DiffView.tsx](../../src/features/browsers/components/DiffView.tsx)；[diffNavigation.ts](../../src/features/browsers/diffNavigation.ts) | 用户 2026-10-31 指定优先；前端已删除 MultiFileDiff/parseDiffFromFile/PatchDiff 生产用法，改为 parsePatchFiles(Rust unified) → FileDiff + loadDiffFiles；100k 行基准 parse 0.15ms vs 旧 diff 90.32ms（≈602×）、heap 81KB vs 14.59MB，hunk 数一致；全量 1550 tests/check:web/build/prettier 绿；真实窗口视觉待验收；证据 `artifacts/evidence/2026-10-31-DIFF-02/验证摘要.md` | QA-01；SAFE-02；DIFF-01 |
+| MERGE-01 | 功能需求 | FE＋BE（PM拆领取范围） | CL 工作流：冲突合并工具重做（先接 P4Merge 外部合并，保留现有安全链） | 已实现待验收 | P1 | [预研-Diff与合并工具重做.md](预研-Diff与合并工具重做.md)；[ManualMergeEditor.tsx](../../src/features/files/components/ManualMergeEditor.tsx)；[workflow_service.rs](../../src-tauri/src/app/workflow_service.rs) | 用户 2026-10-31 选定先直接调用 P4Merge 确保能用；仅检测已安装不打包；从现有手工会话生成 base/theirs/yours/result 四临时文件，等待 P4Merge 退出后读回 result，放入现有 Result 供用户复核，再走现有 validate/save token + 原子写 + `p4 resolve -ay` 复核；未安装/取消/超时/超限明确降级；不改 resolve 策略与 blocked/unknown 语义；GUI 启动不做自动测试，真机冒烟交用户 | CL-03；SAFE-02；UI-08（后续 UI 重做再议） |
 | CL-04 | 功能需求 | FE＋BE（PM拆领取范围） | CL 工作流：全局 CL 详情弹窗与 Go To CL | 已实现待验收 | P1 | [ChangeDetailsDialog.tsx](../../src/features/changelists/components/ChangeDetailsDialog.tsx)；[SubmittedGoTo.tsx](../../src/features/changelists/components/SubmittedGoTo.tsx) | 已抽查 History/Pending/Submitted/FileReview/工具栏共享打开动作，搜索通过 App 导航继续核验覆盖；取消/迟到隔离代码已接；Go To 明确仅 submitted，验错误/空/长内容/关闭回焦点，不改筛选 | QA-01；SAFE-02 |
 | SUB-01 | 功能需求 | FE | Submitted 与周报：单用户筛选、无 Client/Job、预设迁移与即时应用 | 已实现待验收 | P1 | [submittedFilters.ts](../../src/features/changelists/submittedFilters.ts)；[SubmittedFilterPanel.tsx](../../src/features/changelists/components/SubmittedFilterPanel.tsx) | schema4 丢弃旧隐藏条件，保留当前 Stream；验 reset/保存/恢复/空预设与不重复刷新 | QA-01 |
 | SUB-02 | 功能需求 | FE＋BE（PM拆领取范围） | Submitted 与周报：Stream 多选 OR、当前快捷项、稳定分页 | 已实现待验收 | P1 | [repository.rs](../../src-tauri/src/p4/changelists/repository.rs)；[submittedFilters.test.ts](../../src/features/changelists/submittedFilters.test.ts) | 两项纯 Rust 并集测试通过；最多16项、去重、扫描不全报错；需 mock/fixture 验实际分页、当前+显式及换连接 | SAFE-02；QA-01 |
@@ -98,19 +110,20 @@
 | UI-05 | 功能需求 | FE | 界面与导航：Appearance主题色预设＋自定义（用户已批准） | 已实现待验收 | P1 | [SettingsPage.tsx](../../src/features/settings/SettingsPage.tsx)；[usePreferences.ts](../../src/app/hooks/usePreferences.ts)；[tokens.css](../../src/app/styles/tokens.css)；[并行交接](并行交接.md) | 根转发FE已完成并停写：5个预设＋自定义、预览/保存/跨窗口同步已实现，语义颜色独立。FE报告TS/CSS/format/diff通过；2026-10-28根转发正式require_escalated原命令exit 0，5文件19项纯mock全部通过（2＋1＋7＋4＋5），源码与冻结一致、本轮无修改；React act环境警告无失败。视觉及假P4尚未验。仍需验证浅深主题、非法输入、刷新/重开/跨窗口同步与布局不回归；静态色值计算不关闭验收 | FE；SAFE-03；QA-01 |
 | SUB-07 | 功能需求 | FE＋BE（PM拆领取范围） | Submitted 与周报：CI结构化来源CL引用链及自身workspace（用户最新替换需求） | 已实现待验收 | P1 | [并行交接最新规格](并行交接.md)；[全项目表格统一覆盖矩阵](../Designer/全项目表格统一覆盖矩阵.md) | 以CI描述完整已识别元数据中的来源CL号建反向索引/有向边，从源CL计算直接/间接可达合并CL，逐条显示其自身client/workspace；合并来源路径仅作来源证据，不是目标workspace。不要求正文相同，不查integrated/文件，不匹配正文数字/issue或CL号子串。缓存提交描述与引用索引，串行有界分页累积后重算可达，支持乱序页、取消/续查及未完整短状态；当前筛选不限制调查。旧正文匹配实现/测试仅历史证据；根转发新引用链及虚拟叠字/紧凑顶部/删作者已落盘，21文件176通过，最终列宽后6文件28再通过，TS/diff通过（批次可能重叠）。PM只读确认结构化完整CL号解析与反向索引可达计算；纯mock浏览器视觉进行中，原生/假P4未验。需验直接/多跳、子先父后、同CL多路径/环/重复页、数字边界、缺失/畸形元数据、缓存与失败/取消。UI-04拖宽复用、删候选作者列/两句长说明及紧凑顶部继续，主表作者不动。用户最新要求时间统一显示本地年月日时分，尤其调查范围/读取时间，不显示UTC/ISO/时区说明；仅改展示，不改内部query边界。根已确认范围起止均调用formatLocalTime（DescriptionTraceDialog:414，ChangelistPage:222实际入口），读取/提交时间也本地化，toISOString仅用于内部query；3文件19通过、TS/diff通过。已交BE更新staging/hash，旧截图不代表新格式，不外推新视觉验收 | FE＋BE新链路；UI-04；SAFE-03；QA-01；实际假P4验证仍依赖SAFE-02 |
 | CON-05 | 功能需求 | FE | 连接与工作区：无生效P4配置的强制启动引导（用户已批准） | 已实现待验收（合成UI已通过） | P1 | [gate证据](../../tests/qa/preview-audit/gate-evidence/results.json)；[并行交接](并行交接.md) | 无有效激活配置引导设置，验证成功放行；已配临时断网不当首次。最新初始焦点修至配置按钮，21合成浏览器断言＋47相关mock/TS/diff通过；PM核JSON/源码/390px图。真实Gate但配置卡片/CLI/关闭为替身，不能证明真实认证/下载/原生关闭；保留迟到/连接代次/错误恢复与端到端门槛。合成阶段收尾，不计整包完成，不打包 | 实际连接依赖SAFE-02；原生关闭依赖UI-07宿主验收 |
-| CL-05 | 功能需求 | FE | CL工作流：Pending编号数值正倒序按钮（用户已批准） | 已验收（用户 2026-10-30：CL 编号排序验证通过） | P1 | [pending证据](../../tests/qa/preview-audit/pending-evidence/results.json)；[并行交接](并行交接.md) | 11浏览器断言＋23mock边界/刷新、TS/diff通过，无新增产品改动。PM核JSON/hash及390px图Default/2/10/100顺序；合成验升降序、选择展开、菜单拖放目标、既有偏好及零额外读取。真实Pending逻辑但数据/菜单/移动确认替身，不能外推真实P4执行或全包；保留Default特殊位置和现有交互 | 真实操作依赖SAFE-02；本项合成阶段收尾 |
+| CL-05 | 功能需求 | FE | CL 工作流：Pending编号数值正倒序按钮（用户已批准） | 已验收（用户 2026-10-30：CL 编号排序验证通过） | P1 | [pending证据](../../tests/qa/preview-audit/pending-evidence/results.json)；[并行交接](并行交接.md) | 11浏览器断言＋23mock边界/刷新、TS/diff通过，无新增产品改动。PM核JSON/hash及390px图Default/2/10/100顺序；合成验升降序、选择展开、菜单拖放目标、既有偏好及零额外读取。真实Pending逻辑但数据/菜单/移动确认替身，不能外推真实P4执行或全包；保留Default特殊位置和现有交互 | 真实操作依赖SAFE-02；本项合成阶段收尾 |
 | UI-06 | 功能需求 | FE | 界面与导航：全局横纵滚动条对比与边界（UI优化） | 已验收（用户 2026-10-30：全页面/窄窗滚动条通过） | P1 | [滚动条覆盖](../../tests/qa/preview-audit/scroll-evidence/coverage.json)；[并行交接](并行交接.md) | 双主题28实际拖动及4窄窗150%检查通过，另2无横向溢出不计实际拖动；17mock/TS/diff通过，无产品改动。PM核矩阵/JSON/hash及Dockview截图，表格/虚拟表/预览真实组件，弹窗/侧栏/嵌套部分结构替身。保留Windows WebView、OS overlay/高对比、未实例化Dockview自绘纵条缺口；不能宣称全平台/所有页面验收 | 原生/OS覆盖待验；本轮合成矩阵收尾 |
-| CL-06 | 功能需求 | BE调研；后续FE/BE由PM分阶段派单 | CL工作流：自定义提交工具配置与原提交入口分流 | 已验收（用户 2026-10-30：公司自定义提交工具验证通过） | P1（先调研） | [并行交接调研任务单](并行交接.md) | 用户要求研究旧P4V待提交CL右键公司入口并接入；BE静态确证customtools.xml调用DevGuardSubmitTool.exe 3.36.1.0、签名Valid，菜单为Custom Tools而非Jobs；工具内部Jobs/退出码/工作目录/认证/default CL仍未知。先只读本机P4V自定义工具配置/相关已安装脚本及官方Custom Tools/Jobs文档，识别customtool/job/其他机制、CL参数/路径/依赖与缺配置降级，再定方案安全边界，最后实现验收。根已核实目标为菜单底部“提交当前CL”，另有查看提交详情/提交选中文件；标准Submit及Remove All Jobs独立存在，不证明Jobs机制。PM直接派发曾遇AbsolutePathBuf错误；根已按PM任务单转交空闲BE，工具确认started，仅只读调研已启动，实施未开始。用户后要求独立研究Agent，独立线程01a1814f-5e59-7699-b5be-f55db37820e5“调研公司提交入口”已创建，BE已自然完成交接，研究员只读续查已完成，PM已读最终报告；S审核通过最小单编号pending CL的mock边界，真实cwd/认证优先级/后台生命周期仍未知。用户明确无文档，PM已给独立研究员R2完成且PM直接审核，未新增运行契约；I1固定参数/路径/连接快照/防重纯mock排既有队列后，真实启动禁用；动态下一步仅询问可回滚独立Windows VM是否可用，不再等待用户提供文档作为唯一前置；不得执行工具或生产验证。仅阶段完成，I未派；mock切片排现有六项后，实际公司工具不执行。禁止启动P4V自动连接、点击入口、执行公司脚本或生产P4查询（包括jobs/info）；配置命令仅作数据，敏感信息脱敏 | CL-06-R调查→CL-06-S方案→CL-06-I实现验收；FE原队列不打断；公司入口执行需独立安全边界 |
-| CL-07 | 功能需求 | FE＋BE；QA独立 | CL工作流：跨多个Pending CL提交选中文件 | 已实现待验收（已合入，待用户本地假P4人工验收） | P1高优先，当前项自然收尾后 | [CL07-I01批单](并行交接.md) | 跨Default/编号CL选文件，预览并填写描述后新建CL，仅移动选中、核成员后走既有custom/native提交路线；部分失败不提交，取消保留新CL，不自动回退/回移；mock覆盖幂等、身份变化和逐文件恢复事实 | CL-01；CL-02；CL-06；UI07；用户dev安全写入边界 |
+| CL-06 | 功能需求 | BE调研；后续FE/BE由PM分阶段派单 | CL 工作流：自定义提交工具配置与原提交入口分流 | 已验收（用户 2026-10-30：公司自定义提交工具验证通过） | P1（先调研） | [并行交接调研任务单](并行交接.md) | 用户要求研究旧P4V待提交CL右键公司入口并接入；BE静态确证customtools.xml调用DevGuardSubmitTool.exe 3.36.1.0、签名Valid，菜单为Custom Tools而非Jobs；工具内部Jobs/退出码/工作目录/认证/default CL仍未知。先只读本机P4V自定义工具配置/相关已安装脚本及官方Custom Tools/Jobs文档，识别customtool/job/其他机制、CL参数/路径/依赖与缺配置降级，再定方案安全边界，最后实现验收。根已核实目标为菜单底部“提交当前CL”，另有查看提交详情/提交选中文件；标准Submit及Remove All Jobs独立存在，不证明Jobs机制。PM直接派发曾遇AbsolutePathBuf错误；根已按PM任务单转交空闲BE，工具确认started，仅只读调研已启动，实施未开始。用户后要求独立研究Agent，独立线程01a1814f-5e59-7699-b5be-f55db37820e5“调研公司提交入口”已创建，BE已自然完成交接，研究员只读续查已完成，PM已读最终报告；S审核通过最小单编号pending CL的mock边界，真实cwd/认证优先级/后台生命周期仍未知。用户明确无文档，PM已给独立研究员R2完成且PM直接审核，未新增运行契约；I1固定参数/路径/连接快照/防重纯mock排既有队列后，真实启动禁用；动态下一步仅询问可回滚独立Windows VM是否可用，不再等待用户提供文档作为唯一前置；不得执行工具或生产验证。仅阶段完成，I未派；mock切片排现有六项后，实际公司工具不执行。禁止启动P4V自动连接、点击入口、执行公司脚本或生产P4查询（包括jobs/info）；配置命令仅作数据，敏感信息脱敏 | CL-06-R调查→CL-06-S方案→CL-06-I实现验收；FE原队列不打断；公司入口执行需独立安全边界 |
+| CL-07 | 功能需求 | FE＋BE；QA独立 | CL 工作流：跨多个Pending CL提交选中文件 | 已实现待验收（已合入，待用户本地假P4人工验收） | P1高优先，当前项自然收尾后 | [CL07-I01批单](并行交接.md) | 跨Default/编号CL选文件，预览并填写描述后新建CL，仅移动选中、核成员后走既有custom/native提交路线；部分失败不提交，取消保留新CL，不自动回退/回移；mock覆盖幂等、身份变化和逐文件恢复事实 | CL-01；CL-02；CL-06；UI07；用户dev安全写入边界 |
 
 | UI-07 | Bug修复 | BE宿主先行；FE自然检查点协作 | 界面与导航：WebView导航/初始化失败时保留关闭与恢复通道 | 部分实现（旧原生兜底已撤销，待CHROME-OFF替换；CLOSE独立继续） | P0 | [tauri.conf.json](../../src-tauri/tauri.conf.json)；[TopBar.tsx](../../src/app/shell/TopBar.tsx)；[并行交接](并行交接.md) | 根核实截图为Edge ERR_CONNECTION_REFUSED/127.0.0.1，无应用标题栏或关闭按钮。主窗decorations=false、devUrl=127.0.0.1:1422；截图无端口，未证明dev断服或生产资源错误，0.1.2影响未知。先核查实际构建/导航路径及原生关闭生命周期；网页不可达也须有宿主级关闭保障，React边界仅覆盖页面内错误。故障注入验主窗/popout/启动引导/初始化失败、系统关闭快捷键及未保存/在途操作保护；不得强杀/静默丢失、不改代理防火墙。纯mock不等于原生关闭验证 | BE1纯策略11/11已审核；FE1A完成；BE2发现旧文档身份不可证；PM冻结v1.1保持wire，未验证clean一律unknown并原生确认，FE1根报告82＋1测试/TS/diff通过，PM核4场景TopBar JSON及390px图；BE2根报告12纯测试＋11策略回归/libcheck/fmt/diff通过，PM抽查v1.1宿主接线；实现阶段收尾，原生故障验收明确挂起，现释放JSON-only待根代转，不归档全项；隔离原生验收另证；不自动打包 |
 
 
-| UI-09 | 功能需求 | FE | 界面与导航：设置里支持自定义背景色（主题色之外） | 待实现 | P2，用户列第三优先 | [AppControls.tsx](../../src/app/shell/AppControls.tsx)；主题相关 CSS | 设置新增“背景色”自定义（颜色选择/恢复默认），与主题深/浅色兼容，保证文字对比度与选中态可读；持久化到偏好并重启生效；提供少量预设 + 自定义入口；验收含截图（深/浅背景下可读性） | 无 |
-| UI-11 | 功能需求 | FE | 界面与导航：标签页 session（首启只开待提交、重启恢复上次标签） | 待实现 | P1，0.1.9 | [usePageNavigation.ts](../../src/app/hooks/usePageNavigation.ts)；[App.tsx](../../src/app/App.tsx) | 新用户首次启动只自动打开 Pending，其它页面不预开；之后启动恢复上次关闭前的标签集合+激活页；未知/损坏/超量回退 Pending；仅主窗口持久化；不触发恢复查询风暴；测试覆盖负向（其它页未开）/恢复/回退/幂等 | 无 |
+| UI-09 | 功能需求 | FE | 界面与导航：设置里支持自定义背景色（主题色之外） | 已验收（用户 2026-10-30：自定义背景色验收通过） | P2 | [BackgroundColorSettings.tsx](../../src/features/settings/BackgroundColorSettings.tsx)；[background.ts](../../src/features/settings/background.ts) | 设置“背景色”：预设 + 取色器/十六进制 + 恢复默认，深浅主题自适应对比度，偏好持久化；0.1.8 已发布并获用户验收；子项 UI-09-1/2/3 分别记录实现与验收 | 无 |
+| UI-11 | 功能需求 | FE | 界面与导航：标签页 session（首启只开待提交、重启恢复上次标签） | 已实现待验收（0.1.9 已发布） | P1，0.1.9 | [usePageNavigation.ts](../../src/app/hooks/usePageNavigation.ts)；[usePageNavigation.test.ts](../../src/app/hooks/usePageNavigation.test.ts) | 首启只开 Pending；主窗口持久化打开页+激活页（上限 12、版本容错、未知页过滤、关闭同步、损坏回退、幂等），11 项 vitest 覆盖；0.1.9 已随版本交付，待人工确认重启恢复体验 | 无 |
+| UI-13 | 功能需求 | FE | 界面与导航：标题栏显示应用版本号（0.1.9 补登） | 已验收（用户 2026-10-31 看板点验收通过） | P1，0.1.9 | [TopBar.tsx](../../src/app/shell/TopBar.tsx)；[useAppVersion.ts](../../src/app/shell/useAppVersion.ts)；[TopBar.version.test.tsx](../../src/app/shell/TopBar.version.test.tsx) | 标题栏显示 `P4Deck v<version>`（tooltip 为完整版本号），版本取自运行时 app version，加载中不显示；0.1.9 已发布；2026-10-31 用户在看板点验收通过 | 无 |
 | UI-14 | 功能需求 | FE | 界面与导航：设置页自适应填满 + 模块折叠 + 设置导航 | 已实现待验收 | P1，0.1.9 | [SettingsPage.tsx](../../src/features/settings/SettingsPage.tsx)；[SettingsNav.tsx](../../src/features/settings/SettingsNav.tsx)；[SettingsSection.tsx](../../src/features/settings/SettingsSection.tsx) | 右侧空白填充（导航+内容两栏、auto-fit 多列、表单 max-width 480）；8 模块折叠（aria-expanded/持久化/损坏回退全展开）；sticky 导航+scroll-spy+键盘；窄屏降级；tsc 0、定向 12 文件 85 用例过；真实视觉/窄窗待人工验收 | 无 |
 | UI-15 | 功能需求 | BE＋FE | 界面与导航：P4 可执行文件/自定义提交工具加文件选择按钮 | 已实现待验收 | P1，0.1.9 | [ConnectionProfilesCard.tsx](../../src/features/settings/ConnectionProfilesCard.tsx)；[executablePicker.ts](../../src/features/settings/executablePicker.ts) | tauri-plugin-dialog 2.8.4 双侧接入+仅 dialog:allow-open；两字段后浏览按钮（桌面显示、取消/失败安全、不自动保存）；tsc 0、picker 9 用例 + SettingsPage 38 通过；真实桌面点击待人工验收 | 无 |
-| KEY-01 | 功能需求 | FE＋BE | 界面与导航：快捷键系统（P4V 对齐 + 设置可配置 + 持久化） | 待实现 | P2 | [catalog.ts](../../src/app/commands/catalog.ts)；[统一Action刷新与通知.md](../Designer/统一Action刷新与通知.md) | 4 个关联子项分别验收：①调研 P4V 默认快捷键（Windows 键位，输出映射/冲突/保留清单）②按 P4V 习惯在 catalog 实现全局+页面快捷键（统一 commandForShortcut，保留输入框保护/平台差异/风险绕过检查）③Settings 新增快捷键分区（命令列表/当前键/录制/冲突检测/恢复默认）④keymap 持久化（本地配置文件跨重启生效，默认=P4V 对齐，含版本迁移与重启验证） | 无 |
+| KEY-01 | 功能需求 | FE＋BE | 界面与导航：快捷键系统（P4V 对齐 + 设置可配置 + 持久化） | 已实现待验收（0.1.8 已发布） | P2 | [catalog.ts](../../src/app/commands/catalog.ts)；[ShortcutSettingsCard.tsx](../../src/features/settings/ShortcutSettingsCard.tsx)；[快捷键P4V映射.md](../Designer/快捷键P4V映射.md) | 四阶段（P4V 映射调研、catalog 统一分发、Settings 录制/冲突/恢复默认、keymap 持久化）已在 0.1.8 发布并有 vitest 覆盖；待人工确认默认键位、输入框保护、冲突提示与跨重启生效 | 无 |
 
 ## 完成项归档（历史基线有证据，不外推最新版本）
 
@@ -153,15 +166,15 @@
 | UPD-01-3 / UPD-01 | 功能需求（FE UI） | FE | P1 | 已验收（随 0.1.9 交付） | UPD-01-1 | 标题栏“有新版本 vX.Y.Z”入口 + 更新面板：版本说明、下载进度、稍后、立即重启安装；与现有 WindowControls/CommandBar 布局兼容；无更新时不打扰 |
 | UPD-01-4 / UPD-01 | 功能需求（发布流水线） | BE＋PM | P1 | 已验收（随 0.1.9 交付） | UPD-01-1 | 版本发布流水线：版本一致性校验、构建、签名 updater 产物、生成 `latest.json`、上传 GitHub Release（public）；记录 sha/签名/资产清单；失败不发布半成品 |
 | UPD-01-5 / UPD-01 | 功能需求（验收） | PM；用户 | P1 | 已验收（随 0.1.9 交付） | UPD-01-2；UPD-01-4 | 端到端验收：手装旧基线版→发布新版本→标题栏提示→下载安装→重启后版本更新；覆盖无网/中断/签名不匹配/回退；证明不静默安装、不上传敏感信息 |
-| UI-09-1 / UI-09 | 功能需求（UI） | FE | P2 | 待实现 | 无 | 设置“背景色”自定义：预设 + 取色器/十六进制输入、恢复默认；主题深/浅色下文字与选中态对比度检查；偏好持久化、重启生效 |
-| UI-09-2 / UI-09 | 功能需求（验收） | FE；用户 | P2 | 待实现 | UI-09-1 | 截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户确认后关闭 |
-| UI-09-3 / UI-09 | 功能需求（UI） | FE | P1，0.1.9 | 待实现 | UI-09-1 | 自定义背景色后，工具栏/标题栏/标签栏/侧栏/状态栏也要跟随（同色系 3-4 级层次、略有区别）；默认“跟随主题”外观保持不变；深浅主题可读性/对比度证据 |
-| UI-11-1 / UI-11 | 功能需求（首启默认） | FE | P1 | 待实现 | 无 | 无 session 记录时只打开 Pending；移除“默认全开标签”行为；保留连接 gate/深链/通知导航 |
-| UI-11-2 / UI-11 | 功能需求（session 恢复） | FE | P1 | 待实现 | UI-11-1 | 持久化打开页+激活页（仅主窗口、上限、版本容错）；启动恢复并过滤未知页；关闭页面同步；损坏回退 Pending；测试幂等 |
-| KEY-01-1 / KEY-01 | 功能需求 | FE；PM | P2 | 待实现 | 无 | 调研 P4V 默认快捷键（Windows：菜单/工具栏/面板），输出 P4V 键位→P4Deck 命令映射清单、冲突与不迁移项（保留系统/输入法冲突说明） |
-| KEY-01-2 / KEY-01 | 功能需求 | FE | P2 | 待实现 | KEY-01-1 | 按 P4V 习惯在 app/commands/catalog.ts 补齐全局+页面快捷键；统一 commandForShortcut 分发，保留输入框保护/平台 Ctrl-Cmd/风险与确认不绕过；冲突测试更新 |
-| KEY-01-3 / KEY-01 | 功能需求 | FE | P2 | 待实现 | KEY-01-2 | Settings 新增“快捷键”分区：按分组列出命令/当前键/可用条件；点击录制新键；实时冲突提示；恢复默认；不可用原因显示 |
-| KEY-01-4 / KEY-01 | 功能需求 | FE | P2 | 待实现 | KEY-01-3 | keymap 持久化（本地配置文件，随 profile 独立；版本号/迁移；损坏回退默认）；重启后生效验证；与命令面板标签一致 |
+| UI-09-1 / UI-09 | 功能需求（UI） | FE | P2 | 已实现待验收（0.1.8 已发布） | 无 | 设置“背景色”自定义：预设 + 取色器/十六进制输入、恢复默认；主题深/浅色下文字与选中态对比度检查；偏好持久化、重启生效；BackgroundColorSettings.tsx + background.test.ts 覆盖 |
+| UI-09-2 / UI-09 | 功能需求（验收） | FE；用户 | P2 | 已实现且有相应验收证据（用户 2026-10-30 验收背景色） | UI-09-1 | 截图对照验收：深/浅背景 + 自定义背景下的可读性、弹窗/菜单/表格/状态色一致性；用户 2026-10-30 确认背景色功能通过（0.1.8 自动升级后）；UI-09-3 的 chrome 层次另记 |
+| UI-09-3 / UI-09 | 功能需求（UI） | FE | P1，0.1.9 | 已实现待验收（0.1.9 已发布，决策名 UI-12） | UI-09-1 | 自定义背景色后，工具栏/标题栏/标签栏/侧栏/状态栏也要跟随（同色系 3-4 级层次、略有区别）；默认“跟随主题”外观保持不变；BackgroundColorSettings 的浅/深预览已含 chrome 层；待人工确认层次与对比度 |
+| UI-11-1 / UI-11 | 功能需求（首启默认） | FE | P1 | 已实现待验收（0.1.9 已发布） | 无 | 无 session 记录时只打开 Pending；移除“默认全开标签”行为；保留连接 gate/深链/通知导航；usePageNavigation.test.ts 首启用例覆盖 |
+| UI-11-2 / UI-11 | 功能需求（session 恢复） | FE | P1 | 已实现待验收（0.1.9 已发布） | UI-11-1 | 持久化打开页+激活页（仅主窗口、上限、版本容错）；启动恢复并过滤未知页；关闭页面同步；损坏回退 Pending；测试幂等；usePageNavigation.test.ts 其余 10 项覆盖 |
+| KEY-01-1 / KEY-01 | 功能需求 | FE；PM | P2 | 已实现且有相应验收证据（映射文档） | 无 | 调研 P4V 默认快捷键（Windows：菜单/工具栏/面板），输出 P4V 键位→P4Deck 命令映射清单、冲突与不迁移项（保留系统/输入法冲突说明）；产出 [快捷键P4V映射.md](../Designer/快捷键P4V映射.md) |
+| KEY-01-2 / KEY-01 | 功能需求 | FE | P2 | 已实现待验收（0.1.8 已发布） | KEY-01-1 | 按 P4V 习惯在 app/commands/catalog.ts 补齐全局+页面快捷键；统一 commandForShortcut 分发，保留输入框保护/平台 Ctrl-Cmd/风险与确认不绕过；冲突测试更新；keymap.ts + catalog.test.ts 覆盖 |
+| KEY-01-3 / KEY-01 | 功能需求 | FE | P2 | 已实现待验收（0.1.8 已发布） | KEY-01-2 | Settings 新增“快捷键”分区：按分组列出命令/当前键/可用条件；点击录制新键；实时冲突提示；恢复默认；不可用原因显示；ShortcutSettingsCard.tsx + 10 项测试覆盖 |
+| KEY-01-4 / KEY-01 | 功能需求 | FE | P2 | 已实现待验收（0.1.8 已发布） | KEY-01-3 | keymap 持久化（本地配置文件，随 profile 独立；版本号/迁移；损坏回退默认）；重启后生效验证；与命令面板标签一致；keymapPersistence.ts + 测试覆盖 |
 
 CL-06需求阶段：CL-06-R只读调研由空闲BE领取，R只读调研已完成，S已审核mock边界，真实启动契约以独立R2只读证据/必要隔离实验计划推进，不等不存在文档；CL-06-S已根据独立报告审核最小方案/安全边界，三组维护者问题见交接；CL-06-I实施验收依赖已确定方案并在FE原六项队列后领取。三阶段均属功能需求（不是重构，R仅表示Research），不额外计工作包；R有完成报告，S有审核结论，I尚未实施/验收。验收要求及禁止项见交接任务单。
 

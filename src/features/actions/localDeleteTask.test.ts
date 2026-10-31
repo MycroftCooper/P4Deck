@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
-vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+  isTauri: () => true,
+}));
 import {
   localDeleteBlockedPaths,
   localDeleteHiddenPathsForTests,
@@ -9,6 +12,9 @@ import {
   type LocalDeletePort,
 } from "./localDeleteTask";
 import type { FileActionResult, RuntimeInfo } from "../../shared/contracts";
+import type { ConnectionSnapshot } from "../companySubmit/model";
+import { blockedPathDetails } from "../changelists/moveOptimism";
+import { admissionPort } from "./admissionPort";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 let serial = 0;
@@ -313,4 +319,179 @@ it("context drift before dispatch writes nothing and withdraws every intent", as
   expect(localDeleteSnapshot()[0].outcome).toBe("notDispatched");
   expect(localDeleteBlockedPaths(f.scope).size).toBe(0);
   expect(localDeleteHiddenPathsForTests(f.scope).size).toBe(0);
+});
+
+const pendingUnknown = (operationId: string): FileActionResult =>
+  ({
+    operation: null,
+    affectedPaths: ["C:/fixture/a", "C:/fixture/b", "C:/fixture/c"],
+    message: "uncertain",
+    execution: {
+      operationId,
+      outcome: "unknown",
+      perFileEvidence: "localIoAcknowledgements",
+      files: [
+        { depotPath: "C:/fixture/a", state: "succeeded", message: "" },
+        { depotPath: "C:/fixture/b", state: "unknown", message: "os error" },
+        { depotPath: "C:/fixture/c", state: "blocked", message: "" },
+      ],
+    },
+  }) as unknown as FileActionResult;
+
+it("host fence release downgrades unknown rows and unblocks the paths", async () => {
+  const f = fixture();
+  let finish!: (r: FileActionResult) => void;
+  vi.mocked(f.port.execute).mockReturnValue(new Promise((r) => (finish = r)));
+  startLocalDelete(
+    f.scope,
+    f.runtime,
+    f.files.map((x) => x.path),
+    () => true,
+    f.port,
+  );
+  await flush();
+  const operationId = localDeleteSnapshot()[0].operationId;
+  finish(pendingUnknown(operationId));
+  await flush();
+  expect(localDeleteBlockedPaths(f.scope)).toEqual(new Set(["C:/fixture/b"]));
+  expect(blockedPathDetails(f.scope).size).toBe(1);
+  // A release for another scope must never touch this operation's claim.
+  admissionPort.released({
+    fenceId: "fence-other",
+    operationId,
+    scope: { server: "s", user: "u", client: "other-client" },
+    revision: "1",
+    active: false,
+    outcome: "unknown",
+    released: false,
+  });
+  expect(localDeleteBlockedPaths(f.scope)).toEqual(new Set(["C:/fixture/b"]));
+  // `action_release_unknown` only emits for the exact (operationId, scope).
+  admissionPort.released({
+    fenceId: "fence-b",
+    operationId,
+    scope: { server: "s", user: "u", client: f.scope },
+    revision: "2",
+    active: false,
+    outcome: "unknown",
+    released: false,
+  });
+  expect(localDeleteSnapshot()[0].rows.map((r) => r.state)).toEqual([
+    "succeeded",
+    "blocked",
+    "blocked",
+  ]);
+  expect(localDeleteBlockedPaths(f.scope).size).toBe(0);
+  expect(blockedPathDetails(f.scope).size).toBe(0);
+});
+
+const lookupPort = (
+  f: ReturnType<typeof fixture>,
+  lookup: LocalDeletePort["lookup"],
+): LocalDeletePort => ({ ...f.port, lookup });
+
+it("pre-dispatch invoke rejection with no receipt releases the claim", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(
+    new Error("Workspace Root has not been verified"),
+  );
+  const lookup = vi.fn(async () => ({ kind: "notFound" as const }));
+  startLocalDelete(
+    f.scope,
+    f.runtime,
+    f.files.map((x) => x.path),
+    () => true,
+    lookupPort(f, lookup),
+  );
+  await flush();
+  expect(f.port.execute).toHaveBeenCalledOnce();
+  expect(lookup).toHaveBeenCalledWith({
+    operationId: localDeleteSnapshot()[0].operationId,
+    connection: f.connection,
+  });
+  expect(localDeleteSnapshot()[0].outcome).toBe("notDispatched");
+  expect(localDeleteSnapshot()[0].rows.map((r) => r.state)).toEqual([
+    "blocked",
+    "blocked",
+    "blocked",
+  ]);
+  expect(localDeleteBlockedPaths(f.scope).size).toBe(0);
+  expect(blockedPathDetails(f.scope).size).toBe(0);
+});
+
+it("transport loss with no receipt still stays unknown and claimed", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(new Error("lost"));
+  const lookup = vi.fn(async () => ({ kind: "notFound" as const }));
+  startLocalDelete(
+    f.scope,
+    f.runtime,
+    f.files.map((x) => x.path),
+    () => true,
+    lookupPort(f, lookup),
+  );
+  await flush();
+  expect(lookup).toHaveBeenCalledOnce();
+  expect(localDeleteSnapshot()[0].outcome).toBe("unknown");
+  expect(localDeleteSnapshot()[0].rows.map((r) => r.state)).toEqual([
+    "unknown",
+    "unknown",
+    "unknown",
+  ]);
+  expect(localDeleteBlockedPaths(f.scope).size).toBe(3);
+});
+
+it("a settled receipt recovers the exact per-file facts without re-dispatching", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(new Error("lost"));
+  const lookup = vi.fn(
+    async (request: {
+      operationId: string;
+      connection: ConnectionSnapshot;
+    }) => ({
+      kind: "found" as const,
+      receipt: {
+        operationId: request.operationId,
+        kind: "fileAction",
+        connection: request.connection,
+        payloadDigest: "a".repeat(64),
+        revision: "2",
+        state: "settled" as const,
+        result: pendingUnknown(request.operationId),
+      },
+    }),
+  );
+  startLocalDelete(
+    f.scope,
+    f.runtime,
+    f.files.map((x) => x.path),
+    () => true,
+    lookupPort(f, lookup),
+  );
+  await flush();
+  expect(f.port.execute).toHaveBeenCalledOnce();
+  expect(localDeleteSnapshot()[0].rows.map((r) => r.state)).toEqual([
+    "succeeded",
+    "unknown",
+    "blocked",
+  ]);
+  expect(localDeleteBlockedPaths(f.scope)).toEqual(new Set(["C:/fixture/b"]));
+});
+
+it("a storage-unavailable receipt lookup keeps the claim unknown", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(
+    new Error("Workspace Root has not been verified"),
+  );
+  const lookup = vi.fn(async () => ({ kind: "storageUnavailable" as const }));
+  startLocalDelete(
+    f.scope,
+    f.runtime,
+    f.files.map((x) => x.path),
+    () => true,
+    lookupPort(f, lookup),
+  );
+  await flush();
+  expect(localDeleteSnapshot()[0].outcome).toBe("unknown");
+  expect(localDeleteBlockedPaths(f.scope).size).toBe(3);
 });

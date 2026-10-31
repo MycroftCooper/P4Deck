@@ -353,3 +353,24 @@ it("carries a popout menu origin into a modal and restores focus there", async (
     frame.remove();
   }
 });
+it("accents an emphasized resolve action while a conflict is unresolved", async () => {
+  let settle!: (bindings: MenuBindings) => void;
+  const pending = new Promise<MenuBindings>((done) => {
+    settle = done;
+  });
+  await act(async () => {
+    root.render(
+      <ContextMenuProvider scope="a" zh>
+        <Targets resolve={() => pending} />
+      </ContextMenuProvider>,
+    );
+  });
+  await rightClick('[data-testid="file"]');
+  await act(async () => {
+    settle({ "解决冲突…": { run, emphasis: "primary" } });
+  });
+  const button = [
+    ...document.querySelectorAll<HTMLButtonElement>("[role=menu] button"),
+  ].find((item) => item.textContent?.includes("解决冲突"));
+  expect(button?.className).toContain("menu-emphasis");
+});

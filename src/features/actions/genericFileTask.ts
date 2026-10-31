@@ -24,6 +24,7 @@ import {
   confirmGenericFileProjection,
   withdrawGenericFileProjection,
 } from "./genericFileProjection";
+import { isHostPreDispatchRejection } from "./revertTask";
 export const genericP4Actions = [
   "checkout",
   "checkoutAndOpen",
@@ -180,7 +181,8 @@ export function startGenericFileAction(
       let connection: ConnectionSnapshot | undefined,
         result: FileActionResult | undefined,
         authority: ReceiptAuthority | undefined,
-        dispatched = false;
+        dispatched = false,
+        hostRejected = false;
       try {
         connection = await port.connection();
         if (
@@ -197,10 +199,12 @@ export function startGenericFileAction(
         );
         dispatched = true;
         result = await port.execute(request, connection);
-      } catch {
+      } catch (error) {
+        let receiptMissing = false;
         if (dispatched && connection) {
           try {
             const found = await port.lookup({ operationId, connection });
+            if (found.kind === "notFound") receiptMissing = true;
             if (found.kind === "found") {
               const r = found.receipt;
               if (
@@ -224,29 +228,47 @@ export function startGenericFileAction(
             /* Read failure is not permission to retry. */
           }
         }
+        // The action receipt is reserved before any write, so notFound + a known
+        // pre-dispatch refusal proves the host never reached the write path.
+        // Everything else (transport/unknown, existing-but-unsettled receipt)
+        // stays unknown and waits for the host fence/receipt.
+        hostRejected = receiptMissing && isHostPreDispatchRejection(error);
       } finally {
         const complete =
           result?.execution?.operationId === operationId &&
           result.execution.outcome === "commandCompleted" &&
           result.execution.perFileEvidence === "notCollected";
-        const outcome = !dispatched
-          ? "notDispatched"
-          : complete
-            ? "commandCompleted"
-            : "unknown";
+        const outcome =
+          !dispatched || hostRejected
+            ? "notDispatched"
+            : complete
+              ? "commandCompleted"
+              : "unknown";
         const record = fileActionLedger.get(operationId)!;
         fileActionLedger.update(
           operationId,
-          { ...record.data, busy: false, outcome, result },
+          {
+            ...record.data,
+            busy: false,
+            outcome,
+            result,
+            // No fence can exist for a proven pre-dispatch refusal; release the
+            // local claim so it never blocks later writes on these paths.
+            ...(outcome === "notDispatched" ? { admissionReleased: true } : {}),
+          },
           outcome === "unknown" ? "unknown" : "settled",
           authority,
         );
         if (outcome !== "commandCompleted")
           report(
-            dispatched ? "unknown" : "failed",
-            dispatched ? "uncertainOutcome" : "contextChanged",
+            outcome === "unknown" ? "unknown" : "failed",
+            outcome === "unknown"
+              ? "uncertainOutcome"
+              : hostRejected
+                ? "preflightBlocked"
+                : "contextChanged",
           );
-        if (dispatched) {
+        if (dispatched && !hostRejected) {
           // commandCompleted: keep the projection until the bounded active refetch lands (then the
           // authoritative rows replace it). unknown: withdraw first, then correct by the same refetch.
           if (outcome === "commandCompleted")

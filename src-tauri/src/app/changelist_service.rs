@@ -870,6 +870,7 @@ mod tests {
             state: Some("openedEdit".into()),
             client_path: None,
             revision: None,
+            head_revision: None,
             file_type: None,
             lock_ownership: None,
             lock_owner: None,

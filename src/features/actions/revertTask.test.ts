@@ -1,4 +1,4 @@
-﻿import { expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import { startRevert, revertTargets, type RevertPort } from "./revertTask";
 import { writeSnapshot, readSnapshot } from "../../shared/cache/snapshots";
 import {
@@ -6,7 +6,11 @@ import {
   type PendingSnapshot,
 } from "../changelists/pendingCache";
 import { projectRemovalChanges, shelfObservation } from "./shelfObservation";
-import { blockedMovePaths } from "../changelists/moveOptimism";
+import { removalLedger } from "./actionStore";
+import {
+  blockedMovePaths,
+  blockedPathDetails,
+} from "../changelists/moveOptimism";
 import type {
   RuntimeInfo,
   WorkspaceNode,
@@ -123,6 +127,13 @@ it("projects immediately, retains I/O conflict, then merges precise success with
     readSnapshot<PendingSnapshot>(f.key)!.data.changes[0].files,
   ).toHaveLength(0);
   expect(blockedMovePaths(f.scope).size).toBe(0);
+  const settled = removalLedger
+    .getSnapshot()
+    .find((item) => item.scope === f.scope && item.data.kind === "revert")!;
+  expect(settled.data.items.every((item) => item.outcome === "confirmed")).toBe(
+    true,
+  );
+  expect(settled.data.execution?.admissionReleased).toBe(true);
 });
 it("unknown mixed facts restore unknown and keep its conflict without replay", async () => {
   const f = fixture();
@@ -291,9 +302,8 @@ it("all-retained revertUnchanged is a known no-op, never a restored success or r
   expect(f.port.report).not.toHaveBeenCalled();
   expect(f.port.execute).toHaveBeenCalledOnce();
 });
-it("retained outside revertUnchanged is not trusted and stays unknown and occupied", async () => {
+it("retained plain revert is a known no-op that never blocks submission", async () => {
   const f = fixture();
-  f.result.outcome = "partial";
   f.result.files[0].state = "retained";
   startRevert(
     f.scope,
@@ -305,15 +315,21 @@ it("retained outside revertUnchanged is not trusted and stays unknown and occupi
     f.port,
   );
   await flush();
+  // P4 revert -a kept a modified file: it stays visible and open, but the
+  // outcome is known, so it must not keep the submit button disabled.
   expect(
     readSnapshot<PendingSnapshot>(f.key)!.data.changes[0].files.map(
       (x) => x.depotPath,
     ),
   ).toEqual(["//fixture/a"]);
-  expect(blockedMovePaths(f.scope)).toEqual(new Set(["//fixture/a"]));
-  expect(f.port.report).toHaveBeenCalledWith(
-    expect.objectContaining({ outcome: "partial" }),
-  );
+  expect(blockedPathDetails(f.scope).size).toBe(0);
+  expect(f.port.report).not.toHaveBeenCalled();
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.scope === f.scope && item.data.kind === "revert")!;
+  expect(record.data.items[0].outcome).toBe("notApplied");
+  expect(record.data.items[0].ioComplete).toBe(true);
+  expect(record.data.execution?.admissionReleased).toBe(true);
 });
 it("settled receipt with retained facts is reused after transport loss without reexecution", async () => {
   const f = fixture();
@@ -540,5 +556,100 @@ it("does not guess when status would need more than 20 directories", async () =>
       paths: many.map((node) => node.depotPath),
     }),
     f.connection,
+  );
+});
+
+it("host pre-dispatch rejection with no receipt settles as known no-op and releases the claim", async () => {
+  const f = fixture();
+  // Host commands reserve the durable receipt BEFORE any write, so a same-id
+  // lookup returning notFound proves the write path was never reached.
+  vi.mocked(f.port.execute).mockRejectedValue(
+    Error("connectionChanged: The active connection changed."),
+  );
+  startRevert(
+    f.scope,
+    f.runtime,
+    f.nodes,
+    "revert",
+    () => true,
+    undefined,
+    f.port,
+  );
+  await flush();
+  expect(f.port.execute).toHaveBeenCalledOnce();
+  expect(f.port.lookup).toHaveBeenCalledOnce();
+  expect(f.port.lookup).toHaveBeenCalledWith({
+    operationId: vi.mocked(f.port.execute).mock.calls[0][0].operationId,
+    connection: f.connection,
+  });
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.scope === f.scope && item.data.kind === "revert")!;
+  expect(record.data.items.map((item) => item.outcome)).toEqual([
+    "notApplied",
+    "notApplied",
+  ]);
+  expect(record.data.items.every((item) => item.ioComplete)).toBe(true);
+  expect(record.data.execution?.admissionReleased).toBe(true);
+  expect(blockedMovePaths(f.scope).size).toBe(0);
+  // One honest failure report; never an "unknown outcome" claim and never success.
+  expect(f.port.report).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ outcome: "failed", code: "preflightBlocked" }),
+  );
+});
+
+it("unrecognized transport failure without a receipt keeps the local claim unknown", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(Error("ipc invoke failed"));
+  startRevert(
+    f.scope,
+    f.runtime,
+    f.nodes,
+    "revert",
+    () => true,
+    undefined,
+    f.port,
+  );
+  await flush();
+  expect(blockedMovePaths(f.scope).size).toBe(2);
+  expect(f.port.report).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ outcome: "unknown", code: "uncertainOutcome" }),
+  );
+});
+
+it("settled receipt wins over a pre-dispatch-looking error", async () => {
+  const f = fixture();
+  vi.mocked(f.port.execute).mockRejectedValue(
+    Error("contextChanged: The active connection changed."),
+  );
+  vi.mocked(f.port.lookup).mockImplementation(async ({ operationId }) => ({
+    kind: "found" as const,
+    receipt: {
+      operationId,
+      kind: "revert" as const,
+      connection: f.connection,
+      payloadDigest: "ab".repeat(32),
+      revision: "7",
+      state: "settled" as const,
+      result: f.result,
+    },
+  }));
+  startRevert(
+    f.scope,
+    f.runtime,
+    f.nodes,
+    "revert",
+    () => true,
+    undefined,
+    f.port,
+  );
+  await flush();
+  expect(blockedMovePaths(f.scope).size).toBe(0);
+  expect(f.port.report).not.toHaveBeenCalled();
+  const record = removalLedger
+    .getSnapshot()
+    .find((item) => item.scope === f.scope && item.data.kind === "revert")!;
+  expect(record.data.items.every((item) => item.outcome === "confirmed")).toBe(
+    true,
   );
 });

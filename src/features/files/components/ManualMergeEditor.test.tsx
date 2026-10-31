@@ -9,7 +9,10 @@ const closeGuard = vi.hoisted(() => ({
 vi.mock("../../../app/closeGuard", () => ({
   useUnsavedEditor: closeGuard.state,
 }));
-import type { ManualMergeSession } from "../../../shared/contracts";
+import type {
+  ExternalMergeResult,
+  ManualMergeSession,
+} from "../../../shared/contracts";
 import {
   ManualMergeEditor,
   manualMergeBlocksForTest,
@@ -175,4 +178,133 @@ it("cancels the old group and ignores a late load after connection drift", async
     (host.querySelector('[aria-label="Result"]') as HTMLTextAreaElement).value,
   ).toBe("LATEST\n");
   expect(cancel).toHaveBeenCalledTimes(1);
+});
+
+const externalButton = () =>
+  [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+    ["Merge with P4Merge", "Waiting for P4Merge…"].includes(
+      button.textContent ?? "",
+    ),
+  )!;
+
+const renderEditor = async (connectionKey: string) => {
+  await act(async () =>
+    root.render(
+      <ManualMergeEditor
+        depotPath="//depot/file.txt"
+        connectionKey={connectionKey}
+        zh={false}
+      />,
+    ),
+  );
+};
+
+it("runs P4Merge with the editor result, fills Result, and never validates or saves", async () => {
+  vi.spyOn(backend, "detectExternalMergeTool").mockResolvedValue({
+    available: true,
+    executable: "C:\\Program Files\\Perforce\\p4merge.exe",
+    source: "commonPath",
+    reason:
+      "P4MERGE points to a non-.exe wrapper (for example .bat/.cmd); set P4MERGE to p4merge.exe.",
+  });
+  vi.spyOn(backend, "openManualMerge").mockResolvedValue(
+    session("p4merge", "draft result\n"),
+  );
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue(undefined);
+  const validate = vi.spyOn(backend, "validateManualMerge");
+  const save = vi.spyOn(backend, "confirmManualMergeSave");
+  const pending = deferred<ExternalMergeResult>();
+  const run = vi
+    .spyOn(backend, "runExternalMerge")
+    .mockReturnValue(pending.promise);
+  await renderEditor("p4merge");
+
+  expect(externalButton().disabled).toBe(false);
+  // A skipped Windows `.bat` wrapper still lets the fallback executable win,
+  // and the reason stays visible instead of being dropped silently.
+  expect(host.textContent).toContain("non-.exe wrapper");
+  await act(async () => externalButton().click());
+  await act(async () => {});
+  expect(run).toHaveBeenCalledWith({
+    sessionId: "p4merge",
+    result: "draft result\n",
+  });
+  expect(externalButton().textContent).toBe("Waiting for P4Merge…");
+  expect(externalButton().disabled).toBe(true);
+
+  await act(async () =>
+    pending.resolve({
+      status: "completed",
+      result: "merged by p4merge\n",
+      exitCode: 0,
+      operationIds: [],
+    }),
+  );
+  await act(async () => {});
+  expect(
+    (host.querySelector('[aria-label="Result"]') as HTMLTextAreaElement).value,
+  ).toBe("merged by p4merge\n");
+  expect(host.textContent).toContain(
+    "Read back the P4Merge result; review it before validate/save",
+  );
+  expect(validate).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("disables the P4Merge button and shows the detection reason when unavailable", async () => {
+  vi.spyOn(backend, "detectExternalMergeTool").mockResolvedValue({
+    available: false,
+    reason:
+      "P4Merge was not found in P4MERGE, the common install locations, or PATH",
+  });
+  vi.spyOn(backend, "openManualMerge").mockResolvedValue(
+    session("no-tool", "draft\n"),
+  );
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue(undefined);
+  const run = vi.spyOn(backend, "runExternalMerge");
+  await renderEditor("no-tool");
+
+  expect(externalButton().disabled).toBe(true);
+  expect(host.textContent).toContain("P4Merge was not found");
+  await act(async () => externalButton().click());
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("keeps Result intact and reports unchanged and failed P4Merge outcomes", async () => {
+  vi.spyOn(backend, "detectExternalMergeTool").mockResolvedValue({
+    available: true,
+    executable: "p4merge",
+    source: "path",
+  });
+  vi.spyOn(backend, "openManualMerge").mockResolvedValue(
+    session("outcomes", "original\n"),
+  );
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue(undefined);
+  const run = vi
+    .spyOn(backend, "runExternalMerge")
+    .mockResolvedValueOnce({
+      status: "unchanged",
+      exitCode: 0,
+      operationIds: [],
+    })
+    .mockResolvedValueOnce({
+      status: "failed",
+      exitCode: 2,
+      reason: "P4Merge exited with code 2",
+      operationIds: [],
+    });
+  await renderEditor("outcomes");
+
+  await act(async () => externalButton().click());
+  await act(async () => {});
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("P4Merge did not change the result");
+
+  await act(async () => externalButton().click());
+  await act(async () => {});
+  expect(run).toHaveBeenCalledTimes(2);
+  expect(host.textContent).toContain("P4Merge exited with code 2");
+  expect(
+    (host.querySelector('[aria-label="Result"]') as HTMLTextAreaElement).value,
+  ).toBe("original\n");
 });

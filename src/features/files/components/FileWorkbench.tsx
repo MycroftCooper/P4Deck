@@ -25,6 +25,7 @@ import { useLocalDeleteHidden } from "../../actions/localDeleteTask";
 import type { WorkspaceNode } from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 import { depotNodeAsWorkspaceNode } from "../fileListModel";
+import { nodeNeedsSync } from "../fileActions";
 
 type T = (typeof messages)[keyof typeof messages];
 export function FileWorkbench({
@@ -228,6 +229,7 @@ export function FileWorkbench({
             >
               {virtual.getVirtualItems().map((row) => {
                 const node = visibleNodes[row.index];
+                const needsSync = nodeNeedsSync(node);
                 return (
                   <button
                     key={node.id}
@@ -277,6 +279,15 @@ export function FileWorkbench({
                           ? "Depot 文件"
                           : "Depot file"
                         : labels[node.state]}
+                      {!isDepot &&
+                      needsSync &&
+                      node.state !== "outOfDate" &&
+                      node.state !== "notSynced" ? (
+                        <span className="file-state-stale">
+                          {" "}
+                          · {zh ? "需获取最新" : "needs sync"}
+                        </span>
+                      ) : null}
                     </em>
                     <span>
                       #{node.revision ?? "—"}/{node.headRevision ?? "—"}

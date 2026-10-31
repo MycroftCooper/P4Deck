@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import type {
   PendingChange,
   RuntimeInfo,
+  WorkflowFailureCode,
   WorkflowResult,
 } from "../../shared/contracts";
 import { appCache } from "../../shared/cache/appCache";
@@ -87,7 +88,48 @@ export function projectRemovalChanges(
   });
   return changed ? rows : changes;
 }
-/** Exact per-file success only. A newer observation cannot be modified by this older receipt. */
+/**
+ * Failure codes that prove the host rejected the operation before it wrote
+ * anything (token/identity/content revalidation and internal preflight all run
+ * before the P4 command). Such a result is a known no-op, never "unknown".
+ * `cancelled`/`commandFailure`/`uncertainOutcome` are deliberately excluded:
+ * a cancelled or failed command may still have partially applied.
+ */
+const KNOWN_NOT_APPLIED_FAILURES: ReadonlySet<WorkflowFailureCode> = new Set([
+  "preflightBlocked",
+  "contentChanged",
+  "contextChanged",
+  "tokenUnknown",
+  "tokenExpired",
+  "targetMismatch",
+]);
+
+/**
+ * True when the host result deterministically did not write: `rejected` is only
+ * produced by pre-execution revalidation, and `failed` with a pre-write failure
+ * code is the internal-preflight rejection of the direct delete path.
+ */
+export function knownNotAppliedWorkflowResult(
+  result: WorkflowResult | undefined,
+) {
+  return (
+    !!result &&
+    (result.outcome === "rejected" ||
+      (result.outcome === "failed" &&
+        !!result.failure &&
+        KNOWN_NOT_APPLIED_FAILURES.has(result.failure)))
+  );
+}
+/**
+ * Settle one removal observation from a host result. A command-level success
+ * (`execution.state === "commandCompleted"`) is authoritative only when the
+ * envelope belongs to this exact dispatch (same operationId/kind/outcome);
+ * P4's `retained` is a known no-op ("revert -a kept a modified file"); a host
+ * deterministic rejection is a known "nothing was written". Only genuinely
+ * missing/unknown facts stay blocking. Once every item is terminal there is no
+ * host unknown fence to wait for, so the local admission is released for both
+ * shelf-delete call paths.
+ */
 export function finishRemovalObservation(
   operationId: string,
   runtime: RuntimeInfo,
@@ -96,38 +138,54 @@ export function finishRemovalObservation(
 ) {
   const record = removalLedger.get(operationId);
   if (!record) return;
-  // `retained` is a known no-op fact only for revertUnchanged: the file was deliberately left
-  // modified and open. It keeps the current row, retires this operation's optimistic hide,
-  // releases only this operation's claim, and never claims "restored"/"reverted" content.
-  const confirmation = record.data.execution?.confirmation;
-  const retainedNoop =
-    record.data.kind === "revert" &&
-    !!confirmation &&
-    "action" in confirmation &&
-    confirmation.action === "revertUnchanged";
+  const execution = result?.execution;
+  // F9: the envelope is evidence only for the dispatch that produced it. The
+  // host writes `execution.kind = "shelf"` for both shelf create and shelf
+  // delete, so the removal kind maps to the wire kind.
+  const expectedKind = record.data.kind === "shelfDelete" ? "shelf" : undefined;
+  const envelopeTrusted =
+    !execution ||
+    (!!result &&
+      execution.operationId === operationId &&
+      (expectedKind === undefined || execution.kind === expectedKind) &&
+      execution.outcome === result.outcome);
+  const commandCompleted =
+    envelopeTrusted && execution?.state === "commandCompleted";
+  const knownNoOp = notDispatched || knownNotAppliedWorkflowResult(result);
   const items = record.data.items.map((item) => {
     const matches =
       result?.files.filter((f) => f.depotPath === item.path) ?? [];
     const state = matches.length === 1 ? matches[0].state : undefined;
-    const outcome = notDispatched
+    const outcome = knownNoOp
       ? ("notApplied" as const)
       : state === "succeeded"
         ? ("confirmed" as const)
-        : state === "retained" && retainedNoop
+        : state === "retained"
           ? ("notApplied" as const)
-          : ("unknown" as const);
+          : matches.length > 0
+            ? // Any per-file fact (including a duplicate/contradictory one) wins
+              // over the command-level fallback: never synthesize a success.
+              ("unknown" as const)
+            : commandCompleted
+              ? ("confirmed" as const)
+              : ("unknown" as const);
     return { ...item, outcome, ioComplete: true };
   });
+  const settled = items.every((item) => item.outcome !== "unknown");
   removalLedger.update(
     operationId,
     {
       ...record.data,
       items,
       execution: record.data.execution
-        ? { ...record.data.execution, busy: false }
+        ? {
+            ...record.data.execution,
+            busy: false,
+            ...(settled ? { admissionReleased: true } : {}),
+          }
         : undefined,
     },
-    items.some((i) => i.outcome === "unknown") ? "unknown" : "settled",
+    settled ? "settled" : "unknown",
   );
   const observation = shelfObservation(runtime);
   if (record.data.execution?.observation !== observation.version) return;

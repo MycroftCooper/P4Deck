@@ -80,7 +80,7 @@ const runTodos = (argv) =>
   });
 const addedTodo = runTodos(["add", "测试待办"]);
 check("人类待办 add", addedTodo.status === 0 && addedTodo.stdout.includes("T01"), addedTodo.stdout.trim());
-const toggledTodo = runTodos(["toggle", "T01"]);
+const toggledTodo = runTodos(["toggle", "T01", "--no-board"]);
 check("人类待办 toggle", toggledTodo.status === 0 && toggledTodo.stdout.includes("已完成"), toggledTodo.stdout.trim());
 const listedTodos = JSON.parse(runTodos(["list", "--json"]).stdout);
 check("人类待办落盘", listedTodos.items?.[0]?.done === true);
@@ -223,11 +223,23 @@ const releaseDry = spawnSync(
   [path.join(HERE, "release.mjs"), "--version", packageVersion, "--skip-gate", "--allow-dirty"],
   { cwd: ROOT, encoding: "utf8" },
 );
-check(
-  "release 默认 dry-run 输出计划",
-  releaseDry.status === 0 && releaseDry.stdout.includes('"dryRun": true'),
-  releaseDry.stderr.trim(),
-);
+const existingTag = spawnSync("git", ["tag", "--list", `v${packageVersion}`], {
+  cwd: ROOT,
+  encoding: "utf8",
+}).stdout.trim();
+if (existingTag) {
+  check(
+    "release 拒绝已存在的 tag",
+    releaseDry.status !== 0 && /已存在|exists/i.test(`${releaseDry.stderr}${releaseDry.stdout}`),
+    String(releaseDry.status),
+  );
+} else {
+  check(
+    "release 默认 dry-run 输出计划",
+    releaseDry.status === 0 && releaseDry.stdout.includes('"dryRun": true'),
+    releaseDry.stderr.trim(),
+  );
+}
 const releaseBad = spawnSync(
   process.execPath,
   [path.join(HERE, "release.mjs"), "--version", "0.0.0", "--skip-gate", "--allow-dirty"],

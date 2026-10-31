@@ -1,5 +1,6 @@
 import type { ConnectionSnapshot } from "./model";
 import { sameSubmitIdentity } from "../changelists/selectedSubmit";
+import { releaseCustomSubmitRequest } from "./customSubmitSessions";
 export interface CustomParentExit {
   requestId: string;
   changeId: string;
@@ -59,6 +60,11 @@ export function createCustomExitConsumer(
       ]);
       if (seen.has(key)) return;
       seen.add(key);
+      // The parent exit is the terminal runtime fact: the tool window is gone,
+      // so release the per-(connection, changelist) occupancy even if the later
+      // cache refresh fails. Submission outcome stays unknown in session state
+      // and durable receipts; only the "already running" claim ends here.
+      releaseCustomSubmitRequest(e.requestId, e.changeId);
       const scope = port.scope();
       const current = () => !stopped && port.scope() === scope;
       try {

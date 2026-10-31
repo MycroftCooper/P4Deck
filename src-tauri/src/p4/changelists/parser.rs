@@ -464,6 +464,7 @@ pub fn parse_opened_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)> 
                         .and_then(Value::as_str)
                         .map(str::to_owned),
                     revision: number_option(&value, "rev"),
+                    head_revision: None,
                     file_type: value.get("type").and_then(Value::as_str).map(str::to_owned),
                     lock_ownership: None,
                     lock_owner: None,
@@ -494,6 +495,13 @@ pub fn merge_lock_status(
         file.lock_owner.clone_from(&fact.lock_owner);
         file.other_open.clone_from(&fact.other_open);
         file.exclusive_open = Some(crate::p4::locks::parser::exclusive(&fact.file_type));
+        // Known have may fill an absent opened revision, but never overwrite the
+        // `p4 opened` revision semantics. Head stays optional: absence is unknown,
+        // never an implicit "current".
+        if file.revision.is_none() {
+            file.revision = fact.have_revision;
+        }
+        file.head_revision = fact.head_revision;
     }
 }
 
@@ -532,6 +540,7 @@ pub fn parse_shelved_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)>
                     resolve: None,
                     client_path: None,
                     revision: number_option(&value, &format!("rev{index}")),
+                    head_revision: None,
                     file_type: value
                         .get(format!("type{index}"))
                         .and_then(Value::as_str)
@@ -854,5 +863,47 @@ mod tests {
         assert_eq!(metadata[&41].user, "alice");
         assert_eq!(metadata[&41].client, "ws");
         assert_eq!(metadata[&42].client, "other");
+    }
+
+    #[test]
+    fn merge_lock_status_adds_head_revision_without_overwriting_opened_revision() {
+        let events = [event(
+            r#"{"action":"edit","change":"42","depotFile":"//depot/a","rev":"3","type":"text"}"#,
+        )];
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/a","type":"text","haveRev":"79","headRev":"80"}"#,
+        )]);
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &facts);
+        // `p4 opened` revision semantics win over the fstat have revision.
+        assert_eq!(files[0].1.revision, Some(3));
+        assert_eq!(files[0].1.head_revision, Some(80));
+
+        // A missing head keeps None: partial fstat never claims "current".
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/a","type":"text","haveRev":"79"}"#,
+        )]);
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &facts);
+        assert_eq!(files[0].1.head_revision, None);
+        assert_eq!(files[0].1.revision, Some(3));
+
+        // Without any fstat fact the opened revision is untouched and head is unknown.
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &[]);
+        assert_eq!(files[0].1.revision, Some(3));
+        assert_eq!(files[0].1.head_revision, None);
+
+        // A known have may fill a missing opened revision; it is never fabricated.
+        let no_rev_events = [event(
+            r#"{"action":"edit","change":"42","depotFile":"//depot/b","type":"text"}"#,
+        )];
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/b","haveRev":"5"}"#,
+        )]);
+        let mut files = parse_opened_files(&no_rev_events);
+        merge_lock_status(&mut files, &facts);
+        assert_eq!(files[0].1.revision, Some(5));
+        assert_eq!(files[0].1.head_revision, None);
     }
 }
