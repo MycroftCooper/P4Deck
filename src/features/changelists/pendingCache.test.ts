@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { pendingSnapshotKey } from "./pendingCache";
 
 it("reuses snapshots across restarts while isolating server, user, workspace and profile", () => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -7,8 +8,15 @@ import type {
   RenameMovePreflightRequest,
   RenameMoveResult,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { checkRenamePath, type RenamePathError } from "../renamePath";
+import {
+  beginLocalIoProjection,
+  clearLocalIoProjection,
+  lifecycleOf,
+  unwrapLocalIoLegacy,
+  withdrawLocalIoProjection,
+} from "../../actions/localIoLifecycle";
 
 const reasons: Record<RenamePathError, [string, string]> = {
   empty: ["请填写目标路径。", "Enter a destination path."],
@@ -37,7 +45,7 @@ export function RenameDialog({
   node,
   source,
   zh,
-  onDismiss,
+  onDismiss: dismissCallback,
   onRefresh,
   check = (request) => backend.preflightRenameMove(request),
   execute = (confirmation) => backend.confirmRenameMove(confirmation),
@@ -48,7 +56,9 @@ export function RenameDialog({
   onDismiss(): void;
   onRefresh?(): Promise<void> | void;
   check?(request: RenameMovePreflightRequest): Promise<RenameMovePreflight>;
-  execute?(confirmation: RenameMoveConfirmation): Promise<RenameMoveResult>;
+  execute?(
+    confirmation: RenameMoveConfirmation,
+  ): Promise<RenameMoveResult | unknown>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({ ...node }));
@@ -60,6 +70,17 @@ export function RenameDialog({
   const [phase, setPhase] = useState<Phase>("preview");
   const [preflight, setPreflight] = useState<RenameMovePreflight>();
   const [result, setResult] = useState<RenameMoveResult>();
+  const clearUnsaved = useUnsavedEditor(
+    result?.outcome === "succeeded"
+      ? "clean"
+      : target !== from || targetChangeId !== (snapshot.changelistId ?? 0)
+        ? "dirty"
+        : "clean",
+  );
+  const onDismiss = () => {
+    clearUnsaved();
+    dismissCallback();
+  };
   const [failure, setFailure] = useState("");
   const [discard, setDiscard] = useState(false);
   const generation = useRef(0);
@@ -133,6 +154,12 @@ export function RenameDialog({
     const epoch = generation.current;
     const operationId = crypto.randomUUID();
     activeOperation.current = operationId;
+    beginLocalIoProjection({
+      operationId,
+      kind: "renameMove",
+      fromPath: from,
+      toPath: target,
+    });
     setFailure("");
     setPhase("confirming");
     try {
@@ -143,12 +170,43 @@ export function RenameDialog({
         operationId,
       });
       if (epoch !== generation.current) return;
-      setResult(value);
-      setPhase("result");
-      if (value.refresh.workspaceStatus || value.refresh.pendingChanges)
+      const lifecycle = lifecycleOf(value);
+      if (lifecycle && lifecycle.state === "unknown") {
+        withdrawLocalIoProjection(operationId);
+        setFailure(
+          tr(
+            "结果不确定；已按服务器真实状态刷新，请核对后再操作（不会自动重试）。",
+            "Outcome is unconfirmed; rows were corrected from the server. Verify before retrying (no automatic retry).",
+          ),
+        );
+        setPhase("result");
         void Promise.resolve(onRefresh?.()).catch(() => undefined);
+        return;
+      }
+      const legacy = unwrapLocalIoLegacy<RenameMoveResult>(value);
+      if (!legacy) {
+        withdrawLocalIoProjection(operationId);
+        setFailure(
+          tr("未收到可识别的结果。", "No recognizable result was returned."),
+        );
+        setPhase("result");
+        void Promise.resolve(onRefresh?.()).catch(() => undefined);
+        return;
+      }
+      setResult(legacy);
+      setPhase("result");
+      if (lifecycle?.state === "committed") {
+        void Promise.resolve(onRefresh?.())
+          .then(() => clearLocalIoProjection(operationId))
+          .catch(() => undefined);
+      } else {
+        withdrawLocalIoProjection(operationId);
+        if (legacy.refresh.workspaceStatus || legacy.refresh.pendingChanges)
+          void Promise.resolve(onRefresh?.()).catch(() => undefined);
+      }
     } catch (cause) {
       if (epoch !== generation.current) return;
+      withdrawLocalIoProjection(operationId);
       setFailure(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh?.()).catch(() => undefined);
@@ -201,7 +259,7 @@ export function RenameDialog({
         >
           {phase === "checking"
             ? tr("预检中…", "Checking…")
-            : tr("预检并审阅", "Preview and review")}
+            : tr("开始预检", "Preview and review")}
         </button>
       </>
     );

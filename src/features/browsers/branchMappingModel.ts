@@ -3,7 +3,7 @@ import type {
   BranchMappingPage,
   BranchViewLine,
   BranchViewModifier,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 /** Validate persisted list rows before rendering or merging another page. */
 export function isBranchMappingSnapshot(

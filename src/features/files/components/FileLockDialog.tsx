@@ -1,3 +1,4 @@
+import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
@@ -9,9 +10,14 @@ import type {
   FileLockPreflightRequest,
   FileLockResult,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 
 type Phase = "idle" | "checking" | "review" | "running" | "result";
+import {
+  beginFileLockProjection,
+  settleFileLockProjection,
+  withdrawFileLockProjection,
+} from "../../actions/fileLockProjection";
 
 export function FileLockDialog({
   nodes,
@@ -46,6 +52,7 @@ export function FileLockDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<FileLockPreflight>();
   const [result, setResult] = useState<FileLockResult>();
+  const pendingOperation = useRef<string | undefined>(undefined);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<number>();
   const generation = useRef(0);
@@ -97,7 +104,7 @@ export function FileLockDialog({
       const value = await check({
         operation,
         paths,
-        operationId: crypto.randomUUID(),
+        operationId: (pendingOperation.current ??= crypto.randomUUID()),
       });
       if (
         epoch !== generation.current ||
@@ -118,8 +125,9 @@ export function FileLockDialog({
       return;
     const epoch = generation.current;
     const expectedConnection = connectionKey;
-    const operationId = crypto.randomUUID();
+    const operationId = pendingOperation.current ?? crypto.randomUUID();
     activeOperation.current = operationId;
+    beginFileLockProjection(operationId, operation, paths, connectionKey);
     setProgress(0);
     setError("");
     setPhase("running");
@@ -135,17 +143,23 @@ export function FileLockDialog({
         connection.current !== expectedConnection
       )
         return;
+      settleFileLockProjection(operationId, value, false);
       setResult(value);
       setPhase("result");
-      void Promise.resolve(onRefresh?.()).catch(() => undefined);
+      void Promise.resolve(onRefresh?.())
+        .then(() => settleFileLockProjection(operationId, value, true))
+        .catch(() => undefined);
     } catch (cause) {
       if (epoch !== generation.current) return;
+      withdrawFileLockProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
-      if (activeOperation.current === operationId)
+      if (activeOperation.current === operationId) {
         activeOperation.current = undefined;
+        pendingOperation.current = undefined;
+      }
     }
   }
 
@@ -205,7 +219,7 @@ export function FileLockDialog({
         >
           {phase === "checking"
             ? tr("预检中…", "Checking…")
-            : tr("预检并审阅", "Preflight and review")}
+            : tr("开始预检", "Run preflight")}
         </button>
       </>
     );
@@ -257,7 +271,12 @@ export function FileLockDialog({
             </DialogNotice>
           )}
           <div className="workflow-mapping-scroll">
-            <table className="workflow-mapping-table">
+            <ResizableTable
+              tableId="file-lock"
+              defaults={[240, 130, 100, 160, 150]}
+              minimums={[140, 90, 80, 100, 100]}
+              className="workflow-mapping-table"
+            >
               <thead>
                 <tr>
                   <th>{tr("文件", "File")}</th>
@@ -294,7 +313,7 @@ export function FileLockDialog({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResizableTable>
           </div>
         </>
       )}

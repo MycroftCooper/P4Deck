@@ -1,14 +1,11 @@
+import { fileMenuCommands } from "./fileMenuCommands";
 import { useContext } from "react";
 import { CommandExecutionContext } from "../shell/CommandContext";
-import {
-  commandReason,
-  type CommandId,
-  type CommandTarget,
-} from "../shell/commandPolicy";
+import { commandReason, type CommandTarget } from "../shell/commandPolicy";
 import type {
   LocalPathCapabilities,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { backend } from "../../infrastructure/backend";
 import { workspaceCache } from "../../features/files/workspaceQueries";
 import { resolveSelection } from "../../features/files/resolveSelection";
@@ -18,56 +15,7 @@ import { useMenuEnvironment } from "./environment";
 import { action, copy } from "./bindings";
 import type { MenuBindings } from "./model";
 
-const commands: Record<string, CommandId> = {
-  "移到 CL…": "moveFiles",
-  "搁置所选文件…": "shelve",
-  "搁置此文件…": "shelve",
-  "解决冲突…": "resolve",
-  "重命名/移动…": "rename",
-  "重命名/移动目录…": "rename",
-  锁定文件: "lock",
-  解锁文件: "unlock",
-  锁定: "lock",
-  解锁: "unlock",
-  "获取整个工作区最新版本…": "getLatest",
-  "获取整个工作区指定版本…": "getRevision",
-  "签出整个工作区适用文件…": "checkout",
-  "标记删除整个工作区受控文件…": "delete",
-  "还原整个工作区…": "revert",
-  "获取映射范围最新版本…": "getLatest",
-  "获取映射范围指定版本…": "getRevision",
-  "签出映射范围适用文件…": "checkout",
-  "标记删除映射范围受控文件…": "delete",
-  "还原映射范围文件…": "revert",
-  文件预览: "preview",
-  获取最新: "getLatest",
-  "获取指定版本…": "getRevision",
-  "签出…": "checkout",
-  "添加到 P4…": "add",
-  "标记删除…": "delete",
-  "还原…": "revert",
-  "还原此文件…": "revert",
-  "与 have 版本比较": "diff",
-  文件历史: "history",
-  修订图: "revgraph",
-  "其他软件打开…": "openWith",
-  系统中定位: "reveal",
-  "获取最新…": "getLatest",
-  "获取最新（递归）…": "getLatest",
-  "获取最新（含递归）…": "getLatest",
-  "获取指定版本（递归）…": "getRevision",
-  "获取指定版本（含递归）…": "getRevision",
-  "签出（递归）…": "checkout",
-  "签出（含递归）…": "checkout",
-  "添加未跟踪文件（递归）…": "add",
-  "添加未跟踪文件（含递归）…": "add",
-  "标记删除（递归）…": "delete",
-  "标记删除（含递归）…": "delete",
-  "还原（递归）…": "revert",
-  "还原（含递归）…": "revert",
-  "标记删除所选文件…": "delete",
-  "还原所选文件…": "revert",
-};
+const commands = fileMenuCommands;
 
 export function useFileMenu() {
   const menu = useContextMenu();
@@ -208,7 +156,18 @@ export function useFileMenu() {
           () => env.searchInDirectory(node.depotPath || node.absolutePath),
           node.depotPath || node.absolutePath ? undefined : "没有目录路径",
         );
-      return { ...bindings, ...options.bindings };
+      const merged = { ...bindings, ...options.bindings };
+      const needsResolve = resolved.some(
+        (item) =>
+          item.state === "conflicted" || item.status?.resolve === "unresolved",
+      );
+      const resolveItem = merged["解决冲突…"];
+      if (needsResolve && resolveItem && !resolveItem.reason)
+        merged["解决冲突…"] = {
+          ...resolveItem,
+          emphasis: "primary",
+        };
+      return merged;
     };
     return menu(
       object,

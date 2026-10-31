@@ -1,3 +1,5 @@
+#[path = "integration_trace.rs"]
+mod integration_trace;
 use crate::{
     app::status_cache::{
         CacheFreshness, CachedFileStatus, FileStatusKind, InvalidationReason, StatusCache,
@@ -70,6 +72,7 @@ pub struct FileService {
     journal: Arc<OperationJournal>,
     contexts: Arc<ContextStore>,
     review_cache: Mutex<ReviewCache>,
+    trace_reads: integration_trace::TraceReads,
 }
 
 struct RunOptions {
@@ -105,6 +108,7 @@ impl FileService {
             journal,
             contexts,
             review_cache: Mutex::new(ReviewCache::default()),
+            trace_reads: integration_trace::TraceReads::default(),
         }
     }
 
@@ -657,7 +661,7 @@ impl FileService {
             let root = canonical_root(&context)?;
             let targets = paths
                 .iter()
-                .map(|path| secure_path(&root, path, true))
+                .map(|path| secure_path(&root, path, true).map(|target| (path.clone(), target)))
                 .collect::<Result<Vec<_>, _>>()?;
             let app = app.cloned();
             let local_operation_id = operation_id.clone();
@@ -669,50 +673,100 @@ impl FileService {
                 OperationCategory::LocalFile,
             );
             emit_progress(app.as_ref(), &local_operation_id, EventKind::Queued, 0.0);
-            let local_result = tokio::task::spawn_blocking(move || {
-                emit_progress(app.as_ref(), &local_operation_id, EventKind::Started, 2.0);
-                let total = targets.len().max(1);
-                for (index, target) in targets.into_iter().enumerate() {
-                    trash::delete(target).map_err(|error| error.to_string())?;
-                    let percent = 2.0 + ((index + 1) as f32 / total as f32) * 93.0;
-                    emit_progress(
-                        app.as_ref(),
+            let group = self.runner.begin_operation_group(operation_id.clone());
+            let guard = self
+                .runner
+                .lock_write_transaction(&context, &operation_id)
+                .await?;
+            let total = targets.len().max(1);
+            let local_result =
+                tokio::task::spawn_blocking(move || -> Result<FileActionResult, String> {
+                    let guard = guard; // I/O owns admission even if awaiting UI task is dropped.
+                    let _group = group; // the blocking local I/O owns this cancellation token
+                    emit_progress(app.as_ref(), &local_operation_id, EventKind::Started, 2.0);
+                    let mut acknowledged = 0usize;
+                    let result = super::local_action::run(
                         &local_operation_id,
-                        EventKind::Progress,
-                        percent,
+                        &targets,
+                        || _group.ensure_active().is_ok(),
+                        |target| {
+                            let outcome = trash::delete(target).map_err(|error| error.to_string());
+                            if outcome.is_ok() {
+                                acknowledged += 1;
+                                let percent = 2.0 + (acknowledged as f32 / total as f32) * 93.0;
+                                emit_progress(
+                                    app.as_ref(),
+                                    &local_operation_id,
+                                    EventKind::Progress,
+                                    percent,
+                                );
+                            }
+                            outcome
+                        },
                     );
-                }
-                emit_progress(
-                    app.as_ref(),
-                    &local_operation_id,
-                    EventKind::Completed,
-                    100.0,
-                );
-                Ok::<_, String>(())
-            })
-            .await
-            .map_err(|error| error.to_string())?;
-            match local_result {
-                Ok(()) => {
+                    match result
+                        .execution
+                        .as_ref()
+                        .map(|execution| execution.outcome.as_str())
+                    {
+                        Some("commandCompleted") => emit_progress(
+                            app.as_ref(),
+                            &local_operation_id,
+                            EventKind::Completed,
+                            100.0,
+                        ),
+                        Some("notDispatched") => emit_progress(
+                            app.as_ref(),
+                            &local_operation_id,
+                            EventKind::Cancelled,
+                            0.0,
+                        ),
+                        _ => emit_progress(
+                            app.as_ref(),
+                            &local_operation_id,
+                            EventKind::Error,
+                            100.0,
+                        ),
+                    }
+                    // S1B fence: a clean known end state is verified; unknown keeps a
+                    // conservative durable fence; nothing is replayed or retried.
+                    let verified = result
+                        .execution
+                        .as_ref()
+                        .is_some_and(|execution| execution.outcome != "unknown");
+                    guard.finish(verified)?;
+                    Ok(result)
+                })
+                .await
+                .map_err(|error| error.to_string())??;
+            let outcome = local_result
+                .execution
+                .as_ref()
+                .map(|execution| execution.outcome.as_str())
+                .unwrap_or("unknown");
+            match outcome {
+                "commandCompleted" => {
                     let _ = self
                         .journal
                         .finish(&operation_id, JournalState::Succeeded, None);
                 }
-                Err(error) => {
+                "notDispatched" => {
+                    let _ = self
+                        .journal
+                        .finish(&operation_id, JournalState::Cancelled, None);
+                }
+                _ => {
                     let _ = self.journal.finish(
                         &operation_id,
                         JournalState::Failed,
                         Some(OperationFailureKind::CommandFailure),
                     );
-                    return Err(error);
                 }
             }
-            self.invalidate_status(&context, &affected_paths, invalidation_reason);
-            return Ok(FileActionResult {
-                operation: None,
-                affected_paths,
-                message: "Moved local files to system trash".into(),
-            });
+            if outcome != "notDispatched" {
+                self.invalidate_status(&context, &affected_paths, invalidation_reason);
+            }
+            return Ok(local_result);
         };
         let operation = self
             .run_mode(
@@ -733,13 +787,19 @@ impl FileService {
         }
         self.invalidate_status(&context, &affected_paths, invalidation_reason);
         Ok(FileActionResult {
+            execution: None,
             operation: Some(operation),
             affected_paths,
             message: format!("{} completed", invocation.command),
         })
     }
 
-    fn invalidate_status(&self, context: &P4Context, paths: &[String], reason: InvalidationReason) {
+    pub(crate) fn invalidate_status(
+        &self,
+        context: &P4Context,
+        paths: &[String],
+        reason: InvalidationReason,
+    ) {
         self.review_cache.lock().entries.clear();
         let local_paths = if paths.iter().any(|path| path.starts_with("//")) {
             Vec::new()
@@ -768,11 +828,21 @@ impl FileService {
         const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
         const MAX_TEXT_LINES: usize = 100_000;
         const MAX_DIFF_BYTES: usize = 8 * 1024 * 1024;
+        request.validate_explicit_pair()?;
         let context = self.validate_review_scope(&request.scope)?;
+        let right_scope = request.right_file_identity.as_ref().map(|path| {
+            let mut scope = request.scope.clone();
+            scope.file_identity = path.clone();
+            scope
+        });
+        if let Some(scope) = &right_scope {
+            self.validate_review_scope(scope)?;
+        }
         let cache_key = format!(
             "diff:{}:{}",
             review_fingerprint(&request.scope),
-            serde_json::to_string(&(&request.left, &request.right)).map_err(|e| e.to_string())?
+            serde_json::to_string(&(&request.left, &request.right, &request.right_file_identity))
+                .map_err(|e| e.to_string())?
         );
         if !request.refresh {
             if let Some(cached) = self.review_cache.lock().get(&cache_key) {
@@ -799,10 +869,22 @@ impl FileService {
             )
             .await?;
         operation_ids.extend(left.operation_ids.iter().cloned());
+        let right_inspection = if let Some(scope) = right_scope
+            .as_ref()
+            .filter(|scope| scope.file_identity != request.scope.file_identity)
+        {
+            let value = self
+                .inspect_review_file(&context, &scope.file_identity, &root_id, app)
+                .await?;
+            operation_ids.extend(value.operation_ids.iter().cloned());
+            Some(value)
+        } else {
+            None
+        };
         let right = self
             .load_diff_side(
                 &context,
-                &inspection,
+                right_inspection.as_ref().unwrap_or(&inspection),
                 request.right,
                 MAX_TEXT_BYTES,
                 format!("{root_id}:right"),
@@ -1107,26 +1189,18 @@ impl FileService {
     }
 
     fn validate_review_scope(&self, scope: &FileReviewScope) -> Result<P4Context, String> {
-        self.ensure_review_scope_current(scope)?;
+        let (profile, generation, context) = self.contexts.swarm_snapshot();
+        validate_review_snapshot(scope, &context, generation, &profile)?;
         if scope.file_identity.trim().is_empty() || scope.file_identity.contains(['\r', '\n', '\0'])
         {
             return Err("File identity is empty or contains control characters".into());
         }
-        Ok(self.contexts.current())
+        Ok(context)
     }
 
     fn ensure_review_scope_current(&self, scope: &FileReviewScope) -> Result<(), String> {
-        let (context, generation) = self.contexts.snapshot();
-        if context.server != scope.server
-            || context.user != scope.user
-            || context.client != scope.client
-            || context.cwd.as_deref().unwrap_or_default() != scope.workspace
-            || generation != scope.context_generation
-            || self.contexts.active_profile_id() != scope.active_profile_id
-        {
-            return Err("File review context changed; discard this stale result and retry".into());
-        }
-        Ok(())
+        let (profile, generation, context) = self.contexts.swarm_snapshot();
+        validate_review_snapshot(scope, &context, generation, &profile)
     }
 
     async fn inspect_review_file(
@@ -1894,6 +1968,24 @@ fn value_u64(value: &Value) -> Option<u64> {
     value
         .as_u64()
         .or_else(|| value.as_str()?.trim_start_matches('#').parse().ok())
+}
+
+fn validate_review_snapshot(
+    scope: &FileReviewScope,
+    context: &P4Context,
+    generation: u64,
+    profile: &Option<String>,
+) -> Result<(), String> {
+    if context.server != scope.server
+        || context.user != scope.user
+        || context.client != scope.client
+        || context.cwd.as_deref().unwrap_or_default() != scope.workspace
+        || generation != scope.context_generation
+        || profile != &scope.active_profile_id
+    {
+        return Err("File review context changed; discard this stale result and retry".into());
+    }
+    Ok(())
 }
 
 fn review_fingerprint(scope: &FileReviewScope) -> String {

@@ -1,8 +1,9 @@
 import type {
   LocalPathCapabilities,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { compactTargets } from "../../features/files/selectionCommands";
+import { nodeNeedsSync } from "../../features/files/fileActions";
 import { nodeKey } from "../../features/files/selection";
 export type CommandId =
   | "refresh"
@@ -36,7 +37,12 @@ export type CommandTarget =
       /** Set only when the snapshot is the complete file set of this CL. */
       wholeChangelistId?: number;
     }
-  | { type: "pending"; id: number; count: number }
+  | {
+      type: "pending";
+      id: number;
+      count: number;
+      selectedSubmitExpectation?: import("../../features/changelists/selectedSubmit").SelectedSubmitExpectation;
+    }
   | { type: "submitted"; id: number }
   | { type: "history"; path: string; revisions: number[] }
   | { type: "none" };
@@ -236,11 +242,11 @@ export function commandReason(
       "conflicted",
       "missing",
     ],
-    getLatest: ["controlled", "outOfDate", "missing"],
-    getRevision: ["controlled", "outOfDate", "missing"],
+    getLatest: ["controlled", "outOfDate", "missing", "openedEdit"],
+    getRevision: ["controlled", "outOfDate", "missing", "openedEdit"],
     checkout: ["controlled", "outOfDate"],
     add: ["untracked"],
-    delete: ["controlled", "outOfDate", "openedEdit"],
+    delete: ["controlled", "outOfDate", "openedEdit", "untracked", "ignored"],
     revert: [
       "openedEdit",
       "openedAdd",
@@ -275,6 +281,12 @@ export function commandReason(
       "missing",
     ],
   };
+  if (
+    (id === "getLatest" || id === "getRevision") &&
+    (node.absolutePath || node.depotPath) &&
+    nodeNeedsSync(node)
+  )
+    return undefined;
   if (
     allowed[id]?.includes(node.state) &&
     (node.absolutePath || node.depotPath)

@@ -2,7 +2,7 @@ import type {
   StreamGraphEdge,
   StreamGraphNode,
   StreamGraphResult,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 /** Validate persisted display data before it reaches the graph renderer. */
 export function isStreamGraphSnapshot(

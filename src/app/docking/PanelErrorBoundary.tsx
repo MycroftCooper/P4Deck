@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { closeState } from "../closeGuard";
 interface Props {
   children: ReactNode;
   resetKey: string;
@@ -9,6 +10,9 @@ export class PanelErrorBoundary extends Component<
   { error: string | null }
 > {
   state: { error: string | null } = { error: null };
+  componentDidCatch() {
+    closeState.markUnknown();
+  }
   static getDerivedStateFromError(error: unknown) {
     return { error: String(error) };
   }

@@ -9,7 +9,7 @@ import { RenameDialog } from "../../features/files/components/RenameDialog";
 import { ResolveDialog } from "../../features/files/components/ResolveDialog";
 import { ManualMergeEditor } from "../../features/files/components/ManualMergeEditor";
 import { OperationConfirmDialog } from "./OperationConfirmDialog";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 
 /** Development-only synthetic fixtures. No write adapters or backend calls. */
 export default function WorkflowAuditPage() {

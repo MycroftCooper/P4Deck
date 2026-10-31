@@ -1,3 +1,5 @@
+#[path = "workspace_mutation.rs"]
+mod workspace_mutation;
 use crate::{
     domain::*,
     p4::{
@@ -21,6 +23,8 @@ use uuid::Uuid;
 use zeroize::Zeroize;
 
 pub struct ConnectionService {
+    workspace_tokens:
+        crate::app::confirmation::ConfirmationStore<workspace_mutation::WorkspaceToken>,
     contexts: Arc<ContextStore>,
     setup: ConnectionSetupRepository,
     logs: Arc<LogStore>,
@@ -28,6 +32,12 @@ pub struct ConnectionService {
 }
 
 impl ConnectionService {
+    pub(crate) fn with_custom_submit_context<T>(
+        &self,
+        action: impl FnOnce(Option<String>, u64, &P4Context) -> T,
+    ) -> T {
+        self.contexts.with_custom_submit_context(action)
+    }
     pub fn new(
         contexts: Arc<ContextStore>,
         setup: ConnectionSetupRepository,
@@ -35,6 +45,7 @@ impl ConnectionService {
         journal: Arc<OperationJournal>,
     ) -> Self {
         Self {
+            workspace_tokens: Default::default(),
             contexts,
             setup,
             logs,
@@ -66,6 +77,12 @@ impl ConnectionService {
 
     pub fn active_profile(&self) -> Option<ConnectionProfile> {
         self.contexts.active_profile()
+    }
+
+    /// Read-only lookup of any persisted profile, used to scope profile-store
+    /// writes that are valid while no profile is active.
+    pub fn profile(&self, id: &str) -> Option<ConnectionProfile> {
+        self.contexts.profile(id)
     }
 
     pub async fn create_profile(
@@ -321,6 +338,7 @@ impl ConnectionService {
             context,
             mut password,
             confirmed,
+            operation_id: _,
         } = request;
         if !confirmed
             || validate_connection_context(&context).is_err()

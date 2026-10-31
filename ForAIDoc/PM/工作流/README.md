@@ -28,16 +28,57 @@
 
 单写者从"约定"变成可执行检查：`ci-fast --role <ROLE>` 按 `ownership.json` 拦越界。
 
+## 0.6 发布闸门（用户明确授权才发布）
+
+- **未经用户明确说「发版 / 发布新版本」，任何 agent 与 Lead 都不得执行 publish/上传 release**（包括 0.1.x 版本号预置、构建、draft 转正）。
+- 版本号可以提前 bump、构建与本地校验可以做；**发布动作必须单独获得用户当次授权**。构建产物与 latest.json 留在本地，等授权后再上传。
+- 未发布前，所有新功能与修复都累积进同一个「待发版本」；不要为小改动单独发版。
+- 违反视为流程事故：立即停止、报告、保留证据，不自动重试上传。
+
 ## 1.5 两条通道（默认敏捷，只有发版才全量）
 
 | 通道 | 何时用 | 做什么 | 明确不做 |
 |---|---|---|---|
-| **敏捷（默认）** | 用户验收反馈、bug 修复、文案/布局/小逻辑调整、≤5 文件小改 | 直接改原树（改前备份原文件+sha 到 `artifacts/evidence/<fix>/backup/`）→ 必要时 `baseline.mjs start` 刷新基线 → `ci-fast --files <改动> --role <FE\|BE>` → 定向测试（相关 vitest 文件 / `cargo check` + 相关单测）→ LEAD 复核 diff → 真机启动/刷新确认 | **不建候选、不 freeze manifest、不跑全量 tsc/cargo/vitest、不做独立 QA、不做联合集成、不 apply**（文件已在树里） |
+| **敏捷（默认）** | 用户验收反馈、bug 修复、文案/布局/小逻辑调整、≤5 文件小改 | 直接改原树 → `pnpm wf:agile --files <改动> --role <FE\|BE\|LEAD> --title "<一句话>"`：自动跑 `ci-fast`（写域/状态/相关格式/类型/关联测试），把改动、门禁结果、改动前备份（`git show HEAD:<path>`）和 5 分钟验收清单写进 `artifacts/evidence/agile-<n>/` → LEAD 复核 diff → 用户按 `ACCEPTANCE.md` 做约 5 分钟验收 | **不建候选、不 freeze manifest、不跑全量 tsc/cargo/vitest、不做独立 QA、不做联合集成、不 apply**（文件已在树里） |
 | **发布** | 准备发版/交付新版本（版本号、打包、签名、对外） | 下方 9 步全流程 + 全量 CI（`ci:quick` / `ci:local`）+ 打包/版本校验 | — |
 
 判定规则：**只有"新版本发布"才允许/要求走全量流程**；其余尤其是"用户人验反馈→调整"一律走敏捷通道。敏捷通道底线：定向检查必须绿、改前备份、回执列改动文件+sha、不碰真实 P4/生产数据、dev 进程关闭才写树。
 
+`wf:agile` 的证据结构（模板在 `scripts/workflow/templates/`）：
+
+```text
+artifacts/evidence/agile-<n>/
+  REPORT.md       改动范围 / 门禁步骤 / 回滚 / 未跑项
+  ACCEPTANCE.md   约 5 分钟的用户验收清单
+  hashes.json     改动文件 sha256 + gitHead + gitDirty + 备份标记
+  gate.log        ci-fast 原始输出
+  backup/         已跟踪文件改动前的 HEAD 版本（新增文件无备份）
+```
+
+常用变体：`--plan` 只打印计划；`--skip-gate` 只记录证据（仅文档或已验改动）；`--todo` 顺带加一条人类待办；`--since-baseline` 从基线取改动。命令与参数见 [命令速查](命令速查.md#敏捷通道)。
+
+## 1.6 依赖链与就绪（任务 / 人类待办同链）
+
+- 依赖写在 `state.json` 的 `deps`（来源是 TODO 表「依赖」列），可填任务 ID，也可填**人类待办 ID**（`T01`…）。
+- 就绪是**派生**的，不写回状态：所有依赖都完成才 `ready`。任务完成 = `stage=done` / 已归档 / `humanAccepted`；人类待办完成 = 已勾选。
+- 依赖完成后不会伪造"已开工"的状态迁移：下游任务在 `queue` 里自动从 `WAIT …` 变成 `READY`；`next` 返回第一个就绪项。
+- 人类待办是链上一环：勾选后从看板活跃区移除（记录保留用于审计）、打印解锁的下游任务、自动刷新 `看板.md` / `看板.html`；取消勾选会重新阻塞下游。已完成的人类待办不再出现在活跃区。
+- 命令：
+
+  ```bash
+  node scripts/workflow/state.mjs queue --for FE [--ready|--waiting]
+  node scripts/workflow/state.mjs next --for FE
+  node scripts/workflow/state.mjs task <ID> --for FE --message   # 依赖行标注就绪/等待
+  node scripts/workflow/state.mjs board                          # 看板新增「就绪」列
+  ```
+
+- 新增/修改链：在 TODO 表该行「依赖」列写 `T04` 或任务 ID，再运行 `node scripts/workflow/state.mjs import`；直接改 `state.json` 会在下次 import 被 TODO 表覆盖。
+- `accept <ID>` 完成一个任务后会打印「解锁下游任务」；`check` 会报未知依赖与依赖环。人类待办勾选对下游的解锁由 `human-todos.mjs toggle` 打印。
+- **父子任务（完成聚合）**：TODO 的「关联子项」表（子ID / 父项）就是父子关系。父任务完成 = 自身已完成 **或** 所有子任务完成（已验收的父任务不会因后来新增子任务被降级）；父任务未完成全部子任务时，`accept` / `archive` 会拒绝；子任务可用 `accept <子ID>` 单独验收，导入会保留子任务验收结果。`queue` 同时列出可开工的子项并标 `（子项 → 父项）`，看板显示 `子任务 n/m`；完成最后一个子任务时打印「父任务汇总完成」。
+
 ## 2. 发布通道：一个发布任务的生命周期（9 步，仅发版）
+
+> 分支：日常提交在 `dev`；发布走 `pnpm wf:release --version x.y.z --apply`（dev→master `--no-ff` + `v*` tag，默认 dry-run，带门禁校验）。
 
 ```
 ① LEAD：state.batch.slices + 任务单（state.mjs task <ID> --for <ROLE> --message）

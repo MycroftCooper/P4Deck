@@ -9,7 +9,7 @@ import {
   SquarePen,
   CloudDownload,
 } from "lucide-react";
-import type { FileAction, WorkspaceNode } from "../../shared/contracts/types";
+import type { FileAction, WorkspaceNode } from "../../shared/contracts";
 import type { messages } from "../../shared/i18n";
 type T = (typeof messages)[keyof typeof messages];
 export const fileActions: {
@@ -68,4 +68,19 @@ export function isFileActionAllowed(
       "revisionGraph",
     ].includes(action);
   return action !== "add" && action !== "revert";
+}
+
+/**
+ * The primary state intentionally keeps an opened action above sync state, so
+ * "opened for edit" can still be behind depot. Get Latest must not be gated
+ * only by the primary state: an opened file with have < head is syncable.
+ */
+export function nodeNeedsSync(
+  node: Pick<WorkspaceNode, "status" | "revision" | "headRevision">,
+) {
+  const sync = node.status?.sync;
+  if (sync === "outOfDate" || sync === "notSynced") return true;
+  const have = node.revision;
+  const head = node.headRevision;
+  return have !== undefined && head !== undefined && head > 0 && have < head;
 }

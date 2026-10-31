@@ -2,7 +2,7 @@
 
 ## 写域
 
-- 可写：`src/test/batch-qa/**`、`evidence/**`（或候选内 evidence 目录）。
+- 可写：`tests/qa/batch-qa/**`、`evidence/**`（或候选内 evidence 目录）。
 - 不写：产品实现（`src/`、`src-tauri/`）；不改被验切片。
 
 ## 铁律

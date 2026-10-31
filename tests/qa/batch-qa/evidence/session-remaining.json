@@ -1,0 +1,217 @@
+{
+  "checks": [
+    {
+      "name": "frozen-source-unchanged",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-bridge:gate.html",
+      "pass": true
+    },
+    {
+      "name": "gate-close-denied-retains",
+      "pass": true
+    },
+    {
+      "name": "gate-settings-draft-retained",
+      "pass": true
+    },
+    {
+      "name": "no-bridge:pending.html",
+      "pass": true
+    },
+    {
+      "name": "pending-sort-default-selection",
+      "pass": true,
+      "data": [
+        0,
+        2,
+        10,
+        100
+      ]
+    },
+    {
+      "name": "no-bridge:scroll.html?kind=table&theme=light",
+      "pass": true
+    },
+    {
+      "name": "scroll-drag:light:x",
+      "pass": true,
+      "data": {
+        "x": 11,
+        "y": 0,
+        "maxX": 11,
+        "maxY": 2483
+      }
+    },
+    {
+      "name": "scroll-drag:light:y",
+      "pass": true,
+      "data": {
+        "x": 0,
+        "y": 2483,
+        "maxX": 11,
+        "maxY": 2483
+      }
+    },
+    {
+      "name": "no-bridge:scroll.html?kind=table&theme=dark",
+      "pass": true
+    },
+    {
+      "name": "scroll-drag:dark:x",
+      "pass": true,
+      "data": {
+        "x": 11,
+        "y": 0,
+        "maxX": 11,
+        "maxY": 2483
+      }
+    },
+    {
+      "name": "scroll-drag:dark:y",
+      "pass": true,
+      "data": {
+        "x": 0,
+        "y": 2483,
+        "maxX": 11,
+        "maxY": 2483
+      }
+    },
+    {
+      "name": "no-runtime-errors",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-external-requests",
+      "pass": true,
+      "data": []
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "requests": [
+    "http://127.0.0.1:1437/gate.html",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/gate-fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionSetupGate.tsx",
+    "http://127.0.0.1:1437/gate-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/fixture.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/pending.html",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/pending-fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/fixture.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=e8b112f5",
+    "http://127.0.0.1:1437/scroll.html?kind=table&theme=light",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/scroll-fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/dockview-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/FilePreviewPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/dockview-react@8.3.1_react-_d28a227a6504067f8c77638d0981d0cf/node_modules/dockview-react/dist/styles/dockview.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/preview.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/docking.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/scrollbars.css",
+    "http://127.0.0.1:1437/scroll-fixture.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=e8b112f5",
+    "http://127.0.0.1:1437/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/FullTextSelection.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=e8b112f5",
+    "http://127.0.0.1:1437/scroll.html?kind=table&theme=dark",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/scroll-fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/dockview-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/FilePreviewPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/dockview-react@8.3.1_react-_d28a227a6504067f8c77638d0981d0cf/node_modules/dockview-react/dist/styles/dockview.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/preview.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/docking.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/scrollbars.css",
+    "http://127.0.0.1:1437/scroll-fixture.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=e8b112f5",
+    "http://127.0.0.1:1437/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=e8b112f5",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/FullTextSelection.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=e8b112f5"
+  ],
+  "identity": {
+    "config": "src/test/preview-audit/vite.config.mjs",
+    "host": "127.0.0.1",
+    "port": 1437,
+    "pid": 73780,
+    "address": {
+      "address": "127.0.0.1",
+      "family": "IPv4",
+      "port": 1437
+    }
+  },
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  }
+}

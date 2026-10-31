@@ -4,10 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import * as clipboard from "../../../infrastructure/clipboard";
-import type {
-  RuntimeInfo,
-  ClQueryResult,
-} from "../../../shared/contracts/types";
+import type { RuntimeInfo, ClQueryResult } from "../../../shared/contracts";
 import { SubmittedReportDialog } from "./SubmittedReportDialog";
 const harness = dialogHarness();
 const runtime = {

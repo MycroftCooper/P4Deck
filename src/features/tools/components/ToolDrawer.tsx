@@ -1,4 +1,5 @@
 import { FixedPageHeader } from "../../../app/docking/chrome";
+import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Ban,
@@ -15,7 +16,7 @@ import type {
   OperationEvent,
   OperationResult,
   P4Context,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 import { storage } from "../../../shared/lib/storage";
 import { tokenize } from "../../../shared/lib/tokenize";
@@ -66,6 +67,7 @@ export function ToolDrawer(props: Props) {
   const menu = useContextMenu();
   const textSelection = useFullTextSelection();
   const [input, setInput] = useState("");
+  useUnsavedEditor(input.length > 0 ? "dirty" : "clean", props.connectionKey);
   const [lines, setLines] = useState<string[]>([
     "P4Deck controlled terminal — only p4 commands are allowed.",
   ]);
@@ -463,6 +465,7 @@ export function ToolDrawer(props: Props) {
       )}
       {props.open && props.active === "journal" && (
         <OperationJournalView
+          native={props.native}
           zh={props.zh}
           connectionKey={props.connectionKey}
           focusOperationId={props.journalOperation}

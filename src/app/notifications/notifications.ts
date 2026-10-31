@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { backend } from "../../infrastructure/backend";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { subscribeSafely } from "../../shared/lib/subscription";
 
 export interface DesktopNotice {

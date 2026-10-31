@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-28T09:29:11.402Z",
+  "hashes": {
+    "src/app/context-menu/labels.ts": "746189efba5bb4a08bef04b27c8df8fc7c66bee3c78a6cb894e9eee9b0892507",
+    "src/app/context-menu/catalog.ts": "d9661c3f3599fc50184527af8ecaf0da4879e7d416ed44646f0a483371792192",
+    "src/app/context-menu/model.ts": "2c3f5e8e2d71830ec44cc590cef152521fa56bd747d2b6b6821c3b21b4232672",
+    "src/app/context-menu/model.test.ts": "793c3dc0ecfe6b4afdfb40753b5ddad9906be32ef869cff82c95ec98dbce5a67",
+    "ForAIDoc/Designer/右键菜单对象与菜单项总表.md": "6dc52b45d526b1775e04505213b2c0e2be0f24b22eab83efdc61afa8b55e7117"
+  },
+  "changedSinceCandidate": [],
+  "result": {
+    "translation": "passed",
+    "inventory": "failed C09 ID order",
+    "filtered": 64
+  }
+}

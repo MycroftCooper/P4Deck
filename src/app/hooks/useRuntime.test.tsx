@@ -2,10 +2,7 @@
 import { act, Activity, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type {
-  ConnectionStatus,
-  RuntimeInfo,
-} from "../../shared/contracts/types";
+import type { ConnectionStatus, RuntimeInfo } from "../../shared/contracts";
 import { useRuntime } from "./useRuntime";
 
 const backend = vi.hoisted(() => ({

@@ -9,7 +9,7 @@ import {
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
 import { messages } from "../../../shared/i18n";
-import type { RuntimeInfo } from "../../../shared/contracts/types";
+import type { RuntimeInfo } from "../../../shared/contracts";
 import { RevisionFileList } from "./RevisionFileList";
 
 const runtime: RuntimeInfo = {

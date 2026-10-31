@@ -9,7 +9,7 @@ pub struct Invocation {
 const INLINE_PATH_LIMIT: usize = 128;
 const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
 const FSTAT_BASE_FIELDS: &str =
-    "depotFile,clientFile,path,action,change,type,headType,ourLock,otherLock,otherOpen";
+    "depotFile,clientFile,path,action,change,type,headType,ourLock,otherLock,otherOpen,haveRev,headRev";
 const MAX_STATUS_PATHS: usize = 100_000;
 
 pub fn validate_paths(paths: &[String]) -> Result<Vec<String>, String> {

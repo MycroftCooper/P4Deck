@@ -2,7 +2,7 @@ import type {
   PendingChange,
   WorkflowResult,
   WorkflowTargetSnapshot,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { invalidateData } from "../../shared/cache/dataEffects";
 
 export interface WorkflowRefreshDetail {

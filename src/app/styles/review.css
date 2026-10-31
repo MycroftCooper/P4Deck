@@ -41,7 +41,19 @@
 .diff-view {
   --diff-control-height: 28px;
   --diff-control-gap: 6px;
+  /* The @pierre/diffs renderer lives in shadow DOM and reads these custom properties. */
+  --diffs-font-family:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  --diffs-font-size: 12px;
+  --diffs-line-height: 20px;
+  --diffs-tab-size: 4;
+  --diffs-header-font-family: inherit;
+  --diffs-light-bg: var(--panel);
+  --diffs-dark-bg: var(--panel);
+  --diffs-light: var(--text);
+  --diffs-dark: var(--text);
   container: diff / inline-size;
+  position: relative;
   border: 0;
   border-radius: 0;
 }
@@ -239,86 +251,42 @@
   width: 100%;
   font-variant-numeric: tabular-nums;
 }
-.diff-side-line.diff-target-row {
-  box-shadow:
-    inset 0 1px var(--accent),
-    inset 0 -1px var(--accent);
+.diff-view-toggle {
+  display: flex;
+  gap: 2px;
+  margin-left: 2px;
 }
-.diff-side-line mark {
-  background: var(--warning);
-  color: var(--panel);
-  border-radius: 2px;
+.diff-toolbar button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
-.diff-side-line mark[data-active="true"] {
-  background: var(--accent);
-  outline: 1px solid var(--text);
+.diff-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.diff-scroll-root {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--panel);
+}
+.diff-renderer {
+  display: block;
+}
+.diff-menu-anchor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 .graph-legend {
   flex: 1;
   font-size: 10px;
-}
-.diff-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  contain: strict;
-}
-.diff-line {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: max-content;
-  min-width: 100%;
-  display: flex;
-  align-items: center;
-  white-space: pre;
-  font:
-    12px/24px ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
-}
-.diff-line code {
-  padding-right: 24px;
-  font: inherit;
-}
-.diff-line-number {
-  display: inline-block;
-  flex: 0 0 48px;
-  text-align: right;
-  padding-right: 14px;
-  margin-right: 12px;
-  color: var(--muted);
-  user-select: none;
-  border-right: 1px solid var(--border);
-}
-.diff-line.added {
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 12%, var(--panel));
-}
-.diff-line.removed {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
-}
-.diff-line.meta {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.diff-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-.diff-pane {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-.diff-pane + .diff-pane {
-  border-left: 1px solid var(--border);
 }
 .diff-pane-header {
   display: grid;
@@ -375,49 +343,6 @@
   .diff-pane-header > span {
     grid-column: 1 / -1;
   }
-}
-.diff-side-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: scroll;
-  contain: strict;
-}
-.diff-side-line {
-  position: absolute;
-  inset: 0 auto auto 0;
-  display: flex;
-  width: max-content;
-  min-width: 100%;
-  white-space: pre;
-  font:
-    12px/24px ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
-  tab-size: 4;
-}
-.diff-side-line code {
-  padding-right: 24px;
-  font: inherit;
-}
-.diff-eof-marker {
-  padding: 0 8px;
-  color: var(--muted);
-  font-size: 10px;
-  user-select: none;
-}
-.diff-side-line.added {
-  background: color-mix(in srgb, var(--success) 12%, var(--panel));
-}
-.diff-side-line.removed {
-  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
-}
-.diff-side-line.empty {
-  background: var(--panel-2);
-}
-.diff-side-line.meta {
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 .graph-scroll {
   flex: 1;
@@ -668,4 +593,100 @@
   .graph-focus-controls {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.graph-investigation-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.graph-investigation-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.graph-investigation-fields input,
+.graph-investigation-fields select {
+  min-width: 0;
+  width: 100%;
+}
+.graph-investigation-fields .graph-investigation-check {
+  flex-direction: row;
+  align-items: center;
+}
+.graph-investigation-check input {
+  width: auto;
+}
+.graph-investigation-fields p {
+  overflow-wrap: anywhere;
+}
+.graph-investigation-results {
+  max-height: 340px;
+  overflow: auto;
+}
+.graph-investigation-results table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.graph-investigation-results th,
+.graph-investigation-results td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.graph-investigation-results small {
+  display: block;
+  color: var(--muted);
+}
+
+.review-graph g.compare-first circle {
+  fill: #e8f0ff;
+  stroke: #2e6ba4;
+  stroke-width: 3px;
+}
+.review-graph g.compare-last circle {
+  fill: #fff0d4;
+  stroke: #9b6112;
+  stroke-width: 3px;
+}
+:root[data-theme="dark"] .review-graph g.compare-first circle {
+  fill: #20384c;
+  stroke: #91c9ff;
+}
+:root[data-theme="dark"] .review-graph g.compare-last circle {
+  fill: #4a3820;
+  stroke: #efca79;
+}
+.review-graph g:focus-visible circle {
+  stroke-width: 5px;
+}
+
+.diff-fallback {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+  background: var(--panel);
+}
+.diff-fallback-note {
+  margin: 0 0 8px;
+  color: var(--warning);
+  font-size: 12px;
+}
+.diff-patch-fallback {
+  margin: 0;
+  white-space: pre;
+  font:
+    12px/20px ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  color: var(--text);
 }

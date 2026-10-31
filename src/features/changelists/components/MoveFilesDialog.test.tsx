@@ -2,247 +2,247 @@
 import { act, type ComponentProps } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
-import { backend } from "../../../infrastructure/backend";
-import type {
-  MoveFilesPreflight,
-  MoveFilesResult,
-  PendingChange,
-} from "../../../shared/contracts/types";
-import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
-
-const root = dialogHarness();
-const dismiss = vi.fn();
-const changes: PendingChange[] = [0, 10, 20].map((id) => ({
+import { MoveFilesDialog } from "./MoveFilesDialog";
+import type { SelectedMoveRequest, SelectedMoveReceipt } from "../selectedMove";
+const api = vi.hoisted(() => ({
+  companySubmitConnectionSnapshot: vi.fn(),
+  selectedMoveExecute: vi.fn(),
+  selectedMoveStatus: vi.fn(),
+  cancelOperation: vi.fn(),
+}));
+vi.mock("../../../infrastructure/backend", () => ({ backend: api }));
+const close = vi.hoisted(() => ({ clear: vi.fn() }));
+vi.mock("../../../app/closeGuard", () => ({
+  useUnsavedEditor: () => close.clear,
+}));
+const root = dialogHarness(),
+  dismiss = vi.fn();
+const connection = {
+  profileId: "fixture",
+  generation: "9007199254740993",
+  server: "synthetic",
+  user: "fixture",
+  client: "workspace",
+};
+const changes = [0, 10, 20].map((id) => ({
   id,
   description: `Change ${id}`,
-  user: "tester",
+  user: "fixture",
   client: "workspace",
-  status: "pending",
+  status: "pending" as const,
   jobs: [],
   files: [],
   shelvedFiles: [],
 }));
-const target = {
-  kind: "move" as const,
-  server: "fixture:1666",
-  user: "tester",
-  client: "workspace",
-  workspace: "/workspace",
-  contextGeneration: 1,
-  targetChangeId: 0,
-  depotPaths: ["//depot/a"],
-};
-const ready = (
-  overrides: Partial<MoveFilesPreflight> = {},
-): MoveFilesPreflight => ({
-  ready: true,
-  target,
-  files: [
-    {
-      depotPath: "//depot/a",
-      sourceChangeId: 10,
-      action: "edit",
-      movable: true,
-    },
-  ],
-  blockers: [],
-  warnings: [],
-  contentDigest: "digest",
-  token: "token",
-  expiresAt: Date.now() + 60_000,
-  ttlMs: 60_000,
-  operationIds: ["preflight"],
-  ...overrides,
-});
-const success = (
-  overrides: Partial<MoveFilesResult> = {},
-): MoveFilesResult => ({
-  outcome: "succeeded",
-  message: "Moved 1 file(s).",
-  operationIds: ["move:1"],
-  files: [
-    {
-      depotPath: "//depot/a",
-      state: "succeeded",
-      message: "Moved",
-      operationId: "move:1",
-    },
-  ],
-  affectedChanges: [0, 10],
-  refreshedChanges: [],
-  refresh: {
-    pendingChanges: true,
-    workspaceStatus: true,
-    depotPaths: ["//depot/a"],
-    reason: "refresh",
-  },
-  ...overrides,
-});
-
-beforeEach(() => dismiss.mockClear());
-
-async function render(
-  request: MoveFilesRequest = {
+const props: ComponentProps<typeof MoveFilesDialog> = {
+  request: {
     from: 10,
-    paths: ["//depot/a", "//depot/a"],
+    origins: { "//synthetic/a": 0, "//synthetic/b": 10 },
+    paths: ["//synthetic/a", "//synthetic/b", "//synthetic/a"],
     source: null,
   },
-  overrides: Partial<ComponentProps<typeof MoveFilesDialog>> = {},
-) {
+  changes,
+  client: "workspace",
+  connectionKey: "a",
+  zh: false,
+  onDismiss: dismiss,
+};
+const result = (
+  r: SelectedMoveRequest,
+  extra: Partial<SelectedMoveReceipt> = {},
+): SelectedMoveReceipt => ({
+  operationId: r.operationId,
+  targetCreationUnknown: false,
+  targetChangeId: r.target.kind === "existing" ? r.target.changeId : 30,
+  stage: "completed",
+  files: r.files.map((f) => ({ ...f, state: "moved" })),
+  message: "Synthetic result",
+  ...extra,
+});
+async function render(overrides: Partial<typeof props> = {}) {
   await act(async () =>
-    root.render(
-      <MoveFilesDialog
-        request={request}
-        changes={changes}
-        client="workspace"
-        connectionKey="connection-a"
-        zh
-        onDismiss={dismiss}
-        check={vi.fn().mockResolvedValue(ready())}
-        execute={vi.fn().mockResolvedValue(success())}
-        {...overrides}
-      />,
-    ),
+    root.render(<MoveFilesDialog {...props} {...overrides} />),
   );
 }
-
-function button(text: string) {
-  return [...document.querySelectorAll("button")].find(
-    (item) => item.textContent === text,
-  )!;
-}
-
-it("moves a frozen deduplicated drop immediately without mounting a dialog", async () => {
-  const check = vi.fn().mockResolvedValue(ready());
-  const execute = vi.fn().mockResolvedValue(success());
-  await render(
-    { from: 10, target: 0, paths: ["//depot/a", "//depot/a"], source: null },
-    { check, execute },
+async function click(text: string) {
+  const b = [...document.querySelectorAll("button")].find(
+    (b) => b.textContent === text || b.textContent?.startsWith(text),
   );
-  expect(document.querySelector("dialog")).toBeNull();
-  expect(check).toHaveBeenCalledOnce();
-  expect(check.mock.calls[0][0]).toMatchObject({
-    targetChangeId: 0,
-    depotPaths: ["//depot/a"],
+  expect(b, text).toBeDefined();
+  await act(async () => b!.click());
+}
+async function type(text: string) {
+  await act(async () => {
+    const n = document.querySelector("textarea")!;
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(n, text);
+    n.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(execute).toHaveBeenCalledOnce();
-  expect(execute.mock.calls[0][0]).toMatchObject({ token: "token", target });
-  expect(dismiss).toHaveBeenCalledOnce();
+}
+beforeEach(() => {
+  vi.clearAllMocks();
+  api.companySubmitConnectionSnapshot.mockResolvedValue(connection);
+  api.selectedMoveExecute.mockImplementation(async (r) => result(r));
+  api.selectedMoveStatus.mockResolvedValue(null);
+  api.cancelOperation.mockResolvedValue(undefined);
 });
-
-it("returns success before a background refresh finishes", async () => {
-  const onResult = vi.fn(
-    () => new Promise<void>(() => {}),
+it("previews exact cross-CL selection and moves only after explicit confirmation, without footer cancellation", async () => {
+  await render();
+  await click("CL 20");
+  expect(api.selectedMoveExecute).not.toHaveBeenCalled();
+  expect(document.querySelector(".workflow-dialog-footer")?.textContent).toBe(
+    "",
   );
-  await render(
-    { from: 10, target: 0, paths: ["//depot/a"], source: null },
-    { onResult },
+  await click("Confirm move");
+  const r = api.selectedMoveExecute.mock.calls[0][0];
+  expect(r.files).toEqual([
+    { depotPath: "//synthetic/a", sourceChangeId: 0 },
+    { depotPath: "//synthetic/b", sourceChangeId: 10 },
+  ]);
+  expect(r.connection).toEqual(connection);
+  expect(r.target).toEqual({ kind: "existing", changeId: 20 });
+  expect(document.body.textContent).toContain("Selected files move completed.");
+});
+it("requires new description, captures it once and never submits", async () => {
+  await render();
+  await click("New changelist");
+  expect(
+    [...document.querySelectorAll("button")].find(
+      (b) => b.textContent === "Confirm move",
+    )!.disabled,
+  ).toBe(true);
+  await type("  New description  ");
+  await click("Confirm move");
+  expect(api.selectedMoveExecute.mock.calls[0][0].target).toEqual({
+    kind: "new",
+    description: "New description",
+  });
+  expect(api.selectedMoveExecute).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain("CL 30");
+});
+it("X before confirmation makes zero writes even for direct drop target", async () => {
+  await render({ request: { ...props.request, target: 20 } });
+  expect(api.selectedMoveExecute).not.toHaveBeenCalled();
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>(".workflow-dialog-close")!
+      .click(),
   );
-  expect(onResult).toHaveBeenCalledOnce();
   expect(dismiss).toHaveBeenCalledOnce();
-  expect(document.querySelector('[role="alert"]')).toBeNull();
+  expect(api.selectedMoveExecute).not.toHaveBeenCalled();
 });
-
-it("menu entry only asks for a destination, then moves on one click", async () => {
-  const execute = vi.fn().mockResolvedValue(success());
-  await render(undefined, { execute });
-  expect(document.querySelector("dialog")).not.toBeNull();
-  expect(document.body.textContent).not.toContain("预检");
-  expect(document.body.textContent).not.toContain("确认移动");
-  await act(async () => button("DefaultChange 0").click());
-  expect(execute).toHaveBeenCalledOnce();
-  expect(dismiss).toHaveBeenCalledOnce();
+it("lost response only checks same operation and never re-executes", async () => {
+  api.selectedMoveExecute.mockRejectedValue(new Error("lost"));
+  await render();
+  await click("CL 20");
+  await click("Confirm move");
+  const r = api.selectedMoveExecute.mock.calls[0][0];
+  api.selectedMoveStatus.mockResolvedValue(result(r));
+  await click("Check this attempt");
+  expect(api.selectedMoveStatus).toHaveBeenCalledWith({
+    operationId: r.operationId,
+    connection,
+  });
+  expect(api.selectedMoveExecute).toHaveBeenCalledOnce();
 });
-
-it("reports partial failures without presenting them as full success or opening a dialog", async () => {
-  const execute = vi.fn().mockResolvedValue(
-    success({
-      outcome: "partial",
-      message: "Some files were not confirmed moved.",
-      files: [
-        {
-          depotPath: "//depot/a",
-          state: "failed",
-          message: "Target rejected this file",
-        },
-      ],
+it("partial results retain file states and target; closing never rolls back", async () => {
+  api.selectedMoveExecute.mockImplementation(async (r) =>
+    result(r, {
+      stage: "stopped",
+      files: r.files.map(
+        (f: SelectedMoveRequest["files"][number], i: number) => ({
+          ...f,
+          state: i ? "unknown" : "moved",
+        }),
+      ),
     }),
   );
-  await render(
-    { from: 10, target: 0, paths: ["//depot/a"], source: null },
-    { execute },
+  await render();
+  await click("CL 20");
+  await click("Confirm move");
+  expect(document.body.textContent).toContain("Move not confirmed complete");
+  expect(document.body.textContent).toContain("Unknown");
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>(".workflow-dialog-close")!
+      .click(),
   );
-  expect(document.querySelector("dialog")).toBeNull();
-  expect(document.querySelector('[role="alert"]')!.textContent).toContain(
-    "Target rejected this file",
-  );
-  expect(dismiss).not.toHaveBeenCalled();
+  expect(dismiss).toHaveBeenCalledOnce();
+  expect(api.cancelOperation).not.toHaveBeenCalled();
 });
-
-it("stops before writing when automatic checks reject the selected files", async () => {
-  const execute = vi.fn();
-  const check = vi.fn().mockResolvedValue(
-    ready({
-      ready: false,
-      token: undefined,
-      blockers: [
-        {
-          code: "lockedFile",
-          certainty: "confirmed",
-          message: "File is locked",
-          paths: ["//depot/a"],
-        },
-      ],
+it("same-target selection remains explicit and reports already in target", async () => {
+  api.selectedMoveExecute.mockImplementation(async (r) =>
+    result(r, {
+      files: r.files.map((f: SelectedMoveRequest["files"][number]) => ({
+        ...f,
+        state: f.sourceChangeId === 0 ? "alreadyInTarget" : "moved",
+      })),
     }),
   );
-  await render(
-    { from: 10, target: 0, paths: ["//depot/a"], source: null },
-    { check, execute },
-  );
-  expect(execute).not.toHaveBeenCalled();
-  expect(document.body.textContent).toContain("File is locked");
+  await render();
+  await click("Default");
+  expect(document.body.textContent).toContain("Already in target");
+  await click("Confirm move");
+  expect(api.selectedMoveExecute.mock.calls[0][0].files).toHaveLength(2);
 });
-
-it("does not execute a delayed check after the connection changes", async () => {
-  let finish!: (value: MoveFilesPreflight) => void;
-  const check = vi.fn(
+it("connection switch blocks execute and status; late receipt cannot refresh new context", async () => {
+  let finish!: (r: SelectedMoveReceipt) => void;
+  const onResult = vi.fn();
+  api.selectedMoveExecute.mockImplementation(
     () =>
-      new Promise<MoveFilesPreflight>((resolve) => {
-        finish = resolve;
+      new Promise((r) => {
+        finish = r;
       }),
   );
-  const execute = vi.fn();
-  const cancel = vi.spyOn(backend, "cancelOperation").mockResolvedValue();
-  const request = { from: 10, target: 0, paths: ["//depot/a"], source: null };
-  await render(request, { check, execute });
-  await render(request, { check, execute, connectionKey: "connection-b" });
-  await act(async () => finish(ready()));
-  expect(execute).not.toHaveBeenCalled();
-  expect(cancel).toHaveBeenCalled();
-  expect(document.body.textContent).toContain("连接或工作区已改变");
-  cancel.mockRestore();
+  await render({ onResult });
+  await click("CL 20");
+  await click("Confirm move");
+  const r = api.selectedMoveExecute.mock.calls[0][0];
+  await render({ onResult, connectionKey: "b" });
+  await act(async () => finish(result(r)));
+  expect(onResult).not.toHaveBeenCalled();
+  await click("Check this attempt");
+  expect(api.selectedMoveStatus).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("Connection changed");
 });
-
-it("treats a repeated same-target drop as a no-op without checking or writing", async () => {
-  const check = vi.fn();
-  const execute = vi.fn();
-  await render(
-    { from: 10, target: 10, paths: ["//depot/a"], source: null },
-    { check, execute },
+it("duplicate confirmation while running dispatches once and cancel uses same operation", async () => {
+  let finish!: (r: SelectedMoveReceipt) => void;
+  api.selectedMoveExecute.mockImplementation(
+    () =>
+      new Promise((r) => {
+        finish = r;
+      }),
   );
-  expect(check).not.toHaveBeenCalled();
-  expect(execute).not.toHaveBeenCalled();
-  expect(document.querySelector("dialog")).toBeNull();
-  expect(dismiss).toHaveBeenCalledOnce();
+  await render();
+  await click("CL 20");
+  await click("Confirm move");
+  const r = api.selectedMoveExecute.mock.calls[0][0];
+  await click("Stop remaining operations");
+  expect(api.cancelOperation).toHaveBeenCalledWith(r.operationId);
+  expect(api.selectedMoveExecute).toHaveBeenCalledOnce();
+  await act(async () => finish(result(r)));
+});
+it("rejects malformed success instead of displaying a complete move", async () => {
+  api.selectedMoveExecute.mockImplementation(async (r) =>
+    result(r, { files: [] }),
+  );
+  await render();
+  await click("CL 20");
+  await click("Confirm move");
+  expect(document.body.textContent).toContain("Outcome unknown");
+  expect(document.body.textContent).not.toContain(
+    "Selected files move completed",
+  );
 });
 
-it("blocks duplicate destination clicks while moving", async () => {
-  const check = vi.fn().mockReturnValue(new Promise(() => {}));
-  await render(undefined, { check });
-  await act(async () => {
-    button("DefaultChange 0").click();
-    button("DefaultChange 0").click();
-  });
-  expect(check).toHaveBeenCalledOnce();
-  expect(button("DefaultChange 0").disabled).toBe(true);
+it("hands confirmed work to background owner before closing, without starting a duplicate request", async () => {
+  const onStart = vi.fn(() => true);
+  await render({ onStart });
+  await click("CL 20");
+  await click("Confirm move");
+  expect(onStart).toHaveBeenCalledOnce();
+  expect(dismiss).toHaveBeenCalledOnce();
+  expect(api.selectedMoveExecute).not.toHaveBeenCalled();
 });

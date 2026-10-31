@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
-import type { WorkspaceNode } from "../../../shared/contracts/types";
+import type { WorkspaceNode } from "../../../shared/contracts";
 import { compactTargets } from "../selectionCommands";
 import { revisionSelector, type RevisionMode } from "../revisionSelector";
 

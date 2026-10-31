@@ -3,6 +3,12 @@ import ReactDOM from "react-dom/client";
 import { lazy, Suspense } from "react";
 import "./app/styles.css";
 import { StartupBoundary, StartupShell } from "./app/StartupShell";
+import { useCloseGuard } from "./app/closeGuard";
+
+function CloseGuardRuntime({ children }: React.PropsWithChildren) {
+  useCloseGuard();
+  return children;
+}
 
 const App = lazy(() =>
   import("./app/App").then((module) => ({ default: module.App })),
@@ -22,16 +28,18 @@ const workflowAudit =
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <StartupBoundary>
-      <Suspense fallback={<StartupShell />}>
-        {workflowAudit && WorkflowAuditPage ? (
-          <WorkflowAuditPage />
-        ) : audit && MenuAuditPage ? (
-          <MenuAuditPage />
-        ) : (
-          <App />
-        )}
-      </Suspense>
-    </StartupBoundary>
+    <CloseGuardRuntime>
+      <StartupBoundary>
+        <Suspense fallback={<StartupShell />}>
+          {workflowAudit && WorkflowAuditPage ? (
+            <WorkflowAuditPage />
+          ) : audit && MenuAuditPage ? (
+            <MenuAuditPage />
+          ) : (
+            <App />
+          )}
+        </Suspense>
+      </StartupBoundary>
+    </CloseGuardRuntime>
   </React.StrictMode>,
 );

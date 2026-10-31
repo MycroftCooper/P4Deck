@@ -1,8 +1,8 @@
 .app-shell {
-  grid-template-rows: 60px auto minmax(0, 1fr) 38px 28px;
+  grid-template-rows: 44px auto minmax(0, 1fr) 38px 28px;
 }
 .app-shell.with-tools {
-  grid-template-rows: 60px auto minmax(0, 1fr) auto 28px;
+  grid-template-rows: 44px auto minmax(0, 1fr) auto 28px;
 }
 .app-shell.detached-shell {
   grid-template-rows: auto minmax(0, 1fr);
@@ -79,7 +79,7 @@
   right: 10px;
   padding: 5px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: var(--panel);
 }
 .runtime-rebound {
@@ -90,7 +90,7 @@
   max-width: calc(100vw - 250px);
   padding: 5px 8px;
   border: 1px solid var(--warning);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: var(--panel);
   color: var(--warning);
   font-size: 11px;
@@ -109,7 +109,7 @@
 }
 .command-center {
   min-width: 0;
-  background: var(--panel);
+  background: var(--chrome-command);
   border-bottom: 1px solid var(--border);
   padding: 7px 16px 5px;
 }
@@ -120,7 +120,7 @@
   height: 32px;
   padding: 0 5px 0 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-panel);
   background: var(--panel-2);
   color: var(--muted);
 }
@@ -154,7 +154,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 .global-tools {
   display: flex;
@@ -206,28 +206,6 @@
 .global-address button:disabled {
   opacity: var(--disabled-opacity, 0.34);
   cursor: not-allowed;
-}
-.command-status-slot {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-}
-.command-status {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-}
-.command-status.is-error {
-  color: var(--danger);
-}
-.command-status.is-success,
-.command-status.is-running {
-  color: var(--accent);
 }
 .file-workbench {
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -387,7 +365,7 @@
   font-size: 11px;
   white-space: nowrap;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--muted);
 }
@@ -400,14 +378,9 @@
   flex: 0 1 auto;
   min-width: 0;
   max-width: 45%;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
 }
 @media (max-width: 650px) {
   .command-toolbar-row {
     gap: 6px;
-  }
-  .command-navigation-slot {
-    padding-left: 6px;
   }
 }

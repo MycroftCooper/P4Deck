@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { switchFailure } from "./workspaceSwitch";
 import { useWorkspaceList } from "./workspaceList";
 
@@ -95,6 +95,7 @@ export function WorkspaceSwitcher({
   return (
     <div
       className="connection-picker"
+      data-tauri-drag-region="false"
       ref={picker}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);

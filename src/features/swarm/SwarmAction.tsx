@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ExternalLink, Settings } from "lucide-react";
 import { action, unavailable } from "../../app/context-menu/bindings";
 import type { MenuAction } from "../../app/context-menu/model";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import {
   buildSwarmLink,
   openSwarmLink,

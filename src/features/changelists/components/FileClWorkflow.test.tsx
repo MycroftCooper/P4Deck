@@ -8,7 +8,7 @@ import type {
   PendingChange,
   PendingChangePage,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 const harness = dialogHarness();
 afterEach(() => vi.restoreAllMocks());
 const nodes: WorkspaceNode[] = ["a", "b"].map((name) => ({
@@ -44,12 +44,19 @@ const page = (value: PendingChange[]): PendingChangePage => ({
     truncatedBySafetyLimit: false,
   },
 });
-it("loads once and moves only files outside the chosen destination", async () => {
+it("loads once and sends explicit origins including already-in-target files", async () => {
   const check = vi
-    .spyOn(backend, "preflightMoveFiles")
+    .spyOn(backend, "selectedMoveExecute")
     .mockImplementation(async () => {
       throw new Error("test stop");
     });
+  vi.spyOn(backend, "companySubmitConnectionSnapshot").mockResolvedValue({
+    profileId: "fixture",
+    generation: "1",
+    server: "synthetic",
+    user: "tester",
+    client: "workspace",
+  });
   const query = vi
     .spyOn(backend, "queryPendingChanges")
     .mockResolvedValue(page(changes));
@@ -65,8 +72,16 @@ it("loads once and moves only files outside the chosen destination", async () =>
     />,
   );
   await act(async () => dialogButton("CL 10CL").click());
+  expect(check).not.toHaveBeenCalled();
+  await act(async () => dialogButton("确认移动").click());
   expect(check).toHaveBeenCalledWith(
-    expect.objectContaining({ targetChangeId: 10, depotPaths: ["//depot/a"] }),
+    expect.objectContaining({
+      target: { kind: "existing", changeId: 10 },
+      files: [
+        { depotPath: "//depot/a", sourceChangeId: 0 },
+        { depotPath: "//depot/b", sourceChangeId: 10 },
+      ],
+    }),
   );
   expect(query).toHaveBeenCalledOnce();
 });

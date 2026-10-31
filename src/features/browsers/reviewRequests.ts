@@ -4,7 +4,7 @@ import type {
   FileReviewScope,
   RevisionReference,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export type ReviewRequestKind =
   | "diff"
@@ -23,6 +23,7 @@ export interface ReviewRequestIdentity {
   scope: FileReviewScope;
   tab: "diff" | "history" | "revgraph";
   request: ReviewRequestKind;
+  rightFileIdentity?: string;
   left?: RevisionReference;
   right?: RevisionReference;
   nodeId?: string;
@@ -53,7 +54,7 @@ export class ReviewRequestOwner {
 
   constructor(
     private readonly cancelOperation: CancelOperation = (operationId) =>
-      backend.cancelOperation(operationId),
+      backend.cancelOperation(operationId).then(() => undefined),
   ) {}
 
   start(
@@ -147,7 +148,12 @@ export function reviewRequestIdentity(
   request: ReviewRequestKind,
   details: Pick<
     ReviewRequestIdentity,
-    "left" | "right" | "nodeId" | "cursor" | "expandTarget"
+    | "left"
+    | "right"
+    | "rightFileIdentity"
+    | "nodeId"
+    | "cursor"
+    | "expandTarget"
   > = {},
 ): ReviewRequestIdentity {
   return {

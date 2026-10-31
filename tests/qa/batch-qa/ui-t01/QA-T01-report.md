@@ -1,0 +1,25 @@
+# QA-T01 independent synthetic acceptance
+
+2026-10-28. Scope: PM UI-T01 frozen `src/test/ui-t01-handoff.json`, plus latest staged release instructions in `ForAIDoc/PM/并行交接.md`. Only QA fixtures/scripts/evidence changed. All ten production/test paths released in `evidence/release-all.json`; earlier settings/Pending/CommandBar release is `evidence/release-settings-pending-commandbar.json`. Exact expected/actual SHA256 values are recorded per path. Final hash check detected post-release changes in CommandBar, PendingPage and ConnectionProfilesCard. Their new hashes are NOT accepted by this report. Eight/ten or ten/ten current-match claims must not be inferred: final manifest records seven matches and three mismatches. Future I3 modifications require fresh hashes and acceptance.
+
+## Actual results
+
+- Settings: real ConnectionProfilesCard and ConnectionDirectoryDialog, light/dark × 1200/390px. User/Workspace Browse inline right, same height, no field New buttons; keyboard Tab/Enter selection; Root retained; save/verify dispatch to synthetic backend passed. Evidence: settings checks within `attempt2-results.json` and four settings screenshots. SettingsPage.test itself was not independently rerun.
+- Pending: light/dark × 1200/390px; filter and sort retain 35px height. Narrow layout correctly stacks both full-width controls. Focus/hover computed styles recorded, screenshots reviewed. Numeric order Default/2/10/100, selected CL retained, filter input boundary with zero backend reads, and existing context-menu CL details route passed. The filter implementation is a stub; this does not independently retest production filtering internals.
+- Branch: Name/Owner/Apply alignment, same height, wide labels aligned, narrow wrapping, keyboard Apply passed. Supplement explicitly waits for loaded rows; corrected runtime identity matches the synthetic backend. Both themes and widths captured. Old `branch-*.png` show the initial fixture loading state; use `branch-ready-*.png` for loaded-state evidence.
+- Toolbar: pending/submitted × 1200/390px × text/icon, dark snapshot accepted before release. Light supplemental run passed its checks, but final post-release CommandBar hash differs; conservatively do not treat light results as frozen-hash acceptance. Top CL details removed; refresh and file preview retained in the accepted snapshot. Pending context details route remains exercised. Action visibility is covered; real file-preview/refresh/backend execution is outside scope.
+- `remaining-results.json`: 53 passed, 0 failed, no page errors/external requests; `supplement-results.json`: 33 passed, 0 failed, no page errors/external requests. These are separate runs, not an invented single aggregate suite. Author-reported 77 tests are not counted as independent QA execution.
+- Nonincremental app TypeScript and scoped whitespace check passed before the supplemental fixture-only change; final verification recorded at completion. Vite build was write:false, graph initial 1705 / revised 1706 modules, zero forbidden modules. Graph files contain dependency hashes. Browser and owned server were closed in both successful runs.
+
+## Preserved failures and QA corrections
+
+1. `attempt1-results.json`: fixture omitted directory stats, causing a render error. Added synthetic stats only.
+2. `attempt2-results.json`: 44 passed / 1 failed because QA assumed narrow Pending controls must remain on one row. Existing responsive CSS specifies one column; assertion corrected to check stacked alignment and unchanged heights. Settings had completed successfully before that failure.
+3. Initial Branch fixture used settings identity against a different synthetic backend identity, so snapshots were rejected. Fixed only fixture runtime and performed dedicated loaded-state supplement. No product fix or softened business assertion.
+
+## Limits / PM follow-up
+
+- 390px with CSS body zoom 150% visibly clips right-side content in the isolated Branch fixture. The recorded visibility assertion only proves Apply is present/reachable, NOT complete zoom-layout acceptance. Native DPI and real dock resizing remain unverified; this synthetic zoom observation is not yet a confirmed production bug. Screenshots `branch-ready-light-390-150.png` and dark counterpart preserve it.
+- Exhaustive disabled-state matrices, real P4/filter result correctness, real Root discovery, docking/native UI07, installer/close failure, and I3 launcher execution were not tested. Swarm normalization and external boundaries are stubs. Do not extrapolate these pictures to I3 settings or routing.
+- No default App/main/Tauri/real backend, real P4, company tool/custom executable, production data, packaging, upload, deployment, or real submission was executed. The explicit allowlist rejects unlisted source imports; local browser requests allow only 127.0.0.1:1437. No existing manual fixture/server was changed or stopped.
+- I3 frozen IPC contract was read. FE may now integrate released paths under its existing batch. QA-I3 awaits FE's final integrated hashes; this T01 result is not an I3 pass or a real submission result.

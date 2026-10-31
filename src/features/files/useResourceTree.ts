@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueries, type QueryKey } from "@tanstack/react-query";
-import type { DepotNode, WorkspaceListing } from "../../shared/contracts/types";
+import type { DepotNode, WorkspaceListing } from "../../shared/contracts";
 import { hydrateSnapshot, persistId } from "../../shared/cache/snapshots";
 import { depotNodeAsWorkspaceNode } from "./fileListModel";
 import {
@@ -145,10 +145,7 @@ export function useResourceTree(
         mode === "workspace"
           ? paths.map((path) => ({
               ...workspaceQuery(connectionKey, path || undefined),
-              enabled:
-                enabled &&
-                statusReady &&
-                cacheReady(path, "status"),
+              enabled: enabled && statusReady && cacheReady(path, "status"),
               placeholderData: workspaceCache.getQueryData<WorkspaceListing>(
                 workspaceQuery(connectionKey, path || undefined).queryKey,
               ),
@@ -259,6 +256,7 @@ export function useResourceTree(
   };
   return {
     expanded,
+    folders,
     toggle,
     refresh,
     root: folders.get("")!,

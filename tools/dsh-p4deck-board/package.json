@@ -1,6 +1,6 @@
 {
   "name": "dsh-p4deck-board",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "P4Deck 工作流看板：在 DSH Web GUI 右侧栏查看任务状态与 Agent 忙闲",
   "type": "module",

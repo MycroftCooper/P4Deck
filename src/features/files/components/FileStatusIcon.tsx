@@ -4,6 +4,7 @@ import {
   fileBadges,
   fileBadgeGlyph,
   fileBadgeLabel,
+  fileBadgeTone,
   type FileDecorationFacts,
 } from "../fileDecorations";
 import "./fileStatusIcon.css";
@@ -37,6 +38,8 @@ export const FileStatusIcon = memo(function FileStatusIcon({
           key={`${badge.id}:${badge.owner}:${badge.detail}`}
           aria-hidden="true"
           className={`file-badge slot-${index} badge-${badge.id.replace("/", "-")} owner-${badge.owner ?? "none"}`}
+          data-badge={badge.id}
+          data-tone={fileBadgeTone(badge.id)}
         >
           {["locked", "globalLock", "exclusive"].includes(badge.id) ? (
             <LockKeyhole size={9} strokeWidth={3} />

@@ -1,7 +1,4 @@
-import type {
-  PendingChange,
-  WorkspaceNode,
-} from "../../shared/contracts/types";
+import type { PendingChange, WorkspaceNode } from "../../shared/contracts";
 export function fileClScope(nodes: WorkspaceNode[], changes: PendingChange[]) {
   const membership = new Map<string, number[]>();
   for (const change of changes)

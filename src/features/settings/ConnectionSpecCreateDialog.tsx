@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import type { ConnectionSnapshot } from "../companySubmit/model";
+import {
+  lookupConnectionCreateAction,
+  validConnectionCreateReceipt,
+  type ConnectionCreateActionLookup,
+} from "../actions/workflowReceipt";
 import type {
   ConnectionSpecCreatePreflight,
   ConnectionSpecCreateResult,
@@ -8,7 +15,7 @@ import type {
   ConnectionWorkspaceCreatePlan,
   ConnectionWorkspaceMapping,
   P4Context,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { tokenize } from "../../shared/lib/tokenize";
 
 type CreateKind = "user" | "workspace";
@@ -36,8 +43,10 @@ export function ConnectionSpecCreateDialog({
   requestGeneration,
   source,
   zh,
-  onDismiss,
+  onDismiss: dismissCallback,
   onCreated,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
 }: {
   kind: CreateKind;
   context: P4Context;
@@ -46,6 +55,13 @@ export function ConnectionSpecCreateDialog({
   zh: boolean;
   onDismiss(): void;
   onCreated(value: string | ConnectionWorkspaceCandidate): void;
+  /** Exact dispatching connection snapshot; captured once per confirm. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<ConnectionCreateActionLookup>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const snapshot = useMemo(() => ({ ...context }), []);
@@ -66,6 +82,25 @@ export function ConnectionSpecCreateDialog({
     useState<ConnectionWorkspaceCreatePlan["syncMode"]>("standard");
   const [preflight, setPreflight] = useState<ConnectionSpecCreatePreflight>();
   const [result, setResult] = useState<ConnectionSpecCreateResult>();
+  const formState = JSON.stringify([
+    name,
+    fullName,
+    email,
+    root,
+    description,
+    mappingKind,
+    stream,
+    classicView,
+    syncMode,
+  ]);
+  const [savedForm, setSavedForm] = useState(formState);
+  const clearUnsaved = useUnsavedEditor(
+    formState !== savedForm ? "dirty" : "clean",
+  );
+  const onDismiss = () => {
+    clearUnsaved();
+    dismissCallback();
+  };
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -189,6 +224,35 @@ export function ConnectionSpecCreateDialog({
     }
   }
 
+  /** One same-operationId receipt lookup. `settled` is persisted, never success. */
+  async function recover(
+    operationId: string,
+    dispatching: ConnectionSnapshot,
+  ): Promise<ConnectionSpecCreateResult | undefined> {
+    try {
+      const request = { operationId, connection: dispatching };
+      const lookup = await (lookupReceipt ?? lookupConnectionCreateAction)(
+        request,
+      );
+      if (
+        lookup.kind === "found" &&
+        validConnectionCreateReceipt(
+          request,
+          lookup.receipt,
+          kind === "user"
+            ? "connectionCreateUser"
+            : "connectionCreateWorkspace",
+        ) &&
+        lookup.receipt.state === "settled" &&
+        lookup.receipt.result
+      )
+        return lookup.receipt.result;
+    } catch {
+      /* Lookup failure never retries the write. */
+    }
+    return undefined;
+  }
+
   async function create() {
     if (busy || !confirmed || !preflight?.ready || !preflight.token) return;
     if (preflight.expiresAt <= Date.now()) {
@@ -204,11 +268,29 @@ export function ConnectionSpecCreateDialog({
       return;
     }
     const seq = ++sequence.current;
+    // One UUID for dispatch + same-id receipt lookup; never a retry identity.
+    const operationId = crypto.randomUUID();
+    operation.current = operationId;
     setBusy(true);
     setError("");
+    let dispatching: ConnectionSnapshot | undefined;
     try {
+      dispatching = await (
+        connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
+      )();
+      if (seq !== sequence.current) return;
+      // Generation is the drift marker captured for the same-id receipt lookup;
+      // the host revalidates the full exact context (server/user/client) itself.
+      if (String(requestGeneration) !== dispatching.generation)
+        throw new Error(
+          tr(
+            "连接代际与预检目标不一致，未执行创建。",
+            "Connection generation changed; nothing was created.",
+          ),
+        );
       const confirmation = {
         token: preflight.token,
+        operationId,
         context:
           kind === "user"
             ? { ...snapshot, user: preflight.name, client: "" }
@@ -217,20 +299,49 @@ export function ConnectionSpecCreateDialog({
         stateDigest: preflight.stateDigest,
         confirmed: true,
       };
-      const next =
+      let next =
         kind === "user"
           ? await backend.confirmCreateConnectionUser(confirmation)
           : await backend.confirmCreateConnectionWorkspace(confirmation);
       if (seq !== sequence.current) return;
+      if (next.outcome === "unknown")
+        next = (await recover(operationId, dispatching)) ?? next;
+      if (seq !== sequence.current) return;
       setResult(next);
+      if (next.outcome === "created") setSavedForm(formState);
       setPhase("result");
     } catch (cause) {
-      if (seq === sequence.current) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+      if (seq !== sequence.current) return;
+      const recovered = dispatching
+        ? await recover(operationId, dispatching)
+        : undefined;
+      if (seq !== sequence.current) return;
+      if (recovered) {
+        setResult(recovered);
+        if (recovered.outcome === "created") setSavedForm(formState);
         setPhase("result");
+        return;
       }
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(message);
+      setResult({
+        outcome: "unknown",
+        failure: "verificationFailed",
+        kind: kind === "user" ? "userSelf" : "workspace",
+        name: preflight.name,
+        message: tr(
+          "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
+          "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
+        ),
+        operationIds: [operationId],
+        simulated: false,
+      });
+      setPhase("result");
     } finally {
-      if (seq === sequence.current) setBusy(false);
+      if (seq === sequence.current) {
+        operation.current = undefined;
+        setBusy(false);
+      }
     }
   }
 
@@ -561,6 +672,11 @@ export function ConnectionSpecCreateDialog({
           {result && (
             <DialogNotice error={!created || !createdWorkspaceUsable}>
               {result.simulated && "Browser Mock simulated · "}
+              {result.outcome === "created" &&
+                tr(
+                  "创建结果（服务器回读已确认）：",
+                  "Created (confirmed by server readback): ",
+                )}
               {result.message}
               {created && !createdWorkspaceUsable
                 ? tr(
@@ -569,6 +685,19 @@ export function ConnectionSpecCreateDialog({
                   )
                 : ""}
             </DialogNotice>
+          )}
+          {result?.outcome === "unknown" && (
+            <DialogNotice error>
+              {tr(
+                "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
+                "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
+              )}
+            </DialogNotice>
+          )}
+          {result && !!result.operationIds.length && (
+            <p className="workflow-context">
+              {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+            </p>
           )}
         </>
       )}

@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ChevronRight, LoaderCircle } from "lucide-react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
-import type {
-  MoveFilesPreflight,
-  MoveFilesPreflightRequest,
-  MoveFilesResult,
-  PendingChange,
-  WorkflowConfirmation,
-} from "../../../shared/contracts/types";
-
+import { useUnsavedEditor } from "../../../app/closeGuard";
+import type { PendingChange } from "../../../shared/contracts";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
+import {
+  validMoveReceipt,
+  type SelectedMoveRequest,
+  type SelectedMoveReceipt,
+} from "../selectedMove";
 export interface MoveFilesRequest {
   from: number;
   origins?: Record<string, number>;
@@ -17,8 +16,7 @@ export interface MoveFilesRequest {
   target?: number;
   source: HTMLElement | null;
 }
-
-/** Drops already name a destination; menu entry only needs a destination picker. */
+/** One explicit, immutable move attempt. Status never repeats a write or submits. */
 export function MoveFilesDialog({
   request,
   changes,
@@ -27,18 +25,16 @@ export function MoveFilesDialog({
   zh,
   onDismiss,
   onResult,
-  check = (value) => backend.preflightMoveFiles(value),
-  execute = (value) => backend.confirmMoveFiles(value),
+  onStart,
 }: {
   request: MoveFilesRequest;
   changes: PendingChange[];
   client: string;
   connectionKey: string;
   zh: boolean;
+  onStart?(request: SelectedMoveRequest): boolean;
   onDismiss(): void;
-  onResult?(result: MoveFilesResult): Promise<void> | void;
-  check?(request: MoveFilesPreflightRequest): Promise<MoveFilesPreflight>;
-  execute?(confirmation: WorkflowConfirmation): Promise<MoveFilesResult>;
+  onResult?(receipt: SelectedMoveReceipt): Promise<void> | void;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
@@ -46,205 +42,362 @@ export function MoveFilesDialog({
     paths: [...new Set(request.paths)],
     origins: { ...request.origins },
     connectionKey,
-    changes: changes.map(({ id, description, status }) => ({
-      id,
-      description,
-      status,
+    changes: changes.map((c) => ({
+      id: c.id,
+      description: c.description,
+      status: c.status,
     })),
   }));
-  const [filter, setFilter] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const generation = useRef(0);
-  const activeOperation = useRef<string | undefined>(undefined);
-  const running = useRef(false);
-  const started = useRef(false);
-  const binding = useRef(connectionKey);
+  const [connection, setConnection] = useState<ConnectionSnapshot>();
+  const [retry, setRetry] = useState(0),
+    [filter, setFilter] = useState("");
+  const [target, setTarget] = useState<number | "new" | undefined>(
+    snapshot.target,
+  );
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false),
+    [attempted, setAttempted] = useState(false),
+    [error, setError] = useState("");
+  const [receipt, setReceipt] = useState<SelectedMoveReceipt>();
+  const operation = useRef<SelectedMoveRequest | undefined>(undefined);
+  const lock = useRef(false),
+    alive = useRef(true),
+    binding = useRef(connectionKey);
   binding.current = connectionKey;
-  const staleConnection = snapshot.connectionKey !== connectionKey;
-  const direct = snapshot.target !== undefined;
+  const stale = snapshot.connectionKey !== connectionKey;
+  const clearDraft = useUnsavedEditor(
+    description && receipt?.targetChangeId == null ? "dirty" : "clean",
+    "",
+    "changelistDescription",
+  );
+  const dismiss = () => {
+    if (!lock.current) {
+      clearDraft();
+      onDismiss();
+    }
+  };
   const name = (id: number) => (id === 0 ? "Default" : `CL ${id}`);
-  const pathsFor = (target: number) =>
-    snapshot.paths.filter(
-      (path) => (snapshot.origins[path] ?? snapshot.from) !== target,
+  const files = snapshot.paths.map((depotPath) => ({
+    depotPath,
+    sourceChangeId: snapshot.origins[depotPath] ?? snapshot.from,
+  }));
+  const invalidFiles =
+    !files.length ||
+    files.some(
+      (f) =>
+        !f.depotPath.startsWith("//") ||
+        !Number.isSafeInteger(f.sourceChangeId) ||
+        f.sourceChangeId < 0,
     );
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      if (lock.current && operation.current)
+        void backend
+          .cancelOperation(operation.current.operationId)
+          .catch(() => {});
+    };
+  }, []);
+  useEffect(() => {
+    let live = true;
+    if (stale) return;
+    setConnection(undefined);
+    setError("");
+    void backend
+      .companySubmitConnectionSnapshot()
+      .then((value) => {
+        if (!live || binding.current !== snapshot.connectionKey) return;
+        if (
+          !value.profileId ||
+          !/^\d+$/.test(value.generation) ||
+          ![value.server, value.user, value.client].every((v) => v.trim())
+        )
+          throw Error("invalidConnection");
+        const { profileId, generation, server, user, client } = value;
+        setConnection({ profileId, generation, server, user, client });
+      })
+      .catch((cause) => {
+        if (live) setError(String(cause));
+      });
+    return () => {
+      live = false;
+    };
+  }, [retry, stale, snapshot.connectionKey]);
+  async function perform(status = false) {
+    if (
+      lock.current ||
+      stale ||
+      binding.current !== snapshot.connectionKey ||
+      !connection ||
+      (!status && operation.current)
+    )
+      return;
+    if (!status) {
+      if (
+        invalidFiles ||
+        target === undefined ||
+        (target === "new" && !description.trim())
+      )
+        return;
+      operation.current = {
+        operationId: crypto.randomUUID(),
+        connection: { ...connection },
+        files,
+        target:
+          target === "new"
+            ? { kind: "new", description: description.trim() }
+            : { kind: "existing", changeId: target },
+      };
+    }
+    const frozen = operation.current;
+    if (!frozen) return;
+    if (!status && onStart) {
+      if (onStart(frozen)) {
+        clearDraft();
+        onDismiss();
+      } else {
+        operation.current = undefined;
+        setError(
+          tr(
+            "文件已有未确认移动或归属已变化，请先核实本次状态。",
+            "Files have an unresolved move or changed ownership. Check that attempt first.",
+          ),
+        );
+      }
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setAttempted(true);
+    setError("");
+    try {
+      const result = status
+        ? await backend.selectedMoveStatus({
+            operationId: frozen.operationId,
+            connection: frozen.connection,
+          })
+        : await backend.selectedMoveExecute(frozen);
+      if (!alive.current) return;
+      if (!result || !validMoveReceipt(frozen, result))
+        throw Error(
+          tr(
+            "结果未知；仅检查本次状态，不会重新创建或移动。",
+            "Outcome unknown; check this attempt without creating or moving again.",
+          ),
+        );
+      setReceipt(result);
+      if (result.targetChangeId !== null) clearDraft();
+      if (binding.current === snapshot.connectionKey)
+        void Promise.resolve(onResult?.(result)).catch(() => {});
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      lock.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
   const available = snapshot.changes.filter(
-    (change) =>
-      change.status === "pending" &&
-      pathsFor(change.id).length &&
-      `${change.id === 0 ? "default" : change.id} ${change.description}`
+    (c) =>
+      c.status === "pending" &&
+      Number.isSafeInteger(c.id) &&
+      c.id >= 0 &&
+      `${name(c.id)} ${c.description}`
         .toLowerCase()
         .includes(filter.trim().toLowerCase()),
   );
-
-  useEffect(() => {
-    if (staleConnection) {
-      setBusy(false);
-      running.current = false;
-      activeOperation.current = undefined;
-    }
-    return () => {
-      generation.current++;
-      if (activeOperation.current)
-        void backend.cancelOperation(activeOperation.current).catch(() => {});
-    };
-  }, [connectionKey]);
-
-  async function move(target: number) {
-    if (
-      running.current ||
-      staleConnection ||
-      binding.current !== snapshot.connectionKey
-    )
-      return;
-    const paths = pathsFor(target);
-    if (!paths.length) {
-      onDismiss();
-      return;
-    }
-    running.current = true;
-    const epoch = generation.current;
-    const current = () =>
-      epoch === generation.current &&
-      binding.current === snapshot.connectionKey;
-    setBusy(true);
-    setError("");
-    try {
-      activeOperation.current = crypto.randomUUID();
-      const plan = await check({
-        targetChangeId: target,
-        depotPaths: paths,
-        operationId: activeOperation.current,
-      });
-      if (!current()) return;
-      if (!plan.ready || !plan.token) {
-        throw new Error(
-          plan.blockers.map((issue) => issue.message).join("\n") ||
-            tr(
-              "这些文件暂时无法移动，请刷新后重试。",
-              "These files cannot be moved. Refresh and try again.",
-            ),
-        );
-      }
-      activeOperation.current = crypto.randomUUID();
-      const result = await execute({
-        token: plan.token,
-        target: plan.target,
-        operationId: activeOperation.current,
-      });
-      if (!current()) return;
-      void Promise.resolve(onResult?.(result)).catch(() => undefined);
-      if (result.outcome === "succeeded") onDismiss();
-      else {
-        setError(
-          [
-            result.message,
-            result.refreshError,
-            ...result.files
-              .filter((file) => file.state !== "succeeded")
-              .map((file) => `${file.depotPath}: ${file.message}`),
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        );
-      }
-    } catch (cause) {
-      if (current()) setError(String(cause));
-    } finally {
-      if (current()) {
-        activeOperation.current = undefined;
-        running.current = false;
-        setBusy(false);
-      }
-    }
-  }
-
-  useEffect(() => {
-    const epoch = generation.current;
-    if (snapshot.target === undefined || staleConnection) return;
-    queueMicrotask(() => {
-      if (epoch !== generation.current || started.current) return;
-      started.current = true;
-      void move(snapshot.target!);
-    });
-  }, [snapshot, staleConnection]);
-
-  const message = staleConnection
-    ? tr(
-        "连接或工作区已改变，请重新选择文件。",
-        "Connection or workspace changed. Select the files again.",
-      )
-    : error;
-  if (direct)
-    return message ? (
-      <div className="move-feedback is-error" role="alert">
-        <AlertCircle size={16} />
-        <span>{message}</span>
-        <button
-          onClick={onDismiss}
-          aria-label={tr("关闭移动提示", "Dismiss move message")}
-        >
-          ×
-        </button>
-      </div>
-    ) : null;
-
+  const stateLabel = (state: string) =>
+    ({
+      moved: tr("已移动", "Moved"),
+      alreadyInTarget: tr("已在目标，无需移动", "Already in target"),
+      notMoved: tr("未移动", "Not moved"),
+      unknown: tr("未知", "Unknown"),
+    })[state] ?? state;
   return (
     <Dialog
       title={tr("移动到 CL", "Move to changelist")}
       description={tr(
-        "选择目标 CL 即可移动所选文件。",
-        "Choose a destination to move the selected files.",
+        "仅移动选中文件，不提交。选择目标并确认范围。",
+        "Move selected files only; never submit. Choose a target and confirm the scope.",
       )}
       source={snapshot.source}
       zh={zh}
       busy={busy}
-      onRequestClose={() => !busy && onDismiss()}
-      footer={
-        <button disabled={busy} onClick={onDismiss}>
-          {tr("取消", "Cancel")}
-        </button>
-      }
+      onRequestClose={dismiss}
+      footer={null}
     >
-      <div className="workflow-context">
-        {client} · {snapshot.paths.length} {tr("个文件", "files")}
+      <div className="move-workflow">
+        <div className="workflow-context">
+          {client} · {snapshot.paths.length} {tr("个文件", "files")}
+        </div>
+        {!attempted && (
+          <>
+            <button
+              type="button"
+              aria-pressed={target === "new"}
+              disabled={stale || busy}
+              onClick={() => setTarget("new")}
+            >
+              {tr("新建 CL…", "New changelist…")}
+            </button>
+            <label>
+              {tr("筛选目标 CL", "Filter target changelists")}
+              <input
+                autoFocus
+                data-dialog-autofocus
+                value={filter}
+                disabled={stale || busy}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={tr("编号或描述", "Number or description")}
+              />
+            </label>
+            <div className="move-destinations">
+              {available.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  aria-pressed={target === c.id}
+                  disabled={busy || stale}
+                  onClick={() => setTarget(c.id)}
+                >
+                  <strong>{name(c.id)}</strong>
+                  <span>{c.description}</span>
+                </button>
+              ))}
+            </div>
+            {!available.length && (
+              <DialogNotice>
+                {tr("没有匹配的目标 CL。", "No matching changelists.")}
+              </DialogNotice>
+            )}
+            {target === "new" && (
+              <label>
+                {tr("新 CL 描述", "New CL description")}
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={busy || stale}
+                  rows={3}
+                />
+              </label>
+            )}
+            {target !== undefined && (
+              <>
+                <strong>
+                  {tr("目标", "Target")}:{" "}
+                  {target === "new"
+                    ? tr("新建编号 CL", "New numbered CL")
+                    : name(target)}
+                </strong>
+                <ul className="move-file-preview">
+                  {files.map((f) => (
+                    <li key={f.depotPath}>
+                      {name(f.sourceChangeId)} →{" "}
+                      {target === "new" ? tr("新 CL", "New CL") : name(target)}{" "}
+                      · {f.depotPath}
+                      {target === f.sourceChangeId
+                        ? ` · ${stateLabel("alreadyInTarget")}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  className="primary"
+                  type="button"
+                  disabled={
+                    busy ||
+                    stale ||
+                    !connection ||
+                    invalidFiles ||
+                    (target === "new" && !description.trim())
+                  }
+                  onClick={() => void perform()}
+                >
+                  {tr("确认移动", "Confirm move")}
+                </button>
+              </>
+            )}
+            {!connection && !stale && (
+              <button type="button" onClick={() => setRetry((v) => v + 1)}>
+                {tr("重新检测连接", "Check connection again")}
+              </button>
+            )}
+          </>
+        )}
+        {attempted && (
+          <>
+            <p>
+              {tr("本次操作", "Attempt")}: {operation.current?.operationId}
+            </p>
+            <p>
+              {tr("目标 CL", "Target CL")}:{" "}
+              {receipt?.targetChangeId == null
+                ? tr("尚未确认", "Not confirmed")
+                : name(receipt.targetChangeId)}
+            </p>
+            <DialogNotice>
+              {receipt?.stage === "completed"
+                ? tr("所选文件移动完成。", "Selected files move completed.")
+                : tr(
+                    "移动未确认完整；已发生的移动不会回滚。",
+                    "Move not confirmed complete; completed moves are not rolled back.",
+                  )}
+            </DialogNotice>
+            {receipt?.message && <p>{receipt.message}</p>}
+            <ul className="move-file-preview">
+              {files.map((f) => (
+                <li key={f.depotPath}>
+                  {name(f.sourceChangeId)} · {f.depotPath} ·{" "}
+                  {stateLabel(
+                    receipt?.files.find((r) => r.depotPath === f.depotPath)
+                      ?.state ?? "unknown",
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              disabled={busy || stale}
+              onClick={() => void perform(true)}
+            >
+              {tr("检查本次状态", "Check this attempt")}
+            </button>
+            <p>
+              {tr(
+                "关闭仅关闭此窗口，不撤销移动，也不会删除已创建的 CL。",
+                "Closing this dialog does not undo moves or delete a created changelist.",
+              )}
+            </p>
+          </>
+        )}
+        {busy && (
+          <>
+            <span role="status">
+              {tr("正在移动或检查…", "Moving or checking…")}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (operation.current)
+                  void backend
+                    .cancelOperation(operation.current.operationId)
+                    .catch((cause) => setError(String(cause)));
+              }}
+            >
+              {tr("停止后续操作", "Stop remaining operations")}
+            </button>
+          </>
+        )}
+        {stale && (
+          <DialogNotice error>
+            {tr(
+              "连接已改变，请重新选择文件；保留本次结果。",
+              "Connection changed; select files again. This attempt remains recorded.",
+            )}
+          </DialogNotice>
+        )}
+        {error && <DialogNotice error>{error}</DialogNotice>}
       </div>
-      <label>
-        {tr("筛选目标 CL", "Filter target changelists")}
-        <input
-          autoFocus
-          data-dialog-autofocus
-          value={filter}
-          disabled={busy || staleConnection}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={tr("编号或描述", "Number or description")}
-        />
-      </label>
-      <div className="move-destinations">
-        {available.map((change) => (
-          <button
-            key={change.id}
-            disabled={busy || staleConnection}
-            onClick={() => void move(change.id)}
-          >
-            <strong>{name(change.id)}</strong>
-            <span>{change.description}</span>
-            <ChevronRight size={16} />
-          </button>
-        ))}
-      </div>
-      {!available.length && (
-        <DialogNotice>
-          {tr("没有匹配的目标 CL。", "No matching changelists.")}
-        </DialogNotice>
-      )}
-      {busy && (
-        <span className="move-running" role="status">
-          <LoaderCircle className="spin" size={16} />
-          {tr("正在移动…", "Moving…")}
-        </span>
-      )}
-      {message && <DialogNotice error>{message}</DialogNotice>}
     </Dialog>
   );
 }

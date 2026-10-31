@@ -1,3 +1,33 @@
+import {
+  useRemovalActions,
+  projectShelfChanges,
+  projectRemovalChanges,
+  shelfObservation,
+} from "../../actions/shelfObservation";
+import {
+  projectGenericPendingChanges,
+  useGenericFileProjections,
+} from "../../actions/genericFileProjection";
+import { recordFrontendOperationLog } from "../../../infrastructure/backend/frontendOperationLog";
+import {
+  useMoveAttempts,
+  projectMoves,
+  startOptimisticMove,
+  checkOptimisticMove,
+  blockedPathDetails,
+  formatBlockedPaths,
+  reconcileMoveCache,
+  mergeConfirmedMoves,
+} from "../moveOptimism";
+import {
+  emptyOpenedSelection,
+  selectOpenedFile,
+  snapshotOpenedSelection,
+  type SelectedOpenedFile,
+} from "../selectedFiles";
+import { SelectedFilesSubmitDialog } from "./SelectedFilesSubmitDialog";
+import type { SelectedSubmitExpectation } from "../selectedSubmit";
+import { customSubmitRoute } from "../../companySubmit/customSubmit";
 import { useChangeDetails } from "./ChangeDetailsDialog";
 import { useCommandFocus } from "../../../app/shell/CommandContext";
 import {
@@ -27,14 +57,14 @@ import {
   Trash2,
   ListChecks,
   LoaderCircle,
-  Check,
+  PackageOpen,
 } from "lucide-react";
 import type {
   PendingChange,
   PendingChangeSort,
   PendingChangeMutationResult,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 import { backend } from "../../../infrastructure/backend";
 import { PendingFileList } from "./PendingFileList";
@@ -44,14 +74,29 @@ import { useRecordSelection } from "../../../app/context-menu/useRecordSelection
 import { CommandExecutionContext } from "../../../app/shell/CommandContext";
 import { ChangelistFormDialog } from "./ChangelistFormDialog";
 import { ShelfDialog, type ShelfRequest } from "./ShelfDialog";
-import { UnshelveDialog } from "./UnshelveDialog";
+import { startUnshelveDirect } from "../unshelveDirectTask";
+import {
+  projectUnshelvedChanges,
+  useUnshelveProjections,
+} from "../unshelveProjection";
 import { MoveFilesDialog, type MoveFilesRequest } from "./MoveFilesDialog";
-import { invalidateData } from "../../../shared/cache/dataEffects";
 import { mergePendingMutation } from "../pendingQueries";
+import {
+  authoritativeChangeId,
+  beginPendingClIntent,
+  lifecycleOf,
+  lookupPendingClReceipt,
+  pendingClCommitted,
+  pendingClDeleteConfirmed,
+  recoverPendingClUnknown,
+  settlePendingClIntent,
+  unwrapPendingClLegacy,
+} from "../../actions/pendingClLifecycle";
 export { mergePendingMutation } from "../pendingQueries";
 import { usePendingCache } from "../pendingCache";
 import {
   readPendingFilterState,
+  sortPendingChanges,
   writePendingFilterState,
 } from "../pendingFilterState";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
@@ -71,6 +116,45 @@ const openedStates: Record<string, WorkspaceNode["state"]> = {
   "move/add": "openedMoveAdd",
   "move/delete": "openedMoveDelete",
 };
+/**
+ * F10: the only durable release entry for an unknown write fence is the
+ * Operation Log's ActionAdmission list, so every blocked hint must point there
+ * instead of reading as a permanent dead end.
+ */
+const withAdmissionHint = (text: string, zh: boolean) =>
+  `${text} ${
+    zh
+      ? "可到「工具 → 操作日志」解除写入阻塞。"
+      : "Release write blocks under Tools → Operation Log."
+  }`;
+
+/** Unshelve runs immediately into the current workspace/default CL: no dialog, no FE preflight. */
+function DirectUnshelve({
+  request,
+  currentWorkspace,
+  connectionKey,
+  onDismiss,
+}: {
+  request: ShelfRequest;
+  currentWorkspace: string;
+  connectionKey: string;
+  onDismiss(): void;
+}) {
+  const once = useRef(false);
+  useEffect(() => {
+    if (once.current) return;
+    once.current = true;
+    startUnshelveDirect({
+      connectionKey,
+      sourceChangeId: request.changeId,
+      depotPaths: request.paths,
+      targetWorkspace: currentWorkspace,
+      targetChangeId: request.changeId,
+    });
+    onDismiss();
+  }, []);
+  return null;
+}
 
 export function PendingPage({
   t,
@@ -119,8 +203,176 @@ export function PendingPage({
     });
   };
   const pending = usePendingCache(menuEnvironment.runtime, ready);
-  const cachedChanges = pending.changes;
+  const moveAttempts = useMoveAttempts();
+  const moveProjection = useMemo(
+    () => projectMoves(pending.changes, connectionKey, moveAttempts),
+    [pending.changes, connectionKey, moveAttempts],
+  );
+  const removalActions = useRemovalActions();
+  const genericFileProjections = useGenericFileProjections();
+  const genericProjectedChanges = useMemo(
+    () => projectGenericPendingChanges(moveProjection.changes, connectionKey),
+    [moveProjection.changes, connectionKey, genericFileProjections],
+  );
+  const observation = shelfObservation(menuEnvironment.runtime).version;
+  const unshelveProjections = useUnshelveProjections();
+  const removalProjectedChanges = useMemo(
+    () =>
+      projectRemovalChanges(
+        "revert",
+        projectShelfChanges(
+          genericProjectedChanges,
+          connectionKey,
+          observation,
+          removalActions,
+        ),
+        connectionKey,
+        observation,
+        removalActions,
+      ),
+    [genericProjectedChanges, connectionKey, observation, removalActions],
+  );
+  // Optimistic unshelve rows: appear in the target CL immediately, replaced by the authoritative refresh.
+  const cachedChanges = useMemo(
+    () => projectUnshelvedChanges(removalProjectedChanges, connectionKey),
+    [removalProjectedChanges, connectionKey, unshelveProjections],
+  );
+  const currentMoves = moveAttempts.filter(
+    (attempt) => attempt.scope === connectionKey,
+  );
+  const blockedDetails = blockedPathDetails(connectionKey);
+  const blockedPaths = new Set(blockedDetails.keys());
+  useEffect(() => {
+    const merged = mergeConfirmedMoves(
+      pending.changes,
+      connectionKey,
+      moveAttempts,
+    );
+    if (merged !== pending.changes) {
+      pending.updateChanges(
+        (base) => mergeConfirmedMoves(base, connectionKey, moveAttempts),
+        { revalidate: false },
+      );
+    }
+    reconcileMoveCache(connectionKey, merged);
+  }, [connectionKey, pending.changes, moveAttempts, pending.updateChanges]);
   const setChanges = pending.updateChanges;
+  const [openedSelection, setOpenedSelection] = useState(() =>
+    emptyOpenedSelection(connectionKey),
+  );
+  const openedRef = useRef(openedSelection);
+  if (openedRef.current.scope !== connectionKey)
+    openedRef.current = emptyOpenedSelection(connectionKey);
+  const [selectedSubmit, setSelectedSubmit] = useState<{
+    files: readonly SelectedOpenedFile[];
+    expected: SelectedSubmitExpectation;
+    scope: string;
+  }>();
+  const openingSelected = useRef(false);
+  const bindingRef = useRef(connectionKey);
+  bindingRef.current = connectionKey;
+  useEffect(() => {
+    setOpenedSelection(emptyOpenedSelection(connectionKey));
+  }, [connectionKey]);
+  const selectedNodes: WorkspaceNode[] = cachedChanges.flatMap((change) =>
+    change.files.map((file) => ({
+      id: file.depotPath,
+      name: file.depotPath.split("/").at(-1)!,
+      kind: "file" as const,
+      absolutePath: "",
+      relativePath: pendingFilePath(file, menuEnvironment.runtime.context),
+      depotPath: file.depotPath,
+      changelistId: change.id,
+      state: file.state ?? "controlled",
+    })),
+  );
+  const visibleOpenedRows = useRef(
+    new Map<number, readonly SelectedOpenedFile[]>(),
+  );
+  const reportVisibleOpened = useCallback(
+    (changeId: number, rows: readonly SelectedOpenedFile[]) => {
+      visibleOpenedRows.current.set(changeId, rows);
+    },
+    [],
+  );
+  const sharedSelection = {
+    reportVisible: reportVisibleOpened,
+    state:
+      openedSelection.scope === connectionKey
+        ? openedSelection
+        : emptyOpenedSelection(connectionKey),
+    nodes: selectedNodes,
+    change: (
+      rows: readonly SelectedOpenedFile[],
+      path: string,
+      gesture = {},
+    ) => {
+      const next = selectOpenedFile(
+        openedRef.current,
+        connectionKey,
+        changes.flatMap((change) =>
+          change.id === rows[0]?.originalChangeId
+            ? rows
+            : (visibleOpenedRows.current.get(change.id) ?? []),
+        ),
+        path,
+        gesture,
+      );
+      openedRef.current = next;
+      setOpenedSelection(next);
+      return next.files;
+    },
+    clear: () => {
+      const next = emptyOpenedSelection(connectionKey);
+      openedRef.current = next;
+      setOpenedSelection(next);
+    },
+  };
+  const openSelectedSubmit = async (files: readonly SelectedOpenedFile[]) => {
+    if (!ready || openingSelected.current || !files.length) return;
+    if (files.some((file) => blockedPaths.has(file.depotPath))) {
+      const blockedText = formatBlockedPaths(
+        files.map((file) => file.depotPath),
+        blockedDetails,
+        t.files === "文件",
+      );
+      const zh = t.files === "文件";
+      setError(
+        blockedText
+          ? withAdmissionHint(blockedText, zh)
+          : zh
+            ? "选中文件有未确认项，请先核实。"
+            : "Selected files have unresolved items; verify them first.",
+      );
+      return;
+    }
+    const scope = connectionKey;
+    const frozen = snapshotOpenedSelection({ scope, files }).files;
+    openingSelected.current = true;
+    try {
+      const connection = await backend.companySubmitConnectionSnapshot();
+      const profiles = await backend.listConnectionProfiles();
+      if (bindingRef.current !== scope) return;
+      customSubmitRoute(profiles, connection, ["1"]); // Validate active profile identity without launching.
+      const profile = profiles.profiles.find(
+        (p) => p.id === profiles.activeProfileId,
+      )!;
+      setSelectedSubmit({
+        files: frozen,
+        scope,
+        expected: {
+          connection,
+          customSubmitExecutablePath:
+            profile.context.customSubmitExecutablePath ?? "",
+        },
+      });
+    } catch (cause) {
+      if (bindingRef.current === scope) setError(String(cause));
+    } finally {
+      openingSelected.current = false;
+    }
+  };
+
   const loading = pending.initialLoading || pending.refreshing;
   const loaded = !!pending.data;
   const partial = pending.data?.partial ?? false;
@@ -141,6 +393,17 @@ export function PendingPage({
     paths: string[];
     origins: Record<string, number>;
   }>();
+  const dragSnapshot = useRef<typeof drag>(undefined);
+  const dropContext = useRef({ connectionKey, ready, changes: cachedChanges });
+  dropContext.current = { connectionKey, ready, changes: cachedChanges };
+  const dropAlive = useRef(true);
+  useEffect(() => {
+    dropAlive.current = true;
+    return () => {
+      dropAlive.current = false;
+      dragSnapshot.current = undefined;
+    };
+  }, []);
   const [dropTarget, setDropTarget] = useState<number>();
   const [deleting, setDeleting] = useState<number>();
   const deletingRef = useRef(false);
@@ -175,6 +438,14 @@ export function PendingPage({
     setMove({
       from,
       paths: [...paths],
+      origins: Object.fromEntries(
+        paths.map((path) => [
+          path,
+          cachedChanges.find((change) =>
+            change.files.some((file) => file.depotPath === path),
+          )?.id ?? from,
+        ]),
+      ),
       source: surface.current?.ownerDocument
         .activeElement as HTMLElement | null,
     });
@@ -192,8 +463,16 @@ export function PendingPage({
       connectionKey,
       from,
       paths: [...new Set(paths)],
-      origins: Object.fromEntries(paths.map((path) => [path, from])),
+      origins: Object.fromEntries(
+        paths.map((path) => [
+          path,
+          cachedChanges.find((change) =>
+            change.files.some((file) => file.depotPath === path),
+          )?.id ?? from,
+        ]),
+      ),
     };
+    dragSnapshot.current = snapshot;
     setDrag(snapshot);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData(
@@ -206,19 +485,117 @@ export function PendingPage({
     event.preventDefault();
     event.stopPropagation();
     setDropTarget(undefined);
-    if (!ready || move || menuEnvironment.commandBusy) return;
-    if (!drag || drag.connectionKey !== connectionKey) {
-      setDrag(undefined);
-      return;
-    }
-    setMove({
-      from: drag.from,
-      origins: drag.origins,
-      paths: [...drag.paths],
-      target: targetChangeId,
-      source: event.currentTarget,
-    });
+    // Only our in-memory drag snapshot is trusted; consume synchronously before awaiting IPC.
+    const snapshot = dragSnapshot.current;
+    dragSnapshot.current = undefined;
     setDrag(undefined);
+    if (
+      !ready ||
+      move ||
+      menuEnvironment.commandBusy ||
+      !snapshot ||
+      snapshot.connectionKey !== connectionKey
+    )
+      return;
+    const target = cachedChanges.find((c) => c.id === targetChangeId);
+    if (
+      !target ||
+      target.status !== "pending" ||
+      !Number.isSafeInteger(targetChangeId) ||
+      targetChangeId < 0
+    )
+      return;
+    const files = snapshot.paths
+      .filter((path) => snapshot.origins[path] !== targetChangeId)
+      .map((depotPath) => ({
+        depotPath,
+        sourceChangeId: snapshot.origins[depotPath],
+      }));
+    if (!files.length) return;
+    const scope = connectionKey;
+    void (async () => {
+      try {
+        const connection = await backend.companySubmitConnectionSnapshot();
+        const current = dropContext.current;
+        if (
+          !dropAlive.current ||
+          current.connectionKey !== scope ||
+          !current.ready
+        )
+          return;
+        if (
+          !connection.profileId ||
+          !/^\d+$/.test(connection.generation) ||
+          ![connection.server, connection.user, connection.client].every((v) =>
+            v.trim(),
+          )
+        )
+          throw Error("invalidConnection");
+        if (
+          !current.changes.some(
+            (c) => c.id === targetChangeId && c.status === "pending",
+          ) ||
+          files.some(
+            (f) =>
+              !current.changes
+                .find((c) => c.id === f.sourceChangeId)
+                ?.files.some((v) => v.depotPath === f.depotPath),
+          )
+        )
+          throw Error(
+            "移动范围已变化，请重新选择 / Move selection changed; select again",
+          );
+        const { profileId, generation, server, user, client } = connection;
+        if (
+          !startOptimisticMove(
+            scope,
+            {
+              operationId: crypto.randomUUID(),
+              connection: { profileId, generation, server, user, client },
+              files,
+              target: { kind: "existing", changeId: targetChangeId },
+            },
+            current.changes,
+          )
+        )
+          throw Error("文件已有未确认移动 / Files have an unresolved move");
+        setExpanded((value) => new Set([...value, targetChangeId]));
+      } catch (cause) {
+        if (dropAlive.current && dropContext.current.connectionKey === scope)
+          setError(String(cause));
+      }
+    })();
+  };
+  const allShelfReason = (change: PendingChange) =>
+    !ready
+      ? connectionReason
+      : menuEnvironment.commandBusy
+        ? t.files === "文件"
+          ? "操作进行中"
+          : "Operation in progress"
+        : loading || partial || truncated || pending.error
+          ? t.files === "文件"
+            ? "搁置范围尚未完整读取，请刷新后重试"
+            : "Shelf scope is incomplete; refresh before continuing"
+          : !Number.isSafeInteger(change.id) ||
+              change.id <= 0 ||
+              !change.shelvedFiles.length
+            ? t.files === "文件"
+              ? "没有可操作的搁置文件"
+              : "No shelved files available"
+            : undefined;
+  const openAllShelf = (
+    change: PendingChange,
+    mode: "unshelve" | "delete",
+    source?: HTMLElement,
+  ) => {
+    if (allShelfReason(change)) return;
+    openShelf(
+      change,
+      mode,
+      [...new Set(change.shelvedFiles.map((file) => file.depotPath))],
+      source,
+    );
   };
   const openShelfDetail = (changeId: number, path?: string, fresh = false) =>
     menuEnvironment.openFilePage(
@@ -260,22 +637,39 @@ export function PendingPage({
   );
   const changes = useMemo(
     () =>
-      filterPendingChanges(visibleChanges, keyword).sort((left, right) =>
-        left.id === 0
-          ? -1
-          : right.id === 0
-            ? 1
-            : sort === "newest"
-              ? right.id - left.id
-              : left.id - right.id,
-      ),
+      sortPendingChanges(filterPendingChanges(visibleChanges, keyword), sort),
     [visibleChanges, keyword, sort],
   );
   const mounted = useRef(true);
   const activeChangeId = useRef<number | undefined>(undefined);
   const restoreVirtualFocus = useRef(false);
-  const [operationError, setError] = useState("");
-  const error = operationError || pending.error;
+  const setError = (message: string) => {
+    if (!message) return;
+    const id = crypto.randomUUID();
+    void recordFrontendOperationLog({
+      eventId: `${id}-execute`,
+      operationId: id,
+      action: "otherOperation",
+      phase: "execute",
+      outcome: "failed",
+      code: "operationFailed",
+      targetCount: 0,
+    });
+  };
+  const error = pending.error;
+  useEffect(() => {
+    if (!pending.error) return;
+    const id = crypto.randomUUID();
+    void recordFrontendOperationLog({
+      eventId: `${id}-refresh`,
+      operationId: id,
+      action: "otherOperation",
+      phase: "refresh",
+      outcome: "failed",
+      code: "refreshFailed",
+      targetCount: 0,
+    });
+  }, [pending.error, connectionKey]);
   const authenticationRequired =
     ["authRequired", "ticketExpired"].includes(
       menuEnvironment.runtime.connection.state,
@@ -283,17 +677,53 @@ export function PendingPage({
     /session has expired|ticket (?:has )?expired|password (?:invalid|unset)|not logged in|authenticationRequired/i.test(
       error,
     );
-  const [notice, setNotice] = useState("");
+  const [, setNotice] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set([31821]));
   const [collapsedShelves, setCollapsedShelves] = useState<Set<number>>(
     new Set(),
   );
+  useEffect(() => {
+    const relevant = moveAttempts.filter((a) => a.scope === connectionKey);
+    const ids = relevant
+      .filter(
+        (a) =>
+          a.request.target.kind === "new" && a.receipt?.targetChangeId != null,
+      )
+      .map((a) => a.receipt!.targetChangeId!);
+    if (ids.length) setExpanded((value) => new Set([...value, ...ids]));
+    setOpenedSelection((value) => {
+      if (value.scope !== connectionKey) return value;
+      const files = value.files.map((file) => {
+        const latest = relevant
+          .filter((a) =>
+            a.request.files.some((f) => f.depotPath === file.depotPath),
+          )
+          .at(-1);
+        const fact = latest?.receipt?.files.find(
+          (f) => f.depotPath === file.depotPath,
+        );
+        const id =
+          fact?.state === "notMoved"
+            ? fact.sourceChangeId
+            : fact?.state === "moved" || fact?.state === "alreadyInTarget"
+              ? latest?.receipt?.targetChangeId
+              : undefined;
+        return id != null ? { ...file, originalChangeId: id } : file;
+      });
+      return files.every(
+        (f, i) => f.originalChangeId === value.files[i].originalChangeId,
+      )
+        ? value
+        : { ...value, files };
+    });
+  }, [moveAttempts, connectionKey]);
   useEffect(() => writePendingFilterState({ keyword, sort }), [keyword, sort]);
   useEffect(() => {
     setExpanded(new Set());
     setCollapsedShelves(new Set());
     setOptimisticDeleted(new Set());
     setDrag(undefined);
+    dragSnapshot.current = undefined;
     setDropTarget(undefined);
   }, [connectionKey]);
   useEffect(() => {
@@ -380,33 +810,73 @@ export function PendingPage({
       target.focus();
     }
   }, [virtualRows]);
-  const applyMutation = (
-    result: PendingChangeMutationResult,
+  const applyMutation = async (
+    raw: unknown,
     incompleteMessage: string,
     successMessage: string,
   ) => {
-    if (!result.refreshError)
-      setChanges((value) => mergePendingMutation(value, result));
+    const lifecycle = lifecycleOf(raw);
+    const legacy =
+      unwrapPendingClLegacy<PendingChangeMutationResult>(raw) ??
+      (raw as PendingChangeMutationResult);
+    if (lifecycle && lifecycle.state !== "legacy") {
+      const id = lifecycle.operationId ?? legacy?.operation?.operationId ?? "";
+      settlePendingClIntent(id);
+      let effective = lifecycle;
+      if (!pendingClCommitted(effective)) {
+        // Unknown/rejected: exactly ONE same-operationId lookup (never a new id, no retry).
+        const recovered = await recoverPendingClUnknown(id, {
+          connection: () => backend.companySubmitConnectionSnapshot(),
+          lookup: lookupPendingClReceipt,
+        });
+        if (recovered.result) effective = recovered.result;
+        settlePendingClIntent(id);
+      }
+      if (pendingClCommitted(effective)) {
+        const effectiveLegacy =
+          unwrapPendingClLegacy<PendingChangeMutationResult>(effective) ??
+          legacy;
+        if (effectiveLegacy?.refreshedChanges?.length)
+          setChanges((value) => mergePendingMutation(value, effectiveLegacy));
+        else void reload().catch(() => undefined);
+        const authoritative = authoritativeChangeId(effective);
+        setError("");
+        setNotice(
+          `${successMessage}${authoritative ? ` · CL ${authoritative}` : ""} · ${t.files === "文件" ? "操作记录" : "Operation"} ${id}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
+        );
+        // No p4deck:pending-* events on the wired path: host result + readback are the authority.
+      } else {
+        setNotice("");
+        setError(
+          t.files === "文件"
+            ? "结果未确认；现有行已保留并按权威状态刷新，请勿换新操作重试。"
+            : "Outcome unconfirmed; existing rows kept and refreshed from authority. Do not retry with a new id.",
+        );
+        void reload().catch(() => undefined);
+      }
+      return;
+    }
+    if (!legacy?.operation) {
+      setError(incompleteMessage);
+      return;
+    }
+    if (!legacy.refreshError)
+      setChanges((value) => mergePendingMutation(value, legacy));
     setError(
-      result.refreshError ? `${incompleteMessage}: ${result.refreshError}` : "",
+      legacy.refreshError ? `${incompleteMessage}: ${legacy.refreshError}` : "",
     );
     setNotice(
-      result.refreshError
+      legacy.refreshError
         ? ""
-        : `${successMessage} · ${t.files === "文件" ? "操作记录" : "Operation"} ${result.operation.operationId}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
+        : `${successMessage} · ${t.files === "文件" ? "操作记录" : "Operation"} ${legacy.operation.operationId}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
     );
-    if (result.refreshError)
+    if (legacy.refreshError)
       window.dispatchEvent(new Event("p4deck:pending-refresh"));
     else
       window.dispatchEvent(
-        new CustomEvent("p4deck:pending-mutation", { detail: result }),
+        new CustomEvent("p4deck:pending-mutation", { detail: legacy }),
       );
   };
-  const refreshFileStatus = (affectedPaths?: readonly string[]) =>
-    invalidateData(["workspaceStatus", "depot"], {
-      connectionKey,
-      affectedPaths,
-    }).catch(() => undefined);
   const deleteEmptyChange = async (change: PendingChange) => {
     if (
       !ready ||
@@ -422,23 +892,56 @@ export function PendingPage({
     deletingRef.current = true;
     setDeleting(change.id);
     setError("");
+    const operationId = crypto.randomUUID();
+    beginPendingClIntent({
+      operationId,
+      kind: "pendingClDelete",
+      changeId: change.id,
+    });
+    // Intent-only: the row is hidden while the command is in flight, but the success notice is
+    // only produced once the host confirms; unknown/rejected/legacy restores it below.
     setOptimisticDeleted((current) => new Set(current).add(change.id));
     setChanges((current) => current.filter((item) => item.id !== change.id), {
       revalidate: false,
     });
     try {
-      const result = await backend.mutatePendingChange({
+      const raw: unknown = await backend.mutatePendingChange({
         type: "delete",
         changeId: change.id,
-        operationId: crypto.randomUUID(),
+        operationId,
       });
       if (!mounted.current || currentBinding.current !== binding) return;
-      applyMutation(
-        result,
+      const lifecycle = lifecycleOf(raw);
+      const confirmed =
+        !!lifecycle &&
+        pendingClCommitted(lifecycle) &&
+        pendingClDeleteConfirmed(lifecycle, change.id);
+      if (lifecycle && !confirmed) {
+        // Unknown/rejected: keep the row (no fabricated "deleted") and refetch once from authority.
+        setOptimisticDeleted((current) => {
+          const next = new Set(current);
+          next.delete(change.id);
+          return next;
+        });
+        setChanges(
+          (current) =>
+            current.some((item) => item.id === change.id)
+              ? current
+              : [...current, change].sort((left, right) =>
+                  left.id === 0 ? -1 : right.id === 0 ? 1 : right.id - left.id,
+                ),
+          { revalidate: false },
+        );
+      }
+      await applyMutation(
+        raw,
         t.files === "文件" ? "删除后的刷新不完整" : "Delete refresh incomplete",
-        t.files === "文件" ? "CL 已删除" : "Changelist deleted",
+        t.files === "文件"
+          ? "CL 删除已由服务器确认"
+          : "Changelist delete confirmed",
       );
     } catch (cause) {
+      settlePendingClIntent(operationId);
       if (!mounted.current || currentBinding.current !== binding) return;
       setOptimisticDeleted((current) => {
         const next = new Set(current);
@@ -454,9 +957,26 @@ export function PendingPage({
               ),
         { revalidate: false },
       );
-      void reload().catch(() => undefined);
-      if (mounted.current && currentBinding.current === binding)
-        setError(String(cause));
+      // Err with an operationId is persisted as unknown by the host: recover once by the same id.
+      const recovered = await recoverPendingClUnknown(operationId, {
+        connection: () => backend.companySubmitConnectionSnapshot(),
+        lookup: lookupPendingClReceipt,
+      });
+      if (recovered.result && pendingClCommitted(recovered.result)) {
+        await applyMutation(
+          recovered.result,
+          t.files === "文件"
+            ? "删除后的刷新不完整"
+            : "Delete refresh incomplete",
+          t.files === "文件"
+            ? "CL 删除已由服务器确认"
+            : "Changelist delete confirmed",
+        );
+      } else {
+        void reload().catch(() => undefined);
+        if (mounted.current && currentBinding.current === binding)
+          setError(String(cause));
+      }
     } finally {
       deletingRef.current = false;
       if (mounted.current) setDeleting(undefined);
@@ -504,8 +1024,21 @@ export function PendingPage({
         ?.focus(),
     );
   };
-  const changeMenu = (change: PendingChange) =>
-    menu(
+  const changeMenu = (change: PendingChange) => {
+    const conflictNodes: WorkspaceNode[] = change.files
+      .filter((file) => file.resolve === "unresolved")
+      .map((file) => ({
+        id: file.depotPath,
+        name: file.depotPath.split("/").pop() ?? file.depotPath,
+        kind: "file",
+        state: "conflicted",
+        absolutePath: file.clientPath ?? "",
+        relativePath: file.clientPath ?? file.depotPath,
+        depotPath: file.depotPath,
+        revision: file.revision,
+        changelistId: change.id,
+      }));
+    return menu(
       selection.targets(change).length > 1
         ? "C12"
         : change.id === 0
@@ -519,6 +1052,27 @@ export function PendingPage({
             source,
           ),
         ),
+        "解决冲突…": conflictNodes.length
+          ? {
+              ...action(
+                (source) =>
+                  run(
+                    "resolve",
+                    {
+                      type: "file",
+                      node: conflictNodes[0],
+                      nodes: conflictNodes,
+                    },
+                    source,
+                  ),
+                connectionReason,
+              ),
+              emphasis: "primary" as const,
+            }
+          : {
+              reason:
+                "该 CL 没有需要 Resolve 的文件 / No files in this CL need resolve",
+            },
         "复制标识 default": copy("default"),
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),
@@ -622,38 +1176,25 @@ export function PendingPage({
         onOpen: () => selection.context(change),
       },
     );
+  };
   const headerActions =
     headerTarget &&
     createPortal(
       <>
-        <span
-          className="pending-operation-state"
-          title={
-            checking
-              ? t.files === "文件"
-                ? "正在检查连接与登录状态"
-                : "Checking connection and login"
-              : notice || undefined
-          }
-          role="status"
-        >
-          {checking || move || deleting !== undefined ? (
+        {(checking || move || deleting !== undefined) && (
+          <span className="pending-operation-state" role="status">
             <LoaderCircle size={16} className="spin" />
-          ) : notice ? (
-            <Check size={16} />
-          ) : null}
-          <span className="sr-only">
-            {checking
-              ? t.files === "文件"
-                ? "正在检查连接与登录状态"
-                : "Checking connection and login"
-              : move || deleting !== undefined
+            <span className="sr-only">
+              {checking
                 ? t.files === "文件"
+                  ? "正在检查连接与登录状态"
+                  : "Checking connection and login"
+                : t.files === "文件"
                   ? "正在操作"
-                  : "Operation in progress"
-                : notice}
+                  : "Operation in progress"}
+            </span>
           </span>
-        </span>
+        )}
         <button
           disabled={!ready}
           title={connectionReason}
@@ -668,16 +1209,34 @@ export function PendingPage({
     );
   return (
     <section className="pending-page" ref={surface}>
+      {selectedSubmit && (
+        <SelectedFilesSubmitDialog
+          files={selectedSubmit.files}
+          expected={selectedSubmit.expected}
+          active={selectedSubmit.scope === connectionKey}
+          zh={t.files === "文件"}
+          onDismiss={() => {
+            setSelectedSubmit(undefined);
+            void reload();
+          }}
+          onContinue={(id, count, expected) => {
+            if (bindingRef.current === selectedSubmit.scope)
+              run("submit", {
+                type: "pending",
+                id,
+                count,
+                selectedSubmitExpectation: expected,
+              });
+          }}
+        />
+      )}
       {headerActions}
       {shelfRequest &&
         (shelfRequest.unshelve ? (
-          <UnshelveDialog
+          <DirectUnshelve
             request={shelfRequest.request}
-            changes={changes}
             currentWorkspace={clientName}
             connectionKey={connectionKey}
-            demo={demo}
-            zh={t.files === "文件"}
             onDismiss={() => setShelfRequest(undefined)}
           />
         ) : (
@@ -697,34 +1256,14 @@ export function PendingPage({
           connectionKey={connectionKey}
           zh={t.files === "文件"}
           onDismiss={() => setMove(undefined)}
-          onResult={async (result) => {
-            if (!result.refreshError) {
-              setChanges((current) =>
-                mergePendingMutation(current, {
-                  operation: {
-                    operationId: result.operationIds[0] ?? "move",
-                    exitCode: result.outcome === "succeeded" ? 0 : 1,
-                    events: [],
-                    durationMs: 0,
-                  },
-                  affectedChanges: result.affectedChanges,
-                  affectedPaths: result.refresh.depotPaths,
-                  refreshedChanges: result.refreshedChanges,
-                }),
-              );
-            } else {
-              setError(result.refreshError);
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+          onStart={(request) => {
+            if (!startOptimisticMove(connectionKey, request, cachedChanges))
+              return false;
+            if (request.target.kind === "existing") {
+              const id = request.target.changeId;
+              setExpanded((value) => new Set([...value, id]));
             }
-            setNotice(
-              result.outcome === "succeeded"
-                ? t.files === "文件"
-                  ? "移动完成"
-                  : "Move completed"
-                : "",
-            );
-            if (result.refreshError) void reload().catch(() => undefined);
-            void refreshFileStatus(result.refresh.depotPaths);
+            return true;
           }}
         />
       )}
@@ -745,32 +1284,67 @@ export function PendingPage({
           source={form.source}
           onDismiss={() => setForm(undefined)}
           onSubmit={async (draft) => {
+            const operationId = crypto.randomUUID();
+            beginPendingClIntent({
+              operationId,
+              kind: form.change ? "pendingClEdit" : "pendingClCreate",
+              changeId: form.change?.id,
+            });
             try {
-              const result = await backend.mutatePendingChange(
+              const raw: unknown = await backend.mutatePendingChange(
                 form.change
                   ? {
                       type: "edit",
                       changeId: form.change.id,
                       description: draft.description,
                       jobs: draft.jobs,
-                      operationId: crypto.randomUUID(),
+                      operationId,
                     }
                   : {
                       type: "create",
                       description: draft.description,
                       jobs: draft.jobs,
-                      operationId: crypto.randomUUID(),
+                      operationId,
                     },
               );
-              applyMutation(
-                result,
+              await applyMutation(
+                raw,
                 t.files === "文件"
                   ? "保存后的刷新不完整"
                   : "Save refresh incomplete",
-                t.files === "文件" ? "CL 已保存" : "Changelist saved",
+                form.change
+                  ? t.files === "文件"
+                    ? "CL 编辑已由服务器确认"
+                    : "Changelist edit confirmed"
+                  : t.files === "文件"
+                    ? "CL 创建已由服务器确认"
+                    : "Changelist creation confirmed",
               );
             } catch (cause) {
-              window.dispatchEvent(new Event("p4deck:pending-refresh"));
+              settlePendingClIntent(operationId);
+              // Err with an operationId is persisted as unknown by the host: one same-id recovery.
+              const recovered = await recoverPendingClUnknown(operationId, {
+                connection: () => backend.companySubmitConnectionSnapshot(),
+                lookup: lookupPendingClReceipt,
+              });
+              if (recovered.result && pendingClCommitted(recovered.result)) {
+                await applyMutation(
+                  recovered.result,
+                  t.files === "文件"
+                    ? "保存后的刷新不完整"
+                    : "Save refresh incomplete",
+                  form.change
+                    ? t.files === "文件"
+                      ? "CL 编辑已由服务器确认"
+                      : "Changelist edit confirmed"
+                    : t.files === "文件"
+                      ? "CL 创建已由服务器确认"
+                      : "Changelist creation confirmed",
+                );
+                return;
+              }
+              // No legacy refresh event on the wired path; one bounded authoritative refetch.
+              void reload().catch(() => undefined);
               throw cause;
             }
           }}
@@ -781,6 +1355,7 @@ export function PendingPage({
         aria-label="Pending changelist filters"
       >
         <input
+          className="search-field"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           placeholder={
@@ -794,20 +1369,29 @@ export function PendingPage({
               : "Filter pending changelists"
           }
         />
-        <select
-          value={sort}
-          onChange={(event) => setSort(event.target.value as PendingChangeSort)}
-          aria-label={t.files === "文件" ? "Pending 排序" : "Pending sort"}
+        <button
+          className="secondary"
+          type="button"
+          onClick={() =>
+            setSort((value) => (value === "newest" ? "oldest" : "newest"))
+          }
+          aria-label={
+            t.files === "文件"
+              ? "切换 CL 编号正序/倒序"
+              : "Toggle ascending/descending CL number"
+          }
+          aria-pressed={sort === "oldest"}
         >
-          <option value="newest">
-            {t.files === "文件" ? "最新优先" : "Newest first"}
-          </option>
-          <option value="oldest">
-            {t.files === "文件" ? "最早优先" : "Oldest first"}
-          </option>
-        </select>
+          {sort === "oldest"
+            ? t.files === "文件"
+              ? "CL ↑ 正序"
+              : "CL ↑ Ascending"
+            : t.files === "文件"
+              ? "CL ↓ 倒序"
+              : "CL ↓ Descending"}
+        </button>
       </div>
-      {(error || authenticationRequired || connectionProblem) && (
+      {(authenticationRequired || connectionProblem) && (
         <div
           role="alert"
           className={`workspace-load-error${connectionProblem || authenticationRequired ? " pending-connection-status" : ""}`}
@@ -863,6 +1447,94 @@ export function PendingPage({
             : `Partial results: scanned ${stats.scannedCount}, matched ${stats.matchedCount}.`}
         </div>
       )}
+      {currentMoves.some(
+        (a) => a.busy || !a.receipt || a.receipt.stage !== "completed",
+      ) && (
+        <div className="pending-move-status" role="status">
+          {currentMoves
+            .filter(
+              (a) => a.busy || !a.receipt || a.receipt.stage !== "completed",
+            )
+            .map((a) => (
+              <div key={a.request.operationId}>
+                <span>
+                  {t.files === "文件"
+                    ? "本地归属预览，未确认文件需核实"
+                    : "Local grouping preview; unconfirmed files need checking"}{" "}
+                  · {a.request.files.length}
+                </span>
+                <details>
+                  <summary>
+                    {t.files === "文件" ? "逐文件状态" : "File status"}
+                  </summary>
+                  {a.request.files.map((file) => (
+                    <div key={file.depotPath}>
+                      {file.depotPath} ·{" "}
+                      {(() => {
+                        const state =
+                          a.receipt?.files.find(
+                            (f) => f.depotPath === file.depotPath,
+                          )?.state ?? "unknown";
+                        return t.files === "文件"
+                          ? {
+                              moved: "已移动",
+                              notMoved: "未移动",
+                              unknown: "待核实",
+                              alreadyInTarget: "已在目标",
+                            }[state]
+                          : state;
+                      })()}
+                    </div>
+                  ))}
+                </details>
+                {a.busy ? (
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      void backend
+                        .cancelOperation(a.request.operationId)
+                        .catch((cause) => setError(String(cause)))
+                    }
+                  >
+                    {t.files === "文件"
+                      ? "停止后续操作"
+                      : "Stop remaining operations"}
+                  </button>
+                ) : (
+                  <button
+                    className="secondary"
+                    onClick={() => checkOptimisticMove(a.request.operationId)}
+                  >
+                    {t.files === "文件" ? "检查本次状态" : "Check this attempt"}
+                  </button>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
+      {moveProjection.temporary.map((group) => (
+        <section
+          className="pending-move-temporary"
+          key={group.operationId}
+          aria-label={
+            t.files === "文件"
+              ? "新 CL，编号待确认"
+              : "New CL, number not confirmed"
+          }
+        >
+          <strong>
+            {t.files === "文件"
+              ? "新 CL，编号待确认"
+              : "New CL, number not confirmed"}
+          </strong>{" "}
+          · {group.description}
+          <ul>
+            {group.files.map((file) => (
+              <li key={file.depotPath}>{file.depotPath}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
       <div
         className="pending-list"
         ref={list}
@@ -883,19 +1555,30 @@ export function PendingPage({
             const change = changes[virtualRow.index];
             const zh = t.files === "文件";
             const label = change.id ? `CL ${change.id}` : "Default";
-            const unavailable = !ready
-              ? zh
-                ? "连接尚未就绪"
-                : "Connection is not ready"
-              : menuEnvironment.commandBusy || deleting !== undefined
-                ? zh
-                  ? "请等待当前操作完成"
-                  : "Wait for the current operation"
-                : !change.files.length
-                  ? zh
-                    ? "没有已打开文件"
-                    : "No opened files"
+            const unavailable =
+              (() => {
+                const blockedText = formatBlockedPaths(
+                  change.files.map((file) => file.depotPath),
+                  blockedDetails,
+                  zh,
+                );
+                return blockedText
+                  ? withAdmissionHint(blockedText, zh)
                   : undefined;
+              })() ??
+              (!ready
+                ? zh
+                  ? "连接尚未就绪"
+                  : "Connection is not ready"
+                : menuEnvironment.commandBusy || deleting !== undefined
+                  ? zh
+                    ? "请等待当前操作完成"
+                    : "Wait for the current operation"
+                  : !change.files.length
+                    ? zh
+                      ? "没有已打开文件"
+                      : "No opened files"
+                    : undefined);
             const numberedReason =
               unavailable ??
               (change.id === 0
@@ -1004,6 +1687,22 @@ export function PendingPage({
                     >
                       {change.description}
                     </span>
+                    {change.files.some(
+                      (file) => file.resolve === "unresolved",
+                    ) && (
+                      <span
+                        className="pending-resolve-badge"
+                        role="img"
+                        title={
+                          zh
+                            ? "此 CL 有需要 Resolve 的文件"
+                            : "Changelist has files that need resolve"
+                        }
+                        aria-label={zh ? "需要 Resolve" : "Needs resolve"}
+                      >
+                        !
+                      </span>
+                    )}
                     <b>
                       {change.files.length} {t.files}
                     </b>
@@ -1147,6 +1846,10 @@ export function PendingPage({
                     <div className="pending-body">
                       <PendingFileList
                         files={change.files}
+                        sharedSelection={sharedSelection}
+                        onSubmitSelected={(files) =>
+                          void openSelectedSubmit(files)
+                        }
                         changeId={change.id}
                         refresh={reload}
                         onMove={(paths) => openMove(change.id, paths)}
@@ -1154,6 +1857,7 @@ export function PendingPage({
                           beginDrag(change.id, paths, event)
                         }
                         onDragEnd={() => {
+                          dragSnapshot.current = undefined;
                           setDrag(undefined);
                           setDropTarget(undefined);
                         }}
@@ -1164,30 +1868,21 @@ export function PendingPage({
                       {change.shelvedFiles.length ? (
                         <>
                           <h4
+                            className="pending-shelf-heading"
                             tabIndex={0}
                             {...menu("C06", () => ({
-                              "Unshelve 到 CL…": action((source) =>
-                                openShelf(
-                                  change,
-                                  "unshelve",
-                                  change.shelvedFiles.map(
-                                    (file) => file.depotPath,
-                                  ),
-                                  source,
-                                ),
+                              "Unshelve 到 CL…": action(
+                                (source) =>
+                                  openAllShelf(change, "unshelve", source),
+                                allShelfReason(change),
                               ),
                               查看搁置详情: action(() =>
                                 openShelfDetail(change.id),
                               ),
-                              "删除搁置内容…": action((source) =>
-                                openShelf(
-                                  change,
-                                  "delete",
-                                  change.shelvedFiles.map(
-                                    (file) => file.depotPath,
-                                  ),
-                                  source,
-                                ),
+                              "删除搁置内容…": action(
+                                (source) =>
+                                  openAllShelf(change, "delete", source),
+                                allShelfReason(change),
                               ),
                               "展开/折叠": action(() => toggleShelf(change.id)),
                               "复制来源 CL 编号": copy(change.id),
@@ -1199,15 +1894,88 @@ export function PendingPage({
                               ),
                             }))}
                           >
-                            <FolderArchive size={13} />
-                            {t.shelves}
                             <button
-                              aria-label="展开/折叠搁置文件 / Toggle shelved files"
+                              type="button"
+                              className="pending-shelf-toggle"
+                              aria-label={
+                                zh
+                                  ? `${collapsedShelves.has(change.id) ? "展开" : "折叠"} CL ${change.id} 已搁置文件`
+                                  : `${collapsedShelves.has(change.id) ? "Expand" : "Collapse"} CL ${change.id} shelved files`
+                              }
                               aria-expanded={!collapsedShelves.has(change.id)}
-                              onClick={() => toggleShelf(change.id)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleShelf(change.id);
+                              }}
+                              onKeyDown={(event) => event.stopPropagation()}
                             >
-                              {collapsedShelves.has(change.id) ? "+" : "−"}
+                              <ChevronDown
+                                size={15}
+                                className={
+                                  collapsedShelves.has(change.id)
+                                    ? "pending-chevron-collapsed"
+                                    : ""
+                                }
+                              />
                             </button>
+                            <FolderArchive size={13} aria-hidden="true" />
+                            <span>{t.shelves}</span>
+                            <span
+                              className="pending-shelf-actions"
+                              role="group"
+                              aria-label={
+                                zh
+                                  ? `CL ${change.id} 全部搁置文件操作`
+                                  : `CL ${change.id} all shelved files actions`
+                              }
+                            >
+                              <button
+                                type="button"
+                                className="secondary"
+                                disabled={!!allShelfReason(change)}
+                                title={
+                                  allShelfReason(change) ??
+                                  (zh
+                                    ? `把 CL ${change.id} 的全部搁置文件移动到 CL`
+                                    : `Move all shelved files from CL ${change.id} to a changelist`)
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openAllShelf(
+                                    change,
+                                    "unshelve",
+                                    event.currentTarget,
+                                  );
+                                }}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <PackageOpen size={13} aria-hidden="true" />
+                                {zh ? "移动全部到CL" : "Move all to CL"}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary"
+                                disabled={!!allShelfReason(change)}
+                                title={
+                                  allShelfReason(change) ??
+                                  (zh
+                                    ? `删除 CL ${change.id} 的全部搁置内容`
+                                    : `Delete all shelved content in CL ${change.id}`)
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openAllShelf(
+                                    change,
+                                    "delete",
+                                    event.currentTarget,
+                                  );
+                                }}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <Trash2 size={13} aria-hidden="true" />
+                                {zh ? "删除全部" : "Delete all"}
+                              </button>
+                            </span>
                           </h4>
                           {!collapsedShelves.has(change.id) && (
                             <PendingFileList

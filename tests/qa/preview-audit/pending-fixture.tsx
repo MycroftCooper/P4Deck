@@ -1,0 +1,10 @@
+import {createRoot} from 'react-dom/client';
+import {PendingPage} from '../../../src/features/changelists/components/PendingPage';
+import {messages} from '../../../src/shared/i18n';
+import {audit} from './pending-stubs';
+import '../../app/styles/tokens.css';
+import '../../app/styles/workbench.css';
+import './fixture.css';
+if('__TAURI_INTERNALS__' in window)throw new Error('Native bridge forbidden');
+Object.assign(window,{pendingAudit:audit});
+createRoot(document.getElementById('root')!).render(<PendingPage t={messages['en-US']} clientName="synthetic" connectionKey="synthetic-sort" demo={false} ready/>);

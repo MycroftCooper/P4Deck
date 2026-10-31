@@ -1,3 +1,4 @@
+import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 import {
   forwardRef,
   useCallback,
@@ -11,7 +12,7 @@ import type {
   OperationEvent,
   OperationResult,
   P4Context,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import type { messages } from "../../shared/i18n";
 import { storage } from "../../shared/lib/storage";
 import { subscribeSafely } from "../../shared/lib/subscription";
@@ -20,7 +21,7 @@ import { readToolTab } from "./terminalPreferences";
 
 export type { ToolTab } from "./components/ToolDrawer";
 export interface ToolHandle {
-  open(tab: ToolTab, operationId?: string): void;
+  open(tab: ToolTab, operationId?: string, error?: string): void;
   afterOperation(warnings: string[]): Promise<void>;
 }
 interface Props {
@@ -47,7 +48,19 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   const [journalOperation, setJournalOperation] = useState<string>();
   const [unread, setUnread] = useState(0);
   const [events, setEvents] = useState<OperationEvent[]>([]);
-  const [error, setError] = useState("");
+  const setError = (message: string) => {
+    if (!message) return;
+    const id = crypto.randomUUID();
+    void recordFrontendOperationLog({
+      eventId: `${id}-execute`,
+      operationId: id,
+      action: "otherOperation",
+      phase: "execute",
+      outcome: "failed",
+      code: "operationFailed",
+      targetCount: 0,
+    });
+  };
   const [refreshKey, setRefreshKey] = useState(0);
   const openRef = useRef(open);
   const activeRef = useRef(active);
@@ -135,7 +148,13 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
   }, []);
 
   useImperativeHandle(ref, () => ({
-    open: show,
+    open(tab, operationId, message) {
+      if (message) {
+        setError(message);
+        return;
+      }
+      show(tab, operationId);
+    },
     async afterOperation(_warnings) {
       setRefreshKey((value) => value + 1);
     },
@@ -187,12 +206,6 @@ export const ToolArea = forwardRef<ToolHandle, Props>(function ToolArea(
         }}
         onOpenSettings={onOpenSettings}
       />
-      {error && (
-        <div className="tool-error" role="alert">
-          {error}
-          <button onClick={() => setError("")}>×</button>
-        </div>
-      )}
     </>
   );
 });

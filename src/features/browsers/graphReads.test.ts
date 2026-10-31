@@ -7,7 +7,7 @@ import { appCache } from "../../shared/cache/appCache";
 import type {
   RevisionGraph,
   RevisionGraphRequest,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 const request: RevisionGraphRequest = {
   scope: {
     server: "mock",
@@ -88,4 +88,31 @@ it("limits concurrent reads to two and cancels unobserved work", async () => {
   resolvers[1](graph);
   resolvers[2](graph);
   await Promise.all([b, c]);
+});
+
+it("shared graph dispatch sends only native request fields, preserving scope/cursor/limit", async () => {
+  const { backend } = await import("../../infrastructure/backend");
+  const { readGraph } = await import("./graphReads");
+  vi.mocked(backend.getRevisionGraph).mockReset().mockResolvedValue(graph);
+  await readGraph(
+    { ...request, cursor: "bounded-next", refresh: true },
+    "mock",
+    signal(),
+  );
+  expect(backend.getRevisionGraph).toHaveBeenCalledExactlyOnceWith({
+    scope: request.scope,
+    revisionLimit: 100,
+    cursor: "bounded-next",
+    refresh: true,
+    operationId: expect.any(String),
+  });
+  const payload = vi.mocked(backend.getRevisionGraph).mock.calls[0][0];
+  expect(Object.keys(JSON.parse(JSON.stringify(payload))).sort()).toEqual([
+    "cursor",
+    "operationId",
+    "refresh",
+    "revisionLimit",
+    "scope",
+  ]);
+  expect(payload.scope).toEqual(request.scope);
 });

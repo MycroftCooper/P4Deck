@@ -79,10 +79,12 @@ export function useDockController(props: DockProps) {
     newInstance = false,
     comparison,
   ) => {
+    const requestedComparison = comparison;
     comparison =
       page === "diff"
-        ? normalizePanelTarget({ comparison }).comparison
+        ? normalizePanelTarget({ comparison, target }).comparison
         : undefined;
+    if (requestedComparison && !comparison) return;
     if (comparison) newInstance = true;
     const dock = api.current;
     if (!dock) return;

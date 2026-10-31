@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { TableHeader } from "../../../app/context-menu/TableHeader";
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
 import { copy } from "../../../app/context-menu/bindings";
@@ -20,8 +28,10 @@ export function RevisionFileList({
   scope,
   demo,
   showFileType = false,
+  outerScroll,
 }: {
   showFileType?: boolean;
+  outerScroll?: RefObject<HTMLDivElement | null>;
   files: RevisionFileTarget[];
   scope: string;
   demo: boolean;
@@ -36,11 +46,56 @@ export function RevisionFileList({
     (file) => `${file.depotPath}#${file.revision}`,
     scope,
   );
+  const columns = useColumnWidths(
+    [28, 440, 110, 100, 80],
+    [28, 160, 80, 70, 60],
+    { id: "revision-files", gutter: 32 },
+  );
+  const visibleColumns = [0, 1, ...(showFileType ? [2] : []), 3, 4];
+  const columnStyle = {
+    gridTemplateColumns: visibleColumns
+      .map((index) => `${columns.widths[index]}px`)
+      .join(" "),
+    minWidth: visibleColumns.reduce(
+      (sum, index) => sum + columns.widths[index],
+      32,
+    ),
+  };
+  const resize = {
+    ...columns,
+    style: columnStyle,
+    widths: visibleColumns.map((index) => columns.widths[index]),
+    minimums: visibleColumns.map((index) => columns.minimums[index]),
+    handle: (index: number) => columns.handle(visibleColumns[index]),
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  // In an expanded CL, virtualize against the main list viewport, not an inner scrollbar.
+  useLayoutEffect(() => {
+    const outer = outerScroll?.current,
+      inner = scrollRef.current;
+    if (
+      !outer ||
+      !inner ||
+      !outer.clientHeight ||
+      !inner.getClientRects().length
+    )
+      return;
+    const offset =
+      inner.getBoundingClientRect().top -
+      outer.getBoundingClientRect().top -
+      outer.clientTop +
+      outer.scrollTop +
+      inner.clientTop;
+    setScrollMargin((previous) =>
+      Math.abs(previous - offset) < 0.5 ? previous : offset,
+    );
+  });
   const [activeIndex, setActiveIndex] = useState(0);
   const virtualizer = useVirtualizer({
     count: files.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => outerScroll?.current ?? scrollRef.current,
+    scrollMargin: outerScroll ? scrollMargin : 0,
     estimateSize: () => 40,
     overscan: 8,
     initialRect: { width: 320, height: 240 },
@@ -73,6 +128,7 @@ export function RevisionFileList({
   return (
     <section
       className="revision-file-list"
+      style={{ overflowX: "auto" }}
       aria-label="已提交文件 / Submitted files"
     >
       {demo && (
@@ -82,9 +138,33 @@ export function RevisionFileList({
             : "These are simulated Browser Mock files; no real P4 Server was accessed."}
         </p>
       )}
+      <TableHeader
+        className="workspace-head"
+        resize={resize}
+        columns={[
+          { id: "icon", label: "" },
+          { id: "path", label: zh ? "路径" : "Path" },
+          ...(showFileType
+            ? [{ id: "type", label: zh ? "类型" : "Type" }]
+            : []),
+          { id: "action", label: zh ? "动作" : "Action" },
+          { id: "revision", label: zh ? "版本" : "Revision" },
+        ]}
+      />
       <div
         ref={scrollRef}
         className="revision-file-scroll"
+        style={
+          outerScroll
+            ? {
+                height: files.length * 40 + 2,
+                minHeight: 0,
+                contain: "layout style",
+                overflow: "visible",
+                flex: "none",
+              }
+            : undefined
+        }
         data-testid="revision-file-virtual-list"
         role="listbox"
         aria-label={zh ? "提交文件" : "Submitted files"}
@@ -93,7 +173,7 @@ export function RevisionFileList({
         <div
           className="revision-file-spacer"
           style={{
-            height: `${virtualizer.getTotalSize() || files.length * 40}px`,
+            height: `${outerScroll ? files.length * 40 : virtualizer.getTotalSize() || files.length * 40}px`,
           }}
         >
           {visibleRows.map((row) => {
@@ -143,8 +223,9 @@ export function RevisionFileList({
                 tabIndex={row.index === activeIndex ? 0 : -1}
                 className={selection.isSelected(file) ? "selected" : ""}
                 style={{
-                  transform: `translateY(${row.start}px)`,
+                  transform: `translateY(${row.start - (outerScroll && measuredRows.length ? scrollMargin : 0)}px)`,
                   height: `${row.size}px`,
+                  ...columnStyle,
                 }}
                 aria-selected={selection.isSelected(file)}
                 {...menuProps}
@@ -181,7 +262,7 @@ export function RevisionFileList({
                     {file.fileType || "—"}
                   </small>
                 )}
-                {file.action ? <small>{file.action}</small> : null}
+                <small>{file.action || "—"}</small>
                 <small>
                   {file.revision === undefined ? "#?" : `#${file.revision}`}
                 </small>

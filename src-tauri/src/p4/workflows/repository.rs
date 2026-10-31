@@ -71,6 +71,15 @@ impl WorkflowRepository {
         }
     }
 
+    pub async fn lock_write_transaction(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+    ) -> Result<MutationGuard, String> {
+        self.runner
+            .lock_write_transaction(context, operation_id)
+            .await
+    }
     pub async fn lock_mutations(&self, server: &str) -> MutationGuard {
         self.runner.lock_mutations(server).await
     }
@@ -164,6 +173,25 @@ impl WorkflowRepository {
         })
     }
 
+    pub async fn execute_reopen_batch(
+        &self,
+        context: &P4Context,
+        target: i64,
+        paths: &[String],
+        operation_id: String,
+        guard: &MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        self.guarded(
+            context,
+            command::reopen_batch(target, paths)?,
+            operation_id,
+            paths.len(),
+            guard,
+            app,
+        )
+        .await
+    }
     pub async fn execute_reopen(
         &self,
         context: &P4Context,
@@ -196,19 +224,31 @@ impl WorkflowRepository {
         &self,
         context: &P4Context,
         change_id: i64,
+        mode: ShelfMode,
         paths: &[String],
         prefix: &str,
         app: Option<&AppHandle>,
     ) -> Result<ShelfInspection, String> {
         command::ensure_context(context)?;
-        let paths = command::validate_paths(paths)?;
-        let change = self
-            .changelists
-            .query_pending(context.clone(), app)
-            .await?
-            .into_iter()
-            .find(|change| change.id == change_id);
+        let paths = command::validate_exact_paths(paths)?;
         let mut operation_ids = Vec::new();
+        let mut change = if mode == ShelfMode::Delete {
+            let metadata_id = format!("{prefix}-identity");
+            let value = self
+                .changelists
+                .pending_identity(context, change_id, metadata_id.clone(), app)
+                .await?;
+            operation_ids.push(metadata_id);
+            Some(value)
+        } else {
+            // Create/replace still uses the existing full pending snapshot until
+            // empty-shelf evidence can be distinguished from read failures.
+            self.changelists
+                .query_pending(context.clone(), app)
+                .await?
+                .into_iter()
+                .find(|change| change.id == change_id)
+        };
         let facts = self
             .checked_named(
                 context,
@@ -248,6 +288,11 @@ impl WorkflowRepository {
                 assess_permissions(&paths, parser::permissions(&result.events))
             })
             .unwrap_or(PermissionAssessment::Unknown);
+        if mode == ShelfMode::Delete {
+            if let Some(change) = &mut change {
+                project_shelf_membership(change, &paths, &facts, &shelf_facts);
+            }
+        }
         Ok(ShelfInspection {
             change,
             facts,
@@ -265,7 +310,7 @@ impl WorkflowRepository {
         app: Option<&AppHandle>,
     ) -> Result<UnshelveInspection, String> {
         command::ensure_context(context)?;
-        let paths = command::validate_paths(&request.depot_paths)?;
+        let paths = command::validate_exact_paths(&request.depot_paths)?;
         let source = self
             .changelists
             .query_pending(context.clone(), app)
@@ -515,6 +560,64 @@ impl WorkflowRepository {
             .await
     }
 
+    /// P4's own `Diff chunks:` summary from `p4 resolve -n`. JSON marshal
+    /// (`-Mj`) omits the human summary, so this one call deliberately uses
+    /// plain text output and parses the same line P4V's dialog shows.
+    pub async fn resolve_diff_counts(
+        &self,
+        context: &P4Context,
+        depot_path: &str,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<Option<parser::ResolveDiffCounts>, String> {
+        command::ensure_context(context)?;
+        let invocation = command::resolve_interactive(depot_path)?;
+        let result = self
+            .runner
+            .run_with_progress(
+                P4CommandRequest {
+                    operation_id: Some(operation_id),
+                    source: OperationSource::Gui,
+                    command: invocation.command.into(),
+                    args: invocation.args,
+                    context: context.clone(),
+                    output_mode: OutputMode::Text,
+                    timeout_ms: Some(120_000),
+                    input: Some("s\n".into()),
+                },
+                app,
+                None,
+                None,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(parser::resolve_diff_counts(&parser::preview_lines(
+            &result.events,
+        )))
+    }
+
+    /// Read-only metadata for the latest revision of one depot file.
+    pub async fn filelog_revision(
+        &self,
+        context: &P4Context,
+        depot_path: &str,
+        revision: i64,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> Result<parser::FilelogRevision, String> {
+        command::ensure_context(context)?;
+        let result = self
+            .checked_named(
+                context,
+                command::filelog_revision(depot_path, revision)?,
+                operation_id,
+                app,
+            )
+            .await?;
+        parser::filelog_revision(&result.events)
+            .ok_or_else(|| "p4 filelog returned no revision metadata".into())
+    }
+
     async fn workspace_context(
         &self,
         context: &P4Context,
@@ -698,4 +801,109 @@ fn event_text(result: &OperationResult) -> String {
         .filter_map(|event| event.message.as_deref())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+// The shelf facts originate exclusively from successful -Rs -e <CL> queries.
+// Their `change`/`action` fields describe workspace opens, NOT shelf identity.
+fn project_shelf_membership(
+    change: &mut PendingChange,
+    paths: &[String],
+    facts: &[parser::WorkflowFileFact],
+    shelves: &[parser::WorkflowFileFact],
+) {
+    let selected = paths.iter().collect::<BTreeSet<_>>();
+    let file = |fact: &parser::WorkflowFileFact| PendingFile {
+        depot_path: fact.depot_path.clone(),
+        action: fact.action.clone(),
+        state: None,
+        client_path: fact.client_path.clone(),
+        revision: None,
+        head_revision: None,
+        file_type: Some(fact.file_type.clone()),
+        lock_ownership: None,
+        lock_owner: None,
+        other_open: Vec::new(),
+        exclusive_open: None,
+        resolve: None,
+    };
+    change.files = facts
+        .iter()
+        .filter(|f| {
+            selected.contains(&f.depot_path)
+                && f.change_id == Some(change.id)
+                && !f.action.is_empty()
+        })
+        .map(file)
+        .collect();
+    change.shelved_files = shelves
+        .iter()
+        .filter(|f| selected.contains(&f.depot_path))
+        .map(file)
+        .collect();
+    change.files.sort_by(|a, b| a.depot_path.cmp(&b.depot_path));
+    change
+        .shelved_files
+        .sort_by(|a, b| a.depot_path.cmp(&b.depot_path));
+}
+
+#[cfg(test)]
+mod shelf_scope_tests {
+    use super::*;
+    fn fact(path: &str, change: Option<i64>) -> parser::WorkflowFileFact {
+        parser::WorkflowFileFact {
+            depot_path: path.into(),
+            client_path: None,
+            action: "edit".into(),
+            change_id: change,
+            have_revision: None,
+            head_revision: Some(99),
+            file_type: "text".into(),
+            digest: "digest".into(),
+            shelved_digest: String::new(),
+            size: None,
+            shelved_size: None,
+            shelved_type: None,
+            unresolved: 0,
+            other_open: 0,
+            other_lock: 0,
+            our_lock: 0,
+        }
+    }
+    #[test]
+    fn exact_membership_does_not_confuse_open_cl_with_shelf_cl_or_head_revision() {
+        let mut change = PendingChange {
+            id: 41,
+            description: String::new(),
+            user: "test".into(),
+            client: "mock".into(),
+            status: "pending".into(),
+            updated_at: None,
+            jobs: vec![],
+            files: vec![],
+            shelved_files: vec![],
+        };
+        let paths = vec!["//fixture/a".into(), "//fixture/b".into()];
+        project_shelf_membership(
+            &mut change,
+            &paths,
+            &[
+                fact("//fixture/a", Some(41)),
+                fact("//fixture/b", Some(42)),
+                fact("//fixture/unselected", Some(41)),
+            ],
+            &[fact("//fixture/b", Some(42))],
+        );
+        assert_eq!(
+            change
+                .files
+                .iter()
+                .map(|f| f.depot_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["//fixture/a"]
+        );
+        assert_eq!(change.shelved_files[0].depot_path, "//fixture/b");
+        assert_eq!(change.shelved_files[0].revision, None);
+        project_shelf_membership(&mut change, &paths, &[], &[]);
+        assert!(change.files.is_empty() && change.shelved_files.is_empty());
+    }
 }

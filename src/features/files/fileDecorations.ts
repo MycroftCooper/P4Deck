@@ -1,7 +1,4 @@
-import type {
-  FileState,
-  WorkspaceFileStatus,
-} from "../../shared/contracts/types";
+import type { FileState, WorkspaceFileStatus } from "../../shared/contracts";
 
 export type FileBadgeId =
   | "add"
@@ -34,6 +31,48 @@ export type FileBadgeId =
   | "error"
   | "loading";
 export type FileBadgeOwner = "self" | "other" | "shelf";
+/** UI-10 semantic tone. Backgrounds follow this map only; ownership never repaints a status. */
+export type FileBadgeTone =
+  | "success"
+  | "danger"
+  | "warning"
+  | "amber"
+  | "yellow"
+  | "neutral"
+  | "purple"
+  | "teal";
+const badgeTones: Record<FileBadgeId, FileBadgeTone> = {
+  add: "success",
+  edit: "success",
+  delete: "danger",
+  "move/add": "success",
+  "move/delete": "danger",
+  branch: "success",
+  integrate: "amber",
+  latest: "teal",
+  outOfDate: "yellow",
+  notSynced: "yellow",
+  missing: "neutral",
+  untracked: "neutral",
+  ignored: "neutral",
+  resolve: "danger",
+  modified: "amber",
+  locked: "warning",
+  globalLock: "warning",
+  exclusive: "warning",
+  unmapped: "neutral",
+  depotDeleted: "danger",
+  shelf: "purple",
+  imported: "neutral",
+  ditto: "neutral",
+  placeholder: "neutral",
+  symlink: "purple",
+  unknown: "neutral",
+  stale: "neutral",
+  error: "danger",
+  loading: "neutral",
+};
+export const fileBadgeTone = (id: FileBadgeId): FileBadgeTone => badgeTones[id];
 export interface FileBadge {
   id: FileBadgeId;
   owner?: FileBadgeOwner;

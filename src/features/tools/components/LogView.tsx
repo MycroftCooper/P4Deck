@@ -1,16 +1,29 @@
+import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
+import { LOG_LEVELS, logLevelLabel } from "../logLevels";
 import type {
   LogEntry,
   LogLevel,
   LogPolicy,
   OperationSource,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { storage } from "../../../shared/lib/storage";
 import { readLogViewPreferences } from "../logPreferences";
 import { subscribeSafely } from "../../../shared/lib/subscription";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
+import {
+  lookupControlPlaneAction,
+  type ControlPlaneActionLookup,
+} from "../../actions/workflowReceipt";
+import {
+  controlPlaneCommitted,
+  controlPlaneDetails,
+  controlPlaneLegacy,
+  runControlPlaneAction,
+} from "../../settings/controlPlaneLifecycle";
 
 const PAGE_SIZE = 100;
 
@@ -21,6 +34,13 @@ interface Props {
   operationFilter?: string;
   onOperationFilter(value?: string): void;
   onOpenJournal(operationId: string): void;
+  /** Exact dispatching connection snapshot; captured once per policy save. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<ControlPlaneActionLookup>;
 }
 
 export function LogView({
@@ -30,6 +50,8 @@ export function LogView({
   operationFilter,
   onOperationFilter,
   onOpenJournal,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
 }: Props) {
   const saved = useRef(
     readLogViewPreferences(storage.getItem("p4deck.p4Log.view.v1")),
@@ -193,11 +215,42 @@ export function LogView({
     }
     setPolicyBusy(true);
     setPolicyStatus(zh ? "正在保存…" : "Saving…");
+    const operationId = crypto.randomUUID();
     try {
-      const saved = await backend.setLogPolicy(draft);
-      setPolicy(saved);
-      setDraft(saved);
-      setPolicyStatus(zh ? "日志策略已保存。" : "Log policy saved.");
+      const dispatching = await (
+        connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
+      )();
+      const run = await runControlPlaneAction({
+        kind: "logPolicySet",
+        operationId,
+        connection: dispatching,
+        execute: () => backend.setLogPolicy({ policy: draft, operationId }),
+        lookup: lookupReceipt ?? lookupControlPlaneAction,
+      });
+      const result = run.result;
+      if (controlPlaneCommitted(result)) {
+        const readback = controlPlaneDetails<LogPolicy>(result) ?? draft;
+        setPolicy(readback);
+        setDraft(readback);
+        setPolicyStatus(
+          zh
+            ? "日志策略已保存（回读逐字段一致）。"
+            : "Log policy saved (readback matches every field).",
+        );
+      } else if (result.state === "legacy") {
+        const savedLegacy = controlPlaneLegacy<LogPolicy>(result) ?? draft;
+        setPolicy(savedLegacy);
+        setDraft(savedLegacy);
+        setPolicyStatus(zh ? "日志策略已保存。" : "Log policy saved.");
+      } else {
+        // Uncertain: never show "saved"; restore the last known policy and be explicit.
+        setDraft(policy);
+        setPolicyStatus(
+          zh
+            ? "保存结果不确定：回读未逐字段匹配。已用同一操作号查询持久回执；已恢复上次已知策略，请核对后再操作。"
+            : "Save outcome uncertain: the readback did not match every field. The durable receipt was queried with the same operation id; the last known policy was restored for inspection.",
+        );
+      }
     } catch (cause) {
       setDraft(policy);
       setPolicyStatus(
@@ -211,13 +264,14 @@ export function LogView({
   return (
     <div className="diagnostic-view log-view">
       <div
-        className="diagnostic-toolbar"
+        className="diagnostic-toolbar log-toolbar"
         aria-label={zh ? "日志筛选" : "Log filters"}
       >
         <span className="muted">
           {zh ? "本次运行日志" : "Current session logs"}
         </span>
         <input
+          className="log-search"
           aria-label={zh ? "搜索日志" : "Search logs"}
           value={keyword}
           placeholder={zh ? "消息或命令" : "Message or command"}
@@ -229,9 +283,11 @@ export function LogView({
           onChange={(event) => setLevel(event.target.value as LogLevel | "")}
         >
           <option value="">{zh ? "全部级别" : "All levels"}</option>
-          <option value="info">Info</option>
-          <option value="warning">Warning</option>
-          <option value="error">Error</option>
+          {LOG_LEVELS.map((value) => (
+            <option key={value} value={value}>
+              {logLevelLabel(value, zh)}
+            </option>
+          ))}
         </select>
         <select
           aria-label={zh ? "日志来源" : "Log source"}
@@ -245,6 +301,7 @@ export function LogView({
           <option value="terminal">Terminal</option>
         </select>
         <input
+          className="log-command"
           aria-label={zh ? "命令或类别" : "Command or category"}
           value={command}
           placeholder={zh ? "命令 / 类别" : "Command / category"}
@@ -342,7 +399,13 @@ export function LogView({
         className="diagnostic-scroll"
         data-testid="log-virtual-list"
       >
-        <table className="diagnostic-table" aria-rowcount={entries.length + 1}>
+        <ResizableTable
+          tableId="p4-log"
+          defaults={[160, 90, 100, 360, 160, 90]}
+          minimums={[110, 70, 80, 180, 100, 70]}
+          className="diagnostic-table"
+          aria-rowcount={entries.length + 1}
+        >
           <caption className="sr-only">{zh ? "P4 日志" : "P4 log"}</caption>
           <thead>
             <tr>
@@ -368,6 +431,7 @@ export function LogView({
                 <tr
                   key={entry.id}
                   className={entry.level}
+                  data-level={entry.level}
                   data-index={row.index}
                   ref={virtualizer.measureElement}
                   aria-rowindex={row.index + 2}
@@ -377,7 +441,7 @@ export function LogView({
                       {new Date(entry.timestamp).toLocaleString()}
                     </time>
                   </td>
-                  <td>{entry.level}</td>
+                  <td>{logLevelLabel(entry.level, zh)}</td>
                   <td>{entry.source}</td>
                   <td>
                     <code>{entry.command}</code>
@@ -413,7 +477,7 @@ export function LogView({
               </tr>
             )}
           </tbody>
-        </table>
+        </ResizableTable>
         {!entries.length && !loading && !error && (
           <div className="empty-state">
             {zh ? "暂无匹配日志" : "No matching logs"}

@@ -1,7 +1,19 @@
+import { useServerStatus } from "./useServerStatus";
+import type { ServerStatusHint } from "./serverStatus";
+import {
+  PassiveServerStatusIcon,
+  PassiveStatusPanel,
+} from "./PassiveServerStatus";
+import { passiveStatusPresentation } from "./passiveStatus";
+import type { PassiveStatusView } from "./passiveStatus";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronUp, HardDrive, Pause, RefreshCw } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
+import {
+  cancelIntentMessage,
+  cancelIntentState,
+} from "../../features/actions/cancelLogBoundary";
 import { workspaceCache } from "../../features/files/workspaceQueries";
 import { subscribeSafely } from "../../shared/lib/subscription";
 import {
@@ -19,6 +31,10 @@ import type { AutoRefreshStatus } from "../refresh/autoRefresh";
 const size = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 export function StatusBar({
   connectionKey,
+  serverStatus: suppliedStatus,
+  serverScopeHint,
+  onCheckServer: suppliedCheck,
+  checkingServer: suppliedChecking,
   native,
   zh,
   children,
@@ -28,6 +44,10 @@ export function StatusBar({
   onToggleAutoRefresh,
 }: {
   connectionKey: string;
+  serverStatus?: PassiveStatusView;
+  serverScopeHint?: ServerStatusHint;
+  onCheckServer?(): void;
+  checkingServer?: boolean;
   native: boolean;
   zh: boolean;
   children: ReactNode;
@@ -36,6 +56,11 @@ export function StatusBar({
   autoRefreshPaused: boolean;
   onToggleAutoRefresh(): void;
 }) {
+  const observed = useServerStatus(native, connectionKey, serverScopeHint);
+  const serverStatus = suppliedStatus ?? observed.view;
+  const onCheckServer =
+    suppliedCheck ?? (observed.canCheck ? observed.check : undefined);
+  const checkingServer = suppliedChecking ?? observed.busy;
   const menu = useContextMenu();
   const [tasksOpen, setTasksOpen] = useState(false);
   const [tasks, setTasks] = useState<ActiveTask[]>([]);
@@ -48,11 +73,18 @@ export function StatusBar({
   const live = useRef(true);
   const operations = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const statusTrigger = useRef<HTMLButtonElement>(null);
   const tasksId = useId();
+  const statusId = useId();
+  const [statusOpen, setStatusOpen] = useState(false);
   const progress = progressSummary(tasks);
   const closeTasks = () => {
     setTasksOpen(false);
     trigger.current?.focus();
+  };
+  const closeStatus = () => {
+    setStatusOpen(false);
+    statusTrigger.current?.focus();
   };
   const disk = useQuery(
     {
@@ -115,6 +147,18 @@ export function StatusBar({
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [tasksOpen]);
+  useEffect(() => {
+    if (!statusOpen) return;
+    operations.current
+      ?.querySelector<HTMLButtonElement>(".passive-server-panel header button")
+      ?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!operations.current?.contains(event.target as Node))
+        setStatusOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [statusOpen]);
   const cancelTask = async (id: string) => {
     if (!active.current.has(id) || pending.current.has(id)) return;
     trigger.current?.focus();
@@ -122,7 +166,13 @@ export function StatusBar({
     setCancelling(new Set(pending.current));
     setCancelError("");
     try {
-      await backend.cancelOperation(id);
+      const cancelled = await backend.cancelOperation(id);
+      // Cancel is a request only: surface notFound/unknown as uncertainty, never as rollback.
+      const state = cancelIntentState(cancelled);
+      if (live.current && (state === "notFound" || state === "unknown")) {
+        setCancelError(cancelIntentMessage(state, zh));
+        setTasksOpen(true);
+      }
     } catch {
       if (!live.current) return;
       pending.current.delete(id);
@@ -145,7 +195,12 @@ export function StatusBar({
     setCancellingAll(true);
     setCancelError("");
     try {
-      await backend.cancelAllOperations();
+      const cancelled = await backend.cancelAllOperations();
+      const state = cancelIntentState(cancelled);
+      if (live.current && (state === "notFound" || state === "unknown")) {
+        setCancelError(cancelIntentMessage(state, zh));
+        setTasksOpen(true);
+      }
     } catch {
       if (!live.current) return;
       ids.forEach((id) => pending.current.delete(id));
@@ -197,10 +252,16 @@ export function StatusBar({
         className="p4-operations"
         ref={operations}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && tasksOpen) {
-            event.preventDefault();
-            event.stopPropagation();
-            closeTasks();
+          if (event.key === "Escape") {
+            if (statusOpen) {
+              event.preventDefault();
+              event.stopPropagation();
+              closeStatus();
+            } else if (tasksOpen) {
+              event.preventDefault();
+              event.stopPropagation();
+              closeTasks();
+            }
           }
         }}
       >
@@ -241,6 +302,17 @@ export function StatusBar({
           </span>
           <ChevronUp size={12} />
         </button>
+        <button
+          ref={statusTrigger}
+          className="passive-server-trigger"
+          aria-haspopup="dialog"
+          aria-expanded={statusOpen}
+          aria-controls={statusOpen ? statusId : undefined}
+          onClick={() => setStatusOpen((value) => !value)}
+          title={passiveStatusPresentation(serverStatus, zh).title}
+        >
+          <PassiveServerStatusIcon status={serverStatus} zh={zh} />
+        </button>
         {tasksOpen && (
           <TaskList
             id={tasksId}
@@ -253,6 +325,17 @@ export function StatusBar({
             cancelling={cancelling}
             error={cancelError}
             zh={zh}
+          />
+        )}
+        {statusOpen && (
+          <PassiveStatusPanel
+            id={statusId}
+            status={serverStatus}
+            zh={zh}
+            native={native}
+            onCheckServer={onCheckServer}
+            checkingServer={checkingServer}
+            onClose={closeStatus}
           />
         )}
       </div>

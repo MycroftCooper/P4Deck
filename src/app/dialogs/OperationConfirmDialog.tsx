@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { compactTargets } from "../../features/files/selectionCommands";
 import { Dialog, DialogNotice } from "./Dialog";
 import { TargetList } from "./TargetList";

@@ -1,3 +1,7 @@
+#[path = "action_receipts.rs"]
+pub mod action_receipts;
+#[path = "write_admission.rs"]
+pub mod admission;
 use crate::{domain::OperationSource, security};
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -84,9 +88,27 @@ pub struct OperationJournalPage {
 
 pub struct OperationJournal {
     connection: Mutex<Connection>,
+    fence_active: Mutex<std::collections::HashSet<String>>,
+    fence_events: Mutex<Option<tauri::AppHandle>>,
 }
 
 impl OperationJournal {
+    /// Aggregate existing facts directly; no paginated/filter_map snapshot that
+    /// could silently drop a malformed row or hide queued work behind a cursor.
+    /// Test-only today: the close flow keeps this aggregate in its own tests, so it is
+    /// compiled only for `cfg(test)` instead of pretending to be production API.
+    #[cfg(test)]
+    pub(crate) fn close_status(&self, since: &str) -> Result<(bool, bool), String> {
+        self.connection.lock().query_row(
+            "SELECT EXISTS(SELECT 1 FROM operation_journal WHERE state IN ('queued','running')),
+                    EXISTS(SELECT 1 FROM operation_journal WHERE
+                      (state NOT IN ('queued','running','succeeded','failed','cancelled','interrupted')) OR
+                      (julianday(finished_at)>=julianday(?1) AND
+                        (state IN ('cancelled','interrupted') OR failure IN ('unknown','interrupted'))))",
+            [since], |row| Ok((row.get(0)?, row.get(1)?)),
+        ).map_err(|e| e.to_string())
+    }
+
     pub fn open(path: &Path) -> Result<Self, String> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -101,9 +123,14 @@ impl OperationJournal {
             CREATE INDEX IF NOT EXISTS operation_journal_order ON operation_journal(started_at DESC, operation_id DESC);
             UPDATE operation_journal SET state='interrupted', failure='interrupted', finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE state IN ('queued','running');")
             .map_err(|e| e.to_string())?;
-        Ok(Self {
+        let journal = Self {
             connection: Mutex::new(connection),
-        })
+            fence_active: Mutex::new(std::collections::HashSet::new()),
+            fence_events: Mutex::new(None),
+        };
+        journal.init_fences()?;
+        journal.init_action_receipts()?;
+        Ok(journal)
     }
 
     pub fn start(
@@ -318,6 +345,37 @@ fn normalize_utc_timestamp(value: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ui07_close_snapshot_uses_all_active_rows_and_only_current_uncertain_outcomes() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch("CREATE TABLE operation_journal(state TEXT, failure TEXT, finished_at TEXT);
+            INSERT INTO operation_journal VALUES('cancelled','cancelled','2020-01-01T00:00:00Z');
+            INSERT INTO operation_journal VALUES('failed','commandFailure','2026-01-01T00:00:01Z');").unwrap();
+        let journal = OperationJournal {
+            connection: Mutex::new(connection),
+            fence_active: Mutex::new(std::collections::HashSet::new()),
+            fence_events: Mutex::new(None),
+        };
+        let since = "2026-01-01T00:00:00Z";
+        assert_eq!(journal.close_status(since).unwrap(), (false, false));
+        journal
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO operation_journal VALUES('running',NULL,NULL)",
+                [],
+            )
+            .unwrap();
+        assert_eq!(journal.close_status(since).unwrap(), (true, false));
+        journal.connection.lock().execute("UPDATE operation_journal SET state='cancelled',failure='cancelled',finished_at='2026-01-01T00:00:02Z' WHERE state='running'", []).unwrap();
+        assert_eq!(journal.close_status(since).unwrap(), (false, true));
+        journal
+            .connection
+            .lock()
+            .execute("DROP TABLE operation_journal", [])
+            .unwrap();
+        assert!(journal.close_status(since).is_err());
+    }
     fn path() -> std::path::PathBuf {
         std::env::temp_dir().join(format!("p4deck-journal-{}.sqlite", uuid::Uuid::new_v4()))
     }

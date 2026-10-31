@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { dialogHarness, dialogButton, chooseSelect } from "./testHarness";
+import { dialogHarness, dialogButton } from "./testHarness";
 import { refreshFileLockFacts, useCommandDialogs } from "./useCommandDialogs";
 import type {
   PendingChange,
   PendingChangePage,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { backend } from "../../infrastructure/backend";
+import { lookupSubmitAction } from "../../features/actions/workflowReceipt";
 import { workspaceCache } from "../../features/files/workspaceQueries";
+vi.mock("../../features/actions/workflowReceipt", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../features/actions/workflowReceipt")
+  >()),
+  lookupSubmitAction: vi.fn(),
+}));
 const harness = dialogHarness();
 const node: WorkspaceNode = {
   id: "a",
@@ -144,17 +151,34 @@ it("connects the shared submit dialog to preflight and confirmation adapters", a
     operationIds: [],
     refreshRecommended: false,
   });
-  const confirm = vi.spyOn(backend, "confirmSubmit").mockResolvedValue({
-    outcome: "submitted",
-    changeId: 10,
-    message: "Submitted",
-    refresh: {
-      pendingChanges: true,
-      submittedChanges: true,
-      workspaceStatus: true,
-      depotPaths: ["//depot/a"],
-      reason: "refresh",
-    },
+  const confirm = vi
+    .spyOn(backend, "confirmSubmit")
+    .mockImplementation(async (confirmation) => ({
+      execution: {
+        kind: "submit",
+        operationId: confirmation.operationId!,
+        state: "commandCompleted",
+        outcome: "submitted",
+        files: [],
+      },
+      outcome: "submitted",
+      changeId: 10,
+      submittedChangeId: 42,
+      message: "Submitted as CL 42",
+      refresh: {
+        pendingChanges: true,
+        submittedChanges: true,
+        workspaceStatus: true,
+        depotPaths: ["//depot/a"],
+        reason: "refresh",
+      },
+    }));
+  vi.spyOn(backend, "companySubmitConnectionSnapshot").mockResolvedValue({
+    profileId: "fixture",
+    generation: "1",
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
   });
   await harness.render(<Harness />);
   await act(async () =>
@@ -166,11 +190,146 @@ it("connects the shared submit dialog to preflight and confirmation adapters", a
   );
   await act(async () => dialogButton("确认提交整个 CL").click());
   expect(preflight).toHaveBeenCalledExactlyOnceWith({ changeId: 10 });
-  expect(confirm).toHaveBeenCalledExactlyOnceWith({
+  const confirmation = confirm.mock.calls[0][0] as {
+    token: string;
+    target: { changeId: number };
+    operationId: string;
+  };
+  expect(confirmation).toMatchObject({
     token: "token",
     target: expect.objectContaining({ changeId: 10 }),
   });
-  expect(document.body.textContent).toContain("Submitted");
+  expect(confirmation.operationId).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  );
+  expect(document.body.textContent).toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain("CL 42");
+  expect(document.body.textContent).toContain("Submitted as CL 42");
+});
+
+const submitConnection = {
+  profileId: "fixture",
+  generation: "1",
+  server: "server:1666",
+  user: "tester",
+  client: "workspace",
+};
+function submitFixture() {
+  const change = {
+    id: 10,
+    description: "Submit me",
+    user: "tester",
+    client: "workspace",
+    status: "pending" as const,
+    jobs: [],
+    files: [{ depotPath: "//depot/a", action: "edit" }],
+    shelvedFiles: [],
+  };
+  vi.spyOn(backend, "queryPendingChanges").mockResolvedValue(
+    pendingPage([change]),
+  );
+  vi.spyOn(backend, "preflightSubmit").mockResolvedValue({
+    ready: true,
+    change,
+    blockers: [],
+    warnings: [],
+    target: {
+      server: "server:1666",
+      user: "tester",
+      client: "workspace",
+      workspace: "/work",
+      changeId: 10,
+      contextGeneration: 1,
+    },
+    fileSummary: {
+      fileCount: 1,
+      depotPaths: ["//depot/a"],
+      actionCounts: { edit: 1 },
+      contentDigest: "digest",
+    },
+    token: "token",
+    expiresAt: Date.now() + 60_000,
+    ttlMs: 60_000,
+    operationIds: [],
+    refreshRecommended: false,
+  });
+  vi.spyOn(backend, "companySubmitConnectionSnapshot").mockResolvedValue(
+    submitConnection,
+  );
+}
+async function openSubmitDialog() {
+  await harness.render(<Harness />);
+  await act(async () =>
+    api.open({ kind: "submit", id: 10, count: 1, source: null }),
+  );
+  await act(async () => dialogButton("重新预检").click());
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await act(async () => dialogButton("确认提交整个 CL").click());
+}
+
+it("recovers an unconfirmed submit by the SAME operation id and shows authority", async () => {
+  submitFixture();
+  const confirm = vi
+    .spyOn(backend, "confirmSubmit")
+    .mockRejectedValue(new Error("transport lost"));
+  const lookup = vi
+    .mocked(lookupSubmitAction)
+    .mockImplementation(async (request) => ({
+      kind: "found" as const,
+      receipt: {
+        operationId: request.operationId,
+        kind: "submit" as const,
+        connection: request.connection,
+        payloadDigest: "a".repeat(64),
+        revision: "2",
+        state: "settled" as const,
+        result: {
+          outcome: "submitted" as const,
+          changeId: 10,
+          submittedChangeId: 42,
+          message: "Submitted as CL 42",
+          refresh: {
+            pendingChanges: true,
+            submittedChanges: true,
+            workspaceStatus: true,
+            depotPaths: ["//depot/a"],
+            reason: "refresh",
+          },
+        },
+      },
+    }));
+  await openSubmitDialog();
+  const confirmation = confirm.mock.calls[0][0] as { operationId: string };
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(lookup).toHaveBeenCalledExactlyOnceWith({
+    operationId: confirmation.operationId,
+    connection: submitConnection,
+  });
+  expect(document.body.textContent).toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain("CL 42");
+  expect(document.body.textContent).not.toContain("结果不确定");
+});
+
+it("keeps a lost submit uncertain when the receipt has no settled result", async () => {
+  submitFixture();
+  const confirm = vi
+    .spyOn(backend, "confirmSubmit")
+    .mockRejectedValue(new Error("transport lost"));
+  const lookup = vi
+    .mocked(lookupSubmitAction)
+    .mockResolvedValue({ kind: "notFound" });
+  await openSubmitDialog();
+  const confirmation = confirm.mock.calls[0][0] as { operationId: string };
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(lookup).toHaveBeenCalledExactlyOnceWith({
+    operationId: confirmation.operationId,
+    connection: submitConnection,
+  });
+  expect(document.body.textContent).toContain("结果不确定");
+  expect(document.body.textContent).not.toContain("提交结果（权威）");
+  expect(document.body.textContent).toContain(confirmation.operationId);
 });
 
 it("connects toolbar and context-menu resolve requests to the typed workflow", async () => {
@@ -209,6 +368,12 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
     ttlMs: 60_000,
     operationIds: [],
   });
+  vi.spyOn(backend, "resolveStats").mockResolvedValue({
+    base: {},
+    source: {},
+    target: {},
+    conflicts: 0,
+  });
   const confirm = vi.spyOn(backend, "confirmResolve").mockResolvedValue({
     outcome: "succeeded",
     message: "Resolved",
@@ -231,20 +396,32 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
   await act(async () =>
     api.open({ kind: "resolve", nodes: [depotNode], source: null }),
   );
-  await act(async () => dialogButton("检查冲突").click());
-  await chooseSelect("safe");
-  await act(async () => dialogButton("执行逐文件计划").click());
+  // P4V-style dialog: the conflict list is inspected once automatically on mount.
+  // Accept executes immediately and success re-inspects the full scope, so the
+  // preflight runs twice while the confirmation runs exactly once.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   expect(preflight).toHaveBeenCalledExactlyOnceWith({
     depotPaths: ["//depot/a"],
   });
+  const acceptSafe = [
+    ...document.querySelectorAll<HTMLButtonElement>("dialog button"),
+  ].find((button) => button.textContent?.includes("接受自动合并"))!;
+  await act(async () => acceptSafe.click());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(preflight).toHaveBeenCalledTimes(2);
   expect(confirm).toHaveBeenCalledExactlyOnceWith({
+    operationId: expect.any(String),
     token: "resolve-token",
     target,
     resolutions: [{ depotPath: "//depot/a", strategy: "safe" }],
   });
 });
 
-it("connects file shelving requests through FileClWorkflow to the typed workflow", async () => {
+it("file shelving no longer opens a preflight or confirm dialog", async () => {
   const depotNode = {
     ...node,
     depotPath: "//depot/a",
@@ -265,53 +442,7 @@ it("connects file shelving requests through FileClWorkflow to the typed workflow
   vi.spyOn(backend, "queryPendingChanges").mockResolvedValue(
     pendingPage([change]),
   );
-  const target = {
-    kind: "shelf" as const,
-    server: "server:1666",
-    user: "tester",
-    client: "workspace",
-    workspace: "/work",
-    contextGeneration: 1,
-    sourceChangeId: 10,
-    depotPaths: ["//depot/a"],
-  };
-  const preflight = vi.spyOn(backend, "preflightShelf").mockResolvedValue({
-    ready: true,
-    change,
-    blockers: [],
-    warnings: [],
-    target,
-    scope: {
-      openedPaths: ["//depot/a"],
-      existingShelvedPaths: [],
-      createPaths: ["//depot/a"],
-      replacePaths: [],
-      deletePaths: [],
-      contentDigest: "digest",
-    },
-    token: "shelf-token",
-    expiresAt: Date.now() + 60_000,
-    ttlMs: 60_000,
-    operationIds: [],
-  });
-  const confirm = vi.spyOn(backend, "confirmShelf").mockResolvedValue({
-    outcome: "succeeded",
-    message: "Shelved",
-    operationIds: ["shelf-op"],
-    files: [
-      {
-        depotPath: "//depot/a",
-        state: "succeeded",
-        message: "verified",
-      },
-    ],
-    refresh: {
-      pendingChanges: true,
-      workspaceStatus: true,
-      depotPaths: ["//depot/a"],
-      reason: "refresh",
-    },
-  });
+  const preflight = vi.spyOn(backend, "preflightShelf");
   await harness.render(<Harness />);
   await act(async () =>
     api.open({
@@ -321,16 +452,10 @@ it("connects file shelving requests through FileClWorkflow to the typed workflow
       source: null,
     }),
   );
-  await act(async () => dialogButton("运行预检").click());
-  await act(async () => dialogButton("确认搁置所选文件").click());
-  expect(preflight).toHaveBeenCalledExactlyOnceWith({
-    changeId: 10,
-    depotPaths: ["//depot/a"],
-    mode: "createOrUpdate",
-    replace: false,
+  await act(async () => {
+    await Promise.resolve();
   });
-  expect(confirm).toHaveBeenCalledExactlyOnceWith({
-    token: "shelf-token",
-    target,
-  });
+  // No FE preflight call and no shelf/confirm dialog; the host command owns its internal check.
+  expect(preflight).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
 });

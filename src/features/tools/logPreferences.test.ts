@@ -22,6 +22,11 @@ it("restores only bounded non-sensitive P4 Log view preferences", () => {
       }),
     ),
   ).toEqual({ level: "", source: "", followTail: true });
+  expect(
+    readLogViewPreferences(
+      JSON.stringify({ level: "cancelled", source: "", followTail: true }),
+    ).level,
+  ).toBe("cancelled");
   expect(readLogViewPreferences("broken")).toEqual({
     level: "",
     source: "",

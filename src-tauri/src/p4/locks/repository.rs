@@ -23,6 +23,18 @@ impl LockRepository {
     pub async fn lock_mutations(&self, server: &str) -> MutationGuard {
         self.runner.lock_mutations(server).await
     }
+    /// Unified S1B write lane: same-server writes serialize and the durable
+    /// WriteLease is attached until `MutationGuard::finish`.
+    pub async fn lock_write_transaction(
+        &self,
+        context: &P4Context,
+        operation_id: &str,
+    ) -> Result<MutationGuard, String> {
+        self.runner
+            .lock_write_transaction(context, operation_id)
+            .await
+            .map_err(|error| error.to_string())
+    }
     pub fn begin_group(&self, operation_id: String) -> OperationGroup {
         self.runner.begin_operation_group(operation_id)
     }

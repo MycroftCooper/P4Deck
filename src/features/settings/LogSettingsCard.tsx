@@ -2,13 +2,32 @@ import { useRef, useState } from "react";
 import { FolderOpen, ScrollText, Trash2 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
 import { Dialog } from "../../app/dialogs/Dialog";
+import type { ConnectionSnapshot } from "../companySubmit/model";
+import {
+  lookupControlPlaneAction,
+  type ControlPlaneActionLookup,
+} from "../actions/workflowReceipt";
+import {
+  controlPlaneCommitted,
+  controlPlaneDetails,
+  runControlPlaneAction,
+} from "./controlPlaneLifecycle";
 
 export function LogSettingsCard({
   zh,
   native,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
 }: {
   zh: boolean;
   native: boolean;
+  /** Exact dispatching connection snapshot; captured once per clear. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<ControlPlaneActionLookup>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [confirm, setConfirm] = useState(false);
@@ -22,18 +41,42 @@ export function LogSettingsCard({
     setError("");
     setMessage("");
     try {
-      if (action === "open") await backend.openLogsFolder();
-      else {
-        await backend.deleteAllLogs();
+      if (action === "open") {
+        await backend.openLogsFolder();
+      } else {
+        const operationId = crypto.randomUUID();
+        const dispatching = await (
+          connectionProvider ??
+          (() => backend.companySubmitConnectionSnapshot())
+        )();
+        const runResult = await runControlPlaneAction({
+          kind: "logClear",
+          operationId,
+          connection: dispatching,
+          execute: () => backend.deleteAllLogs({ operationId }),
+          lookup: lookupReceipt ?? lookupControlPlaneAction,
+        });
         setConfirm(false);
-        setMessage(
-          native
-            ? tr(
-                "已删除全部日志，后续日志将继续写入。",
-                "All logs deleted. New logs will continue to be recorded.",
-              )
-            : tr("已清空模拟日志。", "Simulated logs cleared."),
-        );
+        if (controlPlaneCommitted(runResult.result)) {
+          const remaining =
+            controlPlaneDetails<{ remainingEntries?: number }>(runResult.result)
+              ?.remainingEntries ?? 0;
+          setMessage(
+            native
+              ? tr(
+                  `日志已清空（回读确认剩余 ${remaining} 条）；后续日志将继续写入。`,
+                  `Logs cleared (readback confirms ${remaining} remaining); new logs will continue to be recorded.`,
+                )
+              : tr("已清空模拟日志。", "Simulated logs cleared."),
+          );
+        } else {
+          setError(
+            tr(
+              "清理结果不确定：回读仍有条目或读取失败。已用同一操作号查询持久回执；请先核对日志页，不要换新操作号重试。",
+              "Clear outcome uncertain: the readback still has entries or failed. The durable receipt was queried with the same operation id; inspect the log page before any retry with a new id.",
+            ),
+          );
+        }
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

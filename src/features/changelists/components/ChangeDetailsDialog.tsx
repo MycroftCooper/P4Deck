@@ -12,8 +12,9 @@ import type {
   PendingChange,
   RuntimeInfo,
   SubmittedChangeDetail,
-} from "../../../shared/contracts/types";
-import { RevisionFileList } from "./RevisionFileList";
+} from "../../../shared/contracts";
+import { ResizableTable } from "../../../app/context-menu/ResizableTable";
+import { FileStatusIcon } from "../../files/components/FileStatusIcon";
 export type ChangeDetailsTarget =
   | {
       kind: "submitted";
@@ -175,7 +176,11 @@ function ChangeDetailsDialog({
       : "—";
   return (
     <Dialog
-      title={`${tr("CL 详情", "Changelist details")} · ${target.changeId || "default"}`}
+      title={`${tr("CL 详情", "Changelist details")} · ${target.changeId || "default"}${
+        value && value.files.length
+          ? ` · ${value.files.length} ${tr("个文件", "files")}`
+          : ""
+      }`}
       source={source}
       zh={zh}
       onRequestClose={onClose}
@@ -248,19 +253,71 @@ function ChangeDetailsDialog({
                   tr("文件列表可能不完整", "File list may be incomplete")}
               </DialogNotice>
             )}
-            <h3>
-              {tr("文件", "Files")} · {value.files.length}
-            </h3>
             {value.files.length ? (
-              <RevisionFileList
-                showFileType
-                files={value.files.map((f) => ({
-                  ...f,
-                  changeId: value.changeId,
-                }))}
-                scope={`${runtime.contextGeneration}:${target.kind}:${target.changeId}`}
-                demo={runtime.mode === "mock"}
-              />
+              <div
+                className="change-details-table-scroll"
+                data-testid="change-details-files-scroll"
+              >
+                <ResizableTable
+                  tableId="change-details-files"
+                  defaults={[220, 300, 120, 100, 80]}
+                  minimums={[120, 160, 80, 70, 60]}
+                  className="change-details-files-table"
+                >
+                  <thead>
+                    <tr>
+                      <th>{tr("文件名称", "File name")}</th>
+                      <th>{tr("路径", "Path")}</th>
+                      <th>{tr("类型", "Type")}</th>
+                      <th>{tr("动作", "Action")}</th>
+                      <th>{tr("版本", "Revision")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {value.files.map((file) => {
+                      const name =
+                        file.depotPath.split("/").at(-1) || file.depotPath;
+                      const parent = file.depotPath.includes("/")
+                        ? file.depotPath.slice(
+                            0,
+                            file.depotPath.lastIndexOf("/") + 1,
+                          )
+                        : "";
+                      return (
+                        <tr
+                          key={`${file.depotPath}#${file.revision ?? "unknown"}`}
+                        >
+                          <td>
+                            <span className="change-details-file-name">
+                              <FileStatusIcon
+                                facts={{ scope: "revision" }}
+                                zh={zh}
+                              />
+                              <span
+                                title={`${name}${file.fileType ? ` · ${file.fileType}` : ""}`}
+                              >
+                                {name}
+                              </span>
+                            </span>
+                          </td>
+                          <td title={file.depotPath}>
+                            <span className="change-details-file-path">
+                              {parent || "—"}
+                            </span>
+                          </td>
+                          <td>{file.fileType || "—"}</td>
+                          <td>{file.action || "—"}</td>
+                          <td>
+                            {file.revision === undefined
+                              ? "#?"
+                              : `#${file.revision}`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </ResizableTable>
+              </div>
             ) : (
               <p>{tr("无文件", "No files")}</p>
             )}

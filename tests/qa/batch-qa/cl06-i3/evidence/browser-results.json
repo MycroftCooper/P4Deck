@@ -1,0 +1,238 @@
+{
+  "checks": [
+    {
+      "name": "dependency-hashes",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "tool-after-p4:light1200",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light1200User",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light1200Workspace",
+      "pass": true
+    },
+    {
+      "name": "saved-path:light1200",
+      "pass": true
+    },
+    {
+      "name": "save-no-launch:light1200",
+      "pass": true
+    },
+    {
+      "name": "root-retained:light1200",
+      "pass": true
+    },
+    {
+      "name": "tool-after-p4:light390",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light390User",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:light390Workspace",
+      "pass": true
+    },
+    {
+      "name": "saved-path:light390",
+      "pass": true
+    },
+    {
+      "name": "save-no-launch:light390",
+      "pass": true
+    },
+    {
+      "name": "root-retained:light390",
+      "pass": true
+    },
+    {
+      "name": "tool-after-p4:dark1200",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:dark1200User",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:dark1200Workspace",
+      "pass": true
+    },
+    {
+      "name": "saved-path:dark1200",
+      "pass": true
+    },
+    {
+      "name": "save-no-launch:dark1200",
+      "pass": true
+    },
+    {
+      "name": "root-retained:dark1200",
+      "pass": true
+    },
+    {
+      "name": "tool-after-p4:dark390",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:dark390User",
+      "pass": true
+    },
+    {
+      "name": "browse-inline:dark390Workspace",
+      "pass": true
+    },
+    {
+      "name": "saved-path:dark390",
+      "pass": true
+    },
+    {
+      "name": "save-no-launch:dark390",
+      "pass": true
+    },
+    {
+      "name": "root-retained:dark390",
+      "pass": true
+    },
+    {
+      "name": "no-preview-entry:light1200",
+      "pass": true
+    },
+    {
+      "name": "refresh-retained:light1200",
+      "pass": true
+    },
+    {
+      "name": "pending-35:light1200",
+      "pass": true
+    },
+    {
+      "name": "numeric-default:light1200",
+      "pass": true
+    },
+    {
+      "name": "wire:light1200",
+      "pass": true
+    },
+    {
+      "name": "unknown-no-relaunch:light1200",
+      "pass": true
+    },
+    {
+      "name": "no-preview-entry:light390",
+      "pass": true
+    },
+    {
+      "name": "refresh-retained:light390",
+      "pass": true
+    },
+    {
+      "name": "pending-35:light390",
+      "pass": true
+    },
+    {
+      "name": "numeric-default:light390",
+      "pass": true
+    },
+    {
+      "name": "wire:light390",
+      "pass": true
+    },
+    {
+      "name": "unknown-no-relaunch:light390",
+      "pass": true
+    },
+    {
+      "name": "no-preview-entry:dark1200",
+      "pass": true
+    },
+    {
+      "name": "refresh-retained:dark1200",
+      "pass": true
+    },
+    {
+      "name": "pending-35:dark1200",
+      "pass": true
+    },
+    {
+      "name": "numeric-default:dark1200",
+      "pass": true
+    },
+    {
+      "name": "wire:dark1200",
+      "pass": true
+    },
+    {
+      "name": "unknown-no-relaunch:dark1200",
+      "pass": true
+    },
+    {
+      "name": "no-preview-entry:dark390",
+      "pass": true
+    },
+    {
+      "name": "refresh-retained:dark390",
+      "pass": true
+    },
+    {
+      "name": "pending-35:dark390",
+      "pass": true
+    },
+    {
+      "name": "numeric-default:dark390",
+      "pass": true
+    },
+    {
+      "name": "wire:dark390",
+      "pass": true
+    },
+    {
+      "name": "unknown-no-relaunch:dark390",
+      "pass": true
+    },
+    {
+      "name": "native-route-only",
+      "pass": true
+    },
+    {
+      "name": "failure-no-fallback:error",
+      "pass": true
+    },
+    {
+      "name": "failure-no-fallback:transport",
+      "pass": true
+    },
+    {
+      "name": "transport-no-retry",
+      "pass": true
+    },
+    {
+      "name": "dependency-hashes",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-page-errors",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-external-requests",
+      "pass": true,
+      "data": []
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  }
+}

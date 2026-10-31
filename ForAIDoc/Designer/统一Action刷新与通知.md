@@ -2,26 +2,31 @@
 
 ## Action 目录
 
-`src/app/commands/catalog.ts` 是 37 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的“已保存连接”区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
+`src/app/commands/catalog.ts` 是 41 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的“已保存连接”区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
 
 | 分组 | 稳定 ID | 动作 | Windows / Linux | macOS | 风险 / 确认 |
 | --- | --- | --- | --- | --- | --- |
 | App | `app.commandPalette` | 命令面板 | Ctrl+Shift+P | Cmd+Shift+P | 只读 |
 | Connection | `connection.manageProfiles` | 连接 / 切换 Profile | — | — | 导航至受控 Settings 流程 |
-| Navigation | `view.refresh` | 刷新当前数据 | Ctrl+R | Cmd+R | 幂等只读 |
+| Navigation | `view.refresh` | 刷新当前数据 | Ctrl+R（别名 F5） | Cmd+R（别名 F5） | 幂等只读 |
 | Changes | `workspace.sync` / `workspace.syncRevision` | Sync / Sync to revision | — | — | mutation；既有 Sync preflight/confirm |
 | Changes | `changelist.submit` | Submit 所选 CL | — | — | mutation；既有 Submit preflight/confirm |
 | Changes | `changelist.shelf` / `changelist.moveFiles` | Shelf / 移动到 CL | — | — | mutation；既有工作流状态机 |
 | Changes | `file.rename` / `file.resolve` | Rename/Move / Resolve | — | — | mutation；既有 preflight/confirm |
 | Changes | `file.lock` / `file.unlock` | Lock / Unlock | — | — | mutation；既有完整文件集预检与确认 |
 | Changes | `file.checkout` / `file.add` / `file.delete` / `file.revert` | 文件写操作 | — | — | mutation；既有目标策略与适用确认 |
-| Navigation | `view.pending` / `view.submitted` | Pending / Submitted | — | — | 只读导航 |
+| Navigation | `view.files` | Depot 文件 | Ctrl+9 | Cmd+9 | 只读导航 |
+| Navigation | `view.pending` / `view.submitted` | Pending / Submitted | Ctrl+1 / Ctrl+2 | Cmd+1 / Cmd+2 | 只读导航 |
+| Navigation | `view.branchMappings` | Branch Mappings | Ctrl+3 | Cmd+3 | 只读导航 |
 | Navigation | `view.search` | Global Search | Ctrl+Shift+F | Cmd+Shift+F | 只读导航 |
-| Navigation | `view.workspaces` | Workspace | — | — | 只读导航；切换仍走验证/CAS |
-| Navigation | `view.streams` | Streams | — | — | 只读导航；切换动作仍走验证/CAS |
-| Tools | `view.diagnostics` | Diagnostics | — | — | 只读 |
-| File | `file.diff` / `file.history` / `file.revgraph` / `file.preview` | 文件查看工具 | — | — | 只读；要求适用的单文件上下文 |
-| File | `file.reveal` / `file.openWith` | 系统定位 / Open With | — | — | 本地系统能力检查 |
+| Navigation | `view.workspaces` | Workspace | Ctrl+5 | Cmd+5 | 只读导航；切换仍走验证/CAS |
+| Navigation | `view.streams` | Streams | Ctrl+7 | Cmd+7 | 只读导航；切换动作仍走验证/CAS |
+| Navigation | `view.streamgraph` | Stream Graph | Ctrl+Shift+M | Cmd+Shift+M | 只读导航 |
+| Navigation | `navigation.focusAddress` | 跳转到地址栏 | Alt+L（别名 Ctrl+G） | Option+L（别名 Cmd+G） | 只读；仅聚焦统一地址栏，不改变当前对象 |
+| Tools | `view.diagnostics` | Diagnostics | Ctrl+I | Cmd+I | 只读 |
+| File | `file.diff` | Diff | Ctrl+D（别名 Ctrl+Shift+D） | Cmd+D（别名 Cmd+Shift+D） | 只读；要求适用的单文件上下文 |
+| File | `file.history` / `file.revgraph` / `file.preview` | 文件查看工具 | Ctrl+T / Ctrl+Shift+R / — | Cmd+T / Cmd+Shift+R / — | 只读；要求适用的单文件上下文 |
+| File | `file.reveal` / `file.openWith` | 系统定位 / Open With | Ctrl+Shift+S / — | Cmd+Shift+S / — | 本地系统能力检查 |
 | Navigation | `swarm.open` | 在 Swarm 中打开 | — | — | 只读外链；活动 profile/context CAS 与 URL allowlist |
 | App | `operation.cancel` | 取消当前操作 | — | — | 仅在现有状态机允许时可用 |
 | Tools | `tools.openTerminal` | Terminal | Ctrl+Alt+T | Cmd+Option+T | sensitive；继续受 Terminal 双层安全策略约束 |
@@ -31,7 +36,7 @@
 | App | `refresh.toggleAuto` | 暂停 / 恢复自动刷新 | — | — | 只读偏好 |
 | Tools | `panel.dockBack` | 停靠回主窗口 | Ctrl+Alt+D | Cmd+Option+D | 仅独立窗口 |
 
-快捷键按平台精确解析：Windows/Linux 只接受 Ctrl，macOS 只接受 Cmd；普通快捷键在 input、textarea、select、contenteditable 和 textbox 内不触发。命令面板及旧 Terminal/P4 Log 快捷键明确允许在编辑焦点下使用。mutation 不分配直接快捷键，也不能绕过上下文禁用原因。
+快捷键按平台精确解析：Windows/Linux 只接受 Ctrl，macOS 只接受 Cmd；普通快捷键在 input、textarea、select、contenteditable 和 textbox 内不触发。命令面板及旧 Terminal/P4 Log 快捷键明确允许在编辑焦点下使用。mutation 不分配直接快捷键，也不能绕过上下文禁用原因；只读/导航命令按 P4V 默认映射绑定主键位，`aliases` 仅作默认兼容键位（参与分发与冲突检测，不进入后续 Settings 的可编辑主键）。
 
 ## Retry 边界
 

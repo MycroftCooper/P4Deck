@@ -7,6 +7,7 @@ use crate::{
     p4::{
         context::ContextStore,
         locks::{LockInspection, LockRepository},
+        runner::MutationGuard,
     },
 };
 use sha2::{Digest, Sha256};
@@ -180,9 +181,36 @@ impl FileLockService {
         }
     }
 
+    /// Unified write lane entry for IPC: same-server writes serialize and a
+    /// durable S1B WriteLease is attached until `MutationGuard::finish`.
+    pub async fn lock_write_transaction(
+        &self,
+        context: &crate::domain::P4Context,
+        operation_id: &str,
+    ) -> Result<MutationGuard, String> {
+        self.repository
+            .lock_write_transaction(context, operation_id)
+            .await
+    }
+
+    /// Compatibility entry used only by the feature-gated e2e harness:
+    /// acquires the legacy in-memory mutation lane without a durable lease.
+    /// Production IPC uses `confirm_admitted` with the unified write lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm(
         &self,
         confirmation: FileLockConfirmation,
+        app: Option<&AppHandle>,
+    ) -> FileLockResult {
+        let (context, _) = self.contexts.snapshot();
+        let guard = self.repository.lock_mutations(&context.server).await;
+        self.confirm_admitted(confirmation, &guard, app).await
+    }
+
+    pub async fn confirm_admitted(
+        &self,
+        confirmation: FileLockConfirmation,
+        guard: &MutationGuard,
         app: Option<&AppHandle>,
     ) -> FileLockResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -231,7 +259,6 @@ impl FileLockService {
                 operation_id,
             );
         }
-        let guard = self.repository.lock_mutations(&context.server).await;
         let paths = record
             .target
             .files
@@ -331,7 +358,7 @@ impl FileLockService {
                     record.target.operation,
                     &file.depot_path,
                     child_id.clone(),
-                    &guard,
+                    guard,
                     app,
                 )
                 .await
@@ -593,7 +620,22 @@ fn result_from_files(
     } else {
         FileLockOutcome::Failed
     };
-    FileLockResult { outcome, failure: match outcome { FileLockOutcome::Succeeded | FileLockOutcome::Partial => None, FileLockOutcome::Cancelled => Some(FileLockFailureCode::Cancelled), FileLockOutcome::Unknown => Some(FileLockFailureCode::UncertainOutcome), _ => Some(FileLockFailureCode::CommandFailure) }, message: format!("Lock operation finished: {succeeded} satisfied, {failed} failed, {cancelled} cancelled, {unknown} unknown. Successful files were not rolled back."), files, operation_id: Some(operation_id.clone()), log_reference: Some(operation_id), refresh: refresh(target, "Lock state changed or may have changed; refresh workspace, Pending, search and review caches.") }
+    let execution = execution_envelope(&operation_id, outcome, &files);
+    FileLockResult {
+        execution: Some(execution),
+        outcome,
+        failure: match outcome {
+            FileLockOutcome::Succeeded | FileLockOutcome::Partial => None,
+            FileLockOutcome::Cancelled => Some(FileLockFailureCode::Cancelled),
+            FileLockOutcome::Unknown => Some(FileLockFailureCode::UncertainOutcome),
+            _ => Some(FileLockFailureCode::CommandFailure),
+        },
+        message: format!("Lock operation finished: {succeeded} satisfied, {failed} failed, {cancelled} cancelled, {unknown} unknown. Successful files were not rolled back."),
+        files,
+        operation_id: Some(operation_id.clone()),
+        log_reference: Some(operation_id),
+        refresh: refresh(target, "Lock state changed or may have changed; refresh workspace, Pending, search and review caches."),
+    }
 }
 
 fn file_result(
@@ -691,6 +733,7 @@ fn rejected(
     target: Option<&FileLockTargetSnapshot>,
 ) -> FileLockResult {
     FileLockResult {
+        execution: None,
         outcome: FileLockOutcome::Rejected,
         failure: Some(failure),
         message: message.into(),
@@ -720,6 +763,41 @@ fn rejected_with_operation(
     result.operation_id = Some(operation_id.clone());
     result.log_reference = Some(operation_id);
     result
+}
+
+/// S3a-style execution envelope for the lock lifecycle. `commandCompleted`
+/// only means a dispatched lifecycle produced known per-file facts; it never
+/// claims per-file success, and the authoritative rows stay in `files[]`.
+fn execution_envelope(
+    operation_id: &str,
+    outcome: FileLockOutcome,
+    files: &[FileLockFileResult],
+) -> FileActionExecution {
+    let unknown = outcome == FileLockOutcome::Unknown
+        || files
+            .iter()
+            .any(|file| file.outcome == FileLockFileOutcome::Unknown);
+    FileActionExecution {
+        operation_id: operation_id.to_string(),
+        outcome: if unknown {
+            "unknown"
+        } else {
+            "commandCompleted"
+        }
+        .into(),
+        per_file_evidence: "notCollected".into(),
+        files: None,
+    }
+}
+
+/// A lock lifecycle is verified only when no per-file effect is unconfirmed.
+/// Unknown/uncertain rows must keep a conservative durable fence.
+pub(crate) fn verified_completion(result: &FileLockResult) -> bool {
+    result.outcome != FileLockOutcome::Unknown
+        && !result
+            .files
+            .iter()
+            .any(|file| file.outcome == FileLockFileOutcome::Unknown)
 }
 
 #[cfg(test)]
@@ -772,5 +850,62 @@ mod tests {
             issues(FileLockOperation::Lock, &[ours]).1[0].code,
             FileLockIssueCode::AlreadyLocked
         );
+    }
+    #[test]
+    fn execution_envelope_marks_unknown_and_never_claims_per_file_success() {
+        let id = "11111111-1111-4111-8111-111111111111";
+        let row = |outcome| FileLockFileResult {
+            depot_path: "//depot/a".into(),
+            outcome,
+            message: String::new(),
+            ownership: FileLockOwnership::Ours,
+            lock_owner: None,
+            operation_id: None,
+        };
+        let known = execution_envelope(
+            id,
+            FileLockOutcome::Succeeded,
+            &[row(FileLockFileOutcome::Succeeded)],
+        );
+        assert_eq!(known.outcome, "commandCompleted");
+        assert_eq!(known.per_file_evidence, "notCollected");
+        let unknown = execution_envelope(
+            id,
+            FileLockOutcome::Partial,
+            &[row(FileLockFileOutcome::Unknown)],
+        );
+        assert_eq!(unknown.outcome, "unknown");
+    }
+    #[test]
+    fn verified_completion_is_false_when_any_file_is_unknown() {
+        let unknown = FileLockFileResult {
+            depot_path: "//depot/a".into(),
+            outcome: FileLockFileOutcome::Unknown,
+            message: String::new(),
+            ownership: FileLockOwnership::Unlocked,
+            lock_owner: None,
+            operation_id: None,
+        };
+        let target = FileLockTargetSnapshot {
+            server: "s".into(),
+            user: "u".into(),
+            client: "c".into(),
+            workspace: "w".into(),
+            active_profile_id: None,
+            context_generation: 1,
+            operation: FileLockOperation::Lock,
+            files: Vec::new(),
+        };
+        let result = FileLockResult {
+            execution: None,
+            outcome: FileLockOutcome::Partial,
+            failure: None,
+            message: String::new(),
+            files: vec![unknown],
+            operation_id: None,
+            log_reference: None,
+            refresh: refresh(&target, "test"),
+        };
+        assert!(!verified_completion(&result));
     }
 }

@@ -1,5 +1,16 @@
 import { expect, it } from "vitest";
-import { fileBadges, fileBadgeLabel } from "./fileDecorations";
+import {
+  fileBadgeTone,
+  fileBadges,
+  fileBadgeLabel,
+  type FileBadgeId,
+} from "./fileDecorations";
+
+it("uses a yellow badge for older/not-synced revisions", () => {
+  expect(fileBadgeTone("outOfDate")).toBe("yellow");
+  expect(fileBadgeTone("notSynced")).toBe("yellow");
+  expect(fileBadgeTone("modified")).toBe("amber");
+});
 
 it("does not infer modified or latest from checkout or controlled alone", () => {
   expect(fileBadges({ state: "openedEdit" })).toEqual([
@@ -126,4 +137,42 @@ it("renders authoritative lock ownership and +l independently", () => {
     ["exclusive", "other", "bob@render"],
     ["edit", "self", undefined],
   ]);
+});
+
+it("UI-10 semantic palette: checkout/add/move-target green; delete/conflict/error red; locks orange; sync/modified amber", () => {
+  const tones: Partial<Record<FileBadgeId, string>> = {
+    add: "success",
+    edit: "success",
+    "move/add": "success",
+    branch: "success",
+    delete: "danger",
+    "move/delete": "danger",
+    resolve: "danger",
+    error: "danger",
+    depotDeleted: "danger",
+    locked: "warning",
+    globalLock: "warning",
+    exclusive: "warning",
+    outOfDate: "yellow",
+    notSynced: "yellow",
+    modified: "amber",
+    integrate: "amber",
+    latest: "teal",
+    shelf: "purple",
+    symlink: "purple",
+    untracked: "neutral",
+    missing: "neutral",
+    unknown: "neutral",
+    stale: "neutral",
+    loading: "neutral",
+  };
+  for (const [id, tone] of Object.entries(tones))
+    expect(fileBadgeTone(id as FileBadgeId)).toBe(tone);
+  // The normal checkout must never share the destructive/conflict colour.
+  expect(fileBadgeTone("edit")).not.toBe(fileBadgeTone("delete"));
+  expect(fileBadgeTone("edit")).not.toBe(fileBadgeTone("resolve"));
+  // Ownership is not part of the colour decision.
+  const mine = fileBadges({ state: "openedEdit" })[0];
+  expect(mine.owner).toBe("self");
+  expect(fileBadgeTone(mine.id)).toBe("success");
 });

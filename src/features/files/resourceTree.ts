@@ -1,4 +1,4 @@
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 
 export type ResourceTreeMode = "workspace" | "depot";
 export interface ResourceFolder {

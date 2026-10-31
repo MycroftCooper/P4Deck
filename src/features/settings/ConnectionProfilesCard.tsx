@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useUnsavedEditor } from "../../app/closeGuard";
 import {
   Cable,
+  FolderOpen,
   KeyRound,
   LogIn,
   LogOut,
@@ -12,6 +14,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
+import { canPickExecutables, pickExecutablePath } from "./executablePicker";
+import {
+  beginConnectionControlIntent,
+  connectionStatusVerdict,
+  lookupConnectionControlReceipt,
+  recoverConnectionControlUnknown,
+  settleConnectionControlIntent,
+  type ConnectionControlKind,
+} from "./connectionControlLifecycle";
 import type {
   ConnectionProfile,
   ConnectionProfileErrorCode,
@@ -21,9 +32,10 @@ import type {
   Locale,
   P4Context,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   connectionPresentation,
+  cliStatus,
   contextIdentity,
   notTestedStatus,
   probeConnection,
@@ -246,13 +258,18 @@ function localizedError(
     ],
   };
   const selected = parsed.code ? copy[parsed.code] : undefined;
+  const base =
+    (selected && (zh ? selected[0] : selected[1])) ||
+    (zh
+      ? "操作未完成；当前连接未改动，请重试。"
+      : "The operation did not complete. The current connection was not changed; retry.");
+  // Surface the backend OS error (path/errno) for support; the localized text alone hides it.
+  const detail = parsed.detail.trim().slice(0, 300);
   return {
     code: parsed.code,
-    message:
-      (selected && (zh ? selected[0] : selected[1])) ||
-      (zh
-        ? "操作未完成；当前连接未改动，请重试。"
-        : "The operation did not complete. The current connection was not changed; retry."),
+    message: detail
+      ? base + (zh ? "（详情：" : " (detail: ") + detail + (zh ? "）" : ")")
+      : base,
   };
 }
 
@@ -279,6 +296,17 @@ export function ConnectionProfilesCard({
   const [error, setError] = useState("");
   const [password, setPassword] = useState("");
   const [trustConfirmed, setTrustConfirmed] = useState(false);
+  // UI-15: desktop-only native .exe picker (dynamic plugin import; hidden in browser/failure).
+  const [pickerAvailable, setPickerAvailable] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void canPickExecutables().then((available) => {
+      if (live) setPickerAvailable(available);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const [profileSearch, setProfileSearch] = useState("");
   const [deleteId, setDeleteId] = useState("");
   const deleteSource = useRef<HTMLButtonElement | null>(null);
@@ -313,6 +341,15 @@ export function ConnectionProfilesCard({
   })();
   const dirty =
     draftIdentity({ ...draft, context: current }) !== draftIdentity(baseline);
+  const clearUnsaved = useUnsavedEditor(
+    dirty || password.length > 0
+      ? "dirty"
+      : loading || !profiles
+        ? "unknown"
+        : "clean",
+    `${runtime.activeProfileId}:${runtime.contextGeneration}`,
+    "connectionSettings",
+  );
   selectedIdRef.current = selectedId;
   dirtyRef.current = dirty;
   const isActive = !!draft.id && profiles?.activeProfileId === draft.id;
@@ -353,6 +390,12 @@ export function ConnectionProfilesCard({
       "https://swarm.example/",
     ],
     ["executable", "P4 可执行文件", "P4 executable", "p4 / p4.exe"],
+    [
+      "customSubmitExecutablePath",
+      "自定义提交工具（可选）",
+      "Custom submit tool (optional)",
+      "C:\\Tools\\submit.exe",
+    ],
   ];
 
   const resetTransient = useCallback(
@@ -668,6 +711,28 @@ export function ConnectionProfilesCard({
       : tr("连接名称已存在。", "That connection name already exists.");
   }
 
+  function controlSnapshot() {
+    return {
+      profileId: profiles?.activeProfileId ?? "",
+      generation: String(runtime.contextGeneration),
+      server: current.server,
+      user: current.user,
+      client: current.client,
+    };
+  }
+  function beginControl(kind: ConnectionControlKind, label: string) {
+    const operationId = crypto.randomUUID();
+    beginConnectionControlIntent({ operationId, kind, label });
+    return operationId;
+  }
+  /** Exactly one same-id lookup; never a new id and never a credential replay. */
+  async function recoverControlOnce(operationId: string) {
+    settleConnectionControlIntent(operationId);
+    return recoverConnectionControlUnknown(operationId, {
+      connection: async () => controlSnapshot(),
+      lookup: lookupConnectionControlReceipt,
+    });
+  }
   async function saveProfile() {
     const validation = clientValidation();
     if (validation) {
@@ -678,6 +743,10 @@ export function ConnectionProfilesCard({
     const token = begin("save");
     if (token == null) return;
     const wasActive = !!draft.id && draft.id === profiles.activeProfileId;
+    const operationId = beginControl(
+      draft.id ? "connectionProfileUpdate" : "connectionProfileCreate",
+      `${current.server} / ${current.user}`,
+    );
     const existingProfileIds = new Set(
       profiles.profiles.map((item) => item.id),
     );
@@ -688,11 +757,13 @@ export function ConnectionProfilesCard({
             id: draft.id,
             name: savedName,
             context: current,
+            operationId,
           })
         : await backend.createConnectionProfile({
             expectedRevision: profiles.revision,
             name: savedName,
             context: current,
+            operationId,
           });
       if (!isCurrent(token)) return;
       setProfiles(document);
@@ -704,6 +775,7 @@ export function ConnectionProfilesCard({
           );
       if (!saved)
         throw new Error("notFound: Saved connection was not returned.");
+      clearUnsaved();
       const nextDraft = fromProfile(saved);
       setSelectedId(saved.id);
       setDraft(nextDraft);
@@ -738,6 +810,7 @@ export function ConnectionProfilesCard({
       }
     } catch (cause) {
       if (!isCurrent(token)) return;
+      await recoverControlOnce(operationId);
       const failure = localizedError(cause, zh);
       setError(failure.message);
       if (failure.code === "revisionConflict") {
@@ -752,6 +825,39 @@ export function ConnectionProfilesCard({
           );
         }
       }
+    } finally {
+      finish(token);
+    }
+  }
+
+  async function rediscoverCli() {
+    const token = begin("test");
+    if (token == null) return;
+    try {
+      const result = await backend.discoverP4Cli({
+        executable: current.executable,
+      });
+      if (!isCurrent(token)) return;
+      const unavailable = cliStatus(result, current.server);
+      publish(
+        unavailable ?? notTestedStatus(current.server),
+        result.version ?? cliVersion,
+      );
+      if (!unavailable)
+        setNotice(
+          tr(
+            "已找到 P4 CLI。可点击“验证这些设置”验证连接；尚未访问服务器。",
+            "P4 CLI found. Use Verify these settings to check the connection; no server has been contacted.",
+          ),
+        );
+    } catch {
+      if (isCurrent(token))
+        setError(
+          tr(
+            "CLI 检测未完成，请重试。",
+            "CLI detection did not complete. Retry.",
+          ),
+        );
     } finally {
       finish(token);
     }
@@ -823,13 +929,28 @@ export function ConnectionProfilesCard({
       return;
     const token = begin("trust");
     if (token == null) return;
+    const operationId = beginControl(
+      "authTrust",
+      `${current.server} / ${current.user}`,
+    );
     try {
       const trusted = await backend.trustServer({
         context: current,
         fingerprint: snapshot.fingerprint,
         confirmed: true,
+        operationId,
       });
       if (!isCurrent(token)) return;
+      settleConnectionControlIntent(operationId);
+      if (connectionStatusVerdict("authTrust", trusted) !== "success") {
+        setError(
+          tr(
+            "Trust 结果未被权威状态证实；卡片刻意保持不确定，请刷新后再试。",
+            "The trust result was not proven by the authoritative status. The card stays uncertain; refresh before retrying.",
+          ),
+        );
+        return;
+      }
       if (trusted.state === "notTested") {
         const result = await probeConnection(backend, current, () =>
           isCurrent(token),
@@ -838,13 +959,15 @@ export function ConnectionProfilesCard({
           publish(result.status, result.discovery.version ?? cliVersion);
       } else publish(trusted);
     } catch {
-      if (isCurrent(token))
+      if (isCurrent(token)) {
+        await recoverControlOnce(operationId);
         setError(
           tr(
             "Trust 请求未完成；未信任其他指纹。",
             "The trust request did not complete. No other fingerprint was trusted.",
           ),
         );
+      }
     } finally {
       finish(token);
     }
@@ -860,11 +983,16 @@ export function ConnectionProfilesCard({
     if (token == null) return;
     const singleUsePassword = password;
     setPassword("");
+    const operationId = beginControl(
+      "authLogin",
+      `${current.server} / ${current.user}`,
+    );
     try {
       const authenticated = await backend.login({
         context: current,
         password: singleUsePassword,
         confirmed: true,
+        operationId,
       });
       if (!isCurrent(token)) return;
       const status =
@@ -872,8 +1000,9 @@ export function ConnectionProfilesCard({
           ? await backend.queryLoginStatus(current)
           : authenticated;
       if (!isCurrent(token)) return;
+      settleConnectionControlIntent(operationId);
       publish(status);
-      if (status.state === "connected")
+      if (connectionStatusVerdict("authLogin", status) === "success")
         setNotice(
           runtime.mode === "mock"
             ? tr(
@@ -885,14 +1014,23 @@ export function ConnectionProfilesCard({
                 "The current settings are authenticated; the password was cleared.",
               ),
         );
+      else
+        setError(
+          tr(
+            "登录结果未被权威连接状态证实；密码已清空，请刷新后再试。",
+            "Login was not proven by the authoritative connection status; the password was cleared. Refresh before retrying.",
+          ),
+        );
     } catch {
-      if (isCurrent(token))
+      if (isCurrent(token)) {
+        await recoverControlOnce(operationId);
         setError(
           tr(
             "登录未完成；密码已清空。",
             "Login did not complete; the password was cleared.",
           ),
         );
+      }
     } finally {
       finish(token);
     }
@@ -903,27 +1041,43 @@ export function ConnectionProfilesCard({
     const token = begin("logout");
     if (token == null) return;
     setPassword("");
+    const operationId = beginControl(
+      "authLogout",
+      `${current.server} / ${current.user}`,
+    );
     try {
       const status = await backend.logout({
         context: current,
         confirmed: true,
+        operationId,
       });
       if (!isCurrent(token)) return;
+      settleConnectionControlIntent(operationId);
       publish(status);
-      setNotice(
-        runtime.mode === "mock"
-          ? tr(
-              "浏览器 Mock：模拟退出，未访问真实服务器。",
-              "Browser Mock: logout was simulated without contacting a real server.",
-            )
-          : tr(
-              "当前设置对应用户已退出。",
-              "The user for the current settings was logged out.",
-            ),
-      );
+      if (connectionStatusVerdict("authLogout", status) === "success")
+        setNotice(
+          runtime.mode === "mock"
+            ? tr(
+                "浏览器 Mock：模拟退出，未访问真实服务器。",
+                "Browser Mock: logout was simulated without contacting a real server.",
+              )
+            : tr(
+                "当前设置对应用户已退出。",
+                "The user for the current settings was logged out.",
+              ),
+        );
+      else
+        setError(
+          tr(
+            "退出结果未被权威状态证实；卡片刻意保持不确定。",
+            "Logout was not proven by the authoritative status; the card stays uncertain.",
+          ),
+        );
     } catch {
-      if (isCurrent(token))
+      if (isCurrent(token)) {
+        await recoverControlOnce(operationId);
         setError(tr("退出登录未完成。", "Logout did not complete."));
+      }
     } finally {
       finish(token);
     }
@@ -952,9 +1106,16 @@ export function ConnectionProfilesCard({
     resetTransient(emptyDraft(runtime));
   }
 
+  async function chooseExecutableFile(
+    key: "executable" | "customSubmitExecutablePath",
+  ) {
+    // Cancel/failure resolves undefined and leaves the current value untouched; never saves.
+    const selected = await pickExecutablePath();
+    if (selected) updateContext(key, selected);
+  }
   function updateContext(key: keyof P4Context, value: string) {
     generation.current += 1;
-    if (key === "swarmBaseUrl") {
+    if (key === "swarmBaseUrl" || key === "customSubmitExecutablePath") {
       setDraft({ ...draft, context: { ...draft.context, [key]: value } });
       setNotice("");
       setError("");
@@ -1033,10 +1194,12 @@ export function ConnectionProfilesCard({
     const wasActive = profiles.activeProfileId === deleteId;
     const token = begin("delete");
     if (token == null) return;
+    const operationId = beginControl("connectionProfileDelete", deleteId);
     try {
       const document = await backend.deleteConnectionProfile({
         expectedRevision: profiles.revision,
         id: deleteId,
+        operationId,
       });
       if (!isCurrent(token)) return;
       if (wasActive) {
@@ -1052,6 +1215,7 @@ export function ConnectionProfilesCard({
       requestAnimationFrame(() => newButtonRef.current?.focus());
     } catch (cause) {
       if (!isCurrent(token)) return;
+      await recoverControlOnce(operationId);
       const failure = localizedError(cause, zh);
       setError(failure.message);
       if (failure.code === "revisionConflict") {
@@ -1071,10 +1235,12 @@ export function ConnectionProfilesCard({
     if (!profiles || !draft.id || dirty) return;
     const token = begin("connect");
     if (token == null) return;
+    const operationId = beginControl("connectionProfileSetActive", draft.id);
     try {
       const next = await backend.setActiveConnectionProfile({
         expectedRevision: profiles.revision,
         id: draft.id,
+        operationId,
       });
       if (!isCurrent(token)) return;
       const document = await backend.listConnectionProfiles();
@@ -1085,7 +1251,10 @@ export function ConnectionProfilesCard({
       setConnection(next.connection);
       setNotice(tr("连接已启用。", "Connection is now active."));
     } catch (cause) {
-      if (isCurrent(token)) setError(localizedError(cause, zh).message);
+      if (isCurrent(token)) {
+        await recoverControlOnce(operationId);
+        setError(localizedError(cause, zh).message);
+      }
     } finally {
       finish(token);
     }
@@ -1363,19 +1532,6 @@ export function ConnectionProfilesCard({
                             >
                               <Search size={13} /> {tr("浏览", "Browse")}
                             </button>
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={(event) =>
-                                openResourceDialog(
-                                  key === "user" ? "user" : "workspace",
-                                  "create",
-                                  event.currentTarget,
-                                )
-                              }
-                            >
-                              <Plus size={13} /> {tr("新建", "New")}
-                            </button>
                           </div>
                         )}
                       </div>
@@ -1462,20 +1618,46 @@ export function ConnectionProfilesCard({
                 </p>
                 <div className="settings-grid profile-fields">
                   {p4Fields.map(([key, zhLabel, enLabel, placeholder]) => (
-                    <label key={key}>
-                      {zh ? zhLabel : enLabel}
-                      <input
-                        aria-label={zh ? zhLabel : enLabel}
-                        value={draft.context[key] ?? ""}
-                        placeholder={placeholder}
-                        spellCheck={false}
-                        onChange={(event) =>
-                          updateContext(key, event.target.value)
-                        }
-                      />
-                    </label>
+                    <div className="connection-field" key={key}>
+                      <label>
+                        {zh ? zhLabel : enLabel}
+                        <input
+                          aria-label={zh ? zhLabel : enLabel}
+                          value={draft.context[key] ?? ""}
+                          placeholder={placeholder}
+                          spellCheck={false}
+                          onChange={(event) =>
+                            updateContext(key, event.target.value)
+                          }
+                        />
+                      </label>
+                      {(key === "executable" ||
+                        key === "customSubmitExecutablePath") &&
+                        pickerAvailable && (
+                          <div className="connection-field-actions">
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={busy || loading}
+                              title={tr(
+                                "选择 .exe 文件（仅桌面版）",
+                                "Choose an .exe file (desktop only)",
+                              )}
+                              onClick={() => void chooseExecutableFile(key)}
+                            >
+                              <FolderOpen size={13} /> {tr("浏览", "Browse")}
+                            </button>
+                          </div>
+                        )}
+                    </div>
                   ))}
                 </div>
+                <p className="settings-field-note">
+                  {tr(
+                    "自定义提交工具留空时使用普通提交；配置后，原“提交 CL”按钮启动工具，失败不会回退。保存不会试运行。工作目录使用 exe 所在目录，继承应用环境；首版仅支持一次工具会话，退出不等于提交成功，也不会自动解除占用。",
+                    "Leave the custom submit tool empty for native submission. When configured, Submit CL starts the tool without fallback on failure. Saving never runs it. Working directory is the exe folder; environment is inherited. This version supports one tool session; exit does not confirm submission or release occupancy.",
+                  )}
+                </p>
                 <p className="settings-field-note">
                   {tr(
                     "Swarm URL 仅用于生成只读网页链接；不会保存 Swarm token、密码或登录信息。",
@@ -1598,6 +1780,34 @@ export function ConnectionProfilesCard({
               </div>
             </div>
             <p>{presentation.detail}</p>
+            {connection.state === "cliMissing" && (
+              <div className="connection-recovery-panel">
+                <p>
+                  {tr(
+                    "先重新检测已有的 P4 CLI。若未安装，请从 Perforce 官方页面选择 P4 CLI，自行确认适用条款并完成安装，再重新检测。打开下载页不会自动安装。",
+                    "First check for an existing P4 CLI. If missing, select P4 CLI on the official Perforce page, review the applicable terms and complete installation, then check again. Opening the page does not install it.",
+                  )}
+                </p>
+                <a
+                  href="https://www.perforce.com/downloads"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {tr(
+                    "Perforce 官方下载（P4 CLI）",
+                    "Official Perforce downloads (P4 CLI)",
+                  )}
+                </a>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void rediscoverCli()}
+                >
+                  {tr("重新检测 CLI", "Detect CLI again")}
+                </button>
+              </div>
+            )}
             <dl className="connection-facts">
               <div>
                 <dt>{tr("服务器", "Server")}</dt>

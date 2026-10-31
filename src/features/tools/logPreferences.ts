@@ -1,4 +1,5 @@
-import type { LogLevel, OperationSource } from "../../shared/contracts/types";
+import type { LogLevel, OperationSource } from "../../shared/contracts";
+import { LOG_LEVELS } from "./logLevels";
 
 export interface LogViewPreferences {
   level: LogLevel | "";
@@ -18,7 +19,7 @@ export function readLogViewPreferences(raw: string | null): LogViewPreferences {
     if (!value || typeof value !== "object") return defaultLogViewPreferences;
     const candidate = value as Partial<LogViewPreferences>;
     return {
-      level: ["", "info", "warning", "error"].includes(candidate.level ?? "")
+      level: ["", ...LOG_LEVELS].includes(candidate.level ?? "")
         ? (candidate.level ?? "")
         : "",
       source: ["", "gui", "terminal"].includes(candidate.source ?? "")

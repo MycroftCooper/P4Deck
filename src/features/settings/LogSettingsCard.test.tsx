@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
@@ -6,7 +6,25 @@ import { LogSettingsCard } from "./LogSettingsCard";
 const backend = vi.hoisted(() => ({
   openLogsFolder: vi.fn(),
   deleteAllLogs: vi.fn(),
+  companySubmitConnectionSnapshot: vi.fn(async () => ({
+    profileId: "fixture",
+    generation: "1",
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
+  })),
 }));
+const cleared = {
+  kind: "logClear" as const,
+  operationId: "op-clear",
+  state: "committed" as const,
+  outcome: "succeeded" as const,
+  artifact: { exists: false, sizeBytes: 0 },
+  details: { remainingEntries: 0 },
+  optimistic: "intentOnly" as const,
+  message: "cleared",
+  legacy: "ok",
+};
 vi.mock("../../infrastructure/backend", () => ({ backend }));
 let host: HTMLDivElement, root: Root;
 const originals = ["showModal", "close"].map((key) =>
@@ -18,7 +36,7 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   vi.resetAllMocks();
   backend.openLogsFolder.mockResolvedValue(undefined);
-  backend.deleteAllLogs.mockResolvedValue(undefined);
+  backend.deleteAllLogs.mockResolvedValue(cleared);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -59,24 +77,24 @@ it("opens the fixed log folder and deletes only after confirmation, then restore
   expect(backend.deleteAllLogs).not.toHaveBeenCalled();
   await act(async () => button("删除全部日志").click());
   await act(async () => button("确认删除").click());
-  expect(backend.deleteAllLogs).toHaveBeenCalledExactlyOnceWith();
+  expect(backend.deleteAllLogs).toHaveBeenCalledExactlyOnceWith({
+    operationId: expect.any(String),
+  });
   expect(document.querySelector("dialog")).toBeNull();
   expect(host.querySelector('[role="status"]')?.textContent).toContain(
     "后续日志将继续写入",
   );
   expect(document.activeElement).toBe(button("删除全部日志"));
 });
-it("keeps errors actionable and allows retrying deletion", async () => {
+it("keeps an unconfirmed clear explicitly uncertain without auto-retry", async () => {
   backend.deleteAllLogs.mockRejectedValueOnce(new Error("Log file is busy"));
   await act(async () => root.render(<LogSettingsCard native zh={false} />));
   await act(async () => button("Delete all logs").click());
   await act(async () => button("Confirm deletion").click());
-  expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-    "Log file is busy",
+  expect(backend.deleteAllLogs).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    "Clear outcome uncertain",
   );
-  expect(document.querySelector("dialog")).not.toBeNull();
-  await act(async () => button("Confirm deletion").click());
-  expect(backend.deleteAllLogs).toHaveBeenCalledTimes(2);
   expect(document.querySelector("dialog")).toBeNull();
 });
 it("disables folder opening in the browser and labels simulated deletion", async () => {

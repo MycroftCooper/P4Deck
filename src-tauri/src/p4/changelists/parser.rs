@@ -25,6 +25,42 @@ pub fn parse_change_events(events: &[OperationEvent]) -> Vec<ChangelistSummary> 
         .collect()
 }
 
+// Submitted paging must not turn diagnostics or unrecognized output into an
+// exhausted page. A genuinely empty successful stdout remains an empty page.
+pub fn parse_submitted_page(events: &[OperationEvent]) -> Result<Vec<ChangelistSummary>, String> {
+    use crate::domain::EventKind;
+    let mut rows = Vec::new();
+    for event in events {
+        match event.kind {
+            EventKind::Cancelled | EventKind::Error | EventKind::Warning | EventKind::Stderr => {
+                return Err("Submitted query returned a diagnostic or was cancelled; results are incomplete.".into());
+            }
+            EventKind::Stdout => {}
+            _ => continue,
+        }
+        let Some(line) = event
+            .message
+            .as_deref()
+            .filter(|line| !line.trim().is_empty())
+        else {
+            continue;
+        };
+        let value: Value = serde_json::from_str(line)
+            .map_err(|_| "Submitted query returned unrecognized output; results are incomplete.")?;
+        if value.get("severity").is_some()
+            || value.get("code").is_some_and(|code| code != "stat")
+            || value.get("desc").and_then(Value::as_str).is_none()
+            || number(&value, "change") <= 0
+        {
+            return Err(
+                "Submitted query returned incomplete records or a server diagnostic.".into(),
+            );
+        }
+        rows.push(parse_change(value).ok_or("Invalid submitted change record")?);
+    }
+    Ok(rows)
+}
+
 pub fn parse_query_metadata(
     events: &[OperationEvent],
 ) -> std::collections::HashMap<i64, SubmittedQueryMetadata> {
@@ -355,6 +391,57 @@ pub fn parse_pending_metadata(
         .collect()
 }
 
+/// `p4 resolve -n` preview: one line per unresolved file, shaped like
+/// `<clientPath> - merging <depotPath>#<rev>`. Returned for row badges only; nothing is resolved.
+#[derive(Debug, Default)]
+pub struct ResolvePreview {
+    pub client_paths: std::collections::HashSet<String>,
+    pub depot_paths: std::collections::HashSet<String>,
+}
+
+/// Normalize a client path for comparison: separators unified, drive letter case-insensitive.
+pub fn normalize_client_path(value: &str) -> String {
+    // `p4 opened` may return a client-relative form ("//client/Assets/..."), while `resolve -n`
+    // prints the absolute local path; compare both after separator/case normalization.
+    value
+        .replace('/', "\\")
+        .trim_start_matches('\\')
+        .to_lowercase()
+}
+
+pub fn parse_resolve_preview(events: &[OperationEvent]) -> ResolvePreview {
+    let mut preview = ResolvePreview::default();
+    for event in events {
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        for line in message.lines() {
+            let line = line.trim();
+            if line.is_empty() || !line.contains(" - merging ") {
+                if let Some(depot) = line.split_whitespace().find(|part| part.starts_with("//")) {
+                    preview
+                        .depot_paths
+                        .insert(depot.split('#').next().unwrap_or(depot).to_owned());
+                }
+                continue;
+            }
+            let (client, source) = line.split_once(" - merging ").unwrap();
+            preview
+                .client_paths
+                .insert(normalize_client_path(client.trim()));
+            if let Some(depot) = source
+                .split_whitespace()
+                .find(|part| part.starts_with("//"))
+            {
+                preview
+                    .depot_paths
+                    .insert(depot.split('#').next().unwrap_or(depot).to_owned());
+            }
+        }
+    }
+    preview
+}
+
 pub fn parse_opened_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)> {
     json_values(events)
         .into_iter()
@@ -370,12 +457,14 @@ pub fn parse_opened_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)> 
                 PendingFile {
                     depot_path,
                     state: opened_state(&action).map(str::to_owned),
+                    resolve: None,
                     action,
                     client_path: value
                         .get("clientFile")
                         .and_then(Value::as_str)
                         .map(str::to_owned),
                     revision: number_option(&value, "rev"),
+                    head_revision: None,
                     file_type: value.get("type").and_then(Value::as_str).map(str::to_owned),
                     lock_ownership: None,
                     lock_owner: None,
@@ -406,6 +495,13 @@ pub fn merge_lock_status(
         file.lock_owner.clone_from(&fact.lock_owner);
         file.other_open.clone_from(&fact.other_open);
         file.exclusive_open = Some(crate::p4::locks::parser::exclusive(&fact.file_type));
+        // Known have may fill an absent opened revision, but never overwrite the
+        // `p4 opened` revision semantics. Head stays optional: absence is unknown,
+        // never an implicit "current".
+        if file.revision.is_none() {
+            file.revision = fact.have_revision;
+        }
+        file.head_revision = fact.head_revision;
     }
 }
 
@@ -441,8 +537,10 @@ pub fn parse_shelved_files(events: &[OperationEvent]) -> Vec<(i64, PendingFile)>
                     depot_path: depot_path.to_owned(),
                     action,
                     state: None,
+                    resolve: None,
                     client_path: None,
                     revision: number_option(&value, &format!("rev{index}")),
+                    head_revision: None,
                     file_type: value
                         .get(format!("type{index}"))
                         .and_then(Value::as_str)
@@ -562,6 +660,50 @@ fn created_id_from_text(value: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submitted_page_rejects_partial_or_diagnostic_output() {
+        let valid = event(r#"{"change":"42","desc":"Body\n提交人: robot","status":"submitted"}"#);
+        for bad in [
+            "not json",
+            r#"{"severity":2,"data":"permission denied"}"#,
+            r#"{"code":"error","data":"maxresults exceeded"}"#,
+            r#"{"change":"43"}"#,
+        ] {
+            assert!(parse_submitted_page(&[valid.clone(), event(bad)]).is_err());
+        }
+        for kind in [
+            crate::domain::EventKind::Cancelled,
+            crate::domain::EventKind::Warning,
+            crate::domain::EventKind::Error,
+            crate::domain::EventKind::Stderr,
+        ] {
+            let mut diagnostic = event("diagnostic");
+            diagnostic.kind = kind;
+            assert!(parse_submitted_page(&[valid.clone(), diagnostic]).is_err());
+        }
+    }
+
+    #[test]
+    fn submitted_page_preserves_distinct_changes_with_identical_full_descriptions() {
+        let description = "Body\r\n提交人: robot\nCL号: 7";
+        let events = [42, 43].map(|id| {
+            event(
+                &serde_json::json!({
+                "change": id, "desc": description, "status": "submitted", "client": format!("workspace-{id}")
+                })
+                .to_string(),
+            )
+        });
+        let rows = parse_submitted_page(&events).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].description, description);
+        assert_eq!(rows[1].description, description);
+        assert_ne!(rows[0].id, rows[1].id);
+        assert_eq!(rows[0].client, "workspace-42");
+        assert_eq!(rows[1].client, "workspace-43");
+        assert!(parse_submitted_page(&[]).unwrap().is_empty());
+    }
 
     fn event(message: &str) -> OperationEvent {
         OperationEvent {
@@ -721,5 +863,47 @@ mod tests {
         assert_eq!(metadata[&41].user, "alice");
         assert_eq!(metadata[&41].client, "ws");
         assert_eq!(metadata[&42].client, "other");
+    }
+
+    #[test]
+    fn merge_lock_status_adds_head_revision_without_overwriting_opened_revision() {
+        let events = [event(
+            r#"{"action":"edit","change":"42","depotFile":"//depot/a","rev":"3","type":"text"}"#,
+        )];
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/a","type":"text","haveRev":"79","headRev":"80"}"#,
+        )]);
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &facts);
+        // `p4 opened` revision semantics win over the fstat have revision.
+        assert_eq!(files[0].1.revision, Some(3));
+        assert_eq!(files[0].1.head_revision, Some(80));
+
+        // A missing head keeps None: partial fstat never claims "current".
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/a","type":"text","haveRev":"79"}"#,
+        )]);
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &facts);
+        assert_eq!(files[0].1.head_revision, None);
+        assert_eq!(files[0].1.revision, Some(3));
+
+        // Without any fstat fact the opened revision is untouched and head is unknown.
+        let mut files = parse_opened_files(&events);
+        merge_lock_status(&mut files, &[]);
+        assert_eq!(files[0].1.revision, Some(3));
+        assert_eq!(files[0].1.head_revision, None);
+
+        // A known have may fill a missing opened revision; it is never fabricated.
+        let no_rev_events = [event(
+            r#"{"action":"edit","change":"42","depotFile":"//depot/b","type":"text"}"#,
+        )];
+        let facts = crate::p4::locks::parser::file_facts(&[event(
+            r#"{"depotFile":"//depot/b","haveRev":"5"}"#,
+        )]);
+        let mut files = parse_opened_files(&no_rev_events);
+        merge_lock_status(&mut files, &facts);
+        assert_eq!(files[0].1.revision, Some(5));
+        assert_eq!(files[0].1.head_revision, None);
     }
 }

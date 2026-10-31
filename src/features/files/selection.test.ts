@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { containsNode, nodeKey, selectionKeys, selectRange } from "./selection";
 import {
   affectedPathAliases,

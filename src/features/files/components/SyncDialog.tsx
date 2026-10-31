@@ -8,8 +8,15 @@ import type {
   SyncResult,
   SyncRevisionSpec,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { compactTargets, selectionRequest } from "../selectionCommands";
+import {
+  beginLocalIoProjection,
+  lifecycleOf,
+  settleLocalIoProjection,
+  unwrapLocalIoLegacy,
+  withdrawLocalIoProjection,
+} from "../../actions/localIoLifecycle";
 
 type Phase = "preview" | "review" | "confirming" | "result";
 
@@ -140,22 +147,56 @@ export function SyncDialog({
     const seq = ++sequence.current;
     const operationId = crypto.randomUUID();
     operation.current = operationId;
+    // change/date/label cannot be proven by the host recheck -> intent/progress only, no projection.
+    if (revision && (revision.kind === "head" || revision.kind === "revision"))
+      beginLocalIoProjection({
+        operationId,
+        kind: "syncRevision",
+        paths,
+        targetState: "controlled",
+      });
     setBusy(true);
     setError("");
     setPhase("confirming");
     try {
-      const next = await backend.confirmSync({
+      const raw: unknown = await backend.confirmSync({
         token: plan.token,
         target: plan.target,
         acknowledgeForce: forceAck,
         operationId,
       });
       if (!mounted.current || seq !== sequence.current) return;
-      setResult(next);
+      const lifecycle = lifecycleOf(raw);
+      if (!lifecycle) {
+        // Older/mocked payload: legacy shape only, no new lifecycle facts.
+        withdrawLocalIoProjection(operationId);
+        const legacy = raw as SyncResult;
+        setResult(legacy);
+        setPhase("result");
+        void Promise.resolve(onRefresh(legacy)).catch(() => undefined);
+        return;
+      }
+      if (
+        lifecycle.state === "unknown" ||
+        lifecycle.state === "rejected" ||
+        lifecycle.state === "legacy"
+      ) {
+        settleLocalIoProjection(operationId, lifecycle, false);
+        setError(lifecycle.message);
+        setPhase("result");
+        void Promise.resolve(onRefresh()).catch(() => undefined);
+        return;
+      }
+      settleLocalIoProjection(operationId, lifecycle, false);
+      const legacy = unwrapLocalIoLegacy<SyncResult>(raw);
+      setResult(legacy);
       setPhase("result");
-      void Promise.resolve(onRefresh(next)).catch(() => undefined);
+      void Promise.resolve(onRefresh(legacy))
+        .then(() => settleLocalIoProjection(operationId, lifecycle, true))
+        .catch(() => undefined);
     } catch (cause) {
       if (!mounted.current || seq !== sequence.current) return;
+      withdrawLocalIoProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh()).catch(() => undefined);

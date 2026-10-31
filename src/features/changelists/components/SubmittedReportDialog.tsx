@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
 import { writeClipboardText } from "../../../infrastructure/clipboard";
-import type { RuntimeInfo } from "../../../shared/contracts/types";
+import type { RuntimeInfo } from "../../../shared/contracts";
 import {
   collectReport,
   reportBounds,

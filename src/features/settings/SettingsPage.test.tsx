@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -7,9 +7,10 @@ import type {
   ConnectionProfiles,
   ConnectionStatus,
   RuntimeInfo,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { defaultUi } from "./preferences";
 import { SettingsPage } from "./SettingsPage";
+import { ConnectionSpecCreateDialog } from "./ConnectionSpecCreateDialog";
 
 const backend = vi.hoisted(() => ({
   listConfigBackups: vi.fn(),
@@ -35,6 +36,13 @@ const backend = vi.hoisted(() => ({
   confirmCreateConnectionUser: vi.fn(),
   confirmCreateConnectionWorkspace: vi.fn(),
   cancelOperation: vi.fn(),
+  companySubmitConnectionSnapshot: vi.fn(async () => ({
+    profileId: "profile-a",
+    generation: "1",
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
+  })),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
 
@@ -146,9 +154,49 @@ async function render(
   });
 }
 
+async function renderCreateDialog(
+  kind: "user" | "workspace",
+  server = "ssl:fixture:1666",
+  extra: Partial<Parameters<typeof ConnectionSpecCreateDialog>[0]> = {},
+) {
+  const onCreated = vi.fn();
+  await act(async () =>
+    root.render(
+      <ConnectionSpecCreateDialog
+        kind={kind}
+        context={{ ...runtime().context, server }}
+        requestGeneration={1}
+        source={null}
+        zh
+        onDismiss={vi.fn()}
+        onCreated={onCreated}
+        {...extra}
+      />,
+    ),
+  );
+  return onCreated;
+}
+
+it("keeps only Browse beside User and Workspace while retaining profile creation and Root", async () => {
+  await render();
+  for (const label of ["用户", "工作区"]) {
+    expect(fieldAction(label, "浏览")).toBeTruthy();
+    expect(fieldAction(label, "新建")).toBeUndefined();
+    expect(
+      input(label).closest(".connection-field")?.querySelectorAll("button"),
+    ).toHaveLength(1);
+  }
+  expect(button("新建")).toBeTruthy();
+  await waitForResolvedRoot();
+  expect(backend.preflightCreateConnectionUser).not.toHaveBeenCalled();
+  expect(backend.preflightCreateConnectionWorkspace).not.toHaveBeenCalled();
+});
+
 function button(text: string) {
-  return [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
-    item.textContent?.includes(text),
+  return [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+    (item) =>
+      // UI-14 nav entries repeat module titles; card actions remain the target.
+      !item.closest(".settings-nav") && item.textContent?.includes(text),
   )!;
 }
 
@@ -350,17 +398,54 @@ it("creates and stages the non-secret layout backup while preserving terminal hi
     backups: [backup],
   });
   backend.createConfigBackup.mockResolvedValue({
-    backup,
-    omittedLocalStorageKeys: ["p4deck.terminalHistory"],
+    kind: "backupCreate",
+    operationId: "op-backup",
+    state: "committed",
+    outcome: "succeeded",
+    artifact: {
+      path: "C:\\\\app-data\\\\backups\\\\p4deck-config-manual-safe.json",
+      fileName: backup.fileName,
+      exists: true,
+      sizeBytes: backup.sizeBytes,
+      sha256: "A".repeat(64),
+    },
+    details: backup,
+    optimistic: "intentOnly",
+    message: "verified",
+    legacy: {
+      backup,
+      omittedLocalStorageKeys: ["p4deck.terminalHistory"],
+    },
   });
   backend.restoreConfigBackup.mockResolvedValue({
-    sourceFileName: backup.fileName,
-    rollbackFileName: "p4deck-config-pre-restore-safe.json",
-    localStorage: [
-      { key: "p4deck.ui", value: '{"compact":true}' },
-      { key: "p4deck.panel.diff", value: '{"target":"//depot/a"}' },
-    ],
-    restartRequired: true,
+    kind: "backupRestore",
+    operationId: "op-restore",
+    state: "pending",
+    outcome: "unknown",
+    artifact: {
+      path: "C:\\\\app-data\\\\backups\\\\p4deck-config-pre-restore-safe.json",
+      fileName: "p4deck-config-pre-restore-safe.json",
+      exists: true,
+      sizeBytes: 1024,
+      sha256: "D".repeat(64),
+    },
+    details: {
+      sourceFileName: backup.fileName,
+      rollbackFileName: "p4deck-config-pre-restore-safe.json",
+      restartRequired: true,
+      pendingStaged: true,
+    },
+    optimistic: "intentOnly",
+    message: "staged",
+    legacy: {
+      sourceFileName: backup.fileName,
+      rollbackFileName: "p4deck-config-pre-restore-safe.json",
+      localStorage: [
+        { key: "p4deck.ui", value: '{"compact":true}' },
+        { key: "p4deck.panel.diff", value: '{"target":"//depot/a"}' },
+      ],
+      restartRequired: true,
+    },
   });
   localStorage.setItem("p4deck.ui", '{"compact":false}');
   localStorage.setItem("p4deck.terminalHistory", '["p4 print //depot/secret"]');
@@ -368,16 +453,32 @@ it("creates and stages the non-secret layout backup while preserving terminal hi
 
   await render();
   await act(async () => button("创建本地备份").click());
-  expect(backend.createConfigBackup).toHaveBeenCalledWith({
-    localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
   });
-  expect(host.textContent).toContain("已创建 p4deck-config-manual-safe.json");
+  expect(backend.createConfigBackup).toHaveBeenCalledWith({
+    request: {
+      localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+    },
+    operationId: expect.any(String),
+  });
+  expect(host.textContent).toContain("备份文件已回读验证");
+  expect(host.textContent).toContain("p4deck-config-manual-safe.json");
   expect(host.textContent).toContain("1 个临时/敏感键");
 
   await act(async () => button("恢复").click());
+  await act(async () => button("确认暂存恢复").click());
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
   expect(backend.restoreConfigBackup).toHaveBeenCalledWith({
-    fileName: backup.fileName,
-    localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+    request: {
+      fileName: backup.fileName,
+      localStorage: [{ key: "p4deck.ui", value: '{"compact":false}' }],
+    },
+    operationId: expect.any(String),
   });
   expect(localStorage.getItem("p4deck.ui")).toBe('{"compact":true}');
   expect(localStorage.getItem("p4deck.panel.diff")).toBe(
@@ -543,6 +644,7 @@ it("creates a profile with CAS and never persists sensitive authentication state
   await waitForResolvedRoot("C:\\fixture\\created");
   await act(async () => button("保存连接").click());
   expect(backend.createConnectionProfile).toHaveBeenCalledWith({
+    operationId: expect.any(String),
     expectedRevision: 4,
     name: "Office",
     context: expect.objectContaining({
@@ -649,6 +751,7 @@ it("generates a secondary saved-connection name when the optional name is blank"
   await waitForResolvedRoot("C:\\fixture\\generated");
   await act(async () => button("保存连接").click());
   expect(backend.createConnectionProfile).toHaveBeenCalledWith({
+    operationId: expect.any(String),
     expectedRevision: 4,
     name: "generated-client · generated-user@generated:1666",
     context: expect.objectContaining({
@@ -843,9 +946,7 @@ it("preflights and confirms self-service user creation before filling without sa
     operationIds: ["user-confirm"],
     simulated: true,
   });
-  await render();
-  await change(input("服务器"), "draft:1666");
-  await act(async () => fieldAction("用户", "新建").click());
+  const onCreated = await renderCreateDialog("user", "draft:1666");
   expect(backend.preflightCreateConnectionUser).not.toHaveBeenCalled();
   expect(backend.confirmCreateConnectionUser).not.toHaveBeenCalled();
   await change(dialogInput("用户 ID"), "new-user");
@@ -873,7 +974,7 @@ it("preflights and confirms self-service user creation before filling without sa
   expect(document.querySelector("dialog")?.textContent).not.toContain(
     "userSelf",
   );
-  expect(input("用户").value).toBe("tester");
+  expect(onCreated).not.toHaveBeenCalled();
   await act(async () => dialogCheckbox("我确认在").click());
   await act(async () => dialogButton("确认创建").click());
   expect(backend.confirmCreateConnectionUser).toHaveBeenCalledWith(
@@ -883,9 +984,9 @@ it("preflights and confirms self-service user creation before filling without sa
       confirmed: true,
     }),
   );
-  expect(input("用户").value).toBe("tester");
+  expect(onCreated).not.toHaveBeenCalled();
   await act(async () => dialogButton("填入连接设置").click());
-  expect(input("用户").value).toBe("new-user");
+  expect(onCreated).toHaveBeenCalledWith("new-user");
   expect(backend.createConnectionProfile).not.toHaveBeenCalled();
   expect(backend.setActiveConnectionProfile).not.toHaveBeenCalled();
 });
@@ -962,8 +1063,7 @@ it("sends virtual sync when P4VFS is explicitly selected", async () => {
       };
     },
   );
-  await render();
-  await act(async () => fieldAction("工作区", "新建").click());
+  await renderCreateDialog("workspace");
   expect(backend.preflightCreateConnectionWorkspace).not.toHaveBeenCalled();
   await change(dialogInput("Workspace 名称"), "new-workspace");
   await change(dialogInput("Workspace Root"), "D:\\work\\new-workspace");
@@ -986,7 +1086,7 @@ it("sends virtual sync when P4VFS is explicitly selected", async () => {
   );
 });
 
-it("creates a workspace only after explicit preview and fills its server-read Root", async () => {
+it("creates a workspace only after explicit preview and returns its server-read Root", async () => {
   backend.preflightCreateConnectionWorkspace.mockImplementation(
     async (request: { requestGeneration: number; plan: { name: string } }) => ({
       ready: true,
@@ -1058,8 +1158,7 @@ it("creates a workspace only after explicit preview and fills its server-read Ro
       };
     },
   );
-  await render();
-  await act(async () => fieldAction("工作区", "新建").click());
+  const onCreated = await renderCreateDialog("workspace");
   expect(backend.preflightCreateConnectionWorkspace).not.toHaveBeenCalled();
   await change(dialogInput("Workspace 名称"), "new-workspace");
   await change(dialogInput("Workspace Root"), "D:\\work\\new-workspace");
@@ -1079,9 +1178,12 @@ it("creates a workspace only after explicit preview and fills its server-read Ro
   await act(async () => dialogCheckbox("我确认在").click());
   await act(async () => dialogButton("确认创建").click());
   await act(async () => dialogButton("填入连接设置").click());
-  expect(input("工作区").value).toBe("new-workspace");
-  expect(document.querySelector('input[aria-label="P4 工作目录"]')).toBeNull();
-  await waitForResolvedRoot("D:\\work\\new-workspace");
+  expect(onCreated).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: "new-workspace",
+      root: "D:\\work\\new-workspace",
+    }),
+  );
   expect(backend.createConnectionProfile).not.toHaveBeenCalled();
   expect(backend.setActiveConnectionProfile).not.toHaveBeenCalled();
 });
@@ -1217,6 +1319,7 @@ it("allows deleting any profile and requires a modal confirmation", async () => 
   await act(async () => secondaryDelete.click());
   await act(async () => dialogButton("确认删除").click());
   expect(backend.deleteConnectionProfile).toHaveBeenCalledWith({
+    operationId: expect.any(String),
     expectedRevision: 4,
     id: "secondary",
   });
@@ -1289,6 +1392,7 @@ it("can explicitly reconnect a remaining profile after the active profile was de
   });
   await act(async () => button("使用此连接").click());
   expect(backend.setActiveConnectionProfile).toHaveBeenCalledWith({
+    operationId: expect.any(String),
     expectedRevision: 4,
     id: remaining.id,
   });
@@ -1467,6 +1571,7 @@ it("requires exact fingerprint confirmation and provides external-auth guidance"
   );
   await act(async () => button("信任此精确指纹").click());
   expect(backend.trustServer).toHaveBeenCalledWith({
+    operationId: expect.any(String),
     context: expect.objectContaining({
       server: "ssl:fixture:1666",
       user: "tester",
@@ -1492,4 +1597,253 @@ it("renders English copy, a keyboard-focusable scrollable list, and explicit sim
   expect(
     host.querySelector('[role="status"][aria-live="polite"]'),
   ).toBeTruthy();
+});
+
+it("offers official CLI setup and redetects without testing or logging into a server", async () => {
+  const value = runtime(status("cliMissing"));
+  await render(value, "en-US");
+  const link = host.querySelector<HTMLAnchorElement>(
+    'a[href="https://www.perforce.com/downloads"]',
+  );
+  expect(link?.textContent).toContain("P4 CLI");
+  expect(host.textContent).toContain("review the applicable terms");
+  backend.testConnection.mockClear();
+  backend.queryLoginStatus.mockClear();
+  backend.discoverP4Cli.mockResolvedValueOnce({
+    state: "notTested",
+    executable: "C:\\fixture\\p4.exe",
+    version: "P4 fixture",
+    message: "Found locally",
+  });
+  await act(async () => button("Detect CLI again").click());
+  expect(backend.discoverP4Cli).toHaveBeenCalledWith({
+    executable: value.context.executable,
+  });
+  expect(backend.testConnection).not.toHaveBeenCalled();
+  expect(backend.queryLoginStatus).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("P4 CLI found");
+});
+
+it("persists the optional custom tool after P4 executable without running or changing the P4 path", async () => {
+  const saved = profile("primary", "Primary");
+  saved.context.customSubmitExecutablePath = "C:\\Synthetic\\submit.exe";
+  backend.updateConnectionProfile.mockResolvedValue(
+    profilesDocument([saved, profile("secondary", "Secondary")], 5),
+  );
+  backend.runtimeInfo.mockResolvedValue({
+    ...runtime(),
+    context: saved.context,
+    contextGeneration: 2,
+  });
+  await render();
+  await waitForResolvedRoot();
+  const fields = [...document.querySelectorAll(".profile-p4-settings input")];
+  const tool = input("自定义提交工具（可选）");
+  expect(fields.indexOf(tool)).toBe(fields.indexOf(input("P4 可执行文件")) + 1);
+  expect(tool.value).toBe("");
+  const rootReads = backend.browseConnectionWorkspaces.mock.calls.length;
+  await change(tool, " C:\\Synthetic\\submit.exe ");
+  expect(backend.browseConnectionWorkspaces).toHaveBeenCalledTimes(rootReads);
+  await act(async () => button("保存连接").click());
+  expect(backend.updateConnectionProfile).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: expect.objectContaining({
+        customSubmitExecutablePath: saved.context.customSubmitExecutablePath,
+        executable: "C:\\fixture\\p4.exe",
+      }),
+    }),
+  );
+  expect(backend.testConnection).not.toHaveBeenCalled();
+  await act(async () => button("Secondary").click());
+  expect(input("自定义提交工具（可选）").value).toBe("");
+  await act(async () => button("Primary").click());
+  expect(input("自定义提交工具（可选）").value).toBe(
+    saved.context.customSubmitExecutablePath,
+  );
+});
+
+it("keeps an uncertain creation explicit, looks up the SAME operation id once and never enables fill-in", async () => {
+  backend.preflightCreateConnectionWorkspace.mockImplementation(
+    async (request: { requestGeneration: number; plan: { name: string } }) => ({
+      ready: true,
+      kind: "workspace",
+      name: request.plan.name,
+      requestGeneration: request.requestGeneration,
+      stateDigest: "workspace-state",
+      token: "workspace-token",
+      expiresAt: Date.now() + 60_000,
+      blockers: [],
+      warnings: [],
+      operationIds: ["workspace-preflight"],
+      simulated: true,
+    }),
+  );
+  const confirm = backend.confirmCreateConnectionWorkspace.mockResolvedValue({
+    outcome: "unknown",
+    failure: "verificationFailed",
+    kind: "workspace",
+    name: "new-workspace",
+    message: "The creation may have been submitted.",
+    operationIds: ["child"],
+    simulated: true,
+  });
+  const lookup = vi.fn(async () => ({ kind: "notFound" as const }));
+  const onCreated = await renderCreateDialog("workspace", "draft:1666", {
+    lookup,
+  });
+  await change(dialogInput("Workspace 名称"), "new-workspace");
+  await change(dialogInput("Workspace Root"), "D:\\\\work\\\\new-workspace");
+  await change(dialogInput("Stream"), "//depot/main");
+  await act(async () => dialogButton("预检").click());
+  expect(document.querySelector("dialog")?.textContent).not.toContain(
+    "创建结果（服务器回读已确认）",
+  );
+  await act(async () => dialogCheckbox("我确认在").click());
+  await act(async () => dialogButton("确认创建").click());
+  const confirmation = confirm.mock.calls[0][0] as { operationId: string };
+  expect(confirmation.operationId).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  );
+  expect(lookup).toHaveBeenCalledExactlyOnceWith({
+    operationId: confirmation.operationId,
+    connection: expect.objectContaining({ generation: "1" }),
+  });
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(document.querySelector("dialog")?.textContent).toContain("结果不确定");
+  expect(
+    [...document.querySelectorAll("button")].some(
+      (button) => button.textContent === "填入连接设置",
+    ),
+  ).toBe(false);
+  expect(onCreated).not.toHaveBeenCalled();
+});
+
+it("refuses to create when the dispatching connection generation changed", async () => {
+  backend.preflightCreateConnectionWorkspace.mockImplementation(
+    async (request: { requestGeneration: number; plan: { name: string } }) => ({
+      ready: true,
+      kind: "workspace",
+      name: request.plan.name,
+      requestGeneration: request.requestGeneration,
+      stateDigest: "workspace-state",
+      token: "workspace-token",
+      expiresAt: Date.now() + 60_000,
+      blockers: [],
+      warnings: [],
+      operationIds: ["workspace-preflight"],
+      simulated: true,
+    }),
+  );
+  backend.companySubmitConnectionSnapshot.mockResolvedValueOnce({
+    profileId: "primary",
+    generation: "2",
+    server: "ssl:fixture:1666",
+    user: "tester",
+    client: "fixture-client",
+  });
+  await renderCreateDialog("workspace", "draft:1666");
+  await change(dialogInput("Workspace 名称"), "new-workspace");
+  await change(dialogInput("Workspace Root"), "D:\\\\work\\\\new-workspace");
+  await change(dialogInput("Stream"), "//depot/main");
+  await act(async () => dialogButton("预检").click());
+  await act(async () => dialogCheckbox("我确认在").click());
+  await act(async () => dialogButton("确认创建").click());
+  expect(backend.confirmCreateConnectionWorkspace).not.toHaveBeenCalled();
+  expect(document.querySelector("dialog")?.textContent).toContain("未执行创建");
+});
+it("renders the UI-14 settings navigation in module order and scrolls to the chosen module", async () => {
+  const scrollIntoView = vi.fn();
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scrollIntoView;
+  try {
+    await render();
+    const labels = [
+      ...host.querySelectorAll<HTMLButtonElement>(".settings-nav button"),
+    ].map((item) => item.textContent);
+    expect(labels).toEqual([
+      "已保存连接",
+      "本地配置备份",
+      "更新",
+      "日志",
+      "签出",
+      "刷新与通知",
+      "外观与交互",
+      "快捷键",
+    ]);
+    expect(
+      host
+        .querySelector('[data-settings-nav="connection"]')
+        ?.getAttribute("aria-current"),
+    ).toBe("location");
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('[data-settings-nav="appearance"]')!
+        .click(),
+    );
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+    expect(
+      host
+        .querySelector('[data-settings-nav="appearance"]')
+        ?.getAttribute("aria-current"),
+    ).toBe("location");
+    expect(
+      host
+        .querySelector('[data-settings-nav="connection"]')
+        ?.getAttribute("aria-current"),
+    ).toBeNull();
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});
+
+it("collapses and persists settings modules, restoring them and falling back when state is corrupt", async () => {
+  await render();
+  const toggle = () =>
+    host.querySelector<HTMLButtonElement>(
+      '[data-settings-section="backup"] .settings-section-toggle',
+    )!;
+  const body = () =>
+    host.querySelector<HTMLElement>("#settings-section-backup-body")!;
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  expect(body().hidden).toBe(false);
+  await act(async () => toggle().click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  expect(body().hidden).toBe(true);
+  expect(
+    JSON.parse(localStorage.getItem("p4deck.settings.collapsed") ?? "null"),
+  ).toEqual(["backup"]);
+  // Navigating to a collapsed module must reveal it.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[data-settings-nav="backup"]')!
+      .click(),
+  );
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  // Collapse again and simulate a restart with the same storage.
+  await act(async () => toggle().click());
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(
+    host
+      .querySelector<HTMLButtonElement>(
+        '[data-settings-section="backup"] .settings-section-toggle',
+      )!
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
+  // Corrupted persisted state falls back to all-expanded.
+  localStorage.setItem("p4deck.settings.collapsed", "{broken");
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await render();
+  expect(
+    host
+      .querySelector<HTMLButtonElement>(
+        '[data-settings-section="backup"] .settings-section-toggle',
+      )!
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
 });

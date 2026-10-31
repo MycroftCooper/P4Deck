@@ -1,9 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { backend } from "../../infrastructure/backend";
-import type {
-  PendingChange,
-  PendingChangePage,
-} from "../../shared/contracts/types";
+import type { PendingChange, PendingChangePage } from "../../shared/contracts";
 import {
   pendingQuery,
   pendingQueryKey,

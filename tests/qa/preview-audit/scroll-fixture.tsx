@@ -1,0 +1,22 @@
+import {createRoot} from 'react-dom/client';
+import {DockviewReact,themeLight} from 'dockview-react';
+import {ResizableTable} from '../../../src/app/context-menu/ResizableTable';
+import {FilePreviewPage} from '../../../src/features/browsers/components/FilePreviewPage';
+import {BranchMappingsPage} from '../../../src/features/browsers/components/BranchMappingsPage';
+import {runtime} from './branch-stubs';
+import 'dockview-react/dist/styles/dockview.css';
+import '../../app/styles/tokens.css';
+import '../../app/styles/workbench.css';
+import '../../app/styles/branch-mappings.css';
+import '../../app/styles/preview.css';
+import '../../app/styles/dialogs.css';
+import '../../app/styles/docking.css';
+import '../../app/styles/scrollbars.css';
+import './scroll-fixture.css';
+if('__TAURI_INTERNALS__' in window)throw new Error('Native bridge forbidden');
+const params=new URLSearchParams(location.search);document.documentElement.dataset.theme=params.get('theme')??'light';
+const rows=Array.from({length:80},(_,i)=><p key={i}>Synthetic row {i} — {'content '.repeat(30)}</p>);
+const kind=params.get('kind')??'table';
+function Content(){return <div className="audit-scroll">{rows}</div>;}
+const fixture=kind==='preview'?<FilePreviewPage runtime={runtime} target="synthetic.json" locked={false} onTargetChange={()=>{}} zh={false}/>:kind==='virtual'?<BranchMappingsPage runtime={runtime} zh={false}/>:kind==='dock'?<DockviewReact theme={{...themeLight,className:'dockview-theme-light dockview-theme-p4deck'}} components={{synthetic:Content}} onReady={({api})=>{for(let i=0;i<18;i++)api.addPanel({id:String(i),component:'synthetic',title:'Synthetic long tab '+i});}}/>:kind==='table'?<div className="audit-scroll"><ResizableTable tableId="scroll-audit" defaults={[280,600,500]} minimums={[100,100,100]}><thead><tr><th>ID</th><th>Workspace</th><th>Description</th></tr></thead><tbody>{rows.map((_,i)=><tr key={i}><td>{i}</td><td>synthetic-workspace-{i}</td><td>{'description '.repeat(12)}</td></tr>)}</tbody></ResizableTable></div>:kind==='dialog'?<section className="workflow-dialog" style={{width:'100%',height:'100%'}}><header className="workflow-dialog-heading">Synthetic dialog</header><div className="workflow-dialog-body audit-scroll">{rows}</div><footer className="workflow-dialog-footer">Footer remains visible</footer></section>:kind==='nested'?<div className="audit-scroll outer"><div className="audit-scroll inner">{rows}</div>{rows}</div>:<aside className="audit-scroll">{rows}</aside>;
+createRoot(document.getElementById('root')!).render(fixture);

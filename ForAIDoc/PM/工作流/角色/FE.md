@@ -3,7 +3,7 @@
 ## 写域
 
 - 可写：`src/**`，以及同目录 `*.test.tsx/ts`。
-- 不写：`src-tauri/**`、`package.json`、根配置、`src/test/batch-qa/**`（QA 所有）。
+- 不写：`src-tauri/**`、`package.json`、根配置、`tests/qa/batch-qa/**`（QA 所有）。
 
 ## 禁做
 

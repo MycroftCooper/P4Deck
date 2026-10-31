@@ -1,4 +1,8 @@
+import type { OpenedFileSelection, SelectedOpenedFile } from "../selectedFiles";
+import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
+import { nodeNeedsSync } from "../../files/fileActions";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import {
   useCallback,
@@ -10,10 +14,7 @@ import {
   type DragEvent,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type {
-  PendingFile,
-  WorkspaceNode,
-} from "../../../shared/contracts/types";
+import type { PendingFile, WorkspaceNode } from "../../../shared/contracts";
 import { useFileMenu } from "../../../app/context-menu/useFileMenu";
 import { useContextMenu } from "../../../app/context-menu/ContextMenu";
 import { useRecordSelection } from "../../../app/context-menu/useRecordSelection";
@@ -33,7 +34,26 @@ export function PendingFileList({
   onInspect,
   onDragFiles,
   onDragEnd,
+  sharedSelection,
+  onSubmitSelected,
 }: {
+  sharedSelection?: {
+    state: OpenedFileSelection;
+    nodes: WorkspaceNode[];
+    change(
+      rows: readonly SelectedOpenedFile[],
+      path: string,
+      gesture?: {
+        ctrlKey?: boolean;
+        metaKey?: boolean;
+        shiftKey?: boolean;
+        context?: boolean;
+      },
+    ): readonly SelectedOpenedFile[];
+    clear(): void;
+    reportVisible?(changeId: number, rows: readonly SelectedOpenedFile[]): void;
+  };
+  onSubmitSelected?(files: readonly SelectedOpenedFile[]): void;
   files: PendingFile[];
   changeId: number;
   shelf?: boolean;
@@ -56,112 +76,23 @@ export function PendingFileList({
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const headerRef = useRef<HTMLDivElement>(null);
-  const [columnLayout, setColumnLayout] = useState<{
-    widths: number[];
-    gutter: number;
-  } | null>(null);
-  const [measuredWidths, setMeasuredWidths] = useState(columnMinWidths);
-  const columnDrag = useRef<{
-    pointerId: number;
-    index: number;
-    startX: number;
-    widths: number[];
-    gutter: number;
-  } | null>(null);
-  const [resizingColumn, setResizingColumn] = useState<number | null>(null);
-  useEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-    const measure = () => {
-      const widths = [...header.children].map(
-        (cell) => cell.getBoundingClientRect().width,
-      );
-      setMeasuredWidths((previous) =>
-        widths.every((width, index) => width === previous[index])
-          ? previous
-          : widths,
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(header);
-    for (const cell of header.children) observer.observe(cell);
-    return () => observer.disconnect();
-  }, []);
-  const readColumnLayout = () => ({
-    widths: [...headerRef.current!.children].map(
-      (cell) => cell.getBoundingClientRect().width,
-    ),
-    gutter:
-      headerRef.current!.parentElement!.offsetWidth -
-      headerRef.current!.parentElement!.clientWidth,
+  const columns = useColumnWidths([28, 180, 350, 110, 90], columnMinWidths, {
+    id: shelf ? "shelf-files" : "pending-files",
+    gutter: 48,
+    readWidths: () =>
+      headerRef.current
+        ? [...headerRef.current.children].map(
+            (cell, index) =>
+              cell.getBoundingClientRect().width ||
+              [28, 180, 350, 110, 90][index],
+          )
+        : [28, 180, 350, 110, 90],
   });
-  const resizeColumn = (clientX: number) => {
-    const drag = columnDrag.current;
-    if (!drag) return;
-    const widths = [...drag.widths];
-    widths[drag.index] = Math.max(
-      columnMinWidths[drag.index],
-      drag.widths[drag.index] + clientX - drag.startX,
-    );
-    setColumnLayout({ widths, gutter: drag.gutter });
-  };
+  const columnLayout = columns.changed
+    ? { widths: columns.widths, gutter: 0 }
+    : null;
   const columnResizer = (index: number, label: string) => (
-    <div
-      role="separator"
-      tabIndex={0}
-      aria-label={zh ? `调整${label}列宽` : `Resize ${label} column`}
-      aria-orientation="vertical"
-      aria-valuemin={columnMinWidths[index]}
-      aria-valuenow={Math.round(measuredWidths[index])}
-      className={`pending-column-resizer ${resizingColumn === index ? "is-resizing" : ""}`}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        event.stopPropagation();
-        columnDrag.current = {
-          ...readColumnLayout(),
-          pointerId: event.pointerId,
-          index,
-          startX: event.clientX,
-        };
-        event.currentTarget.setPointerCapture(event.pointerId);
-        setResizingColumn(index);
-      }}
-      onPointerMove={(event) => {
-        if (columnDrag.current?.pointerId === event.pointerId)
-          resizeColumn(event.clientX);
-      }}
-      onPointerUp={(event) => {
-        if (columnDrag.current?.pointerId !== event.pointerId) return;
-        resizeColumn(event.clientX);
-        columnDrag.current = null;
-        setResizingColumn(null);
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }}
-      onPointerCancel={() => {
-        columnDrag.current = null;
-        setResizingColumn(null);
-      }}
-      onLostPointerCapture={() => {
-        columnDrag.current = null;
-        setResizingColumn(null);
-      }}
-      onKeyDown={(event) => {
-        if (!["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const layout = readColumnLayout();
-        layout.widths[index] =
-          event.key === "Home"
-            ? columnMinWidths[index]
-            : Math.max(
-                columnMinWidths[index],
-                layout.widths[index] + (event.key === "ArrowLeft" ? -10 : 10),
-              );
-        setColumnLayout(layout);
-      }}
-    />
+    <ColumnResizer resize={columns} index={index} label={label} />
   );
   const sourceRows = useMemo(
     () =>
@@ -189,7 +120,9 @@ export function PendingFileList({
           ...sourceRows.map((row) => row.status),
           ...(statusFilter ? [statusFilter] : []),
         ]),
-      ].sort(),
+      ]
+        .filter((status) => status !== "__resolve")
+        .sort(),
     [sourceRows, statusFilter],
   );
   const types = useMemo(
@@ -211,7 +144,10 @@ export function PendingFileList({
     return sourceRows
       .filter(
         (row) =>
-          (!statusFilter || row.status === statusFilter) &&
+          (!statusFilter ||
+            (statusFilter === "__resolve"
+              ? row.file.resolve === "unresolved"
+              : row.status === statusFilter)) &&
           (!typeFilter || (row.extension || "(none)") === typeFilter),
       )
       .sort(
@@ -230,7 +166,12 @@ export function PendingFileList({
         absolutePath: "",
         relativePath: path,
         kind: "file",
-        state: file.state ?? "controlled",
+        state:
+          file.resolve === "unresolved"
+            ? "conflicted"
+            : (file.state ?? "controlled"),
+        revision: file.revision,
+        headRevision: file.headRevision,
         changelistId: changeId,
       })),
     [filteredRows, changeId],
@@ -247,11 +188,72 @@ export function PendingFileList({
       ? changeId
       : undefined;
   };
-  const selection = useRecordSelection(
+  const localSelection = useRecordSelection(
     nodes,
     (node) => node.id,
     `${changeId}:${shelf}`,
   );
+  const shared = shelf ? undefined : sharedSelection;
+  useEffect(() => {
+    shared?.reportVisible?.(
+      changeId,
+      nodes.map((node) => ({
+        depotPath: node.depotPath!,
+        originalChangeId: changeId,
+      })),
+    );
+    return () => shared?.reportVisible?.(changeId, []);
+  }, [shared?.reportVisible, changeId, nodes]);
+  const toNodes = (files: readonly SelectedOpenedFile[]) =>
+    files
+      .map((file) =>
+        shared?.nodes.find(
+          (node) =>
+            node.depotPath === file.depotPath &&
+            node.changelistId === file.originalChangeId,
+        ),
+      )
+      .filter((node): node is WorkspaceNode => !!node);
+  const sharedTargets = (node: WorkspaceNode) =>
+    shared!.state.files.some((file) => file.depotPath === node.depotPath)
+      ? toNodes(shared!.state.files)
+      : [node];
+  const selectShared = (node: WorkspaceNode, gesture = {}) =>
+    toNodes(
+      shared!.change(
+        nodes.map((row) => ({
+          depotPath: row.depotPath!,
+          originalChangeId: changeId,
+        })),
+        node.depotPath!,
+        gesture,
+      ),
+    );
+  const selection = shared
+    ? {
+        ...localSelection,
+        isSelected: (node: WorkspaceNode) =>
+          shared.state.files.some((file) => file.depotPath === node.depotPath),
+        targets: sharedTargets,
+        selectTargets: selectShared,
+        contextTargets: (node: WorkspaceNode) =>
+          selectShared(node, { context: true }),
+        keyboardTargets: (
+          node: WorkspaceNode,
+          event: import("react").KeyboardEvent,
+        ) => {
+          if (
+            event.target !== event.currentTarget ||
+            !["Enter", " "].includes(event.key)
+          )
+            return false;
+          event.preventDefault();
+          event.stopPropagation();
+          return selectShared(node, event);
+        },
+        clear: shared.clear,
+      }
+    : localSelection;
   const fileMenu = useFileMenu();
   const menu = useContextMenu();
   const focus = useCommandFocus();
@@ -427,6 +429,9 @@ export function PendingFileList({
                   }}
                 >
                   <option value="">{zh ? "所有状态" : "All statuses"}</option>
+                  <option value="__resolve">
+                    {zh ? "需要 Resolve" : "Needs resolve"}
+                  </option>
                   {statuses.map((status) => (
                     <option key={status} value={status}>
                       {statusLabel(status)}
@@ -485,6 +490,10 @@ export function PendingFileList({
               const index = row.index;
               const { file, name, path, extension, status } =
                 filteredRows[index];
+              // Only opened-for-edit rows can be brought up to date; unknown or
+              // equal head revisions must not claim "needs get latest".
+              const needsLatest =
+                !shelf && node.state === "openedEdit" && nodeNeedsSync(node);
               const menuTargets = selection.targets(node);
               const wholeChangelistId = wholeChangelistIdFor(menuTargets);
               const menuProps = shelf
@@ -572,6 +581,18 @@ export function PendingFileList({
                       ? { wholeChangelistId }
                       : {}),
                     bindings: {
+                      提交选中文件: action(
+                        () =>
+                          onSubmitSelected?.(
+                            selection.targets(node).map((row) => ({
+                              depotPath: row.depotPath!,
+                              originalChangeId: row.changelistId!,
+                            })),
+                          ),
+                        onSubmitSelected
+                          ? undefined
+                          : "入口尚未接通 / Not connected",
+                      ),
                       ...Object.fromEntries(
                         ["搁置此文件…", "搁置所选文件…"].map((label) => [
                           label,
@@ -584,7 +605,10 @@ export function PendingFileList({
                                   .map((n) => n.depotPath!),
                                 source,
                               ),
-                            onShelf
+                            onShelf &&
+                              menuTargets.every(
+                                (row) => row.changelistId === changeId,
+                              )
                               ? undefined
                               : "入口尚未接通 / Not connected",
                           ),
@@ -677,6 +701,11 @@ export function PendingFileList({
                                       detail: file.lockOwner,
                                     }
                                   : undefined,
+                              file.resolve === "unresolved"
+                                ? {
+                                    id: "resolve" as const,
+                                  }
+                                : undefined,
                               file.exclusiveOpen
                                 ? {
                                     id: "exclusive" as const,
@@ -710,7 +739,12 @@ export function PendingFileList({
                     className="pending-file-status"
                     title={file.action}
                   >
-                    {statusLabel(status)}
+                    {file.resolve === "unresolved"
+                      ? `${statusLabel(status)} · ${zh ? "需要 Resolve" : "Needs resolve"}`
+                      : statusLabel(status)}
+                    {needsLatest
+                      ? ` · ${zh ? "需获取最新" : "Needs get latest"}`
+                      : ""}
                   </span>
                   <span role="gridcell" className="pending-file-type">
                     {extension || (zh ? "无后缀" : "No extension")}

@@ -40,6 +40,18 @@ pub struct ContextStore {
 }
 
 impl ContextStore {
+    /// Keep connection/configuration unchanged through launch reservation and spawn.
+    pub(crate) fn with_custom_submit_context<T>(
+        &self,
+        action: impl FnOnce(Option<String>, u64, &P4Context) -> T,
+    ) -> T {
+        let state = self.state.read().unwrap_or_else(|error| error.into_inner());
+        action(
+            state.document.active_profile_id.clone(),
+            state.generation,
+            &state.runtime_context,
+        )
+    }
     pub fn load(directory: &Path) -> Result<Self, ConnectionProfileError> {
         let path = directory.join("connection.json");
         let environment = environment_context();
@@ -99,6 +111,21 @@ impl ContextStore {
             .profiles
             .iter()
             .find(|profile| profile.id == active)
+            .cloned()
+    }
+
+    /// Read-only lookup of any persisted profile, active or not.
+    ///
+    /// Profile-store writes must also work while the store has no active profile
+    /// (first save, or after the active profile was deleted), so they cannot rely
+    /// on `active_profile` for their journal scope.
+    pub fn profile(&self, id: &str) -> Option<ConnectionProfile> {
+        let state = self.state.read().unwrap_or_else(|error| error.into_inner());
+        state
+            .document
+            .profiles
+            .iter()
+            .find(|profile| profile.id == id)
             .cloned()
     }
 
@@ -454,17 +481,32 @@ impl ContextStore {
     }
 }
 
+fn default_custom_submit_field(value: &mut serde_json::Value) {
+    if let Some(profiles) = value.get_mut("profiles").and_then(|v| v.as_array_mut()) {
+        for profile in profiles {
+            if let Some(context) = profile.get_mut("context").and_then(|v| v.as_object_mut()) {
+                context
+                    .entry("customSubmitExecutablePath")
+                    .or_insert_with(|| serde_json::Value::String(String::new()));
+            }
+        }
+    }
+}
+
 fn load_document(
     path: &Path,
     bytes: &[u8],
 ) -> Result<(PersistedProfiles, P4Context), ConnectionProfileError> {
-    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|error| {
         profile_error(
             ConnectionProfileErrorCode::CorruptStore,
             format!("connection.json is invalid JSON and was left unchanged: {error}"),
         )
     })?;
     if value.get("schemaVersion").is_some() {
+        // Add only the known optional field before the strict unknown-field check.
+        // Existing v2/v3 profiles must remain readable without losing that check.
+        default_custom_submit_field(&mut value);
         let document: PersistedProfiles =
             serde_json::from_value(value.clone()).map_err(|error| {
                 profile_error(
@@ -540,9 +582,10 @@ fn load_document(
 }
 
 pub(crate) fn validate_backup_document(bytes: &[u8]) -> Result<(), String> {
-    let value: serde_json::Value =
+    let mut value: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
     if value.get("schemaVersion").is_some() {
+        default_custom_submit_field(&mut value);
         let mut document: PersistedProfiles =
             serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
         if ![
@@ -784,18 +827,37 @@ fn persist_document(
             .open(&temp)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
-        atomic_replace(&temp, path)?;
+        replace_with_retry(&temp, path)?;
         sync_parent(path)?;
         Ok::<(), std::io::Error>(())
     })();
     if let Err(error) = result {
         let _ = std::fs::remove_file(&temp);
-        return Err(persistence_error(
-            "atomically write connection store",
-            error,
+        return Err(profile_error(
+            ConnectionProfileErrorCode::PersistenceFailed,
+            format!(
+                "Failed to atomically write connection store ({}): {error}",
+                path.display()
+            ),
         ));
     }
     Ok(())
+}
+
+/// Antivirus/EDR and other instances briefly lock `connection.json`; a short bounded retry is
+/// safe because the replacement is atomic and the new bytes are fully fsynced first.
+fn replace_with_retry(source: &Path, destination: &Path) -> std::io::Result<()> {
+    let mut last = None;
+    for attempt in 0..4u64 {
+        match atomic_replace(source, destination) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last = Some(error);
+                std::thread::sleep(std::time::Duration::from_millis(40 * (attempt + 1)));
+            }
+        }
+    }
+    Err(last.unwrap_or_else(|| std::io::Error::other("atomic replace failed")))
 }
 
 #[cfg(windows)]
@@ -863,6 +925,7 @@ fn profile_error(
 fn environment_context() -> P4Context {
     P4Context {
         executable: None,
+        custom_submit_executable_path: String::new(),
         server: std::env::var("P4PORT").unwrap_or_default(),
         user: std::env::var("P4USER").unwrap_or_default(),
         client: std::env::var("P4CLIENT").unwrap_or_default(),
@@ -952,6 +1015,58 @@ pub fn normalize_swarm_base_url(input: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_submit_config_survives_profile_reload_and_old_schema3_defaults() {
+        let mut context = configured("fixture-client");
+        context.custom_submit_executable_path = "C:\\Synthetic Tool\\submit.exe".into();
+        let document = PersistedProfiles {
+            schema_version: 3,
+            revision: 1,
+            active_profile_id: Some("00000000-0000-4000-8000-000000000001".into()),
+            profiles: vec![ConnectionProfile {
+                id: "00000000-0000-4000-8000-000000000001".into(),
+                name: "Fixture".into(),
+                context: context.clone(),
+            }],
+        };
+        // Current-schema load_document is a pure byte decode/validation path.
+        let path = Path::new("unused-synthetic-profile-path");
+        let (restored, runtime) =
+            load_document(path, &serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(runtime, context);
+        assert_eq!(restored.profiles[0].context, context);
+        let mut old = serde_json::to_value(document).unwrap();
+        old["profiles"][0]["context"]
+            .as_object_mut()
+            .unwrap()
+            .remove("customSubmitExecutablePath");
+        let (_, runtime) = load_document(path, &serde_json::to_vec(&old).unwrap()).unwrap();
+        assert_eq!(runtime.custom_submit_executable_path, "");
+        assert!(validate_backup_document(&serde_json::to_vec(&old).unwrap()).is_ok());
+        old["profiles"][0]["context"]["unknownField"] = true.into();
+        assert!(load_document(path, &serde_json::to_vec(&old).unwrap()).is_err());
+    }
+
+    #[test]
+    fn custom_submit_context_holds_configuration_lock_through_action() {
+        let context = configured("fixture-client");
+        let store = ContextStore {
+            path: PathBuf::from("unused-synthetic-path"),
+            state: RwLock::new(StoreState {
+                document: empty_document(),
+                runtime_context: context.clone(),
+                generation: 7,
+            }),
+        };
+        store.with_custom_submit_context(|profile, generation, current| {
+            assert_eq!(profile, None);
+            assert_eq!(generation, 7);
+            assert_eq!(current, &context);
+            assert!(store.state.try_write().is_err());
+        });
+        assert!(store.state.try_write().is_ok());
+    }
 
     fn configured(client: &str) -> P4Context {
         P4Context {
@@ -1172,6 +1287,33 @@ mod tests {
             )
             .unwrap();
         assert_eq!(store.current().client, "two");
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn profile_lookup_keeps_an_inactive_target_readable_without_an_active_profile() {
+        let directory = directory();
+        let store = ContextStore::load(&directory).unwrap();
+        let first = store
+            .create(0, "Primary".into(), configured("one"))
+            .unwrap();
+        let active = first.active_profile_id.clone().unwrap();
+        let second = store
+            .create(first.revision, "Other".into(), configured("two"))
+            .unwrap();
+        let other = second
+            .profiles
+            .iter()
+            .find(|profile| profile.id != active)
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(store.profile(&other).unwrap().context.client, "two");
+        let deleted = store.delete(second.revision, &active).unwrap();
+        assert!(deleted.active_profile_id.is_none());
+        // Profile-store reads still resolve the write target while disconnected.
+        assert_eq!(store.profile(&other).unwrap().context.client, "two");
+        assert!(store.profile("missing").is_none());
         std::fs::remove_dir_all(directory).unwrap();
     }
 

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OperationConfirmDialog } from "./OperationConfirmDialog";
 import { useDialogRequest } from "./useDialogRequest";
 import { RenameDialog } from "../../features/files/components/RenameDialog";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 
 let root: Root, host: HTMLDivElement;
 const close = vi.fn();
@@ -150,7 +150,7 @@ it("keeps rename in preview until a changed input is preflighted and protects dr
       <RenameDialog node={node} source={null} zh onDismiss={close} />,
     ),
   );
-  expect(button("预检并审阅").disabled).toBe(true);
+  expect(button("开始预检").disabled).toBe(true);
   await act(async () => {
     const input = document.querySelectorAll("input")[1];
     Object.getOwnPropertyDescriptor(
@@ -159,7 +159,7 @@ it("keeps rename in preview until a changed input is preflighted and protects dr
     )!.set!.call(input, "/workspace/new");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(button("预检并审阅").disabled).toBe(false);
+  expect(button("开始预检").disabled).toBe(false);
   expect(document.body.textContent).toContain("阶段 · preview");
   await act(async () => button("取消").click());
   expect(close).not.toHaveBeenCalled();

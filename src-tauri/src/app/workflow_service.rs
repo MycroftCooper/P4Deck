@@ -1,19 +1,21 @@
 use crate::{
     app::{
         confirmation::{ConfirmationStore, ExpiringConfirmation},
-        manual_merge,
+        external_merge, manual_merge,
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
     p4::{
         context::ContextStore,
         workflows::{
-            content_digest, local_content_facts, parser, MoveInspection, PermissionAssessment,
-            ResolveInspection, ShelfInspection, UnshelveInspection, WorkflowRepository,
+            content_digest, local_content_facts, parser, resolve_stats as resolve_stats_math,
+            MoveInspection, PermissionAssessment, ResolveInspection, ShelfInspection,
+            UnshelveInspection, WorkflowRepository,
         },
     },
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
@@ -779,6 +781,7 @@ impl WorkflowService {
             .inspect_shelf(
                 &context,
                 request.change_id,
+                request.mode,
                 &request.depot_paths,
                 &format!("shelf-preflight-{}", Uuid::new_v4()),
                 app,
@@ -815,9 +818,29 @@ impl WorkflowService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses `confirm_shelf_admitted` with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm_shelf(
         &self,
         confirmation: WorkflowConfirmation,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_shelf_inner(confirmation, None, app).await
+    }
+    pub async fn confirm_shelf_admitted(
+        &self,
+        confirmation: WorkflowConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_shelf_inner(confirmation, Some(guard), app)
+            .await
+    }
+    async fn confirm_shelf_inner(
+        &self,
+        confirmation: WorkflowConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> WorkflowResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -848,12 +871,20 @@ impl WorkflowService {
                 "The connection or workspace changed after preflight.",
             );
         }
-        let guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         let inspection = self
             .repository
             .inspect_shelf(
                 &context,
                 request.change_id,
+                request.mode,
                 &request.depot_paths,
                 &format!("shelf-recheck-{}", Uuid::new_v4()),
                 app,
@@ -891,7 +922,7 @@ impl WorkflowService {
         let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
-            .execute_shelf(&context, &request, operation_id.clone(), &guard, app)
+            .execute_shelf(&context, &request, operation_id.clone(), guard, app)
             .await;
         self.clear_shelf_details();
         self.invalidate(
@@ -899,12 +930,44 @@ impl WorkflowService {
             &request.depot_paths,
             InvalidationReason::ChangelistMutation,
         );
-        operation_result(
+        let revalidated = self
+            .revalidate_shelf_after_write(&context, &request, &record.content_digest, app)
+            .await;
+        shelf_unshelve_result(
             &record.target,
             execution,
             operation_id,
-            "Shelf operation completed.",
+            revalidated,
+            "Shelf command completed; refresh the shelf before relying on membership.",
         )
+    }
+
+    /// Write-after recheck for SHELF: the command-level lifecycle is only
+    /// accepted as confirmed when the shelf state can be re-inspected and the
+    /// content digest moved away from the reviewed one. No per-file success is
+    /// inferred here; this only separates known from unknown.
+    async fn revalidate_shelf_after_write(
+        &self,
+        context: &P4Context,
+        request: &ShelfPreflightRequest,
+        reviewed_digest: &str,
+        app: Option<&AppHandle>,
+    ) -> bool {
+        match self
+            .repository
+            .inspect_shelf(
+                context,
+                request.change_id,
+                request.mode,
+                &request.depot_paths,
+                &format!("shelf-postwrite-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            Ok(inspection) => evaluate_shelf(request, inspection).digest != reviewed_digest,
+            Err(_) => false,
+        }
     }
 
     pub async fn preflight_unshelve(
@@ -964,9 +1027,31 @@ impl WorkflowService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses `confirm_unshelve_admitted` with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm_unshelve(
         &self,
         confirmation: WorkflowConfirmation,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_unshelve_inner(confirmation, None, app).await
+    }
+
+    pub async fn confirm_unshelve_admitted(
+        &self,
+        confirmation: WorkflowConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> WorkflowResult {
+        self.confirm_unshelve_inner(confirmation, Some(guard), app)
+            .await
+    }
+
+    async fn confirm_unshelve_inner(
+        &self,
+        confirmation: WorkflowConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> WorkflowResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -992,7 +1077,14 @@ impl WorkflowService {
                 "The source connection changed after preflight.",
             );
         }
-        let guard = self.repository.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         let inspection = self
             .repository
             .inspect_unshelve(
@@ -1039,6 +1131,13 @@ impl WorkflowService {
                 "The source shelf or target workspace changed after preflight.",
             );
         }
+        if self.contexts.snapshot() != (context.clone(), generation) {
+            return rejected(
+                &record.target,
+                WorkflowFailureCode::ContextChanged,
+                "The active connection changed during Unshelve confirmation.",
+            );
+        }
         let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
@@ -1046,7 +1145,7 @@ impl WorkflowService {
                 &evaluation.target_context,
                 &request,
                 operation_id.clone(),
-                &guard,
+                guard,
                 app,
             )
             .await;
@@ -1055,12 +1154,41 @@ impl WorkflowService {
             &request.depot_paths,
             InvalidationReason::ChangelistMutation,
         );
-        operation_result(
+        let revalidated = self
+            .revalidate_unshelve_after_write(&context, &request, &record.content_digest, app)
+            .await;
+        shelf_unshelve_result(
             &record.target,
             execution,
             operation_id,
-            "Unshelve completed; files may still require Resolve.",
+            revalidated,
+            "Unshelve command completed; refresh the target changelist/workspace and check Resolve before relying on per-file state.",
         )
+    }
+
+    /// Write-after recheck for UNSHELVE: same rules as SHELF. Only a readable
+    /// post-write state whose digest changed can confirm the command-level
+    /// lifecycle; no requested path is ever marked as per-file success.
+    async fn revalidate_unshelve_after_write(
+        &self,
+        context: &P4Context,
+        request: &UnshelvePreflightRequest,
+        reviewed_digest: &str,
+        app: Option<&AppHandle>,
+    ) -> bool {
+        match self
+            .repository
+            .inspect_unshelve(
+                context,
+                request,
+                &format!("unshelve-postwrite-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            Ok(inspection) => evaluate_unshelve(request, inspection).digest != reviewed_digest,
+            Err(_) => false,
+        }
     }
 
     pub async fn preflight_resolve(
@@ -1325,6 +1453,114 @@ impl WorkflowService {
         Ok(session)
     }
 
+    /// Detection only; never starts P4Merge and never touches a merge session.
+    pub fn detect_external_merge_tool(&self) -> ExternalMergeToolInfo {
+        let external_merge::ToolDetection { tool, reason } = external_merge::detect_tool();
+        match tool {
+            Some(tool) => ExternalMergeToolInfo {
+                available: true,
+                executable: Some(tool.executable.to_string_lossy().into_owned()),
+                source: Some(match tool.source {
+                    external_merge::ToolSource::Env => ExternalMergeToolSource::Env,
+                    external_merge::ToolSource::CommonPath => ExternalMergeToolSource::CommonPath,
+                    external_merge::ToolSource::Path => ExternalMergeToolSource::Path,
+                }),
+                reason,
+            },
+            None => ExternalMergeToolInfo {
+                available: false,
+                executable: None,
+                source: None,
+                reason: Some(reason.unwrap_or_else(|| {
+                    "P4Merge was not found in P4MERGE, the common install locations, or PATH".into()
+                })),
+            },
+        }
+    }
+
+    /// Open the installed P4Merge on the current session inputs and return the
+    /// saved text as a *candidate* result. This never writes the workspace file
+    /// and never resolves; the user still reviews and runs validate/save/resolve.
+    pub fn run_external_merge(
+        &self,
+        request: ExternalMergeRunRequest,
+    ) -> Result<ExternalMergeRunResult, String> {
+        let record = self.manual_session(&request.session_id)?;
+        self.ensure_manual_target_current(&record)?;
+        let normalized = external_merge::normalize_line_endings(&request.result);
+        if normalized.len() as u64 > manual_merge::MAX_MANUAL_MERGE_BYTES {
+            return Err("External merge input exceeds the 4 MiB text safety limit".into());
+        }
+        if normalized.lines().count() > manual_merge::MAX_MANUAL_MERGE_LINES {
+            return Err("External merge input exceeds the 100,000-line text safety limit".into());
+        }
+        let operation_ids = record.session.operation_ids.clone();
+        let external_merge::ToolDetection { tool, reason } = external_merge::detect_tool();
+        let Some(tool) = tool else {
+            return Ok(ExternalMergeRunResult {
+                status: ExternalMergeStatus::NotInstalled,
+                result: None,
+                exit_code: None,
+                reason: Some(reason.unwrap_or_else(|| {
+                    "P4Merge was not found in P4MERGE, the common install locations, or PATH".into()
+                })),
+                operation_ids,
+            });
+        };
+        let inputs = external_merge::MergeInputs {
+            base: &record.session.base,
+            theirs: &record.session.theirs,
+            yours: &record.session.yours,
+            result: &request.result,
+        };
+        let outcome = external_merge::execute(&tool.executable, &inputs);
+        let result = match outcome {
+            external_merge::MergeOutcome::Completed { result, exit_code } => {
+                ExternalMergeRunResult {
+                    status: ExternalMergeStatus::Completed,
+                    result: Some(result),
+                    exit_code,
+                    reason: None,
+                    operation_ids,
+                }
+            }
+            external_merge::MergeOutcome::Unchanged { exit_code } => ExternalMergeRunResult {
+                status: ExternalMergeStatus::Unchanged,
+                result: None,
+                exit_code,
+                reason: None,
+                operation_ids,
+            },
+            external_merge::MergeOutcome::Failed { exit_code, reason } => ExternalMergeRunResult {
+                status: ExternalMergeStatus::Failed,
+                result: None,
+                exit_code,
+                reason: Some(reason),
+                operation_ids,
+            },
+            external_merge::MergeOutcome::Timeout => ExternalMergeRunResult {
+                status: ExternalMergeStatus::Timeout,
+                result: None,
+                exit_code: None,
+                reason: Some(
+                    "P4Merge did not save within 30 minutes and was stopped; nothing was written"
+                        .into(),
+                ),
+                operation_ids,
+            },
+            external_merge::MergeOutcome::Cancelled => ExternalMergeRunResult {
+                status: ExternalMergeStatus::Cancelled,
+                result: None,
+                exit_code: None,
+                reason: Some(
+                    "P4Merge was terminated before saving a result; nothing was written".into(),
+                ),
+                operation_ids,
+            },
+        };
+        Ok(result)
+    }
+
     pub fn validate_manual_merge(
         &self,
         request: ManualMergeValidateRequest,
@@ -1396,7 +1632,10 @@ impl WorkflowService {
         let operation_id = valid_operation_id(confirmation.operation_id);
         let operation = self.repository.begin_operation_group(operation_id.clone());
         let (context, _) = self.contexts.snapshot();
-        let _guard = self.repository.lock_mutations(&context.server).await;
+        let guard = self
+            .repository
+            .lock_write_transaction(&context, &operation_id)
+            .await?;
         self.ensure_manual_target_current(&session_record)?;
         operation.ensure_active()?;
         let recheck = self
@@ -1461,6 +1700,7 @@ impl WorkflowService {
             &[session_record.session.depot_path.clone()],
             InvalidationReason::FileMutation,
         );
+        guard.finish(saved.durability_confirmed)?;
         Ok(ManualMergeSaveResult {
             outcome: if saved.durability_confirmed {
                 WorkflowOutcome::Succeeded
@@ -1741,8 +1981,12 @@ impl WorkflowService {
             .map(|item| item.depot_path.clone())
             .collect::<BTreeSet<_>>();
         let expected_paths = paths.iter().cloned().collect::<BTreeSet<_>>();
-        if selections.len() != selected_paths.len()
-            || selected_paths != expected_paths
+        // P4V-style per-file resolve: any non-empty subset of the checked files is
+        // executable, but duplicates, unknown paths, and preview-only strategies
+        // are rejected before anything runs.
+        if selections.is_empty()
+            || selections.len() != selected_paths.len()
+            || !selected_paths.is_subset(&expected_paths)
             || selections
                 .iter()
                 .any(|item| item.strategy == ResolveStrategy::MergePreview)
@@ -1750,7 +1994,7 @@ impl WorkflowService {
             return rejected(
                 &record.target,
                 WorkflowFailureCode::TargetMismatch,
-                "Resolve confirmation must select one executable strategy for every checked file.",
+                "Resolve confirmation must select at least one checked file, without duplicates or unknown paths, and cannot use a preview-only strategy.",
             );
         }
         let (context, generation) = self.contexts.snapshot();
@@ -1860,6 +2104,175 @@ impl WorkflowService {
             &record.target,
             "Resolve execution completed with per-file verification.",
         )
+    }
+
+    /// Read-only best-effort statistics for the Resolve dialog. Any missing
+    /// metadata/content becomes `None`; nothing is fabricated and no errors are
+    /// thrown for unreadable sides.
+    pub async fn resolve_stats(
+        &self,
+        request: ResolveStatsRequest,
+        app: Option<&AppHandle>,
+    ) -> ResolveStats {
+        let (context, _generation) = self.contexts.snapshot();
+        // P4's own resolve engine prints the authoritative chunk summary used by
+        // P4V. Prefer it over any client-side diff approximation; when it is
+        // available the version contents do not need to be printed at all.
+        let engine_counts = self
+            .repository
+            .resolve_diff_counts(
+                &context,
+                &request.depot_path,
+                format!("resolve-stats-counts-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+            .ok()
+            .flatten();
+        let need_content = engine_counts.is_none();
+        let staging = if need_content {
+            let staging =
+                std::env::temp_dir().join(format!("p4deck-resolve-stats-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&staging).ok().map(|_| staging)
+        } else {
+            None
+        };
+        let (mut base, base_text) = self
+            .resolve_version_stats(
+                &context,
+                request.base_depot_path,
+                request.base_revision,
+                "base",
+                staging.as_deref(),
+                need_content,
+                app,
+            )
+            .await;
+        let (mut source, source_text) = self
+            .resolve_version_stats(
+                &context,
+                request.source_depot_path,
+                request.source_revision,
+                "source",
+                staging.as_deref(),
+                need_content,
+                app,
+            )
+            .await;
+        let target_text = if need_content {
+            request
+                .target_path
+                .as_deref()
+                .and_then(read_resolve_stats_text)
+        } else {
+            None
+        };
+        let mut target = ResolveTargetStats {
+            path: request.target_path,
+            base_revision: request.base_revision,
+            diff_blocks: None,
+        };
+        let mut conflicts = engine_counts.as_ref().map(|counts| counts.conflicting);
+        if let Some(counts) = &engine_counts {
+            base.diff_blocks = Some(counts.theirs);
+            source.diff_blocks = Some(counts.theirs);
+            target.diff_blocks = Some(counts.yours);
+        }
+        if source.diff_blocks.is_none() {
+            if let (Some(base_text), Some(source_text)) = (&base_text, &source_text) {
+                let blocks = resolve_stats_math::diff_blocks(base_text, source_text);
+                base.diff_blocks = Some(blocks);
+                source.diff_blocks = Some(blocks);
+            }
+        }
+        if target.diff_blocks.is_none() {
+            if let (Some(base_text), Some(target_text)) = (&base_text, &target_text) {
+                target.diff_blocks = Some(resolve_stats_math::diff_blocks(base_text, target_text));
+            }
+        }
+        if conflicts.is_none() {
+            if let (Some(base_text), Some(source_text), Some(target_text)) =
+                (&base_text, &source_text, &target_text)
+            {
+                conflicts = Some(resolve_stats_math::conflict_blocks(
+                    base_text,
+                    source_text,
+                    target_text,
+                ));
+            }
+        }
+        if let Some(staging) = staging {
+            let _ = std::fs::remove_dir_all(staging);
+        }
+        ResolveStats {
+            base,
+            source,
+            target,
+            conflicts,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn resolve_version_stats(
+        &self,
+        context: &P4Context,
+        depot_path: Option<String>,
+        revision: Option<i64>,
+        role: &str,
+        staging: Option<&Path>,
+        load_content: bool,
+        app: Option<&AppHandle>,
+    ) -> (ResolveVersionStats, Option<String>) {
+        let mut stats = ResolveVersionStats {
+            depot_path: depot_path.clone(),
+            revision,
+            ..ResolveVersionStats::default()
+        };
+        let (Some(depot_path), Some(revision)) = (depot_path, revision) else {
+            return (stats, None);
+        };
+        if revision <= 0 || depot_path.len() > 4096 || !depot_path.starts_with("//") {
+            return (stats, None);
+        }
+        if let Ok(filelog) = self
+            .repository
+            .filelog_revision(
+                context,
+                &depot_path,
+                revision,
+                format!("resolve-stats-{role}-filelog-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+        {
+            stats.change = filelog.change;
+            stats.user = filelog.user;
+            stats.time = filelog.time;
+            stats.description = filelog.description;
+        }
+        if !load_content {
+            return (stats, None);
+        }
+        let Some(staging) = staging else {
+            return (stats, None);
+        };
+        let output = staging.join(format!("{role}-content"));
+        let spec = format!("{depot_path}#{revision}");
+        if self
+            .repository
+            .print_revision_to(
+                context,
+                &spec,
+                &output,
+                format!("resolve-stats-{role}-print-{}", Uuid::new_v4()),
+                app,
+            )
+            .await
+            .is_err()
+        {
+            return (stats, None);
+        }
+        (stats, read_resolve_stats_text(&output.to_string_lossy()))
     }
 
     fn consume(
@@ -2395,13 +2808,28 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
         "unknown"
     };
     let mut conflicts = Vec::new();
+    let basename = |value: &str| {
+        value
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(value)
+            .to_ascii_lowercase()
+    };
     for path in paths {
+        let fact = facts.get(path).copied();
         let record = inspection
             .records
             .iter()
-            .find(|record| record.target_file.as_deref() == Some(path.as_str()))
+            .find(|record| {
+                record.target_file.as_deref().is_some_and(|target| {
+                    target == path
+                        || fact.and_then(|item| item.client_path.as_deref()) == Some(target)
+                        || basename(target) == basename(path)
+                }) || record.base_file.as_deref() == Some(path)
+                    || record.from_file.as_deref() == Some(path)
+            })
             .or_else(|| (inspection.records.len() == 1).then(|| &inspection.records[0]));
-        let sources = record
+        let mut sources = record
             .and_then(|record| {
                 Some(vec![
                     ResolveVersionSource {
@@ -2419,6 +2847,28 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
                 ])
             })
             .unwrap_or_else(|| fallback_sources.clone());
+        if sources.is_empty() {
+            if let Some(fact) = fact {
+                let mut built = Vec::new();
+                if let Some(revision) = fact.have_revision {
+                    built.push(ResolveVersionSource {
+                        role: "base".into(),
+                        depot_path: Some(path.clone()),
+                        revision: Some(revision),
+                        description: "base revision (have) from fstat".into(),
+                    });
+                }
+                if let Some(revision) = fact.head_revision {
+                    built.push(ResolveVersionSource {
+                        role: "theirs".into(),
+                        depot_path: Some(path.clone()),
+                        revision: Some(revision),
+                        description: "incoming head revision from fstat".into(),
+                    });
+                }
+                sources = built;
+            }
+        }
         let structured_type = record
             .and_then(|record| record.resolve_type.as_deref())
             .map(str::to_ascii_lowercase);
@@ -2438,7 +2888,7 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
                 }
             })
             .unwrap_or(conflict_type);
-        match facts.get(path).copied() {
+        match fact {
             Some(fact) if fact.unresolved > 0 && inspection.preview_succeeded => {
                 let typed_conflict = if conflict_type == "unknown"
                     && sources.iter().any(|source| source.role == "base")
@@ -2711,6 +3161,7 @@ fn rejected(
     message: impl Into<String>,
 ) -> WorkflowResult {
     WorkflowResult {
+        execution: None,
         outcome: WorkflowOutcome::Rejected,
         failure: Some(failure),
         message: message.into(),
@@ -2735,6 +3186,7 @@ fn rejected(
 
 fn rejected_manual(failure: WorkflowFailureCode, message: impl Into<String>) -> WorkflowResult {
     WorkflowResult {
+        execution: None,
         outcome: WorkflowOutcome::Rejected,
         failure: Some(failure),
         message: message.into(),
@@ -2808,63 +3260,174 @@ fn reopen_file_result(
     }
 }
 
+/// SHELF create/replace/update and UNSHELVE have no authoritative per-file
+/// facts. The optimistic boundary is intent/progress only: a clean command
+/// lifecycle plus a revalidated post-write state can be confirmed at command
+/// level, but no requested path is ever projected as per-file success.
+fn shelf_unshelve_result(
+    target: &WorkflowTargetSnapshot,
+    result: Result<OperationResult, String>,
+    operation_id: String,
+    revalidated: bool,
+    success: &str,
+) -> WorkflowResult {
+    let clean = result.as_ref().is_ok_and(|operation| {
+        operation.exit_code == 0
+            && !operation.events.iter().any(|event| {
+                matches!(
+                    event.kind,
+                    EventKind::Error | EventKind::Cancelled | EventKind::Warning
+                ) || event
+                    .message
+                    .as_deref()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                    .is_some_and(|value| {
+                        value.get("code").and_then(|code| code.as_str()) == Some("error")
+                            || value
+                                .get("severity")
+                                .and_then(|severity| {
+                                    severity.as_i64().or_else(|| {
+                                        severity.as_str().and_then(|text| text.parse().ok())
+                                    })
+                                })
+                                .is_some_and(|severity| severity >= 2)
+                    })
+            })
+    });
+    let confirmed = clean && revalidated;
+    let message = if confirmed {
+        success
+    } else {
+        "The command may have completed, but the shelf/unshelve state could not be revalidated. Individual outcomes are unconfirmed; refresh and inspect before any manual retry."
+    };
+    let outcome = if confirmed {
+        WorkflowOutcome::Succeeded
+    } else {
+        WorkflowOutcome::Unknown
+    };
+    let state = if confirmed {
+        "commandCompleted"
+    } else {
+        "unknown"
+    };
+    WorkflowResult {
+        execution: Some(WorkflowExecution {
+            kind: target.kind.clone(),
+            operation_id: operation_id.clone(),
+            state: state.into(),
+            outcome,
+            files: Vec::new(),
+        }),
+        outcome,
+        failure: if confirmed {
+            None
+        } else {
+            Some(WorkflowFailureCode::UncertainOutcome)
+        },
+        message: message.into(),
+        operation_ids: vec![operation_id.clone()],
+        log_reference: Some(operation_id),
+        files: Vec::new(),
+        refresh: refresh(
+            target.depot_paths.clone(),
+            "Refresh shelf detail, Pending changes and review caches; do not treat this result as per-file success.",
+        ),
+    }
+}
+
+/// Generic command-level result builder kept for unit tests and non-shelf
+/// command lifecycles. SHELF/UNSHELVE now use `shelf_unshelve_result`, which
+/// adds the lifecycle envelope and claims no per-file success.
+#[allow(dead_code)]
 fn operation_result(
     target: &WorkflowTargetSnapshot,
     result: Result<OperationResult, String>,
     operation_id: String,
     success: &str,
 ) -> WorkflowResult {
-    match result {
-        Ok(operation) if operation.exit_code == 0 => WorkflowResult {
-            outcome: WorkflowOutcome::Succeeded,
-            failure: None,
-            message: success.into(),
-            operation_ids: vec![operation_id.clone()],
-            log_reference: Some(operation_id.clone()),
-            files: target
-                .depot_paths
-                .iter()
-                .map(|path| WorkflowFileResult {
-                    depot_path: path.clone(),
-                    state: WorkflowFileState::Succeeded,
-                    message: success.into(),
-                    operation_id: Some(operation_id.clone()),
-                })
-                .collect(),
-            refresh: refresh(
-                target.depot_paths.clone(),
-                "Refresh affected changelist and workspace views.",
-            ),
+    // A failed/cancelled batch can have mutated some paths. Without a per-file
+    // authoritative post-state, neither failure nor completion is proven for them.
+    // Do not infer acknowledgements from localized human-readable output.
+    let confirmed = result.as_ref().is_ok_and(|operation| {
+        operation.exit_code == 0
+            && !operation.events.iter().any(|event| {
+                matches!(
+                    event.kind,
+                    EventKind::Error | EventKind::Cancelled | EventKind::Warning
+                ) || event
+                    .message
+                    .as_deref()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                    .is_some_and(|value| {
+                        value.get("code").and_then(|code| code.as_str()) == Some("error")
+                            || value
+                                .get("severity")
+                                .and_then(|severity| {
+                                    severity.as_i64().or_else(|| {
+                                        severity.as_str().and_then(|text| text.parse().ok())
+                                    })
+                                })
+                                .is_some_and(|severity| severity >= 2)
+                    })
+            })
+    });
+    let message = if confirmed {
+        success
+    } else {
+        "Some files may have changed; individual outcomes are unconfirmed. Refresh and inspect before any manual retry."
+    };
+    WorkflowResult {
+        execution: None,
+        outcome: if confirmed {
+            WorkflowOutcome::Succeeded
+        } else {
+            WorkflowOutcome::Unknown
         },
-        Ok(operation) => {
-            let cancelled = operation
-                .events
-                .iter()
-                .any(|event| matches!(event.kind, EventKind::Cancelled));
-            WorkflowResult { outcome: if cancelled { WorkflowOutcome::Cancelled } else { WorkflowOutcome::Failed }, failure: Some(if cancelled { WorkflowFailureCode::Cancelled } else { WorkflowFailureCode::CommandFailure }), message: if cancelled { "Operation was cancelled.".into() } else { "The server rejected the operation.".into() }, operation_ids: vec![operation_id.clone()], log_reference: Some(operation_id.clone()), files: target.depot_paths.iter().map(|path| WorkflowFileResult { depot_path: path.clone(), state: if cancelled { WorkflowFileState::Cancelled } else { WorkflowFileState::Failed }, message: "Refresh before retrying because a partial server-side change is possible.".into(), operation_id: Some(operation_id.clone()) }).collect(), refresh: refresh(target.depot_paths.clone(), "Failure or cancellation may be partial; refresh before retrying.") }
-        }
-        Err(_) => WorkflowResult {
-            outcome: WorkflowOutcome::Unknown,
-            failure: Some(WorkflowFailureCode::UncertainOutcome),
-            message: "The command outcome is uncertain.".into(),
-            operation_ids: vec![operation_id.clone()],
-            log_reference: Some(operation_id.clone()),
-            files: target
-                .depot_paths
-                .iter()
-                .map(|path| WorkflowFileResult {
-                    depot_path: path.clone(),
-                    state: WorkflowFileState::Unknown,
-                    message: "Refresh before any retry.".into(),
-                    operation_id: Some(operation_id.clone()),
-                })
-                .collect(),
-            refresh: refresh(
-                target.depot_paths.clone(),
-                "The outcome is uncertain; refresh all related state.",
-            ),
+        failure: if confirmed {
+            None
+        } else {
+            Some(WorkflowFailureCode::UncertainOutcome)
         },
+        message: message.into(),
+        operation_ids: vec![operation_id.clone()],
+        log_reference: Some(operation_id.clone()),
+        files: target
+            .depot_paths
+            .iter()
+            .map(|path| WorkflowFileResult {
+                depot_path: path.clone(),
+                state: if confirmed {
+                    WorkflowFileState::Succeeded
+                } else {
+                    WorkflowFileState::Unknown
+                },
+                message: message.into(),
+                operation_id: Some(operation_id.clone()),
+            })
+            .collect(),
+        refresh: refresh(
+            target.depot_paths.clone(),
+            "Refresh affected changelist and workspace views before retrying.",
+        ),
     }
+}
+/// Read a stats source without ever fabricating content: regular file only,
+/// same 4 MiB text safety limit as manual merge, strict decodable text.
+fn read_resolve_stats_text(path: &str) -> Option<String> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > manual_merge::MAX_MANUAL_MERGE_BYTES
+    {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() as u64 > manual_merge::MAX_MANUAL_MERGE_BYTES {
+        return None;
+    }
+    manual_merge::decode(&bytes)
+        .ok()
+        .map(|document| document.text)
 }
 
 fn file_result(
@@ -2941,6 +3504,7 @@ fn result_from_files(
         _ => Some(WorkflowFailureCode::CommandFailure),
     };
     WorkflowResult {
+        execution: None,
         outcome,
         failure,
         message: message.into(),
@@ -2967,6 +3531,183 @@ fn refresh(paths: Vec<String>, reason: impl Into<String>) -> WorkflowRefreshAdvi
 mod tests {
     use super::*;
 
+    #[test]
+    fn shelf_i01_batch_errors_never_claim_per_file_failure_or_success() {
+        let target = WorkflowTargetSnapshot {
+            kind: "unshelve".into(),
+            server: "synthetic".into(),
+            user: "tester".into(),
+            client: "workspace".into(),
+            workspace: r"C:\synthetic".into(),
+            context_generation: 1,
+            source_change_id: Some(7),
+            target_change_id: Some(9),
+            depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+        };
+        for (exit_code, kind, message, expected) in [
+            (0, EventKind::Completed, "", WorkflowOutcome::Succeeded),
+            (
+                1,
+                EventKind::Error,
+                "one file may have changed",
+                WorkflowOutcome::Unknown,
+            ),
+            (0, EventKind::Error, "error", WorkflowOutcome::Unknown),
+            (
+                0,
+                EventKind::Cancelled,
+                "cancelled",
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Stdout,
+                r#"{"severity":3,"data":"denied"}"#,
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Stdout,
+                r#"{"severity":"2","data":"warning"}"#,
+                WorkflowOutcome::Unknown,
+            ),
+            (
+                0,
+                EventKind::Warning,
+                "output truncated",
+                WorkflowOutcome::Unknown,
+            ),
+        ] {
+            let operation = OperationResult {
+                operation_id: "synthetic".into(),
+                exit_code,
+                duration_ms: 0,
+                events: vec![crate::domain::OperationEvent {
+                    operation_id: "synthetic".into(),
+                    kind,
+                    message: Some(message.into()),
+                    progress: None,
+                    timestamp: String::new(),
+                }],
+            };
+            let result = operation_result(&target, Ok(operation), "synthetic".into(), "done");
+            assert_eq!(result.outcome, expected);
+            assert_eq!(result.files.len(), 2);
+            assert!(result.files.iter().all(|file| file.state
+                == if expected == WorkflowOutcome::Succeeded {
+                    WorkflowFileState::Succeeded
+                } else {
+                    WorkflowFileState::Unknown
+                }));
+        }
+        assert_eq!(
+            operation_result(&target, Err("transport".into()), "id".into(), "done").outcome,
+            WorkflowOutcome::Unknown
+        );
+    }
+    #[test]
+    fn shelf_unshelve_result_never_claims_per_file_success() {
+        let target = WorkflowTargetSnapshot {
+            kind: "shelf".into(),
+            server: "synthetic".into(),
+            user: "tester".into(),
+            client: "workspace".into(),
+            workspace: r"C:\synthetic".into(),
+            context_generation: 1,
+            source_change_id: Some(7),
+            target_change_id: None,
+            depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+        };
+        let clean = OperationResult {
+            operation_id: "synthetic".into(),
+            exit_code: 0,
+            duration_ms: 0,
+            events: vec![],
+        };
+        let confirmed = shelf_unshelve_result(
+            &target,
+            Ok(clean.clone()),
+            "synthetic-op".into(),
+            true,
+            "done",
+        );
+        assert_eq!(confirmed.outcome, WorkflowOutcome::Succeeded);
+        assert!(confirmed
+            .files
+            .iter()
+            .all(|file| file.state == WorkflowFileState::Unknown));
+        let unverified =
+            shelf_unshelve_result(&target, Ok(clean), "synthetic-op".into(), false, "done");
+        assert_eq!(unverified.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(
+            unverified.failure,
+            Some(WorkflowFailureCode::UncertainOutcome)
+        );
+        assert!(unverified
+            .files
+            .iter()
+            .all(|file| file.state == WorkflowFileState::Unknown));
+    }
+    #[test]
+    fn shelf_i01_delete_scope_permission_and_stale_digest() {
+        let mut current = change();
+        current.shelved_files = current.files.clone();
+        let request = ShelfPreflightRequest {
+            change_id: 7,
+            depot_paths: vec!["//depot/a".into()],
+            mode: ShelfMode::Delete,
+            replace: false,
+        };
+        let inspect = |change, permission| ShelfInspection {
+            change,
+            permission,
+            facts: Vec::new(),
+            shelf_facts: Vec::new(),
+            operation_ids: Vec::new(),
+        };
+        let first = evaluate_shelf(
+            &request,
+            inspect(Some(current.clone()), PermissionAssessment::Allowed),
+        );
+        assert!(first.blockers.is_empty());
+        assert_eq!(first.scope.delete_paths, request.depot_paths);
+        assert!(first.scope.create_paths.is_empty());
+        assert!(first.scope.replace_paths.is_empty());
+        let denied = evaluate_shelf(
+            &request,
+            inspect(
+                Some(current.clone()),
+                PermissionAssessment::Denied(request.depot_paths.clone()),
+            ),
+        );
+        assert!(denied
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::PermissionDenied));
+        let unknown = evaluate_shelf(
+            &request,
+            inspect(Some(current.clone()), PermissionAssessment::Unknown),
+        );
+        assert!(unknown
+            .warnings
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::PermissionUnknown));
+        current.shelved_files.clear();
+        let stale = evaluate_shelf(
+            &request,
+            inspect(Some(current), PermissionAssessment::Allowed),
+        );
+        assert_ne!(first.digest, stale.digest);
+        assert!(stale
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::FileNotShelved));
+        let absent = evaluate_shelf(&request, inspect(None, PermissionAssessment::Allowed));
+        assert!(absent
+            .blockers
+            .iter()
+            .any(|item| item.code == WorkflowIssueCode::ChangeNotFound));
+    }
     fn shelf_test_service() -> (WorkflowService, std::path::PathBuf) {
         let directory = std::env::temp_dir().join(format!(
             "p4deck-shelf-cursor-{}-{}",
@@ -3052,11 +3793,13 @@ mod tests {
                 state: Some("openedEdit".into()),
                 client_path: Some("missing".into()),
                 revision: Some(1),
+                head_revision: None,
                 file_type: Some("text".into()),
                 lock_ownership: None,
                 lock_owner: None,
                 other_open: Vec::new(),
                 exclusive_open: None,
+                resolve: None,
             }],
             shelved_files: Vec::new(),
         }
@@ -3315,11 +4058,13 @@ mod tests {
                 state: None,
                 client_path: None,
                 revision: Some(1),
+                head_revision: None,
                 file_type: Some("text".into()),
                 lock_ownership: None,
                 lock_owner: None,
                 other_open: Vec::new(),
                 exclusive_open: None,
+                resolve: None,
             }],
             ..change()
         };
@@ -3387,5 +4132,515 @@ mod tests {
         assert!(blockers
             .iter()
             .any(|issue| issue.code == WorkflowIssueCode::FileNotInChange));
+    }
+
+    use crate::p4::runner::P4Runner;
+    use crate::persistence::{log_store::LogStore, operation_journal::OperationJournal};
+    use std::path::Path;
+
+    #[cfg(windows)]
+    const RESOLVE_WINDOWS_SCRIPT: &str = r#"@echo off
+echo %*>>"__CALLS__"
+echo %* | findstr /C:" fstat " >nul
+if %errorlevel%==0 (
+  if exist "__MARKER__" (
+    echo {"depotFile":"//depot/a","clientFile":"C:/p4deck-nonexistent/a.txt","action":"edit","type":"text","unresolved":"0"}
+    echo {"depotFile":"//depot/b","clientFile":"C:/p4deck-nonexistent/b.txt","action":"edit","type":"text","unresolved":"0"}
+  ) else (
+    echo {"depotFile":"//depot/a","clientFile":"C:/p4deck-nonexistent/a.txt","action":"edit","type":"text","unresolved":"1"}
+    echo {"depotFile":"//depot/b","clientFile":"C:/p4deck-nonexistent/b.txt","action":"edit","type":"text","unresolved":"1"}
+  )
+  exit /b 0
+)
+echo %* | findstr /C:" resolve -n " >nul
+if %errorlevel%==0 (
+  echo {"clientFile":"//depot/a","resolveBaseFile":"//depot/a","resolveBaseRev":"1","resolveFromFile":"//depot/from/a","resolveEndFromRev":"2","resolveType":"content"}
+  echo {"clientFile":"//depot/b","resolveBaseFile":"//depot/b","resolveBaseRev":"1","resolveFromFile":"//depot/from/b","resolveEndFromRev":"2","resolveType":"content"}
+  exit /b 0
+)
+echo %* | findstr /C:" resolve -a" >nul
+if %errorlevel%==0 (
+  type nul >"__MARKER__"
+  echo {"data":"resolved"}
+  exit /b 0
+)
+echo unexpected resolve command 1>&2
+exit /b 9
+"#;
+
+    #[cfg(unix)]
+    const RESOLVE_UNIX_SCRIPT: &str = r#"#!/bin/sh
+printf '%s\n' "$*" >> "__CALLS__"
+case "$*" in
+*" fstat "*)
+  if [ -f "__MARKER__" ]; then u=0; else u=1; fi
+  printf '%s\n' "{\"depotFile\":\"//depot/a\",\"clientFile\":\"C:/p4deck-nonexistent/a.txt\",\"action\":\"edit\",\"type\":\"text\",\"unresolved\":\"$u\"}"
+  printf '%s\n' "{\"depotFile\":\"//depot/b\",\"clientFile\":\"C:/p4deck-nonexistent/b.txt\",\"action\":\"edit\",\"type\":\"text\",\"unresolved\":\"$u\"}"
+  exit 0;;
+*" resolve -n "*)
+  printf '%s\n' '{"clientFile":"//depot/a","resolveBaseFile":"//depot/a","resolveBaseRev":"1","resolveFromFile":"//depot/from/a","resolveEndFromRev":"2","resolveType":"content"}'
+  printf '%s\n' '{"clientFile":"//depot/b","resolveBaseFile":"//depot/b","resolveBaseRev":"1","resolveFromFile":"//depot/from/b","resolveEndFromRev":"2","resolveType":"content"}'
+  exit 0;;
+*" resolve -a"*)
+  : > "__MARKER__"
+  printf '%s\n' '{"data":"resolved"}'
+  exit 0;;
+esac
+echo unexpected resolve command >&2
+exit 9
+"#;
+
+    /// Deterministic fake `p4` for resolve flows: two unresolved files become
+    /// resolved after the first `resolve -a*` mutation. No real Perforce.
+    fn resolve_fake_p4(directory: &Path) -> std::path::PathBuf {
+        let calls = directory.join("calls.txt");
+        let marker = directory.join("resolved.marker");
+        #[cfg(windows)]
+        {
+            let executable = directory.join("fake-p4.cmd");
+            let script = RESOLVE_WINDOWS_SCRIPT
+                .replace("__CALLS__", &calls.to_string_lossy())
+                .replace("__MARKER__", &marker.to_string_lossy());
+            std::fs::write(&executable, script).unwrap();
+            executable
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let executable = directory.join("fake-p4");
+            let script = RESOLVE_UNIX_SCRIPT
+                .replace("__CALLS__", &calls.to_string_lossy())
+                .replace("__MARKER__", &marker.to_string_lossy());
+            std::fs::write(&executable, script).unwrap();
+            let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&executable, permissions).unwrap();
+            executable
+        }
+    }
+
+    struct ResolveHarness {
+        directory: std::path::PathBuf,
+        service: WorkflowService,
+    }
+
+    impl Drop for ResolveHarness {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.directory);
+        }
+    }
+
+    fn resolve_harness(label: &str) -> ResolveHarness {
+        let directory =
+            std::env::temp_dir().join(format!("p4deck-resolve-{label}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = resolve_fake_p4(&directory);
+        let contexts = Arc::new(crate::p4::context::ContextStore::load(&directory).unwrap());
+        contexts
+            .save(P4Context {
+                executable: Some(executable.to_string_lossy().into_owned()),
+                server: "fake:1666".into(),
+                user: "alice".into(),
+                client: "main".into(),
+                cwd: Some(directory.to_string_lossy().into_owned()),
+                ..Default::default()
+            })
+            .unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("logs.sqlite")).unwrap());
+        let journal =
+            Arc::new(OperationJournal::open(&directory.join("operations.sqlite")).unwrap());
+        let runner = Arc::new(P4Runner::new(logs, journal));
+        ResolveHarness {
+            service: WorkflowService::new(
+                WorkflowRepository::new(runner),
+                contexts,
+                crate::app::status_cache::shared_default(),
+            ),
+            directory,
+        }
+    }
+
+    fn resolve_calls(directory: &Path) -> Vec<String> {
+        std::fs::read_to_string(directory.join("calls.txt"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    async fn ready_resolve_preflight(harness: &ResolveHarness) -> ResolvePreflight {
+        let preflight = harness
+            .service
+            .preflight_resolve(
+                ResolvePreflightRequest {
+                    depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+                },
+                None,
+            )
+            .await;
+        assert!(preflight.ready, "{:?}", preflight.blockers);
+        preflight
+    }
+
+    fn resolve_selection(path: &str, strategy: ResolveStrategy) -> ResolveSelection {
+        ResolveSelection {
+            depot_path: path.into(),
+            strategy,
+        }
+    }
+
+    fn resolve_confirmation(
+        preflight: &ResolvePreflight,
+        resolutions: Vec<ResolveSelection>,
+    ) -> ResolveConfirmation {
+        ResolveConfirmation {
+            token: preflight.token.clone().unwrap(),
+            target: preflight.target.clone(),
+            operation_id: Some("resolve-p4v".into()),
+            resolutions,
+        }
+    }
+
+    #[tokio::test]
+    async fn confirm_resolve_executes_only_the_selected_subset() {
+        let harness = resolve_harness("partial");
+        let preflight = ready_resolve_preflight(&harness).await;
+        let result = harness
+            .service
+            .confirm_resolve(
+                resolve_confirmation(
+                    &preflight,
+                    vec![resolve_selection("//depot/a", ResolveStrategy::AcceptYours)],
+                ),
+                None,
+            )
+            .await;
+
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded);
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(result.files[0].depot_path, "//depot/a");
+        assert_eq!(result.files[0].state, WorkflowFileState::Succeeded);
+        assert_eq!(result.operation_ids.len(), 1);
+
+        let calls = resolve_calls(&harness.directory);
+        let executions = calls
+            .iter()
+            .filter(|line| line.contains(" resolve -a"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            executions.len(),
+            1,
+            "only the selected file may execute: {calls:?}"
+        );
+        assert!(executions[0].contains("//depot/a"));
+        assert!(!executions[0].contains("//depot/b"));
+    }
+
+    #[tokio::test]
+    async fn confirm_resolve_full_selection_keeps_executing_every_checked_file() {
+        let harness = resolve_harness("full");
+        let preflight = ready_resolve_preflight(&harness).await;
+        let result = harness
+            .service
+            .confirm_resolve(
+                resolve_confirmation(
+                    &preflight,
+                    vec![
+                        resolve_selection("//depot/a", ResolveStrategy::AcceptYours),
+                        resolve_selection("//depot/b", ResolveStrategy::AcceptTheirs),
+                    ],
+                ),
+                None,
+            )
+            .await;
+
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded);
+        assert_eq!(result.files.len(), 2);
+        assert_eq!(result.operation_ids.len(), 2);
+        let calls = resolve_calls(&harness.directory);
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|line| line.contains(" resolve -a"))
+                .count(),
+            2,
+            "{calls:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn confirm_resolve_rejects_empty_duplicate_unknown_and_preview_selections() {
+        for (label, resolutions) in [
+            ("empty", Vec::new()),
+            (
+                "duplicate",
+                vec![
+                    resolve_selection("//depot/a", ResolveStrategy::AcceptYours),
+                    resolve_selection("//depot/a", ResolveStrategy::AcceptTheirs),
+                ],
+            ),
+            (
+                "unknown",
+                vec![resolve_selection(
+                    "//depot/zzz",
+                    ResolveStrategy::AcceptYours,
+                )],
+            ),
+            (
+                "preview",
+                vec![resolve_selection(
+                    "//depot/a",
+                    ResolveStrategy::MergePreview,
+                )],
+            ),
+        ] {
+            let harness = resolve_harness(label);
+            let preflight = ready_resolve_preflight(&harness).await;
+            let result = harness
+                .service
+                .confirm_resolve(resolve_confirmation(&preflight, resolutions), None)
+                .await;
+            assert_eq!(result.outcome, WorkflowOutcome::Rejected, "{label}");
+            assert!(
+                result
+                    .files
+                    .iter()
+                    .all(|file| file.state == WorkflowFileState::Blocked),
+                "{label}: a rejected confirmation must not report executed files"
+            );
+            assert!(
+                result.message.contains("at least one checked file"),
+                "{label}: {}",
+                result.message
+            );
+            let calls = resolve_calls(&harness.directory);
+            assert!(
+                !calls.iter().any(|line| line.contains(" resolve -a")),
+                "{label} must not execute a resolve: {calls:?}"
+            );
+        }
+    }
+
+    const STATS_WINDOWS_SCRIPT: &str = r#"@echo off
+echo %*>>"__CALLS__"
+echo %* | findstr /C:" filelog " >nul
+if %errorlevel%==0 (
+  if exist "__FAIL_FILELOG__" exit /b 5
+  echo {"depotFile":"//depot/a","rev":"2","change":"42","user":"alice","time":"1700000000","desc":"Add feature"}
+  exit /b 0
+)
+echo %* | findstr /C:" print " >nul
+if not %errorlevel%==0 goto unexpected
+if exist "__FAIL_PRINT__" exit /b 6
+set OUT=
+:args
+if "%~1"=="" goto written
+if "%~1"=="-o" set OUT=%~2
+shift
+goto args
+:written
+if not defined OUT exit /b 7
+if exist "__PRINT_COUNTER__" goto source
+(echo one& echo two& echo three)>"%OUT%"
+type nul>"__PRINT_COUNTER__"
+exit /b 0
+:source
+(echo one& echo TWO& echo three)>"%OUT%"
+exit /b 0
+:unexpected
+echo unexpected stats command 1>&2
+exit /b 9
+"#;
+
+    #[cfg(unix)]
+    const STATS_UNIX_SCRIPT: &str = r#"#!/bin/sh
+printf '%s\n' "$*" >> "__CALLS__"
+case "$*" in
+*" filelog "*)
+  [ -f "__FAIL_FILELOG__" ] && exit 5
+  printf '%s\n' '{"depotFile":"//depot/a","rev":"2","change":"42","user":"alice","time":"1700000000","desc":"Add feature"}'
+  exit 0;;
+*" print "*)
+  [ -f "__FAIL_PRINT__" ] && exit 6
+  out=
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -o) out="$2"; shift 2;;
+      *) shift;;
+    esac
+  done
+  [ -n "$out" ] || exit 7
+  if [ -f "__PRINT_COUNTER__" ]; then
+    printf 'one\nTWO\nthree\n' > "$out"
+  else
+    printf 'one\ntwo\nthree\n' > "$out"
+    : > "__PRINT_COUNTER__"
+  fi
+  exit 0;;
+esac
+echo unexpected stats command >&2
+exit 9
+"#;
+
+    fn stats_fake_p4(directory: &Path) -> std::path::PathBuf {
+        let calls = directory.join("calls.txt");
+        let fail_filelog = directory.join("FAIL_FILELOG");
+        let fail_print = directory.join("FAIL_PRINT");
+        let counter = directory.join("PRINT_COUNTER");
+        #[cfg(windows)]
+        {
+            let executable = directory.join("fake-p4.cmd");
+            let script = STATS_WINDOWS_SCRIPT
+                .replace("__CALLS__", &calls.to_string_lossy())
+                .replace("__FAIL_FILELOG__", &fail_filelog.to_string_lossy())
+                .replace("__FAIL_PRINT__", &fail_print.to_string_lossy())
+                .replace("__PRINT_COUNTER__", &counter.to_string_lossy());
+            std::fs::write(&executable, script).unwrap();
+            executable
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let executable = directory.join("fake-p4");
+            let script = STATS_UNIX_SCRIPT
+                .replace("__CALLS__", &calls.to_string_lossy())
+                .replace("__FAIL_FILELOG__", &fail_filelog.to_string_lossy())
+                .replace("__FAIL_PRINT__", &fail_print.to_string_lossy())
+                .replace("__PRINT_COUNTER__", &counter.to_string_lossy());
+            std::fs::write(&executable, script).unwrap();
+            let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&executable, permissions).unwrap();
+            executable
+        }
+    }
+
+    struct StatsHarness {
+        directory: std::path::PathBuf,
+        service: WorkflowService,
+    }
+
+    impl Drop for StatsHarness {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.directory);
+        }
+    }
+
+    fn stats_harness(label: &str) -> StatsHarness {
+        let directory =
+            std::env::temp_dir().join(format!("p4deck-resolve-stats-{label}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = stats_fake_p4(&directory);
+        let contexts = Arc::new(crate::p4::context::ContextStore::load(&directory).unwrap());
+        contexts
+            .save(P4Context {
+                executable: Some(executable.to_string_lossy().into_owned()),
+                server: "fake:1666".into(),
+                user: "alice".into(),
+                client: "main".into(),
+                cwd: Some(directory.to_string_lossy().into_owned()),
+                ..Default::default()
+            })
+            .unwrap();
+        let logs = Arc::new(LogStore::open(&directory.join("logs.sqlite")).unwrap());
+        let journal =
+            Arc::new(OperationJournal::open(&directory.join("operations.sqlite")).unwrap());
+        let runner = Arc::new(P4Runner::new(logs, journal));
+        StatsHarness {
+            service: WorkflowService::new(
+                WorkflowRepository::new(runner),
+                contexts,
+                crate::app::status_cache::shared_default(),
+            ),
+            directory,
+        }
+    }
+
+    fn stats_request(target: &Path) -> ResolveStatsRequest {
+        ResolveStatsRequest {
+            depot_path: "//depot/a".into(),
+            base_depot_path: Some("//depot/a".into()),
+            base_revision: Some(2),
+            source_depot_path: Some("//depot/a".into()),
+            source_revision: Some(3),
+            target_path: Some(target.to_string_lossy().into_owned()),
+        }
+    }
+
+    #[tokio::test]
+    async fn resolve_stats_reads_filelog_print_and_target_with_real_counts() {
+        let harness = stats_harness("counts");
+        let target = harness.directory.join("target.txt");
+        std::fs::write(&target, "one\nTWO\nTHREE\n").unwrap();
+        let stats = harness
+            .service
+            .resolve_stats(stats_request(&target), None)
+            .await;
+
+        assert_eq!(stats.base.depot_path.as_deref(), Some("//depot/a"));
+        assert_eq!(stats.base.revision, Some(2));
+        assert_eq!(stats.base.change, Some(42));
+        assert_eq!(stats.base.user.as_deref(), Some("alice"));
+        assert_eq!(
+            stats.base.time.as_deref(),
+            Some("2023-11-14T22:13:20+00:00")
+        );
+        assert_eq!(stats.base.description.as_deref(), Some("Add feature"));
+        // base one/two/three -> source one/TWO/three: one changed block.
+        assert_eq!(stats.base.diff_blocks, Some(1));
+        assert_eq!(stats.source.diff_blocks, Some(1));
+        // base -> target changes lines two and three as one contiguous block.
+        assert_eq!(stats.target.base_revision, Some(2));
+        assert_eq!(stats.target.diff_blocks, Some(1));
+        // Source and target both change line two: one conflict block.
+        assert_eq!(stats.conflicts, Some(1));
+    }
+
+    #[tokio::test]
+    async fn resolve_stats_reports_none_for_missing_metadata_or_content() {
+        // print fails: metadata from filelog survives, but no diff/conflict numbers.
+        let harness = stats_harness("no-print");
+        let target = harness.directory.join("target.txt");
+        std::fs::write(&target, "one\nTWO\nTHREE\n").unwrap();
+        std::fs::write(harness.directory.join("FAIL_PRINT"), b"1").unwrap();
+        let stats = harness
+            .service
+            .resolve_stats(stats_request(&target), None)
+            .await;
+        assert_eq!(stats.base.change, Some(42));
+        assert_eq!(stats.base.diff_blocks, None);
+        assert_eq!(stats.source.diff_blocks, None);
+        assert_eq!(stats.target.diff_blocks, None);
+        assert_eq!(stats.conflicts, None);
+
+        // filelog fails: content-based numbers still work, metadata stays None.
+        let harness = stats_harness("no-filelog");
+        let target = harness.directory.join("target.txt");
+        std::fs::write(&target, "one\nTWO\nTHREE\n").unwrap();
+        std::fs::write(harness.directory.join("FAIL_FILELOG"), b"1").unwrap();
+        let stats = harness
+            .service
+            .resolve_stats(stats_request(&target), None)
+            .await;
+        assert_eq!(stats.base.change, None);
+        assert_eq!(stats.base.user, None);
+        assert_eq!(stats.base.diff_blocks, Some(1));
+        assert_eq!(stats.conflicts, Some(1));
+
+        // Missing local target: no target diff, no conflict number, no fabrication.
+        let harness = stats_harness("missing-target");
+        let missing = harness.directory.join("does-not-exist.txt");
+        let stats = harness
+            .service
+            .resolve_stats(stats_request(&missing), None)
+            .await;
+        assert_eq!(stats.base.diff_blocks, Some(1));
+        assert_eq!(
+            stats.target.path.as_deref(),
+            Some(missing.to_string_lossy().as_ref())
+        );
+        assert_eq!(stats.target.diff_blocks, None);
+        assert_eq!(stats.conflicts, None);
     }
 }

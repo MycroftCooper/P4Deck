@@ -1,5 +1,5 @@
 import { backend } from "../../infrastructure/backend";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { cleanAddress, parentPath, pathKey } from "./address";
 import { workspaceCache, workspaceQuery } from "./workspaceQueries";
 

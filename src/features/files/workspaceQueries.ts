@@ -4,7 +4,7 @@ import type {
   RuntimeInfo,
   WorkspaceListing,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { appCache } from "../../shared/cache/appCache";
 import { stableConnectionKey } from "../../shared/cache/connectionKey";
 import { writePersisted } from "../../shared/cache/persistentStore";

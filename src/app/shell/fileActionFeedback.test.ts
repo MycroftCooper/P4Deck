@@ -1,9 +1,6 @@
 import { expect, it } from "vitest";
 import { fileActionFeedback } from "./fileActionFeedback";
-import type {
-  FileActionResult,
-  OperationEvent,
-} from "../../shared/contracts/types";
+import type { FileActionResult, OperationEvent } from "../../shared/contracts";
 const result = (
   exitCode = 0,
   events: OperationEvent[] = [],

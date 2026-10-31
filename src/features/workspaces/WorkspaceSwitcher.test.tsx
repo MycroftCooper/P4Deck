@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { RuntimeInfo } from "../../shared/contracts/types";
+import type { RuntimeInfo } from "../../shared/contracts";
 import { TopBar } from "../../app/shell/TopBar";
 
 const backend = vi.hoisted(() => ({

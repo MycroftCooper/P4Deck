@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-28T09:55:31.212Z",
+  "status": "released for FE-I3 authorized settings work",
+  "hashes": {
+    "src/features/settings/ConnectionProfilesCard.tsx": "43faa94c8c2144554e4514b739e9f015b693d4617ef5d80bfae984dc931e3642",
+    "src/app/styles/settings.css": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+    "src/features/settings/SettingsPage.test.tsx": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779"
+  },
+  "evidence": "attempt2-results.json: all settings checks passed; four screenshots; light1200 and dark390 viewed",
+  "limits": [
+    "SettingsPage.test.tsx not independently rerun; real ConnectionProfilesCard and directory browser exercised",
+    "Shared workbench.css still frozen until Pending completes",
+    "I3-modified settings require new snapshot; T01 screenshots cannot prove I3"
+  ]
+}

@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { initialLocale, messages } from "../../shared/i18n";
-import type { Locale, ThemeMode } from "../../shared/contracts/types";
-import { readUiPreferences } from "../../features/settings/preferences";
+import type { Locale, ThemeMode } from "../../shared/contracts";
+import {
+  readUiPreferences,
+  saveUiPreferences,
+} from "../../features/settings/preferences";
 import { storage } from "../../shared/lib/storage";
+import { accentTokens } from "../../features/settings/accent";
+import {
+  backgroundAccentSurfaces,
+  backgroundTokens,
+  backgroundVariableNames,
+} from "../../features/settings/background";
+import { notifyFailure } from "../../shared/notice";
 
 export function usePreferences() {
   const [locale, setLocale] = useState<Locale>(initialLocale);
@@ -12,7 +22,11 @@ export function usePreferences() {
   });
   const [ui, setUi] = useState(readUiPreferences);
   useEffect(() => {
-    storage.setItem("p4deck.ui", JSON.stringify(ui));
+    if (!saveUiPreferences(ui))
+      notifyFailure(undefined, {
+        zh: "外观设置保存失败；重启后可能不会保留本次更改。",
+        en: "Saving appearance preferences failed; these changes may not persist after a restart.",
+      });
     document.documentElement.style.setProperty(
       "--list-font-size",
       `${ui.fontSize}px`,
@@ -35,13 +49,32 @@ export function usePreferences() {
     storage.setItem("p4deck.theme", theme);
     const media = matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      document.documentElement.dataset.theme =
+      const resolved =
         theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      const dark = resolved === "dark";
+      document.documentElement.dataset.theme = resolved;
+      const background = backgroundTokens(ui.backgroundTone, dark);
+      if (background) {
+        for (const [key, value] of Object.entries(background))
+          document.documentElement.style.setProperty(key, value);
+      } else {
+        // Back to the theme surfaces: drop the inline custom-background values.
+        for (const name of backgroundVariableNames)
+          document.documentElement.style.removeProperty(name);
+      }
+      const surfaces = background
+        ? backgroundAccentSurfaces(background)
+        : undefined;
+      for (const [key, value] of Object.entries(
+        accentTokens(ui.accentColor, dark, surfaces),
+      )) {
+        document.documentElement.style.setProperty(key, value);
+      }
     };
     apply();
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
-  }, [theme]);
+  }, [theme, ui.accentColor, ui.backgroundTone]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
       if (event.key === "p4deck.ui") setUi(readUiPreferences());

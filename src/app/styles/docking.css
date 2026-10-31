@@ -3,14 +3,14 @@
   color-scheme: inherit;
   --dv-group-view-background-color: var(--bg);
   --dv-background-color: var(--bg);
-  --dv-tabs-and-actions-container-background-color: var(--panel-2);
+  --dv-tabs-and-actions-container-background-color: var(--chrome);
   --dv-activegroup-visiblepanel-tab-background-color: var(--accent-soft);
   --dv-activegroup-visiblepanel-tab-color: var(--accent);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--chrome);
   --dv-activegroup-hiddenpanel-tab-color: var(--muted);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel-3);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--chrome-2);
   --dv-inactivegroup-visiblepanel-tab-color: var(--text);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--chrome);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
   --dv-tab-divider-color: var(--border);
   --dv-separator-border: var(--border);
@@ -68,7 +68,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 4px;
+  border-radius: var(--radius-control);
 }
 .dock-actions button:hover {
   background: var(--hover);
@@ -86,7 +86,7 @@
   top: 40px;
   padding: 12px;
   border: 1px solid var(--danger);
-  border-radius: 6px;
+  border-radius: var(--radius-panel);
   background: var(--panel);
   color: var(--danger);
   font-size: 12px;
@@ -99,14 +99,14 @@
 .dockview-theme-p4deck {
   --dv-background-color: var(--bg);
   --dv-paneview-header-border-color: var(--border);
-  --dv-tabs-and-actions-container-background-color: var(--panel-2);
+  --dv-tabs-and-actions-container-background-color: var(--chrome);
   --dv-activegroup-visiblepanel-tab-background-color: var(--accent-soft);
   --dv-activegroup-visiblepanel-tab-color: var(--accent);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--chrome);
   --dv-activegroup-hiddenpanel-tab-color: var(--muted);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel-3);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--chrome-2);
   --dv-inactivegroup-visiblepanel-tab-color: var(--text);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--panel-2);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--chrome);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
   --dv-tab-divider-color: var(--border);
   --dv-separator-border: var(--border);
@@ -279,7 +279,7 @@
   flex: 1;
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-panel);
   background: var(--panel);
   font-size: 12px;
 }
@@ -287,7 +287,7 @@
   border: 1px solid var(--border);
   background: var(--accent-soft);
   color: var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-panel);
   padding: 0 12px;
   font-size: 12px;
 }

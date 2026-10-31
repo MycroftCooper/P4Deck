@@ -33,6 +33,8 @@ pub struct UndoPreview {
 pub struct UndoConfirmation {
     pub target: UndoTarget,
     pub token: String,
+    #[serde(default)]
+    pub operation_id: Option<String>,
 }
 struct Record {
     target: UndoTarget,

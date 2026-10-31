@@ -1,4 +1,4 @@
-import type { RuntimeInfo } from "../contracts/types";
+import type { RuntimeInfo } from "../contracts";
 
 /**
  * Freshness classes. See ForAIDoc/Coder/数据缓存与操作架构.md.

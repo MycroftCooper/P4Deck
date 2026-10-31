@@ -36,7 +36,7 @@
   min-height: 29px;
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   color: inherit;
   text-align: left;
   padding: 5px 8px;
@@ -61,6 +61,18 @@
 }
 .p4-context-menu button.danger:not([aria-disabled="true"]) {
   color: var(--danger, #ce434b);
+}
+.p4-context-menu button.menu-emphasis:not([aria-disabled="true"]) {
+  background: var(--accent) !important;
+  color: var(--on-accent, #ffffff);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--on-accent, #ffffff);
+}
+.p4-context-menu button.menu-emphasis:hover,
+.p4-context-menu button.menu-emphasis:focus-visible {
+  background: var(--accent) !important;
+  color: var(--on-accent, #ffffff);
+  outline-color: var(--on-accent, #ffffff);
 }
 .menu-hint {
   font-size: 10px;

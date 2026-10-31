@@ -1,7 +1,19 @@
-import type { PendingChangeSort } from "../../shared/contracts/types";
+import type { PendingChangeSort } from "../../shared/contracts";
 import { storage } from "../../shared/lib/storage";
 
 const KEY = "p4deck.pending-filter.v1";
+
+export function sortPendingChanges<T extends { id: number }>(
+  items: T[],
+  sort: PendingChangeSort,
+): T[] {
+  return [...items].sort((left, right) => {
+    if (left.id === right.id) return 0;
+    if (left.id === 0) return -1;
+    if (right.id === 0) return 1;
+    return sort === "newest" ? right.id - left.id : left.id - right.id;
+  });
+}
 
 export interface PendingFilterState {
   keyword: string;

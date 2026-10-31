@@ -1,4 +1,4 @@
-import type { FileState, WorkspaceNode } from "../../shared/contracts/types";
+import type { FileState, WorkspaceNode } from "../../shared/contracts";
 
 export type WorkspaceFileFilter = "all" | "changed" | "incoming";
 

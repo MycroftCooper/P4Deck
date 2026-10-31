@@ -1,0 +1,753 @@
+import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
+import { useUnsavedEditor } from "../../../app/closeGuard";
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
+import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
+import { backend } from "../../../infrastructure/backend";
+import type { ConnectionSnapshot } from "../../companySubmit/model";
+import {
+  lookupBranchMappingAction,
+  validBranchMappingReceipt,
+  type BranchMappingActionLookup,
+} from "../../actions/workflowReceipt";
+import {
+  branchConnectionMatchesTarget,
+  branchObservedSummary,
+  unknownBranchMutationResult,
+} from "../mutationLifecycle";
+import type {
+  BranchMappingDetail,
+  BranchMappingDraft,
+  BranchMutationMode,
+  BranchMutationPreflight,
+  BranchMutationResult,
+  BranchViewLine,
+  RuntimeInfo,
+} from "../../../shared/contracts";
+import { validateBranchDraft, validateBranchView } from "../branchMappingModel";
+
+type Phase = "edit" | "checking" | "review" | "running" | "result";
+
+const blankLine = (): BranchViewLine => ({
+  modifier: "map",
+  source: "",
+  target: "",
+});
+
+function initialDraft(
+  mode: BranchMutationMode,
+  detail: BranchMappingDetail | undefined,
+  owner: string,
+): BranchMappingDraft | undefined {
+  if (mode === "delete") return undefined;
+  if (mode === "edit" && detail)
+    return {
+      name: detail.name,
+      owner: detail.owner,
+      description: detail.description,
+      locked: detail.locked,
+      view: detail.view.map((line) => ({ ...line })),
+    };
+  return {
+    name: "",
+    owner,
+    description: "",
+    locked: false,
+    view: [blankLine()],
+  };
+}
+
+export function BranchMappingMutationDialog({
+  mode,
+  detail,
+  runtime,
+  connectionKey,
+  source,
+  zh,
+  onDismiss: dismissCallback,
+  onResult,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
+}: {
+  mode: BranchMutationMode;
+  detail?: BranchMappingDetail;
+  runtime: RuntimeInfo;
+  connectionKey: string;
+  source: HTMLElement | null;
+  zh: boolean;
+  onDismiss(): void;
+  onResult(result: BranchMutationResult, selectedName?: string): void;
+  /** Exact dispatching connection snapshot; captured once per confirm. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<BranchMappingActionLookup>;
+}) {
+  const tableColumns = useColumnWidths(
+    [30, 92, 240, 240, 100],
+    [30, 80, 150, 150, 90],
+    { id: "branch-view-editor", gutter: 48 },
+  );
+  const tr = (cn: string, en: string) => (zh ? cn : en);
+  const [draft, setDraft] = useState(() =>
+    initialDraft(mode, detail, runtime.context.user),
+  );
+  const [savedDraft, setSavedDraft] = useState(() => JSON.stringify(draft));
+  const clearUnsaved = useUnsavedEditor(
+    JSON.stringify(draft) !== savedDraft ? "dirty" : "clean",
+    connectionKey,
+  );
+  const onDismiss = () => {
+    clearUnsaved();
+    dismissCallback();
+  };
+  const [phase, setPhase] = useState<Phase>("edit");
+  const [preflight, setPreflight] = useState<BranchMutationPreflight>();
+  const [result, setResult] = useState<BranchMutationResult>();
+  const [error, setError] = useState("");
+  const [acknowledgeDelete, setAcknowledgeDelete] = useState(false);
+  const sequence = useRef(0);
+  const activeOperation = useRef<string | undefined>(undefined);
+  const mounted = useRef(true);
+  const connection = useRef(connectionKey);
+  connection.current = connectionKey;
+  const name = mode === "create" ? (draft?.name ?? "") : (detail?.name ?? "");
+  const draftIssues = useMemo(
+    () => (draft ? validateBranchDraft(draft) : []),
+    [draft],
+  );
+  const lineIssues = useMemo(
+    () => (draft ? validateBranchView(draft.view) : []),
+    [draft],
+  );
+  const lineIssueMap = useMemo(
+    () => new Map(lineIssues.map((issue) => [issue.index, issue.messages])),
+    [lineIssues],
+  );
+  const editingBlocked = mode === "edit" && detail?.editable !== true;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      sequence.current += 1;
+      if (activeOperation.current)
+        void backend.cancelOperation(activeOperation.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    sequence.current += 1;
+    if (activeOperation.current)
+      void backend.cancelOperation(activeOperation.current);
+    activeOperation.current = undefined;
+    setError("");
+    setPreflight(undefined);
+    setResult(undefined);
+    setPhase("edit");
+  }, [connectionKey]);
+
+  useEffect(() => {
+    if (phase !== "review" || !preflight) return;
+    const timeout = window.setTimeout(
+      () => {
+        setPreflight(undefined);
+        setAcknowledgeDelete(false);
+        setError(
+          tr(
+            "预检已过期，请重新检查 Branch Mapping。",
+            "The preflight expired; inspect the Branch Mapping again.",
+          ),
+        );
+        setPhase("edit");
+      },
+      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [phase, preflight, zh]);
+
+  const updateLine = (index: number, value: BranchViewLine) =>
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            view: current.view.map((line, row) =>
+              row === index ? value : line,
+            ),
+          }
+        : current,
+    );
+
+  const moveLine = (index: number, delta: -1 | 1) =>
+    setDraft((current) => {
+      if (!current) return current;
+      const target = index + delta;
+      if (target < 0 || target >= current.view.length) return current;
+      const view = [...current.view];
+      [view[index], view[target]] = [view[target], view[index]];
+      return { ...current, view };
+    });
+
+  async function runPreflight() {
+    if (
+      phase === "checking" ||
+      phase === "running" ||
+      editingBlocked ||
+      !name ||
+      draftIssues.length ||
+      lineIssues.length
+    )
+      return;
+    const seq = ++sequence.current;
+    const expectedConnection = connectionKey;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
+    setPhase("checking");
+    setError("");
+    setResult(undefined);
+    setPreflight(undefined);
+    setAcknowledgeDelete(false);
+    try {
+      const value = await backend.preflightBranchMappingMutation({
+        mode,
+        name,
+        desired: mode === "delete" ? undefined : draft,
+        operationId,
+      });
+      if (
+        !mounted.current ||
+        seq !== sequence.current ||
+        connection.current !== expectedConnection
+      )
+        return;
+      setPreflight(value);
+      setPhase("review");
+    } catch (cause) {
+      if (mounted.current && seq === sequence.current) {
+        setError(String(cause));
+        setPhase("edit");
+      }
+    } finally {
+      if (seq === sequence.current) activeOperation.current = undefined;
+    }
+  }
+
+  /** One same-operationId receipt lookup. Settled means persisted, never success. */
+  async function recover(
+    operationId: string,
+    dispatching: ConnectionSnapshot,
+  ): Promise<BranchMutationResult | undefined> {
+    try {
+      const request = { operationId, connection: dispatching };
+      const lookup = await (lookupReceipt ?? lookupBranchMappingAction)(
+        request,
+      );
+      if (
+        lookup.kind === "found" &&
+        validBranchMappingReceipt(request, lookup.receipt) &&
+        lookup.receipt.state === "settled" &&
+        lookup.receipt.result
+      )
+        return lookup.receipt.result;
+    } catch {
+      /* Lookup failure never retries the write. */
+    }
+    return undefined;
+  }
+
+  function commit(value: BranchMutationResult) {
+    setResult(value);
+    if (value.outcome === "succeeded") setSavedDraft(JSON.stringify(draft));
+    setPhase("result");
+    if (value.refreshBranchMappings || value.outcome === "succeeded")
+      onResult(
+        value,
+        value.outcome === "succeeded" && mode !== "delete"
+          ? preflight?.name
+          : undefined,
+      );
+  }
+
+  async function confirm() {
+    if (
+      phase !== "review" ||
+      !preflight?.ready ||
+      !preflight.token ||
+      !preflight.target ||
+      preflight.expiresAt <= Date.now() ||
+      (mode === "delete" && !acknowledgeDelete)
+    )
+      return;
+    const seq = ++sequence.current;
+    const expectedConnection = connectionKey;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
+    setPhase("running");
+    setError("");
+    let dispatching: ConnectionSnapshot | undefined;
+    try {
+      // The exact dispatching connection is captured once and reused by the
+      // same-operationId receipt lookup; it is never a retry identity.
+      dispatching = await (
+        connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
+      )();
+      if (
+        !mounted.current ||
+        seq !== sequence.current ||
+        connection.current !== expectedConnection
+      )
+        return;
+      if (!branchConnectionMatchesTarget(preflight.target, dispatching))
+        throw new Error(
+          tr(
+            "连接身份与预检目标不一致，未执行 Branch Mapping 变更。",
+            "Connection identity changed; no branch mapping change was dispatched.",
+          ),
+        );
+      let value = await backend.confirmBranchMappingMutation({
+        token: preflight.token,
+        target: preflight.target,
+        previewDigest: preflight.previewDigest,
+        acknowledgeDangerousDelete: mode === "delete" && acknowledgeDelete,
+        operationId,
+      });
+      if (
+        !mounted.current ||
+        seq !== sequence.current ||
+        connection.current !== expectedConnection
+      )
+        return;
+      // Unknown may have applied: query the durable receipt once by identity.
+      if (value.outcome === "unknown")
+        value = (await recover(operationId, dispatching)) ?? value;
+      if (!mounted.current || seq !== sequence.current) return;
+      commit(value);
+    } catch (cause) {
+      if (!mounted.current || seq !== sequence.current) return;
+      const recovered = dispatching
+        ? await recover(operationId, dispatching)
+        : undefined;
+      if (!mounted.current || seq !== sequence.current) return;
+      if (recovered) {
+        commit(recovered);
+        return;
+      }
+      // Transport failure is unknown, not "not applied"; refresh once and keep
+      // the uncertainty explicit.
+      const fallback = unknownBranchMutationResult(operationId, String(cause));
+      setError(String(cause));
+      setResult(fallback);
+      setPhase("result");
+      onResult(fallback);
+    } finally {
+      if (seq === sequence.current) activeOperation.current = undefined;
+    }
+  }
+
+  function reset() {
+    sequence.current += 1;
+    if (activeOperation.current)
+      void backend.cancelOperation(activeOperation.current);
+    activeOperation.current = undefined;
+    setPreflight(undefined);
+    setResult(undefined);
+    setError("");
+    setAcknowledgeDelete(false);
+    setPhase("edit");
+  }
+
+  const title =
+    mode === "create"
+      ? tr("创建 Branch Mapping", "Create Branch Mapping")
+      : mode === "edit"
+        ? tr("编辑 Branch Mapping", "Edit Branch Mapping")
+        : tr("删除 Branch Mapping", "Delete Branch Mapping");
+  const busy = phase === "checking" || phase === "running";
+  const observed = branchObservedSummary(result?.observed);
+  const preflightState = busy
+    ? ({ kind: "checking" } as const)
+    : error
+      ? ({ kind: "failed", message: error } as const)
+      : preflight
+        ? ({
+            kind: preflight.ready ? "ready" : "blocked",
+            blockers: preflight.blockers.map((issue) => issue.message),
+            warnings: preflight.warnings.map((issue) => issue.message),
+          } as const)
+        : ({ kind: "idle" } as const);
+
+  return (
+    <Dialog
+      title={title}
+      description={tr(
+        "所有写入只经专用预检和一次性确认令牌；不会使用 force，也不会执行 integrate。",
+        "Every write uses the dedicated preflight and one-use confirmation token. P4Deck never forces the change or runs integrate here.",
+      )}
+      source={source}
+      zh={zh}
+      danger={mode === "delete"}
+      busy={busy}
+      onRequestClose={() => {
+        if (busy && activeOperation.current)
+          void backend.cancelOperation(activeOperation.current);
+        else onDismiss();
+      }}
+      footer={
+        <>
+          {phase === "edit" && (
+            <>
+              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button
+                className={mode === "delete" ? "danger" : "primary"}
+                data-dialog-autofocus
+                disabled={
+                  editingBlocked ||
+                  !name ||
+                  !!draftIssues.length ||
+                  !!lineIssues.length
+                }
+                onClick={() => void runPreflight()}
+              >
+                {tr("开始预检", "Run preflight")}
+              </button>
+            </>
+          )}
+          {phase === "checking" && (
+            <button
+              onClick={() =>
+                activeOperation.current &&
+                backend.cancelOperation(activeOperation.current)
+              }
+            >
+              {tr("取消预检", "Cancel preflight")}
+            </button>
+          )}
+          {phase === "review" && (
+            <>
+              <button onClick={reset}>{tr("返回编辑", "Back to edit")}</button>
+              <button
+                className={mode === "delete" ? "danger" : "primary"}
+                disabled={
+                  !preflight?.ready ||
+                  !preflight.token ||
+                  !preflight.target ||
+                  preflight.expiresAt <= Date.now() ||
+                  (mode === "delete" && !acknowledgeDelete)
+                }
+                onClick={() => void confirm()}
+              >
+                {mode === "delete"
+                  ? tr("确认永久删除", "Confirm permanent delete")
+                  : tr("确认保存", "Confirm save")}
+              </button>
+            </>
+          )}
+          {phase === "running" && (
+            <button
+              onClick={() =>
+                activeOperation.current &&
+                backend.cancelOperation(activeOperation.current)
+              }
+            >
+              {tr("取消操作", "Cancel operation")}
+            </button>
+          )}
+          {phase === "result" && (
+            <>
+              <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+              {result?.outcome !== "succeeded" && (
+                <button className="primary" onClick={reset}>
+                  {tr("重新预检", "Preflight again")}
+                </button>
+              )}
+            </>
+          )}
+        </>
+      }
+    >
+      {runtime.mode === "mock" && (
+        <DialogNotice>
+          {tr(
+            "Browser Mock：预检与保存均为模拟，不访问真实服务器。",
+            "Browser Mock: preflight and save are simulated; no real server is accessed.",
+          )}
+        </DialogNotice>
+      )}
+      <div className="workflow-context">
+        <strong>{name || tr("新 Mapping", "New mapping")}</strong>
+        {" · "}
+        {runtime.context.server} · {runtime.context.user}
+      </div>
+      <PreflightStatus zh={zh} state={preflightState} />
+
+      {phase === "edit" && mode === "delete" && (
+        <DialogNotice error>
+          {tr(
+            "删除不可撤销。预检会重新读取 Mapping、owner、锁定状态和权限，确认阶段还会执行 TOCTOU 复核。",
+            "Deletion is irreversible. Preflight re-reads the mapping, owner, lock state, and permissions; confirmation repeats the TOCTOU checks.",
+          )}
+        </DialogNotice>
+      )}
+      {editingBlocked && (
+        <DialogNotice error>
+          {tr(
+            "该 Mapping 含未知字段、注释或无法往返的 View 行，禁止编辑；详情仍可只读查看。",
+            "This mapping contains unknown fields, comments, or non-round-trippable View lines. Editing is blocked; details remain read-only.",
+          )}
+        </DialogNotice>
+      )}
+
+      {phase === "edit" && draft && (
+        <div className="branch-mutation-editor">
+          <div className="branch-mutation-fields">
+            <label>
+              <span>{tr("名称", "Name")}</span>
+              <input
+                aria-label={tr("Branch Mapping 名称", "Branch Mapping name")}
+                value={draft.name}
+                disabled={mode === "edit"}
+                maxLength={128}
+                onChange={(event) =>
+                  setDraft({ ...draft, name: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              <span>Owner</span>
+              <input aria-label="Owner" value={draft.owner} readOnly />
+            </label>
+            <label className="branch-description-field">
+              <span>Description</span>
+              <textarea
+                aria-label="Description"
+                value={draft.description}
+                maxLength={4096}
+                onChange={(event) =>
+                  setDraft({ ...draft, description: event.target.value })
+                }
+              />
+            </label>
+            <label className="workflow-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.locked}
+                onChange={(event) =>
+                  setDraft({ ...draft, locked: event.target.checked })
+                }
+              />
+              {tr("锁定 Mapping", "Lock mapping")}
+            </label>
+          </div>
+          {draftIssues.map((message) => (
+            <DialogNotice key={message} error>
+              {message}
+            </DialogNotice>
+          ))}
+          <div className="branch-view-editor-header">
+            <div>
+              <strong>View</strong>
+              <span>{draft.view.length} / 512</span>
+            </div>
+            <button
+              disabled={draft.view.length >= 512}
+              onClick={() =>
+                setDraft({ ...draft, view: [...draft.view, blankLine()] })
+              }
+            >
+              <Plus size={14} /> {tr("添加行", "Add line")}
+            </button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <ResizeHeader
+              columns={[
+                "#",
+                tr("模式", "Mode"),
+                tr("来源", "Source"),
+                tr("目标", "Target"),
+                tr("操作", "Actions"),
+              ]}
+              resize={tableColumns}
+            />
+            <ol className="branch-view-editor" aria-label="Branch View editor">
+              {draft.view.map((line, index) => (
+                <li
+                  key={index}
+                  className={lineIssueMap.has(index) ? "invalid" : ""}
+                  style={tableColumns.style}
+                >
+                  <span className="branch-view-index">{index + 1}</span>
+                  <select
+                    aria-label={`View line ${index + 1} modifier`}
+                    value={line.modifier}
+                    onChange={(event) =>
+                      updateLine(index, {
+                        modifier: event.target
+                          .value as BranchViewLine["modifier"],
+                        source: line.source,
+                        target: line.target,
+                      })
+                    }
+                  >
+                    <option value="map">map</option>
+                    <option value="exclude">exclude</option>
+                    <option value="overlay">overlay</option>
+                  </select>
+                  <input
+                    aria-label={`View line ${index + 1} source`}
+                    placeholder="//source/..."
+                    value={line.source ?? ""}
+                    onChange={(event) =>
+                      updateLine(index, { ...line, source: event.target.value })
+                    }
+                  />
+                  <input
+                    aria-label={`View line ${index + 1} target`}
+                    placeholder="//target/..."
+                    value={line.target ?? ""}
+                    onChange={(event) =>
+                      updateLine(index, { ...line, target: event.target.value })
+                    }
+                  />
+                  <span className="branch-view-row-actions">
+                    <button
+                      aria-label={`Move View line ${index + 1} up`}
+                      disabled={index === 0}
+                      onClick={() => moveLine(index, -1)}
+                    >
+                      <ArrowUp size={13} />
+                    </button>
+                    <button
+                      aria-label={`Move View line ${index + 1} down`}
+                      disabled={index === draft.view.length - 1}
+                      onClick={() => moveLine(index, 1)}
+                    >
+                      <ArrowDown size={13} />
+                    </button>
+                    <button
+                      aria-label={`Delete View line ${index + 1}`}
+                      disabled={draft.view.length === 1}
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          view: draft.view.filter((_, row) => row !== index),
+                        })
+                      }
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </span>
+                  {lineIssueMap.get(index)?.map((message) => (
+                    <span className="branch-view-line-error" key={message}>
+                      {message}
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {phase === "review" && preflight && (
+        <div className="branch-preflight-review">
+          <DialogNotice>
+            {tr("一次性令牌剩余", "One-use token remaining")} ·{" "}
+            {Math.max(0, Math.ceil((preflight.expiresAt - Date.now()) / 1000))}s
+          </DialogNotice>
+          <dl>
+            <div>
+              <dt>Mode</dt>
+              <dd>{preflight.mode}</dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd>{preflight.name}</dd>
+            </div>
+            <div>
+              <dt>Owner</dt>
+              <dd>
+                {preflight.desired?.owner ?? preflight.current?.owner ?? "—"}
+              </dd>
+            </div>
+            <div>
+              <dt>View lines</dt>
+              <dd>
+                {preflight.desired?.view.length ??
+                  preflight.current?.view.length ??
+                  0}
+              </dd>
+            </div>
+          </dl>
+          {mode === "delete" && (
+            <label className="workflow-checkbox danger-check">
+              <input
+                type="checkbox"
+                checked={acknowledgeDelete}
+                onChange={(event) => setAcknowledgeDelete(event.target.checked)}
+              />
+              {tr(
+                "我确认永久删除该 Branch Mapping",
+                "I understand this permanently deletes the Branch Mapping",
+              )}
+            </label>
+          )}
+        </div>
+      )}
+
+      {phase === "result" && (
+        <DialogNotice
+          error={
+            !result ||
+            (result.outcome !== "succeeded" && result.outcome !== "unknown")
+          }
+        >
+          <strong>
+            {result?.outcome === "succeeded"
+              ? tr("已由服务器回读验证", "Verified by server readback")
+              : result?.outcome === "unknown"
+                ? tr("结果不确定", "Outcome uncertain")
+                : tr("操作未成功", "Operation did not succeed")}
+          </strong>
+          <br />
+          {error || result?.message || tr("未知结果", "Unknown result")}
+          {result?.failure && (
+            <>
+              <br />
+              <code>{result.failure}</code>
+            </>
+          )}
+        </DialogNotice>
+      )}
+      {phase === "result" && result?.outcome === "unknown" && (
+        <DialogNotice error>
+          {tr(
+            "写入可能已应用；已用同一操作号查询持久回执并刷新一次。请先核对 Branch Mapping 列表/详情，不要用新操作号重试。",
+            "The write may have applied. The durable receipt was queried once with the same operation id and views were refreshed; inspect the Branch Mappings list/detail before any retry with a new operation id.",
+          )}
+        </DialogNotice>
+      )}
+      {phase === "result" && result?.outcome === "succeeded" && observed && (
+        <DialogNotice>
+          {tr("服务器回读：", "Server readback: ")}
+          {observed.name} · {observed.viewLines} {tr("行", "lines")} · Owner{" "}
+          {observed.owner}
+          {observed.locked ? tr(" · 已锁定", " · locked") : ""}
+          {" · "}
+          {tr(
+            "仍以刷新后的列表/详情为准。",
+            "The refreshed list/detail remains authoritative.",
+          )}
+        </DialogNotice>
+      )}
+      {phase === "result" && result && (
+        <p className="workflow-context">
+          {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+        </p>
+      )}
+    </Dialog>
+  );
+}

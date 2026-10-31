@@ -1,4 +1,5 @@
 mod app;
+mod close_guard;
 mod domain;
 mod ipc;
 mod p4;
@@ -42,6 +43,8 @@ use std::sync::Arc;
 use tauri::Manager;
 
 pub(crate) struct AppState {
+    pub selected_submit: app::selected_submit::Host,
+    pub custom_submit: Arc<app::custom_submit::Host>,
     pub runner: Arc<P4Runner>,
     pub logs: Arc<LogStore>,
     pub changelists: Arc<ChangelistService>,
@@ -67,8 +70,20 @@ pub(crate) struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let application = tauri::Builder::default()
+        .manage(close_guard::CloseGuard::default())
+        .on_page_load(|webview, event| {
+            close_guard::page_load(webview, event);
+        })
+        .on_window_event(|window, event| {
+            close_guard::window_event(window, event);
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Auto-update (GitHub Releases) + relaunch after a staged install.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        // Native file picker for the P4 executable / custom submit tool settings.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let backups = Arc::new(ConfigBackupService::new(data_dir.clone()));
@@ -85,7 +100,13 @@ pub fn run() {
                 OperationJournal::open(&data_dir.join("operations.sqlite"))
                     .map_err(std::io::Error::other)?,
             );
-            let runner = Arc::new(P4Runner::new(logs.clone(), journal.clone()));
+            journal.attach_events(app.handle().clone());
+            let runner = Arc::new(P4Runner::try_new(logs.clone(), journal.clone())?);
+            let observer = Arc::new(crate::p4::server_status::Observer::new(
+                contexts.clone(),
+                app.handle().clone(),
+            ));
+            runner.attach_status(observer);
             let connection_setup_repository =
                 p4::connection_setup::ConnectionSetupRepository::new(runner.clone());
             let connection = Arc::new(ConnectionService::new(
@@ -157,6 +178,11 @@ pub fn run() {
             ));
             let stream_switch = Arc::new(StreamSwitchService::new(runner.clone(), contexts));
             app.manage(AppState {
+                selected_submit: app::selected_submit::Host::open(
+                    &data_dir.join("selected-submit.sqlite"),
+                )
+                .map_err(std::io::Error::other)?,
+                custom_submit: Arc::new(app::custom_submit::Host::default()),
                 runner,
                 logs,
                 changelists,
@@ -182,6 +208,21 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            ipc::commands::selected_submit_prepare,
+            ipc::commands::selected_move_execute,
+            ipc::commands::selected_move_status,
+            ipc::commands::selected_move_lookup,
+            ipc::commands::selected_move_reconcile,
+            ipc::commands::action_write_fences,
+            ipc::commands::action_release_unknown,
+            ipc::commands::selected_submit_status,
+            ipc::commands::selected_submit_claim,
+            ipc::commands::company_submit_connection_snapshot,
+            ipc::commands::custom_submit_start,
+            ipc::commands::custom_submit_status,
+            close_guard::close_guard_register,
+            close_guard::close_guard_report,
+            close_guard::close_guard_request,
             ipc::commands::workspace_disk_usage,
             ipc::commands::list_user_workspaces,
             ipc::commands::browse_connection_users,
@@ -208,6 +249,8 @@ pub fn run() {
             ipc::commands::delete_connection_profile,
             ipc::commands::set_active_connection_profile,
             ipc::commands::switch_workspace,
+            ipc::commands::preflight_workspace_mutation,
+            ipc::commands::confirm_workspace_mutation,
             ipc::commands::save_connection,
             ipc::commands::discover_p4_cli,
             ipc::commands::test_connection,
@@ -220,6 +263,7 @@ pub fn run() {
             ipc::commands::cancel_all_operations,
             ipc::commands::global_search,
             ipc::commands::query_logs,
+            ipc::commands::record_frontend_operation_log,
             ipc::commands::query_log_page,
             ipc::commands::get_log_policy,
             ipc::commands::set_log_policy,
@@ -243,6 +287,7 @@ pub fn run() {
             ipc::commands::open_swarm_link,
             ipc::commands::local_path_capabilities,
             ipc::commands::perform_file_action,
+            ipc::commands::confirm_revert_action,
             ipc::commands::preflight_rename_move,
             ipc::commands::confirm_rename_move,
             ipc::commands::preflight_file_lock,
@@ -251,12 +296,14 @@ pub fn run() {
             ipc::commands::preview_undo,
             ipc::commands::confirm_undo,
             ipc::commands::preview_sync,
+            ipc::commands::sync_latest,
             ipc::commands::confirm_sync,
             ipc::commands::get_diff,
             ipc::commands::get_shelf_file_preview,
             ipc::commands::get_file_preview,
             ipc::commands::get_file_history,
             ipc::commands::get_revision_graph,
+            ipc::commands::get_integration_trace,
             ipc::commands::query_pending_changes,
             ipc::commands::mutate_pending_change,
             ipc::commands::get_shelf_detail,
@@ -266,15 +313,26 @@ pub fn run() {
             ipc::commands::confirm_submit,
             ipc::commands::preflight_shelf,
             ipc::commands::confirm_shelf,
+            ipc::commands::delete_shelved_revisions,
+            ipc::commands::shelve_files,
+            ipc::commands::workflow_action_lookup,
+            ipc::commands::unshelve_files,
             ipc::commands::preflight_unshelve,
             ipc::commands::confirm_unshelve,
             ipc::commands::preflight_resolve,
+            ipc::commands::resolve_stats,
             ipc::commands::confirm_resolve,
             ipc::commands::open_manual_merge,
             ipc::commands::validate_manual_merge,
             ipc::commands::confirm_manual_merge_save,
-            ipc::commands::confirm_manual_merge_resolve
+            ipc::commands::confirm_manual_merge_resolve,
+            ipc::commands::detect_external_merge_tool,
+            ipc::commands::run_external_merge,
+            ipc::commands::get_server_status,
+            ipc::commands::check_server_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running P4Deck");
+        .build(tauri::generate_context!());
+    if let Some(app) = close_guard::initialized(application, close_guard::initialization_failure) {
+        app.run(close_guard::run_event);
+    }
 }

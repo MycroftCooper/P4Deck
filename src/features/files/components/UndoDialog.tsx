@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
-import type { UndoTarget, UndoPreview } from "../../../shared/contracts/types";
+import type { UndoTarget, UndoPreview } from "../../../shared/contracts";
+import {
+  beginLocalIoProjection,
+  lifecycleOf,
+  settleLocalIoProjection,
+  unwrapLocalIoLegacy,
+  withdrawLocalIoProjection,
+} from "../../actions/localIoLifecycle";
 
 export interface UndoDialogRequest extends UndoTarget {
   source: HTMLElement | null;
@@ -57,25 +64,71 @@ export function UndoDialog({
           );
         if (mounted.current) setPlan(next);
       } else {
-        const result = await backend.confirmUndo({
+        const operationId = crypto.randomUUID();
+        beginLocalIoProjection({
+          operationId,
+          kind: "undoChange",
+          paths: [target.depotPath],
+          targetState: "openedEdit",
+          changelistId: target.changelistId,
+        });
+        const raw: unknown = await backend.confirmUndo({
           target,
           token: reviewed!.token,
-        });
-        onRefresh();
+          operationId,
+        } as never);
+        const lifecycle = lifecycleOf(raw);
+        const legacy =
+          unwrapLocalIoLegacy<
+            import("../../../shared/contracts").OperationResult
+          >(raw);
+        if (!lifecycle || !legacy) {
+          withdrawLocalIoProjection(operationId);
+          onRefresh();
+          if (mounted.current) {
+            setFinished(true);
+            setMessage(
+              tr(
+                "Undo 已执行（旧格式结果）；请检查工作区与操作日志。",
+                "Undo executed (legacy result); inspect the workspace and operation log.",
+              ),
+            );
+          }
+          return;
+        }
+        if (
+          lifecycle.state === "unknown" ||
+          lifecycle.state === "rejected" ||
+          lifecycle.state === "legacy"
+        ) {
+          settleLocalIoProjection(operationId, lifecycle, false);
+          onRefresh();
+          if (mounted.current) {
+            setFinished(true);
+            setMessage(
+              tr(
+                "Undo 结果不确定，已按真实状态刷新；不要直接重试。",
+                "Undo outcome is unconfirmed; rows were corrected from the server. Do not retry blindly.",
+              ),
+            );
+          }
+          return;
+        }
+        settleLocalIoProjection(operationId, lifecycle, false);
+        void Promise.resolve(onRefresh())
+          .then(() => settleLocalIoProjection(operationId, lifecycle, true))
+          .catch(() => undefined);
         if (mounted.current) {
           setFinished(true);
           setMessage(
-            result.exitCode === 0 &&
-              !result.events.some((e) =>
-                ["error", "cancelled", "warning"].includes(e.type),
-              )
+            lifecycle.outcome === "succeeded"
               ? tr(
                   "Undo 已保存到默认待提交列表，尚未提交。请检查文件；如有后续修订，提交前需要同步并解决冲突。",
                   "Undo saved to the default pending changelist, not submitted. Review the file; later revisions may require sync and resolve before submission.",
                 )
               : tr(
-                  "Undo 未完整完成。请检查工作区与操作日志，不要直接重试。",
-                  "Undo did not complete cleanly. Inspect the workspace and operation log before retrying.",
+                  "Undo 未完整完成（partial/unknown）。请检查工作区与操作日志，不要直接重试。",
+                  "Undo did not complete cleanly (partial/unknown). Inspect the workspace and operation log before retrying.",
                 ),
           );
         }

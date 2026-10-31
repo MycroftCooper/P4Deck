@@ -16,3 +16,5 @@ pub mod submit;
 pub mod vfs;
 pub mod workflows;
 pub mod workspaces;
+
+pub mod server_status;

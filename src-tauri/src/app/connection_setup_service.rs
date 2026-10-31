@@ -314,10 +314,35 @@ impl ConnectionSetupService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses confirm_admitted with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm(
         &self,
         expected_kind: ConnectionSpecKind,
         confirmation: ConnectionSpecCreateConfirmation,
+        app: Option<&AppHandle>,
+    ) -> ConnectionSpecCreateResult {
+        self.confirm_inner(expected_kind, confirmation, None, app)
+            .await
+    }
+
+    pub async fn confirm_admitted(
+        &self,
+        expected_kind: ConnectionSpecKind,
+        confirmation: ConnectionSpecCreateConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> ConnectionSpecCreateResult {
+        self.confirm_inner(expected_kind, confirmation, Some(guard), app)
+            .await
+    }
+
+    async fn confirm_inner(
+        &self,
+        expected_kind: ConnectionSpecKind,
+        confirmation: ConnectionSpecCreateConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> ConnectionSpecCreateResult {
         let _confirmation = self.confirmation_gate.lock().await;
@@ -359,9 +384,20 @@ impl ConnectionSetupService {
                 Vec::new(),
             );
         }
-        let guard = self.repository.lock_mutations(&record.context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.repository.lock_mutations(&record.context.server).await;
+                &owned_guard
+            }
+        };
         let mut operation_ids = Vec::new();
-        let root = format!("connection-create-{}", Uuid::new_v4());
+        let root = confirmation
+            .operation_id
+            .clone()
+            .filter(|value| uuid::Uuid::parse_str(value).is_ok())
+            .unwrap_or_else(|| format!("connection-create-{}", Uuid::new_v4()));
         let identity = match self
             .repository
             .inspect_identity(&record.context, &format!("{root}:info"), app)
@@ -432,7 +468,7 @@ impl ConnectionSetupService {
                         user_form(plan),
                         &format!("{root}:write"),
                         app,
-                        &guard,
+                        guard,
                     )
                     .await
             }
@@ -445,7 +481,7 @@ impl ConnectionSetupService {
                         workspace_form(&record.context.user, plan),
                         &format!("{root}:write"),
                         app,
-                        &guard,
+                        guard,
                     )
                     .await
             }
@@ -1119,6 +1155,7 @@ exit /b 9
         assert!(stale.ready, "{:?}", stale.blockers);
         let stale_confirmation = ConnectionSpecCreateConfirmation {
             token: stale.token.unwrap(),
+            operation_id: None,
             context: context.clone(),
             request_generation: 8,
             state_digest: stale.state_digest,
@@ -1161,6 +1198,7 @@ exit /b 9
                 ConnectionSpecKind::UserSelf,
                 ConnectionSpecCreateConfirmation {
                     token: preflight.token.unwrap(),
+                    operation_id: None,
                     context,
                     request_generation: 9,
                     state_digest: preflight.state_digest,

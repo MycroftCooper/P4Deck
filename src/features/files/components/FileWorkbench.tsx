@@ -1,3 +1,4 @@
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useObjectSelection } from "../SelectionContext";
 import {
@@ -16,13 +17,15 @@ import { useDirectoryMenu } from "../../../app/context-menu/useDirectoryMenu";
 import { useContext } from "react";
 import { SelectionContext } from "../SelectionContext";
 import { useMenuEnvironment } from "../../../app/context-menu/environment";
-import type { WorkspaceNode } from "../../../shared/contracts/types";
-import type { messages } from "../../../shared/i18n";
 import {
-  depotNodeAsWorkspaceNode,
-  filterWorkspaceNodes,
-  type WorkspaceFileFilter,
-} from "../fileListModel";
+  useWorkspaceOverlays,
+  visibleWorkspaceNodes,
+} from "../../actions/workspaceOverlays";
+import { useLocalDeleteHidden } from "../../actions/localDeleteTask";
+import type { WorkspaceNode } from "../../../shared/contracts";
+import type { messages } from "../../../shared/i18n";
+import { depotNodeAsWorkspaceNode } from "../fileListModel";
+import { nodeNeedsSync } from "../fileActions";
 
 type T = (typeof messages)[keyof typeof messages];
 export function FileWorkbench({
@@ -63,16 +66,20 @@ export function FileWorkbench({
     directory,
   );
   const listing = isDepot ? depot : local;
+  const applyOverlays = useWorkspaceOverlays(connectionKey);
+  // Fourth overlay (S3-local-FE): local-delete pending rows are hidden after filtering.
+  const localDeleteHidden = useLocalDeleteHidden(connectionKey);
   const nodes: WorkspaceNode[] = useMemo(
     () =>
-      isDepot
-        ? (depot.data ?? []).map(depotNodeAsWorkspaceNode)
-        : (local.data?.items ?? []),
-    [isDepot, depot.data, local.data],
+      applyOverlays(
+        isDepot
+          ? (depot.data ?? []).map(depotNodeAsWorkspaceNode)
+          : (local.data?.items ?? []),
+      ) as WorkspaceNode[],
+    [isDepot, depot.data, local.data, applyOverlays],
   );
   const busy = listing.isFetching;
   const refreshing = listing.refreshing;
-  const [filter, setFilter] = useState<WorkspaceFileFilter>("all");
   const [compact, setCompact] = useState(density ?? false);
   useEffect(() => setCompact(density ?? false), [density]);
   const [operationError, setError] = useState("");
@@ -97,26 +104,17 @@ export function FileWorkbench({
     ignored: zh ? "已忽略" : "Ignored",
     unknown: zh ? "状态未知" : "Unknown",
   };
-  const statusNotice =
-    !isDepot &&
-    local.data &&
-    local.data.cacheFreshness !== "local" &&
-    local.data.completeness !== "complete"
-      ? local.data.errors.map((item) => item.message).join(" · ") ||
-        (local.data.truncated
-          ? zh
-            ? `结果已限制为 ${local.data.safetyLimit} 项`
-            : `Results limited to ${local.data.safetyLimit} items`
-          : zh
-            ? "状态证据不完整；已保留可信结果"
-            : "Status evidence is partial; trusted results are preserved")
-      : "";
   const visibleNodes = useMemo(
-    () => filterWorkspaceNodes(nodes, filter),
-    [nodes, filter],
+    () => visibleWorkspaceNodes(nodes, "all", localDeleteHidden),
+    [nodes, localDeleteHidden],
   );
   const selection = useObjectSelection(visibleNodes);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const columns = useColumnWidths(
+    [300, 120, 100, 100, 160],
+    [140, 80, 70, 70, 100],
+    { id: "files" },
+  );
   const virtual = useVirtualizer({
     count: visibleNodes.length,
     getScrollElement: () => scrollRef.current,
@@ -147,7 +145,7 @@ export function FileWorkbench({
       reveal();
       const frame = requestAnimationFrame(reveal);
       return () => cancelAnimationFrame(frame);
-    } else if (nodes.some(matches)) setFilter("all");
+    }
   }, [
     selected?.absolutePath,
     selected?.depotPath,
@@ -186,25 +184,6 @@ export function FileWorkbench({
         </button>
       </FixedPageHeader>
       <div className="file-filterbar">
-        <div className="segmented">
-          {[
-            ["all", zh ? "全部文件" : "All files"],
-            ["changed", zh ? "本地修改" : "Modified"],
-            ["incoming", zh ? "待更新" : "Incoming"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              aria-pressed={filter === id}
-              className={filter === id ? "active" : ""}
-              onClick={() => {
-                setFilter(id as WorkspaceFileFilter);
-                scrollRef.current?.scrollTo(0, 0);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <span className="filter-count">
           {visibleNodes.length} {t.files}
         </span>
@@ -218,16 +197,11 @@ export function FileWorkbench({
           <button onClick={() => setError("")}>×</button>
         </div>
       ) : null}
-      {statusNotice ? (
-        <div className="workspace-warning" role="status" title={statusNotice}>
-          {zh ? "状态查询不完整：" : "Partial status: "}
-          {statusNotice}
-        </div>
-      ) : null}
       <div className="file-content">
-        <div className="file-table">
+        <div className="file-table" style={{ overflowX: "auto" }}>
           <TableHeader
             className="file-table-head"
+            resize={columns}
             columns={[
               { id: "name", label: t.files },
               { id: "state", label: t.localState },
@@ -239,6 +213,7 @@ export function FileWorkbench({
           <div
             ref={scrollRef}
             className="file-scroll"
+            style={{ minWidth: columns.style.minWidth }}
             role="listbox"
             aria-label={t.files}
             aria-multiselectable="true"
@@ -254,6 +229,7 @@ export function FileWorkbench({
             >
               {virtual.getVirtualItems().map((row) => {
                 const node = visibleNodes[row.index];
+                const needsSync = nodeNeedsSync(node);
                 return (
                   <button
                     key={node.id}
@@ -263,6 +239,7 @@ export function FileWorkbench({
                     style={{
                       transform: `translateY(${row.start}px)`,
                       height: row.size,
+                      ...columns.style,
                     }}
                     onClick={(event) => selection.choose(node, event)}
                     onDoubleClick={() => {
@@ -302,6 +279,15 @@ export function FileWorkbench({
                           ? "Depot 文件"
                           : "Depot file"
                         : labels[node.state]}
+                      {!isDepot &&
+                      needsSync &&
+                      node.state !== "outOfDate" &&
+                      node.state !== "notSynced" ? (
+                        <span className="file-state-stale">
+                          {" "}
+                          · {zh ? "需获取最新" : "needs sync"}
+                        </span>
+                      ) : null}
                     </em>
                     <span>
                       #{node.revision ?? "—"}/{node.headRevision ?? "—"}

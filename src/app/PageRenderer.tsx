@@ -8,9 +8,14 @@ import type {
   WorkspaceNode,
   P4Context,
   ConnectionStatus,
-} from "../shared/contracts/types";
+} from "../shared/contracts";
 import type { Preferences } from "./hooks/usePreferences";
-import type { FilePageId, PageId, PanelTarget } from "./panels";
+import type {
+  FilePageId,
+  PageId,
+  PanelTarget,
+  RevisionComparison,
+} from "./panels";
 import { PanelErrorBoundary } from "./docking/PanelErrorBoundary";
 const SearchPage = lazy(() =>
   import("../features/search/SearchPage").then((m) => ({
@@ -38,27 +43,27 @@ const WorkspacePage = lazy(() =>
   })),
 );
 const FileReviewPage = lazy(() =>
-  import("../features/browsers/FileReviewPage").then((m) => ({
+  import("../features/browsers/components/FileReviewPage").then((m) => ({
     default: m.FileReviewPage,
   })),
 );
 const FilePreviewPage = lazy(() =>
-  import("../features/browsers/FilePreviewPage").then((m) => ({
+  import("../features/browsers/components/FilePreviewPage").then((m) => ({
     default: m.FilePreviewPage,
   })),
 );
 const ReadOnlyPage = lazy(() =>
-  import("../features/browsers/ReadOnlyPages").then((m) => ({
+  import("../features/browsers/components/ReadOnlyPages").then((m) => ({
     default: m.ReadOnlyPage,
   })),
 );
 const StreamGraphPage = lazy(() =>
-  import("../features/browsers/StreamGraphPage").then((m) => ({
+  import("../features/browsers/components/StreamGraphPage").then((m) => ({
     default: m.StreamGraphPage,
   })),
 );
 const BranchMappingsPage = lazy(() =>
-  import("../features/browsers/BranchMappingsPage").then((m) => ({
+  import("../features/browsers/components/BranchMappingsPage").then((m) => ({
     default: m.BranchMappingsPage,
   })),
 );
@@ -80,6 +85,7 @@ export interface PageEnvironment {
   selectedFile?: WorkspaceNode;
   directory?: string;
   onNavigate(node: WorkspaceNode): void;
+  onCompareRevisions?(path: string, comparison: RevisionComparison): void;
   onReview(kind: FilePageId, node: WorkspaceNode): void;
   onConnection(
     context: P4Context,
@@ -128,6 +134,7 @@ function Content({
   directory,
   onNavigate,
   onReview,
+  onCompareRevisions,
   onConnection,
   onRuntime,
   onOpenPage,
@@ -272,9 +279,10 @@ function Content({
     case "revgraph":
       return (
         <FileReviewPage
-          key={`${connectionKey}:${target.comparison ? `${target.target}#${target.comparison.left},${target.comparison.right}` : "default"}`}
+          key={`${connectionKey}:${target.comparison ? `${target.target}#${target.comparison.left},${target.comparison.rightPath ?? target.target}#${target.comparison.right}` : "default"}`}
           kind={page}
           comparison={target.comparison}
+          onCompareRevisions={onCompareRevisions}
           target={target.target}
           locked={target.locked}
           onTargetChange={changeTarget}

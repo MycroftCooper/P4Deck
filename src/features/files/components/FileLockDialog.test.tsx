@@ -6,7 +6,7 @@ import type {
   FileLockPreflight,
   FileLockTargetSnapshot,
   WorkspaceNode,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { FileLockDialog } from "./FileLockDialog";
 
 const harness = dialogHarness();
@@ -113,7 +113,7 @@ it("reviews the full locked file set and binds token, snapshot and digest", asyn
       execute={execute}
     />,
   );
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   expect(document.body.textContent).toContain("binary+l · +l");
   expect(document.body.textContent).toContain("//depot/main/b.bin");
   await act(async () => dialogButton("确认锁定").click());
@@ -159,7 +159,7 @@ it("keeps confirmed blockers visible and never enables execution", async () => {
       check={vi.fn().mockResolvedValue(blocked)}
     />,
   );
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   expect(document.body.textContent).toContain("bob@other owns this lock");
   expect(dialogButton("确认锁定").disabled).toBe(true);
 });
@@ -181,9 +181,9 @@ it("discards a late preflight response after the connection changes", async () =
     />
   );
   await harness.render(render("connection-a"));
-  await act(async () => dialogButton("预检并审阅").click());
+  await act(async () => dialogButton("开始预检").click());
   await harness.render(render("connection-b"));
   await act(async () => resolve(ready()));
   expect(document.body.textContent).not.toContain("binary+l · +l");
-  expect(dialogButton("预检并审阅")).toBeTruthy();
+  expect(dialogButton("开始预检")).toBeTruthy();
 });

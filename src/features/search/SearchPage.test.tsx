@@ -8,7 +8,7 @@ import type {
   GlobalSearchQuery,
   GlobalSearchResult,
   GlobalSearchTarget,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import { GLOBAL_SEARCH_KINDS } from "./searchModel";
 import { SearchPage } from "./SearchPage";
 

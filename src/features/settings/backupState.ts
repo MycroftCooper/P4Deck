@@ -1,4 +1,4 @@
-import type { ConfigBackupLocalStorageEntry } from "../../shared/contracts/types";
+import type { ConfigBackupLocalStorageEntry } from "../../shared/contracts";
 
 export const BACKUP_LOCAL_STORAGE_KEYS = [
   "p4deck.ui",

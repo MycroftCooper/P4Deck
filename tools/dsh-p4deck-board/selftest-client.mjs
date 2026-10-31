@@ -100,9 +100,28 @@ check("注册了标题插槽", slotRegistrations.some((entry) => entry.declarati
 
 // 3) 用真实 react-dom 渲染纯视图
 const snapshot = await buildSnapshot(WORKSPACE);
-const html = renderToStaticMarkup(react.createElement(module.BoardView, { snapshot, status: "ready", error: null }));
+const noop = () => {};
+const html = renderToStaticMarkup(
+  react.createElement(module.BoardView, { snapshot, status: "ready", error: null, onAccept: noop, onCancel: noop }),
+);
 check("渲染出标题", html.includes("工作流看板"));
 check("渲染出主工作包计数", /共 \d+ 个主工作包/.test(html), "");
+check("渲染出功能名（不只是编号）", html.includes("Dock/popout"));
+check("渲染出验收按钮", html.includes("验收完成"));
+check("渲染出取消按钮", html.includes("取消"));
+check("已完成项显示已验收", html.includes("已验收"));
+const outdatedHtml = renderToStaticMarkup(
+  react.createElement(module.BoardView, {
+    snapshot,
+    status: "ready",
+    error: null,
+    onAccept: noop,
+    onCancel: noop,
+    hostOutdated: true,
+  }),
+);
+check("旧宿主提示重启", outdatedHtml.includes("完全退出 DSH"));
+check("旧宿主隐藏操作按钮", !outdatedHtml.includes("验收完成"));
 check("渲染出 Agent（LEAD/BE）", html.includes("LEAD") && html.includes("BE"));
 check("渲染出里程碑", html.includes("CON06") || html.includes("批次里程碑"));
 check("渲染出任务卡（CL-01/UI-07）", html.includes("CL-01") || html.includes("UI-07"));

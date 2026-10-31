@@ -43,7 +43,9 @@ it("routes log and cancel actions to the explicit task, not an aggregate or the 
             ]}
             cancelling={new Set()}
             error=""
-            onCancel={backend.cancelOperation}
+            onCancel={(id: string) =>
+              backend.cancelOperation(id).then(() => undefined)
+            }
             onCancelAll={async () => {}}
             cancellingAll={false}
             zh

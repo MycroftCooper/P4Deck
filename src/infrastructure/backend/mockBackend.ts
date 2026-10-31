@@ -1,3 +1,4 @@
+import { journalMappingForLogLevel } from "../../features/tools/logLevels";
 import type {
   ChangelistSummary,
   ConfigBackupSummary,
@@ -15,12 +16,12 @@ import type {
   WorkflowTargetSnapshot,
   WorkspaceOpenedAction,
   WorkspaceNode,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import type { Backend } from "./contract";
 import { inspectTerminalCommand } from "../../features/tools/terminalSecurity";
 import { isBackupLocalStorageKey } from "../../features/settings/backupState";
 
-let mockContext: import("../../shared/contracts/types").P4Context = {
+let mockContext: import("../../shared/contracts").P4Context = {
   server: "ssl:p4.company.dev:1666",
   user: "fmeng",
   client: "atlas-main-fm",
@@ -30,7 +31,7 @@ let mockContext: import("../../shared/contracts/types").P4Context = {
 let mockContextGeneration = 1;
 let mockProfileRevision = 1;
 let mockActiveProfileId: string | undefined = "mock-primary-profile";
-let mockProfiles: import("../../shared/contracts/types").ConnectionProfile[] = [
+let mockProfiles: import("../../shared/contracts").ConnectionProfile[] = [
   { id: mockActiveProfileId, name: "Primary", context: { ...mockContext } },
 ];
 let mockAuthentication: "connected" | "authRequired" = "connected";
@@ -38,7 +39,7 @@ let mockCurrentStream = "//atlas/main";
 const mockConfigBackups: ConfigBackupSummary[] = [];
 const mockConfigBackupStorage = new Map<
   string,
-  import("../../shared/contracts/types").ConfigBackupLocalStorageEntry[]
+  import("../../shared/contracts").ConfigBackupLocalStorageEntry[]
 >();
 const mockConnectionUsers = new Map([
   [
@@ -50,26 +51,26 @@ const mockConnectionUsers = new Map([
 ]);
 const mockConnectionWorkspaces = new Map<
   string,
-  import("../../shared/contracts/types").ConnectionWorkspaceCandidate
+  import("../../shared/contracts").ConnectionWorkspaceCandidate
 >();
 const mockConnectionSpecTokens = new Map<
   string,
   {
     kind: "userSelf" | "workspace";
     name: string;
-    context: import("../../shared/contracts/types").P4Context;
+    context: import("../../shared/contracts").P4Context;
     requestGeneration: number;
     stateDigest: string;
     plan:
-      | import("../../shared/contracts/types").ConnectionUserCreatePlan
-      | import("../../shared/contracts/types").ConnectionWorkspaceCreatePlan;
+      | import("../../shared/contracts").ConnectionUserCreatePlan
+      | import("../../shared/contracts").ConnectionWorkspaceCreatePlan;
     expiresAt: number;
   }
 >();
 const mockStreamSwitchTokens = new Map<
   string,
   {
-    target: import("../../shared/contracts/types").StreamSwitchTargetSnapshot;
+    target: import("../../shared/contracts").StreamSwitchTargetSnapshot;
     digest: string;
     expiresAt: number;
     hasWarnings: boolean;
@@ -77,7 +78,7 @@ const mockStreamSwitchTokens = new Map<
 >();
 const mockBranchDetails = new Map<
   string,
-  import("../../shared/contracts/types").BranchMappingDetail
+  import("../../shared/contracts").BranchMappingDetail
 >([
   [
     "atlas-release",
@@ -110,7 +111,7 @@ const mockBranchDetails = new Map<
 const mockBranchCursors = new Map<
   string,
   {
-    items: import("../../shared/contracts/types").BranchMappingSummary[];
+    items: import("../../shared/contracts").BranchMappingSummary[];
     offset: number;
     queryKey: string;
     expiresAt: number;
@@ -119,7 +120,7 @@ const mockBranchCursors = new Map<
 const mockBranchTokens = new Map<
   string,
   {
-    target: import("../../shared/contracts/types").BranchMutationTarget;
+    target: import("../../shared/contracts").BranchMutationTarget;
     digest: string;
     expiresAt: number;
   }
@@ -140,10 +141,10 @@ const mockWorkflowTokens = new Map<
 const mockSyncTokens = new Map<
   string,
   {
-    target: import("../../shared/contracts/types").SyncTargetSnapshot;
+    target: import("../../shared/contracts").SyncTargetSnapshot;
     digest: string;
     expiresAt: number;
-    counts: import("../../shared/contracts/types").SyncPlanCounts;
+    counts: import("../../shared/contracts").SyncPlanCounts;
   }
 >();
 const mockRenameTokens = new Map<
@@ -157,7 +158,7 @@ const mockRenameTokens = new Map<
 const mockLockTokens = new Map<
   string,
   {
-    target: import("../../shared/contracts/types").FileLockTargetSnapshot;
+    target: import("../../shared/contracts").FileLockTargetSnapshot;
     digest: string;
     expiresAt: number;
   }
@@ -179,7 +180,7 @@ const mockGlobalSearchSnapshots = new Map<
   }
 >();
 const mockCancelledOperations = new Set<string>();
-type MockShelfFile = import("../../shared/contracts/types").ShelfDetailFile;
+type MockShelfFile = import("../../shared/contracts").ShelfDetailFile;
 const mockShelfSnapshots = new Map<
   string,
   {
@@ -191,7 +192,7 @@ const mockShelfSnapshots = new Map<
 >();
 
 function mockShelfError(
-  code: import("../../shared/contracts/types").ShelfDetailRequestErrorCode,
+  code: import("../../shared/contracts").ShelfDetailRequestErrorCode,
   message: string,
 ) {
   return { code, message };
@@ -390,7 +391,7 @@ const mockNames = [
 ];
 
 function submittedQuerySignature(
-  query: import("../../shared/contracts/types").ClQuery,
+  query: import("../../shared/contracts").ClQuery,
 ) {
   return JSON.stringify({
     keyword: query.keyword.trim(),
@@ -622,7 +623,7 @@ function assertMockRevision(expected: number) {
 
 function assertMockProfile(
   name: string,
-  context: import("../../shared/contracts/types").P4Context,
+  context: import("../../shared/contracts").P4Context,
   exceptId?: string,
 ) {
   if (!name || name.length > 128 || /[\u0000-\u001f\u007f]/u.test(name))
@@ -641,8 +642,83 @@ function assertMockProfile(
   }
 }
 
+const workspaceMutationTokens = new Map<
+  string,
+  import("../../shared/contracts").WorkspaceMutationPreview
+>();
+const workspaceOverrides = new Map<
+  string,
+  Map<string, import("../../shared/contracts").ClientWorkspace | null>
+>();
+const workspaceScope = () =>
+  JSON.stringify([mockActiveProfileId, mockContext.server, mockContext.user]);
 export const mockBackend: Backend = {
-  async createConfigBackup(request) {
+  async selectedMoveLookup() {
+    return { kind: "notFound" as const };
+  },
+  async selectedMoveExecute(request) {
+    return {
+      operationId: request.operationId,
+      targetCreationUnknown: false,
+      targetChangeId: null,
+      stage: "stopped",
+      files: request.files.map((f) => ({ ...f, state: "notMoved" as const })),
+      message: "Browser preview: no changelist created and no files moved.",
+    };
+  },
+  async selectedMoveStatus() {
+    return null;
+  },
+  async selectedSubmitPrepare(request) {
+    return {
+      operationId: request.operationId,
+      newChangeId: null,
+      stage: "stopped",
+      files: request.files.map((file) => ({
+        ...file,
+        state: "notMoved" as const,
+      })),
+      canContinue: false,
+      message: "Browser preview: no files were created or moved.",
+    };
+  },
+  async selectedSubmitStatus() {
+    return null;
+  },
+  async selectedSubmitClaim() {
+    throw new Error("Browser preview cannot authorize submission");
+  },
+  async customSubmitStart(request) {
+    // Browser Mock never starts a process or claims a simulated submit succeeded.
+    return {
+      requestId: request.requestId,
+      changeId: request.changeId,
+      state: "notStarted",
+      executablePath: mockContext.customSubmitExecutablePath ?? "",
+      exitCode: null,
+      reason: "browserMockNoProcess",
+    };
+  },
+  async customSubmitStatus() {
+    return null;
+  },
+  async companySubmitConnectionSnapshot() {
+    if (!mockActiveProfileId) throw new Error("invalidConnection");
+    // Synthetic owner counter only; production obtains the string directly from Rust.
+    return {
+      profileId: mockActiveProfileId,
+      generation: mockContextGeneration.toString(),
+      server: mockContext.server,
+      user: mockContext.user,
+      client: mockContext.client,
+    };
+  },
+  async createConfigBackup(payload) {
+    // S4j2: new shape { request, operationId? }; old flat shape stays legacy/no receipt.
+    const wrapped =
+      payload && typeof payload === "object" && "request" in payload;
+    const request = wrapped ? payload.request : payload;
+    const operationId = wrapped ? payload.operationId : undefined;
     const createdAt = new Date().toISOString();
     const fileName = `p4deck-config-manual-${Date.now()}.json`;
     const allowedKeys = request.localStorage
@@ -663,12 +739,41 @@ export const mockBackend: Backend = {
     };
     mockConfigBackups.unshift(backup);
     mockConfigBackupStorage.set(fileName, retainedEntries);
-    return {
+    const legacy: import("../../shared/contracts").ConfigBackupCreateResult = {
       backup,
       omittedLocalStorageKeys: request.localStorage
         .map((entry) => entry.key)
         .filter((key) => !allowedKeys.includes(key))
         .sort(),
+    };
+    if (!wrapped || !operationId)
+      return {
+        kind: "backupCreate",
+        state: "legacy",
+        outcome: "succeeded",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: null,
+        optimistic: "intentOnly",
+        message: "Browser Mock legacy backup result.",
+        legacy,
+      };
+    return {
+      kind: "backupCreate",
+      operationId,
+      state: "committed",
+      outcome: "succeeded",
+      artifact: {
+        path: `browser-mock://backups/${fileName}`,
+        fileName,
+        exists: true,
+        sizeBytes: legacy.backup.sizeBytes,
+        sha256: "A".repeat(64),
+      },
+      details: backup,
+      optimistic: "intentOnly",
+      message:
+        "Browser Mock only: backup artifact verified by simulated post-write readback.",
+      legacy,
     };
   },
   async listConfigBackups() {
@@ -677,16 +782,69 @@ export const mockBackend: Backend = {
       backups: [...mockConfigBackups],
     };
   },
-  async restoreConfigBackup(request) {
+  async restoreConfigBackup(payload) {
+    const wrapped =
+      payload && typeof payload === "object" && "request" in payload;
+    const request = wrapped ? payload.request : payload;
+    const operationId = wrapped ? payload.operationId : undefined;
     const source = mockConfigBackups.find(
       (backup) => backup.fileName === request.fileName,
     );
-    if (!source) throw new Error("backupNotFound");
-    return {
+    if (!source) {
+      if (!wrapped) throw new Error("backupNotFound");
+      return {
+        kind: "backupRestore",
+        operationId,
+        state: "rejected",
+        outcome: "rejected",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: undefined,
+        optimistic: "intentOnly",
+        message: "backupNotFound",
+        legacy: null,
+      };
+    }
+    const rollbackFileName = `p4deck-config-pre-restore-${Date.now()}.json`;
+    const legacy: import("../../shared/contracts").ConfigBackupRestoreResult = {
       sourceFileName: source.fileName,
-      rollbackFileName: `p4deck-config-pre-restore-${Date.now()}.json`,
+      rollbackFileName,
       localStorage: mockConfigBackupStorage.get(source.fileName) ?? [],
       restartRequired: true,
+    };
+    if (!wrapped || !operationId)
+      return {
+        kind: "backupRestore",
+        state: "legacy",
+        outcome: "unknown",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: null,
+        optimistic: "intentOnly",
+        message: "Browser Mock legacy restore result.",
+        legacy,
+      };
+    return {
+      kind: "backupRestore",
+      operationId,
+      // Staged only: applies on the next start, never committed in this call.
+      state: "pending",
+      outcome: "unknown",
+      artifact: {
+        path: `browser-mock://backups/${rollbackFileName}`,
+        fileName: rollbackFileName,
+        exists: true,
+        sizeBytes: 1024,
+        sha256: "D".repeat(64),
+      },
+      details: {
+        sourceFileName: legacy.sourceFileName,
+        rollbackFileName,
+        restartRequired: true,
+        pendingStaged: true,
+      },
+      optimistic: "intentOnly",
+      message:
+        "Browser Mock only: restore is staged (rollback bundle + pending manifest); it applies on the next start.",
+      legacy,
     };
   },
   async openConfigBackupsFolder() {
@@ -716,8 +874,7 @@ export const mockBackend: Backend = {
       workspace: entry.workspace,
       source: entry.source,
       category: entry.source === "terminal" ? "query" : "fileMutation",
-      state: entry.level === "error" ? "failed" : "succeeded",
-      failure: entry.level === "error" ? "commandFailure" : undefined,
+      ...journalMappingForLogLevel(entry.level),
       startedAt: entry.timestamp,
       finishedAt: new Date(
         Date.parse(entry.timestamp) + (entry.durationMs ?? 0),
@@ -773,28 +930,137 @@ export const mockBackend: Backend = {
   async openLogsFolder() {
     throw new Error("Opening the log folder requires the desktop app.");
   },
-  async deleteAllLogs() {
+  async deleteAllLogs(payload) {
+    const wrapped =
+      payload && typeof payload === "object" && "operationId" in payload;
+    const operationId = wrapped
+      ? (payload as { operationId?: string }).operationId
+      : undefined;
     mockLogs.length = 0;
     logsClearedSubscribers.forEach((callback) => callback());
+    if (!operationId)
+      return {
+        kind: "logClear",
+        state: "legacy",
+        outcome: "succeeded",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: null,
+        optimistic: "intentOnly",
+        message: "Browser Mock legacy log clear.",
+        legacy: "ok",
+      };
+    return {
+      kind: "logClear",
+      operationId,
+      state: "committed",
+      outcome: "succeeded",
+      artifact: { exists: false, sizeBytes: 0 },
+      details: { remainingEntries: 0 },
+      optimistic: "intentOnly",
+      message:
+        "Browser Mock only: log clear verified by simulated empty readback.",
+      legacy: "ok",
+    };
   },
   async subscribeLogsCleared(callback) {
     logsClearedSubscribers.add(callback);
     return () => logsClearedSubscribers.delete(callback);
   },
-  async setLogPolicy(policy) {
-    return {
+  async setLogPolicy(payload) {
+    const wrapped =
+      payload &&
+      typeof payload === "object" &&
+      "policy" in payload &&
+      typeof (payload as { policy?: unknown }).policy === "object";
+    const policy = wrapped
+      ? (payload as { policy: import("../../shared/contracts").LogPolicy })
+          .policy
+      : (payload as unknown as import("../../shared/contracts").LogPolicy);
+    const operationId = wrapped
+      ? (payload as { operationId?: string }).operationId
+      : undefined;
+    const saved = {
       ...policy,
       retentionDays: Math.max(1, Math.min(30, policy.retentionDays)),
       maxMib: Math.max(5, Math.min(50, policy.maxMib)),
     };
-  },
-  async exportDiagnostics() {
+    if (!wrapped || !operationId)
+      return {
+        kind: "logPolicySet",
+        state: "legacy",
+        outcome: "succeeded",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: null,
+        optimistic: "intentOnly",
+        message: "Browser Mock legacy log policy.",
+        legacy: saved,
+      };
     return {
+      kind: "logPolicySet",
+      operationId,
+      state: "committed",
+      outcome: "succeeded",
+      artifact: {
+        path: "browser-mock://logs/policy.json",
+        fileName: "policy.json",
+        exists: true,
+        sizeBytes: 128,
+        sha256: "C".repeat(64),
+      },
+      details: saved,
+      optimistic: "intentOnly",
+      message:
+        "Browser Mock only: log policy verified by simulated readback and persisted policy.json.",
+      legacy: saved,
+    };
+  },
+  async exportDiagnostics(payload) {
+    const wrapped =
+      payload && typeof payload === "object" && "request" in payload;
+    const operationId = wrapped
+      ? (payload as { operationId?: string }).operationId
+      : undefined;
+    const legacy: import("../../shared/contracts").DiagnosticExportResult = {
       path: "Mock simulation — no diagnostic file was written",
       sizeBytes: 0,
       truncated: false,
       format: "json",
       simulated: true,
+    };
+    if (!wrapped || !operationId)
+      return {
+        kind: "diagnosticsExport",
+        state: "legacy",
+        outcome: "succeeded",
+        artifact: { exists: false, sizeBytes: 0 },
+        details: null,
+        optimistic: "intentOnly",
+        message: "Browser Mock legacy diagnostics export.",
+        legacy,
+      };
+    return {
+      kind: "diagnosticsExport",
+      operationId,
+      state: "committed",
+      outcome: "succeeded",
+      artifact: {
+        path: "browser-mock://diagnostics/export.json",
+        fileName: "export.json",
+        exists: true,
+        sizeBytes: 4096,
+        sha256: "B".repeat(64),
+      },
+      details: {
+        format: "json",
+        truncated: false,
+        sizeBytes: 4096,
+        redaction:
+          "existing DiagnosticService redaction (passwords/tickets/stdin/raw args omitted; paths redacted)",
+      },
+      optimistic: "intentOnly",
+      message:
+        "Browser Mock only: diagnostics export verified by simulated post-write readback; no content is read.",
+      legacy,
     };
   },
   async subscribeDiagnosticAlerts(callback) {
@@ -897,7 +1163,7 @@ export const mockBackend: Backend = {
     ];
   },
   async queryStreamGraph(query) {
-    const allNodes: import("../../shared/contracts/types").StreamGraphNode[] = [
+    const allNodes: import("../../shared/contracts").StreamGraphNode[] = [
       {
         stream: "//atlas/main",
         name: "Atlas Main",
@@ -1051,7 +1317,7 @@ export const mockBackend: Backend = {
       profile: mockActiveProfileId,
       context: mockContext,
     });
-    let items: import("../../shared/contracts/types").BranchMappingSummary[];
+    let items: import("../../shared/contracts").BranchMappingSummary[];
     let offset = 0;
     if (query.cursor) {
       const snapshot = mockBranchCursors.get(query.cursor);
@@ -1183,7 +1449,7 @@ export const mockBackend: Backend = {
   },
   async preflightBranchMappingMutation(request) {
     const current = mockBranchDetails.get(request.name);
-    const blockers: import("../../shared/contracts/types").BranchIssue[] = [];
+    const blockers: import("../../shared/contracts").BranchIssue[] = [];
     if (request.mode === "create" && current) {
       blockers.push({
         code: "alreadyExists",
@@ -1278,7 +1544,7 @@ export const mockBackend: Backend = {
     const record = mockBranchTokens.get(confirmation.token);
     mockBranchTokens.delete(confirmation.token);
     const reject = (
-      failure: import("../../shared/contracts/types").BranchMutationFailureCode,
+      failure: import("../../shared/contracts").BranchMutationFailureCode,
       message: string,
     ) => ({
       outcome: "rejected" as const,
@@ -1449,7 +1715,7 @@ export const mockBackend: Backend = {
     const record = mockStreamSwitchTokens.get(confirmation.token);
     mockStreamSwitchTokens.delete(confirmation.token);
     const reject = (
-      failure: import("../../shared/contracts/types").StreamSwitchFailureCode,
+      failure: import("../../shared/contracts").StreamSwitchFailureCode,
       message: string,
     ) => ({
       outcome: "rejected" as const,
@@ -1519,7 +1785,7 @@ export const mockBackend: Backend = {
     };
   },
   async listUserWorkspaces() {
-    return [
+    const seeded = [
       {
         name: mockContext.client,
         host: "fm-mac",
@@ -1554,6 +1820,20 @@ export const mockBackend: Backend = {
       updated: Math.floor(now / 1000) - index * 86400,
       accessed: Math.floor(now / 1000) - index * 3600,
     }));
+    const rows = new Map<
+      string,
+      import("../../shared/contracts").ClientWorkspace
+    >(
+      [...seeded, ...mockConnectionWorkspaces.values()].map((item) => [
+        item.name,
+        item,
+      ]),
+    );
+    workspaceOverrides.get(workspaceScope())?.forEach((item, name) => {
+      if (item) rows.set(name, item);
+      else rows.delete(name);
+    });
+    return [...rows.values()];
   },
   async browseConnectionUsers(request) {
     if (request.operationId && mockCancelledOperations.has(request.operationId))
@@ -1633,8 +1913,7 @@ export const mockBackend: Backend = {
   },
   async preflightCreateConnectionUser(request) {
     const name = request.plan.name.trim();
-    const blockers: import("../../shared/contracts/types").ConnectionSpecIssue[] =
-      [];
+    const blockers: import("../../shared/contracts").ConnectionSpecIssue[] = [];
     if (
       !request.context.server.trim() ||
       !name ||
@@ -1684,8 +1963,7 @@ export const mockBackend: Backend = {
   },
   async preflightCreateConnectionWorkspace(request) {
     const name = request.plan.name.trim();
-    const blockers: import("../../shared/contracts/types").ConnectionSpecIssue[] =
-      [];
+    const blockers: import("../../shared/contracts").ConnectionSpecIssue[] = [];
     if (!request.context.server.trim() || !request.context.user.trim())
       blockers.push({
         code: "invalidInput",
@@ -1764,7 +2042,7 @@ export const mockBackend: Backend = {
         simulated: true,
       };
     const plan =
-      record.plan as import("../../shared/contracts/types").ConnectionUserCreatePlan;
+      record.plan as import("../../shared/contracts").ConnectionUserCreatePlan;
     mockConnectionUsers.set(record.name, {
       name: record.name,
       fullName: plan.fullName,
@@ -1803,7 +2081,7 @@ export const mockBackend: Backend = {
         simulated: true,
       };
     const plan =
-      record.plan as import("../../shared/contracts/types").ConnectionWorkspaceCreatePlan;
+      record.plan as import("../../shared/contracts").ConnectionWorkspaceCreatePlan;
     mockConnectionWorkspaces.set(record.name, {
       name: record.name,
       owner: record.context.user,
@@ -1930,6 +2208,107 @@ export const mockBackend: Backend = {
     mockRenameTokens.clear();
     mockLockTokens.clear();
     return this.runtimeInfo();
+  },
+  async preflightWorkspaceMutation(request) {
+    if (
+      request.expectedGeneration !== mockContextGeneration ||
+      mockAuthentication !== "connected"
+    )
+      throw new Error("Connection changed or unavailable.");
+    if (request.workspace.toLowerCase() === mockContext.client.toLowerCase())
+      throw new Error("Switch to another workspace first.");
+    const rows = await this.listUserWorkspaces();
+    const row = rows.find((item) => item.name === request.workspace);
+    if (!row || row.owner !== mockContext.user)
+      throw new Error("Workspace unavailable.");
+    if (
+      request.action === "rename" &&
+      (!request.newName ||
+        !/^[^\s*%@#"\x00-\x1f-][^\s*%@#"\x00-\x1f]*$/.test(request.newName) ||
+        rows.some(
+          (item) => item.name.toLowerCase() === request.newName!.toLowerCase(),
+        ))
+    )
+      throw new Error("Invalid or existing workspace name.");
+    const preview = {
+      token: crypto.randomUUID(),
+      request: { ...request },
+      root: row.root,
+      stream: row.stream,
+      expiresAt: Date.now() + 120000,
+    };
+    workspaceMutationTokens.set(preview.token, preview);
+    return structuredClone(preview);
+  },
+  async confirmWorkspaceMutation(token, _operationId) {
+    const record = workspaceMutationTokens.get(token);
+    workspaceMutationTokens.delete(token);
+    const reject = (
+      message: string,
+    ): import("../../shared/contracts").WorkspaceMutationResult => ({
+      outcome: "rejected",
+      failure: message,
+      message,
+      workspace: record?.request.workspace ?? "",
+      action: record?.request.action ?? "delete",
+      verified: false,
+    });
+    if (
+      !record ||
+      record.expiresAt <= Date.now() ||
+      record.request.expectedGeneration !== mockContextGeneration
+    )
+      return reject("Confirmation expired or connection changed.");
+    const rows = await this.listUserWorkspaces();
+    const row = rows.find((item) => item.name === record.request.workspace);
+    if (
+      !row ||
+      row.name === mockContext.client ||
+      row.root !== record.root ||
+      row.stream !== record.stream
+    )
+      return reject("Workspace changed.");
+    const overrides = workspaceOverrides.get(workspaceScope()) ?? new Map();
+    if (record.request.action === "rename") {
+      if (
+        rows.some(
+          (item) =>
+            item.name.toLowerCase() === record.request.newName!.toLowerCase(),
+        )
+      )
+        return reject("Name already exists.");
+      overrides.set(record.request.newName!, {
+        ...row,
+        name: record.request.newName!,
+      });
+    }
+    overrides.set(row.name, null);
+    workspaceOverrides.set(workspaceScope(), overrides);
+    // Post-write existence readback is the only authority (never the request).
+    const after = await this.listUserWorkspaces();
+    const newName = record.request.newName;
+    const observedExists =
+      record.request.action === "rename"
+        ? after.some((item) => item.name === newName)
+        : after.some((item) => item.name === record.request.workspace);
+    const verified =
+      record.request.action === "rename"
+        ? observedExists &&
+          !after.some((item) => item.name === record.request.workspace)
+        : !observedExists;
+    return {
+      outcome: verified ? "succeeded" : "unknown",
+      failure: verified
+        ? undefined
+        : "The workspace existence readback did not confirm the requested end state.",
+      message: verified
+        ? "Browser Mock only: the workspace definition change was confirmed by a simulated existence readback."
+        : "Browser Mock only: the workspace change may have applied but the readback did not confirm it; refresh before retrying.",
+      workspace: record.request.workspace,
+      action: record.request.action,
+      verified,
+      observedExists,
+    };
   },
   async switchWorkspace(request) {
     if (request.expectedGeneration !== mockContextGeneration)
@@ -2791,15 +3170,14 @@ export const mockBackend: Backend = {
       files,
     };
     const stateDigest = JSON.stringify(target);
-    const blockers: import("../../shared/contracts/types").FileLockIssue[] =
-      files
-        .filter((file) => !file.openedAction)
-        .map((file) => ({
-          code: "notOpened" as const,
-          certainty: "confirmed" as const,
-          message: file.reason!,
-          paths: [file.depotPath],
-        }));
+    const blockers: import("../../shared/contracts").FileLockIssue[] = files
+      .filter((file) => !file.openedAction)
+      .map((file) => ({
+        code: "notOpened" as const,
+        certainty: "confirmed" as const,
+        message: file.reason!,
+        paths: [file.depotPath],
+      }));
     const applicable = files.filter((file) => file.applicable).length;
     if (!blockers.length && applicable === 0)
       blockers.push({
@@ -2985,8 +3363,7 @@ export const mockBackend: Backend = {
     const caseOnlyRisk =
       sourceLocal !== targetLocal &&
       sourceLocal.toLocaleLowerCase() === targetLocal.toLocaleLowerCase();
-    const blockers: import("../../shared/contracts/types").RenameMoveIssue[] =
-      [];
+    const blockers: import("../../shared/contracts").RenameMoveIssue[] = [];
     if (!sourceNode || sourceNode.kind !== "file")
       blockers.push({
         code: "sourceMissing",
@@ -3144,7 +3521,7 @@ export const mockBackend: Backend = {
   },
   async previewSync(request) {
     const operationId = request.operationId ?? crypto.randomUUID();
-    const target: import("../../shared/contracts/types").SyncTargetSnapshot = {
+    const target: import("../../shared/contracts").SyncTargetSnapshot = {
       server: mockContext.server,
       user: mockContext.user,
       client: mockContext.client,
@@ -3171,17 +3548,16 @@ export const mockBackend: Backend = {
       warnings: target.force ? 1 : 0,
       conflicts: 0,
     };
-    const warnings: import("../../shared/contracts/types").SyncIssue[] =
-      target.force
-        ? [
-            {
-              code: "forceOverwrite",
-              message:
-                "Browser Mock only: force risk is simulated and requires explicit acknowledgement.",
-              paths: target.paths,
-            },
-          ]
-        : [];
+    const warnings: import("../../shared/contracts").SyncIssue[] = target.force
+      ? [
+          {
+            code: "forceOverwrite",
+            message:
+              "Browser Mock only: force risk is simulated and requires explicit acknowledgement.",
+            paths: target.paths,
+          },
+        ]
+      : [];
     const digest = mockDigest(JSON.stringify({ target, entries, warnings }));
     const token = crypto.randomUUID();
     const expiresAt = Date.now() + 120_000;
@@ -3216,9 +3592,9 @@ export const mockBackend: Backend = {
     const record = mockSyncTokens.get(confirmation.token);
     mockSyncTokens.delete(confirmation.token);
     const reject = (
-      failure: import("../../shared/contracts/types").SyncFailureCode,
+      failure: import("../../shared/contracts").SyncFailureCode,
       message: string,
-    ): import("../../shared/contracts/types").SyncResult => ({
+    ): import("../../shared/contracts").SyncResult => ({
       outcome: "rejected",
       failure,
       message,
@@ -3264,6 +3640,37 @@ export const mockBackend: Backend = {
       refreshDepot: true,
     };
   },
+  async syncLatest(request) {
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const paths = [...new Set(request.paths)].sort();
+    const counts = {
+      added: 0,
+      updated: paths.length,
+      deleted: 0,
+      upToDate: 0,
+      warnings: 0,
+      conflicts: 0,
+    };
+    emitMockLog(
+      "info",
+      "gui",
+      "p4 sync //... (simulated)",
+      `${paths.length} simulated path(s).`,
+      operationId,
+      1,
+    );
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: Get Latest was simulated. No real files or P4 server were changed.",
+      operationId,
+      logReference: operationId,
+      affectedPaths: paths,
+      counts,
+      refreshWorkspace: true,
+      refreshDepot: true,
+    };
+  },
   async getFilePreview(path) {
     if (/\.(png|jpe?g|gif|webp)$/i.test(path))
       return {
@@ -3291,6 +3698,41 @@ export const mockBackend: Backend = {
       encoding: "UTF-8",
     };
   },
+  async getIntegrationTrace(request) {
+    if (
+      Object.keys(request).some(
+        (key) => !["scope", "paths", "refresh", "operationId"].includes(key),
+      )
+    ) {
+      throw new Error("Unknown integration trace request field");
+    }
+    if (
+      !request.paths.length ||
+      request.paths.length > 20 ||
+      new TextEncoder().encode(request.paths.join("")).length > 16000 ||
+      request.paths.some(
+        (path) =>
+          !path.startsWith("//") ||
+          path.length < 5 ||
+          path.endsWith("/") ||
+          !path.slice(2).includes("/") ||
+          /[#@*\u0000-\u001f\u007f-\u009f]/.test(path) ||
+          path.includes("..."),
+      )
+    ) {
+      throw new Error(
+        "Trace requires 1–20 exact P4-escaped depot paths from CL detail (maximum 16 KB)",
+      );
+    }
+    return {
+      records: [],
+      incomplete: true,
+      warnings: [
+        "Simulated mock: no integration evidence configured; destinations unknown",
+      ],
+      readAt: Date.now(),
+    };
+  },
   async getDiff(request) {
     const path = request.scope.fileIdentity;
     const label = (reference: typeof request.left) =>
@@ -3312,7 +3754,9 @@ export const mockBackend: Backend = {
         revision:
           request.left.kind === "workspace" || request.left.kind === "shelf"
             ? undefined
-            : 11,
+            : request.left.kind === "revision"
+              ? request.left.revision
+              : 11,
         fileType: "text",
         size: 54,
         digest: "mock-left",
@@ -3322,11 +3766,13 @@ export const mockBackend: Backend = {
       right: {
         reference: request.right,
         label: label(request.right),
-        depotPath: path,
+        depotPath: request.rightFileIdentity ?? path,
         revision:
           request.right.kind === "workspace" || request.right.kind === "shelf"
             ? undefined
-            : 12,
+            : request.right.kind === "revision"
+              ? request.right.revision
+              : 12,
         fileType: "text",
         size: 78,
         digest: "mock-right",
@@ -3382,6 +3828,15 @@ export const mockBackend: Backend = {
     };
   },
   async getRevisionGraph(request) {
+    const allowed = new Set([
+      "scope",
+      "revisionLimit",
+      "cursor",
+      "refresh",
+      "operationId",
+    ]);
+    if (Object.keys(request).some((key) => !allowed.has(key)))
+      throw new Error("Invalid revision graph request: unknown field");
     const path = request.scope.fileIdentity;
     const nodes = Array.from({ length: 8 }, (_, index) => ({
       id: `r${index + 1}`,
@@ -3642,9 +4097,9 @@ export const mockBackend: Backend = {
     const record = mockSubmitTokens.get(confirmation.token);
     mockSubmitTokens.delete(confirmation.token);
     const reject = (
-      failure: import("../../shared/contracts/types").SubmitFailureCode,
+      failure: import("../../shared/contracts").SubmitFailureCode,
       message: string,
-    ): import("../../shared/contracts/types").SubmitResult => ({
+    ): import("../../shared/contracts").SubmitResult => ({
       outcome: "rejected",
       changeId: confirmation.target.changeId,
       failure,
@@ -3685,7 +4140,7 @@ export const mockBackend: Backend = {
       return reject("changeChanged", "The changelist changed after preflight.");
     changes.splice(index, 1);
     const operationId = confirmation.operationId ?? crypto.randomUUID();
-    return {
+    const legacyResult: import("../../shared/contracts").SubmitResult = {
       outcome: "submitted",
       changeId: confirmation.target.changeId,
       submittedChangeId: confirmation.target.changeId,
@@ -3700,6 +4155,19 @@ export const mockBackend: Backend = {
         reason: "Refresh submit-related views.",
       },
     };
+    // S4g wire: a dispatched confirmation gets the additive command-level
+    // envelope; the authoritative submit facts stay outcome + submittedChangeId.
+    if (!confirmation.operationId) return legacyResult;
+    return {
+      ...legacyResult,
+      execution: {
+        kind: "submit",
+        operationId,
+        state: "commandCompleted",
+        outcome: "submitted",
+        files: [],
+      },
+    };
   },
   async preflightShelf(request) {
     const change = allMockPendingChanges().find(
@@ -3708,7 +4176,7 @@ export const mockBackend: Backend = {
     const paths = [...new Set(request.depotPaths)].sort();
     const opened = new Set(change?.files.map((file) => file.depotPath));
     const shelved = new Set(change?.shelvedFiles.map((file) => file.depotPath));
-    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    const blockers: import("../../shared/contracts").WorkflowIssue[] = [];
     if (!change || request.changeId <= 0)
       blockers.push({
         code: "changeNotFound",
@@ -3782,6 +4250,47 @@ export const mockBackend: Backend = {
       "Browser Mock only: shelf operation was simulated. No real P4 server was accessed.",
       "shelf",
     );
+  },
+  async deleteShelvedRevisions(request) {
+    // Browser Mock simulates the host's direct delete (internal preflight included).
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: shelved revisions were deleted (simulated). No real P4 server was accessed.",
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      files: request.depotPaths.map((depotPath: string) => ({
+        depotPath,
+        state: "succeeded" as const,
+        message: "simulated",
+      })),
+      refresh: {
+        pendingChanges: true,
+        workspaceStatus: true,
+        depotPaths: [...request.depotPaths],
+        reason: "mock direct shelf delete",
+      },
+    };
+  },
+  async shelveFiles(request) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: files were shelved (simulated). No real P4 server was accessed.",
+      operationIds: [request.operationId ?? crypto.randomUUID()],
+      files: request.depotPaths.map((depotPath: string) => ({
+        depotPath,
+        state: "succeeded" as const,
+        message: "simulated",
+      })),
+      refresh: {
+        pendingChanges: true,
+        workspaceStatus: true,
+        depotPaths: [...request.depotPaths],
+        reason: "mock direct shelve",
+      },
+    };
   },
   async getShelfDetail(request) {
     if (request.changeId <= 0)
@@ -3941,7 +4450,7 @@ export const mockBackend: Backend = {
     const targetChange = changes.find(
       (change) => change.id === request.targetChangeId,
     );
-    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    const blockers: import("../../shared/contracts").WorkflowIssue[] = [];
     if (!targetChange || request.targetChangeId < 0)
       blockers.push({
         code: "changeNotFound",
@@ -4038,7 +4547,7 @@ export const mockBackend: Backend = {
         refresh,
       };
     const request =
-      record.request as import("../../shared/contracts/types").MoveFilesPreflightRequest;
+      record.request as import("../../shared/contracts").MoveFilesPreflightRequest;
     const changes = allMockPendingChanges();
     mockPendingChanges ??= changes;
     const affected = new Set<number>([request.targetChangeId]);
@@ -4081,7 +4590,7 @@ export const mockBackend: Backend = {
     const sourcePaths = new Set(
       source?.shelvedFiles.map((file) => file.depotPath),
     );
-    const blockers: import("../../shared/contracts/types").WorkflowIssue[] = [];
+    const blockers: import("../../shared/contracts").WorkflowIssue[] = [];
     const missing = paths.filter((path) => !sourcePaths.has(path));
     if (!source || missing.length)
       blockers.push({
@@ -4144,6 +4653,31 @@ export const mockBackend: Backend = {
       "unshelve",
     );
   },
+  async actionWriteFences() {
+    return { connection: null, fences: [] };
+  },
+  async actionReleaseUnknown() {
+    return "released";
+  },
+  async unshelveFiles(request) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return {
+      outcome: "succeeded",
+      message: "Browser Mock only: unshelve was simulated.",
+      operationIds: [request.operationId ?? "mock-unshelve"],
+      files: request.depotPaths.map((depotPath: string) => ({
+        depotPath,
+        state: "succeeded",
+        message: "simulated",
+      })),
+      refresh: {
+        pendingChanges: true,
+        workspaceStatus: true,
+        depotPaths: request.depotPaths,
+        reason: "mock",
+      },
+    };
+  },
   async preflightResolve(request) {
     const paths = [...new Set(request.depotPaths)].sort();
     const target: WorkflowTargetSnapshot = {
@@ -4189,6 +4723,10 @@ export const mockBackend: Backend = {
       "resolve",
     );
   },
+  async resolveStats() {
+    // Browser Mock has no P4 metadata: the dialog keeps its "not returned" placeholders.
+    return { base: {}, source: {}, target: {} };
+  },
   async openManualMerge() {
     throw new Error(
       "Browser Mock cannot open a manual merge session because it has no authoritative Perforce resolve record.",
@@ -4203,19 +4741,31 @@ export const mockBackend: Backend = {
   async confirmManualMergeResolve() {
     throw new Error("Browser Mock does not resolve Perforce records.");
   },
+  async detectExternalMergeTool() {
+    return {
+      available: false,
+      reason:
+        "Browser Mock has no native process adapter, so it cannot detect or launch P4Merge.",
+    };
+  },
+  async runExternalMerge() {
+    throw new Error(
+      "Browser Mock cannot launch P4Merge; no external process was started and no result was simulated.",
+    );
+  },
 };
 
 async function confirmMockWorkflow(
-  confirmation: import("../../shared/contracts/types").WorkflowConfirmation,
+  confirmation: import("../../shared/contracts").WorkflowConfirmation,
   message: string,
   kind: "shelf" | "unshelve" | "resolve",
-): Promise<import("../../shared/contracts/types").WorkflowResult> {
+): Promise<import("../../shared/contracts").WorkflowResult> {
   const record = mockWorkflowTokens.get(confirmation.token);
   mockWorkflowTokens.delete(confirmation.token);
   const reject = (
-    failure: import("../../shared/contracts/types").WorkflowFailureCode,
+    failure: import("../../shared/contracts").WorkflowFailureCode,
     reason: string,
-  ): import("../../shared/contracts/types").WorkflowResult => ({
+  ): import("../../shared/contracts").WorkflowResult => ({
     outcome: "rejected",
     failure,
     message: reason,
@@ -4244,7 +4794,7 @@ async function confirmMockWorkflow(
   mockPendingChanges ??= changes;
   if (kind === "shelf") {
     const request =
-      record.request as import("../../shared/contracts/types").ShelfPreflightRequest;
+      record.request as import("../../shared/contracts").ShelfPreflightRequest;
     const change = changes.find((item) => item.id === request.changeId);
     const currentDigest = mockDigest(
       JSON.stringify({ change, target: record.target, request }),
@@ -4274,7 +4824,7 @@ async function confirmMockWorkflow(
     }
   } else if (kind === "unshelve") {
     const request =
-      record.request as import("../../shared/contracts/types").UnshelvePreflightRequest;
+      record.request as import("../../shared/contracts").UnshelvePreflightRequest;
     const source = changes.find((item) => item.id === request.sourceChangeId);
     const mappings = request.depotPaths.map((depotPath) => ({
       depotPath,
@@ -4303,7 +4853,7 @@ async function confirmMockWorkflow(
         target.files.push({ depotPath, action: "edit", state: "openedEdit" });
   }
   const operationId = confirmation.operationId ?? crypto.randomUUID();
-  return {
+  const legacyResult: import("../../shared/contracts").WorkflowResult = {
     outcome: "succeeded",
     message,
     operationIds: [operationId],
@@ -4320,6 +4870,21 @@ async function confirmMockWorkflow(
       depotPaths: confirmation.target.depotPaths,
       reason: "Refresh affected views.",
     },
+  };
+  // S4d wire: a dispatched confirmation carries one operationId and gets the
+  // additive command-level envelope. SHELF/UNSHELVE claim no per-file success,
+  // so the top-level files stay empty and the UI may only show intent/progress.
+  if (kind === "resolve" || !confirmation.operationId) return legacyResult;
+  return {
+    ...legacyResult,
+    execution: {
+      kind,
+      operationId,
+      state: "commandCompleted",
+      outcome: legacyResult.outcome,
+      files: [],
+    },
+    files: [],
   };
 }
 

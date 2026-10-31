@@ -1,0 +1,457 @@
+{
+  "checks": [
+    {
+      "label": "before-normal",
+      "height": 0,
+      "lines": [],
+      "top": 113.59375,
+      "bottom": 113.59375,
+      "bridge": false
+    },
+    {
+      "label": "after-normal",
+      "height": 485.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 113.59375,
+          "bottom": 137.59375
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 137.59375,
+          "bottom": 161.59375
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 161.59375,
+          "bottom": 185.59375
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 185.59375,
+          "bottom": 209.59375
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 209.59375,
+          "bottom": 233.59375
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 233.59375,
+          "bottom": 257.59375
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 257.59375,
+          "bottom": 281.59375
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 281.59375,
+          "bottom": 305.59375
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 305.59375,
+          "bottom": 329.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 599.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-resize-390",
+      "height": 138.21875,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 53.1875,
+          "bottom": 77.1875
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 77.1875,
+          "bottom": 101.1875
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 101.1875,
+          "bottom": 125.1875
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 125.1875,
+          "bottom": 149.1875
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 149.1875,
+          "bottom": 173.1875
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 173.1875,
+          "bottom": 197.1875
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 197.1875,
+          "bottom": 221.1875
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 221.1875,
+          "bottom": 245.1875
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 245.1875,
+          "bottom": 269.1875
+        }
+      ],
+      "top": 131.1875,
+      "bottom": 269.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-resize-1200",
+      "height": 585.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 113.59375,
+          "bottom": 137.59375
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 137.59375,
+          "bottom": 161.59375
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 161.59375,
+          "bottom": 185.59375
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 185.59375,
+          "bottom": 209.59375
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 209.59375,
+          "bottom": 233.59375
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 233.59375,
+          "bottom": 257.59375
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 257.59375,
+          "bottom": 281.59375
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 281.59375,
+          "bottom": 305.59375
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 305.59375,
+          "bottom": 329.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 699.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-restored",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 113.59375,
+          "bottom": 137.59375
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 137.59375,
+          "bottom": 161.59375
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 161.59375,
+          "bottom": 185.59375
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 185.59375,
+          "bottom": 209.59375
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 209.59375,
+          "bottom": 233.59375
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 233.59375,
+          "bottom": 257.59375
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 257.59375,
+          "bottom": 281.59375
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 281.59375,
+          "bottom": 305.59375
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 305.59375,
+          "bottom": 329.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-zero-restored",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 113.59375,
+          "bottom": 137.59375
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 137.59375,
+          "bottom": 161.59375
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 161.59375,
+          "bottom": 185.59375
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 185.59375,
+          "bottom": 209.59375
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 209.59375,
+          "bottom": 233.59375
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 233.59375,
+          "bottom": 257.59375
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 257.59375,
+          "bottom": 281.59375
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 281.59375,
+          "bottom": 305.59375
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 305.59375,
+          "bottom": 329.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-empty",
+      "height": 0,
+      "lines": [],
+      "status": "文件为空",
+      "bridge": false
+    },
+    {
+      "label": "after-error",
+      "height": 0,
+      "lines": [],
+      "alert": "无法预览Synthetic read failure",
+      "bridge": false
+    },
+    {
+      "label": "after-error-recovery",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{",
+          "top": 113.59375,
+          "bottom": 137.59375
+        },
+        {
+          "number": "2",
+          "text": "  \"name\": \"fixture\",",
+          "top": 137.59375,
+          "bottom": 161.59375
+        },
+        {
+          "number": "3",
+          "text": "  \"enabled\": true,",
+          "top": 161.59375,
+          "bottom": 185.59375
+        },
+        {
+          "number": "4",
+          "text": "  \"items\": [",
+          "top": 185.59375,
+          "bottom": 209.59375
+        },
+        {
+          "number": "5",
+          "text": "    1,",
+          "top": 209.59375,
+          "bottom": 233.59375
+        },
+        {
+          "number": "6",
+          "text": "    2",
+          "top": 233.59375,
+          "bottom": 257.59375
+        },
+        {
+          "number": "7",
+          "text": "  ],",
+          "top": 257.59375,
+          "bottom": 281.59375
+        },
+        {
+          "number": "8",
+          "text": "  \"label\": \"中文 🚀\"",
+          "top": 281.59375,
+          "bottom": 305.59375
+        },
+        {
+          "number": "9",
+          "text": "}",
+          "top": 305.59375,
+          "bottom": 329.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-invalid",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{ invalid JSON :",
+          "top": 113.59375,
+          "bottom": 137.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-long",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa … [此行过长，已截断显示]",
+          "top": 113.59375,
+          "bottom": 137.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    },
+    {
+      "label": "after-long-end",
+      "height": 285.8125,
+      "lines": [
+        {
+          "number": "1",
+          "text": "{\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa … [此行过长，已截断显示]",
+          "top": 113.59375,
+          "bottom": 137.59375
+        }
+      ],
+      "top": 113.59375,
+      "bottom": 399.40625,
+      "bridge": false
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "hashes": {
+    "current": "306d43882aca8ca50dbdfb784c78e106b69d8e68bb0e3d4362bf42ba229415ed",
+    "currentCss": "f2c9ae17bd7dcbd0b7ff92da130e326e57f9a5a7b2650b36a883bff6d42ae67b",
+    "baseline": "33797d19624ec95d3b8e32d39d7d5a40d4b7fd2cfdfdbd979d1c24d3262a1f19",
+    "baselineCss": "0eab9fcd696ddacd3fce5460e036bde1283b7efc47094560d158189a646deac7"
+  }
+}

@@ -1,3 +1,5 @@
+// 测试模块之后仍有生产 helper（workspace_mutation_command 等）；顺序保持现状。
+#![allow(clippy::items_after_test_module)]
 use crate::{
     domain::{
         ConnectionErrorCode, ConnectionUserCandidate, ConnectionWorkspaceCandidate,
@@ -299,6 +301,80 @@ impl ConnectionSetupRepository {
             "client",
             vec!["-i".into()],
             form,
+            operation_id,
+            app,
+            guard,
+        )
+        .await
+    }
+
+    pub async fn workspace_has_opened(
+        &self,
+        context: &P4Context,
+        name: &str,
+        operation_id: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<bool, String> {
+        let result = self
+            .runner
+            .run(
+                P4CommandRequest {
+                    operation_id: Some(operation_id.into()),
+                    source: OperationSource::Gui,
+                    command: "opened".into(),
+                    args: vec!["-C".into(), name.into(), "-m".into(), "1".into()],
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(30_000),
+                    input: None,
+                },
+                app,
+            )
+            .await
+            .map_err(|_| "Cannot verify open files; deletion blocked.".to_owned())?;
+        opened_records_block_delete(&result)
+    }
+    pub async fn workspace_has_pending(
+        &self,
+        context: &P4Context,
+        name: &str,
+        operation_id: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<bool, String> {
+        let result = self
+            .run_read(
+                context,
+                "changes",
+                vec![
+                    "-s".into(),
+                    "pending".into(),
+                    "-c".into(),
+                    name.into(),
+                    "-m".into(),
+                    "1".into(),
+                ],
+                operation_id,
+                app,
+            )
+            .await?;
+        Ok(json_records(&result)?
+            .iter()
+            .any(|v| v.get("change").is_some()))
+    }
+    pub async fn mutate_workspace(
+        &self,
+        context: &P4Context,
+        request: &crate::domain::WorkspaceMutationRequest,
+        operation_id: &str,
+        app: Option<&AppHandle>,
+        guard: &MutationGuard,
+    ) -> Result<String, SpecWriteError> {
+        let (command, args) = workspace_mutation_command(request);
+        self.run_write(
+            context,
+            command,
+            args,
+            String::new(),
             operation_id,
             app,
             guard,
@@ -743,4 +819,60 @@ mod tests {
         error.events[0].message = Some(r#"{"code":"error","severity":2,"generic":17}"#.into());
         assert!(json_records(&error).unwrap().len() == 1);
     }
+}
+
+pub fn workspace_mutation_command(
+    request: &crate::domain::WorkspaceMutationRequest,
+) -> (&'static str, Vec<String>) {
+    match request.action {
+        crate::domain::WorkspaceMutationAction::Rename => (
+            "renameclient",
+            vec![
+                format!("--from={}", request.workspace),
+                format!("--to={}", request.new_name.as_deref().unwrap_or_default()),
+            ],
+        ),
+        crate::domain::WorkspaceMutationAction::Delete => {
+            ("client", vec!["-d".into(), request.workspace.clone()])
+        }
+    }
+}
+
+fn opened_records_block_delete(result: &OperationResult) -> Result<bool, String> {
+    let mut empty = false;
+    let mut opened = false;
+    for event in &result.events {
+        if !matches!(
+            event.kind,
+            crate::domain::EventKind::Stdout | crate::domain::EventKind::Stderr
+        ) {
+            continue;
+        }
+        for line in event
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+        {
+            let value: Value = serde_json::from_str(line)
+                .map_err(|_| "Cannot verify open files; malformed response.".to_owned())?;
+            if value.get("generic").and_then(Value::as_u64) == Some(17) {
+                empty = true;
+                continue;
+            }
+            if value.get("severity").and_then(Value::as_u64).unwrap_or(0) >= 3
+                || value.get("code").and_then(Value::as_str) == Some("error")
+            {
+                return Err("Cannot verify open files; server denied the query.".into());
+            }
+            if value.get("depotFile").is_some() {
+                opened = true;
+            }
+        }
+    }
+    if result.exit_code != 0 && !empty {
+        return Err("Cannot verify open files; deletion blocked.".into());
+    }
+    Ok(opened)
 }

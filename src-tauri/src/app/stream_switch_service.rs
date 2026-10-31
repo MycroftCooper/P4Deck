@@ -172,9 +172,32 @@ impl StreamSwitchService {
         }
     }
 
+    /// Compatibility entry used only by the feature-gated e2e harness.
+    /// Production IPC uses confirm_admitted with the unified lane/lease.
+    #[allow(dead_code)]
     pub async fn confirm(
         self: &Arc<Self>,
         confirmation: StreamSwitchConfirmation,
+        app: Option<&AppHandle>,
+    ) -> StreamSwitchResult {
+        let (context, _) = self.contexts.snapshot();
+        let guard = self.runner.lock_mutations(&context.server).await;
+        self.confirm_admitted(confirmation, &guard, app).await
+    }
+
+    pub async fn confirm_admitted(
+        self: &Arc<Self>,
+        confirmation: StreamSwitchConfirmation,
+        guard: &crate::p4::runner::MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> StreamSwitchResult {
+        self.confirm_inner(confirmation, Some(guard), app).await
+    }
+
+    async fn confirm_inner(
+        self: &Arc<Self>,
+        confirmation: StreamSwitchConfirmation,
+        admitted: Option<&crate::p4::runner::MutationGuard>,
         app: Option<&AppHandle>,
     ) -> StreamSwitchResult {
         let _gate = self.confirmation_gate.lock().await;
@@ -220,7 +243,14 @@ impl StreamSwitchService {
         let operation_id = valid_operation_id(confirmation.operation_id)
             .unwrap_or_else(|| format!("stream-switch-{}", Uuid::new_v4()));
         let group = self.runner.begin_operation_group(operation_id.clone());
-        let mutation_guard = self.runner.lock_mutations(&context.server).await;
+        let owned_guard;
+        let guard = match admitted {
+            Some(guard) => guard,
+            None => {
+                owned_guard = self.runner.lock_mutations(&context.server).await;
+                &owned_guard
+            }
+        };
         if let Err(message) = group.ensure_active() {
             return cancelled_result(operation_id, message, false, false);
         }
@@ -311,7 +341,7 @@ impl StreamSwitchService {
                     ),
                     app,
                     Some(1),
-                    &mutation_guard,
+                    guard,
                 )
                 .await;
             match switched {
@@ -468,7 +498,7 @@ impl StreamSwitchService {
                     ),
                     app,
                     None,
-                    &mutation_guard,
+                    guard,
                 )
                 .await;
             match synced {

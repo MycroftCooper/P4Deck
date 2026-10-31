@@ -35,6 +35,19 @@
   width: 100%;
 }
 
+.branch-mapping-query .search-field {
+  width: 100%;
+  max-width: none;
+  min-height: 35px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.branch-mapping-query > button {
+  height: 35px;
+  flex: 0 0 auto;
+}
+
 .branch-mapping-status {
   display: flex;
   flex-wrap: wrap;

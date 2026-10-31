@@ -52,6 +52,16 @@ export default defineConfig(({ mode }) => ({
     port: 1420,
     strictPort: true,
     headers: mode === "desktop" ? { "Cache-Control": "no-store" } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // Do not watch generated evidence, test output or local workspaces. The CI
+    // and browser runs write and delete files there, and a locked file made the
+    // watcher die with EBUSY (e.g. artifacts/evidence/.../revertTask.diff).
+    watch: {
+      ignored: [
+        "**/src-tauri/**",
+        "**/artifacts/**",
+        "**/.local/**",
+        "**/test-results/**",
+      ],
+    },
   },
 }));

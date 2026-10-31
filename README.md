@@ -92,6 +92,7 @@ pnpm package:desktop:win
 ## 检查
 
 ```bash
+pnpm wf:agile --files <a,b> --role <FE|BE|LEAD> --title "一句话"  # 日常默认：定向门禁 + 证据 + 5 分钟验收清单
 pnpm ci:quick          # 本地快速门禁：Web 组与 Rust 组并行，失败不中断，只打摘要
 pnpm ci:local          # 基础组 + 浏览器/桌面构建、桌面包审计、串行性能门禁；默认遇错即停
 pnpm ci:bundle         # 快速自检（约 10 秒）：版本一致性 + desktop 构建 + bundle 审计
@@ -109,7 +110,17 @@ pnpm check             # TypeScript + Cargo，需要完整桌面环境
 
 完整子进程输出写到 `artifacts/ci/logs/<mode>/<step>.log`；机器可读摘要分别写入 `artifacts/ci/quick-latest.json`、`artifacts/ci/local-latest.json`，其中 `validate:bundle` 断言桌面 `dist` 中不含 mock backend 代码。常用选项：`--verbose`（不捕获输出，直接查看子进程完整输出）、`--continue` / `--fail-fast`、`--serial`（关闭 Web/Rust 并行）、`--timeout-ms <毫秒>`（单步超时，默认 900000）、`--files a,b`（全为 `.md`/`.txt` 或 `ForAIDoc/` 文档时按 docs-only 直接成功退出）。
 
-本项目只有本地门禁，不配置远端 CI：日常用 `pnpm wf:fast`，freeze 前用 `pnpm ci:quick`，交付候选用 `pnpm ci:local`，改完打包或前端 mock 相关再用 `pnpm ci:bundle` 快速自检。
+本项目只有本地门禁，不配置远端 CI：日常小改动走 `pnpm wf:agile`（只有发版才需要全量流程），freeze 前用 `pnpm ci:quick`，交付候选用 `pnpm ci:local`，改完打包或前端 mock 相关再用 `pnpm ci:bundle` 快速自检。发布用 `pnpm wf:release --version <semver> --apply`（默认 dry-run）。
+
+## 分支模型
+
+- `dev`：日常开发与候选集成分支，**所有 agent 的提交都进这里**（默认工作分支）。
+- `master`：发布线（release），只接受来自 `dev` 的 `--no-ff` merge，并打 `v<semver>` annotated tag；**禁止在 master 上直接开发或提交**。
+- 发布：先跑 `pnpm ci:quick` 拿到绿色门禁，再执行
+  `pnpm wf:release --version 0.1.7 --note "发布说明"`（默认 dry-run，展示 merge/tag 计划），确认后加 `--apply`。
+  脚本会校验：当前在 `dev`、工作树干净、`package.json` 版本与 `--version` 一致、最近一次 `ci:quick` 通过且不早于最后一次提交。
+- 仓库当前没有 remote；发布后自行 `git push origin dev master --follow-tags` 到你配置的远端。
+- 紧急修复：从 `master` 拉 `hotfix/*`，修完先合回 `dev`，再走正常发布；不要在 master 上直改。
 
 ## 文档
 

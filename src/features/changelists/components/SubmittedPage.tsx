@@ -1,4 +1,5 @@
-import { isStreamList } from "../../browsers/ReadOnlyPages";
+import { submittedTags, matchesSubmittedTags } from "../submittedTags";
+import { isStreamList } from "../../browsers/components/ReadOnlyPages";
 import { useSnapshotQuery } from "../../../shared/cache/useSnapshotQuery";
 import { FileText } from "lucide-react";
 import { SubmittedReportDialog } from "./SubmittedReportDialog";
@@ -22,7 +23,7 @@ import type {
   MergeClassification,
   RuntimeInfo,
   SubmittedChangeDetail,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { messages } from "../../../shared/i18n";
 import { serverScope, snapshotKey } from "../../../shared/cache/policy";
 import {
@@ -87,7 +88,7 @@ export interface SubmittedSnapshot extends SubmittedResults {
 }
 
 /**
- * The untouched default filter means "the last 30 days". Its timestamps move
+ * The untouched default filter means "the last 7 days". Its timestamps move
  * with every mount, so they are replaced by a stable token in the cache key.
  */
 export function submittedSnapshotKey(
@@ -95,13 +96,11 @@ export function submittedSnapshotKey(
   base: SubmittedBase,
   defaultRange: boolean,
 ) {
-  const token = defaultRange
-    ? { ...base, from: "recent:30d", to: "now" }
-    : base;
+  const token = defaultRange ? { ...base, from: "recent:7d", to: "now" } : base;
   return snapshotKey(
     "submitted",
     scope,
-    JSON.stringify({ schema: 4, ...token }),
+    JSON.stringify({ schema: 5, ...token }),
   );
 }
 
@@ -211,17 +210,26 @@ export function SubmittedPage({
   const remoteReady =
     runtime.p4Version !== "loading" && runtime.connection.state === "connected";
   const [draft, setDraft] = useState<SubmittedFilterDraft>(() =>
-    createDefaultSubmittedFilter(),
+    createDefaultSubmittedFilter(new Date(), runtime.context.user),
   );
   // Timestamps of the last generated default range (see submittedSnapshotKey).
   const [defaultStamp, setDefaultStamp] = useState(() => ({
     from: draft.from,
     to: draft.to,
   }));
+  const [defaultPreset, setDefaultPreset] = useState(true);
+  const [draftOwner, setDraftOwner] = useState(JSON.stringify(runtime.context));
   const applyDefaultDraft = useCallback((value: SubmittedFilterDraft) => {
+    setDefaultPreset(true);
     setDefaultStamp({ from: value.from, to: value.to });
     setDraft(value);
   }, []);
+  if (draftOwner !== JSON.stringify(runtime.context)) {
+    setDraftOwner(JSON.stringify(runtime.context));
+    applyDefaultDraft(
+      createDefaultSubmittedFilter(new Date(), runtime.context.user),
+    );
+  }
   const defaultRange =
     draft.from === defaultStamp.from && draft.to === defaultStamp.to;
   // Subscribe to the existing workspace cache only; never add an implicit lookup.
@@ -238,19 +246,26 @@ export function SubmittedPage({
       ?.stream || undefined;
   const validation = useMemo(
     () =>
-      validateSubmittedFilter(draft, {
-        client: currentClient,
-        stream: currentStream,
-      }),
-    [draft, currentClient, currentStream],
+      defaultPreset && !draft.users.trim()
+        ? {
+            errors: { users: "当前用户不可用 / Current user unavailable" },
+            query: undefined,
+          }
+        : validateSubmittedFilter(draft, {
+            client: currentClient,
+            stream: currentStream,
+          }),
+    [draft, currentClient, currentStream, defaultPreset],
   );
+  const querySignature = JSON.stringify(validation.query);
+  const stableQuery = useMemo(() => validation.query, [querySignature]);
   const scope = serverScope(runtime);
   const cacheKey = useMemo(
     () =>
-      validation.query
-        ? submittedSnapshotKey(scope, validation.query, defaultRange)
+      stableQuery
+        ? submittedSnapshotKey(scope, stableQuery, defaultRange)
         : undefined,
-    [scope, validation.query, defaultRange],
+    [scope, stableQuery, defaultRange],
   );
   const [savedFilters, setSavedFilters] = useState<SavedSubmittedFilter[]>(() =>
     readSavedSubmittedFilters(),
@@ -490,29 +505,27 @@ export function SubmittedPage({
   }, [cancelQuery]);
 
   const connectionKey = JSON.stringify(runtime.context);
-  const streamOwner = serverScope(runtime);
-  const previousStreamOwner = useRef(streamOwner);
-  if (previousStreamOwner.current !== streamOwner) {
-    previousStreamOwner.current = streamOwner;
-    if (draft.streams.length) setDraft({ ...draft, streams: [] });
-  }
+  // draftOwner above resets all connection-dependent filters together. A second
+  // reset based on the old draft would restore currentStreamOnly on reconnect.
   const kindFilter = draft.submissionKind;
   const reportOwner = `${scope}:${connectionKey}:${runtime.contextGeneration}:${runtime.connection.state}`;
   const [report, setReport] = useState<
     { owner: string; source: HTMLElement } | undefined
   >();
   useEffect(() => setReport(undefined), [reportOwner]);
-  const visibleChanges =
-    kindFilter === "all"
-      ? changes
-      : changes.filter(
-          (change) =>
-            classifySubmission(change.description).kind === kindFilter,
-        );
+  const tagOptions = [
+    ...new Set(changes.flatMap((change) => submittedTags(change.description))),
+  ].sort();
+  const visibleChanges = changes.filter(
+    (change) =>
+      (kindFilter === "all" ||
+        classifySubmission(change.description).kind === kindFilter) &&
+      matchesSubmittedTags(change.description, draft.tags ?? []),
+  );
 
   useEffect(() => {
     cancelQuery();
-    const base = validation.query;
+    const base = stableQuery;
     // Filter edits are debounced; opening the page or reconnecting is not.
     const edited = editedDraft.current !== draft;
     editedDraft.current = draft;
@@ -574,7 +587,7 @@ export function SubmittedPage({
     };
   }, [
     cacheKey,
-    validation.query,
+    stableQuery,
     runtime.p4Version,
     runtime.contextGeneration,
     remoteReady,
@@ -597,12 +610,31 @@ export function SubmittedPage({
   }, [navigation, applyDefaultDraft]);
 
   const refresh = useCallback(() => {
-    if (!validation.query || !cacheKey || queryOperation.current) return;
+    if (!stableQuery || !cacheKey || queryOperation.current) return;
+    if (defaultPreset) {
+      const next = createDefaultSubmittedFilter(
+        new Date(),
+        runtime.context.user,
+      );
+      if (next.from !== draft.from || next.to !== draft.to) {
+        applyDefaultDraft(next);
+        return;
+      }
+    }
     // Same query: keep rows, selection, and detail until the replacement is ready.
     usedCursors.current.clear();
-    currentQuery.current = { base: validation.query, key: cacheKey };
-    void runQuery(validation.query, cacheKey, undefined, false);
-  }, [cacheKey, runQuery, validation.query]);
+    currentQuery.current = { base: stableQuery, key: cacheKey };
+    void runQuery(stableQuery, cacheKey, undefined, false);
+  }, [
+    cacheKey,
+    runQuery,
+    stableQuery,
+    defaultPreset,
+    runtime.context.user,
+    draft.from,
+    draft.to,
+    applyDefaultDraft,
+  ]);
 
   useEffect(() => {
     window.addEventListener("p4deck:submitted-refresh", refresh);
@@ -668,6 +700,7 @@ export function SubmittedPage({
         expansionScope={`${connectionKey}:${runtime.contextGeneration}:${JSON.stringify(cacheKey)}:${loading}`}
         t={t}
         changes={visibleChanges}
+        traceCandidates={changes}
         loading={loading}
         loadingMore={loadingMore}
         pageActions={
@@ -702,18 +735,20 @@ export function SubmittedPage({
         queryControls={
           <>
             <SubmittedFilterPanel
+              tagOptions={tagOptions}
               typeControl={
                 <label className="submitted-filter-field submitted-kind-filter">
                   <span>{zh ? "提交类型" : "Submission type"}</span>
                   <select
                     value={kindFilter}
-                    onChange={(event) =>
+                    onChange={(event) => (
+                      setDefaultPreset(false),
                       setDraft({
                         ...draft,
                         submissionKind: event.target.value as
                           SubmissionKind | "all",
                       })
-                    }
+                    )}
                   >
                     <option value="all">{zh ? "全部" : "All"}</option>
                     {submissionKinds.map((kind) => (
@@ -736,8 +771,19 @@ export function SubmittedPage({
               draft={draft}
               errors={validation.errors}
               savedFilters={savedFilters}
-              onDraftChange={setDraft}
-              onReset={() => applyDefaultDraft(createDefaultSubmittedFilter())}
+              defaultSelected={defaultPreset}
+              onDraftChange={(value) => {
+                setDefaultPreset(false);
+                setDraft(value);
+              }}
+              onReset={() =>
+                applyDefaultDraft(
+                  createDefaultSubmittedFilter(
+                    new Date(),
+                    runtime.context.user,
+                  ),
+                )
+              }
               onSavedFiltersChange={updateSavedFilters}
             />
             {error ? (

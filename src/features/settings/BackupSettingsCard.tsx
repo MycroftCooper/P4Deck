@@ -1,7 +1,24 @@
-import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
+﻿import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { backend } from "../../infrastructure/backend";
-import type { ConfigBackupOverview } from "../../shared/contracts/types";
+import type {
+  ConfigBackupCreateResult,
+  ConfigBackupOverview,
+  ConfigBackupRestoreResult,
+  ControlPlaneActionResult,
+} from "../../shared/contracts";
+import type { ConnectionSnapshot } from "../companySubmit/model";
+import {
+  lookupControlPlaneAction,
+  type ControlPlaneActionLookup,
+} from "../actions/workflowReceipt";
+import {
+  controlPlaneCommitted,
+  controlPlaneDetails,
+  controlPlaneLegacy,
+  controlPlaneRestorePending,
+  runControlPlaneAction,
+} from "./controlPlaneLifecycle";
 import {
   applyBackupLocalStorage,
   collectBackupLocalStorage,
@@ -10,6 +27,13 @@ import {
 interface Props {
   zh: boolean;
   native: boolean;
+  /** Exact dispatching connection snapshot; captured once per operation. */
+  connection?(): Promise<ConnectionSnapshot>;
+  /** Durable receipt recovery by the SAME operationId. */
+  lookup?(request: {
+    operationId: string;
+    connection: ConnectionSnapshot;
+  }): Promise<ControlPlaneActionLookup>;
 }
 
 function size(value: number) {
@@ -24,11 +48,22 @@ function time(value: string, zh: boolean) {
     : parsed.toLocaleString(zh ? "zh-CN" : "en-US");
 }
 
-export function BackupSettingsCard({ zh, native }: Props) {
+/**
+ * S4j2: backup create/restore are local-file control-plane writes. Only
+ * intent/progress is shown before the authoritative readback; restore is only
+ * ever presented as pending (staged, applies on next start), never completed.
+ */
+export function BackupSettingsCard({
+  zh,
+  native,
+  connection: connectionProvider,
+  lookup: lookupReceipt,
+}: Props) {
   const [overview, setOverview] = useState<ConfigBackupOverview>();
   const [busy, setBusy] = useState<"create" | "restore" | "open" | "load">();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [confirmRestore, setConfirmRestore] = useState<string>();
   const tr = (a: string, b: string) => (zh ? a : b);
 
   const refresh = useCallback(async () => {
@@ -65,26 +100,68 @@ export function BackupSettingsCard({ zh, native }: Props) {
     );
   }
 
+  async function captureConnection(): Promise<ConnectionSnapshot> {
+    return (
+      connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
+    )();
+  }
+
+  function describeCreate(result: ControlPlaneActionResult) {
+    if (controlPlaneCommitted(result)) {
+      const artifact = result.artifact;
+      const legacyPayload = result.legacy as ConfigBackupCreateResult | null;
+      const omittedCount = legacyPayload?.omittedLocalStorageKeys?.length ?? 0;
+      const omitted = omittedCount
+        ? tr(
+            `；已排除 ${omittedCount} 个临时/敏感键`,
+            `; ${omittedCount} transient or sensitive keys omitted`,
+          )
+        : "";
+      return tr(
+        `备份文件已回读验证：${artifact.fileName ?? "—"} · ${size(artifact.sizeBytes)}${artifact.sha256 ? ` · sha256 ${artifact.sha256.slice(0, 12)}…` : ""}${omitted}`,
+        `Backup artifact verified by readback: ${artifact.fileName ?? "—"} · ${size(artifact.sizeBytes)}${artifact.sha256 ? ` · sha256 ${artifact.sha256.slice(0, 12)}…` : ""}${omitted}`,
+      );
+    }
+    if (result.state === "legacy") {
+      const legacy = controlPlaneLegacy<ConfigBackupCreateResult>(result);
+      if (!legacy) return result.message;
+      const omitted = legacy.omittedLocalStorageKeys.length
+        ? tr(
+            `；已排除 ${legacy.omittedLocalStorageKeys.length} 个临时/敏感键`,
+            `; ${legacy.omittedLocalStorageKeys.length} transient or sensitive keys omitted`,
+          )
+        : "";
+      return tr(
+        `已创建 ${legacy.backup.fileName}${omitted}`,
+        `Created ${legacy.backup.fileName}${omitted}`,
+      );
+    }
+    return tr(
+      "结果不确定：备份可能已写入但回读未确认。已用同一操作号查询持久回执并刷新列表；请先核对备份文件，不要换新操作号重试。",
+      "Outcome uncertain: the backup may exist but the readback did not confirm it. The durable receipt was queried with the same operation id and the list was refreshed; inspect the backup file before any retry with a new id.",
+    );
+  }
+
   const createBackup = async () => {
     setBusy("create");
     setMessage("");
     setError("");
+    const operationId = crypto.randomUUID();
     try {
-      const result = await backend.createConfigBackup({
-        localStorage: collectBackupLocalStorage(),
+      const dispatching = await captureConnection();
+      const run = await runControlPlaneAction({
+        kind: "backupCreate",
+        operationId,
+        connection: dispatching,
+        execute: () =>
+          backend.createConfigBackup({
+            request: { localStorage: collectBackupLocalStorage() },
+            operationId,
+          }),
+        lookup: lookupReceipt ?? lookupControlPlaneAction,
       });
-      const omitted = result.omittedLocalStorageKeys.length
-        ? tr(
-            `；已排除 ${result.omittedLocalStorageKeys.length} 个临时/敏感键`,
-            `; ${result.omittedLocalStorageKeys.length} transient or sensitive keys omitted`,
-          )
-        : "";
-      setMessage(
-        tr(
-          `已创建 ${result.backup.fileName}${omitted}`,
-          `Created ${result.backup.fileName}${omitted}`,
-        ),
-      );
+      setMessage(describeCreate(run.result));
+      // Single bounded refresh of the local list (readback is the authority).
       setOverview(await backend.listConfigBackups());
     } catch (cause) {
       setError(String(cause));
@@ -93,27 +170,70 @@ export function BackupSettingsCard({ zh, native }: Props) {
     }
   };
 
-  const restoreBackup = async (fileName: string) => {
+  const confirmRestoreRun = async (fileName: string) => {
     setBusy("restore");
     setMessage("");
     setError("");
+    setConfirmRestore(undefined);
+    const operationId = crypto.randomUUID();
     try {
-      const result = await backend.restoreConfigBackup({
-        fileName,
-        localStorage: collectBackupLocalStorage(),
+      const dispatching = await captureConnection();
+      const run = await runControlPlaneAction({
+        kind: "backupRestore",
+        operationId,
+        connection: dispatching,
+        execute: () =>
+          backend.restoreConfigBackup({
+            request: { fileName, localStorage: collectBackupLocalStorage() },
+            operationId,
+          }),
+        lookup: lookupReceipt ?? lookupControlPlaneAction,
       });
-      const layoutApplied = applyBackupLocalStorage(result.localStorage);
-      setMessage(
-        layoutApplied
-          ? tr(
-              `已暂存 ${result.sourceFileName} 的恢复；布局已写入，请完全退出并重新打开 P4Deck，以显示恢复后的布局并加载连接配置。回滚包：${result.rollbackFileName}`,
-              `Restore of ${result.sourceFileName} is staged; layout has been written. Fully quit and reopen P4Deck to show the restored layout and load connection settings. Rollback: ${result.rollbackFileName}`,
-            )
-          : tr(
-              `已暂存 ${result.sourceFileName} 的连接与窗口配置恢复，但当前 WebView 无法写入布局。请先保留回滚包 ${result.rollbackFileName}，再完全退出并重新打开 P4Deck；若布局仍未恢复，请使用回滚包。`,
-              `Connection and window restore for ${result.sourceFileName} is staged, but this WebView could not write layout state. Keep rollback ${result.rollbackFileName}, fully quit and reopen P4Deck, and use the rollback if layout is still not restored.`,
+      const result = run.result;
+      if (controlPlaneRestorePending(result)) {
+        const details = controlPlaneDetails<{
+          sourceFileName?: string;
+          rollbackFileName?: string;
+          restartRequired?: boolean;
+        }>(result);
+        const legacyPayload = result.legacy as ConfigBackupRestoreResult | null;
+        const layoutApplied = legacyPayload
+          ? applyBackupLocalStorage(legacyPayload.localStorage)
+          : false;
+        setMessage(
+          tr(
+            `已暂存恢复（重启后应用，而非已完成）：${details?.sourceFileName ?? fileName}；回滚包 ${details?.rollbackFileName ?? "—"}。${layoutApplied ? "布局已写入，请完全退出并重新打开 P4Deck。" : "当前 WebView 无法写入布局；请保留回滚包，完全退出并重新打开后核对。"}`,
+            `Restore staged (applies on next start, not completed): ${details?.sourceFileName ?? fileName}; rollback ${details?.rollbackFileName ?? "—"}. ${layoutApplied ? "Layout was written; fully quit and reopen P4Deck." : "This WebView could not write layout state; keep the rollback bundle, fully quit and reopen, then verify."}`,
+          ),
+        );
+      } else if (result.state === "legacy") {
+        const legacyPayload = result.legacy as ConfigBackupRestoreResult | null;
+        const layoutApplied = legacyPayload
+          ? applyBackupLocalStorage(legacyPayload.localStorage)
+          : false;
+        setMessage(
+          legacyPayload
+            ? tr(
+                `已暂存 ${legacyPayload.sourceFileName} 的恢复；回滚包：${legacyPayload.rollbackFileName}。若布局未恢复请使用回滚包。`,
+                `Restore of ${legacyPayload.sourceFileName} is staged; rollback: ${legacyPayload.rollbackFileName}. Use the rollback if layout is not restored.`,
+              )
+            : result.message,
+        );
+        if (!layoutApplied)
+          setError(
+            tr(
+              "当前 WebView 无法写入布局；请保留回滚包并在重启后核对。",
+              "This WebView could not write layout state; keep the rollback bundle and verify after restart.",
             ),
-      );
+          );
+      } else {
+        setError(
+          tr(
+            "恢复暂存结果不确定：回滚包/pending 清单未得到回读确认。已用同一操作号查询持久回执；请先核对 pending/回滚状态，不要换新操作号重试。",
+            "Restore staging is unconfirmed: the rollback bundle/pending manifest readback failed. The durable receipt was queried with the same operation id; inspect pending/rollback state before any retry with a new id.",
+          ),
+        );
+      }
       setOverview(await backend.listConfigBackups());
     } catch (cause) {
       setError(String(cause));
@@ -212,6 +332,14 @@ export function BackupSettingsCard({ zh, native }: Props) {
           </span>
         </div>
       )}
+      {busy === "restore" && (
+        <div className="settings-notice" role="status">
+          {tr(
+            "正在暂存恢复（尚未完成，重启后才会应用）…",
+            "Staging the restore (not completed; it applies on the next start)…",
+          )}
+        </div>
+      )}
       {message && (
         <div className="settings-notice backup-success" role="status">
           {message}
@@ -249,20 +377,42 @@ export function BackupSettingsCard({ zh, native }: Props) {
                   {" · "}
                   {backup.includesWindowPlacement
                     ? tr("窗口位置", "Window placement")
-                    : tr("无窗口文件", "No placement file")}
+                    : tr("无窗口位置", "No placement file")}
                   {" · "}
                   {backup.localStorageKeys.length}{" "}
                   {tr("个布局键", "layout keys")}
                 </small>
               </div>
-              <button
-                className="secondary"
-                disabled={Boolean(busy) || Boolean(pending)}
-                onClick={() => void restoreBackup(backup.fileName)}
-              >
-                <RotateCcw size={14} />
-                {tr("恢复", "Restore")}
-              </button>
+              {confirmRestore === backup.fileName ? (
+                <span className="backup-restore-confirm">
+                  {tr(
+                    "恢复会覆盖当前配置并在下次启动应用；将先自动生成回滚包。确认继续？",
+                    "Restore overwrites the current configuration and applies on the next start; a rollback bundle is created first. Continue?",
+                  )}{" "}
+                  <button
+                    className="danger"
+                    disabled={Boolean(busy)}
+                    onClick={() => void confirmRestoreRun(backup.fileName)}
+                  >
+                    {tr("确认暂存恢复", "Confirm staged restore")}
+                  </button>
+                  <button
+                    disabled={Boolean(busy)}
+                    onClick={() => setConfirmRestore(undefined)}
+                  >
+                    {tr("取消", "Cancel")}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="secondary"
+                  disabled={Boolean(busy) || Boolean(pending)}
+                  onClick={() => setConfirmRestore(backup.fileName)}
+                >
+                  <RotateCcw size={14} />
+                  {tr("恢复", "Restore")}
+                </button>
+              )}
             </article>
           ))
         )}

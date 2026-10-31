@@ -286,7 +286,14 @@ function MenuPanel({
               }
               data-menu-item={item.id}
               tabIndex={index === active ? 0 : -1}
-              className={item.danger ? "danger" : ""}
+              className={
+                [
+                  item.danger ? "danger" : "",
+                  item.emphasis === "primary" ? "menu-emphasis" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               title={item.reason}
               onFocus={() => setActive(index)}
               onPointerEnter={(event) => {

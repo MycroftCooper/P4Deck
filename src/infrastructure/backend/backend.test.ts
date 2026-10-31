@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { backend, tokenize } from ".";
-import type { ClQuery } from "../../shared/contracts/types";
+import type { ClQuery } from "../../shared/contracts";
 import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 
 function submittedQuery(overrides: Partial<ClQuery> = {}): ClQuery {
@@ -628,12 +628,15 @@ describe("controlled P4 terminal", () => {
     ).toBeUndefined();
 
     const operationId = crypto.randomUUID();
-    const created = await backend.mutatePendingChange({
+    const created = (await backend.mutatePendingChange({
       operationId,
       type: "create",
       description: "Line one\nJobs:\nChange: remains description",
       jobs: ["ATLAS-TEST"],
-    });
+    })) as unknown as {
+      operation: { operationId: string };
+      createdChangeId?: number;
+    };
     expect(created.operation.operationId).toBe(operationId);
     expect(created.createdChangeId).toBeGreaterThan(0);
     const changeId = created.createdChangeId!;
@@ -692,7 +695,7 @@ describe("controlled P4 terminal", () => {
     ).rejects.toThrow("preflight");
     await expect(
       backend.performFileAction({
-        action: "submit" as import("../../shared/contracts/types").P4FileAction,
+        action: "submit" as import("../../shared/contracts").P4FileAction,
         paths: [],
         changelistId: 31798,
       }),
@@ -922,37 +925,74 @@ describe("controlled P4 terminal", () => {
       .records;
     expect(journal.length).toBeLessThanOrEqual(100);
     expect(JSON.stringify(journal)).not.toContain("single-use-secret");
-    const policy = await backend.setLogPolicy({
-      autoExpandWarning: false,
-      autoExpandError: true,
-      retentionDays: 999,
-      maxMib: 999,
+    const policyResult = await backend.setLogPolicy({
+      policy: {
+        autoExpandWarning: false,
+        autoExpandError: true,
+        retentionDays: 999,
+        maxMib: 999,
+      },
+      operationId: "mock-log-policy",
     });
+    expect(policyResult.state).toBe("committed");
+    const policy = policyResult.details as {
+      retentionDays: number;
+      maxMib: number;
+    };
     expect(policy.retentionDays).toBe(30);
     expect(policy.maxMib).toBe(50);
-    await expect(backend.exportDiagnostics({})).resolves.toMatchObject({
-      simulated: true,
-      sizeBytes: 0,
+    const exportResult = await backend.exportDiagnostics({
+      request: {},
+      operationId: "mock-diagnostics-export",
     });
+    expect(exportResult.state).toBe("committed");
+    expect(exportResult.artifact.exists).toBe(true);
+    expect(JSON.stringify(exportResult)).not.toContain("single-use-secret");
   });
 
   it("backs up only allowlisted layout state in the browser mock", async () => {
     const result = await backend.createConfigBackup({
-      localStorage: [
-        { key: "p4deck.ui", value: '{"compact":true}' },
-        {
-          key: "p4deck.terminalHistory",
-          value: '["p4 print //depot/secret"]',
-        },
-      ],
+      request: {
+        localStorage: [
+          { key: "p4deck.ui", value: '{"compact":true}' },
+          {
+            key: "p4deck.terminalHistory",
+            value: '["p4 print //depot/secret"]',
+          },
+        ],
+      },
+      operationId: "mock-backup-create",
     });
-    expect(result.backup.localStorageKeys).toEqual(["p4deck.ui"]);
-    expect(result.omittedLocalStorageKeys).toEqual(["p4deck.terminalHistory"]);
+    const created = result.legacy as {
+      backup: { fileName: string; localStorageKeys: string[] };
+      omittedLocalStorageKeys: string[];
+    };
+    expect(created.backup.localStorageKeys).toEqual(["p4deck.ui"]);
+    expect(created.omittedLocalStorageKeys).toEqual(["p4deck.terminalHistory"]);
     expect(JSON.stringify(result)).not.toContain("p4 print");
     expect(
       (await backend.listConfigBackups()).backups.map(
         (backup) => backup.fileName,
       ),
-    ).toContain(result.backup.fileName);
+    ).toContain(created.backup.fileName);
   });
+});
+
+it("performs a simulated direct Get Latest in the browser mock", async () => {
+  const result = await backend.syncLatest({
+    paths: ["//depot/b.txt", "//depot/a.txt", "//depot/a.txt"],
+    revision: { kind: "head", value: "" },
+    operationId: "mock-get-latest",
+  });
+  expect(result.outcome).toBe("succeeded");
+  expect(result.operationId).toBe("mock-get-latest");
+  expect(result.affectedPaths).toEqual(["//depot/a.txt", "//depot/b.txt"]);
+  expect(result.refreshWorkspace).toBe(true);
+  expect(result.counts.updated).toBe(2);
+  expect(result.message).toContain("Browser Mock only");
+});
+
+it("returns empty resolve stats from the browser mock", async () => {
+  const stats = await backend.resolveStats({ depotPath: "//depot/a" });
+  expect(stats).toEqual({ base: {}, source: {}, target: {} });
 });

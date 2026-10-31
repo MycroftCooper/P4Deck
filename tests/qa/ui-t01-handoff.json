@@ -1,0 +1,43 @@
+{
+  "batch": "UI-T01",
+  "status": "frontend-frozen-awaiting-QA-visual",
+  "files": {
+    "src/app/styles/branch-mappings.css": "e13d0521bc9ffabb0e7f63347349b6e4162f981372c00c8bb69eeffe9dd276e9",
+    "src/app/styles/workbench.css": "3602e47d4ebc0f7f6415ca031844444714b6d1d8e21ea1b8398928bcde0d4c0c",
+    "src/app/styles/settings.css": "969235d0f1d2a186aa7bc244c312a650098f35ed2739ec94b07d8c734e568126",
+    "src/app/shell/CommandBar.tsx": "b7c46cde7206baa112d1dbcd7859d55ab0377f07bd64edd8e9934799269d6b16",
+    "src/app/shell/CommandBar.test.tsx": "6099abd6ee9e7f16f34b17a32e649d0e428de0003b8e7c5028988675a64fa2ea",
+    "src/features/browsers/components/BranchMappingsPage.tsx": "f3991b020c5a05c898f2e78f7e9169405c8fd23645c02a544106d1a1b8f0a009",
+    "src/features/browsers/components/BranchMappingsPage.test.tsx": "f1e68e214da828d6173beaa1bec9aa940892b748241f6bcc1f187f16971dc1a9",
+    "src/features/changelists/components/PendingPage.tsx": "265a85b1311c841ef359a4e199349006cebf52f050a2dfd1420377d32461a75b",
+    "src/features/settings/ConnectionProfilesCard.tsx": "43faa94c8c2144554e4514b739e9f015b693d4617ef5d80bfae984dc931e3642",
+    "src/features/settings/SettingsPage.test.tsx": "bf0bea1fc47611adf625da8b0d6dbbc0df3691c5ace3804c5350a19c91f21779"
+  },
+  "verification": {
+    "vitest": {
+      "files": 8,
+      "passed": 77,
+      "failed": 0
+    },
+    "typescript": "tsc --noEmit --incremental false -p tsconfig.app.json: passed",
+    "visual": "pending QA; no product/browser server started by FE this batch"
+  },
+  "scope": [
+    "Branch filter theme/alignment, unchanged filter semantics",
+    "Pending filter and numeric sort theme, existing 35px height",
+    "Remove only CL details top toolbar entry; refresh/shared details retained",
+    "User/Workspace Browse inline; remove these two New entries; Root/shared creation retained"
+  ],
+  "qa": [
+    "Light/dark themes, normal/narrow viewport, zoom: Branch label/control alignment and wrap",
+    "Pending 35px input/button, focus/hover/disabled; numeric sort and Default preserved",
+    "Toolbar text/icon modes: CL details absent, Refresh and file Preview retained; context menu or GoTo details still usable",
+    "Settings User/Workspace Browse inline right at same height; narrow inputs usable, keyboard Browse selection and Root preserved"
+  ],
+  "limits": [
+    "No P4 or company executable invocation",
+    "No App/main/Tauri product startup",
+    "No packaging",
+    "No changes to labels, menu model tests, QA configuration or manual fixtures"
+  ]
+}

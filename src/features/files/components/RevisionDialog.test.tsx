@@ -3,7 +3,7 @@ import { act } from "react";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { beforeEach, expect, it, vi } from "vitest";
 import { RevisionDialog } from "./RevisionDialog";
-import type { WorkspaceNode } from "../../../shared/contracts/types";
+import type { WorkspaceNode } from "../../../shared/contracts";
 const root = dialogHarness();
 const close = vi.fn();
 const node: WorkspaceNode = {

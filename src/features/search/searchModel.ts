@@ -1,7 +1,7 @@
 import type {
   GlobalSearchItem,
   GlobalSearchKind,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 
 export const GLOBAL_SEARCH_KINDS: readonly GlobalSearchKind[] = [
   "submittedChange",

@@ -1,52 +1,63 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-29T20:10:00+08:00",
+  "updatedAt": "2026-10-30T15:55:00+08:00",
   "note": "LEAD 手工维护：谁在忙什么 + 最近事件。批次切片与任务状态在 state.json（batch.slices / packages），本文件不再保存里程碑。",
   "agents": [
     {
       "role": "LEAD",
-      "status": "working",
-      "task": "工作流 v1.1：证据派生 / 切片 / 写域校验 / 任务单投递",
-      "detail": "evidence.mjs + batch 证据落盘 + ownership 校验 + state 切片模型",
-      "since": "2026-10-29T20:05:00+08:00"
+      "status": "done",
+      "task": "final-joint Apply 完成，本批收口",
+      "detail": "185/185 文件写入成功；后验 tsc/cargo/FE 绿；状态/看板/决议已更新；待人验",
+      "since": "2026-10-30T15:55:00+08:00"
     },
     {
       "role": "BE",
-      "status": "working",
-      "task": "NOOP-01 窄修 + 技术阶段3 迁移",
-      "detail": "补 revertUnchanged 正常保留事实来源；阶段3 逐行接真实入口链；测试 EXE 0xC0000005 待一次受控复测",
-      "since": "2026-10-29T17:40:00+08:00"
+      "status": "done",
+      "task": "Apply 执行完成",
+      "detail": "备份 92 文件+post-apply verify mismatches=[]；已停笔",
+      "since": "2026-10-30T15:55:00+08:00"
+    },
+    {
+      "role": "BE2",
+      "status": "done",
+      "task": "S4j1/S4k 已并入 final 并应用",
+      "since": "2026-10-30T15:55:00+08:00"
     },
     {
       "role": "FE",
-      "status": "waiting",
-      "task": "S2b 最小结果映射（等新 wire）",
-      "detail": "S2b FE 233mock/fullTS 已冻结交 QA；NOOP 新 wire 冻结后只接 retained 投影与占用释放",
-      "since": "2026-10-29T17:10:00+08:00"
+      "status": "done",
+      "task": "S4f/S4h/S4j1/S4k FE 已并入 final 并应用",
+      "since": "2026-10-30T15:55:00+08:00"
+    },
+    {
+      "role": "FE2",
+      "status": "done",
+      "task": "S4g/S4i1/S4i2/S4j2 FE 已并入 final 并应用",
+      "since": "2026-10-30T15:55:00+08:00"
     },
     {
       "role": "QA",
-      "status": "waiting",
-      "task": "S2b 新 hash 复验",
-      "detail": "QA-S2b 已出结果并定性为回执能力缺口；等新冻结 hash；CUA 保持停止",
-      "since": "2026-10-29T16:50:00+08:00"
+      "status": "working",
+      "task": "最终归档核对（最后一件事）",
+      "detail": "核对 apply receipt/备份/无越界写入，然后停笔",
+      "since": "2026-10-30T15:55:00+08:00"
     }
   ],
   "events": [
     {
-      "at": "2026-10-29T20:05:00+08:00",
+      "at": "2026-10-30T15:55:00+08:00",
       "role": "LEAD",
-      "text": "工作流 v1.1：验收事实从回执派生、批次切片进 state、写域可校验、任务单可直发"
+      "text": "final-joint 00B1DD16 Apply 成功：185/185 文件、备份 92 文件、后验 sha 185/185 + tsc -b 0 + cargo check 0 + FE 两配置绿；用户 WIP 12 文件原样保留；CON06+ACTION-R01 收口，待用户人验"
     },
     {
-      "at": "2026-10-29T19:27:00+08:00",
-      "role": "LEAD",
-      "text": "工作流 v1 提交 103b434（state.json / 批次工具 / 4 份角色合同）"
-    },
-    {
-      "at": "2026-10-29T19:20:00+08:00",
+      "at": "2026-10-30T15:46:00+08:00",
       "role": "QA",
-      "text": "S2b 结果：21＋3 项通过，但 retained/no-op 未闭环，不整体放行"
+      "text": "最终联合 QA PASS（绑 00B1DD16，185 文件，覆盖 joint-v2+B1/B3/B4/B5）"
+    },
+    {
+      "at": "2026-10-30T14:35:00+08:00",
+      "role": "QA",
+      "text": "B4 批 QA PASS（50B06086，19 文件，4 片）：S4i2 workspace/user + S4j1 连接/认证；全 lib 382 passed"
     }
   ]
 }

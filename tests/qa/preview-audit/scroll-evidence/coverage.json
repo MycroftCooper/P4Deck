@@ -1,0 +1,15 @@
+{
+  "scope":"UI06 synthetic-only Edge acceptance",
+  "matrix":[
+    {"surface":"main table","implementation":"real ResizableTable with 80 synthetic rows","axes":"horizontal and vertical","themes":["light","dark"]},
+    {"surface":"virtual list","implementation":"real BranchMappingsPage with existing 96-row stub","axes":"vertical; horizontal overflow absent","themes":["light","dark"]},
+    {"surface":"text preview","implementation":"real FilePreviewPage with synthetic 120-line long text","axes":"horizontal and vertical","themes":["light","dark"]},
+    {"surface":"dialog","implementation":"minimal structure with real workflow-dialog CSS","axes":"horizontal and vertical","themes":["light","dark"]},
+    {"surface":"sidebar","implementation":"minimal aside overflow structure","axes":"horizontal and vertical","themes":["light","dark"]},
+    {"surface":"nested","implementation":"minimal nested overflow structures; inner drag leaves outer offset zero","axes":"horizontal and vertical","themes":["light","dark"]},
+    {"surface":"Dockview","implementation":"installed DockviewReact with 18 synthetic tabs; real custom horizontal tab scrollbar and native panel scrollbars","axes":"custom horizontal; native horizontal and vertical","themes":["light","dark"]}
+  ],
+  "additional":"390px / CSS zoom150% table drag reaches both ends in both themes. Hover/active screenshots inspected for native and Dockview custom bars.",
+  "limitations":["No production app or P4","Not Windows WebView or OS overlay/high-contrast settings acceptance","Dockview custom vertical scrollbar not instantiated by this tab configuration","Initial headless run hid native scrollbars; removed only Playwright --hide-scrollbars default flag and corrected fixture root height; no product change"],
+  "validation":{"mockTests":17,"typescript":"passed","diffCheck":"passed"}
+}

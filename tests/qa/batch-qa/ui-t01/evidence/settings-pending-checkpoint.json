@@ -1,0 +1,524 @@
+{
+  "checks": [
+    {
+      "name": "graph-hashes-current",
+      "pass": true,
+      "data": []
+    },
+    {
+      "name": "no-bridge:pendinglight1200",
+      "pass": true
+    },
+    {
+      "name": "pending-geometry:light1200",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 26,
+          "y": 40,
+          "w": 1033.75,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 1067.75,
+          "y": 40,
+          "w": 106.25,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-focus-hover:light1200",
+      "pass": true,
+      "data": {
+        "focus": {
+          "x": 26,
+          "y": 40,
+          "w": 1033.75,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(21, 120, 91)",
+          "shadow": "none"
+        },
+        "hover": {
+          "x": 1067.75,
+          "y": 40,
+          "w": 106.25,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(21, 120, 91)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-sort-default-selection:light1200",
+      "pass": true,
+      "data": [
+        0,
+        2,
+        10,
+        100
+      ]
+    },
+    {
+      "name": "pending-filter-input:light1200",
+      "pass": true
+    },
+    {
+      "name": "retained-context-details:light1200",
+      "pass": true
+    },
+    {
+      "name": "no-bridge:pendinglight390",
+      "pass": true
+    },
+    {
+      "name": "pending-geometry:light390",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 12,
+          "y": 24,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 12,
+          "y": 67,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-focus-hover:light390",
+      "pass": true,
+      "data": {
+        "focus": {
+          "x": 12,
+          "y": 24,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(213, 221, 216)",
+          "radius": "6px",
+          "outline": "rgb(21, 120, 91)",
+          "shadow": "none"
+        },
+        "hover": {
+          "x": 12,
+          "y": 67,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(255, 255, 255)",
+          "color": "rgb(34, 49, 42)",
+          "border": "rgb(21, 120, 91)",
+          "radius": "6px",
+          "outline": "rgb(34, 49, 42)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-sort-default-selection:light390",
+      "pass": true,
+      "data": [
+        0,
+        2,
+        10,
+        100
+      ]
+    },
+    {
+      "name": "pending-filter-input:light390",
+      "pass": true
+    },
+    {
+      "name": "retained-context-details:light390",
+      "pass": true
+    },
+    {
+      "name": "no-bridge:pendingdark1200",
+      "pass": true
+    },
+    {
+      "name": "pending-geometry:dark1200",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 26,
+          "y": 40,
+          "w": 1040.125,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 1074.125,
+          "y": 40,
+          "w": 99.875,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-focus-hover:dark1200",
+      "pass": true,
+      "data": {
+        "focus": {
+          "x": 26,
+          "y": 40,
+          "w": 1040.125,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(136, 214, 176)",
+          "shadow": "none"
+        },
+        "hover": {
+          "x": 1074.125,
+          "y": 40,
+          "w": 99.875,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(136, 214, 176)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-sort-default-selection:dark1200",
+      "pass": true,
+      "data": [
+        0,
+        2,
+        10,
+        100
+      ]
+    },
+    {
+      "name": "pending-filter-input:dark1200",
+      "pass": true
+    },
+    {
+      "name": "retained-context-details:dark1200",
+      "pass": true
+    },
+    {
+      "name": "no-bridge:pendingdark390",
+      "pass": true
+    },
+    {
+      "name": "pending-geometry:dark390",
+      "pass": true,
+      "data": {
+        "input": {
+          "x": 12,
+          "y": 24,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        },
+        "button": {
+          "x": 12,
+          "y": 67,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-focus-hover:dark390",
+      "pass": true,
+      "data": {
+        "focus": {
+          "x": 12,
+          "y": 24,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(53, 65, 57)",
+          "radius": "6px",
+          "outline": "rgb(136, 214, 176)",
+          "shadow": "none"
+        },
+        "hover": {
+          "x": 12,
+          "y": 67,
+          "w": 366,
+          "h": 35,
+          "bg": "rgb(27, 33, 30)",
+          "color": "rgb(237, 243, 239)",
+          "border": "rgb(136, 214, 176)",
+          "radius": "6px",
+          "outline": "rgb(237, 243, 239)",
+          "shadow": "none"
+        }
+      }
+    },
+    {
+      "name": "pending-sort-default-selection:dark390",
+      "pass": true,
+      "data": [
+        0,
+        2,
+        10,
+        100
+      ]
+    },
+    {
+      "name": "pending-filter-input:dark390",
+      "pass": true
+    },
+    {
+      "name": "retained-context-details:dark390",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "blocked": [],
+  "requests": [
+    "http://127.0.0.1:1437/?page=pending&theme=light",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionProfilesCard.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/CommandBar.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/command-stubs.tsx",
+    "http://127.0.0.1:1437/settings-stubs.tsx",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/settings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/commands.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/commandPolicy.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionDirectoryDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx",
+    "http://127.0.0.1:1437/?page=pending&theme=light",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionProfilesCard.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/CommandBar.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/command-stubs.tsx",
+    "http://127.0.0.1:1437/settings-stubs.tsx",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/settings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/commands.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionDirectoryDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/commandPolicy.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx",
+    "http://127.0.0.1:1437/?page=pending&theme=dark",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionProfilesCard.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/CommandBar.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/command-stubs.tsx",
+    "http://127.0.0.1:1437/settings-stubs.tsx",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/settings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/commands.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionDirectoryDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/commandPolicy.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx",
+    "http://127.0.0.1:1437/?page=pending&theme=dark",
+    "http://127.0.0.1:1437/@vite/client",
+    "http://127.0.0.1:1437/fixture.tsx",
+    "http://127.0.0.1:1437/@react-refresh",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom_client.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionProfilesCard.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/BranchMappingsPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/components/PendingPage.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/CommandBar.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/batch-qa/command-stubs.tsx",
+    "http://127.0.0.1:1437/settings-stubs.tsx",
+    "http://127.0.0.1:1437/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/i18n/index.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/tokens.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/workbench.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/settings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/dialogs.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/branch-mappings.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/styles/commands.css",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.pnpm/vite@7.3.6_@types+node@24.19.2/node_modules/vite/dist/client/env.mjs",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-63KFCR2Q.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/lucide-react.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/connectionWizard.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/settings/ConnectionDirectoryDialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/files/address.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/dialogs/Dialog.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizeHeader.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useColumnWidths.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ResizableTable.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/@tanstack_react-virtual.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/branch-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/browsers/branchMappingModel.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/react-dom.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/useRecordSelection.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/features/changelists/pendingFilterState.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/shell/commandPolicy.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/test/preview-audit/pending-stubs.tsx",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/shared/lib/storage.ts",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/node_modules/.vite/deps/chunk-VR6IJKH7.js?v=ee152910",
+    "http://127.0.0.1:1437/@fs/D:/GitCode/P4Deck/src/app/context-menu/ColumnResizer.tsx"
+  ],
+  "identity": {
+    "pid": 48160,
+    "config": "src/test/batch-qa/ui-t01/vite.config.mjs",
+    "address": {
+      "address": "127.0.0.1",
+      "family": "IPv4",
+      "port": 1437
+    }
+  },
+  "cleanup": {},
+  "settingsPendingCompleted": true
+}

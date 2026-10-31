@@ -1,0 +1,115 @@
+.passive-server-status {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 2px;
+}
+.passive-server-status.tone-muted {
+  color: var(--muted);
+}
+.passive-server-status.tone-success {
+  color: var(--success);
+}
+.passive-server-status.tone-warning {
+  color: var(--warning);
+}
+.passive-server-status.tone-danger {
+  color: var(--danger);
+}
+.passive-server-details {
+  margin: 4px 0 8px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.passive-server-details > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  line-height: 1.7;
+}
+.passive-server-details dt {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.passive-server-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.passive-server-check {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 12px 8px;
+}
+/* Anchor the collapsed connection panel above the status icon in the bottom bar. */
+.p4-operations {
+  position: relative;
+}
+.passive-server-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.passive-server-trigger:hover,
+.passive-server-trigger[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.passive-server-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  min-width: 280px;
+  max-width: min(460px, 92vw);
+  padding: 8px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: 0 12px 40px var(--shadow);
+  font-size: 12px;
+}
+.passive-server-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.passive-server-panel > header button {
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.passive-server-panel > header button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.passive-server-check-reason {
+  margin: 0;
+  padding: 0 12px 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.passive-server-note {
+  margin: 0;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--muted);
+}

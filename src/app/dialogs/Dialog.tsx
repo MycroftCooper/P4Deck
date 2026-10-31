@@ -7,6 +7,8 @@ export interface DialogProps {
   description?: string;
   children: ReactNode;
   footer: ReactNode;
+  /** Omit the footer bar entirely (e.g. a dialog that only has per-row actions). */
+  hideFooter?: boolean;
   onRequestClose(): void;
   source?: HTMLElement | null;
   busy?: boolean;
@@ -20,6 +22,7 @@ export function Dialog({
   description,
   children,
   footer,
+  hideFooter = false,
   onRequestClose,
   source,
   busy = false,
@@ -106,7 +109,9 @@ export function Dialog({
       >
         {children}
       </div>
-      <footer className="workflow-dialog-footer">{footer}</footer>
+      {hideFooter ? null : (
+        <footer className="workflow-dialog-footer">{footer}</footer>
+      )}
     </dialog>,
     origin.owner.body,
   );

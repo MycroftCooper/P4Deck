@@ -1,7 +1,7 @@
 {
   "name": "p4deck",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.10",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
@@ -19,6 +19,7 @@
     "build:desktop": "node scripts/build-frontend.mjs --mode desktop",
     "build:desktop:win": "node scripts/build-desktop.mjs",
     "package:desktop:win": "node scripts/package-desktop.mjs",
+    "publish:update": "node scripts/publish-update.mjs",
     "preview": "vite preview",
     "check:web": "tsc -b --pretty false",
     "check": "tsc -b --pretty false && cargo check --manifest-path src-tauri/Cargo.toml",
@@ -49,8 +50,9 @@
     "wf:task": "node scripts/workflow/state.mjs task",
     "wf:tests": "node scripts/workflow/select-tests.mjs",
     "wf:fast": "node scripts/workflow/ci-fast.mjs",
+    "wf:agile": "node scripts/workflow/agile.mjs",
     "wf:selftest": "node scripts/workflow/batch.selftest.mjs",
-    "wf:selftest:all": "node scripts/workflow/batch.selftest.mjs && node scripts/workflow/workflow.selftest.mjs && node tools/dsh-p4deck-board/selftest.mjs && node tools/dsh-p4deck-board/selftest-client.mjs",
+    "wf:selftest:all": "node scripts/workflow/batch.selftest.mjs && node scripts/workflow/workflow.selftest.mjs && node scripts/workflow/deps.selftest.mjs && node tools/dsh-p4deck-board/selftest.mjs && node tools/dsh-p4deck-board/selftest-client.mjs",
     "wf:evidence": "node scripts/workflow/evidence.mjs",
     "wf:evidence:collect": "node scripts/workflow/evidence.mjs --collect-temp",
     "wf:ownership": "node scripts/workflow/ownership.mjs",
@@ -76,13 +78,18 @@
     "fixture:stop:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 stop",
     "fixture:destroy:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/p4d-fixture.ps1 destroy",
     "tauri": "tauri",
-    "wf:close": "node scripts/workflow/close.mjs"
+    "wf:close": "node scripts/workflow/close.mjs",
+    "wf:release": "node scripts/workflow/release.mjs"
   },
   "dependencies": {
+    "@pierre/diffs": "1.6.2",
     "@tanstack/react-query": "^5.85.5",
     "@tanstack/react-virtual": "^3.14.9",
-    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "2.8.4",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "dockview-react": "^8.3.1",
@@ -94,7 +101,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.64.0",
-    "@tauri-apps/cli": "^2.8.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.19.2",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",

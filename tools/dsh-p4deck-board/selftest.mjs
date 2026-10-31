@@ -41,6 +41,17 @@ async function call(handler, { method = "GET", url }) {
   return res;
 }
 
+function postJson(handler, url, payload) {
+  const request = new EventEmitter();
+  request.method = "POST";
+  request.url = url;
+  const response = fakeResponse();
+  handler(request, response);
+  request.emit("data", JSON.stringify(payload));
+  request.emit("end");
+  return new Promise((resolve) => setTimeout(() => resolve(response), 80));
+}
+
 // 1) 快照
 const snapshot = await buildSnapshot(WORKSPACE);
 check("快照含主工作包", snapshot.counts.total >= 52, String(snapshot.counts.total));
@@ -75,6 +86,7 @@ const page = await call(handler, { url: "/p4deck-board/" });
 check("页面 200", page.statusCode === 200, String(page.statusCode));
 check("页面是 HTML", String(page.headers?.["content-type"]).includes("text/html"));
 check("页面含看板标题", String(page.body).includes("Agent 在忙什么"));
+check("页面含验收/取消按钮", String(page.body).includes("验收完成") && String(page.body).includes("取消"));
 
 // 4) API
 const api = await call(handler, { url: "/p4deck-board/api/snapshot" });
@@ -83,7 +95,18 @@ check("API 200", api.statusCode === 200);
 check("API 返回 total 与快照一致", payload.counts.total === snapshot.counts.total, `${payload.counts.total}/${snapshot.counts.total}`);
 check("API 不缓存", api.headers?.["cache-control"] === "no-store");
 check("快照含人类待办", Array.isArray(payload.humanTodos) && payload.humanTodos.length > 0, `${payload.humanTodos?.length} 条`);
-check("归档与活跃分开", (payload.archived || []).length === 2 && payload.packages.every((pkg) => !pkg.archived));
+check(
+  "归档与活跃分开",
+  (payload.archived || []).length === snapshot.archived.length &&
+    snapshot.archived.length >= 2 &&
+    payload.packages.every((pkg) => !pkg.archived),
+  `${payload.archived?.length}/${snapshot.archived.length}`,
+);
+check(
+  "快照带功能名（不只是编号）",
+  payload.packages.length > 0 && payload.packages.every((pkg) => typeof pkg.scope === "string" && pkg.scope.length > 0),
+  payload.packages[0]?.scope,
+);
 
 // 4a) SSE：事件流路由（不再轮询）
 const eventRequest = new EventEmitter();
@@ -131,6 +154,96 @@ try {
   check("勾选写回 JSON", after.items[0].done === true);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
+}
+
+// 4c) 看板按钮：验收/取消直接写 state.json（临时工作区，不动仓库）
+const stateRoot = await mkdtemp(path.join(os.tmpdir(), "p4deck-action-"));
+try {
+  const flowDir = path.join(stateRoot, "ForAIDoc", "PM", "工作流");
+  await mkdir(flowDir, { recursive: true });
+  const stateFile = path.join(flowDir, "state.json");
+  const stateDoc = {
+    schemaVersion: 2,
+    updatedAt: new Date().toISOString(),
+    batch: {
+      id: "T",
+      goal: "g",
+      stopCondition: "s",
+      slices: [{ id: "S", label: "S", status: "todo", owner: "BE", exit: "x" }],
+    },
+    counts: { main: 2, archived: 0, total: 2, subitems: 0, slices: 1 },
+    packages: [
+      {
+        id: "T-01",
+        type: "feature",
+        owner: "FE",
+        module: "m",
+        scope: "模块：待验收功能",
+        stage: "implemented",
+        statusRaw: "已实现待验收",
+        priority: "P1",
+        evidence: [],
+        note: "n",
+        deps: [],
+        archived: false,
+        migrated: true,
+        verification: { qaPassed: null, applied: null, humanAccepted: null },
+      },
+      {
+        id: "T-02",
+        type: "feature",
+        owner: "FE",
+        module: "m",
+        scope: "模块：要取消功能",
+        stage: "partial",
+        statusRaw: "部分实现",
+        priority: "P1",
+        evidence: [],
+        note: "n",
+        deps: [],
+        archived: false,
+        migrated: true,
+        verification: { qaPassed: null, applied: null, humanAccepted: null },
+      },
+    ],
+    subitems: [],
+  };
+  await writeFile(stateFile, JSON.stringify(stateDoc, null, 2), "utf8");
+  const tempRoutes = [];
+  apply(
+    {
+      webServer: {
+        register(route) {
+          tempRoutes.push(route);
+          return () => {};
+        },
+      },
+      effect(fn) {
+        return fn();
+      },
+    },
+    { workspace: stateRoot },
+  );
+  const tempHandler = tempRoutes.find((route) => route.kind === "prefix").handler;
+  const acceptRes = await postJson(tempHandler, "/p4deck-board/api/packages/accept", { id: "T-01" });
+  const accepted = JSON.parse(await readFile(stateFile, "utf8"));
+  const acceptedPkg = accepted.packages.find((pkg) => pkg.id === "T-01");
+  check("POST 验收返回 200", acceptRes.statusCode === 200, String(acceptRes.statusCode));
+  check("验收写回 state（stage=done + humanAccepted）", acceptedPkg.stage === "done" && acceptedPkg.verification.humanAccepted === true);
+  check("无 QA/Apply 时标记 force 补登", acceptedPkg.verification.humanAcceptedForced === true);
+  check("验收后 counts 仍正确", accepted.counts.main === 2 && accepted.counts.archived === 0, `${accepted.counts.main}/${accepted.counts.archived}`);
+
+  const cancelRes = await postJson(tempHandler, "/p4deck-board/api/packages/cancel", { id: "T-02" });
+  const canceled = JSON.parse(await readFile(stateFile, "utf8"));
+  const canceledPkg = canceled.packages.find((pkg) => pkg.id === "T-02");
+  check("POST 取消返回 200", cancelRes.statusCode === 200, String(cancelRes.statusCode));
+  check("取消归档且不算验收", canceledPkg.archived === true && canceledPkg.verification.canceled === true && canceledPkg.verification.humanAccepted !== true);
+  check("取消后 counts 更新", canceled.counts.main === 1 && canceled.counts.archived === 1, `${canceled.counts.main}/${canceled.counts.archived}`);
+
+  const afterSnapshot = JSON.parse((await call(tempHandler, { url: "/p4deck-board/api/snapshot" })).body);
+  check("取消项离开活跃看板", afterSnapshot.packages.every((pkg) => pkg.id !== "T-02") && afterSnapshot.archived.some((pkg) => pkg.id === "T-02"));
+} finally {
+  await rm(stateRoot, { recursive: true, force: true });
 }
 
 // 5) 边界

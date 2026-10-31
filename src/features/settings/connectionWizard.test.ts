@@ -3,7 +3,7 @@ import type {
   ConnectionState,
   ConnectionStatus,
   RecoveryAction,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   cliStatus,
   connectionPresentation,

@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import type {
-  PendingChange,
-  WorkspaceNode,
-} from "../../../shared/contracts/types";
+import type { PendingChange, WorkspaceNode } from "../../../shared/contracts";
 import { queryAllPendingChanges } from "../pendingQueries";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
 import { MoveFilesDialog } from "./MoveFilesDialog";
 import { ShelfDialog } from "./ShelfDialog";
 import { fileClScope } from "../fileClScope";
-import { invalidateData } from "../../../shared/cache/dataEffects";
+import { startOptimisticMove } from "../moveOptimism";
 
 /** Read once on explicit opening; no per-row queries; delegates writes to typed workflows. */
 export function FileClWorkflow({
@@ -68,15 +65,9 @@ export function FileClWorkflow({
           connectionKey={connectionKey}
           zh={zh}
           onDismiss={onDismiss}
-          onResult={(result) => {
-            void invalidateData(
-              ["pending", "workspaceStatus", "depot"],
-              {
-                connectionKey,
-                affectedPaths: result.refresh.depotPaths,
-              },
-            ).catch(() => undefined);
-          }}
+          onStart={(request) =>
+            startOptimisticMove(connectionKey, request, changes)
+          }
         />
       );
     const id = scope.ids.length === 1 ? scope.ids[0] : group;

@@ -103,6 +103,8 @@ async function buildSnapshot() {
         stage: packageStage(pkg),
         rawStage: pkg.stage,
         module: pkg.module,
+        scope: pkg.scope,
+        statusRaw: pkg.statusRaw,
         evidence: pkg.evidence.length,
         note: pkg.note,
       })),
@@ -113,9 +115,11 @@ async function buildSnapshot() {
         type: pkg.type,
         owner: pkg.owner,
         module: pkg.module,
+        scope: pkg.scope,
         archivedAt: pkg.archivedAt,
         archiveReason: pkg.archiveReason,
         archiveEvidence: pkg.archiveEvidence,
+        canceled: pkg.verification?.canceled === true,
         note: pkg.note,
       })),
     humanTodos: todos.items ?? [],
@@ -199,11 +203,27 @@ input[type=search] { background: var(--panel); border: 1px solid var(--line); co
   overflow-x: auto; padding-bottom: 8px; margin-top: 10px; }
 .col { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 120px;
   display: flex; flex-direction: column; }
-.col > h3 { margin: 0; padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--line);
-  display: flex; justify-content: space-between; color: var(--muted); font-weight: 600; }
+details.col > summary { margin: 0; padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--line);
+  display: flex; justify-content: space-between; color: var(--muted); font-weight: 600; cursor: pointer;
+  list-style: none; }
+details.col > summary::-webkit-details-marker { display: none; }
+details.col > summary::before { content: "▾"; font-size: 10px; margin-right: 6px; }
+details.col:not([open]) > summary::before { content: "▸"; }
+details.col:not([open]) > summary { border-bottom: 0; }
 .col .cards { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+details.sec { margin: 18px 0 0; }
+details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::before { content: "▾"; font-size: 10px; }
+details.sec:not([open]) > summary::before { content: "▸"; }
+details.sec > summary:hover { color: var(--text); }
+details.sec[open] > summary { margin-bottom: 8px; }
 .card { border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; background: var(--bg); }
 .card .id { font-weight: 600; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.card .scope { margin-top: 3px; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.card .snippet { margin-top: 2px; color: var(--muted); font-size: 11px; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card .meta { margin-top: 3px; color: var(--muted); font-size: 11px; display: flex; gap: 8px; flex-wrap: wrap; }
 .todos { display: flex; flex-direction: column; gap: 6px; }
 .todo { display: flex; align-items: baseline; gap: 9px; border: 1px solid var(--line); border-radius: 6px;
@@ -229,31 +249,37 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
     <div class="stamp">数据时间 <span id="stamp"></span><span id="liveMark"></span></div>
   </header>
 
-  <h2>Agent 在忙什么</h2>
+  <details class="sec" data-sec="agents" open><summary>Agent 在忙什么</summary>
   <div class="row agents" id="agents"></div>
+  </details>
 
-  <h2>批次里程碑</h2>
+  <details class="sec" data-sec="milestones" open><summary>批次里程碑</summary>
   <div class="milestones" id="milestones"></div>
+  </details>
 
-  <h2>人类待办（只有你能勾）</h2>
+  <details class="sec" data-sec="todos" open><summary>人类待办（只有你能勾）</summary>
   <div class="todos" id="todos"></div>
+  </details>
 
-  <h2>任务状态分布</h2>
+  <details class="sec" data-sec="stats" open><summary>任务状态分布</summary>
   <div class="stats">
     <div class="bar" id="bar"></div>
     <div class="legend" id="legend"></div>
     <div id="gate"></div>
   </div>
+  </details>
 
-  <h2>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</h2>
+  <details class="sec" data-sec="board" open><summary>任务看板（活跃 <span id="active"></span> · 总计 <span id="total"></span>）</summary>
   <div class="toolbar">
     <input type="search" id="filter" placeholder="按 ID / 负责人 / 模块过滤，例如 FE、CL-01、Shelf">
     <span class="hint">卡片标题为模块与范围，鼠标悬停可看剩余步骤。状态以 state.json 为准。</span>
   </div>
   <div class="board" id="board"></div>
+  </details>
 
-  <h2>已完成归档（独立区域，不混在活跃看板）</h2>
+  <details class="sec" data-sec="archived" open><summary>已完成归档（独立区域，不混在活跃看板）</summary>
   <div class="cards" id="archived"></div>
+  </details>
 
   <footer id="footer"></footer>
 </div>
@@ -275,6 +301,26 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
     blocked: "阻塞", in_progress: "进行中", paused: "暂停"
   };
   var CURRENT = null;
+  var COLLAPSE_KEY = "p4deck-board-collapse";
+
+  function collapseState() {
+    try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "{}"); } catch (error) { return {}; }
+  }
+  function applyCollapse(root) {
+    var state = collapseState();
+    root.querySelectorAll("details[data-sec]").forEach(function (node) {
+      var key = node.getAttribute("data-sec");
+      if (state[key] === false) node.open = false;
+      else if (state[key] === true) node.open = true;
+      if (node.dataset.collapseBound === "1") return;
+      node.dataset.collapseBound = "1";
+      node.addEventListener("toggle", function () {
+        var next = collapseState();
+        next[key] = node.open;
+        try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next)); } catch (error) {}
+      });
+    });
+  }
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);
@@ -352,10 +398,11 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       var items = snapshot.packages.filter(function (pkg) {
         if (pkg.stage !== stage) return false;
         if (!query) return true;
-        return [pkg.id, pkg.owner, pkg.module, pkg.note].join(" ").toLowerCase().indexOf(query) >= 0;
+        return [pkg.id, pkg.owner, pkg.module, pkg.scope, pkg.note].join(" ").toLowerCase().indexOf(query) >= 0;
       });
-      var col = el("div", "col");
-      var head = el("h3");
+      var col = el("details", "col");
+      col.setAttribute("data-sec", "stage-" + stage);
+      var head = el("summary");
       head.appendChild(el("span", null, STAGE_LABELS[stage]));
       head.appendChild(el("span", null, String(items.length)));
       col.appendChild(head);
@@ -371,6 +418,8 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
           id.appendChild(el("span", "tag " + pkg.priority.toLowerCase(), pkg.priority));
         }
         card.appendChild(id);
+        if (pkg.scope) card.appendChild(el("div", "scope", pkg.scope));
+        if (pkg.note) card.appendChild(el("div", "snippet", pkg.note));
         var meta = el("div", "meta");
         meta.appendChild(el("span", "owner", pkg.owner || "—"));
         if (pkg.module) meta.appendChild(el("span", null, pkg.module));
@@ -381,6 +430,7 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       col.appendChild(cards);
       host.appendChild(col);
     });
+    applyCollapse(host);
   }
 
   function todoLocal() {
@@ -445,7 +495,9 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
       id.appendChild(document.createTextNode(pkg.id));
       if (pkg.type) id.appendChild(el("span", "tag " + pkg.type, TYPE_LABELS[pkg.type] || pkg.type));
       card.appendChild(id);
+      if (pkg.scope) card.appendChild(el("div", "scope", pkg.scope));
       card.appendChild(el("div", "meta", "归档于 " + fmt(pkg.archivedAt) + " · " + (pkg.archiveReason || "历史迁移项")));
+      if (pkg.canceled) card.appendChild(el("div", "meta", "已取消（未验收）"));
       if (pkg.archiveEvidence) card.appendChild(el("div", "meta", "证据 " + pkg.archiveEvidence));
       host.appendChild(card);
     });
@@ -474,6 +526,7 @@ footer { margin-top: 18px; color: var(--muted); font-size: 11px; border-top: 1px
   });
 
   render(JSON.parse(document.getElementById("snapshot").textContent));
+  applyCollapse(document);
 
   if (LIVE) {
     // 事件驱动：宿主 watch 三个数据文件，变了才推一条；不再轮询整份快照。

@@ -134,6 +134,58 @@ fn classify(bytes: &[u8]) -> Result<FilePreview, String> {
 mod tests {
     use super::*;
     #[test]
+    fn json_is_raw_text_in_all_supported_encodings_and_wire_contract() {
+        // Invalid JSON syntax is still readable text, never silently discarded.
+        for text in [
+            r#"{"title":"合成内容","items":[1,true,null]}"#,
+            "{invalid json",
+            "",
+            "\n \t",
+        ] {
+            let mut utf8_bom = vec![0xef, 0xbb, 0xbf];
+            utf8_bom.extend_from_slice(text.as_bytes());
+            let mut le = vec![0xff, 0xfe];
+            let mut be = vec![0xfe, 0xff];
+            for unit in text.encode_utf16() {
+                le.extend_from_slice(&unit.to_le_bytes());
+                be.extend_from_slice(&unit.to_be_bytes());
+            }
+            for bytes in [text.as_bytes().to_vec(), utf8_bom, le, be] {
+                let preview = classify(&bytes).unwrap();
+                let wire = serde_json::to_value(preview).unwrap();
+                assert_eq!(wire["kind"], "text");
+                assert_eq!(wire["content"], text);
+                assert_eq!(wire["size"], bytes.len());
+                assert!(wire["encoding"].is_string());
+            }
+        }
+    }
+
+    #[test]
+    fn synthetic_json_file_reads_content_without_p4_or_json_parsing() {
+        let root =
+            std::env::temp_dir().join(format!("p4deck-json-preview-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let text = "{\n  \"name\": \"synthetic\",\n  \"enabled\": true,\n  \"items\": [\n    1,\n    2\n  ],\n  \"count\": 2\n}";
+        assert_eq!(text.lines().count(), 9);
+        let path = root.join("synthetic.json");
+        std::fs::write(&path, text.as_bytes()).unwrap();
+        let preview = read(&root, "synthetic.json").unwrap();
+        assert_eq!(preview.kind, "text");
+        assert_eq!(preview.content, text);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn unsupported_json_bytes_return_errors_instead_of_empty_success() {
+        assert!(classify(&[0x7b, 0x22, 0xff, 0x22, 0x7d]).is_err());
+        assert!(classify(&[0xff, 0xfe, b'{']).is_err());
+        assert!(classify(&[0xfe, 0xff, 0xd8, 0]).is_err());
+        assert!(classify(&[b'{', 0, b'}', 0]).is_err());
+        assert!(classify(&vec![b' '; TEXT_LIMIT as usize + 1]).is_err());
+    }
+    #[test]
     fn text_and_encodings() {
         assert_eq!(classify("你好\ntext".as_bytes()).unwrap().kind, "text");
         assert_eq!(classify(&[0xff, 0xfe, 65, 0]).unwrap().content, "A");

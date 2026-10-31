@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   StreamGraphNode,
   StreamGraphResult,
-} from "../../shared/contracts/types";
+} from "../../shared/contracts";
 import {
   isStreamGraphSnapshot,
   layoutStreamGraph,

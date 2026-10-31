@@ -2,10 +2,12 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   appCommandReason,
   appCommands,
+  commandShortcuts,
   shortcutLabel,
   type AppCommandEnvironment,
   type AppCommandId,
 } from "./catalog";
+import { useShortcutOverrides } from "./keymap";
 
 interface Props {
   open: boolean;
@@ -24,6 +26,7 @@ export function CommandPalette({
 }: Props) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const shortcutOverrides = useShortcutOverrides();
   const input = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLElement>(null);
   const source = useRef<HTMLElement | null>(null);
@@ -145,6 +148,7 @@ export function CommandPalette({
         <ul id={listboxId} role="listbox">
           {commands.map((command, index) => {
             const reason = appCommandReason(command.id, environment, zh);
+            const shortcuts = commandShortcuts(command, shortcutOverrides);
             return (
               <li
                 id={`${listboxId}-${command.id}`}
@@ -167,12 +171,16 @@ export function CommandPalette({
                       : " · preflight/confirmation required"
                     : ""}
                 </small>
-                {command.shortcut && (
+                {shortcuts.length > 0 && (
                   <kbd>
-                    {shortcutLabel(
-                      command.shortcut,
-                      navigator.platform.toLowerCase().includes("mac"),
-                    )}
+                    {shortcuts
+                      .map((shortcut) =>
+                        shortcutLabel(
+                          shortcut,
+                          navigator.platform.toLowerCase().includes("mac"),
+                        ),
+                      )
+                      .join(" / ")}
                   </kbd>
                 )}
                 {reason && <em>{reason}</em>}

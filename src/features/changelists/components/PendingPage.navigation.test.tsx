@@ -1,3 +1,9 @@
+import { recordFrontendOperationLog } from "../../../infrastructure/backend/frontendOperationLog";
+vi.mock("../../../infrastructure/backend/frontendOperationLog", () => ({
+  recordFrontendOperationLog: vi.fn(async () => ({ status: "recorded" })),
+}));
+import { startOptimisticMove } from "../moveOptimism";
+import type { SelectedMoveReceipt } from "../selectedMove";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -12,7 +18,7 @@ import type {
   PendingChange,
   PendingChangePage,
   RuntimeInfo,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { messages } from "../../../shared/i18n";
 import { PendingPage } from "./PendingPage";
 import { CommandExecutionContext } from "../../../app/shell/CommandContext";
@@ -23,6 +29,9 @@ import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 
 const backend = vi.hoisted(() => ({
   queryPendingChanges: vi.fn(),
+  companySubmitConnectionSnapshot: vi.fn(),
+  selectedMoveExecute: vi.fn(),
+  selectedMoveStatus: vi.fn(),
   cancelOperation: vi.fn().mockResolvedValue(undefined),
   mutatePendingChange: vi.fn(),
   localPathCapabilities: vi.fn(),
@@ -125,6 +134,62 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+});
+
+it("toggles numeric CL order locally, retaining Default and the saved choice after remount", async () => {
+  backend.queryPendingChanges.mockImplementation((query) =>
+    Promise.resolve({
+      requestGeneration: query.requestGeneration,
+      defaultChange: { ...change, id: 0 },
+      items: [100, 2, 11].map((id) => ({ ...change, id })),
+      hasMore: false,
+      partial: false,
+      stats: {
+        scannedCount: 4,
+        matchedCount: 4,
+        truncatedBySafetyLimit: false,
+      },
+    }),
+  );
+  const render = () => (
+    <ContextMenuProvider scope="numeric-sort" zh={false}>
+      <MenuEnvironment.Provider value={environment()}>
+        <PendingPage
+          t={messages["en-US"]}
+          clientName="workspace"
+          connectionKey="numeric-sort"
+          demo={false}
+          ready
+        />
+      </MenuEnvironment.Provider>
+    </ContextMenuProvider>
+  );
+  await act(async () => root.render(render()));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  const ids = () =>
+    [...host.querySelectorAll("[data-pending-change]")].map((node) =>
+      Number(node.getAttribute("data-pending-change")),
+    );
+  expect(ids()).toEqual([0, 100, 11, 2]);
+  const count = backend.queryPendingChanges.mock.calls.length;
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Toggle ascending/descending CL number"]',
+      )!
+      .click(),
+  );
+  expect(ids()).toEqual([0, 2, 11, 100]);
+  expect(backend.queryPendingChanges).toHaveBeenCalledTimes(count);
+  await act(async () => root.render(null));
+  await act(async () => root.render(render()));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  expect(ids()).toEqual([0, 2, 11, 100]);
+  expect(
+    host
+      .querySelector('[aria-label="Toggle ascending/descending CL number"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
 });
 
 it("shows a login recovery action instead of raw P4 diagnostics after a ticket expires", async () => {
@@ -235,9 +300,7 @@ it("keeps cached changelists visible while checking and after a connection failu
   await act(async () => render("connected"));
   expect(host.querySelector('[data-pending-change="202"]')).toBeTruthy();
   expect(host.querySelector('[role="alert"]')).toBeNull();
-  expect(header.querySelector(".pending-operation-state")?.textContent).toBe(
-    "",
-  );
+  expect(header.querySelector(".pending-operation-state")).toBeNull();
 });
 
 it("runs header actions for the entire clicked CL despite file filters, and disables unavailable actions", async () => {
@@ -441,7 +504,13 @@ it("deletes an empty CL immediately, blocks duplicate clicks, and never opens a 
     }),
   );
   expect(host.querySelector('[data-pending-change="202"]')).toBeNull();
-  expect(header.textContent).toContain("Changelist deleted");
+  expect(header.textContent).not.toContain("Changelist deleted");
+  expect(header.querySelector(".pending-operation-state")).toBeNull();
+  expect(
+    [...header.querySelectorAll("button")].some(
+      (button) => button.textContent === "New CL",
+    ),
+  ).toBe(true);
 });
 
 it("restores an optimistically deleted empty CL when the P4 request fails", async () => {
@@ -482,8 +551,9 @@ it("restores an optimistically deleted empty CL when the P4 request fails", asyn
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
   expect(host.querySelector('[data-pending-change="202"]')).toBeTruthy();
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-    "delete failed",
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(recordFrontendOperationLog).toHaveBeenCalledWith(
+    expect.objectContaining({ code: "operationFailed" }),
   );
 });
 
@@ -560,7 +630,10 @@ it("keeps expanded rows during a refresh, coalesces automatic reads, and retains
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
   expect(host.textContent).toContain("Updated target");
-  expect(host.textContent).toContain("Refresh unavailable");
+  expect(host.textContent).not.toContain("Refresh unavailable");
+  expect(recordFrontendOperationLog).toHaveBeenCalledWith(
+    expect.objectContaining({ phase: "refresh", code: "refreshFailed" }),
+  );
   expect(host.querySelector(".pending-body")).toBe(body);
 });
 
@@ -782,3 +855,249 @@ it("auto-loads cursor pages, deduplicates IDs, and keeps Default singular", asyn
   );
   expect(document.activeElement).toBe(second);
 });
+it("selects a Shift range across visible CL file tables without selecting collapsed files", async () => {
+  const entry = (id: number) => ({
+    ...change,
+    id,
+    files: [
+      { depotPath: `//fixture/${id}`, action: "edit", state: "openedEdit" },
+    ],
+  });
+  backend.queryPendingChanges.mockImplementation((query) =>
+    Promise.resolve({
+      requestGeneration: query.requestGeneration,
+      defaultChange: entry(0),
+      items: [entry(25), entry(12), entry(5)],
+      hasMore: false,
+      partial: false,
+      stats: {
+        scannedCount: 4,
+        matchedCount: 4,
+        truncatedBySafetyLimit: false,
+      },
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="cross-range" zh={false}>
+        <MenuEnvironment.Provider value={environment()}>
+          <PendingPage
+            t={messages["en-US"]}
+            clientName="workspace"
+            connectionKey="cross-range"
+            demo={false}
+            ready
+          />
+        </MenuEnvironment.Provider>
+      </ContextMenuProvider>,
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  for (const id of [0, 25, 12])
+    await act(async () =>
+      host.querySelector<HTMLElement>(`[data-pending-change="${id}"]`)!.click(),
+    );
+  expect(
+    host.querySelectorAll('.pending-file[aria-selected="true"]'),
+  ).toHaveLength(0);
+  const rows = [...host.querySelectorAll<HTMLElement>(".pending-file")];
+  expect(rows).toHaveLength(3);
+  await act(async () => rows[0].click());
+  await act(async () => {
+    rows[2].dispatchEvent(
+      new MouseEvent("click", { bubbles: true, shiftKey: true }),
+    );
+  });
+  expect(
+    host.querySelectorAll('.pending-file[aria-selected="true"]'),
+  ).toHaveLength(3);
+  expect(
+    host
+      .querySelector('[data-pending-change="5"]')!
+      .parentElement!.querySelector(".pending-file"),
+  ).toBeNull();
+});
+
+it("renders moved files under the target before the server resolves with no full-table reread", async () => {
+  const rows = [
+    {
+      ...change,
+      id: 10,
+      files: [{ depotPath: "//fixture/optimistic", action: "edit" }],
+    },
+    {
+      ...change,
+      id: 20,
+      files: [{ depotPath: "//fixture/extra", action: "edit" }],
+    },
+  ];
+  backend.queryPendingChanges.mockImplementation((query) =>
+    Promise.resolve({
+      requestGeneration: query.requestGeneration,
+      items: rows,
+      hasMore: false,
+      partial: false,
+      stats: {
+        scannedCount: 2,
+        matchedCount: 2,
+        truncatedBySafetyLimit: false,
+      },
+    }),
+  );
+  let finish!: (receipt: SelectedMoveReceipt) => void;
+  backend.selectedMoveExecute.mockImplementation(
+    () => new Promise((resolve) => (finish = resolve)),
+  );
+  await act(async () =>
+    root.render(
+      <ContextMenuProvider scope="optimistic-ui" zh={false}>
+        <MenuEnvironment.Provider value={environment()}>
+          <PendingPage
+            t={messages["en-US"]}
+            clientName="workspace"
+            connectionKey="optimistic-ui"
+            demo={false}
+            ready
+          />
+        </MenuEnvironment.Provider>
+      </ContextMenuProvider>,
+    ),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  for (const id of [10, 20])
+    await act(async () =>
+      host.querySelector<HTMLElement>(`[data-pending-change="${id}"]`)!.click(),
+    );
+  const count = backend.queryPendingChanges.mock.calls.length;
+  const request = {
+    operationId: "ui-deferred",
+    connection: {
+      profileId: "fixture",
+      generation: "1",
+      server: "synthetic",
+      user: "fixture",
+      client: "workspace",
+    },
+    target: { kind: "existing" as const, changeId: 20 },
+    files: [{ depotPath: "//fixture/optimistic", sourceChangeId: 10 }],
+  };
+  await act(async () => {
+    expect(startOptimisticMove("optimistic-ui", request, rows)).toBe(true);
+  });
+  const card = (id: number) =>
+    host
+      .querySelector(`[data-pending-change="${id}"]`)!
+      .closest(".pending-card")!;
+  expect(card(10).textContent).not.toContain("//fixture/optimistic");
+  expect(card(20).textContent).toContain("//fixture/optimistic");
+  expect(card(20).textContent).toContain("//fixture/extra");
+  expect(
+    host.querySelector(".pending-query-bar input")?.hasAttribute("disabled"),
+  ).toBe(false);
+  expect(backend.queryPendingChanges).toHaveBeenCalledTimes(count);
+  await act(async () =>
+    finish({
+      operationId: request.operationId,
+      targetCreationUnknown: false,
+      targetChangeId: 20,
+      stage: "completed",
+      files: [{ ...request.files[0], state: "moved" }],
+      message: "done",
+    }),
+  );
+  expect(backend.queryPendingChanges).toHaveBeenCalledTimes(count);
+  expect(card(20).textContent).toContain("//fixture/optimistic");
+});
+
+it.each([20, 0, 10])(
+  "trusted drag directly targets CL %s without a dialog; same target is a no-op",
+  async (targetId) => {
+    const path = `//fixture/drop-${targetId}`;
+    const source = {
+      ...change,
+      id: 10,
+      files: [{ depotPath: path, action: "edit" }],
+    };
+    const target = { ...change, id: targetId, files: [] };
+    backend.companySubmitConnectionSnapshot.mockResolvedValue({
+      profileId: "fixture",
+      generation: "1",
+      server: "synthetic",
+      user: "fixture",
+      client: "workspace",
+    });
+    backend.selectedMoveExecute
+      .mockReset()
+      .mockImplementation(() => new Promise(() => {}));
+    backend.queryPendingChanges.mockImplementation((query) =>
+      Promise.resolve({
+        requestGeneration: query.requestGeneration,
+        defaultChange: targetId === 0 ? target : undefined,
+        items: targetId === 10 || targetId === 0 ? [source] : [source, target],
+        hasMore: false,
+        partial: false,
+        stats: {
+          scannedCount: 2,
+          matchedCount: 2,
+          truncatedBySafetyLimit: false,
+        },
+      }),
+    );
+    await act(async () =>
+      root.render(
+        <ContextMenuProvider scope={`drop-${targetId}`} zh={false}>
+          <MenuEnvironment.Provider value={environment()}>
+            <PendingPage
+              t={messages["en-US"]}
+              clientName="workspace"
+              connectionKey={`drop-${targetId}`}
+              demo={false}
+              ready
+            />
+          </MenuEnvironment.Provider>
+        </ContextMenuProvider>,
+      ),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-pending-change="10"]')!.click(),
+    );
+    const sourceRow = host.querySelector<HTMLElement>(".pending-file")!;
+    const card = host
+      .querySelector(`[data-pending-change="${targetId}"]`)!
+      .closest(".pending-card")!;
+    const transfer = { effectAllowed: "", setData: vi.fn() };
+    const event = (type: string) => {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(e, "dataTransfer", { value: transfer });
+      return e;
+    };
+    // An external payload has no trusted in-memory snapshot.
+    await act(async () => card.dispatchEvent(event("drop")));
+    expect(backend.selectedMoveExecute).not.toHaveBeenCalled();
+    await act(async () => sourceRow.dispatchEvent(event("dragstart")));
+    await act(async () => {
+      card.dispatchEvent(event("drop"));
+      card.dispatchEvent(event("drop"));
+    });
+    expect(host.querySelector(".move-workflow")).toBeNull();
+    if (targetId === 10) {
+      expect(backend.selectedMoveExecute).not.toHaveBeenCalled();
+      return;
+    }
+    expect(backend.selectedMoveExecute).toHaveBeenCalledTimes(1);
+    expect(backend.selectedMoveExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [{ depotPath: path, sourceChangeId: 10 }],
+        target: { kind: "existing", changeId: targetId },
+      }),
+    );
+    // Execute promise remains unresolved: projection already moved the row.
+    expect(card.textContent).toContain(path);
+    expect(
+      host
+        .querySelector('[data-pending-change="10"]')!
+        .closest(".pending-card")!.textContent,
+    ).not.toContain(path);
+  },
+);

@@ -1,0 +1,78 @@
+.topbar:has(.window-controls) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding-right: 0;
+  gap: 12px;
+}
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+.window-controls button:hover {
+  background: var(--hover);
+}
+.window-controls .window-close:hover {
+  background: var(--danger);
+  color: white;
+}
+.window-control-error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  background: var(--panel);
+  color: var(--danger);
+  white-space: nowrap;
+  padding: 4px;
+}
+.topbar .brand[data-tauri-drag-region] {
+  align-self: stretch;
+  -webkit-app-region: drag;
+}
+@media (max-width: 520px) {
+  .topbar:has(.window-controls) {
+    gap: 6px;
+  }
+  .window-controls button {
+    width: 32px;
+  }
+}
+
+/* Connection setup gate: frameless window still needs a draggable title strip. */
+.connection-setup-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  margin: 0 -20px 20px;
+  padding-left: 20px;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+.connection-setup-bar h1 {
+  margin: 0;
+  font-size: 16px;
+  white-space: nowrap;
+}
+.connection-setup-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+.connection-setup-actions * {
+  -webkit-app-region: no-drag;
+}

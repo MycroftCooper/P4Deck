@@ -1,0 +1,134 @@
+[
+  {
+    "path": "src/features/companySubmit/customSubmit.ts",
+    "expected": "c36c48a5efeabb19fa6fdf9107500fe18dfaf2ef912c85ca0ddf2c6b719ccfd9",
+    "actual": "c36c48a5efeabb19fa6fdf9107500fe18dfaf2ef912c85ca0ddf2c6b719ccfd9",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/customSubmit.test.ts",
+    "expected": "dd6188d6484059c5fef2cd8eac5882ab8e70f9dc6fb21d21ec1c8025f3711a5c",
+    "actual": "dd6188d6484059c5fef2cd8eac5882ab8e70f9dc6fb21d21ec1c8025f3711a5c",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/useCustomSubmit.ts",
+    "expected": "2bae2060516116ab38df825f286f5785c3d2c37a410b9f18552170c41f48f287",
+    "actual": "2bae2060516116ab38df825f286f5785c3d2c37a410b9f18552170c41f48f287",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/useCustomSubmit.test.tsx",
+    "expected": "1d725e412631d282562e04997601d7c3d69b9b82d35e360f43b5ab9301298b5c",
+    "actual": "1d725e412631d282562e04997601d7c3d69b9b82d35e360f43b5ab9301298b5c",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/CustomSubmitStatusDialog.tsx",
+    "expected": "e5d98c8e335cdf103b92dab9c4930124f8beb57286cf346bf6dd32592b574219",
+    "actual": "e5d98c8e335cdf103b92dab9c4930124f8beb57286cf346bf6dd32592b574219",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/snapshotAdapter.test.ts",
+    "expected": "19c2f977561f402a20ac2dee9fe983c336dc104311392c4c694da7d8c16552cf",
+    "actual": "19c2f977561f402a20ac2dee9fe983c336dc104311392c4c694da7d8c16552cf",
+    "matches": true
+  },
+  {
+    "path": "src/infrastructure/backend/contract.ts",
+    "expected": "055cb940d00a5889a0d1e42ccc5e3569fe3e01f652bcb508d4e0b3a5bb504b35",
+    "actual": "055cb940d00a5889a0d1e42ccc5e3569fe3e01f652bcb508d4e0b3a5bb504b35",
+    "matches": true
+  },
+  {
+    "path": "src/infrastructure/backend/tauriBackend.ts",
+    "expected": "839d73c65226c70a418fca5f194946e9ae146f88a905ed4aa33ec6788e732e22",
+    "actual": "839d73c65226c70a418fca5f194946e9ae146f88a905ed4aa33ec6788e732e22",
+    "matches": true
+  },
+  {
+    "path": "src/infrastructure/backend/mockBackend.ts",
+    "expected": "d2a5c1faddb5813c83d7871664b333bdfcb11e4b2cc7d013884f22e9b21739d3",
+    "actual": "d2a5c1faddb5813c83d7871664b333bdfcb11e4b2cc7d013884f22e9b21739d3",
+    "matches": true
+  },
+  {
+    "path": "src/shared/contracts/types.ts",
+    "expected": "d373be9baa3ac10faa312c42ecc87d8c695da2e23a54e70d0b7670e99bd2089a",
+    "actual": "d373be9baa3ac10faa312c42ecc87d8c695da2e23a54e70d0b7670e99bd2089a",
+    "matches": true
+  },
+  {
+    "path": "src/app/shell/CommandBar.tsx",
+    "expected": "7cb3e57cdc40559e0c50dbed2a39a601a0ec8d2f969eb65d6a71b835f0cf2741",
+    "actual": "7cb3e57cdc40559e0c50dbed2a39a601a0ec8d2f969eb65d6a71b835f0cf2741",
+    "matches": true
+  },
+  {
+    "path": "src/app/shell/CommandBar.customSubmit.test.tsx",
+    "expected": "00055195573c81d0845af3ff456e35f736861dc6d906c2fd599237c7661d84a9",
+    "actual": "00055195573c81d0845af3ff456e35f736861dc6d906c2fd599237c7661d84a9",
+    "matches": true
+  },
+  {
+    "path": "src/features/settings/ConnectionProfilesCard.tsx",
+    "expected": "a9a76c4b414e47f3e14b75d9f16e45200f15ddf44f2a8610b69f7fa9170f8b30",
+    "actual": "a9a76c4b414e47f3e14b75d9f16e45200f15ddf44f2a8610b69f7fa9170f8b30",
+    "matches": true
+  },
+  {
+    "path": "src/features/settings/SettingsPage.test.tsx",
+    "expected": "b537be426ab8730edc809798b49a96253b5a3ff33e71468f8ecca94bf65e60e4",
+    "actual": "b537be426ab8730edc809798b49a96253b5a3ff33e71468f8ecca94bf65e60e4",
+    "matches": true
+  },
+  {
+    "path": "src/features/changelists/components/PendingPage.tsx",
+    "expected": "3b3af94263bef6a6b4dacb267873a8bb5883ac30733a7374a0c6b62e112e950a",
+    "actual": "3b3af94263bef6a6b4dacb267873a8bb5883ac30733a7374a0c6b62e112e950a",
+    "matches": true
+  },
+  {
+    "path": "src/app/context-menu/catalog.ts",
+    "expected": "14bd9fca3fd2a5c9b951f77ab8432c88b0864b77e4c1184ee39e2c97a33e9b67",
+    "actual": "14bd9fca3fd2a5c9b951f77ab8432c88b0864b77e4c1184ee39e2c97a33e9b67",
+    "matches": true
+  },
+  {
+    "path": "src/app/context-menu/labels.ts",
+    "expected": "01e3534c72b1021f92870483cee5dd57ec183a9fb94215c0f755a656d245b537",
+    "actual": "01e3534c72b1021f92870483cee5dd57ec183a9fb94215c0f755a656d245b537",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/PendingCompanySubmit.test.tsx",
+    "expected": "229ef4c9aee5cad169ab0aa9edd217f65881aa9637df570c7003dec177b71896",
+    "actual": "229ef4c9aee5cad169ab0aa9edd217f65881aa9637df570c7003dec177b71896",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/CompanySubmitPreparation.test.tsx",
+    "expected": "ca79023eb94a9a6224f9be53133396c1bf965422f11e143a447f06298691b07e",
+    "actual": "ca79023eb94a9a6224f9be53133396c1bf965422f11e143a447f06298691b07e",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/CompanySubmitDialog.tsx",
+    "expected": "cf55f273e21aad0f17fca25c84a1c74fe459cc843f46028dae7e6561c428cf79",
+    "actual": "cf55f273e21aad0f17fca25c84a1c74fe459cc843f46028dae7e6561c428cf79",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/CompanySubmitPreparation.tsx",
+    "expected": "b863ca35a51c46ecd6ccd0c2cd85a58736260363f5ebd8e1c7f4226108bad54d",
+    "actual": "b863ca35a51c46ecd6ccd0c2cd85a58736260363f5ebd8e1c7f4226108bad54d",
+    "matches": true
+  },
+  {
+    "path": "src/features/companySubmit/CompanySubmitPreview.tsx",
+    "expected": "bda0da1b662ce88d580ca80b30699347ea8d2a266b4d79cc94dfaad3aa3c6b76",
+    "actual": "bda0da1b662ce88d580ca80b30699347ea8d2a266b4d79cc94dfaad3aa3c6b76",
+    "matches": true
+  }
+]

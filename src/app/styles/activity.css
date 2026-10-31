@@ -218,7 +218,7 @@ body:has(.resource-resize-handle.is-resizing) * {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel-2);
+  background: var(--chrome);
   border-right: 1px solid var(--border);
 }
 .activity-scroll {
@@ -226,7 +226,6 @@ body:has(.resource-resize-handle.is-resizing) * {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
 }
 .activity-group {
   display: flex;

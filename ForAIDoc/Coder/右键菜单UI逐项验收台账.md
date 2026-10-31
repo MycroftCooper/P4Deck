@@ -507,6 +507,7 @@
 | 台账 ID | 对象 | 菜单项 | 状态 | 备注 |
 | --- | --- | --- | --- | --- |
 | C02-13 | 当前用户/工作区编号 Pending CL | 在 Swarm 中打开 | ☑ | 当前活动 profile；缺配置进入 Settings |
+| C02-14 | 当前用户/工作区编号 Pending CL | 解决冲突… | ☑ | 有未解决冲突时高亮；弹窗列出 CL 内全部冲突文件 |
 | C03-07 | 其他用户/工作区 Pending CL | 在 Swarm 中打开 | ☑ | 只读 change URL |
 | C06-07 | Shelf 分组 / 搁置 CL | 在 Swarm 中打开 | ☑ | 来源 CL URL，不猜 Review ID |
 | C09-08 | Submitted CL | 在 Swarm 中打开 | ☑ | change URL |

@@ -6,6 +6,8 @@ export interface MenuAction {
   run?: (source?: HTMLElement) => void | Promise<unknown>;
   reason?: string;
   checked?: boolean;
+  /** Accent an actionable command (e.g. Resolve while a conflict is unresolved). */
+  emphasis?: "primary";
   children?: MenuItem[];
   hidden?: boolean;
 }

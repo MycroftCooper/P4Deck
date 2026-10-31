@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 
 export interface ChangelistDraft {
@@ -45,6 +46,11 @@ export function ChangelistFormDialog({
   const formId = useId(),
     errorId = useId();
   const dirty = description !== initialDescription;
+  const clearUnsaved = useUnsavedEditor(
+    dirty ? "dirty" : "clean",
+    "",
+    "changelistDescription",
+  );
   const dismiss = () => {
     if (!busy) dirty ? setDiscard(true) : onDismiss();
   };
@@ -80,7 +86,10 @@ export function ChangelistFormDialog({
     setBusy(true);
     try {
       await onSubmit(draft);
-      if (generation.current === requestGeneration) onDismiss();
+      if (generation.current === requestGeneration) {
+        clearUnsaved();
+        onDismiss();
+      }
     } catch (cause) {
       if (generation.current === requestGeneration) setError(String(cause));
     } finally {
@@ -185,7 +194,14 @@ export function ChangelistFormDialog({
           <button type="button" onClick={() => setDiscard(false)}>
             {tr("继续编辑", "Keep editing")}
           </button>
-          <button type="button" className="danger" onClick={onDismiss}>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              clearUnsaved();
+              onDismiss();
+            }}
+          >
             {tr("放弃修改并关闭", "Discard and close")}
           </button>
         </section>

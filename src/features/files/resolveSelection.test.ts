@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { backend } from "../../infrastructure/backend";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { resolveSelection } from "./resolveSelection";
 import { workspaceCache } from "./workspaceQueries";
 afterEach(() => {

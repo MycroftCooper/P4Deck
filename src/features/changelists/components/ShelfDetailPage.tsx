@@ -1,3 +1,5 @@
+import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
+import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
 import {
@@ -20,7 +22,7 @@ import type {
   ShelfDetailFile,
   ShelfDetailRequestError,
   ShelfFilePreview,
-} from "../../../shared/contracts/types";
+} from "../../../shared/contracts";
 import { makeReviewScope } from "../../browsers/reviewModel";
 import { SwarmAction } from "../../swarm/SwarmAction";
 
@@ -68,6 +70,10 @@ export function ShelfDetailPage({
   const initialPath = encodedInitialPath
     ? decodeURIComponent(encodedInitialPath)
     : undefined;
+  const tableColumns = useColumnWidths([320, 230], [140, 140], {
+    id: "shelf-detail",
+    gutter: 48,
+  });
   const [detail, setDetail] = useState<ShelfDetail>();
   const [selected, setSelected] = useState<ShelfDetailFile>();
   const [preview, setPreview] = useState<ShelfFilePreview>();
@@ -510,6 +516,13 @@ export function ShelfDetailPage({
               role="listbox"
               aria-label="Shelved files"
             >
+              <ResizeHeader
+                columns={[
+                  zh ? "路径" : "Path",
+                  zh ? "动作 / 类型 / 大小" : "Action / type / size",
+                ]}
+                resize={tableColumns}
+              />
               <div
                 className="virtual-spacer"
                 style={{ height: rows.getTotalSize() }}
@@ -526,6 +539,7 @@ export function ShelfDetailPage({
                       }
                       style={{
                         height: row.size,
+                        ...tableColumns.style,
                         transform: `translateY(${row.start}px)`,
                       }}
                       onClick={() => {

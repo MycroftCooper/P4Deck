@@ -1,5 +1,5 @@
 import { Languages, MonitorCog, Moon, Sun } from "lucide-react";
-import type { ThemeMode } from "../../shared/contracts/types";
+import type { ThemeMode } from "../../shared/contracts";
 import type { Preferences } from "../hooks/usePreferences";
 export function AppControls({ preferences }: { preferences: Preferences }) {
   const { theme, setTheme, setLocale, t, zh } = preferences;

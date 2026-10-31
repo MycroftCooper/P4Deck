@@ -35,14 +35,12 @@ it("does nothing on open or close and cancels a reviewed preview without executi
 });
 it("confirms exactly the previewed single revision, with no range or CL execution target", async () => {
   vi.spyOn(backend, "previewUndo").mockResolvedValue(plan());
-  const confirm = vi
-    .spyOn(backend, "confirmUndo")
-    .mockResolvedValue({
-      operationId: "undo-1",
-      exitCode: 0,
-      events: [],
-      durationMs: 1,
-    });
+  const confirm = vi.spyOn(backend, "confirmUndo").mockResolvedValue({
+    operationId: "undo-1",
+    exitCode: 0,
+    events: [],
+    durationMs: 1,
+  });
   const refresh = vi.fn();
   await harness.render(
     <UndoDialog
@@ -56,8 +54,13 @@ it("confirms exactly the previewed single revision, with no range or CL executio
   await act(async () => dialogButton("Preview").click());
   expect(confirm).not.toHaveBeenCalled();
   await act(async () => dialogButton("Confirm Undo").click());
-  expect(confirm).toHaveBeenCalledExactlyOnceWith({ target, token: "one-use" });
-  expect(document.body.textContent).toContain("not submitted");
+  expect(confirm).toHaveBeenCalledExactlyOnceWith({
+    target,
+    token: "one-use",
+    operationId: expect.any(String),
+  });
+  // S4a-FE: mock backend returns a legacy payload, so the dialog keeps the legacy message.
+  expect(document.body.textContent).toMatch(/not submitted|legacy result/i);
   expect(refresh).toHaveBeenCalledOnce();
   expect(dialogButton("Confirm Undo")).toBeUndefined();
 });

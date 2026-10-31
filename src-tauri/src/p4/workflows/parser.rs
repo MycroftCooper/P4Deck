@@ -35,6 +35,16 @@ pub struct ResolveRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilelogRevision {
+    pub revision: Option<i64>,
+    pub change: Option<i64>,
+    pub user: Option<String>,
+    /// RFC 3339 when P4 returned a parseable epoch second.
+    pub time: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionFact {
     pub depot_path: Option<String>,
     pub permission: String,
@@ -272,6 +282,43 @@ pub fn preview_lines(events: &[OperationEvent]) -> Vec<String> {
     lines
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolveDiffCounts {
+    pub yours: usize,
+    pub theirs: usize,
+    pub both: usize,
+    pub conflicting: usize,
+}
+
+/// P4's own merge engine prints the authoritative summary:
+/// `Diff chunks: 4 yours + 2 theirs + 1 both + 1 conflicting`.
+/// P4V's "Differences from base" / "Conflicts" are these same counts.
+pub fn resolve_diff_counts(lines: &[String]) -> Option<ResolveDiffCounts> {
+    let line = lines
+        .iter()
+        .find_map(|line| line.split_once("Diff chunks:").map(|(_, rest)| rest))?;
+    let mut counts = ResolveDiffCounts {
+        yours: 0,
+        theirs: 0,
+        both: 0,
+        conflicting: 0,
+    };
+    let tokens = line.split_whitespace().collect::<Vec<_>>();
+    for pair in tokens.windows(2) {
+        let Ok(number) = pair[0].parse::<usize>() else {
+            continue;
+        };
+        match pair[1].trim_end_matches(',') {
+            "yours" => counts.yours = number,
+            "theirs" => counts.theirs = number,
+            "both" => counts.both = number,
+            "conflicting" => counts.conflicting = number,
+            _ => {}
+        }
+    }
+    (counts.yours + counts.theirs + counts.both + counts.conflicting > 0).then_some(counts)
+}
+
 pub fn resolve_sources(lines: &[String]) -> Vec<ResolveVersionSource> {
     let joined = lines.join(" ");
     let mut sources = Vec::new();
@@ -324,6 +371,69 @@ pub fn resolve_records(events: &[OperationEvent]) -> Vec<ResolveRecord> {
             .then_some(record)
         })
         .collect()
+}
+
+/// Latest `p4 filelog -m 1 -t` revision metadata for one depot file. Accepts
+/// both the unindexed (`rev`/`change`/`desc`) and indexed (`rev0`/`change0`)
+/// marshal shapes; unknown fields stay `None`.
+pub fn filelog_revision(events: &[OperationEvent]) -> Option<FilelogRevision> {
+    let mut best: Option<(i64, FilelogRevision)> = None;
+    for value in json_values(events) {
+        let Some(object) = value.as_object() else {
+            continue;
+        };
+        let mut revision: Option<i64> = None;
+        let mut suffix = String::new();
+        for (key, item) in object {
+            let Some(rest) = key.strip_prefix("rev") else {
+                continue;
+            };
+            if !rest.chars().all(|ch| ch.is_ascii_digit()) {
+                continue;
+            }
+            let Some(parsed) = item
+                .as_i64()
+                .or_else(|| item.as_str().and_then(|text| text.parse().ok()))
+            else {
+                continue;
+            };
+            if revision.is_none_or(|current| parsed > current) {
+                revision = Some(parsed);
+                suffix = rest.to_owned();
+            }
+        }
+        let Some(revision) = revision else {
+            continue;
+        };
+        let text = |prefix: &str| {
+            value
+                .get(format!("{prefix}{suffix}"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        let record = FilelogRevision {
+            revision: Some(revision),
+            change: text("change").and_then(|value| value.parse().ok()),
+            user: text("user"),
+            time: text("time").and_then(|value| rfc3339_epoch(&value)),
+            description: text("desc")
+                .map(|value| value.trim_end().to_owned())
+                .filter(|value| !value.is_empty()),
+        };
+        if best.as_ref().is_none_or(|(current, _)| revision > *current) {
+            best = Some((revision, record));
+        }
+    }
+    best.map(|(_, record)| record)
+}
+
+fn rfc3339_epoch(value: &str) -> Option<String> {
+    value
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .and_then(|seconds| DateTime::<Utc>::from_timestamp(seconds, 0))
+        .map(|value| value.to_rfc3339())
 }
 
 fn split_revision(value: &str) -> (Option<String>, Option<i64>) {
@@ -444,6 +554,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_p4_engine_diff_chunk_counts() {
+        let lines = preview_lines(&[event(
+            "Diff chunks: 4 yours + 2 theirs + 1 both + 1 conflicting",
+        )]);
+        let counts = resolve_diff_counts(&lines).expect("counts");
+        assert_eq!(counts.yours, 4);
+        assert_eq!(counts.theirs, 2);
+        assert_eq!(counts.both, 1);
+        assert_eq!(counts.conflicting, 1);
+        assert!(resolve_diff_counts(&["no summary".into()]).is_none());
+    }
+
+    #[test]
     fn parses_sorted_shelf_detail_with_binary_delete_and_special_paths() {
         let events = [event(
             r#"{"change":"7","status":"shelved","user":"tester","client":"ws","time":"1700000000","desc":"Shelf\n","job0":"JOB-1","depotFile0":"//depot/z bin@#%.dat","action0":"edit","type0":"binary","rev0":"3","depotFile1":"//depot/a 删除.txt","action1":"delete","type1":"text","rev1":"2"}"#,
@@ -458,5 +581,35 @@ mod tests {
         assert!(detail.files[1].binary);
         assert_eq!(detail.files[1].size, Some(4096));
         assert_eq!(detail.inspection_status, ShelfInspectionStatus::Complete);
+    }
+
+    #[test]
+    fn parses_filelog_revision_metadata_in_both_marshal_shapes() {
+        let plain = filelog_revision(&[event(
+            r#"{"depotFile":"//depot/a","rev":"2","change":"42","user":"alice","time":"1700000000","desc":"Add feature\n\n"}"#,
+        )])
+        .unwrap();
+        assert_eq!(plain.revision, Some(2));
+        assert_eq!(plain.change, Some(42));
+        assert_eq!(plain.user.as_deref(), Some("alice"));
+        assert_eq!(plain.time.as_deref(), Some("2023-11-14T22:13:20+00:00"));
+        assert_eq!(plain.description.as_deref(), Some("Add feature"));
+
+        let indexed = filelog_revision(&[event(
+            r#"{"depotFile":"//depot/a","rev0":"2","change0":"42","user0":"alice","time0":"1700000000","desc0":"Indexed"}"#,
+        )])
+        .unwrap();
+        assert_eq!(indexed.revision, Some(2));
+        assert_eq!(indexed.change, Some(42));
+        assert_eq!(indexed.user.as_deref(), Some("alice"));
+        assert_eq!(indexed.description.as_deref(), Some("Indexed"));
+
+        // Missing fields stay None; malformed/absent revisions are not fabricated.
+        let sparse = filelog_revision(&[event(r#"{"depotFile":"//depot/a","rev":"1"}"#)]).unwrap();
+        assert_eq!(sparse.change, None);
+        assert_eq!(sparse.user, None);
+        assert_eq!(sparse.time, None);
+        assert_eq!(sparse.description, None);
+        assert!(filelog_revision(&[event(r#"{"depotFile":"//depot/a"}"#)]).is_none());
     }
 }

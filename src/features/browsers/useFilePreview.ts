@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { backend } from "../../infrastructure/backend";
-import type { FilePreview, RuntimeInfo } from "../../shared/contracts/types";
+import type { FilePreview, RuntimeInfo } from "../../shared/contracts";
 import { appCache } from "../../shared/cache/appCache";
 
 /** Previews can hold large images, so only the most recent few are kept. */

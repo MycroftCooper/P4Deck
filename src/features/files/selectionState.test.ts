@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { WorkspaceNode } from "../../shared/contracts/types";
+import type { WorkspaceNode } from "../../shared/contracts";
 import { reconcileSelection } from "./selectionState";
 const file: WorkspaceNode = {
   id: "remote",

@@ -80,7 +80,7 @@ const runTodos = (argv) =>
   });
 const addedTodo = runTodos(["add", "测试待办"]);
 check("人类待办 add", addedTodo.status === 0 && addedTodo.stdout.includes("T01"), addedTodo.stdout.trim());
-const toggledTodo = runTodos(["toggle", "T01"]);
+const toggledTodo = runTodos(["toggle", "T01", "--no-board"]);
 check("人类待办 toggle", toggledTodo.status === 0 && toggledTodo.stdout.includes("已完成"), toggledTodo.stdout.trim());
 const listedTodos = JSON.parse(runTodos(["list", "--json"]).stdout);
 check("人类待办落盘", listedTodos.items?.[0]?.done === true);
@@ -197,9 +197,12 @@ for (const jsonFile of ["tools/dsh-p4deck-board/package.json", "package.json", "
 }
 
 // 人工验收命令：dry-run 不落盘；没有 --note 必须拒绝。
+// 不要写死某个 ID：它可能已经被人工验收过，accept 会提前返回。
+const acceptTarget =
+  stateOnDisk.packages.find((pkg) => !pkg.archived && pkg.verification?.humanAccepted !== true)?.id ?? "CL-04";
 const acceptDry = spawnSync(
   process.execPath,
-  [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force", "--note", "selftest", "--dry"],
+  [path.join(HERE, "state.mjs"), "accept", acceptTarget, "--force", "--note", "selftest", "--dry"],
   { cwd: ROOT, encoding: "utf8" },
 );
 check(
@@ -207,11 +210,42 @@ check(
   acceptDry.status === 0 && acceptDry.stdout.includes('"dryRun": true'),
   acceptDry.stderr.trim(),
 );
-const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "accept", "CL-04", "--force"], {
+const acceptNoNote = spawnSync(process.execPath, [path.join(HERE, "state.mjs"), "accept", acceptTarget, "--force"], {
   cwd: ROOT,
   encoding: "utf8",
 });
 check("accept 必须给 --note", acceptNoNote.status === 2, String(acceptNoNote.status));
+
+// 发布脚本：默认 dry-run；版本不一致必须拒绝。
+const packageVersion = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version;
+const releaseDry = spawnSync(
+  process.execPath,
+  [path.join(HERE, "release.mjs"), "--version", packageVersion, "--skip-gate", "--allow-dirty"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+const existingTag = spawnSync("git", ["tag", "--list", `v${packageVersion}`], {
+  cwd: ROOT,
+  encoding: "utf8",
+}).stdout.trim();
+if (existingTag) {
+  check(
+    "release 拒绝已存在的 tag",
+    releaseDry.status !== 0 && /已存在|exists/i.test(`${releaseDry.stderr}${releaseDry.stdout}`),
+    String(releaseDry.status),
+  );
+} else {
+  check(
+    "release 默认 dry-run 输出计划",
+    releaseDry.status === 0 && releaseDry.stdout.includes('"dryRun": true'),
+    releaseDry.stderr.trim(),
+  );
+}
+const releaseBad = spawnSync(
+  process.execPath,
+  [path.join(HERE, "release.mjs"), "--version", "0.0.0", "--skip-gate", "--allow-dirty"],
+  { cwd: ROOT, encoding: "utf8" },
+);
+check("release 拒绝版本不一致", releaseBad.status === 1, String(releaseBad.status));
 
 // 看板必须把"实现待验收"拆成证据齐/待应用/未登记三个桶。
 const boardRun = spawnSync(process.execPath, [path.join(HERE, "board.mjs")], { cwd: ROOT, encoding: "utf8" });

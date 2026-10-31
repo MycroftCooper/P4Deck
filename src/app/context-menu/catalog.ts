@@ -1116,6 +1116,11 @@ export const menuCatalog = {
         phase: "later",
       },
       { id: "C02-13", label: "在 Swarm 中打开", phase: "initial" },
+      {
+        id: "C02-14",
+        label: "解决冲突…",
+        phase: "initial",
+      },
     ],
   },
   C03: {
@@ -1157,6 +1162,7 @@ export const menuCatalog = {
   C04: {
     title: "Pending CL 内单个工作文件",
     items: [
+      { id: "C04-24", label: "提交选中文件", phase: "initial" },
       {
         id: "C04-01",
         label: "文件预览",
@@ -1277,6 +1283,7 @@ export const menuCatalog = {
   C05: {
     title: "Pending CL 内多个工作文件",
     items: [
+      { id: "C05-15", label: "提交选中文件", phase: "initial" },
       {
         id: "C05-01",
         label: "标记删除所选文件…",
@@ -1483,6 +1490,7 @@ export const menuCatalog = {
   C09: {
     title: "Submitted CL",
     items: [
+      { id: "C09-09", label: "追踪合并去向", phase: "initial" },
       {
         id: "C09-01",
         label: "查看详情",
@@ -2156,58 +2164,12 @@ export const menuCatalog = {
     ],
   },
   W01: {
-    title: "单个 Workspace 记录",
+    title: "工作区",
     items: [
-      {
-        id: "W01-01",
-        label: "查看详情",
-        phase: "initial",
-      },
-      {
-        id: "W01-02",
-        label: "复制名称",
-        phase: "initial",
-      },
-      {
-        id: "W01-03",
-        label: "复制根路径",
-        phase: "initial",
-      },
-      {
-        id: "W01-04",
-        label: "复制 Stream 路径",
-        phase: "initial",
-      },
-      {
-        id: "W01-05",
-        label: "刷新",
-        phase: "initial",
-      },
-      {
-        id: "W01-06",
-        label: "切换到此工作区…",
-        phase: "later",
-      },
-      {
-        id: "W01-07",
-        label: "编辑工作区…",
-        phase: "later",
-      },
-      {
-        id: "W01-08",
-        label: "复制配置新建工作区…",
-        phase: "later",
-      },
-      {
-        id: "W01-09",
-        label: "删除工作区…",
-        phase: "later",
-      },
-      {
-        id: "W01-10",
-        label: "系统中定位根目录",
-        phase: "later",
-      },
+      { id: "W01-06", label: "切换到此工作区…", phase: "initial" },
+      { id: "W01-08", label: "新建工作区…", phase: "initial" },
+      { id: "W01-07", label: "重命名工作区…", phase: "initial" },
+      { id: "W01-09", label: "删除工作区…", phase: "initial" },
     ],
   },
   W02: {

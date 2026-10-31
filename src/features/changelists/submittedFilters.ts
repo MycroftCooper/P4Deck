@@ -1,4 +1,4 @@
-import type { ClQuery } from "../../shared/contracts/types";
+﻿import type { ClQuery } from "../../shared/contracts";
 import { submissionKinds, type SubmissionKind } from "./submittedReport";
 import { storage } from "../../shared/lib/storage";
 
@@ -7,6 +7,7 @@ export const SUBMITTED_FILTERS_SCHEMA_VERSION = 4;
 export const SUBMITTED_PAGE_SIZE = 100;
 
 export interface SubmittedFilterDraft {
+  tags?: string[];
   keyword: string;
   users: string;
   streams: string[];
@@ -35,22 +36,38 @@ function toLocalDateTime(value: Date): string {
   return new Date(value.getTime() - offset).toISOString().slice(0, 16);
 }
 
+/**
+ * RFC3339 with the LOCAL offset and the local wall clock preserved, e.g.
+ * `2026-10-30T22:00:00+08:00`. `toISOString()` would emit a UTC wall clock
+ * (`...T14:00:00Z`), which the backend formats into a P4 date without converting
+ * the offset — that shifted Submitted filters 8 hours on a +08 server.
+ */
+export function toLocalRfc3339(value: Date): string {
+  const pad = (part: number) => String(part).padStart(2, "0");
+  const offsetMinutes = -value.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(offsetMinutes);
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`;
+}
+
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
 export function createDefaultSubmittedFilter(
   now = new Date(),
+  user = "",
 ): SubmittedFilterDraft {
   return {
     keyword: "",
-    users: "",
+    users: user,
+    tags: [],
     streams: [],
     depotPath: "",
     currentStreamOnly: false,
-    from: toLocalDateTime(new Date(now.getTime() - 30 * 86_400_000)),
+    from: toLocalDateTime(new Date(now.getTime() - 7 * 86_400_000)),
     to: toLocalDateTime(now),
-    submissionKind: "all",
+    submissionKind: "ordinary",
   };
 }
 
@@ -152,8 +169,8 @@ export function validateSubmittedFilter(
       clients,
       depotPath,
       streams,
-      from: fromDate.toISOString(),
-      to: toDate.toISOString(),
+      from: toLocalRfc3339(fromDate),
+      to: toLocalRfc3339(toDate),
       mergeClassifications: [],
       hideReliableMerges: false,
       pageSize: SUBMITTED_PAGE_SIZE,
@@ -170,6 +187,9 @@ function isSafeDraft(value: unknown): value is SubmittedFilterDraft {
         typeof item[key] === "string" &&
         byteLength(item[key] as string) <= 4096,
     ) &&
+    (item.tags === undefined ||
+      (Array.isArray(item.tags) &&
+        item.tags.every((tag) => typeof tag === "string"))) &&
     Array.isArray(item.streams) &&
     item.streams.length <= 16 &&
     item.streams.every(
@@ -183,6 +203,7 @@ function isSafeDraft(value: unknown): value is SubmittedFilterDraft {
 
 function copyDraft(value: SubmittedFilterDraft): SubmittedFilterDraft {
   return {
+    tags: [...(value.tags ?? [])],
     keyword: value.keyword,
     users: value.users,
     streams: [...value.streams],
