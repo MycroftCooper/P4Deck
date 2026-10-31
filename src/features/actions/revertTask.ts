@@ -89,6 +89,57 @@ export interface RevertPort {
     connection: ConnectionSnapshot;
   }): Promise<WorkflowActionLookup>;
   report(event: FrontendOperationLog): void;
+  /** Local workspace facts for optimistic hiding; missing/rejecting facts never hide rows. */
+  workspaceChildren?(dir: string): Promise<WorkspaceNode[]>;
+}
+const MAX_STATUS_DIRECTORIES = 20;
+const normalizeLocalPath = (value: string) =>
+  value.replaceAll("\\", "/").toLowerCase();
+function parentDirectory(absolutePath: string): string | undefined {
+  const path = normalizeLocalPath(absolutePath).replace(/\/+$/, "");
+  const slash = path.lastIndexOf("/");
+  return slash > 0 ? path.slice(0, slash) : undefined;
+}
+/**
+ * Only files proven `status.local === "present"` may be hidden optimistically.
+ * Modified/missing/unknown/unreadable/missing-fact/query-failure rows stay visible
+ * until the host result arrives (revert -a retains modified files).
+ */
+export async function localUnchangedPaths(
+  targets: readonly WorkspaceNode[],
+  status: (dir: string) => Promise<WorkspaceNode[]>,
+): Promise<string[]> {
+  const groups = new Map<string, WorkspaceNode[]>();
+  for (const target of targets) {
+    if (!target.absolutePath) continue;
+    const dir = parentDirectory(target.absolutePath);
+    if (!dir) continue;
+    const batch = groups.get(dir) ?? [];
+    batch.push(target);
+    groups.set(dir, batch);
+  }
+  // Too many directories or no path facts: do not guess; keep every row visible.
+  if (!groups.size || groups.size > MAX_STATUS_DIRECTORIES) return [];
+  const unchanged: string[] = [];
+  await Promise.all(
+    [...groups].map(async ([dir, batch]) => {
+      let items: WorkspaceNode[];
+      try {
+        items = await status(dir);
+      } catch {
+        return;
+      }
+      const facts = new Map(
+        items.map((item) => [normalizeLocalPath(item.absolutePath), item]),
+      );
+      for (const target of batch) {
+        const fact = facts.get(normalizeLocalPath(target.absolutePath));
+        if (fact?.status?.local === "present" && target.depotPath)
+          unchanged.push(target.depotPath);
+      }
+    }),
+  );
+  return [...new Set(unchanged)];
 }
 export const revertPort: RevertPort = {
   connection: () => backend.companySubmitConnectionSnapshot(),
@@ -98,6 +149,8 @@ export const revertPort: RevertPort = {
   report: (event) => {
     void recordFrontendOperationLog(event);
   },
+  workspaceChildren: (dir) =>
+    backend.listWorkspaceChildren(dir).then((listing) => listing.items),
 };
 /** Called only after existing confirmation. No modal lifetime, whole-list refresh, or write retry. */
 export function startRevert(
@@ -161,26 +214,34 @@ export function startRevert(
     ...selectionRequest(action, targets, operationId, wholeCl),
     paths: targets.map((n) => n.depotPath!),
   };
-  if (
-    !acceptRemovalObservation(
-      "revert",
-      scope,
-      operationId,
-      0,
-      request.paths,
-      runtime,
-      sources,
-    )
-  ) {
-    report("failed", "preflightBlocked");
-    return false;
-  }
   queueMicrotask(() => {
     void (async () => {
       let connection: ConnectionSnapshot | undefined,
         dispatched = false,
         result: WorkflowResult | undefined;
       try {
+        // Hide only files the local workspace proves unmodified; modified rows stay
+        // visible because the host retains them (no "flash all rows away").
+        const unchanged = await localUnchangedPaths(
+          targets,
+          port.workspaceChildren ?? revertPort.workspaceChildren!,
+        );
+        if (!current()) throw Error("context changed");
+        if (
+          unchanged.length &&
+          !acceptRemovalObservation(
+            "revert",
+            scope,
+            operationId,
+            0,
+            unchanged,
+            runtime,
+            sources,
+          )
+        ) {
+          report("failed", "preflightBlocked");
+          return;
+        }
         connection = await port.connection();
         if (
           !current() ||
@@ -189,19 +250,20 @@ export function startRevert(
           connection.client !== runtime.context.client
         )
           throw Error("context changed");
-        const record = removalLedger.get(operationId)!;
-        removalLedger.update(
-          operationId,
-          {
-            ...record.data,
-            execution: {
-              ...record.data.execution!,
-              confirmation: structuredClone(request),
-              connection,
+        const record = removalLedger.get(operationId);
+        if (record)
+          removalLedger.update(
+            operationId,
+            {
+              ...record.data,
+              execution: {
+                ...record.data.execution!,
+                confirmation: structuredClone(request),
+                connection,
+              },
             },
-          },
-          "running",
-        );
+            "running",
+          );
         dispatched = true;
         result = await port.execute(request, connection);
       } catch {

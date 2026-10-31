@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+﻿import { expect, it, vi } from "vitest";
 import { startRevert, revertTargets, type RevertPort } from "./revertTask";
 import { writeSnapshot, readSnapshot } from "../../shared/cache/snapshots";
 import {
@@ -77,6 +77,18 @@ function fixture() {
     execute: vi.fn(async () => result),
     lookup: vi.fn(async () => ({ kind: "notFound" as const })),
     report: vi.fn(),
+    // Default facts: both fixture files are locally unmodified (present), so the
+    // legacy "both rows hidden in flight" expectations stay valid.
+    workspaceChildren: vi.fn(async (dir: string) =>
+      nodes
+        .filter((node) =>
+          node.absolutePath!.toLowerCase().startsWith(dir.toLowerCase() + "/"),
+        )
+        .map((node) => ({
+          ...node,
+          status: { local: "present" } as WorkspaceNode["status"],
+        })),
+    ),
   };
   return { scope, runtime, nodes, snapshot, key, connection, result, port };
 }
@@ -87,6 +99,8 @@ it("projects immediately, retains I/O conflict, then merges precise success with
   expect(
     startRevert(f.scope, f.runtime, f.nodes, "revert", () => true, 11, f.port),
   ).toBe(true);
+  // Optimistic hiding now waits for local-status facts before claiming rows.
+  await flush();
   expect(
     projectRemovalChanges(
       "revert",
@@ -96,7 +110,6 @@ it("projects immediately, retains I/O conflict, then merges precise success with
     )[0].files,
   ).toHaveLength(0);
   expect(blockedMovePaths(f.scope).size).toBe(2);
-  await flush();
   expect(f.port.execute).toHaveBeenCalledWith(
     expect.objectContaining({
       paths: ["//fixture/a", "//fixture/b"],
@@ -379,4 +392,153 @@ it("retained no-op never clears older unrelated unknown claims", async () => {
       (x) => x.depotPath,
     ),
   ).toEqual(["//fixture/a", "//fixture/b"]);
+});
+
+it("hides only locally unmodified files for revertUnchanged and keeps modified rows", async () => {
+  const f = fixture();
+  vi.mocked(f.port.workspaceChildren!).mockImplementation(async (dir: string) =>
+    f.nodes
+      .filter((node) =>
+        node.absolutePath!.toLowerCase().startsWith(dir.toLowerCase() + "/"),
+      )
+      .map((node) => ({
+        ...node,
+        status: {
+          local: node.depotPath === "//fixture/a" ? "present" : "modified",
+        } as WorkspaceNode["status"],
+      })),
+  );
+  let finish!: (r: WorkflowResult) => void;
+  vi.mocked(f.port.execute).mockReturnValue(new Promise((r) => (finish = r)));
+  expect(
+    startRevert(
+      f.scope,
+      f.runtime,
+      f.nodes,
+      "revertUnchanged",
+      () => true,
+      11,
+      f.port,
+    ),
+  ).toBe(true);
+  await flush();
+  // Present A is hidden optimistically; modified B stays visible in flight.
+  expect(
+    projectRemovalChanges(
+      "revert",
+      f.snapshot.changes,
+      f.scope,
+      shelfObservation(f.runtime).version,
+    )[0].files.map((file) => file.depotPath),
+  ).toEqual(["//fixture/b"]);
+  expect(blockedMovePaths(f.scope).size).toBe(1);
+  // Execution still sends the complete target list and the exact operation.
+  expect(f.port.execute).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: "revertUnchanged",
+      paths: ["//fixture/a", "//fixture/b"],
+    }),
+    f.connection,
+  );
+  f.result.files[0].state = "succeeded";
+  f.result.files[1].state = "retained";
+  finish(f.result);
+  await flush();
+  expect(
+    readSnapshot<PendingSnapshot>(f.key)!.data.changes[0].files.map(
+      (file) => file.depotPath,
+    ),
+  ).toEqual(["//fixture/b"]);
+});
+
+it.each(["unknown", "reject"] as const)(
+  "does not hide rows without confirmed present facts (%s) and still executes",
+  async (mode) => {
+    const f = fixture();
+    vi.mocked(f.port.workspaceChildren!).mockImplementation(async () => {
+      if (mode === "reject") throw Error("status unavailable");
+      return f.nodes.map((node) => ({
+        ...node,
+        status: { local: "unknown" } as WorkspaceNode["status"],
+      }));
+    });
+    let finish!: (r: WorkflowResult) => void;
+    vi.mocked(f.port.execute).mockReturnValue(new Promise((r) => (finish = r)));
+    startRevert(
+      f.scope,
+      f.runtime,
+      f.nodes,
+      "revertUnchanged",
+      () => true,
+      11,
+      f.port,
+    );
+    await flush();
+    expect(
+      projectRemovalChanges(
+        "revert",
+        f.snapshot.changes,
+        f.scope,
+        shelfObservation(f.runtime).version,
+      )[0].files,
+    ).toHaveLength(2);
+    expect(blockedMovePaths(f.scope).size).toBe(0);
+    expect(f.port.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "revertUnchanged",
+        paths: ["//fixture/a", "//fixture/b"],
+      }),
+      f.connection,
+    );
+    finish(f.result);
+    await flush();
+    // No optimistic claim existed, so no synthetic success is merged either.
+    expect(
+      readSnapshot<PendingSnapshot>(f.key)!.data.changes[0].files,
+    ).toHaveLength(2);
+  },
+);
+
+it("does not guess when status would need more than 20 directories", async () => {
+  const f = fixture();
+  const many = Array.from({ length: 21 }, (_, index) => ({
+    ...f.nodes[0],
+    id: `f${index}`,
+    name: `f${index}`,
+    depotPath: `//fixture/f${index}`,
+    absolutePath: `C:/fixture/d${index}/f${index}`,
+    relativePath: `d${index}/f${index}`,
+  }));
+  vi.mocked(f.port.workspaceChildren!).mockImplementation(async () =>
+    many.map((node) => ({
+      ...node,
+      status: { local: "present" } as WorkspaceNode["status"],
+    })),
+  );
+  vi.mocked(f.port.execute).mockResolvedValue(f.result);
+  startRevert(
+    f.scope,
+    f.runtime,
+    many,
+    "revertUnchanged",
+    () => true,
+    11,
+    f.port,
+  );
+  await flush();
+  expect(
+    projectRemovalChanges(
+      "revert",
+      f.snapshot.changes,
+      f.scope,
+      shelfObservation(f.runtime).version,
+    )[0]?.files ?? [],
+  ).toHaveLength(2);
+  expect(blockedMovePaths(f.scope).size).toBe(0);
+  expect(f.port.execute).toHaveBeenCalledWith(
+    expect.objectContaining({
+      paths: many.map((node) => node.depotPath),
+    }),
+    f.connection,
+  );
 });

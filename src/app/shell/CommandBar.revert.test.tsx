@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 import { dialogHarness } from "../dialogs/testHarness";
@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   old: vi.fn(),
   connection: vi.fn(),
   invalidate: vi.fn(),
+  listWorkspaceChildren: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: api.invoke,
@@ -30,6 +31,7 @@ vi.mock("../../infrastructure/backend", () => ({
   backend: {
     performFileAction: api.old,
     companySubmitConnectionSnapshot: api.connection,
+    listWorkspaceChildren: api.listWorkspaceChildren,
     subscribeOperationEvents: async () => () => {},
   },
 }));
@@ -110,6 +112,16 @@ it.each([
       },
     } as PendingSnapshot;
     writeSnapshot(pendingSnapshotKey(runtime), snapshot);
+    // Local facts: the single file is unmodified, so it may be hidden optimistically.
+    api.listWorkspaceChildren.mockResolvedValue({
+      items: [{ ...node, status: { local: "present" } }],
+      completeness: "complete",
+      errors: [],
+      operationIds: [],
+      truncated: false,
+      safetyLimit: 500,
+      cacheFreshness: "fresh",
+    });
     let finish!: (v: WorkflowResult) => void;
     api.invoke.mockImplementation((command: string) =>
       command === "confirm_revert_action"
@@ -161,7 +173,8 @@ it.each([
     await h.render(<View />);
     await act(async () => {
       handler!("revert", target);
-      await Promise.resolve();
+      // Local-status facts are read before the optimistic hide is claimed.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(api.confirm).toHaveBeenCalled();
     if (cancel) {
