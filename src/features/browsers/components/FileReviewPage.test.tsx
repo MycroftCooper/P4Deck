@@ -122,6 +122,17 @@ async function waitForShadowText(text: string) {
   return false;
 }
 
+/** Incomplete diffs default to the raw patch, so watch the whole page text. */
+async function waitForText(text: string) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (host.textContent?.includes(text)) return true;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+  return false;
+}
+
 let host: HTMLDivElement;
 let root: Root;
 
@@ -245,6 +256,13 @@ it("shows missing final newlines on the affected side", async () => {
     "--- left\n+++ right\n@@ -1 +1 @@\n-same\n+same\n\\ No newline at end of file\n";
   backend.getDiff.mockResolvedValue(result);
   await render("diff", "//depot/file.txt");
+  // No full texts: the raw patch shows first, then the structured view.
+  expect(await waitForText("No newline at end of file")).toBe(true);
+  await click(
+    host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Structured view"]',
+    )!,
+  );
   expect(await waitForShadowText("No newline at end of file")).toBe(true);
   const left = sideColumn("left");
   const right = sideColumn("right");
@@ -466,17 +484,18 @@ it("cancels selector and generation owners; a late old error cannot hide the new
   });
   await act(async () => second.resolve(diff("SELECTOR LATEST")));
   await act(async () => first.reject(new Error("SELECTOR OLD ERROR")));
-  expect(await waitForShadowText("SELECTOR LATEST")).toBe(true);
-  expect(shadowText()).not.toContain("SELECTOR OLD ERROR");
+  expect(await waitForText("SELECTOR LATEST")).toBe(true);
+  expect(host.textContent).not.toContain("SELECTOR OLD ERROR");
 
   await render("diff", "//depot/a.txt", {
     ...runtime,
     activeProfileId: "profile-b",
     contextGeneration: 8,
   });
-  expect(shadowText()).not.toContain("SELECTOR LATEST");
+  expect(host.textContent).not.toContain("SELECTOR LATEST");
   await act(async () => third.resolve(diff("GENERATION LATEST")));
-  expect(await waitForShadowText("GENERATION LATEST")).toBe(true);
+  expect(await waitForText("GENERATION LATEST")).toBe(true);
+  expect(host.textContent).not.toContain("SELECTOR LATEST");
 });
 
 it("cancels the active backend operation when unmounted", async () => {

@@ -690,3 +690,11 @@
     monospace;
   color: var(--text);
 }
+/* Incomplete texts default to this readable raw patch instead of a dead-end
+   collapsed structured view. */
+.diff-patch-view-note {
+  color: var(--muted);
+}
+.diff-patch-view .diff-patch-fallback {
+  padding-bottom: 16px;
+}
