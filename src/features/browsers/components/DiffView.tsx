@@ -16,9 +16,9 @@ import {
   Columns2,
   CornerDownLeft,
   FileCode2,
-  FoldVertical,
   Rows3,
   Search,
+  UnfoldVertical,
   X,
 } from "lucide-react";
 import type {
@@ -143,9 +143,10 @@ export function DiffView({
 }) {
   const theme = useResolvedTheme();
   const [view, setView] = useState<ViewStyle>("split");
-  // Complete texts open fully expanded (the pre-0.1.10 behaviour); folding is
-  // an explicit opt-in that keeps the library's expandable separators.
-  const [foldUnchanged, setFoldUnchanged] = useState(false);
+  // Classic diff by default: hunks keep their context and every longer run of
+  // unchanged lines collapses into an expandable separator. Expanding the whole
+  // file is the explicit opt-in.
+  const [expandAll, setExpandAll] = useState(false);
   // Incomplete texts cannot hydrate collapsed context, so the readable raw
   // patch is the default; the structured renderer stays available for compare.
   const [partialMode, setPartialMode] = useState<"patch" | "structured">(
@@ -520,9 +521,10 @@ export function DiffView({
       hunkSeparators: displayText
         ? ("line-info" as const)
         : ("metadata" as const),
-      // Full texts default to showing every unchanged line; folding restores
-      // the library's collapsed, click-to-expand separators.
-      expandUnchanged: displayText ? !foldUnchanged : false,
+      // Classic context folding: ≤3 unchanged lines between hunks stay visible,
+      // longer runs collapse into a line-info separator with an expand button.
+      expandUnchanged: displayText ? expandAll : false,
+      collapsedContextThreshold: 3,
       lineDiffType: "word-alt" as const,
       diffIndicators: "bars" as const,
       disableFileHeader: true,
@@ -530,7 +532,7 @@ export function DiffView({
       onPostRender: bindHost,
       ...(displayText ? { loadDiffFiles } : {}),
     }),
-    [theme, view, displayText, foldUnchanged, loadDiffFiles, bindHost],
+    [theme, view, displayText, expandAll, loadDiffFiles, bindHost],
   );
 
   const validateLine = (targetSide: DiffSideName, number: number) => {
@@ -768,18 +770,18 @@ export function DiffView({
             )}
             {displayText && (
               <button
-                className="diff-fold-toggle"
-                aria-label={zh ? "折叠未改动" : "Fold unchanged"}
+                className="diff-expand-all-toggle"
+                aria-label={zh ? "展开全部" : "Expand all"}
                 title={
                   zh
-                    ? "折叠未改动内容"
-                    : "Fold unchanged context and expand on demand"
+                    ? "展开全部未改动内容"
+                    : "Expand all unchanged context in this file"
                 }
-                aria-pressed={foldUnchanged}
+                aria-pressed={expandAll}
                 disabled={!renderable}
-                onClick={() => setFoldUnchanged((value) => !value)}
+                onClick={() => setExpandAll((value) => !value)}
               >
-                <FoldVertical size={14} />
+                <UnfoldVertical size={14} />
               </button>
             )}
             {!displayText && fileDiff && (

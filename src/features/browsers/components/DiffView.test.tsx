@@ -351,30 +351,18 @@ function contextRows() {
   );
 }
 
-it("opens complete diffs with the unchanged context already expanded", async () => {
+it("defaults to the classic context view with expandable collapsed regions", async () => {
   await render(bigResult());
   expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
     true,
   );
-  expect(await waitFor(() => contextRows() > 100)).toBe(true);
-  expect(
-    container()!.shadowRoot!.querySelectorAll("[data-separator]"),
-  ).toHaveLength(0);
-  const fold = host.querySelector<HTMLButtonElement>(
-    'button[aria-label="Fold unchanged"]',
-  )!;
-  expect(fold.getAttribute("aria-pressed")).toBe("false");
-});
-
-it("folds unchanged context on demand and expands it again", async () => {
-  await render(bigResult());
-  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
-    true,
-  );
-  expect(await waitFor(() => contextRows() > 100)).toBe(true);
   const shadow = () => container()!.shadowRoot!;
-  const expanded = contextRows();
-  await click('button[aria-label="Fold unchanged"]');
+  // The backend patch carries three context lines per hunk side, so they show.
+  expect(await waitFor(() => contextRows() > 0)).toBe(true);
+  expect(
+    shadow().querySelectorAll('[data-line-type^="change-"]').length,
+  ).toBeGreaterThan(0);
+  // Longer unchanged runs collapse into line-info separators with expand buttons.
   expect(
     await waitFor(
       () =>
@@ -382,28 +370,76 @@ it("folds unchanged context on demand and expands it again", async () => {
     ),
   ).toBe(true);
   expect(
-    host
-      .querySelector('button[aria-label="Fold unchanged"]')
-      ?.getAttribute("aria-pressed"),
-  ).toBe("true");
-  const button = shadow().querySelector(
-    '[data-separator="line-info"] [data-expand-button]',
+    shadow().querySelectorAll("[data-separator] [data-expand-button]").length,
+  ).toBeGreaterThan(0);
+  const expandAll = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Expand all"]',
+  )!;
+  expect(expandAll.getAttribute("aria-pressed")).toBe("false");
+});
+
+it("expands all unchanged context on demand and restores the default", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
+    true,
   );
-  expect(button).toBeTruthy();
+  const shadow = () => container()!.shadowRoot!;
+  expect(
+    await waitFor(
+      () => shadow().querySelectorAll("[data-separator]").length > 0,
+    ),
+  ).toBe(true);
   const collapsed = contextRows();
-  expect(collapsed).toBeLessThan(expanded);
-  await act(async () => {
-    button!.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, composed: true }),
-    );
-  });
-  expect(await waitFor(() => contextRows() > collapsed)).toBe(true);
-  await click('button[aria-label="Fold unchanged"]');
+  await click('button[aria-label="Expand all"]');
   expect(
     await waitFor(
       () => shadow().querySelectorAll("[data-separator]").length === 0,
     ),
   ).toBe(true);
+  expect(contextRows()).toBeGreaterThan(collapsed);
+  expect(
+    host
+      .querySelector('button[aria-label="Expand all"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  await click('button[aria-label="Expand all"]');
+  expect(
+    await waitFor(
+      () => shadow().querySelectorAll("[data-separator]").length > 0,
+    ),
+  ).toBe(true);
+  expect(
+    host
+      .querySelector('button[aria-label="Expand all"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("false");
+});
+
+it("expands a collapsed region from its separator", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
+    true,
+  );
+  const shadow = () => container()!.shadowRoot!;
+  expect(
+    await waitFor(
+      () =>
+        shadow().querySelectorAll(
+          '[data-separator="line-info"] [data-expand-button]',
+        ).length > 0,
+    ),
+  ).toBe(true);
+  const before = contextRows();
+  const button = shadow().querySelector(
+    '[data-separator="line-info"] [data-expand-button]',
+  );
+  expect(button).toBeTruthy();
+  await act(async () => {
+    button!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+  });
+  expect(await waitFor(() => contextRows() > before)).toBe(true);
 });
 
 it("renders no change rows when only the line endings differ", async () => {
@@ -442,7 +478,7 @@ it("shows the raw patch by default for incomplete text and switches to the struc
   expect(host.querySelector(".diff-patch-view-note")?.textContent).toContain(
     "incomplete",
   );
-  expect(host.querySelector('button[aria-label="Fold unchanged"]')).toBeNull();
+  expect(host.querySelector('button[aria-label="Expand all"]')).toBeNull();
   expect(container()).toBeNull();
   await click('button[aria-label="Structured view"]');
   expect(
