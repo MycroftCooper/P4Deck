@@ -122,6 +122,7 @@ const english: Record<string, string> = {
   全选当前侧: "Select all on this side",
   打开当前侧精确版本: "Open this side's revision",
   全选: "Select all",
+  "整表（TSV）": "whole table (TSV)",
   适应窗口: "Fit to window",
   原始尺寸: "Actual size",
   图片另存为: "Save image as",

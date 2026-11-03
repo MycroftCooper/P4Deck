@@ -1928,6 +1928,41 @@ export const menuCatalog = {
       { id: "V08-05", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
+  V09: {
+    title: "本地表格预览内容（CSV/XLSX）",
+    items: [
+      {
+        id: "V09-01",
+        label: "复制所选文本",
+        phase: "initial",
+      },
+      {
+        id: "V09-02",
+        label: "全选",
+        phase: "initial",
+      },
+      {
+        id: "V09-03",
+        label: "复制整表（TSV）",
+        phase: "initial",
+      },
+      {
+        id: "V09-04",
+        label: "复制文件路径",
+        phase: "initial",
+      },
+      {
+        id: "V09-05",
+        label: "系统中定位",
+        phase: "initial",
+      },
+      {
+        id: "V09-06",
+        label: "其他软件打开…",
+        phase: "initial",
+      },
+    ],
+  },
   S01: {
     title: "真实文件搜索结果：单文件",
     items: [

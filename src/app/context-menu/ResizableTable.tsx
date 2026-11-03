@@ -28,6 +28,7 @@ export function ResizableTable({
   tableId,
   defaults,
   minimums,
+  headerSticky = false,
   children,
   style,
   ...props
@@ -35,6 +36,12 @@ export function ResizableTable({
   tableId: string;
   defaults: number[];
   minimums: number[];
+  /**
+   * Keeps the header cells sticky (their CSS `top`/`z-index` then apply). The
+   * resizer stays an absolutely positioned child of the sticky cell. Existing
+   * callers keep the historical `relative` positioning by default.
+   */
+  headerSticky?: boolean;
 }) {
   const table = useRef<HTMLTableElement>(null);
   const resize = useColumnWidths(defaults, minimums, {
@@ -57,12 +64,15 @@ export function ResizableTable({
       return cloneElement(
         node,
         {},
-        Children.map(node.props.children, (row) => {
+        Children.map(node.props.children, (row, rowIndex) => {
           if (
             !isValidElement<HTMLAttributes<HTMLElement>>(row) ||
             row.type !== "tr"
           )
             return row;
+          // Only the first header row carries the resize grips; additional
+          // header rows (multi-row frozen headers) must keep their own styles.
+          if (rowIndex !== 0) return row;
           return cloneElement(
             row,
             {},
@@ -74,7 +84,12 @@ export function ResizableTable({
                 return cell;
               return cloneElement(
                 cell as ReactElement<HTMLAttributes<HTMLElement>>,
-                { style: { ...cell.props.style, position: "relative" } },
+                {
+                  style: {
+                    ...cell.props.style,
+                    position: headerSticky ? "sticky" : "relative",
+                  },
+                },
                 cell.props.children,
                 <ColumnResizer
                   resize={resize}

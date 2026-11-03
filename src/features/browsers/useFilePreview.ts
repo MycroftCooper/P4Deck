@@ -19,12 +19,23 @@ function evictOldPreviews() {
     );
 }
 
-export function useFilePreview(target: string, runtime: RuntimeInfo) {
+export function useFilePreview(
+  target: string,
+  runtime: RuntimeInfo,
+  options: { sheetIndex?: number } = {},
+) {
   const [result, setResult] = useState<{ key: string; data: FilePreview }>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const identity = JSON.stringify([runtime.mode, runtime.context, target]);
+  // One cache entry per (target, worksheet); CSV always stays on sheet 0.
+  const sheetIndex = options.sheetIndex ?? 0;
+  const identity = JSON.stringify([
+    runtime.mode,
+    runtime.context,
+    target,
+    sheetIndex,
+  ]);
   const key = useMemo(() => [...PREVIEW_PREFIX, identity], [identity]);
   const data = result?.key === identity ? result.data : undefined;
   useEffect(() => {
@@ -43,7 +54,11 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
       void appCache
         .fetchQuery({
           queryKey: key,
-          queryFn: () => backend.getFilePreview(target),
+          queryFn: () =>
+            backend.getFilePreview(
+              target,
+              sheetIndex ? { sheetIndex } : undefined,
+            ),
           staleTime: 3_000,
         })
         .then((value) => {
@@ -64,7 +79,7 @@ export function useFilePreview(target: string, runtime: RuntimeInfo) {
       live = false;
       clearTimeout(timer);
     };
-  }, [identity, key, target, runtime.p4Version, refresh]);
+  }, [identity, key, target, sheetIndex, runtime.p4Version, refresh]);
   const reload = () => {
     void appCache
       .invalidateQueries({ queryKey: key, exact: true })

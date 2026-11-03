@@ -22,7 +22,9 @@ required-features = ["backend-perf"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+calamine = "=0.38.0"
 chrono = { version = "0.4", features = ["serde"] }
+encoding_rs = "0.8"
 parking_lot = "0.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
@@ -43,6 +45,9 @@ regex = "1"
 zeroize = "1"
 urlencoding = "2"
 url = "2"
+# Direct dependency for the zip central-directory preflight only. Calamine owns
+# decompression and turns the `deflate` feature on for the whole dependency graph.
+zip = { version = "9", default-features = false }
 tauri-plugin-updater = "2.14.1"
 tauri-plugin-process = "2.4.0"
 tauri-plugin-dialog = "2.8.4"

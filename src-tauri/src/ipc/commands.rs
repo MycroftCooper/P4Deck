@@ -2196,9 +2196,17 @@ pub async fn get_shelf_file_preview(
 pub async fn get_file_preview(
     _admission: crate::close_guard::Admission,
     path: String,
+    // Optional table-preview arguments. Tauri v2 maps the Rust snake_case names
+    // to the camelCase JS keys `sheetIndex`/`offset`/`limit`; a missing key
+    // deserializes to `None` (see tauri::ipc::CommandItem::deserialize_option),
+    // so older frontends that only send `{ path }` keep working.
+    sheet_index: Option<u32>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<crate::app::preview::FilePreview, String> {
+    let spec = crate::app::preview::TableSpec::from_options(sheet_index, offset, limit)?;
     let context = state.connection.context();
     let local = if path.starts_with("//") {
         state
@@ -2225,7 +2233,7 @@ pub async fn get_file_preview(
         return Err("Workspace Root must be an absolute path".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        crate::app::preview::read(std::path::Path::new(&root), &local)
+        crate::app::preview::read(std::path::Path::new(&root), &local, spec)
     })
     .await
     .map_err(|e| e.to_string())?

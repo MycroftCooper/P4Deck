@@ -3,12 +3,28 @@ import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
 import { useFilePreview } from "../useFilePreview";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { FileText, Image, Minus, Plus, RefreshCw } from "lucide-react";
-import type { RuntimeInfo } from "../../../shared/contracts";
+import { FileText, Image, Minus, Plus, RefreshCw, Table2 } from "lucide-react";
+import type { FilePreviewTable, RuntimeInfo } from "../../../shared/contracts";
 
 import { useContentMenu } from "../../../app/context-menu/useContentMenu";
-import { action, copy } from "../../../app/context-menu/bindings";
+import { action, copy, copyLazy } from "../../../app/context-menu/bindings";
 import { useFullTextSelection } from "../../../app/context-menu/FullTextSelection";
+import { PreviewTable } from "./PreviewTable";
+import {
+  formatBytes,
+  hardTruncation,
+  maxHeaderRows,
+  normalizeTable,
+  tablePreviewOf,
+  tableToTsv,
+  truncationNotes,
+} from "../previewTableModel";
+
+function delimiterLabel(delimiter: FilePreviewTable["delimiter"]) {
+  if (delimiter === "\t") return "Tab";
+  return delimiter ?? "—";
+}
+
 export function FilePreviewPage({
   target,
   runtime,
@@ -26,8 +42,26 @@ export function FilePreviewPage({
   const refreshSlot = useContext(PageRefreshSlotContext);
   const [zoom, setZoom] = useState<number | null>(null),
     [imageError, setImageError] = useState(false);
+  // Cross-target worksheet/header choices are derived below rather than reset in
+  // an effect, so a new target never sends the previous target's sheet index.
+  const [view, setView] = useState<{
+    target: string;
+    sheetIndex: number;
+    headerRows: number;
+  }>();
+  // Keeps the worksheet picker mounted while the next sheet is being read.
+  const [lastTable, setLastTable] = useState<{
+    target: string;
+    table: FilePreviewTable;
+    encoding?: string | null;
+    encodingGuess?: boolean;
+  }>();
   const scroll = useRef<HTMLDivElement>(null);
-  const { data, error, loading, reload } = useFilePreview(target, runtime);
+  const sheetIndex = view?.target === target ? view.sheetIndex : 0;
+  const requestedHeaderRows = view?.target === target ? view.headerRows : 1;
+  const { data, error, loading, reload } = useFilePreview(target, runtime, {
+    sheetIndex,
+  });
   useEffect(() => {
     if (loading) setImageError(false);
   }, [loading]);
@@ -49,6 +83,46 @@ export function FilePreviewPage({
     estimateSize: () => 24,
     overscan: 10,
   });
+  const table = tablePreviewOf(data);
+  useEffect(() => {
+    if (table)
+      setLastTable({
+        target,
+        table,
+        encoding: data?.encoding,
+        encodingGuess: data?.encodingGuess,
+      });
+  }, [data, table, target]);
+  const shownTable =
+    table ?? (lastTable?.target === target ? lastTable.table : undefined);
+  // Frozen header rows stay inside 0..min(10, rows.length); the page keeps the
+  // user's wording, the clamp only applies when the table shrinks underneath it.
+  const headerRowLimit = maxHeaderRows(shownTable);
+  const headerRows = Math.max(0, Math.min(requestedHeaderRows, headerRowLimit));
+  const shownEncoding =
+    table !== undefined
+      ? data?.encoding
+      : lastTable?.target === target
+        ? lastTable.encoding
+        : null;
+  const shownEncodingGuess =
+    table !== undefined
+      ? data?.encodingGuess
+      : lastTable?.target === target
+        ? lastTable.encodingGuess
+        : false;
+  const tableModel = useMemo(
+    () => (shownTable ? normalizeTable(shownTable, headerRows) : undefined),
+    [shownTable, headerRows],
+  );
+  const notes = table ? truncationNotes(table, zh, hardTruncation(table)) : [];
+  const rowCountTitle =
+    shownTable?.rowCountSource === "dimension" && shownTable.rowCount != null
+      ? tr(
+          `工作表共约 ${shownTable.rowCount} 行（声明值，可能包含空行）`,
+          `About ${shownTable.rowCount} rows from the worksheet dimension; may include empty rows`,
+        )
+      : undefined;
   const refreshButton = (
     <button
       type="button"
@@ -72,13 +146,94 @@ export function FilePreviewPage({
       {runtime.mode === "mock" && (
         <div className="preview-note">
           {tr(
-            "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png 查看图片示例。",
-            "Browser demo: simulated content, no local files accessed. Enter demo.png for an image sample.",
+            "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png / demo.csv / demo.xlsx 查看示例。",
+            "Browser demo: simulated content, no local files accessed. Enter demo.png, demo.csv or demo.xlsx for samples.",
           )}
         </div>
       )}
       <div className="preview-toolbar">
-        {data?.kind === "image" ? (
+        {shownTable ? (
+          <>
+            <Table2 size={14} />
+            <span className="preview-table-format">
+              {shownTable.format === "xlsx" ? "XLSX" : "CSV"}
+            </span>
+            <span className="preview-table-stats" title={rowCountTitle}>
+              {tableModel?.columnCount ?? 0} {tr("列", "cols")} ×{" "}
+              {tableModel?.dataRowCount ?? 0} {tr("行", "rows")}
+            </span>
+            {shownTable.format === "csv" && shownEncoding && (
+              <span className="preview-toolbar-secondary">
+                {tr("编码", "Encoding")} {shownEncoding}
+                {shownEncodingGuess ? tr("（推测）", " (guessed)") : ""}
+              </span>
+            )}
+            {shownTable.format === "csv" && shownTable.delimiter && (
+              <span className="preview-toolbar-secondary">
+                {tr("分隔符", "Delimiter")}{" "}
+                {delimiterLabel(shownTable.delimiter)}
+              </span>
+            )}
+            {shownTable.sheetNames && shownTable.sheetNames.length > 1 && (
+              <select
+                className="preview-table-select"
+                aria-label={tr("工作表", "Worksheet")}
+                value={sheetIndex}
+                onChange={(event) =>
+                  setView({
+                    target,
+                    sheetIndex: Number(event.target.value),
+                    // A different worksheet starts from the default one header row.
+                    headerRows: 1,
+                  })
+                }
+              >
+                {shownTable.sheetNames.map((name, index) => (
+                  <option key={index} value={index}>
+                    {name ||
+                      tr(`工作表 ${index + 1}`, `Worksheet ${index + 1}`)}
+                  </option>
+                ))}
+              </select>
+            )}
+            <span
+              className="preview-table-steps"
+              role="group"
+              aria-label={tr("冻结表头行数", "Frozen header rows")}
+            >
+              <button
+                type="button"
+                className="preview-table-step"
+                aria-label={tr("减少冻结表头行", "Fewer frozen header rows")}
+                title={tr("减少冻结表头行", "Fewer frozen header rows")}
+                disabled={headerRows <= 0}
+                onClick={() =>
+                  setView({ target, sheetIndex, headerRows: headerRows - 1 })
+                }
+              >
+                <Minus size={14} aria-hidden="true" />
+              </button>
+              <span className="preview-table-steps-label">
+                {tr(
+                  `冻结表头 ${headerRows} 行`,
+                  `Frozen header rows: ${headerRows}`,
+                )}
+              </span>
+              <button
+                type="button"
+                className="preview-table-step"
+                aria-label={tr("增加冻结表头行", "More frozen header rows")}
+                title={tr("增加冻结表头行", "More frozen header rows")}
+                disabled={headerRows >= headerRowLimit}
+                onClick={() =>
+                  setView({ target, sheetIndex, headerRows: headerRows + 1 })
+                }
+              >
+                <Plus size={14} aria-hidden="true" />
+              </button>
+            </span>
+          </>
+        ) : data?.kind === "image" ? (
           <>
             <Image size={14} />
             <span>
@@ -113,7 +268,9 @@ export function FilePreviewPage({
           </>
         )}
         <span className="spacer" />
-        <span>{data ? `${(data.size / 1024).toFixed(1)} KiB` : ""}</span>
+        <span className="preview-toolbar-secondary">
+          {data ? formatBytes(data.size) : ""}
+        </span>
       </div>
       <section
         className="preview-body"
@@ -124,7 +281,13 @@ export function FilePreviewPage({
             ? "V07"
             : data.kind === "image"
               ? "V06"
-              : "V05",
+              : data.kind === "table"
+                ? table
+                  ? "V09"
+                  : "V07"
+                : data.kind === "text"
+                  ? "V05"
+                  : "V07",
           target,
           () => ({
             重新加载: action(reload, target ? undefined : "没有预览目标"),
@@ -132,8 +295,17 @@ export function FilePreviewPage({
             复制所选文本: copy(textSelection.selectedText()),
             全选: action(() =>
               textSelection.selectAll(
-                data?.kind === "text" ? data.content : "",
+                data?.kind === "text"
+                  ? data.content
+                  : data?.kind === "table" && table
+                    ? tableToTsv(normalizeTable(table, headerRows))
+                    : "",
               ),
+            ),
+            "复制整表（TSV）": copyLazy(
+              () =>
+                table ? tableToTsv(normalizeTable(table, headerRows)) : "",
+              table ? undefined : "没有可复制的表格 / Nothing to copy",
             ),
             适应窗口: action(() => setZoom(null)),
             原始尺寸: action(() => setZoom(1)),
@@ -216,13 +388,43 @@ export function FilePreviewPage({
               />
             </div>
           )
+        ) : data?.kind === "table" ? (
+          table ? (
+            <div className="preview-table-view">
+              {notes.length > 0 && (
+                <div className="preview-table-notice" role="note">
+                  {notes.join(" · ")}
+                </div>
+              )}
+              <PreviewTable
+                key={`${target}:${sheetIndex}`}
+                table={table}
+                zh={zh}
+                headerRows={headerRows}
+              />
+            </div>
+          ) : (
+            <div role="alert" className="preview-empty">
+              {tr(
+                "表格数据不完整，无法显示",
+                "Table data is incomplete and cannot be displayed",
+              )}
+            </div>
+          )
+        ) : data ? (
+          <div role="alert" className="preview-empty">
+            {tr(
+              "此版本不支持该预览类型，请更新应用",
+              "This build cannot display this preview type; update the app",
+            )}
+          </div>
         ) : null}
       </section>
       {textSelection.dialog}
       <footer className="preview-footer">
         {tr(
-          "文本 ≤ 2 MiB · 图片 ≤ 8 MiB / 2000 万像素 · 不自动下载服务器文件",
-          "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · No automatic depot downloads",
+          "文本 ≤ 2 MiB · 图片 ≤ 8 MiB / 2000 万像素 · 表格 ≤ 500 行 × 64 列 · 百分比/货币显示原始值 · 不自动下载服务器文件",
+          "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · Tables ≤ 500 rows × 64 cols · Percent/currency shown as raw values · No automatic depot downloads",
         )}
       </footer>
     </section>

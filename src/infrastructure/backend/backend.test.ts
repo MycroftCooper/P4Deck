@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { backend, tokenize } from ".";
 import type { ClQuery } from "../../shared/contracts";
 import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
@@ -411,6 +411,57 @@ describe("controlled P4 terminal", () => {
     await expect(backend.getFilePreview("asset.uasset")).rejects.toThrow(
       "Unsupported",
     );
+  });
+  it("previews mock CSV/TSV/XLSX tables and rejects unknown worksheets", async () => {
+    const csv = await backend.getFilePreview("/workspace/atlas/data/demo.csv");
+    expect(csv.kind).toBe("table");
+    expect(csv.content).toBe("");
+    expect(csv.table?.format).toBe("csv");
+    expect(csv.table?.delimiter).toBe(",");
+    expect(csv.table?.rows[0]?.length).toBeGreaterThan(0);
+
+    const tsv = await backend.getFilePreview("/workspace/atlas/data/demo.tsv");
+    expect(tsv.table?.delimiter).toBe("\t");
+
+    const wide = await backend.getFilePreview("/workspace/atlas/data/wide.csv");
+    expect(wide.table?.rows[0]).toHaveLength(64);
+    expect(wide.table?.truncated).toBe(false);
+
+    const truncated = await backend.getFilePreview(
+      "/workspace/atlas/data/truncated.csv",
+    );
+    expect(truncated.table?.truncatedReason).toBe("rowCap");
+    expect(truncated.table?.hasMore).toBe(true);
+
+    const empty = await backend.getFilePreview(
+      "/workspace/atlas/data/empty.csv",
+    );
+    expect(empty.table?.rows).toEqual([]);
+
+    const xlsx = await backend.getFilePreview(
+      "/workspace/atlas/data/demo.xlsx",
+    );
+    expect(xlsx.kind).toBe("table");
+    expect(xlsx.table?.format).toBe("xlsx");
+    expect(xlsx.table?.delimiter).toBeNull();
+    expect(xlsx.table?.sheetNames).toHaveLength(3);
+    expect(xlsx.table?.rowCountSource).toBe("dimension");
+
+    const second = await backend.getFilePreview(
+      "/workspace/atlas/data/demo.xlsx",
+      { sheetIndex: 1 },
+    );
+    expect(second.table?.sheetIndex).toBe(1);
+    expect(second.table?.sheetName).toBe("明细");
+
+    await expect(
+      backend.getFilePreview("/workspace/atlas/data/demo.xlsx", {
+        sheetIndex: 9,
+      }),
+    ).rejects.toThrow(/worksheet/i);
+    await expect(
+      backend.getFilePreview("/workspace/atlas/data/demo.xls"),
+    ).rejects.toThrow("Unsupported");
   });
   it("tokenizes quoted P4 arguments without invoking a shell", () => {
     expect(tokenize('changes -u "Jane Doe" //depot/main/...')).toEqual([

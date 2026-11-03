@@ -162,7 +162,14 @@ export const tauriBackend: Backend = {
       | import("../../shared/contracts").LocalIoActionResult
     >("confirm_sync", { confirmation }),
   syncLatest: (request) => invoke("sync_latest", { request }),
-  getFilePreview: (path) => invoke("get_file_preview", { path }),
+  // Explicit nulls keep Tauri's optional command parameters unambiguous.
+  getFilePreview: (path, options) =>
+    invoke("get_file_preview", {
+      path,
+      sheetIndex: options?.sheetIndex ?? null,
+      offset: options?.offset ?? null,
+      limit: options?.limit ?? null,
+    }),
   getDiff: (request) => invoke("get_diff", { request }),
   getFileHistory: (request) => invoke("get_file_history", { request }),
   getIntegrationTrace: (request) =>

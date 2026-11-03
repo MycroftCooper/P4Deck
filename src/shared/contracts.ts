@@ -2708,13 +2708,62 @@ export interface WorkflowResult {
   refresh: WorkflowRefreshAdvice;
 }
 
+export type FilePreviewKind = "text" | "image" | "table";
+
+/** Why a bounded table preview page was clipped; null when nothing was clipped. */
+export type FilePreviewTruncatedReason =
+  "rowCap" | "colCap" | "cellCap" | "byteCap" | "budgetCap" | "timeout";
+
+/**
+ * Bounded first page of a CSV/XLSX preview. `rows` keeps the sheet's first row
+ * as returned (the frontend decides whether to display it as a header), values
+ * are already formatted by the backend, and `content` stays empty.
+ */
+export interface FilePreviewTable {
+  format: "csv" | "xlsx";
+  /** CSV: auto-detected delimiter. XLSX: null. */
+  delimiter: "," | ";" | "\t" | "|" | null;
+  sheetName: string | null;
+  sheetIndex: number | null;
+  /** XLSX: all worksheet names (bounded); CSV: null. */
+  sheetNames: string[] | null;
+  /** ≤500 rows × ≤64 columns, header row included, empty string = empty cell. */
+  rows: string[][];
+  /** Known total rows; CSV is always null, XLSX only when dimension is trusted. */
+  rowCount: number | null;
+  /** Provenance of `rowCount`; includes the header row and may include empty rows. */
+  rowCountSource: "dimension" | null;
+  hasMore: boolean;
+  truncated: boolean;
+  truncatedReason: FilePreviewTruncatedReason | null;
+  /** Total worksheet columns when the backend knows it (column-cap wording). */
+  totalColumns?: number | null;
+}
+
 export interface FilePreview {
-  kind: "text" | "image";
+  kind: FilePreviewKind;
+  /** text: raw text; image: data URL; table: always "". */
   content: string;
+  /** Real file bytes on disk (not the IPC payload size). */
   size: number;
+  /** text/csv: encoding name; image: null. */
   encoding?: string | null;
+  /** True when `encoding` is a guess rather than a BOM/declared value. */
+  encodingGuess?: boolean;
   width?: number | null;
   height?: number | null;
+  /** Present only for kind === "table". */
+  table?: FilePreviewTable;
+}
+
+/** Optional preview request dimensions; v1 sends only `sheetIndex`. */
+export interface FilePreviewRequestOptions {
+  /** 0-based worksheet index (xlsx). Omitted means 0. */
+  sheetIndex?: number;
+  /** Reserved for paging; v1 never sends it. */
+  offset?: number;
+  /** Reserved for paging; v1 never sends it. */
+  limit?: number;
 }
 
 export interface UndoTarget {
