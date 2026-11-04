@@ -55,6 +55,18 @@ const KEY_INDEX_FILES = [
 
 const violations = [];
 
+/** Every label registered in the context-menu inventory. */
+let menuLabelCache;
+function contextMenuLabels() {
+  if (menuLabelCache) return menuLabelCache;
+  const p = path.join(ROOT, "src/app/context-menu/catalog.ts");
+  const src = fs.existsSync(p) ? fs.readFileSync(p, "utf8") : "";
+  menuLabelCache = new Set(
+    [...src.matchAll(/label:\s*\n?\s*"([^"]+)"/g)].map((m) => m[1]),
+  );
+  return menuLabelCache;
+}
+
 for (const abs of walk(path.join(ROOT, "src"))) {
   const file = rel(abs);
   if (!/\.(ts|tsx)$/.test(file)) continue;
@@ -62,6 +74,10 @@ for (const abs of walk(path.join(ROOT, "src"))) {
   if (EXEMPT_FILES.includes(file)) continue;
 
   const keyIndexOnly = KEY_INDEX_FILES.includes(file);
+  // Labels registered in the menu inventory: a `bindings` object is keyed by
+  // these labels (buildMenu looks up bindings[entry.label]), and every label is
+  // rendered through menuLabel(), so the Chinese here is a key, not copy.
+  const menuLabels = contextMenuLabels();
 
   const lines = fs.readFileSync(abs, "utf8").split(/\r?\n/);
   let inBlockComment = false;
@@ -83,6 +99,16 @@ for (const abs of walk(path.join(ROOT, "src"))) {
     // Ignore a trailing line comment only; keep the code part checked.
     const code = line.split("//")[0];
     if (!CJK.test(code)) return;
+    // A menu-binding key: `中文标签: action(...)` / `copy(...)` / a literal /
+    // a nested object / a conditional. Any of these is keyed by the inventory
+    // label and rendered through menuLabel().
+    const binding = code.match(
+      /^\s*(?:"([^"]+)"|([\w\u4e00-\u9fff]+))\s*:\s*(?:action|copy|swarmMenuAction|hidden|[\w$.]+\s*\?|\{)/,
+    );
+    if (binding) {
+      const label = (binding[1] ?? binding[2]).trim();
+      if (menuLabels.has(label)) return;
+    }
     // In a key index the Chinese sits on the left of a `key: "catalog.key"`
     // pair; only the mapped value is what renders. Flag object values only.
     if (keyIndexOnly) {
