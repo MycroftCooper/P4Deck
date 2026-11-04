@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type { FileState, WorkspaceFileStatus } from "../../shared/contracts";
 
 export type FileBadgeId =
@@ -258,13 +259,9 @@ function priority(b: FileBadge) {
 export function fileBadgeLabel(badge: FileBadge, zh: boolean): string {
   const owner =
     badge.owner === "self"
-      ? zh
-        ? "我："
-        : "You: "
+      ? t("files.you")
       : badge.owner === "other"
-        ? zh
-          ? "其他工作区／用户："
-          : "Other workspace/user: "
+        ? t("files.other.workspace.user")
         : "";
   return (
     owner +

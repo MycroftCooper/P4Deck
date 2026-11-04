@@ -170,9 +170,7 @@ export function ShelfDetailPage({
         if (!ownsShelfResult(value, runtime, changeId, generation)) {
           setRestartRequired(true);
           setError(
-            zh
-              ? "Shelf 响应与当前连接或请求代次不匹配；请重新加载。"
-              : "The shelf response does not match the current connection or request generation; restart the query.",
+            t("pending.the.shelf.response.does.not"),
           );
           return;
         }
@@ -181,9 +179,7 @@ export function ShelfDetailPage({
         if (value.hasMore && !value.nextCursor) {
           setRestartRequired(true);
           setError(
-            zh
-              ? "后端未返回可继续的 Shelf 游标；请重新加载。"
-              : "The backend did not return a usable shelf cursor; restart the query.",
+            t("pending.the.backend.did.not.return"),
           );
         }
       })
@@ -251,9 +247,7 @@ export function ShelfDetailPage({
     if (!cursor || usedCursors.current.has(cursor)) {
       setRestartRequired(true);
       setError(
-        zh
-          ? "Shelf 游标不可继续；请从第一页重新加载。"
-          : "The shelf cursor cannot advance; restart from the first page.",
+        t("pending.the.shelf.cursor.cannot.advance"),
       );
       return;
     }
@@ -275,9 +269,7 @@ export function ShelfDetailPage({
         if (!ownsShelfResult(page, runtime, changeId, generation)) {
           setRestartRequired(true);
           setError(
-            zh
-              ? "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。"
-              : "The shelf page does not match the current connection or request generation; current results were preserved. Restart the query.",
+            t("pending.the.shelf.page.does.not"),
           );
           return;
         }
@@ -291,9 +283,7 @@ export function ShelfDetailPage({
           if (stalled || (page.hasMore && !page.nextCursor)) {
             setRestartRequired(true);
             setError(
-              zh
-                ? "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。"
-                : "The shelf snapshot returned duplicates or a non-progressing cursor; current results were preserved. Restart the query.",
+              t("pending.the.shelf.snapshot.returned.duplicates"),
             );
           }
           return {
@@ -310,9 +300,7 @@ export function ShelfDetailPage({
           setRestartRequired(true);
           setError(
             `${failure.message} ${
-              zh
-                ? "已保留当前结果；请从第一页重新加载。"
-                : "Current results were preserved; restart from the first page."
+              t("pending.current.results.were.preserved.restart")
             }`,
           );
         }
@@ -439,9 +427,7 @@ export function ShelfDetailPage({
           </h1>
           <p>
             {detail?.description ||
-              (zh
-                ? "独立 Shelf 详情与内容预览"
-                : "Shelf detail and content preview")}
+              (t("pending.shelf.detail.and.content.preview"))}
           </p>
         </div>
         {!refreshSlot && refreshButton}
@@ -486,12 +472,8 @@ export function ShelfDetailPage({
           </span>
           <span>
             {detail.cacheFreshness === "cached"
-              ? zh
-                ? "缓存"
-                : "cached"
-              : zh
-                ? "最新"
-                : "fresh"}
+              ? t("pending.cached")
+              : t("pending.fresh")}
           </span>
           {(detail.inspectionStatus === "partial" || detail.truncated) && (
             <strong>
@@ -586,12 +568,8 @@ export function ShelfDetailPage({
                 }}
               >
                 {loadingMore
-                  ? zh
-                    ? "加载中…"
-                    : "Loading…"
-                  : zh
-                    ? "加载更多"
-                    : "Load more"}
+                  ? t("pending.loading")
+                  : t("pending.load.more")}
               </button>
             )}
           </section>
@@ -632,9 +610,7 @@ export function ShelfDetailPage({
             </div>
             {!selected ? (
               <div className="workspace-empty">
-                {zh
-                  ? "选择 Shelf 文件以预览"
-                  : "Select a shelved file to preview"}
+                {t("pending.select.a.shelved.file.to")}
               </div>
             ) : contentLoading && !preview && !diff ? (
               <div className="workspace-empty" role="status">

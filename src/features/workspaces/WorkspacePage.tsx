@@ -185,9 +185,7 @@ export function WorkspacePage({
     <section className="workspaces-page">
       <FixedPageHeader
         description={
-          zh
-            ? "当前用户拥有的工作区，跨主机集中查看。"
-            : "Workspaces owned by the current user, across hosts."
+          translate("workspaces.workspaces.owned.by.the.current")
         }
       >
         <span className="fixed-page-meta">{items.length}</span>
@@ -219,16 +217,10 @@ export function WorkspacePage({
             onClick={() => void switchToSelected()}
           >
             {switching
-              ? zh
-                ? "正在验证并切换…"
-                : "Verifying and switching…"
+              ? translate("workspaces.verifying.and.switching")
               : selected.name === runtime.context.client
-                ? zh
-                  ? "当前工作区"
-                  : "Current workspace"
-                : zh
-                  ? "切换到此工作区"
-                  : "Switch to this workspace"}
+                ? translate("workspaces.current.workspace")
+                : translate("workspaces.switch.to.this.workspace")}
           </button>
         )}
         <span className="owner-scope">
@@ -240,9 +232,7 @@ export function WorkspacePage({
       </div>
       {!ready && (
         <p role="status" className="workspace-load-error">
-          {zh
-            ? "请先在设置中验证并激活连接；连接未验证时不会自动扫描 Workspace。"
-            : "Verify and activate a connection in Settings first. Workspaces are not scanned automatically while the connection is unverified."}
+          {translate("workspaces.verify.and.activate.a.connection")}
         </p>
       )}
       <section
@@ -269,16 +259,10 @@ export function WorkspacePage({
             {vfsStatus?.mode === "virtual"
               ? vfsStatus.ready
                 ? "P4VFS"
-                : zh
-                  ? "P4VFS · 待配置"
-                  : "P4VFS · setup needed"
+                : translate("workspaces.p4vfs.setup.needed")
               : vfsStatus?.mode === "standard"
-                ? zh
-                  ? "标准同步"
-                  : "Standard"
-                : zh
-                  ? "检查中…"
-                  : "Checking…"}
+                ? translate("workspaces.standard")
+                : translate("workspaces.checking")}
           </strong>
         </div>
       </section>
@@ -296,28 +280,20 @@ export function WorkspacePage({
       )}
       {runtime.mode === "mock" && (
         <p className="workspace-simulated-note">
-          {zh
-            ? "Simulated Mock：Workspace 切换只更新模拟 Context，不访问真实网络。"
-            : "Simulated Mock: workspace switching only updates the simulated context and never accesses a real network."}
+          {translate("workspaces.simulated.mock.workspace.switching.only")}
         </p>
       )}
       <div className="workspace-switch-status" role="status" aria-live="polite">
         {switchPhase === "verifying"
-          ? zh
-            ? "正在验证目标 Workspace…"
-            : "Verifying target workspace…"
+          ? translate("workspaces.verifying.target.workspace")
           : switchPhase === "committing"
-            ? zh
-              ? "验证通过，正在提交 Workspace…"
-              : "Verified; committing workspace…"
+            ? translate("workspaces.verified.committing.workspace")
             : switchPhase === "success"
               ? zh
                 ? `已切换到 ${runtime.context.client}，依赖页面已刷新。`
                 : `Switched to ${runtime.context.client}; dependent pages were refreshed.`
               : switchPhase === "error"
-                ? zh
-                  ? "切换失败，原 Workspace 保持不变。"
-                  : "Switch failed; the previous workspace remains active."
+                ? translate("workspaces.switch.failed.the.previous.workspace")
                 : ""}
       </div>
       {error && (
@@ -383,9 +359,7 @@ export function WorkspacePage({
                             !ready ||
                               switching ||
                               item.name === runtime.context.client
-                              ? zh
-                                ? "当前不可切换"
-                                : "Switch unavailable"
+                              ? translate("workspaces.switch.unavailable")
                               : undefined,
                           ),
                         },
@@ -394,9 +368,7 @@ export function WorkspacePage({
                           ...action(
                             () => setCreateOpen(true),
                             !ready
-                              ? zh
-                                ? "连接不可用"
-                                : "Connection unavailable"
+                              ? translate("workspaces.connection.unavailable")
                               : undefined,
                           ),
                         },
@@ -412,9 +384,7 @@ export function WorkspacePage({
                                 expectedGeneration: runtime.contextGeneration,
                               }),
                             !ready || item.name === runtime.context.client
-                              ? zh
-                                ? "请先切换到其他工作区"
-                                : "Switch to another workspace first"
+                              ? translate("workspaces.switch.to.another.workspace.first")
                               : undefined,
                           ),
                         },
@@ -430,9 +400,7 @@ export function WorkspacePage({
                                 expectedGeneration: runtime.contextGeneration,
                               }),
                             !ready || item.name === runtime.context.client
-                              ? zh
-                                ? "请先切换到其他工作区"
-                                : "Switch to another workspace first"
+                              ? translate("workspaces.switch.to.another.workspace.first")
                               : undefined,
                           ),
                         },
@@ -466,20 +434,12 @@ export function WorkspacePage({
             {!filtered.length && (
               <div className="workspace-empty" role="status">
                 {loading
-                  ? zh
-                    ? "正在加载工作区…"
-                    : "Loading workspaces…"
+                  ? translate("workspaces.loading.workspaces")
                   : error
-                    ? zh
-                      ? "加载失败，请刷新重试。"
-                      : "Loading failed. Refresh to retry."
+                    ? translate("workspaces.loading.failed.refresh.to.retry")
                     : search
-                      ? zh
-                        ? "没有匹配的工作区"
-                        : "No matching workspaces"
-                      : zh
-                        ? "当前用户尚无工作区"
-                        : "No workspaces owned by the current user"}
+                      ? translate("workspaces.no.matching.workspaces")
+                      : translate("workspaces.no.workspaces.owned.by.the")}
               </div>
             )}
           </div>

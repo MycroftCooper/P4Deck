@@ -316,9 +316,7 @@ function MenuPanel({
         </div>
         <div className="menu-hint" role="status">
           {items[active]?.reason ||
-            (zh
-              ? "↑ ↓ 选择 · Enter 执行 · Esc 关闭"
-              : "↑ ↓ Navigate · Enter Run · Esc Close")}
+            (t("contextMenu.navigate.enter.run.esc.close"))}
         </div>
       </div>
       {submenu && submenuItem?.children && (

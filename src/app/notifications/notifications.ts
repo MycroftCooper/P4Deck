@@ -114,9 +114,7 @@ export function useDesktopNotifications(
               title: t("notify.p4.operation.needs.attention"),
               body:
                 event.message ||
-                (zh
-                  ? "请返回 P4Deck 查看详情。"
-                  : "Return to P4Deck for details."),
+                (t("notify.return.to.p4deck.for.details")),
               kind: "failure",
             });
           if (event.type === "completed") {

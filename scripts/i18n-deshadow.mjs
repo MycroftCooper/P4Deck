@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 /**
- * Resolve `t` shadowing for files that receive a legacy `t` messages prop.
+ * Resolve `t` shadowing across the whole tree.
  *
- * These components destructure a `t` prop (the old flat dictionary) that
- * shadows the module-level `t` imported by the convergence codemod. Rather than
- * touching those legacy props, alias the import and call the alias:
+ * The convergence codemod prepends `import { t } from ".../shared/i18n"`.
+ * Components that bind their own `t` (a legacy messages prop/param) shadow it.
+ * This pass switches those files to the aliased form and rewrites the
+ * codemod-produced calls:
  *
- *   import { t } from ".../shared/i18n"        ->  import { t as translate } ...
- *   t("key")  (the rewritten catalog keys)     ->  translate("key")
+ *   import { t } from "x"        ->  import { t as translate } from "x"
+ *   t("ns.key")                  ->  translate("ns.key")
  *
- * Only keys produced by the codemod (namespaced, dot-separated) are rewritten;
- * a legacy `t.someField` access is left alone.
- *
- * Usage: node scripts/i18n-deshadow.mjs --write
+ * Only namespaced keys are rewritten, so legacy `t.someField` access is safe.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -20,34 +18,45 @@ import path from "node:path";
 const ROOT = process.cwd();
 const WRITE = process.argv.includes("--write");
 
-const files = [
-  "src/features/files/components/FileWorkbench.tsx",
-  "src/features/workspaces/WorkspacePage.tsx",
-  "src/features/changelists/components/PendingPage.tsx",
-  "src/features/files/components/ResourceExplorer.tsx",
-  "src/features/changelists/components/SubmittedPage.tsx",
-  "src/app/PageRenderer.tsx",
-  "src/app/shell/AppControls.tsx",
-];
+function walk(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else out.push(p);
+  }
+  return out;
+}
+const rel = (p) => path.relative(ROOT, p).replaceAll("\\", "/");
 
+const IMPORT_T = /^import \{ t \} from "([^"]*shared\/i18n)";\n/;
+/** A local binding named t that is not the catalog call: t.prop or a param. */
+const LOCAL_T_USE = /(?<![.\w])t\.[a-zA-Z_]/;
+const LOCAL_T_DECL = /(?:\bt\s*,\s*|\bt\s*:\s*)(?:Messages|typeof messages|\{)|:\s*\{\s*[^}]*\bt\b/;
+
+const files = walk(path.join(ROOT, "src"))
+  .filter((p) => /\.(ts|tsx)$/.test(p) && !/\.test\.(ts|tsx)$/.test(p))
+  .map(rel);
+
+let changed = 0;
 for (const file of files) {
   const abs = path.join(ROOT, file);
   let src = fs.readFileSync(abs, "utf8");
-  const importRe = /^import \{ t \} from "([^"]*shared\/i18n)";\n/;
-  const m = src.match(importRe);
-  if (!m) {
-    console.log(`SKIP ${file}`);
-    continue;
-  }
-  let out = src.replace(importRe, `import { t as translate } from "${m[1]}";\n`);
-  // Rewrite only namespaced catalog keys, not legacy `t.field` access.
-  const callRe = /\bt\("([a-zA-Z][\w]*\.)+[a-zA-Z][\w.]*"\)/g;
-  let n = 0;
-  out = out.replace(callRe, (whole) => {
-    n++;
-    return whole.replace(/^t\(/, "translate(");
-  });
+  const m = src.match(IMPORT_T);
+  if (!m) continue;
+  const body = src.slice(m[0].length);
+  // Shadowed when the file also reads t.<field> (the legacy dictionary) or
+  // declares a t prop/parameter.
+  if (!LOCAL_T_USE.test(body) && !LOCAL_T_DECL.test(body)) continue;
 
+  let out = src.replace(IMPORT_T, `import { t as translate } from "${m[1]}";\n`);
+  let n = 0;
+  out = out.replace(/(?<![.\w])t\("((?:[a-zA-Z][\w]*)(?:\.[a-zA-Z][\w]*)+)"\)/g, (w) => {
+    n++;
+    return w.replace(/^t\(/, "translate(");
+  });
+  if (!n) continue;
   if (WRITE) fs.writeFileSync(abs, out);
-  console.log(`${WRITE ? "PATCHED" : "PLAN"} ${file} (${n} calls)`);
+  console.log(`${WRITE ? "PATCHED" : "PLAN"} ${file} (${n})`);
+  changed++;
 }
+console.log(`files ${WRITE ? "patched" : "to patch"}: ${changed}`);

@@ -4,7 +4,7 @@ import type { FileActionResult } from "../../shared/contracts";
 /** A resolved bridge promise does not imply that the P4 process succeeded. */
 export function fileActionFeedback(
   result: FileActionResult,
-  zh: boolean,
+  _zh: boolean,
 ): { failed: boolean; message: string } {
   const operation = result.operation;
   const events = operation?.events ?? [];
@@ -23,28 +23,16 @@ export function fileActionFeedback(
     .join("\n")
     .slice(0, 8000);
   const status = cancelled
-    ? zh
-      ? "操作已取消"
-      : "Operation cancelled"
+    ? t("shell.operation.cancelled")
     : failed
-      ? zh
-        ? "操作未完全成功"
-        : "Operation did not fully succeed"
+      ? t("shell.operation.did.not.fully.succeed")
       : !operation
-        ? zh
-          ? "已收到操作反馈（未提供退出状态）"
-          : "Operation feedback received (no exit status provided)"
+        ? t("shell.operation.feedback.received.no.exit")
         : warnings
-          ? zh
-            ? "操作结束，存在警告"
-            : "Operation finished with warnings"
-          : zh
-            ? "操作完成"
-            : "Completed";
+          ? t("shell.operation.finished.with.warnings")
+          : t("shell.completed");
   const scope = failed
-    ? zh
-      ? "部分文件可能已改变。取消或失败不会回滚已完成部分，请刷新并检查日志。"
-      : "Some files may have changed. Failure or cancellation does not roll back completed changes; refresh and inspect the logs."
+    ? t("shell.some.files.may.have.changed")
     : "";
   return {
     failed,

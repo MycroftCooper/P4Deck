@@ -10,6 +10,7 @@ import {
   UPDATE_CHECK_INTERVAL_MS,
 } from "./updateService";
 import { updateStore, type UpdateSnapshot } from "./updateStore";
+import { setLocale } from "../../shared/i18n";
 
 const d = vi.hoisted(() => ({
   tauri: true,
@@ -80,6 +81,11 @@ beforeEach(async () => {
   d.getVersion.mockResolvedValue("0.1.6");
   d.check.mockResolvedValue(null);
   await resetUpdateService();
+});
+
+// The UI translates through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
 });
 
 describe("startup and periodic checks", () => {

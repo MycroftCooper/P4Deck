@@ -107,12 +107,8 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
   const params = normalizePanelTarget(props.params);
   const PageIcon = kind ? pageIcons[kind] : undefined;
   const lockLabel = params.locked
-    ? zh
-      ? "目标已锁定；点击恢复跟随文件选择"
-      : "Target locked; click to follow file selection"
-    : zh
-      ? "正在跟随文件选择；点击锁定当前目标"
-      : "Following file selection; click to lock current target";
+    ? tFor(zh ? "zh-CN" : "en-US", "docking.target.locked.click.to.follow")
+    : tFor(zh ? "zh-CN" : "en-US", "docking.following.file.selection.click.to");
   const newTabLabel = tFor(zh ? "zh-CN" : "en-US", "docking.new.tab");
   // Global pages with a compact title bar; their actions portal into it.
   const titled = !!kind && !isMultiPage(kind);
@@ -157,20 +153,12 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                   key={params.target}
                   label={
                     kind === "diff"
-                      ? zh
-                        ? "差异文件路径"
-                        : "Diff file path"
+                      ? tFor(zh ? "zh-CN" : "en-US", "docking.diff.file.path")
                       : kind === "revgraph"
-                        ? zh
-                          ? "修订图文件路径"
-                          : "Revision graph file path"
+                        ? tFor(zh ? "zh-CN" : "en-US", "docking.revision.graph.file.path")
                         : kind === "history"
-                          ? zh
-                            ? "Depot 路径"
-                            : "Depot path"
-                          : zh
-                            ? "预览文件路径"
-                            : "Preview file path"
+                          ? tFor(zh ? "zh-CN" : "en-US", "docking.depot.path")
+                          : tFor(zh ? "zh-CN" : "en-US", "docking.preview.file.path")
                   }
                   raw={kind === "history" || kind === "preview"}
                   target={params.target}

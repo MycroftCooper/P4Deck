@@ -235,9 +235,7 @@ function VirtualSearchResults({
                 disabled={disabled || navigationBusy === item.identity}
                 title={
                   disabled
-                    ? zh
-                      ? "尚无 Job 详情页，无法导航。"
-                      : "No Job details page exists yet; navigation is unavailable."
+                    ? t("search.no.job.details.page.exists")
                     : zh
                       ? `打开 ${item.title}`
                       : `Open ${item.title}`
@@ -267,9 +265,7 @@ function VirtualSearchResults({
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
                     {disabled
-                      ? zh
-                        ? " · 暂无可用详情页"
-                        : " · no destination page"
+                      ? t("search.no.destination.page")
                       : ""}
                   </small>
                 </span>
@@ -296,9 +292,7 @@ function validationMessage(
   zh: boolean,
 ): string {
   if (reason === "control")
-    return zh
-      ? "搜索内容不能包含控制字符。"
-      : "Search text cannot contain control characters.";
+    return t("search.search.text.cannot.contain.control");
   if (reason === "tooLong")
     return zh
       ? `搜索内容最多 ${GLOBAL_SEARCH_MAX_CHARACTERS} 个 Unicode 字符。`

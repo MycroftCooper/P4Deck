@@ -75,15 +75,11 @@ export function isStreamList(value: unknown): value is StreamSummary[] {
   );
 }
 
-function historyNoticeFor(page: FileHistoryPage, zh: boolean) {
+function historyNoticeFor(page: FileHistoryPage, _zh: boolean) {
   return page.truncated
-    ? zh
-      ? "历史结果达到安全上限，当前结果已截断。"
-      : "History reached its safety limit and was truncated."
+    ? t("browse.history.reached.its.safety.limit")
     : page.partial
-      ? zh
-        ? "历史结果不完整。"
-        : "History results are partial."
+      ? t("browse.history.results.are.partial")
       : "";
 }
 
@@ -458,9 +454,7 @@ export function ReadOnlyPage({
                 : onPreviewChange?.(item.changelistId),
             item.changelistId > 0 && (openChangeDetails || onPreviewChange)
               ? undefined
-              : zh
-                ? "此记录没有可预览的 CL"
-                : "No submitted CL is available",
+              : t("browse.no.submitted.cl.is.available"),
           ),
           获取这个版本: action(
             (source) =>
@@ -483,9 +477,7 @@ export function ReadOnlyPage({
               }),
             remoteReady && valid
               ? undefined
-              : zh
-                ? "连接或文件修订无效"
-                : "Connection or file revision is invalid",
+              : t("browse.connection.or.file.revision.is"),
           ),
           Undo: action(
             (source) =>
@@ -497,17 +489,13 @@ export function ReadOnlyPage({
               }),
             remoteReady
               ? undefined
-              : zh
-                ? "连接不可用"
-                : "Connection unavailable",
+              : t("browse.connection.unavailable"),
           ),
           Diff: action(
             () => compareHistory(queue),
             historyDiffPair(queue)
               ? undefined
-              : zh
-                ? "请选择同一文件的两个有效修订"
-                : "Select two valid revisions of the same file",
+              : t("browse.select.two.valid.revisions.of"),
           ),
         };
       },
@@ -602,9 +590,7 @@ export function ReadOnlyPage({
       ) : (
         <FixedPageHeader
           description={
-            zh
-              ? "查看服务器上的分支流、类型和父子关系。"
-              : "Streams, types and parent relationships on this server."
+            t("browse.streams.types.and.parent.relationships")
           }
         >
           <div className="section-title-actions">
@@ -697,9 +683,7 @@ export function ReadOnlyPage({
                 if (nonProgressing)
                   setOwnedError({
                     owner: ownerAtStart,
-                    message: zh
-                      ? "后端返回了重复游标；已保留当前历史记录。"
-                      : "The backend returned a repeated cursor; current history was preserved.",
+                    message: t("browse.the.backend.returned.a.repeated.2"),
                   });
               })
               .catch((cause) => {
@@ -860,20 +844,12 @@ export function ReadOnlyPage({
             {!filtered.length && (
               <div className="workspace-empty">
                 {loading && !rowsLoaded
-                  ? zh
-                    ? "加载中…"
-                    : "Loading…"
+                  ? t("browse.loading.2")
                   : error
-                    ? zh
-                      ? "加载失败，可刷新重试"
-                      : "Loading failed. Refresh to retry."
+                    ? t("browse.loading.failed.refresh.to.retry")
                     : kind === "history" && !queryPath
-                      ? zh
-                        ? "从文件页选择文件后打开 History，或输入 Depot 文件路径。"
-                        : "Select a file before opening History, or enter its depot path."
-                      : zh
-                        ? "没有匹配记录"
-                        : "No matching records"}
+                      ? t("browse.select.a.file.before.opening")
+                      : t("browse.no.matching.records")}
               </div>
             )}
           </div>

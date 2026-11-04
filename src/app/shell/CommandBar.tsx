@@ -244,9 +244,7 @@ export function CommandBar({
     if (running.current === stale.id) running.current = undefined;
     setOperation((old) => (old && old.id === stale.id ? undefined : old));
     setNotice(
-      zh
-        ? "操作长时间未返回，结果未知，请刷新核对"
-        : "The operation did not return in time. Its result is unknown; refresh to verify.",
+      t("shell.the.operation.did.not.return"),
     );
     void recordFrontendOperationLog({
       eventId: `${stale.id}-watchdog`,
@@ -369,9 +367,7 @@ export function CommandBar({
       latest.current.connectionKey !== connectionKey
     )
       throw new Error(
-        zh
-          ? "连接已改变，请重新选择目标"
-          : "Connection changed; select the target again",
+        t("shell.connection.changed.select.the.target"),
       );
     return executeTarget(id, actionTarget, actionNodes, capabilities, source);
   }
@@ -773,9 +769,7 @@ export function CommandBar({
     }
     if (running.current)
       throw new Error(
-        zh
-          ? "另一个操作正在运行，请稍后重试"
-          : "Another operation is running; try again later",
+        t("shell.another.operation.is.running.try"),
       );
     const operationId = crypto.randomUUID();
     const epoch = generation.current;
@@ -914,9 +908,7 @@ export function CommandBar({
           ref={addressInput}
           aria-label={t("shell.address")}
           placeholder={
-            zh
-              ? "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转"
-              : "Local / depot path · Enter or paste to navigate"
+            t("shell.local.depot.path.enter.or")
           }
           value={address}
           onChange={(e) => {
@@ -983,9 +975,7 @@ export function CommandBar({
             <div className="command-group" key={index}>
               {group.map(({ id, icon: Icon, zh: cn, en }) => {
                 const reason = !ready
-                  ? zh
-                    ? "正在连接"
-                    : "Connecting"
+                  ? t("shell.connecting")
                   : commandReason(
                       id,
                       target,
@@ -1000,9 +990,7 @@ export function CommandBar({
                     title={
                       reason ||
                       (id === "refresh"
-                        ? zh
-                          ? "刷新文件与待提交列表（不会自动同步）"
-                          : "Refresh files and pending lists (does not sync)"
+                        ? t("shell.refresh.files.and.pending.lists")
                         : zh
                           ? cn
                           : en)

@@ -1,3 +1,4 @@
+import { beforeEach } from "vitest";
 // @vitest-environment jsdom
 import {readFileSync} from 'node:fs';
 import {act} from 'react';
@@ -6,9 +7,15 @@ import {dialogHarness} from '../../../src/app/dialogs/testHarness';
 import {useCompanySubmitSnapshot} from '../../../src/features/companySubmit/useCompanySubmitSnapshot';
 import {CompanySubmitPreview} from '../../../src/features/companySubmit/CompanySubmitPreview';
 import {beginSimulation,applySimulation,requestBinding,type PlanRequest,type PlanResult,type ConnectionSnapshot} from '../../../src/features/companySubmit/model';
+import { setLocale } from "../../../src/shared/i18n";
 const root=dialogHarness();
 const golden=JSON.parse(readFileSync('src-tauri/src/app/company_submit_golden_v1.json','utf8')) as {cases:{name:string;request:PlanRequest;expected:PlanResult}[]};
 const snapshot:ConnectionSnapshot={profileId:'qa',generation:'18446744073709551615',server:'qa.invalid',user:'fixture',client:'synthetic'};
+// The UI translates through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it('exact host identity survives hook, duplicate reads coalesce and obsolete scope cannot restore ready',async()=>{
  let resolve!:(s:ConnectionSnapshot)=>void;
  const read=vi.fn().mockResolvedValueOnce(snapshot).mockImplementationOnce(()=>new Promise<ConnectionSnapshot>(r=>resolve=r)).mockRejectedValueOnce(Error('new scope unavailable'));

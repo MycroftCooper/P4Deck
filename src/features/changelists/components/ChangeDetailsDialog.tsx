@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { tFor } from "../../../shared/i18n";
 import {
   createContext,
   useCallback,
@@ -155,7 +155,7 @@ function ChangeDetailsDialog({
       if (target.kind === "pending" && target.snapshot)
         return pendingDetail(target.snapshot);
       if (runtime.mode !== "mock" && runtime.connection.state !== "connected")
-        throw new Error(t("pending.connection.unavailable"));
+        throw new Error(tFor(zh ? "zh-CN" : "en-US", "pending.connection.unavailable"));
       if (target.kind === "submitted")
         return backend.getSubmittedChangeDetail({
           changeId: target.changeId,
@@ -202,7 +202,7 @@ function ChangeDetailsDialog({
           );
         if (detail.inspectionStatus === "unavailable")
           throw new Error(
-            detail.message || t("pending.details.unavailable"),
+            detail.message || tFor(zh ? "zh-CN" : "en-US", "pending.details.unavailable"),
           );
         setValue(detail);
         // A pending/shelved CL answered through the submitted path must not be
@@ -246,10 +246,10 @@ function ChangeDetailsDialog({
       : "pending";
   const statusLabel =
     statusKind === "submitted"
-      ? t("pending.submitted")
+      ? tFor(zh ? "zh-CN" : "en-US", "pending.submitted")
       : statusKind === "pending"
-        ? t("pending.pending")
-        : t("pending.unknown");
+        ? tFor(zh ? "zh-CN" : "en-US", "pending.pending")
+        : tFor(zh ? "zh-CN" : "en-US", "pending.unknown");
   // A CL reached through the submitted path that turns out to be pending only
   // exposes shelved files; the pending snapshot path lists opened files.
   const shelvedFiles = target.kind === "submitted" && !submitted;
@@ -261,16 +261,16 @@ function ChangeDetailsDialog({
           "This changelist is not submitted yet; only shelved files are available.",
         )
       : value?.inspectionStatus === "partial"
-        ? t("pending.file.list.may.be.incomplete")
+        ? tFor(zh ? "zh-CN" : "en-US", "pending.file.list.may.be.incomplete")
         : undefined);
   return (
     <Dialog
-      title={`${t("pending.changelist.details")} · ${target.changeId || "default"}${
+      title={`${tFor(zh ? "zh-CN" : "en-US", "pending.changelist.details")} · ${target.changeId || "default"}${
         value && value.files.length
           ? ` · ${value.files.length} ${
               shelvedFiles
-                ? t("pending.shelved.files")
-                : t("pending.files")
+                ? tFor(zh ? "zh-CN" : "en-US", "pending.shelved.files")
+                : tFor(zh ? "zh-CN" : "en-US", "pending.files")
             }`
           : ""
       }`}
@@ -288,7 +288,7 @@ function ChangeDetailsDialog({
       onRequestClose={onClose}
       footer={
         <button data-dialog-autofocus onClick={onClose}>
-          {t("pending.close")}
+          {tFor(zh ? "zh-CN" : "en-US", "pending.close")}
         </button>
       }
     >
@@ -302,19 +302,19 @@ function ChangeDetailsDialog({
           </DialogNotice>
         )}
         {!value && !error && (
-          <DialogNotice>{t("pending.loading")}</DialogNotice>
+          <DialogNotice>{tFor(zh ? "zh-CN" : "en-US", "pending.loading")}</DialogNotice>
         )}
         {error && (
           <>
             <DialogNotice error>{error}</DialogNotice>
             <button onClick={() => setRetry((v) => v + 1)}>
-              {t("pending.retry")}
+              {tFor(zh ? "zh-CN" : "en-US", "pending.retry")}
             </button>
           </>
         )}
         {target.kind === "pending" && target.snapshot && (
           <DialogNotice>
-            {t("pending.current.list.snapshot")}
+            {tFor(zh ? "zh-CN" : "en-US", "pending.current.list.snapshot")}
           </DialogNotice>
         )}
         {value && (
@@ -325,27 +325,27 @@ function ChangeDetailsDialog({
                 <dd>{value.changeId || "default"}</dd>
               </div>
               <div>
-                <dt>{t("pending.user")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.user")}</dt>
                 <dd>{value.user || "—"}</dd>
               </div>
               <div>
-                <dt>{t("pending.time")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.time")}</dt>
                 <dd>{time}</dd>
               </div>
               <div>
-                <dt>{t("pending.workspace")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.workspace")}</dt>
                 <dd>{value.client || "—"}</dd>
               </div>
             </dl>
-            <h3>{t("pending.description")}</h3>
+            <h3>{tFor(zh ? "zh-CN" : "en-US", "pending.description")}</h3>
             <p className="change-details-description">
-              {value.description || t("pending.no.description")}
+              {value.description || tFor(zh ? "zh-CN" : "en-US", "pending.no.description")}
             </p>
             {notice && <DialogNotice>{notice}</DialogNotice>}
             <h3>
               {shelvedFiles
-                ? t("pending.shelved.files.2")
-                : t("pending.files.2")}
+                ? tFor(zh ? "zh-CN" : "en-US", "pending.shelved.files.2")
+                : tFor(zh ? "zh-CN" : "en-US", "pending.files.2")}
             </h3>
             {value.files.length ? (
               <div
@@ -360,11 +360,11 @@ function ChangeDetailsDialog({
                 >
                   <thead>
                     <tr>
-                      <th>{t("pending.file.name")}</th>
-                      <th>{t("pending.path")}</th>
-                      <th>{t("pending.type")}</th>
-                      <th>{t("pending.action")}</th>
-                      <th>{t("pending.revision")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.file.name")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.path")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.type")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.action")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.revision")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -415,8 +415,8 @@ function ChangeDetailsDialog({
             ) : (
               <p>
                 {shelvedFiles
-                  ? t("pending.no.shelved.files")
-                  : t("pending.no.files")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "pending.no.shelved.files")
+                  : tFor(zh ? "zh-CN" : "en-US", "pending.no.files")}
               </p>
             )}
             {shelvedFiles && value.files.length > 0 && (
@@ -424,7 +424,7 @@ function ChangeDetailsDialog({
                 className="secondary"
                 onClick={() => onUnshelveIntoNewChange?.(value)}
               >
-                {t("pending.unshelve.into.new.cl")}
+                {tFor(zh ? "zh-CN" : "en-US", "pending.unshelve.into.new.cl")}
               </button>
             )}
           </>

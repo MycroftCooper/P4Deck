@@ -123,11 +123,9 @@ const openedStates: Record<string, WorkspaceNode["state"]> = {
  * Operation Log's ActionAdmission list, so every blocked hint must point there
  * instead of reading as a permanent dead end.
  */
-const withAdmissionHint = (text: string, zh: boolean) =>
+const withAdmissionHint = (text: string, _zh: boolean) =>
   `${text} ${
-    zh
-      ? "可到「工具 → 操作日志」解除写入阻塞。"
-      : "Release write blocks under Tools → Operation Log."
+    translate("pending.release.write.blocks.under.tools")
   }`;
 
 /** Unshelve runs immediately into the current workspace/default CL: no dialog, no FE preflight. */
@@ -342,9 +340,7 @@ export function PendingPage({
       setError(
         blockedText
           ? withAdmissionHint(blockedText, zh)
-          : zh
-            ? "选中文件有未确认项，请先核实。"
-            : "Selected files have unresolved items; verify them first.",
+          : translate("pending.selected.files.have.unresolved.items"),
       );
       return;
     }
@@ -1566,24 +1562,16 @@ export function PendingPage({
                   : undefined;
               })() ??
               (!ready
-                ? zh
-                  ? "连接尚未就绪"
-                  : "Connection is not ready"
+                ? translate("pending.connection.is.not.ready")
                 : menuEnvironment.commandBusy || deleting !== undefined
-                  ? zh
-                    ? "请等待当前操作完成"
-                    : "Wait for the current operation"
+                  ? translate("pending.wait.for.the.current.operation")
                   : !change.files.length
-                    ? zh
-                      ? "没有已打开文件"
-                      : "No opened files"
+                    ? translate("pending.no.opened.files")
                     : undefined);
             const numberedReason =
               unavailable ??
               (change.id === 0
-                ? zh
-                  ? "请先将文件移到编号 CL"
-                  : "Move files to a numbered CL first"
+                ? translate("pending.move.files.to.a.numbered")
                 : undefined);
             const revertTarget = () => {
               const revertNodes: WorkspaceNode[] = change.files.map((file) => ({
@@ -1693,9 +1681,7 @@ export function PendingPage({
                         className="pending-resolve-badge"
                         role="img"
                         title={
-                          zh
-                            ? "此 CL 有需要 Resolve 的文件"
-                            : "Changelist has files that need resolve"
+                          translate("pending.changelist.has.files.that.need")
                         }
                         aria-label={translate("pending.needs.resolve")}
                       >

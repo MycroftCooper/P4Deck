@@ -34,7 +34,7 @@ export function swarmMenuAction(
 export function SwarmAction({
   target,
   runtime,
-  zh,
+  zh: _zh,
   className,
 }: {
   target: SwarmLinkTarget;
@@ -60,21 +60,15 @@ export function SwarmAction({
           }
           void openSwarmLink(runtime, target).catch(() =>
             setError(
-              zh
-                ? "未能安全打开 Swarm；连接可能已切换，请重试。"
-                : "Swarm was not opened safely. The connection may have changed; retry.",
+              t("swarm.swarm.was.not.opened.safely"),
             ),
           );
         }}
       >
         {configure ? <Settings size={14} /> : <ExternalLink size={14} />}
         {configure
-          ? zh
-            ? "配置 Swarm"
-            : "Configure Swarm"
-          : zh
-            ? "在 Swarm 中打开"
-            : "Open in Swarm"}
+          ? t("swarm.configure.swarm")
+          : t("swarm.open.in.swarm")}
       </button>
       {error ? (
         <span role="alert" className="swarm-open-error">

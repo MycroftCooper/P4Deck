@@ -562,24 +562,14 @@ export function DiffView({
   };
 
   const empty = !path
-    ? zh
-      ? "选择文件，或在上方输入路径。"
-      : "Select a file or enter a path above."
+    ? t("browse.select.a.file.or.enter")
     : loading && !diff
-      ? zh
-        ? "正在加载…"
-        : "Loading…"
+      ? t("browse.loading")
       : error && !diff
-        ? zh
-          ? "加载失败，请重试。"
-          : "Loading failed. Retry."
+        ? t("browse.loading.failed.retry")
         : diff?.identical
-          ? zh
-            ? "两侧内容相同"
-            : "Both sides are identical"
-          : zh
-            ? "没有文本差异"
-            : "No text differences";
+          ? t("browse.both.sides.are.identical")
+          : t("browse.no.text.differences");
 
   const renderable =
     diff !== undefined &&
@@ -774,9 +764,7 @@ export function DiffView({
                 className="diff-expand-all-toggle"
                 aria-label={t("browse.expand.all")}
                 title={
-                  zh
-                    ? "展开全部未改动内容"
-                    : "Expand all unchanged context in this file"
+                  t("browse.expand.all.unchanged.context.in")
                 }
                 aria-pressed={expandAll}
                 disabled={!renderable}
@@ -790,21 +778,13 @@ export function DiffView({
                 className="diff-structured-toggle"
                 aria-label={
                   partialMode === "patch"
-                    ? zh
-                      ? "结构化视图"
-                      : "Structured view"
-                    : zh
-                      ? "原始补丁视图"
-                      : "Raw patch view"
+                    ? t("browse.structured.view")
+                    : t("browse.raw.patch.view")
                 }
                 title={
                   partialMode === "patch"
-                    ? zh
-                      ? "切换到结构化视图"
-                      : "Switch to the structured view"
-                    : zh
-                      ? "切换到原始补丁视图"
-                      : "Switch to the raw patch view"
+                    ? t("browse.switch.to.the.structured.view")
+                    : t("browse.switch.to.the.raw.patch")
                 }
                 aria-pressed={partialMode === "structured"}
                 disabled={!renderable}
@@ -892,9 +872,7 @@ export function DiffView({
                     className="diff-fallback-note diff-patch-view-note"
                     role="note"
                   >
-                    {zh
-                      ? "文件文本不完整，以下为完整原始补丁（含后端 3 行上下文）；折叠上下文无法展开。"
-                      : "File text is incomplete. Showing the full raw patch with the backend's three context lines; collapsed context cannot be expanded."}
+                    {t("browse.file.text.is.incomplete.showing")}
                   </p>
                   <pre className="diff-patch-fallback">{diff.unified}</pre>
                 </div>
@@ -915,9 +893,7 @@ export function DiffView({
             ) : (
               <div className="diff-fallback" role="alert">
                 <p className="diff-fallback-note">
-                  {zh
-                    ? "结构化差异解析失败，以下为原始 patch 预览。"
-                    : "Could not parse the structured diff. Raw patch preview below."}
+                  {t("browse.could.not.parse.the.structured")}
                 </p>
                 <pre className="diff-patch-fallback">{diff.unified}</pre>
               </div>

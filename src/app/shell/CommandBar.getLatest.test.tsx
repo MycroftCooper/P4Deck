@@ -11,6 +11,7 @@ import type {
 } from "../../shared/contracts";
 import { commandActions } from "../actions/actionCatalog";
 import { defaultUi } from "../../features/settings/preferences";
+import { setLocale } from "../../shared/i18n";
 const deps = vi.hoisted(() => ({
   previewSync: vi.fn(),
   syncLatest: vi.fn(),
@@ -159,6 +160,7 @@ function planWithCounts(overrides: Partial<SyncPreviewPlan["counts"]>) {
 }
 
 beforeEach(() => {
+  setLocale("en-US");
   vi.clearAllMocks();
   deps.ui = { toolbarText: true };
   deps.invalidate.mockResolvedValue(undefined);

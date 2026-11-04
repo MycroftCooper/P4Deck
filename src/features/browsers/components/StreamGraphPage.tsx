@@ -395,9 +395,7 @@ export function StreamGraphPage({
       setPhase("ready");
       if (nonProgressing)
         setNotice(
-          zh
-            ? "后端返回了未前进的游标；已保留当前节点并停止分页。"
-            : "The backend returned a non-progressing cursor; current nodes were preserved and paging stopped.",
+          t("browse.the.backend.returned.a.non"),
         );
     } catch (cause) {
       if (requestToken.current !== active.token) return;
@@ -494,9 +492,7 @@ export function StreamGraphPage({
     <section className="stream-graph-page">
       <FixedPageHeader
         description={
-          zh
-            ? "按官方 parent → child 关系查看 Stream 森林；图上操作不会直接修改工作区。"
-            : "Explore the official parent → child stream forest. Graph actions never mutate the workspace directly."
+          t("browse.explore.the.official.parent.child")
         }
       >
         <button
@@ -576,12 +572,8 @@ export function StreamGraphPage({
             </span>
             <span>
               {result.cacheFreshness === "cached"
-                ? zh
-                  ? "缓存"
-                  : "Cached"
-                : zh
-                  ? "新鲜"
-                  : "Fresh"}
+                ? t("browse.cached")
+                : t("browse.fresh")}
             </span>
             {result.partial && <span>{t("browse.partial")}</span>}
             {result.truncated && (

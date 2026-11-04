@@ -4,7 +4,7 @@ import { ArrowRight, Hash } from "lucide-react";
 import { parseChangeNumber } from "../submittedFilters";
 import { useChangeDetails } from "./ChangeDetailsDialog";
 
-export function SubmittedGoTo({ zh }: { zh: boolean }) {
+export function SubmittedGoTo({ zh: _zh }: { zh: boolean }) {
   const open = useChangeDetails();
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
@@ -54,9 +54,7 @@ export function SubmittedGoTo({ zh }: { zh: boolean }) {
           id="submitted-go-to-hint"
           role="alert"
         >
-          {zh
-            ? "请输入有效的正整数 CL 号"
-            : "Enter a positive integer changelist number"}
+          {t("pending.enter.a.positive.integer.changelist")}
         </small>
       )}
     </form>

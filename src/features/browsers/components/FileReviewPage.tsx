@@ -227,9 +227,7 @@ export function FileReviewPage({
     ) {
       setOwnedError({
         owner: primaryOwner,
-        message: zh
-          ? "请选择单个文件；读取预算已达上限时请手动刷新。"
-          : "Select a single file; refresh manually when the read budget is exhausted.",
+        message: t("browse.select.a.single.file.refresh"),
       });
       return;
     }
@@ -469,9 +467,7 @@ export function FileReviewPage({
         if (nonProgressing)
           setOwnedError({
             owner: ownerAtStart,
-            message: zh
-              ? "后端返回了重复游标；已保留当前版本图。"
-              : "The backend returned a repeated cursor; the current graph was preserved.",
+            message: t("browse.the.backend.returned.a.repeated"),
           });
       })
       .catch((cause) => {
@@ -694,27 +690,17 @@ export function FileReviewPage({
               {graph
                 ? `${graph.nodes.length} ${t("browse.revisions.loaded")}`
                 : error
-                  ? zh
-                    ? "版本数量未知（读取失败）"
-                    : "Revision count unavailable (read failed)"
-                  : zh
-                    ? "尚未取得版本数量"
-                    : "Revision count not yet available"}
+                  ? t("browse.revision.count.unavailable.read.failed")
+                  : t("browse.revision.count.not.yet.available")}
             </span>
             <span className="graph-legend">
-              {zh
-                ? "实线：版本 / 分支　虚线：合并 / 复制"
-                : "Solid: revision / branch · Dashed: merge / copy"}
+              {t("browse.solid.revision.branch.dashed.merge")}
             </span>
             {(graph?.partial || graph?.truncated) && (
               <span role="status" className="filter-count">
                 {graph.truncated
-                  ? zh
-                    ? "已达到 2,000 版本安全上限"
-                    : "2,000-revision safety limit reached"
-                  : zh
-                    ? "记录不完整或存在尚未展开的引用节点"
-                    : "Records are incomplete or references remain unexpanded"}
+                  ? t("browse.2.000.revision.safety.limit")
+                  : t("browse.records.are.incomplete.or.references")}
               </span>
             )}
             <button
@@ -736,9 +722,7 @@ export function FileReviewPage({
               disabled={!canCompare || !onCompareRevisions}
               onClick={compareGraphNodes}
               title={
-                zh
-                  ? "在新页签比较所选版本"
-                  : "Compare selected revisions in a new tab"
+                t("browse.compare.selected.revisions.in.a")
               }
             >
               {t("browse.compare.selected.revisions")}
@@ -747,9 +731,7 @@ export function FileReviewPage({
         </div>
         {!queryPath ? (
           <div className="workspace-empty">
-            {zh
-              ? "在文件页选中文件后打开此页签，或在上方输入路径。"
-              : "Select a file and open this tab, or enter a path above."}
+            {t("browse.select.a.file.and.open")}
           </div>
         ) : loading && !data ? (
           <div className="workspace-empty" role="status">
@@ -758,12 +740,8 @@ export function FileReviewPage({
         ) : !graph?.nodes.length ? (
           <div className="workspace-empty">
             {error
-              ? zh
-                ? "加载失败，请重试。"
-                : "Loading failed. Retry."
-              : zh
-                ? "暂无版本记录"
-                : "No revisions"}
+              ? t("browse.loading.failed.retry")
+              : t("browse.no.revisions")}
           </div>
         ) : (
           <div className="graph-scroll">

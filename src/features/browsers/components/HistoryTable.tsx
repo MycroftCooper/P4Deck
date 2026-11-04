@@ -24,7 +24,7 @@ function Description({
   text,
   expanded,
   toggle,
-  zh,
+  zh: _zh,
   controls,
 }: {
   text: string;
@@ -55,12 +55,8 @@ function Description({
     };
   }, [text]);
   const label = expanded
-    ? zh
-      ? "折叠描述"
-      : "Collapse description"
-    : zh
-      ? "展开描述"
-      : "Expand description";
+    ? t("browse.collapse.description")
+    : t("browse.expand.description");
   return (
     <div className="history-description-cell" role="gridcell">
       <span ref={preview} className="history-description-preview">
@@ -202,12 +198,8 @@ export function HistoryTable({
                 title={
                   selectionOrder?.(item)
                     ? selectionOrder(item) === 1
-                      ? zh
-                        ? "先选版本"
-                        : "First selected"
-                      : zh
-                        ? "后选版本 · 获取此版本的目标"
-                        : "Last selected · Get this revision target"
+                      ? t("browse.first.selected")
+                      : t("browse.last.selected.get.this.revision")
                     : undefined
                 }
                 className={`history-columns workspace-row history-row ${isSelected(item) ? "selected" : ""}`}

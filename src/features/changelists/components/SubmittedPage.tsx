@@ -442,9 +442,7 @@ export function SubmittedPage({
         if (!append) reconcileSelection(combined);
         if (invalidContinuation)
           setPageError(
-            zh
-              ? "后端返回了不可继续的游标；已保留当前部分结果。"
-              : "The backend returned a non-progressing cursor; current partial results were preserved.",
+            translate("pending.the.backend.returned.a.non"),
           );
         writePagedSnapshot<SubmittedSnapshot>(key, {
           ...results,
@@ -724,9 +722,7 @@ export function SubmittedPage({
         resultSummary={
           <small
             title={
-              zh
-                ? "仅筛选已加载记录，可继续加载更多；规则不验证 CI 身份。"
-                : "Filters loaded records; load more to continue. Rules do not verify CI identity."
+              translate("pending.filters.loaded.records.load.more")
             }
           >
             {zh
@@ -796,12 +792,8 @@ export function SubmittedPage({
                 <div className="submitted-error-message">
                   <span>
                     {error.includes("must refer to client")
-                      ? zh
-                        ? "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。"
-                        : "P4 could not resolve the query path. Check Depot Path; use /... for a directory scope."
-                      : zh
-                        ? "查询失败，请查看技术详情。"
-                        : "Query failed. See technical details."}
+                      ? translate("pending.p4.could.not.resolve.the")
+                      : translate("pending.query.failed.see.technical.details")}
                   </span>
                   <details>
                     <summary>{translate("pending.technical.details")}</summary>

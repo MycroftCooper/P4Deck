@@ -147,9 +147,7 @@ export function ConnectionSetupGate({
       ) : editing ? (
         <>
           <p role="status">
-            {zh
-              ? "保存连接后，点击“启用连接”完成验证。"
-              : "Save a connection, then activate it to complete verification."}
+            {t("settings.save.a.connection.then.activate")}
           </p>
           <ConnectionProfilesCard
             runtime={runtime}
@@ -166,7 +164,7 @@ export function ConnectionSetupGate({
 }
 
 function SetupPrompt({
-  zh,
+  zh: _zh,
   onConfigure,
 }: {
   zh: boolean;
@@ -195,9 +193,7 @@ function SetupPrompt({
       </header>
       <div className="workflow-dialog-body">
         <p id="connection-setup-description">
-          {zh
-            ? "还没有生效的 P4 连接。请先前往设置保存并启用连接。"
-            : "No P4 connection is active. Open settings to save and activate a connection."}
+          {t("settings.no.p4.connection.is.active")}
         </p>
       </div>
       <footer className="workflow-dialog-footer">

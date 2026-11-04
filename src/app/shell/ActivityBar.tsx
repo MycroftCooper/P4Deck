@@ -10,7 +10,7 @@ interface Props {
   active: PageId | null;
   onOpenPage(page: PageId): void;
 }
-export function ActivityBar({ zh, labels, pages, active, onOpenPage }: Props) {
+export function ActivityBar({ zh: _zh, labels, pages, active, onOpenPage }: Props) {
   const menu = useContextMenu();
   return (
     <nav
@@ -32,12 +32,8 @@ export function ActivityBar({ zh, labels, pages, active, onOpenPage }: Props) {
               labels[page] +
               " · " +
               (pages.includes(page)
-                ? zh
-                  ? "切换到页签"
-                  : "Show tab"
-                : zh
-                  ? "打开页签"
-                  : "Open tab");
+                ? t("shell.show.tab")
+                : t("shell.open.tab"));
             return (
               <button
                 key={page}

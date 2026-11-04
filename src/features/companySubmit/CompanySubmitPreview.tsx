@@ -82,17 +82,13 @@ export function CompanySubmitPreview({
         {t("companySubmit.custom.submit.tool.not.connected")}
       </h2>
       <p>
-        {zh
-          ? "真实启动禁用；工作目录、认证与后台会话行为尚待隔离验证。"
-          : "Real launch is disabled pending isolated verification of working directory, authentication and background sessions."}
+        {t("companySubmit.real.launch.is.disabled.pending")}
       </p>
       {error ? (
         <p role="alert">{tr(errors[error])}</p>
       ) : !result ? (
         <p role="status">
-          {zh
-            ? "等待宿主规划；工具存在性未核验。"
-            : "Awaiting host planning; tool availability unverified."}
+          {t("companySubmit.awaiting.host.planning.tool.availability")}
         </p>
       ) : null}
       {!error && result?.ok && (
@@ -115,15 +111,11 @@ export function CompanySubmitPreview({
       {state && <p role="status">{tr(phases[state.state.state])}</p>}
       {simulation && !state && (
         <p role="status">
-          {zh
-            ? "旧连接快照仍有模拟会话；切换连接不会解锁请求。"
-            : "An earlier snapshot has a simulation session; switching connection does not unlock requests."}
+          {t("companySubmit.an.earlier.snapshot.has.a")}
         </p>
       )}
       <button type="button" disabled>
-        {zh
-          ? "启动自定义提交工具（禁用）"
-          : "Launch custom submit tool (disabled)"}
+        {t("companySubmit.launch.custom.submit.tool.disabled")}
       </button>
     </section>
   );

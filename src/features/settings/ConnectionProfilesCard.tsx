@@ -261,9 +261,7 @@ function localizedError(
   const selected = parsed.code ? copy[parsed.code] : undefined;
   const base =
     (selected && (zh ? selected[0] : selected[1])) ||
-    (zh
-      ? "操作未完成；当前连接未改动，请重试。"
-      : "The operation did not complete. The current connection was not changed; retry.");
+    (t("settings.the.operation.did.not.complete"));
   // Surface the backend OS error (path/errno) for support; the localized text alone hides it.
   const detail = parsed.detail.trim().slice(0, 300);
   return {

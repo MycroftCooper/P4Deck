@@ -60,9 +60,7 @@ export function AccentSettings({
         />
         {!valid && (
           <small role="status">
-            {zh
-              ? "请输入六位十六进制颜色；当前主题保持上次有效值。"
-              : "Enter six hex digits; the last valid color stays applied."}
+            {t("settings.enter.six.hex.digits.the")}
           </small>
         )}
       </label>
@@ -103,9 +101,7 @@ export function AccentSettings({
         })}
       </div>
       <small>
-        {zh
-          ? "立即生效并保存；浅深主题自动调整明暗以保持可读性。成功、警告和错误颜色保持独立。"
-          : "Applied and saved instantly; lightness adapts for readable contrast. Success, warning and error colors remain independent."}
+        {t("settings.applied.and.saved.instantly.lightness")}
       </small>
     </div>
   );

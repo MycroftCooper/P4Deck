@@ -112,6 +112,18 @@ const TERNARY_RE = new RegExp(
   "g",
 );
 
+/**
+ * Prettier-wrapped ternary, e.g.
+ *   zh
+ *     ? "中文"
+ *     : "English"
+ * Captured separately because the single-line pattern must not span newlines.
+ */
+const TERNARY_WRAPPED_RE = new RegExp(
+  `(?<![\\w$.])zh\\s*\\n\\s*\\?\\s*${CJK_OR_ASCII_STR}\\s*\\n\\s*:\\s*${CJK_OR_ASCII_STR}`,
+  "g",
+);
+
 /** tr("中文", "English") — any local helper name already defined in the file. */
 const TR_CALL_RE = new RegExp(
   `\\btr\\s*\\(\\s*${CJK_OR_ASCII_STR}\\s*,\\s*${CJK_OR_ASCII_STR}\\s*\\)`,
@@ -137,14 +149,15 @@ const keys = new Map(); // key -> { zh, en }
 function keyFor(ns, zhText, enText) {
   const slug = slugOf(enText || zhText);
   let key = `${ns}.${slug}`;
-  const existing = keys.get(key);
-  if (existing && (existing.zh !== zhText || existing.en !== enText)) {
-    // Disambiguate deterministically rather than silently overwriting.
-    let n = 2;
-    while (keys.has(`${key}.${n}`)) n++;
-    key = `${key}.${n}`;
+  let suffix = 2;
+  // A key must never be reused for different text: the catalogs are curated by
+  // hand and a silent overwrite changes an existing translation.
+  for (;;) {
+    const existing = keys.get(key);
+    if (!existing) return key;
+    if (existing.zh === zhText && existing.en === enText) return key;
+    key = `${ns}.${slug}.${suffix++}`;
   }
-  return key;
 }
 
 function processFile(file) {
@@ -170,6 +183,7 @@ function processFile(file) {
   };
 
   replaceLit(TERNARY_RE, (r) => [r[0], r[1]]);
+  replaceLit(TERNARY_WRAPPED_RE, (r) => [r[0], r[1]]);
   replaceLit(TR_CALL_RE, (r) => [r[0], r[1]]);
   // Property pairs are reported but left alone: they are data models.
   const pairs = [...src.matchAll(PAIR_RE)];
@@ -264,16 +278,32 @@ if (WRITE) {
   const append = (catalogPath, pick) => {
     let text = fs.readFileSync(catalogPath, "utf8");
     const marker = "  // ---- codemod-converged ------------------------------------------------";
-    const lines = [...keys.entries()]
+    // Merge with keys already converged by a previous run, otherwise the
+    // block is replaced and earlier keys are lost.
+    const existing = new Map();
+    const blockRe = /  \/\/ ---- codemod-converged[^\n]*\n([\s\S]*?)(?=\n\} as const|\n\};)/;
+    const prev = text.match(blockRe);
+    if (prev)
+      for (const m of prev[1].matchAll(/^  "([^"]+)": "((?:[^"\\]|\\.)*)",$/gm))
+        existing.set(m[1], m[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
+    for (const [k, v] of keys) {
+      // Never shadow a curated key that already exists outside the block.
+      if (!existing.has(k) && new RegExp(`^  "${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`, "m").test(text.replace(blockRe, ""))) {
+        throw new Error(
+          `key "${k}" already exists in ${path.basename(catalogPath)} with different text; ` +
+            `refusing to overwrite a curated translation`,
+        );
+      }
+      existing.set(k, pick(v));
+    }
+
+    const lines = [...existing.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `  "${k}": "${esc(pick(v))}",`)
+      .map(([k, v]) => `  "${k}": "${esc(v)}",`)
       .join("\n");
     const block = `${marker}\n${lines}\n`;
-    if (text.includes(marker))
-      text = text.replace(
-        /  \/\/ ---- codemod-converged[\s\S]*?(?=\n\} as const|\n};)/,
-        block.trimEnd() + "\n",
-      );
+
+    if (prev) text = text.replace(blockRe, block.trimEnd() + "\n");
     else {
       // Insert before whichever closing form this catalog uses:
       //   `} as const satisfies Catalog;`   (catalog.zh.ts)

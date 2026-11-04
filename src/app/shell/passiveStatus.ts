@@ -80,9 +80,7 @@ export function passiveStatusPresentation(
               ? `样本不足（${s.samples}/5）`
               : `Insufficient samples (${s.samples}/5)`
             : s.observedAt
-              ? zh
-                ? "已观察请求，尚未测速"
-                : "Requests observed; no speed sample yet"
+              ? tFor(zh ? "zh-CN" : "en-US", "shell.requests.observed.no.speed.sample")
               : unknown));
   const rows = [
     { label: tFor(zh ? "zh-CN" : "en-US", "shell.connection"), value: connection },
@@ -90,13 +88,9 @@ export function passiveStatusPresentation(
     { label: tFor(zh ? "zh-CN" : "en-US", "shell.local.response"), value: quality },
   ];
   const note =
-    (zh
-      ? "已有请求的本机观测，非服务器负载"
-      : "Observed existing requests; not server load") +
+    (tFor(zh ? "zh-CN" : "en-US", "shell.observed.existing.requests.not.server")) +
     (s.connectionSource === "manual"
-      ? zh
-        ? "；连接来自手动检查"
-        : "; connection from manual check"
+      ? tFor(zh ? "zh-CN" : "en-US", "shell.connection.from.manual.check")
       : "");
   return {
     icon,

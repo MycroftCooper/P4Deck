@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { tFor } from "../../shared/i18n";
 import { notifyFailure, notifyUser } from "../../shared/notice";
 import {
   checkForUpdate,
@@ -106,28 +106,18 @@ export function updateFailureText(
   zh: boolean,
 ): string {
   if (scope === "restart")
-    return zh
-      ? "更新已安装，但自动重启失败；请手动重启 P4Deck 完成更新。"
-      : "The update is installed, but the automatic restart failed. Restart P4Deck manually to finish updating.";
+    return tFor(zh ? "zh-CN" : "en-US", "update.the.update.is.installed.but");
   if (verificationFailure.test(error ?? ""))
     return scope === "install"
-      ? zh
-        ? "更新包校验失败，安装已取消；请稍后重试或手动下载安装包。"
-        : "The update package failed verification and installation was cancelled. Retry later or download the installer manually."
-      : zh
-        ? "更新包校验失败；请稍后重试或手动下载安装包。"
-        : "The update package failed verification. Retry later or download the installer manually.";
+      ? tFor(zh ? "zh-CN" : "en-US", "update.the.update.package.failed.verification")
+      : tFor(zh ? "zh-CN" : "en-US", "update.the.update.package.failed.verification.2");
   for (const [pattern, cn, en] of failureReasons)
     if (pattern.test(error ?? "")) return zh ? cn : en;
   if (scope === "check")
-    return t("update.the.update.check.failed");
+    return tFor(zh ? "zh-CN" : "en-US", "update.the.update.check.failed");
   if (scope === "install")
-    return zh
-      ? "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。"
-      : "Installing the update failed; the app still runs the current version. Retry or download the installer manually.";
-  return zh
-    ? "更新下载或安装失败。"
-    : "Downloading or installing the update failed.";
+    return tFor(zh ? "zh-CN" : "en-US", "update.installing.the.update.failed.the");
+  return tFor(zh ? "zh-CN" : "en-US", "update.downloading.or.installing.the.update");
 }
 
 function reportFailure(

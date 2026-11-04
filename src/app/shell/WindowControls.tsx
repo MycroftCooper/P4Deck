@@ -61,12 +61,8 @@ export function WindowControls({ zh }: { zh: boolean }) {
         data-window-chrome-action="maximize"
         aria-label={
           maximized
-            ? zh
-              ? "还原窗口"
-              : "Restore window"
-            : zh
-              ? "最大化"
-              : "Maximize"
+            ? tFor(zh ? "zh-CN" : "en-US", "shell.restore.window")
+            : tFor(zh ? "zh-CN" : "en-US", "shell.maximize")
         }
         onClick={() =>
           run(async () => {

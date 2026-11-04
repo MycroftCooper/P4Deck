@@ -73,7 +73,8 @@ it.each([false, true])(
 
 // Components translate through the module-level locale.
 beforeEach(() => {
-  setLocale("zh-CN");
+  setLocale("en-US");
+  setLocale("en-US");
 });
 
 it("browser/non-desktop shares the same explicit unavailable reason", async () => {

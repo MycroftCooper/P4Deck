@@ -134,9 +134,7 @@ export function RevisionFileList({
     >
       {demo && (
         <p className="preview-note">
-          {zh
-            ? "这是浏览器 Mock 的模拟提交文件，未访问真实 P4 Server。"
-            : "These are simulated Browser Mock files; no real P4 Server was accessed."}
+          {t("pending.these.are.simulated.browser.mock")}
         </p>
       )}
       <TableHeader

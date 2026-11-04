@@ -117,22 +117,14 @@ export function ResourceExplorer({
     () => select([]),
   );
   const connectionNotice = checkingConnection
-    ? zh
-      ? "正在自动检查连接与登录状态…"
-      : "Checking connection and login automatically…"
+    ? translate("files.checking.connection.and.login.automatically")
     : !ready
       ? env.runtime.p4Version === "loading"
-        ? zh
-          ? "正在初始化连接…"
-          : "Initializing connection…"
-        : zh
-          ? "未连接，请在设置中添加或选择连接。"
-          : "Not connected. Add or select a connection in Settings."
+        ? translate("files.initializing.connection")
+        : translate("files.not.connected.add.or.select")
       : blocked || (ready && env.runtime.connection.state !== "connected")
         ? mode === "workspace" && !env.runtime.context.cwd?.trim()
-          ? zh
-            ? "未配置工作区根目录，请先选择工作区。"
-            : "No workspace root configured. Select a workspace."
+          ? translate("files.no.workspace.root.configured.select")
           : connectionPresentation(env.runtime.connection, zh).detail
         : "";
   const notice =
@@ -140,18 +132,12 @@ export function ResourceExplorer({
     connectionNotice ||
     (!tree.root.loaded
       ? tree.root.loading
-        ? zh
-          ? "正在加载文件…"
-          : "Loading files…"
+        ? translate("files.loading.files")
         : ""
       : rootOpen[mode] && !tree.rows.length
         ? filter
-          ? zh
-            ? "已展开目录中没有匹配项"
-            : "No matches in expanded folders"
-          : zh
-            ? "此目录为空"
-            : "This folder is empty"
+          ? translate("files.no.matches.in.expanded.folders")
+          : translate("files.this.folder.is.empty")
         : "");
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = rootOpen[mode] ? tree.rows : [];
@@ -175,9 +161,7 @@ export function ResourceExplorer({
   const selectRoot = () => {
     if (mode === "workspace" && !root.absolutePath) {
       setRootSelectNotice(
-        zh
-          ? "未配置工作区根目录，请先选择工作区。"
-          : "No workspace root configured. Select a workspace first.",
+        translate("files.no.workspace.root.configured.select.2"),
       );
       return;
     }
@@ -239,9 +223,7 @@ export function ResourceExplorer({
     };
     if (blocked) {
       finish(
-        zh
-          ? "工作区不可用，无法定位"
-          : "Workspace unavailable; cannot locate target",
+        translate("files.workspace.unavailable.cannot.locate.target"),
       );
       return;
     }
@@ -390,9 +372,7 @@ export function ResourceExplorer({
             setFilter(event.target.value);
           }}
           placeholder={
-            zh
-              ? "筛选已展开的文件和目录…"
-              : "Filter expanded files and folders…"
+            translate("files.filter.expanded.files.and.folders")
           }
         />
       </label>
@@ -527,13 +507,9 @@ export function ResourceExplorer({
                   >
                     <span>
                       {row.state === "loading"
-                        ? zh
-                          ? "正在加载…"
-                          : "Loading…"
+                        ? translate("files.loading")
                         : row.state === "empty"
-                          ? zh
-                            ? "空目录"
-                            : "Empty folder"
+                          ? translate("files.empty.folder")
                           : row.message}
                     </span>
                     {row.state === "error" && (

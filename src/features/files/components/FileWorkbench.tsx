@@ -277,9 +277,7 @@ export function FileWorkbench({
                       title={statusExplanation(node, zh)}
                     >
                       {isDepot
-                        ? zh
-                          ? "Depot 文件"
-                          : "Depot file"
+                        ? translate("files.depot.file")
                         : labels[node.state]}
                       {!isDepot &&
                       needsSync &&

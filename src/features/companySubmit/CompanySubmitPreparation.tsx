@@ -43,9 +43,7 @@ export function CompanySubmitPreparation({
         </p>
       ) : state.status === "error" ? (
         <p role="alert">
-          {zh
-            ? "无法取得有效连接身份，真实启动保持禁用。"
-            : "Connection identity unavailable; real launch remains disabled."}
+          {t("companySubmit.connection.identity.unavailable.real.launch")}
         </p>
       ) : (
         <CompanySubmitPreview
@@ -60,9 +58,7 @@ export function CompanySubmitPreparation({
       )}
       {state.status !== "ready" && (
         <button type="button" disabled>
-          {zh
-            ? "启动自定义提交工具（禁用）"
-            : "Launch custom submit tool (disabled)"}
+          {t("companySubmit.launch.custom.submit.tool.disabled")}
         </button>
       )}
     </section>

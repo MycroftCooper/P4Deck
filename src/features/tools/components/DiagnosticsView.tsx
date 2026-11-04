@@ -109,27 +109,19 @@ export function DiagnosticsView({
           format: "json",
         });
         setExportStatus(
-          zh
-            ? "诊断导出已完成（路径/大小/sha256 由回读确认；未读取导出内容）。"
-            : "Diagnostic export verified by readback (path/size/sha256; content never read).",
+          tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export.verified.by.readback"),
         );
       } else if (result.state === "legacy") {
         const legacy = controlPlaneLegacy<DiagnosticExportResult>(result);
         if (legacy) setExportResult(legacy);
         setExportStatus(
           legacy?.simulated
-            ? zh
-              ? "Mock 模拟完成；未写入文件。"
-              : "Mock simulation complete; no file was written."
-            : zh
-              ? "诊断导出完成（旧版结果）。"
-              : "Diagnostic export completed (legacy result).",
+            ? tFor(zh ? "zh-CN" : "en-US", "tools.mock.simulation.complete.no.file")
+            : tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export.completed.legacy.result"),
         );
       } else {
         setExportStatus(
-          zh
-            ? "导出结果不确定：文件可能已写入但回读未确认。已用同一操作号查询持久回执；请核对导出目录，不要换新操作号重试。"
-            : "Export outcome uncertain: the file may exist but readback did not confirm it. The durable receipt was queried with the same operation id; inspect the export folder before any retry with a new id.",
+          tFor(zh ? "zh-CN" : "en-US", "tools.export.outcome.uncertain.the.file"),
         );
       }
     } catch (cause) {
@@ -150,9 +142,7 @@ export function DiagnosticsView({
     <div className="diagnostic-view diagnostics-view">
       {!native && (
         <div className="mock-disclosure" role="note">
-          {zh
-            ? "浏览器 Mock：指标和导出均为本地模拟，不访问 P4 Server，也不会创建诊断文件。"
-            : "Browser Mock: metrics and export are local simulations; no P4 Server is contacted and no diagnostic file is created."}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.browser.mock.metrics.and.export")}
         </div>
       )}
       <section aria-labelledby="cache-heading" className="diagnostic-card">
@@ -162,9 +152,7 @@ export function DiagnosticsView({
               {tFor(zh ? "zh-CN" : "en-US", "tools.status.cache.diagnostics")}
             </h3>
             <p>
-              {zh
-                ? "仅展示后端实际提供的累计计数与当前占用。"
-                : "Only backend-provided cumulative counters and current usage are shown."}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.only.backend.provided.cumulative.counters")}
             </p>
           </div>
           <button onClick={() => void refresh()} disabled={cacheBusy}>
@@ -237,9 +225,7 @@ export function DiagnosticsView({
           <div>
             <h3 id="export-heading">{tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export")}</h3>
             <p>
-              {zh
-                ? "后端生成受控大小的脱敏 JSON；不包含密码、ticket、完整 fingerprint 或原始环境变量。"
-                : "The backend produces a size-bounded redacted JSON file without passwords, tickets, full fingerprints, or raw environment variables."}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.the.backend.produces.a.size")}
             </p>
           </div>
           <button
@@ -255,9 +241,7 @@ export function DiagnosticsView({
             <span>
               {bytes(exportResult.sizeBytes)}
               {exportResult.truncated
-                ? zh
-                  ? " · 已截断"
-                  : " · truncated"
+                ? tFor(zh ? "zh-CN" : "en-US", "tools.truncated")
                 : ""}
             </span>
             {!exportResult.simulated && (
@@ -272,9 +256,7 @@ export function DiagnosticsView({
           </div>
         )}
         <p className="policy-boundary">
-          {zh
-            ? "当前安全打开能力仅允许 Workspace 内路径，因此不会用它打开诊断导出目录。"
-            : "The existing safe-open capability only permits Workspace paths, so it is not used for the diagnostics export directory."}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.the.existing.safe.open.capability")}
         </p>
         <div className="sr-status" role="status" aria-live="polite">
           {exportStatus}

@@ -167,9 +167,7 @@ export function CommandPalette({
                 <small>
                   {command.group} · {command.id} · {command.risk}
                   {command.confirmation === "stateMachine"
-                    ? zh
-                      ? " · 需要预检/确认"
-                      : " · preflight/confirmation required"
+                    ? t("commands.preflight.confirmation.required")
                     : ""}
                 </small>
                 {shortcuts.length > 0 && (

@@ -757,12 +757,8 @@ export function PendingFileList({
           {!nodes.length && (
             <p className="pending-file-empty" role="status">
               {filtered
-                ? zh
-                  ? "没有匹配的文件"
-                  : "No matching files"
-                : zh
-                  ? "没有文件"
-                  : "No files"}
+                ? t("pending.no.matching.files")
+                : t("pending.no.files")}
             </p>
           )}
         </div>

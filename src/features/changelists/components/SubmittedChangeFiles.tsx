@@ -138,12 +138,8 @@ export function SubmittedChangeFiles({
           ) : (
             <p>
               {detail.inspectionStatus === "complete"
-                ? zh
-                  ? "没有可显示的文件"
-                  : "No files to display"
-                : zh
-                  ? "尚无可显示文件，列表未完整读取"
-                  : "No files loaded yet; listing is incomplete"}
+                ? t("pending.no.files.to.display")
+                : t("pending.no.files.loaded.yet.listing")}
             </p>
           )}
         </>

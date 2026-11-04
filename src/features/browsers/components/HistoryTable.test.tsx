@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { HistoryTable, historyTime } from "./HistoryTable";
 import type { FileRevision } from "../../../shared/contracts";
+import { setLocale } from "../../../shared/i18n";
 
 // Presentation only: no backend imports, app mount, network or P4.
 const measured = vi.hoisted(() => ({ measure: vi.fn(), element: vi.fn() }));
@@ -35,6 +36,7 @@ const item = (revision: number, description: string): FileRevision => ({
   integrations: [],
 });
 beforeEach(() => {
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

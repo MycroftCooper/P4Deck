@@ -208,9 +208,7 @@ export function LogView({
       draft.maxMib > 50
     ) {
       setPolicyStatus(
-        zh
-          ? "保留期必须为 1–30 天，容量必须为 5–50 MiB。"
-          : "Retention must be 1–30 days and capacity 5–50 MiB.",
+        tFor(zh ? "zh-CN" : "en-US", "tools.retention.must.be.1.30"),
       );
       return;
     }
@@ -234,9 +232,7 @@ export function LogView({
         setPolicy(readback);
         setDraft(readback);
         setPolicyStatus(
-          zh
-            ? "日志策略已保存（回读逐字段一致）。"
-            : "Log policy saved (readback matches every field).",
+          tFor(zh ? "zh-CN" : "en-US", "tools.log.policy.saved.readback.matches"),
         );
       } else if (result.state === "legacy") {
         const savedLegacy = controlPlaneLegacy<LogPolicy>(result) ?? draft;
@@ -247,9 +243,7 @@ export function LogView({
         // Uncertain: never show "saved"; restore the last known policy and be explicit.
         setDraft(policy);
         setPolicyStatus(
-          zh
-            ? "保存结果不确定：回读未逐字段匹配。已用同一操作号查询持久回执；已恢复上次已知策略，请核对后再操作。"
-            : "Save outcome uncertain: the readback did not match every field. The durable receipt was queried with the same operation id; the last known policy was restored for inspection.",
+          tFor(zh ? "zh-CN" : "en-US", "tools.save.outcome.uncertain.the.readback"),
         );
       }
     } catch (cause) {
@@ -379,9 +373,7 @@ export function LogView({
               />
             </label>
             <p className="policy-boundary">
-              {zh
-                ? "保留期与容量由后端强制执行。新日志不会自动展开或切换工具区；未查看的新 Error 只在底部日志入口显示红点。"
-                : "Retention and capacity are enforced by the backend. New logs never expand or switch tools automatically; new unviewed errors only mark the bottom Log entry with a red dot."}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.retention.and.capacity.are.enforced")}
             </p>
             <button onClick={() => void savePolicy()} disabled={policyBusy}>
               {tFor(zh ? "zh-CN" : "en-US", "tools.save.policy")}
@@ -502,9 +494,7 @@ export function LogView({
       <div className="diagnostic-footer" role="status" aria-live="polite">
         <span>
           {loading
-            ? zh
-              ? "正在加载…"
-              : "Loading…"
+            ? tFor(zh ? "zh-CN" : "en-US", "tools.loading")
             : `${entries.length} ${tFor(zh ? "zh-CN" : "en-US", "tools.records")}`}
         </span>
         {nextCursor && !appendError && (

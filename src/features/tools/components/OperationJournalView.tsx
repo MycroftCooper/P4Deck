@@ -57,38 +57,28 @@ export function operationRecoveryGuidance(
     return {
       tone: "danger",
       title: tFor(zh ? "zh-CN" : "en-US", "tools.unknown.result.verify.manually"),
-      steps: zh
-        ? "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。"
-        : "Do not immediately retry a mutation. Open related logs, refresh Pending and Workspace, then verify the server-side result. P4Deck never replays automatically.",
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.do.not.immediately.retry.a"),
     };
   }
   if (failure === "cancelled") {
     return {
       tone: "warning",
-      title: zh
-        ? "已请求取消，执行范围可能不完整"
-        : "Cancel requested; execution may be partial",
-      steps: zh
-        ? "刷新 Pending 和 Workspace 后再决定是否继续。取消只停止剩余工作，不会撤销已完成部分。"
-        : "Refresh Pending and Workspace before continuing. Cancel stops remaining work and does not undo completed work.",
+      title: tFor(zh ? "zh-CN" : "en-US", "tools.cancel.requested.execution.may.be"),
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.refresh.pending.and.workspace.before"),
     };
   }
   if (failure === "authExpired") {
     return {
       tone: "warning",
       title: tFor(zh ? "zh-CN" : "en-US", "tools.authentication.expired"),
-      steps: zh
-        ? "重新登录后先刷新。若中断的是写操作，请先从服务器侧核对，再明确决定是否重试。"
-        : "Log in again and refresh first. If a mutation was interrupted, verify it server-side before explicitly retrying.",
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.log.in.again.and.refresh"),
     };
   }
   if (failure === "offline" || failure === "serverUnreachable") {
     return {
       tone: "warning",
       title: tFor(zh ? "zh-CN" : "en-US", "tools.connection.interrupted"),
-      steps: zh
-        ? "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。"
-        : "Reconnect and refresh after the network or server returns. Reads may retry; mutations are not replayed automatically.",
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.reconnect.and.refresh.after.the"),
     };
   }
   return undefined;
@@ -211,9 +201,7 @@ export function OperationJournalView({
           aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.search.operations")}
           value={keyword}
           placeholder={
-            zh
-              ? "操作 ID、工作区、状态或错误"
-              : "ID, workspace, state, or error"
+            tFor(zh ? "zh-CN" : "en-US", "tools.id.workspace.state.or.error")
           }
           onChange={(event) => setKeyword(event.target.value)}
         />
@@ -288,9 +276,7 @@ export function OperationJournalView({
               : `${recoveryRecords.length} operation(s) need manual recovery`}
           </strong>
           <span>
-            {zh
-              ? "先核对日志和服务器实际状态，再决定是否重试；写操作不会自动重放。"
-              : "Verify logs and server state before retrying. Mutations are never replayed automatically."}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.verify.logs.and.server.state")}
           </span>
         </div>
       )}
@@ -351,9 +337,7 @@ export function OperationJournalView({
                     <span>
                       {record.finishedAt
                         ? new Date(record.finishedAt).toLocaleString()
-                        : zh
-                          ? "进行中"
-                          : "In progress"}
+                        : tFor(zh ? "zh-CN" : "en-US", "tools.in.progress")}
                     </span>
                   </td>
                   <td>{duration(record)}</td>
@@ -413,9 +397,7 @@ export function OperationJournalView({
       <div className="diagnostic-footer" role="status" aria-live="polite">
         <span>
           {loading
-            ? zh
-              ? "正在加载…"
-              : "Loading…"
+            ? tFor(zh ? "zh-CN" : "en-US", "tools.loading")
             : `${records.length} ${tFor(zh ? "zh-CN" : "en-US", "tools.records")}`}
         </span>
         {nextCursor && !appendError && (

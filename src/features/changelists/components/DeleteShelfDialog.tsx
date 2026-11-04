@@ -72,9 +72,7 @@ export function DeleteShelfDialog({
     <Dialog
       title={t("pending.delete.shelved.revisions")}
       description={
-        zh
-          ? "仅删除服务器搁置版本，不会同时删除工作区文件或整个 CL。"
-          : "Delete only server shelf revisions; keep workspace files and the changelist."
+        t("pending.delete.only.server.shelf.revisions")
       }
       source={request.source}
       zh={zh}
