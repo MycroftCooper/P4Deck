@@ -534,6 +534,34 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "notify.operation.incomplete": "Operation did not complete: {text}",
+  "notify.hostReason.overlap.local.modifications":
+    "Shelved content would overlap local modifications; force overwrite is not enabled.",
+  "notify.hostReason.force.overwrite.is.not.enabled":
+    "Force overwrite is not enabled.",
+  "notify.hostReason.preflight.is.not.ready.nothing":
+    "Preflight did not pass; nothing was written.",
+  "notify.hostReason.preflight.blocked":
+    "Preflight blocked; nothing was executed.",
+  "notify.hostReason.existing.operation.is.running.or":
+    "The operation is running or was interrupted; it is never auto-retried. Check its state first.",
+  "notify.hostReason.invalidconnection": "The current connection is invalid.",
+  "notify.hostReason.duplicatechange":
+    "A custom submit tool is already running for this CL; only one per changelist.",
+  "notify.hostReason.bbusy.b":
+    "Another custom submit tool is already running; wait for it to finish.",
+  "notify.hostReason.notconfigured":
+    "This connection has no custom submit tool path configured.",
+  "notify.hostReason.toolnotfileinvalidexecutablepath":
+    "The custom submit tool path is invalid (must be an absolute existing file).",
+  "notify.hostReason.singlenumberedchangerequiredinvalidchangeid":
+    "Custom submit supports exactly one numbered changelist; use normal submit for Default or multi-select.",
+  "notify.hostReason.connectionchanged":
+    "The connection changed during the operation; confirm again.",
+  "notify.hostReason.launchfailedlaunchoutcomeunknown":
+    "The custom submit tool failed to start or its outcome is unknown; check P4 before retrying.",
+  "notify.hostReason.requestidconflictrequestlimitreached":
+    "The submit request was rejected (id conflict or too many requests); restart the app and retry.",
   "settings.write.action.no.shortcut.use.the":
     "Write action: no shortcut; use the toolbar or palette with confirmation",
   "settings.requires.a.nonempty.numbered.pending.changelist":

@@ -496,6 +496,31 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "notify.operation.incomplete": "操作未完成：{text}",
+  "notify.hostReason.overlap.local.modifications":
+    "搁置内容会与本地修改冲突，当前未启用强制覆盖。",
+  "notify.hostReason.force.overwrite.is.not.enabled": "当前未启用强制覆盖。",
+  "notify.hostReason.preflight.is.not.ready.nothing":
+    "预检未通过，未写入任何内容。",
+  "notify.hostReason.preflight.blocked": "预检未通过，未执行。",
+  "notify.hostReason.existing.operation.is.running.or":
+    "该操作仍在进行或已中断，不会自动重试；请先核对状态。",
+  "notify.hostReason.invalidconnection": "当前连接无效。",
+  "notify.hostReason.duplicatechange":
+    "该 CL 已有自定义提交工具在运行；同一个 CL 不能同时打开多个。",
+  "notify.hostReason.bbusy.b":
+    "已有自定义提交工具在运行；请等它结束，不要重复提交。",
+  "notify.hostReason.notconfigured": "当前连接没有配置自定义提交工具路径。",
+  "notify.hostReason.toolnotfileinvalidexecutablepath":
+    "自定义提交工具路径无效（需为存在的绝对路径）。",
+  "notify.hostReason.singlenumberedchangerequiredinvalidchangeid":
+    "自定义提交只能提交单个编号 CL；Default / 多选请使用普通提交。",
+  "notify.hostReason.connectionchanged":
+    "连接在操作期间已变化，请重新确认后再提交。",
+  "notify.hostReason.launchfailedlaunchoutcomeunknown":
+    "自定义提交工具启动失败或结果未知；请核对 P4 中的实际状态，不要重复提交。",
+  "notify.hostReason.requestidconflictrequestlimitreached":
+    "提交请求被拒绝（请求 ID 冲突或过多）；请重启应用后重试。",
   "settings.write.action.no.shortcut.use.the":
     "写操作：不分配快捷键，仍需工具栏/命令面板并确认",
   "settings.requires.a.nonempty.numbered.pending.changelist":

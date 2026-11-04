@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { tFor } from "./i18n/t";
+import type { MsgKey } from "./i18n/catalog.zh";
 
 export type UserNotice = {
   id: number;
@@ -50,73 +52,73 @@ const prefersChinese = () => {
 const reasons: readonly [RegExp, string, string][] = [
   [
     /overlap local modifications/i,
-    "搁置内容会与本地修改冲突，当前未启用强制覆盖。",
-    "Shelved content would overlap local modifications; force overwrite is not enabled.",
+    "notify.hostReason.overlap.local.modifications",
+    "notify.hostReason.overlap.local.modifications",
   ],
   [
     /force overwrite is not enabled/i,
-    "当前未启用强制覆盖。",
-    "Force overwrite is not enabled.",
+    "notify.hostReason.force.overwrite.is.not.enabled",
+    "notify.hostReason.force.overwrite.is.not.enabled",
   ],
   [
     /preflight is not ready; nothing was written/i,
-    "预检未通过，未写入任何内容。",
-    "Preflight did not pass; nothing was written.",
+    "notify.hostReason.preflight.is.not.ready.nothing",
+    "notify.hostReason.preflight.is.not.ready.nothing",
   ],
   [
     /preflight blocked/i,
-    "预检未通过，未执行。",
-    "Preflight blocked; nothing was executed.",
+    "notify.hostReason.preflight.blocked",
+    "notify.hostReason.preflight.blocked",
   ],
   [
     /existing operation is running or interrupted/i,
-    "该操作仍在进行或已中断，不会自动重试；请先核对状态。",
-    "The operation is running or was interrupted; it is never auto-retried. Check its state first.",
+    "notify.hostReason.existing.operation.is.running.or",
+    "notify.hostReason.existing.operation.is.running.or",
   ],
   [
     /invalidconnection/i,
-    "当前连接无效。",
-    "The current connection is invalid.",
+    "notify.hostReason.invalidconnection",
+    "notify.hostReason.invalidconnection",
   ],
   [
     /duplicateChange/i,
-    "该 CL 已有自定义提交工具在运行；同一个 CL 不能同时打开多个。",
-    "A custom submit tool is already running for this CL; only one per changelist.",
+    "notify.hostReason.duplicatechange",
+    "notify.hostReason.duplicatechange",
   ],
   [
     /(?:^|\b)busy(?:\b|$)/i,
-    "已有自定义提交工具在运行；请等它结束，不要重复提交。",
-    "Another custom submit tool is already running; wait for it to finish.",
+    "notify.hostReason.bbusy.b",
+    "notify.hostReason.bbusy.b",
   ],
   [
     /notconfigured/i,
-    "当前连接没有配置自定义提交工具路径。",
-    "This connection has no custom submit tool path configured.",
+    "notify.hostReason.notconfigured",
+    "notify.hostReason.notconfigured",
   ],
   [
     /toolnotfile|invalidExecutablePath/i,
-    "自定义提交工具路径无效（需为存在的绝对路径）。",
-    "The custom submit tool path is invalid (must be an absolute existing file).",
+    "notify.hostReason.toolnotfileinvalidexecutablepath",
+    "notify.hostReason.toolnotfileinvalidexecutablepath",
   ],
   [
     /singleNumberedChangeRequired|invalidChangeId/i,
-    "自定义提交只能提交单个编号 CL；Default / 多选请使用普通提交。",
-    "Custom submit supports exactly one numbered changelist; use normal submit for Default or multi-select.",
+    "notify.hostReason.singlenumberedchangerequiredinvalidchangeid",
+    "notify.hostReason.singlenumberedchangerequiredinvalidchangeid",
   ],
   [
     /connectionchanged/i,
-    "连接在操作期间已变化，请重新确认后再提交。",
-    "The connection changed during the operation; confirm again.",
+    "notify.hostReason.connectionchanged",
+    "notify.hostReason.connectionchanged",
   ],
   [
     /launchfailed|launchOutcomeUnknown/i,
-    "自定义提交工具启动失败或结果未知；请核对 P4 中的实际状态，不要重复提交。",
-    "The custom submit tool failed to start or its outcome is unknown; check P4 before retrying.",
+    "notify.hostReason.launchfailedlaunchoutcomeunknown",
+    "notify.hostReason.launchfailedlaunchoutcomeunknown",
   ],
   [
     /requestIdConflict|requestLimitReached/i,
-    "提交请求被拒绝（请求 ID 冲突或过多）；请重启应用后重试。",
-    "The submit request was rejected (id conflict or too many requests); restart the app and retry.",
+    "notify.hostReason.requestidconflictrequestlimitreached",
+    "notify.hostReason.requestidconflictrequestlimitreached",
   ],
 ];
 
@@ -131,10 +133,10 @@ export function writeFailureText(
   const zh = prefersChinese();
   const text = (message ?? "").trim();
   if (!text) return zh ? fallback.zh : fallback.en;
-  for (const [pattern, cn, en] of reasons) {
-    if (pattern.test(text)) return zh ? cn : en;
+  for (const [pattern, key] of reasons) {
+    if (pattern.test(text)) return tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
   }
-  return zh ? `操作未完成：${text}` : text;
+  return tFor(zh ? "zh-CN" : "en-US", "notify.operation.incomplete", { text });
 }
 
 /** Single entry for every operation failure toast: host reason + localized fallback. */
