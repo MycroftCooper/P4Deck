@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   AlertTriangle,
@@ -48,38 +48,40 @@ const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
 
 function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
   const labels: Record<GlobalSearchKind, [string, string]> = {
-    submittedChange: ["已提交 CL", "Submitted"],
-    pendingChange: ["待提交 CL", "Pending"],
-    workspaceFile: ["工作区文件", "Workspace files"],
-    depotFile: ["Depot 文件", "Depot files"],
+    submittedChange: ["search.submittedChange", "search.submittedChange"],
+    pendingChange: ["search.pendingChange", "search.pendingChange"],
+    workspaceFile: ["search.workspaceFile", "search.workspaceFile"],
+    depotFile: ["search.depotFile", "search.depotFile"],
     job: ["Job", "Jobs"],
     stream: ["Stream", "Streams"],
     shelf: ["Shelf", "Shelves"],
   };
-  return labels[kind][zh ? 0 : 1];
+  return tFor(zh ? "zh-CN" : "en-US", labels[kind][0] as MsgKey);
 }
 
 function fieldLabel(field: string, zh: boolean): string {
   const labels: Record<string, [string, string]> = {
-    title: ["标题", "Title"],
-    summary: ["摘要", "Summary"],
-    description: ["描述", "Description"],
-    user: ["用户", "User"],
-    client: ["工作区", "Client"],
+    title: ["search.title", "search.title"],
+    summary: ["search.summary", "search.summary"],
+    description: ["search.description", "search.description"],
+    user: ["search.user", "search.user"],
+    client: ["search.client", "search.client"],
     jobs: ["Job", "Jobs"],
     jobId: ["Job ID", "Job ID"],
-    status: ["状态", "Status"],
-    absolutePath: ["本地路径", "Local path"],
-    depotPath: ["Depot 路径", "Depot path"],
-    streamPath: ["Stream 路径", "Stream path"],
-    name: ["名称", "Name"],
-    owner: ["所有者", "Owner"],
-    type: ["类型", "Type"],
-    parent: ["父 Stream", "Parent stream"],
-    changeId: ["变更号", "Change ID"],
-    time: ["时间", "Time"],
+    status: ["search.status", "search.status"],
+    absolutePath: ["search.absolutePath", "search.absolutePath"],
+    depotPath: ["search.depotPath", "search.depotPath"],
+    streamPath: ["search.streamPath", "search.streamPath"],
+    name: ["search.name", "search.name"],
+    owner: ["search.owner", "search.owner"],
+    type: ["search.type", "search.type"],
+    parent: ["search.parent", "search.parent"],
+    changeId: ["search.changeId", "search.changeId"],
+    time: ["search.time", "search.time"],
   };
-  return labels[field]?.[zh ? 0 : 1] ?? field;
+  return labels[field]
+    ? tFor(zh ? "zh-CN" : "en-US", labels[field][0] as MsgKey)
+    : field;
 }
 
 function HighlightedText({
