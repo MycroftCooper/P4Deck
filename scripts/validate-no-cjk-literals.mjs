@@ -118,6 +118,11 @@ for (const abs of walk(path.join(ROOT, "src"))) {
       const label = (binding[1] ?? binding[2]).trim();
       if (menuLabels.has(label)) return;
     }
+    // Membership access on an inventory label: bindings["中文"], merged["中文…"],
+    // and label lists such as for (const label of ["刷新", ...]).
+    for (const m of code.matchAll(/"([^"]+)"/g)) {
+      if (CJK.test(m[1]) && menuLabels.has(m[1])) return;
+    }
     // In a key index the Chinese sits on the left of a `key: "catalog.key"`
     // pair; only the mapped value is what renders. Flag object values only.
     if (keyIndexOnly) {
