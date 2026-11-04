@@ -157,24 +157,26 @@ export function SubmittedFilterPanel(props: Props) {
           {props.typeControl}
           {field("keyword", tr(text.keyword))}
           <div className="submitted-filter-field">
-            <span>{props.zh ? "标签" : "Tags"}</span>
+            <span>{tFor(props.zh ? "zh-CN" : "en-US", "pending.tags")}</span>
             <details className="submitted-stream-picker">
               <summary>
                 <span>
                   {props.draft.tags?.join(", ") ||
-                    (props.zh ? "不限标签" : "All tags")}
+                    tFor(props.zh ? "zh-CN" : "en-US", "pending.all.tags")}
                 </span>
                 <ChevronDown size={14} aria-hidden="true" />
               </summary>
               <div className="submitted-stream-options">
                 <input
                   value={tagText}
-                  aria-label={
-                    props.zh ? "输入标签并回车" : "Enter a tag and press Enter"
-                  }
-                  placeholder={
-                    props.zh ? "输入标签并回车" : "Enter a tag and press Enter"
-                  }
+                  aria-label={tFor(
+                    props.zh ? "zh-CN" : "en-US",
+                    "pending.enter.a.tag.and.press.enter",
+                  )}
+                  placeholder={tFor(
+                    props.zh ? "zh-CN" : "en-US",
+                    "pending.enter.a.tag.and.press.enter",
+                  )}
                   onChange={(event) => setTagText(event.target.value)}
                   onKeyDown={(event) => {
                     if (
@@ -220,7 +222,7 @@ export function SubmittedFilterPanel(props: Props) {
                   className="secondary"
                   onClick={() => update("tags", [])}
                 >
-                  {props.zh ? "清空" : "Clear"}
+                  {tFor(props.zh ? "zh-CN" : "en-US", "pending.clear")}
                 </button>
               </div>
             </details>
@@ -243,10 +245,16 @@ export function SubmittedFilterPanel(props: Props) {
                   <span>
                     {[
                       ...(props.draft.currentStreamOnly
-                        ? [props.zh ? "当前 Stream" : "Current stream"]
+                        ? [
+                            tFor(
+                              props.zh ? "zh-CN" : "en-US",
+                              "pending.current.stream",
+                            ),
+                          ]
                         : []),
                       ...props.draft.streams,
-                    ].join(", ") || (props.zh ? "不限 Stream" : "All streams")}
+                    ].join(", ") ||
+                      tFor(props.zh ? "zh-CN" : "en-US", "pending.all.streams")}
                   </span>
                   <ChevronDown size={14} aria-hidden="true" />
                 </summary>
@@ -262,9 +270,13 @@ export function SubmittedFilterPanel(props: Props) {
                         update("currentStreamOnly", event.target.checked)
                       }
                     />
-                    {props.zh ? "当前 Stream" : "Current stream"}:{" "}
+                    {tFor(
+                      props.zh ? "zh-CN" : "en-US",
+                      "pending.current.stream",
+                    )}
+                    :{" "}
                     {props.currentStream ||
-                      (props.zh ? "不可用" : "Unavailable")}
+                      tFor(props.zh ? "zh-CN" : "en-US", "pending.unavailable")}
                   </label>
                   {[
                     ...new Set([
@@ -294,7 +306,7 @@ export function SubmittedFilterPanel(props: Props) {
                     ))}
                   {props.streamLoading && (
                     <small role="status">
-                      {props.zh ? "正在读取…" : "Loading…"}
+                      {tFor(props.zh ? "zh-CN" : "en-US", "pending.reading")}
                     </small>
                   )}
                   {props.streamError && (
@@ -302,9 +314,10 @@ export function SubmittedFilterPanel(props: Props) {
                   )}
                   {!props.streamLoading && !props.streamOptions.length && (
                     <small>
-                      {props.zh
-                        ? "暂无缓存的 Stream 选项"
-                        : "No cached stream options"}
+                      {tFor(
+                        props.zh ? "zh-CN" : "en-US",
+                        "pending.no.cached.stream.options",
+                      )}
                     </small>
                   )}
                   <div>
@@ -314,7 +327,7 @@ export function SubmittedFilterPanel(props: Props) {
                       disabled={props.streamLoading}
                       onClick={props.onLoadStreams}
                     >
-                      {props.zh ? "读取列表" : "Load list"}
+                      {tFor(props.zh ? "zh-CN" : "en-US", "pending.load.list")}
                     </button>
                     <button
                       type="button"
@@ -327,7 +340,7 @@ export function SubmittedFilterPanel(props: Props) {
                         })
                       }
                     >
-                      {props.zh ? "清空" : "Clear"}
+                      {tFor(props.zh ? "zh-CN" : "en-US", "pending.clear")}
                     </button>
                   </div>
                 </div>
@@ -411,7 +424,10 @@ export function SubmittedFilterPanel(props: Props) {
             >
               <option value="">{tr(text.none)}</option>
               <option value="builtin:mine">
-                {props.zh ? "我的提交（默认）" : "My submissions (default)"}
+                {tFor(
+                  props.zh ? "zh-CN" : "en-US",
+                  "pending.my.submissions.default",
+                )}
               </option>
               {props.savedFilters.map((item) => (
                 <option key={item.id} value={`saved:${item.id}`}>
@@ -456,9 +472,10 @@ export function SubmittedFilterPanel(props: Props) {
         </div>
         {selected?.migrated && (
           <p role="note">
-            {props.zh
-              ? "旧过滤器已迁移：移除旧 Client/Merge/Job 条件，旧当前 Stream 保留为快捷项；已按迁移后的条件应用。"
-              : "Migrated filter: legacy Client/Merge/Job conditions removed; the current-stream shortcut is preserved. Applied with the migrated conditions."}
+            {tFor(
+              props.zh ? "zh-CN" : "en-US",
+              "pending.migrated.filter.legacy.client.merge.job",
+            )}
           </p>
         )}
         {nameError ? (

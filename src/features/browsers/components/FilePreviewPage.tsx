@@ -146,10 +146,7 @@ export function FilePreviewPage({
       {refreshSlot ? createPortal(refreshButton, refreshSlot) : refreshButton}
       {runtime.mode === "mock" && (
         <div className="preview-note">
-          {tr(
-            "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png / demo.csv / demo.xlsx 查看示例。",
-            "Browser demo: simulated content, no local files accessed. Enter demo.png, demo.csv or demo.xlsx for samples.",
-          )}
+          {t("browse.browser.demo.simulated.content.no.local")}
         </div>
       )}
       <div className="preview-toolbar">
@@ -305,7 +302,7 @@ export function FilePreviewPage({
             "复制整表（TSV）": copyLazy(
               () =>
                 table ? tableToTsv(normalizeTable(table, headerRows)) : "",
-              table ? undefined : "没有可复制的表格 / Nothing to copy",
+              table ? undefined : t("browse.nothing.to.copy"),
             ),
             适应窗口: action(() => setZoom(null)),
             原始尺寸: action(() => setZoom(1)),
@@ -319,10 +316,7 @@ export function FilePreviewPage({
           </div>
         ) : !target ? (
           <div className="preview-empty">
-            {tr(
-              "选择文件后点击“预览”，或双击文件。",
-              "Select Preview or double-click a file.",
-            )}
+            {t("browse.select.preview.or.double.click.a")}
           </div>
         ) : loading && !data ? (
           <div role="status" className="preview-empty">
@@ -351,10 +345,7 @@ export function FilePreviewPage({
                   <code>
                     {lines[row.index].slice(0, 4000) || " "}
                     {lines[row.index].length > 4000
-                      ? tr(
-                          " … [此行过长，已截断显示]",
-                          " … [long line truncated]",
-                        )
+                      ? t("browse.long.line.truncated")
                       : ""}
                   </code>
                 </div>
@@ -364,10 +355,7 @@ export function FilePreviewPage({
         ) : data?.kind === "image" ? (
           imageError ? (
             <div role="alert" className="preview-empty">
-              {tr(
-                "图片损坏或当前系统不支持此格式。",
-                "Invalid image or unsupported system decoder.",
-              )}
+              {t("browse.invalid.image.or.unsupported.system.decoder")}
             </div>
           ) : (
             <div className={`preview-image ${zoom === null ? "fit" : ""}`}>
@@ -405,27 +393,18 @@ export function FilePreviewPage({
             </div>
           ) : (
             <div role="alert" className="preview-empty">
-              {tr(
-                "表格数据不完整，无法显示",
-                "Table data is incomplete and cannot be displayed",
-              )}
+              {t("browse.table.data.is.incomplete.and.cannot")}
             </div>
           )
         ) : data ? (
           <div role="alert" className="preview-empty">
-            {tr(
-              "此版本不支持该预览类型，请更新应用",
-              "This build cannot display this preview type; update the app",
-            )}
+            {t("browse.this.build.cannot.display.this.preview")}
           </div>
         ) : null}
       </section>
       {textSelection.dialog}
       <footer className="preview-footer">
-        {tr(
-          "文本 ≤ 2 MiB · 图片 ≤ 8 MiB / 2000 万像素 · 表格 ≤ 500 行 × 64 列 · 百分比/货币显示原始值 · 不自动下载服务器文件",
-          "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · Tables ≤ 500 rows × 64 cols · Percent/currency shown as raw values · No automatic depot downloads",
-        )}
+        {t("browse.text.2.mib.images.8.mib")}
       </footer>
     </section>
   );

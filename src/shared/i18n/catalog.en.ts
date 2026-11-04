@@ -534,6 +534,73 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.reading": "Reading…",
+  "pending.12.read.budget.reached.explicitly.refresh":
+    "12-read budget reached; explicitly refresh to start another investigation",
+  "pending.cancelled.current.results.incomplete":
+    "Cancelled; current results incomplete",
+  "pending.coverage.of.retrieved.integration.records.only":
+    "Coverage of retrieved integration records only; neither exhaustive destinations nor current content inclusion. No records does not mean not integrated; unmapped destinations retain their depot paths.",
+  "pending.source.file.set.or.investigation.is":
+    "Source file set or investigation is incomplete; unqueried files are unknown.",
+  "pending.no.matching.records.in.current.results":
+    "No matching records in current results; destinations unknown.",
+  "pending.backend.returned.0.records.this.does":
+    " Backend returned 0 records; this does not prove no integration. Refresh to recheck.",
+  "pending.record.cl.could.not.be.verified":
+    "Record CL could not be verified against all destination revisions; destination CL/time unknown",
+  "pending.read.this.destination.s.next.hop":
+    "Read this destination's next hop",
+  "pending.intermediate.evidence.not.full.coverage":
+    "Intermediate evidence (not full coverage)",
+  "pending.next.hop.records.only.ignored.undo":
+    "Next-hop records only; ignored/undo/edit actions and missing ranges require separate verification.",
+  "browse.browser.demo.simulated.content.no.local":
+    "Browser demo: simulated content, no local files accessed. Enter demo.png, demo.csv or demo.xlsx for samples.",
+  "browse.select.preview.or.double.click.a":
+    "Select Preview or double-click a file.",
+  "browse.long.line.truncated": " … [long line truncated]",
+  "browse.invalid.image.or.unsupported.system.decoder":
+    "Invalid image or unsupported system decoder.",
+  "browse.table.data.is.incomplete.and.cannot":
+    "Table data is incomplete and cannot be displayed",
+  "browse.this.build.cannot.display.this.preview":
+    "This build cannot display this preview type; update the app",
+  "browse.text.2.mib.images.8.mib":
+    "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · Tables ≤ 500 rows × 64 cols · Percent/currency shown as raw values · No automatic depot downloads",
+  "browse.nothing.to.copy": "Nothing to copy",
+  "update.download.the.update.first.once.it":
+    "Download the update first; once it finishes you confirm the install and restart. Failures show a reason.",
+  "update.the.download.continues.in.the.background":
+    "The download continues in the background and you can close this panel; installing always asks again.",
+  "update.installing.closes.the.app.and.the":
+    "Installing closes the app and the installer restarts it when done. You can also continue later from the titlebar.",
+  "update.the.app.must.restart.after.installing":
+    "The app must restart after installing. You can also continue later from the titlebar.",
+  "update.installing.the.app.closes.and.the":
+    "Installing; the app closes and the installer finishes and restarts it.",
+  "update.installing.the.update.the.app.restarts":
+    "Installing the update; the app restarts when it finishes.",
+  "update.the.update.is.installed.but.the":
+    "The update is installed but the restart did not finish. Restart the app manually.",
+  "update.the.update.did.not.complete.the":
+    "The update did not complete; the app still runs the current version.",
+  "update.the.update.is.downloaded.but.not":
+    "The update is downloaded but not installed yet; installing only happens after you confirm.",
+  "update.installing.the.update.the.app.will":
+    "Installing the update; the app will close or restart.",
+  "pending.tags": "Tags",
+  "pending.all.tags": "All tags",
+  "pending.enter.a.tag.and.press.enter": "Enter a tag and press Enter",
+  "pending.clear": "Clear",
+  "pending.current.stream": "Current stream",
+  "pending.all.streams": "All streams",
+  "pending.unavailable": "Unavailable",
+  "pending.no.cached.stream.options": "No cached stream options",
+  "pending.load.list": "Load list",
+  "pending.my.submissions.default": "My submissions (default)",
+  "pending.migrated.filter.legacy.client.merge.job":
+    "Migrated filter: legacy Client/Merge/Job conditions removed; the current-stream shortcut is preserved. Applied with the migrated conditions.",
   "shell.refresh": "Refresh",
   "shell.checkout": "Checkout",
   "shell.add": "Add",

@@ -66,47 +66,23 @@ function UpdateDialog({
               : t("update.check.for.updates");
   const description =
     snapshot.phase === "available"
-      ? tr(
-          "先下载更新；下载完成后确认安装并重启，失败会提示原因。",
-          "Download the update first; once it finishes you confirm the install and restart. Failures show a reason.",
-        )
+      ? t("update.download.the.update.first.once.it")
       : snapshot.phase === "downloading"
-        ? tr(
-            "下载在后台继续，可以关闭此面板；安装前一定会再确认。",
-            "The download continues in the background and you can close this panel; installing always asks again.",
-          )
+        ? t("update.the.download.continues.in.the.background")
         : snapshot.phase === "ready"
           ? windows
-            ? tr(
-                "安装会关闭应用，安装器完成后会自动重启。也可以稍后从标题栏继续。",
-                "Installing closes the app and the installer restarts it when done. You can also continue later from the titlebar.",
-              )
-            : tr(
-                "安装完成后需要重启应用。也可以稍后从标题栏继续。",
-                "The app must restart after installing. You can also continue later from the titlebar.",
-              )
+            ? t("update.installing.closes.the.app.and.the")
+            : t("update.the.app.must.restart.after.installing")
           : snapshot.phase === "installing"
             ? windows
-              ? tr(
-                  "正在安装；应用会关闭，由安装器完成安装并重启。",
-                  "Installing; the app closes and the installer finishes and restarts it.",
-                )
-              : tr(
-                  "正在安装更新，完成后应用将重启。",
-                  "Installing the update; the app restarts when it finishes.",
-                )
+              ? t("update.installing.the.app.closes.and.the")
+              : t("update.installing.the.update.the.app.restarts")
             : snapshot.phase === "restarting"
               ? t("update.restarting.the.app")
               : snapshot.phase === "error"
                 ? snapshot.applied
-                  ? tr(
-                      "更新已安装，但重启没有完成；请手动重启应用。",
-                      "The update is installed but the restart did not finish. Restart the app manually.",
-                    )
-                  : tr(
-                      "更新没有完成，应用仍在当前版本上运行。",
-                      "The update did not complete; the app still runs the current version.",
-                    )
+                  ? t("update.the.update.is.installed.but.the")
+                  : t("update.the.update.did.not.complete.the")
                 : undefined;
   const footer = (() => {
     switch (snapshot.phase) {
@@ -262,18 +238,12 @@ function UpdateDialog({
       )}
       {snapshot.phase === "ready" && (
         <DialogNotice>
-          {tr(
-            "更新已下载，但尚未安装；确认后才会安装。",
-            "The update is downloaded but not installed yet; installing only happens after you confirm.",
-          )}
+          {t("update.the.update.is.downloaded.but.not")}
         </DialogNotice>
       )}
       {snapshot.phase === "installing" && (
         <DialogNotice>
-          {tr(
-            "正在安装更新，应用即将关闭或重启。",
-            "Installing the update; the app will close or restart.",
-          )}
+          {t("update.installing.the.update.the.app.will")}
         </DialogNotice>
       )}
       {snapshot.phase === "restarting" && (

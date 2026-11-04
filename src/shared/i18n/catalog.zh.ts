@@ -496,6 +496,70 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.reading": "正在读取…",
+  "pending.12.read.budget.reached.explicitly.refresh":
+    "达到12次读取预算；请显式刷新以重新调查",
+  "pending.cancelled.current.results.incomplete": "已取消，当前结果不完整",
+  "pending.coverage.of.retrieved.integration.records.only":
+    "只验证已读取的集成记录覆盖，不证明已穷尽所有去向，也不保证目标当前内容仍包含修改。未发现记录不等于未合入；目标分支无法可靠映射时显示 depot 路径。",
+  "pending.source.file.set.or.investigation.is":
+    "源CL文件集或调查尚不完整，未查询项为未知。",
+  "pending.no.matching.records.in.current.results":
+    "当前未发现匹配记录，去向未知。",
+  "pending.backend.returned.0.records.this.does":
+    " 后端返回0条记录；这不能证明未合入，可刷新重新核对。",
+  "pending.record.cl.could.not.be.verified":
+    "记录CL未能与全部目标修订核对，目标CL/时间未知",
+  "pending.read.this.destination.s.next.hop": "按需查询此去向的下一跳",
+  "pending.intermediate.evidence.not.full.coverage":
+    "中转线索（不计为完整覆盖）",
+  "pending.next.hop.records.only.ignored.undo":
+    "仅下一跳记录；忽略/撤销/编辑动作和缺失范围需独立核对。",
+  "browse.browser.demo.simulated.content.no.local":
+    "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png / demo.csv / demo.xlsx 查看示例。",
+  "browse.select.preview.or.double.click.a":
+    "选择文件后点击“预览”，或双击文件。",
+  "browse.long.line.truncated": " … [此行过长，已截断显示]",
+  "browse.invalid.image.or.unsupported.system.decoder":
+    "图片损坏或当前系统不支持此格式。",
+  "browse.table.data.is.incomplete.and.cannot": "表格数据不完整，无法显示",
+  "browse.this.build.cannot.display.this.preview":
+    "此版本不支持该预览类型，请更新应用",
+  "browse.text.2.mib.images.8.mib":
+    "文本 ≤ 2 MiB · 图片 ≤ 8 MiB / 2000 万像素 · 表格 ≤ 500 行 × 64 列 · 百分比/货币显示原始值 · 不自动下载服务器文件",
+  "browse.nothing.to.copy": "没有可复制的表格",
+  "update.download.the.update.first.once.it":
+    "先下载更新；下载完成后确认安装并重启，失败会提示原因。",
+  "update.the.download.continues.in.the.background":
+    "下载在后台继续，可以关闭此面板；安装前一定会再确认。",
+  "update.installing.closes.the.app.and.the":
+    "安装会关闭应用，安装器完成后会自动重启。也可以稍后从标题栏继续。",
+  "update.the.app.must.restart.after.installing":
+    "安装完成后需要重启应用。也可以稍后从标题栏继续。",
+  "update.installing.the.app.closes.and.the":
+    "正在安装；应用会关闭，由安装器完成安装并重启。",
+  "update.installing.the.update.the.app.restarts":
+    "正在安装更新，完成后应用将重启。",
+  "update.the.update.is.installed.but.the":
+    "更新已安装，但重启没有完成；请手动重启应用。",
+  "update.the.update.did.not.complete.the":
+    "更新没有完成，应用仍在当前版本上运行。",
+  "update.the.update.is.downloaded.but.not":
+    "更新已下载，但尚未安装；确认后才会安装。",
+  "update.installing.the.update.the.app.will":
+    "正在安装更新，应用即将关闭或重启。",
+  "pending.tags": "标签",
+  "pending.all.tags": "不限标签",
+  "pending.enter.a.tag.and.press.enter": "输入标签并回车",
+  "pending.clear": "清空",
+  "pending.current.stream": "当前 Stream",
+  "pending.all.streams": "不限 Stream",
+  "pending.unavailable": "不可用",
+  "pending.no.cached.stream.options": "暂无缓存的 Stream 选项",
+  "pending.load.list": "读取列表",
+  "pending.my.submissions.default": "我的提交（默认）",
+  "pending.migrated.filter.legacy.client.merge.job":
+    "旧过滤器已迁移：移除旧 Client/Merge/Job 条件，旧当前 Stream 保留为快捷项；已按迁移后的条件应用。",
   "shell.refresh": "刷新",
   "shell.checkout": "签出",
   "shell.add": "添加",
