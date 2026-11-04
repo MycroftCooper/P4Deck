@@ -510,9 +510,7 @@ export function PendingFileList({
                                     .map((n) => n.depotPath!),
                                   source,
                                 ),
-                              onShelf
-                                ? undefined
-                                : "入口尚未接通 / Not connected",
+                              onShelf ? undefined : t("pending.not.connected"),
                             ),
                           ],
                         ),
@@ -530,9 +528,7 @@ export function PendingFileList({
                                     .map((n) => n.depotPath!),
                                   source,
                                 ),
-                              onShelf
-                                ? undefined
-                                : "入口尚未接通 / Not connected",
+                              onShelf ? undefined : t("pending.not.connected"),
                             ),
                           ],
                         ),
@@ -540,19 +536,19 @@ export function PendingFileList({
                       "复制 Depot 路径": copy(node.depotPath),
                       查看搁置内容: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       在新页签查看搁置内容: action(
                         () => onInspect?.(node.depotPath!, true),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       与工作副本比较: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       与基线比较: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       复制搁置来源标识: copy(`${node.depotPath}@=${changeId}`),
                       "复制 Depot 路径列表": copy(
@@ -588,7 +584,7 @@ export function PendingFileList({
                           ),
                         onSubmitSelected
                           ? undefined
-                          : "入口尚未接通 / Not connected",
+                          : t("pending.not.connected"),
                       ),
                       ...Object.fromEntries(
                         ["搁置此文件…", "搁置所选文件…"].map((label) => [
@@ -607,7 +603,7 @@ export function PendingFileList({
                                 (row) => row.changelistId === changeId,
                               )
                               ? undefined
-                              : "入口尚未接通 / Not connected",
+                              : t("pending.not.connected"),
                           ),
                         ]),
                       ),

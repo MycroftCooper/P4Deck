@@ -534,6 +534,37 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.section.connection": "Saved connections",
+  "settings.section.backup": "Local configuration backup",
+  "settings.section.updates": "Updates",
+  "settings.section.logs": "Logs",
+  "settings.section.checkout": "Checkout",
+  "settings.section.refresh": "Refresh & notifications",
+  "settings.section.appearance": "Appearance & interaction",
+  "settings.section.shortcuts": "Keyboard shortcuts",
+  "pending.not.connected": "Not connected",
+  "settings.global.preferences.saved.connections.switch.only":
+    "Global preferences · Saved connections switch only after verification; appearance applies instantly.",
+  "settings.always.check.out.to.default.cl": "Always check out to Default CL",
+  "settings.off.ask.when.multiple.cls.exist":
+    "Off · Ask when multiple CLs exist",
+  "settings.when.off.choose.a.destination.before":
+    "When off, choose a destination before checkout. If only Default exists, checkout starts directly.",
+  "settings.auto.refresh.interval.minutes": "Auto-refresh interval (minutes)",
+  "settings.default.5.minutes.set.to.0":
+    "Default: 5 minutes. Set to 0 to turn off automatic refresh.",
+  "settings.get.latest.confirmation.threshold.changed.files":
+    "Get Latest confirmation threshold (changed files)",
+  "settings.get.latest.confirmation.threshold":
+    "Get Latest confirmation threshold",
+  "settings.default.100.get.latest.asks.for":
+    "Default: 100. Get Latest asks for confirmation when the preview exceeds this many changes; 0 confirms on any change.",
+  "settings.long.operations.and.attention": "Long operations and attention",
+  "settings.automatic.refresh.retries.only.idempotent.reads":
+    "Automatic refresh retries only idempotent reads. Sync, Submit, Shelf, and other mutations require an explicit retry. System notifications are suppressed while the app is visible.",
+  "settings.checkout": "Checkout",
+  "settings.refresh.notifications": "Refresh & notifications",
+  "settings.appearance.interaction": "Appearance & interaction",
   "browse.unsupported.mapping.rule": "Unsupported mapping rule",
   "browse.unsupported.wildcard.mapping": "Unsupported wildcard mapping",
   "browse.file.excluded.by.mapping": "File excluded by mapping",

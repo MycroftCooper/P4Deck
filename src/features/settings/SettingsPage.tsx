@@ -1,4 +1,4 @@
-import { tFor } from "../../shared/i18n";
+import { tFor, type MsgKey } from "../../shared/i18n";
 import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   Archive,
@@ -74,34 +74,54 @@ interface SettingsSectionConfig {
 const SECTIONS: readonly SettingsSectionConfig[] = [
   {
     id: "connection",
-    zh: "已保存连接",
-    en: "Saved connections",
+    zh: "settings.section.connection",
+    en: "settings.section.connection",
     icon: Cable,
     wide: true,
   },
   {
     id: "backup",
-    zh: "本地配置备份",
-    en: "Local configuration backup",
+    zh: "settings.section.backup",
+    en: "settings.section.backup",
     icon: Archive,
   },
-  { id: "updates", zh: "更新", en: "Updates", icon: Download },
-  { id: "logs", zh: "日志", en: "Logs", icon: ScrollText },
-  { id: "checkout", zh: "签出", en: "Checkout", icon: SquarePen },
+  {
+    id: "updates",
+    zh: "settings.section.updates",
+    en: "settings.section.updates",
+    icon: Download,
+  },
+  {
+    id: "logs",
+    zh: "settings.section.logs",
+    en: "settings.section.logs",
+    icon: ScrollText,
+  },
+  {
+    id: "checkout",
+    zh: "settings.section.checkout",
+    en: "settings.section.checkout",
+    icon: SquarePen,
+  },
   {
     id: "refresh",
-    zh: "刷新与通知",
-    en: "Refresh & notifications",
+    zh: "settings.section.refresh",
+    en: "settings.section.refresh",
     icon: RefreshCw,
   },
   {
     id: "appearance",
-    zh: "外观与交互",
-    en: "Appearance & interaction",
+    zh: "settings.section.appearance",
+    en: "settings.section.appearance",
     icon: Palette,
     wide: true,
   },
-  { id: "shortcuts", zh: "快捷键", en: "Keyboard shortcuts", icon: Keyboard },
+  {
+    id: "shortcuts",
+    zh: "settings.section.shortcuts",
+    en: "settings.section.shortcuts",
+    icon: Keyboard,
+  },
 ] as const;
 export const SETTINGS_SECTION_IDS: readonly string[] = SECTIONS.map(
   (section) => section.id,
@@ -112,7 +132,7 @@ export function settingsSectionLabels(
 ): Array<{ id: string; label: string }> {
   return SECTIONS.map((section) => ({
     id: section.id,
-    label: zh ? section.zh : section.en,
+    label: tFor(zh ? "zh-CN" : "en-US", section.zh as MsgKey),
   }));
 }
 
@@ -128,7 +148,6 @@ export function SettingsPage({
   onUi,
 }: Props) {
   const zh = locale === "zh-CN";
-  const tr = (a: string, b: string) => (zh ? a : b);
   const refreshMinutes = ui.autoRefresh ? ui.autoRefreshMinutes : 0;
   const [refreshDraft, setRefreshDraft] = useState(String(refreshMinutes));
   useEffect(() => setRefreshDraft(String(refreshMinutes)), [refreshMinutes]);
@@ -195,7 +214,7 @@ export function SettingsPage({
     const Icon = config.icon;
     return {
       id: config.id,
-      label: tr(config.zh, config.en),
+      label: tFor(zh ? "zh-CN" : "en-US", config.zh as MsgKey),
       icon: <Icon size={16} aria-hidden="true" />,
     };
   });
@@ -205,7 +224,7 @@ export function SettingsPage({
     const Icon = config.icon;
     return {
       id,
-      title: tr(config.zh, config.en),
+      title: tFor(zh ? "zh-CN" : "en-US", config.zh as MsgKey),
       icon: <Icon size={18} aria-hidden="true" />,
       expanded: !collapsed.has(id),
       onToggle: () => toggle(id),
@@ -216,9 +235,9 @@ export function SettingsPage({
   return (
     <section className="settings-page">
       <FixedPageHeader
-        description={tr(
-          "全局设置 · 已保存连接经验证后切换，外观即时生效。",
-          "Global preferences · Saved connections switch only after verification; appearance applies instantly.",
+        description={tFor(
+          zh ? "zh-CN" : "en-US",
+          "settings.global.preferences.saved.connections.switch.only",
         )}
       ></FixedPageHeader>
       <div className="settings-layout">
@@ -256,9 +275,9 @@ export function SettingsPage({
             <div className="settings-card">
               <div className="settings-grid">
                 <label>
-                  {tr(
-                    "签出时始终使用默认 CL",
-                    "Always check out to Default CL",
+                  {tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "settings.always.check.out.to.default.cl",
                   )}
                   <select
                     value={String(ui.checkoutUseDefault)}
@@ -270,9 +289,9 @@ export function SettingsPage({
                     }
                   >
                     <option value="false">
-                      {tr(
-                        "关闭 · 多个 CL 时询问",
-                        "Off · Ask when multiple CLs exist",
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.off.ask.when.multiple.cls.exist",
                       )}
                     </option>
                     <option value="true">
@@ -285,9 +304,9 @@ export function SettingsPage({
                 </label>
               </div>
               <p>
-                {tr(
-                  "关闭时，签出前可选择目标 CL；只有 Default 时直接签出。",
-                  "When off, choose a destination before checkout. If only Default exists, checkout starts directly.",
+                {tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "settings.when.off.choose.a.destination.before",
                 )}
               </p>
             </div>
@@ -297,9 +316,9 @@ export function SettingsPage({
               <div className="settings-grid refresh-settings-grid">
                 <label>
                   <span className="settings-field-label">
-                    {tr(
-                      "自动刷新间隔（分钟）",
-                      "Auto-refresh interval (minutes)",
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.auto.refresh.interval.minutes",
                     )}
                   </span>
                   <input
@@ -321,17 +340,17 @@ export function SettingsPage({
                     onBlur={() => setRefreshDraft(String(refreshMinutes))}
                   />
                   <small id="refresh-interval-help">
-                    {tr(
-                      "默认 5 分钟；设为 0 关闭自动刷新。",
-                      "Default: 5 minutes. Set to 0 to turn off automatic refresh.",
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.default.5.minutes.set.to.0",
                     )}
                   </small>
                 </label>
                 <label>
                   <span className="settings-field-label">
-                    {tr(
-                      "获取最新确认阈值（变更文件数）",
-                      "Get Latest confirmation threshold (changed files)",
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.get.latest.confirmation.threshold.changed.files",
                     )}
                   </span>
                   <input
@@ -339,9 +358,9 @@ export function SettingsPage({
                     min={getLatestConfirmThresholdMin}
                     max={getLatestConfirmThresholdMax}
                     step={1}
-                    aria-label={tr(
-                      "获取最新确认阈值",
-                      "Get Latest confirmation threshold",
+                    aria-label={tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.get.latest.confirmation.threshold",
                     )}
                     aria-describedby="get-latest-threshold-help"
                     value={confirmThresholdDraft}
@@ -363,9 +382,9 @@ export function SettingsPage({
                     }}
                   />
                   <small id="get-latest-threshold-help">
-                    {tr(
-                      "默认 100。预览变更数超过该值时先要求确认；0 表示只要有变更就确认。",
-                      "Default: 100. Get Latest asks for confirmation when the preview exceeds this many changes; 0 confirms on any change.",
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.default.100.get.latest.asks.for",
                     )}
                   </small>
                 </label>
@@ -417,9 +436,9 @@ export function SettingsPage({
                     }
                   >
                     <option value="false">
-                      {tr(
-                        "长操作结果与需处理事件",
-                        "Long operations and attention",
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.long.operations.and.attention",
                       )}
                     </option>
                     <option value="true">
@@ -432,9 +451,9 @@ export function SettingsPage({
                 </label>
               </div>
               <p>
-                {tr(
-                  "自动刷新仅重试幂等只读请求；Sync、Submit、Shelf 等修改操作必须由你明确重新发起。前台可见时系统通知会被抑制。",
-                  "Automatic refresh retries only idempotent reads. Sync, Submit, Shelf, and other mutations require an explicit retry. System notifications are suppressed while the app is visible.",
+                {tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "settings.automatic.refresh.retries.only.idempotent.reads",
                 )}
               </p>
             </div>

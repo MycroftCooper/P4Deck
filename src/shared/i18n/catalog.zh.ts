@@ -496,6 +496,34 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.section.connection": "已保存连接",
+  "settings.section.backup": "本地配置备份",
+  "settings.section.updates": "更新",
+  "settings.section.logs": "日志",
+  "settings.section.checkout": "签出",
+  "settings.section.refresh": "刷新与通知",
+  "settings.section.appearance": "外观与交互",
+  "settings.section.shortcuts": "快捷键",
+  "pending.not.connected": "入口尚未接通",
+  "settings.global.preferences.saved.connections.switch.only":
+    "全局设置 · 已保存连接经验证后切换，外观即时生效。",
+  "settings.always.check.out.to.default.cl": "签出时始终使用默认 CL",
+  "settings.off.ask.when.multiple.cls.exist": "关闭 · 多个 CL 时询问",
+  "settings.when.off.choose.a.destination.before":
+    "关闭时，签出前可选择目标 CL；只有 Default 时直接签出。",
+  "settings.auto.refresh.interval.minutes": "自动刷新间隔（分钟）",
+  "settings.default.5.minutes.set.to.0": "默认 5 分钟；设为 0 关闭自动刷新。",
+  "settings.get.latest.confirmation.threshold.changed.files":
+    "获取最新确认阈值（变更文件数）",
+  "settings.get.latest.confirmation.threshold": "获取最新确认阈值",
+  "settings.default.100.get.latest.asks.for":
+    "默认 100。预览变更数超过该值时先要求确认；0 表示只要有变更就确认。",
+  "settings.long.operations.and.attention": "长操作结果与需处理事件",
+  "settings.automatic.refresh.retries.only.idempotent.reads":
+    "自动刷新仅重试幂等只读请求；Sync、Submit、Shelf 等修改操作必须由你明确重新发起。前台可见时系统通知会被抑制。",
+  "settings.checkout": "签出",
+  "settings.refresh.notifications": "刷新与通知",
+  "settings.appearance.interaction": "外观与交互",
   "browse.unsupported.mapping.rule": "复杂或未知映射规则",
   "browse.unsupported.wildcard.mapping": "不支持的通配映射",
   "browse.file.excluded.by.mapping": "文件被映射排除",
