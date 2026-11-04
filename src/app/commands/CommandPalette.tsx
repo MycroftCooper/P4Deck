@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   appCommandReason,
@@ -47,8 +47,9 @@ export function CommandPalette({
       if (command.hiddenFromPalette) return false;
       return (
         !needle ||
-        command.zh.toLowerCase().includes(needle) ||
-        command.en.toLowerCase().includes(needle) ||
+        tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)
+          .toLowerCase()
+          .includes(needle) ||
         command.id.toLowerCase().includes(needle)
       );
     });
@@ -163,7 +164,9 @@ export function CommandPalette({
                   execute(index);
                 }}
               >
-                <span>{zh ? command.zh : command.en}</span>
+                <span>
+                  {tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)}
+                </span>
                 <small>
                   {command.group} · {command.id} · {command.risk}
                   {command.confirmation === "stateMachine"

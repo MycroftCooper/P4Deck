@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { Keyboard } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -126,8 +126,8 @@ function reservedWarning(
   );
   if (!reserved) return undefined;
   return zh
-    ? `该组合可能被浏览器/系统占用（${reserved[1].zh}），桌面端通常仍可用`
-    : `This combination may be reserved by the browser/system (${reserved[1].en}); the desktop app usually still receives it`;
+    ? `该组合可能被浏览器/系统占用（${tFor(zh ? "zh-CN" : "en-US", reserved[1].zh as MsgKey)}），桌面端通常仍可用`
+    : `This combination may be reserved by the browser/system (${tFor(zh ? "zh-CN" : "en-US", reserved[1].zh as MsgKey)}); the desktop app usually still receives it`;
 }
 
 type Message = { tone: "info" | "warn" | "error"; text: string };
@@ -211,8 +211,8 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setMessage({
           tone: "error",
           text: tr(
-            `与「${conflict.zh}」(${conflict.id}) 冲突，请先清除或修改另一项`,
-            `Conflicts with "${conflict.en}" (${conflict.id}); clear or change that command first`,
+            `与「${tFor(zh ? "zh-CN" : "en-US", conflict.zh as MsgKey)}」(${conflict.id}) 冲突，请先清除或修改另一项`,
+            `Conflicts with "${tFor(zh ? "zh-CN" : "en-US", conflict.zh as MsgKey)}" (${conflict.id}); clear or change that command first`,
           ),
         });
         return;
@@ -311,7 +311,9 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                     className={isRecording ? "recording" : undefined}
                   >
                     <div className="shortcut-identity">
-                      <span>{zh ? command.zh : command.en}</span>
+                      <span>
+                        {tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)}
+                      </span>
                       <small>
                         {command.id} · {availability(command, zh)}
                       </small>
@@ -350,9 +352,10 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                             type="button"
                             className="secondary"
                             aria-pressed={false}
-                            aria-label={`${t("settings.record")} ${
-                              zh ? command.zh : command.en
-                            }`}
+                            aria-label={`${t("settings.record")} ${tFor(
+                              zh ? "zh-CN" : "en-US",
+                              command.zh as MsgKey,
+                            )}`}
                             onClick={() => {
                               setRecording(command.id);
                               setMessage({
@@ -371,9 +374,10 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${t("settings.clear")} ${
-                            zh ? command.zh : command.en
-                          }`}
+                          aria-label={`${t("settings.clear")} ${tFor(
+                            zh ? "zh-CN" : "en-US",
+                            command.zh as MsgKey,
+                          )}`}
                           onClick={() => {
                             setShortcutOverride(command.id, null);
                             setRecording(undefined);
@@ -390,9 +394,10 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${t("settings.restore.default")} ${
-                            zh ? command.zh : command.en
-                          }`}
+                          aria-label={`${t("settings.restore.default")} ${tFor(
+                            zh ? "zh-CN" : "en-US",
+                            command.zh as MsgKey,
+                          )}`}
                           onClick={() => {
                             clearShortcutOverride(command.id);
                             setMessage({

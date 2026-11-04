@@ -55,6 +55,8 @@ const EXEMPT_FILES = [
 const KEY_INDEX_FILES = [
   "src/app/context-menu/labels.ts",
   "src/app/context-menu/catalog.ts",
+  // 中文菜单标签 -> CommandId lookup, read as `fileMenuCommands[label]`.
+  "src/app/context-menu/fileMenuCommands.ts",
 ];
 
 const violations = [];
