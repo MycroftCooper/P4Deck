@@ -115,12 +115,12 @@ pnpm check             # TypeScript + Cargo，需要完整桌面环境
 ## 分支模型
 
 - `dev`：日常开发与候选集成分支，**所有 agent 的提交都进这里**（默认工作分支）。
-- `master`：发布线（release），只接受来自 `dev` 的 `--no-ff` merge，并打 `v<semver>` annotated tag；**禁止在 master 上直接开发或提交**。
+- `release`：发布线，**仓库主分支**；只接受来自 `dev` 的 `--no-ff` merge，并打 `v<semver>` annotated tag；**禁止在 release 上直接开发或提交**。
 - 发布：先跑 `pnpm ci:quick` 拿到绿色门禁，再执行
   `pnpm wf:release --version 0.1.7 --note "发布说明"`（默认 dry-run，展示 merge/tag 计划），确认后加 `--apply`。
   脚本会校验：当前在 `dev`、工作树干净、`package.json` 版本与 `--version` 一致、最近一次 `ci:quick` 通过且不早于最后一次提交。
-- 仓库远端为 `origin`（<https://github.com/MycroftCooper/P4Deck>）；发布后执行 `git push origin dev master --follow-tags`。安装包与自动更新清单发布到同一仓库的 Releases。
-- 紧急修复：从 `master` 拉 `hotfix/*`，修完先合回 `dev`，再走正常发布；不要在 master 上直改。
+- 仓库远端为 `origin`（<https://github.com/MycroftCooper/P4Deck>）；发布后执行 `git push origin dev release --follow-tags`。安装包与自动更新清单发布到同一仓库的 Releases。
+- 紧急修复：从 `release` 拉 `hotfix/*`，修完先合回 `dev`，再走正常发布；不要在 release 上直改。
 
 ## 文档
 
