@@ -140,21 +140,11 @@ export function ConnectionSpecCreateDialog({
       kind === "user" &&
       (!fullName.trim() || !email.trim() || !email.includes("@"))
     ) {
-      setError(
-        tr(
-          "姓名和有效邮箱均为必填项。",
-          "Full name and a valid email address are required.",
-        ),
-      );
+      setError(t("settings.full.name.and.a.valid.email"));
       return;
     }
     if (kind === "workspace" && !snapshot.user.trim()) {
-      setError(
-        tr(
-          "请先在连接设置中填写 User。",
-          "Enter User in Connection settings first.",
-        ),
-      );
+      setError(t("settings.enter.user.in.connection.settings.first"));
       return;
     }
     let mapping: ConnectionWorkspaceMapping | undefined;
@@ -204,12 +194,7 @@ export function ConnectionSpecCreateDialog({
             });
       if (seq !== sequence.current) return;
       if (next.requestGeneration !== requestGeneration) {
-        setError(
-          tr(
-            "预检对应的连接设置已变化，请关闭后重试。",
-            "The connection settings for this preflight changed. Close and retry.",
-          ),
-        );
+        setError(t("settings.the.connection.settings.for.this.preflight"));
         return;
       }
       setPreflight(next);
@@ -257,12 +242,7 @@ export function ConnectionSpecCreateDialog({
   async function create() {
     if (busy || !confirmed || !preflight?.ready || !preflight.token) return;
     if (preflight.expiresAt <= Date.now()) {
-      setError(
-        tr(
-          "预检已过期，请重新预检后确认。",
-          "The preflight expired. Run it again before confirming.",
-        ),
-      );
+      setError(t("settings.the.preflight.expired.run.it.again"));
       setPreflight(undefined);
       setConfirmed(false);
       setPhase("edit");
@@ -284,10 +264,7 @@ export function ConnectionSpecCreateDialog({
       // the host revalidates the full exact context (server/user/client) itself.
       if (String(requestGeneration) !== dispatching.generation)
         throw new Error(
-          tr(
-            "连接代际与预检目标不一致，未执行创建。",
-            "Connection generation changed; nothing was created.",
-          ),
+          t("settings.connection.generation.changed.nothing.was.created"),
         );
       const confirmation = {
         token: preflight.token,
@@ -330,10 +307,7 @@ export function ConnectionSpecCreateDialog({
         failure: "verificationFailed",
         kind: kind === "user" ? "userSelf" : "workspace",
         name: preflight.name,
-        message: tr(
-          "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
-          "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
-        ),
+        message: t("settings.outcome.uncertain.the.creation.may.have"),
         operationIds: [operationId],
         simulated: false,
       });
@@ -479,10 +453,7 @@ export function ConnectionSpecCreateDialog({
                 />
               </label>
               <DialogNotice>
-                {tr(
-                  "仅按该用户自身身份创建，不会以旧登录身份创建其他用户，也不会使用管理员 -f。",
-                  "Creation uses this user's own identity. It never creates another user through an old login and never uses administrator -f.",
-                )}
+                {t("settings.creation.uses.this.user.s.own")}
               </DialogNotice>
             </>
           ) : (
@@ -494,12 +465,7 @@ export function ConnectionSpecCreateDialog({
                   spellCheck={false}
                   onChange={(event) => setRoot(event.target.value)}
                 />
-                <small>
-                  {tr(
-                    "Root 仅用于创建新 Workspace；创建成功后会以后端回读结果自动填入连接设置并再次精确核对。",
-                    "Root is used only to create the new Workspace. After creation, the server read-back fills the connection settings and is checked again exactly.",
-                  )}
-                </small>
+                <small>{t("settings.root.is.used.only.to.create")}</small>
               </label>
               <label>
                 {t("settings.description.optional")}
@@ -540,10 +506,7 @@ export function ConnectionSpecCreateDialog({
                     onChange={(event) => setClassicView(event.target.value)}
                   />
                   <small>
-                    {tr(
-                      "每行一个明确的 depot path 与 client path；含空格的路径必须使用引号。不会自动生成全库映射。",
-                      "One explicit depot path and client path per line; quote paths containing spaces. No all-depot mapping is generated automatically.",
-                    )}
+                    {t("settings.one.explicit.depot.path.and.client")}
                   </small>
                 </label>
               )}
@@ -556,18 +519,12 @@ export function ConnectionSpecCreateDialog({
                   }
                 />
                 <span>
-                  {tr(
-                    "启用 P4VFS 虚拟同步（只同步元数据，首次读取时按需下载）",
-                    "Enable P4VFS virtual sync (metadata first, download on first read)",
-                  )}
+                  {t("settings.enable.p4vfs.virtual.sync.metadata.first")}
                 </span>
               </label>
               {syncMode === "virtual" && (
                 <DialogNotice>
-                  {tr(
-                    "需要 Windows、P4 Server 2023.1+、P4 CLI 2023.1+ 和已安装的 P4VFS 客户端代理。创建后文件只保留占位，首次访问才会占用实际磁盘空间。",
-                    "Requires Windows, P4 Server 2023.1+, P4 CLI 2023.1+, and the P4VFS client agent. Files remain placeholders until first access.",
-                  )}
+                  {t("settings.requires.windows.p4.server.2023.1")}
                 </DialogNotice>
               )}
             </>
@@ -644,10 +601,7 @@ export function ConnectionSpecCreateDialog({
           ))}
           {!issues.length && (
             <DialogNotice>
-              {tr(
-                "预检通过，可以确认创建。",
-                "Preflight passed. Creation can be confirmed.",
-              )}
+              {t("settings.preflight.passed.creation.can.be.confirmed")}
             </DialogNotice>
           )}
           <label className="workflow-checkbox">
@@ -672,25 +626,16 @@ export function ConnectionSpecCreateDialog({
             <DialogNotice error={!created || !createdWorkspaceUsable}>
               {result.simulated && "Browser Mock simulated · "}
               {result.outcome === "created" &&
-                tr(
-                  "创建结果（服务器回读已确认）：",
-                  "Created (confirmed by server readback): ",
-                )}
+                t("settings.created.confirmed.by.server.readback")}
               {result.message}
               {created && !createdWorkspaceUsable
-                ? tr(
-                    " 服务端未返回可在本机使用的 Workspace Root，不能填入连接设置。",
-                    " The server did not return a Workspace Root usable on this machine, so it cannot be used in connection settings.",
-                  )
+                ? t("settings.the.server.did.not.return.a")
                 : ""}
             </DialogNotice>
           )}
           {result?.outcome === "unknown" && (
             <DialogNotice error>
-              {tr(
-                "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
-                "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
-              )}
+              {t("settings.outcome.uncertain.the.creation.may.have")}
             </DialogNotice>
           )}
           {result && !!result.operationIds.length && (
