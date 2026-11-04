@@ -66,6 +66,25 @@ it("distinguishes unsynced, latest, older and missing without duplicate badges",
   ).toEqual([{ id: "missing" }]);
 });
 
+it("shows an already resolved file as 已解决 instead of needs-resolve", () => {
+  const resolved = fileBadges({
+    state: "openedEdit",
+    status: {
+      primary: "openedEdit",
+      sync: "current",
+      resolve: "resolved",
+      local: "present",
+      completeness: "complete",
+      evidence: [],
+      errors: [],
+    },
+  });
+  expect(resolved.map((badge) => badge.id)).toEqual(["edit", "resolved"]);
+  expect(fileBadgeLabel(resolved[1], true)).toBe("已解决");
+  expect(fileBadgeLabel(resolved[1], false)).toBe("Resolved");
+  expect(fileBadgeTone("resolved")).toBe("teal");
+});
+
 it("renders orthogonal aggregate evidence and explains ignore provenance", () => {
   const partial = fileBadges({
     state: "openedEdit",

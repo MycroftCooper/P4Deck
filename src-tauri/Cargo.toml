@@ -8,7 +8,12 @@ edition = "2021"
 
 [lib]
 name = "p4deck_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop-only (Windows + macOS) needs just the rlib: both platforms run the
+# `p4deck` binary against this library. `staticlib` (iOS) and `cdylib` (Android)
+# are mobile-only artifacts, and keeping them makes every debug build emit an
+# extra ~1.4GB `.lib` plus thousands of `.o` files into target/.
+# Restore ["staticlib", "cdylib", "rlib"] when mobile targets come back.
+crate-type = ["rlib"]
 
 [features]
 backend-perf = ["tokio/rt"]

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-const longClient = "fenganmeng_DM42.Beyond_Beyond_v1d6_project";
+const longClient = "testclient_DM42.Beyond_Beyond_v1d6_project";
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 844 });
   await page.addInitScript((client) => {

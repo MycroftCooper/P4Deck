@@ -3,7 +3,7 @@
 //
 // 用法:
 //   node scripts/workflow/cache.mjs status [--json]
-//   node scripts/workflow/cache.mjs clean --incremental [--dry]
+//   node scripts/workflow/cache.mjs clean --incremental [--size-mb N] [--dry]
 //   node scripts/workflow/cache.mjs clean --release|--target-qa|--workspace-target [--dry]
 //   node scripts/workflow/cache.mjs clean --lfs [--dry]          # git lfs prune（只删未引用对象）
 //   node scripts/workflow/cache.mjs clean --temp-candidates --days 2 [--dry]
@@ -122,6 +122,10 @@ if (command === "status") {
   const dry = args.includes("--dry");
   const daysIndex = args.indexOf("--days");
   const days = daysIndex >= 0 ? Number(args[daysIndex + 1]) : 1;
+  // 调用方（如 close.mjs）通常刚跑过 status，已经知道体积；--size-mb 可跳过重复扫描。
+  const sizeIndex = args.indexOf("--size-mb");
+  const assumedMb = sizeIndex >= 0 ? Number(args[sizeIndex + 1]) : null;
+  const knownMb = Number.isFinite(assumedMb) ? assumedMb : null;
   const targets = [];
   if (args.includes("--cargo")) targets.push({ name: "cargoTarget", path: PATHS.cargoTarget });
   if (args.includes("--baseline")) targets.push({ name: "baseline", path: PATHS.baseline });
@@ -137,9 +141,10 @@ if (command === "status") {
   }
 
   for (const target of targets) {
-    const size = await sizeOf(target.path);
+    const size = knownMb === null ? await sizeOf(target.path) : { mb: knownMb, files: null };
     if (dry) {
-      process.stdout.write(`[dry] 将删除 ${target.name}（${size.mb}MB / ${size.files} files）\n`);
+      const files = size.files === null ? "" : ` / ${size.files} files`;
+      process.stdout.write(`[dry] 将删除 ${target.name}（${size.mb}MB${files}）\n`);
     } else {
       await rm(target.path, { recursive: true, force: true });
       await mkdir(target.path, { recursive: true }).catch(() => {});

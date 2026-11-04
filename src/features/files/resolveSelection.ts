@@ -4,6 +4,39 @@ import { parentPath, pathKey } from "./address";
 import { workspaceCache, workspaceQuery } from "./workspaceQueries";
 import { nodeKey } from "./selection";
 
+/**
+ * Only real unresolved integration facts may offer "resolve": a conflicted
+ * workspace state or an authoritative unresolved resolve preview. Directories
+ * and clean files never qualify.
+ */
+export function needsResolve(nodes: readonly WorkspaceNode[]): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "file" &&
+      (node.state === "conflicted" || node.status?.resolve === "unresolved"),
+  );
+}
+
+/**
+ * An already-resolved (but not yet submitted) file can be resolved again with
+ * `p4 resolve -f`; the target content is the previous resolution. Files without
+ * that record stay clean: they must not offer a resolve entry.
+ */
+export function canReResolve(nodes: readonly WorkspaceNode[]): boolean {
+  return nodes.some(
+    (node) => node.kind === "file" && node.status?.resolve === "resolved",
+  );
+}
+
+/**
+ * The context-menu resolve entry is offered for unresolved files (normal
+ * resolve) and for already resolved files (force re-resolve); a clean selection
+ * has nothing to offer and hides it.
+ */
+export function canOfferResolve(nodes: readonly WorkspaceNode[]): boolean {
+  return needsResolve(nodes) || canReResolve(nodes);
+}
+
 /** Hydrate by directory, never one P4 request per selected row. Bound concurrent directories to four. */
 export async function resolveSelection(
   nodes: WorkspaceNode[],
@@ -58,6 +91,15 @@ export async function resolveSelection(
             replacements.set(nodeKey(old), {
               ...found,
               depotPath: found.depotPath || old.depotPath,
+              // A depot-only pending row carries an authoritative `conflicted`
+              // flag from the pending scan (`p4 resolve -n`). A stale or
+              // differently-scoped workspace listing must not overwrite it, or
+              // the context-menu "解决冲突…" entry disappears while the row
+              // still shows "需要 Resolve".
+              state:
+                old.state === "conflicted" && found.state !== "conflicted"
+                  ? "conflicted"
+                  : found.state,
             });
           else if (refresh && old.kind === "file")
             replacements.set(nodeKey(old), {

@@ -458,6 +458,14 @@ function ConnectedApp({
     };
   }, [executeAppCommand, openPage]);
   const hasSidebar = leftOpen && !detachedPage;
+  // The host log records how many targets the failed command actually covered;
+  // a hard-coded 0 made tool failures impossible to triage.
+  const commandTargetCount =
+    command.target.type === "file"
+      ? (command.target.nodes ?? [command.target.node]).length
+      : command.target.type === "pending"
+        ? command.target.count
+        : 0;
   return (
     <ContextMenuProvider
       scope={connectionKey + ":" + route + ":" + commandBusy}
@@ -536,7 +544,7 @@ function ConnectedApp({
                           phase: "execute",
                           outcome: "failed",
                           code: "operationFailed",
-                          targetCount: 0,
+                          targetCount: commandTargetCount,
                         });
                       } else toolsRef.current?.open("journal");
                     }}

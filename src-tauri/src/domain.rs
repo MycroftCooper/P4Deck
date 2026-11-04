@@ -733,6 +733,8 @@ pub enum SubmittedInspectionStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SubmittedChangeDetail {
     pub change_id: i64,
+    /// `"submitted"`, `"pending"`, `"shelved"`, or `"unknown"` (inspection unavailable).
+    pub status: String,
     pub description: String,
     pub user: String,
     pub client: String,
@@ -1564,6 +1566,8 @@ pub enum WorkspaceSyncState {
 pub enum WorkspaceResolveState {
     None,
     Unresolved,
+    /// Integration/resolve records exist but every one is already resolved (not yet submitted).
+    Resolved,
     Unknown,
 }
 
@@ -3338,6 +3342,11 @@ pub enum ResolveStrategy {
 #[serde(rename_all = "camelCase")]
 pub struct ResolvePreflightRequest {
     pub depot_paths: Vec<String>,
+    /// `p4 resolve -f`: allow re-resolving files that are already resolved but not
+    /// yet submitted (the target content is the previous resolution, not the
+    /// original workspace content).
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -3403,6 +3412,9 @@ pub struct ResolveConfirmation {
 #[serde(rename_all = "camelCase")]
 pub struct ResolveStatsRequest {
     pub depot_path: String,
+    /// `true` when the dialog is re-resolving an already resolved file (`p4 resolve -f`).
+    #[serde(default)]
+    pub force: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_depot_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

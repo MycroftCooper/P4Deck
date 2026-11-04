@@ -6,7 +6,7 @@ pub struct Invocation {
     pub argument_input: Option<Vec<String>>,
 }
 
-const FSTAT_FIELDS: &str = "depotFile,clientFile,path,action,change,haveRev,headRev,type,headType,digest,fileSize,modTime,unresolved,otherOpen,otherLock,ourLock,shelved,shelvedChange,shelvedDigest,shelvedSize,shelvedType";
+const FSTAT_FIELDS: &str = "depotFile,clientFile,path,action,change,haveRev,headRev,type,headType,digest,fileSize,modTime,unresolved,resolved,otherOpen,otherLock,ourLock,shelved,shelvedChange,shelvedDigest,shelvedSize,shelvedType";
 const INLINE_PATH_LIMIT: usize = 128;
 const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
 
@@ -149,16 +149,24 @@ pub fn unshelve(
     scoped("unshelve", args, paths)
 }
 
-pub fn resolve_preview(paths: &[String]) -> Result<Invocation, String> {
+pub fn resolve_preview(paths: &[String], force: bool) -> Result<Invocation, String> {
     // `-o` asks the server for the authoritative base revision used by this
     // resolve record. Manual merge must never infer that revision from have/head.
-    scoped("resolve", vec!["-n".into(), "-o".into()], paths)
+    // `-f` additionally allows records that are already resolved (not submitted).
+    let args = if force {
+        vec!["-f".into(), "-n".into(), "-o".into()]
+    } else {
+        vec!["-n".into(), "-o".into()]
+    };
+    scoped("resolve", args, paths)
 }
 
 /// Interactive resolve target. The caller supplies `s` on stdin, so the file
 /// is skipped and never modified; the only purpose is P4's own chunk summary.
-pub fn resolve_interactive(path: &str) -> Result<Invocation, String> {
-    scoped("resolve", Vec::new(), &[path.to_owned()])
+/// `force` re-opens already resolved records so their chunk summary is available.
+pub fn resolve_interactive(path: &str, force: bool) -> Result<Invocation, String> {
+    let args = if force { vec!["-f".into()] } else { Vec::new() };
+    scoped("resolve", args, &[path.to_owned()])
 }
 
 pub fn print_to(spec: &str, output: &str) -> Result<Invocation, String> {
@@ -182,7 +190,7 @@ pub fn print_to(spec: &str, output: &str) -> Result<Invocation, String> {
     })
 }
 
-pub fn resolve(path: &str, strategy: ResolveStrategy) -> Result<Invocation, String> {
+pub fn resolve(path: &str, strategy: ResolveStrategy, force: bool) -> Result<Invocation, String> {
     let flag = match strategy {
         ResolveStrategy::Safe => "-am",
         ResolveStrategy::AcceptYours => "-ay",
@@ -191,7 +199,12 @@ pub fn resolve(path: &str, strategy: ResolveStrategy) -> Result<Invocation, Stri
             return Err("mergePreview is non-mutating and cannot be confirmed".into())
         }
     };
-    scoped("resolve", vec![flag.into()], &[path.to_owned()])
+    let mut args = Vec::new();
+    if force {
+        args.push("-f".into());
+    }
+    args.push(flag.into());
+    scoped("resolve", args, &[path.to_owned()])
 }
 
 /// `p4 filelog -m 1 -t <depot>#<rev>`: latest revision metadata for one file.
@@ -335,7 +348,35 @@ mod tests {
             ["-Af", "-c", "7", "-f", "//depot/a b.txt"]
         );
         assert_eq!(unshelve(7, 0, &paths, true).unwrap().args[0], "-n");
-        assert!(resolve("//depot/a", ResolveStrategy::MergePreview).is_err());
+        assert!(resolve("//depot/a", ResolveStrategy::MergePreview, false).is_err());
+        assert_eq!(
+            resolve("//depot/a", ResolveStrategy::AcceptYours, false)
+                .unwrap()
+                .args,
+            ["-ay", "//depot/a"]
+        );
+        assert_eq!(
+            resolve("//depot/a", ResolveStrategy::Safe, true)
+                .unwrap()
+                .args,
+            ["-f", "-am", "//depot/a"]
+        );
+        assert_eq!(
+            resolve_preview(&["//depot/a".into()], false).unwrap().args,
+            ["-n", "-o", "//depot/a"]
+        );
+        assert_eq!(
+            resolve_preview(&["//depot/a".into()], true).unwrap().args,
+            ["-f", "-n", "-o", "//depot/a"]
+        );
+        assert_eq!(
+            resolve_interactive("//depot/a", false).unwrap().args,
+            ["//depot/a"]
+        );
+        assert_eq!(
+            resolve_interactive("//depot/a", true).unwrap().args,
+            ["-f", "//depot/a"]
+        );
         assert_eq!(
             reopen(0, "//depot/a b#@%.txt").unwrap().args,
             ["-c", "default", "//depot/a b#@%.txt"]

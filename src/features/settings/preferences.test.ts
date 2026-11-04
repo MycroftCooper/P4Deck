@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  clampGetLatestConfirmThreshold,
   defaultUi,
+  getLatestConfirmThresholdMax,
+  getLatestConfirmThresholdMin,
   readUiPreferences,
   saveUiPreferences,
   toggleAutoRefresh,
@@ -86,6 +89,56 @@ it("restores non-negative whole-minute intervals and preserves old disabled pref
     autoRefresh: false,
     autoRefreshMinutes: 5,
   });
+});
+
+it("defaults the Get Latest confirmation threshold and restores only safe integers in range", () => {
+  vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({}) });
+  expect(readUiPreferences().getLatestConfirmThreshold).toBe(
+    defaultUi.getLatestConfirmThreshold,
+  );
+  for (const getLatestConfirmThreshold of [
+    getLatestConfirmThresholdMin,
+    1,
+    100,
+    getLatestConfirmThresholdMax,
+  ]) {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ getLatestConfirmThreshold }),
+    });
+    expect(readUiPreferences().getLatestConfirmThreshold).toBe(
+      getLatestConfirmThreshold,
+    );
+  }
+  for (const getLatestConfirmThreshold of [
+    -1,
+    0.5,
+    "10",
+    null,
+    getLatestConfirmThresholdMax + 1,
+    1e20,
+  ]) {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ getLatestConfirmThreshold }),
+    });
+    expect(readUiPreferences().getLatestConfirmThreshold).toBe(
+      defaultUi.getLatestConfirmThreshold,
+    );
+  }
+});
+
+it("clamps entered Get Latest confirmation thresholds into the supported range", () => {
+  expect(clampGetLatestConfirmThreshold(-5)).toBe(getLatestConfirmThresholdMin);
+  expect(clampGetLatestConfirmThreshold(0)).toBe(0);
+  expect(clampGetLatestConfirmThreshold(12.9)).toBe(12);
+  expect(clampGetLatestConfirmThreshold(20_000)).toBe(
+    getLatestConfirmThresholdMax,
+  );
+  expect(clampGetLatestConfirmThreshold(Number.NaN)).toBe(
+    defaultUi.getLatestConfirmThreshold,
+  );
+  expect(clampGetLatestConfirmThreshold(Number.POSITIVE_INFINITY)).toBe(
+    defaultUi.getLatestConfirmThreshold,
+  );
 });
 
 it("remembers a custom interval when paused and can resume an interval disabled with zero", () => {

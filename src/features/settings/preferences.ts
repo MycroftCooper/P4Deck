@@ -3,6 +3,8 @@ import { defaultAccent, normalizeAccent } from "./accent";
 import { defaultBackgroundTone, normalizeBackgroundTone } from "./background";
 export const sidebarMinWidth = 200;
 export const sidebarMaxWidth = 600;
+export const getLatestConfirmThresholdMin = 0;
+export const getLatestConfirmThresholdMax = 10_000;
 export interface UiPreferences {
   accentColor: string;
   /** Empty string follows the theme; otherwise a validated `#rrggbb` tone. */
@@ -15,6 +17,8 @@ export interface UiPreferences {
   reducedMotion: boolean;
   autoRefresh: boolean;
   autoRefreshMinutes: number;
+  /** Get Latest asks for confirmation only when the preview exceeds this many changed files. */
+  getLatestConfirmThreshold: number;
   desktopNotifications: boolean;
   notifyOnlyFailures: boolean;
   checkoutUseDefault: boolean;
@@ -30,10 +34,19 @@ export const defaultUi: UiPreferences = {
   reducedMotion: false,
   autoRefresh: true,
   autoRefreshMinutes: 5,
+  getLatestConfirmThreshold: 100,
   desktopNotifications: false,
   notifyOnlyFailures: false,
   checkoutUseDefault: false,
 };
+/** Clamps a user-entered threshold; invalid input falls back to the default. */
+export function clampGetLatestConfirmThreshold(value: number): number {
+  if (!Number.isFinite(value)) return defaultUi.getLatestConfirmThreshold;
+  return Math.min(
+    getLatestConfirmThresholdMax,
+    Math.max(getLatestConfirmThresholdMin, Math.trunc(value)),
+  );
+}
 export function readUiPreferences(): UiPreferences {
   try {
     const p = JSON.parse(storage.getItem("p4deck.ui") ?? "{}");
@@ -51,6 +64,12 @@ export function readUiPreferences(): UiPreferences {
         Number.isSafeInteger(p.autoRefreshMinutes) && p.autoRefreshMinutes >= 0
           ? p.autoRefreshMinutes
           : defaultUi.autoRefreshMinutes,
+      getLatestConfirmThreshold:
+        Number.isSafeInteger(p.getLatestConfirmThreshold) &&
+        p.getLatestConfirmThreshold >= getLatestConfirmThresholdMin &&
+        p.getLatestConfirmThreshold <= getLatestConfirmThresholdMax
+          ? p.getLatestConfirmThreshold
+          : defaultUi.getLatestConfirmThreshold,
       desktopNotifications: p.desktopNotifications === true,
       notifyOnlyFailures: p.notifyOnlyFailures === true,
       checkoutUseDefault: p.checkoutUseDefault === true,

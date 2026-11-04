@@ -8,7 +8,10 @@ import type {
 } from "../../shared/contracts";
 import { backend } from "../../infrastructure/backend";
 import { workspaceCache } from "../../features/files/workspaceQueries";
-import { resolveSelection } from "../../features/files/resolveSelection";
+import {
+  resolveSelection,
+  canOfferResolve,
+} from "../../features/files/resolveSelection";
 import { menuCatalog, type MenuObjectId } from "./catalog";
 import { useContextMenu } from "./ContextMenu";
 import { useMenuEnvironment } from "./environment";
@@ -157,16 +160,18 @@ export function useFileMenu() {
           node.depotPath || node.absolutePath ? undefined : "没有目录路径",
         );
       const merged = { ...bindings, ...options.bindings };
-      const needsResolve = resolved.some(
-        (item) =>
-          item.state === "conflicted" || item.status?.resolve === "unresolved",
-      );
+      // Unresolved files resolve normally; already resolved (not yet submitted)
+      // files re-resolve with `p4 resolve -f`. Only a truly clean selection
+      // hides the entry instead of offering an always-failing action.
       const resolveItem = merged["解决冲突…"];
-      if (needsResolve && resolveItem && !resolveItem.reason)
+      if (!canOfferResolve(resolved)) {
+        merged["解决冲突…"] = { ...(resolveItem ?? {}), hidden: true };
+      } else if (resolveItem && !resolveItem.reason) {
         merged["解决冲突…"] = {
           ...resolveItem,
           emphasis: "primary",
         };
+      }
       return merged;
     };
     return menu(

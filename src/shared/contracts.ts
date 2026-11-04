@@ -510,7 +510,12 @@ export type WorkspaceReconcileAction =
   "add" | "edit" | "delete" | "moveAdd" | "moveDelete";
 export type WorkspaceSyncState =
   "current" | "outOfDate" | "notSynced" | "unknown";
-export type WorkspaceResolveState = "none" | "unresolved" | "unknown";
+/**
+ * `resolved` means the file has an already-resolved (but not yet submitted)
+ * integration record; it can be re-resolved with `p4 resolve -f`.
+ */
+export type WorkspaceResolveState =
+  "none" | "unresolved" | "unknown" | "resolved";
 export type WorkspaceLocalState =
   | "present"
   | "missing"
@@ -896,6 +901,13 @@ export interface SubmittedChangeDetail {
   mergeClassification: MergeClassification;
   inspectionStatus: "complete" | "partial" | "unavailable";
   message?: string;
+  /**
+   * Real changelist status reported by the server:
+   * "submitted" | "pending" | "shelved" | "unknown" (unknown means the
+   * inspection itself was unavailable). Optional only for older fixtures;
+   * the Rust backend always returns it.
+   */
+  status?: string;
 }
 
 export interface ShelfDetailRequest {
@@ -2448,6 +2460,8 @@ export type ResolveStrategy =
 
 export interface ResolvePreflightRequest {
   depotPaths: string[];
+  /** Re-resolve already resolved files with `p4 resolve -f` (target = last resolution). */
+  force?: boolean;
 }
 
 export interface ResolveVersionSource {
@@ -2498,6 +2512,8 @@ export interface ResolveStatsRequest {
   sourceDepotPath?: string;
   sourceRevision?: number;
   targetPath?: string;
+  /** Measure the `p4 resolve -f` (re-resolve) three-way state instead. */
+  force?: boolean;
 }
 
 export interface ResolveVersionStats {

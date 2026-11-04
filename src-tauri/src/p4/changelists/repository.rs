@@ -28,6 +28,44 @@ pub struct PendingScan {
     pub truncated_by_safety_limit: bool,
 }
 
+/// Shown for pending/shelved changelists, where opened files belong to the
+/// owner's client and only the shelf can be inspected from another workspace.
+const PENDING_DETAIL_MESSAGE: &str = "This changelist is pending; opened files belong to its owner's client and only shelved files are listed.";
+
+/// Projects a `describe -s -S` detail of a pending/shelved changelist onto the
+/// `PendingChange` shape used by workflow preflights. Shelf records carry no
+/// workspace state, so `files` (opened files) stays empty by design.
+pub(crate) fn pending_from_shelved_detail(detail: SubmittedChangeDetail) -> PendingChange {
+    PendingChange {
+        id: detail.change_id,
+        description: detail.description,
+        user: detail.user,
+        client: detail.client,
+        status: detail.status,
+        updated_at: (!detail.time.is_empty()).then_some(detail.time),
+        jobs: detail.jobs,
+        files: Vec::new(),
+        shelved_files: detail
+            .files
+            .into_iter()
+            .map(|file| PendingFile {
+                depot_path: file.depot_path,
+                action: file.action,
+                state: None,
+                client_path: None,
+                revision: file.revision,
+                head_revision: None,
+                file_type: file.file_type,
+                lock_ownership: None,
+                lock_owner: None,
+                other_open: Vec::new(),
+                exclusive_open: None,
+                resolve: None,
+            })
+            .collect(),
+    }
+}
+
 impl ChangelistRepository {
     pub fn new(runner: Arc<P4Runner>) -> Self {
         Self { runner }
@@ -643,6 +681,11 @@ impl ChangelistRepository {
             )
             .await?;
         let mut detail = parser::parse_submitted_detail(&described.events, request.change_id)?;
+        if detail.status != "submitted" {
+            return self
+                .shelved_only_detail(context, request, detail, operation_id, app)
+                .await;
+        }
         if !detail.integration_evidence.is_empty() {
             return Ok(detail);
         }
@@ -678,6 +721,71 @@ impl ChangelistRepository {
         )?;
         parser::finalize_submitted_classification(&mut detail, evidence);
         Ok(detail)
+    }
+
+    /// Fills a pending/shelved detail from `p4 describe -s -S <id>`: only shelf
+    /// files are visible, zero shelves is a legitimate result, and no filelog
+    /// integration inspection is attempted (there is no submitted revision).
+    async fn shelved_only_detail(
+        &self,
+        context: &P4Context,
+        request: &SubmittedChangeDetailRequest,
+        mut detail: SubmittedChangeDetail,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<SubmittedChangeDetail, String> {
+        let shelved = self
+            .run_detail(
+                context,
+                command::describe_shelves_invocation(&[request.change_id])?,
+                operation_id,
+                app,
+            )
+            .await?;
+        detail.files = parser::parse_shelved_files(&shelved.events)
+            .into_iter()
+            .filter(|(change_id, _)| *change_id == request.change_id)
+            .map(|(_, file)| SubmittedChangeFile {
+                depot_path: file.depot_path,
+                action: file.action,
+                revision: file.revision,
+                file_type: file.file_type,
+            })
+            .collect();
+        detail.integration_evidence.clear();
+        detail.merge_classification = MergeClassification::Unknown;
+        detail.inspection_status = SubmittedInspectionStatus::Partial;
+        detail.message = Some(PENDING_DETAIL_MESSAGE.into());
+        Ok(detail)
+    }
+
+    /// Read-only lookup of any changelist's shelf via `p4 describe -s -S <id>`.
+    /// Unlike `query_pending`, this is not limited to the current user/client, so
+    /// a workflow can preflight unshelving from another user's pending changelist.
+    /// Returns `None` for submitted changelists (they have no shelf to unshelve).
+    pub async fn shelved_change(
+        &self,
+        context: &P4Context,
+        change_id: i64,
+        prefix: &str,
+        app: Option<&AppHandle>,
+    ) -> Result<Option<PendingChange>, String> {
+        if change_id <= 0 {
+            return Err("a positive source changelist is required".into());
+        }
+        let described = self
+            .run_detail(
+                context,
+                command::describe_shelves_invocation(&[change_id])?,
+                Some(format!("{prefix}:describe")),
+                app,
+            )
+            .await?;
+        let detail = parser::parse_submitted_detail(&described.events, change_id)?;
+        if detail.status == "submitted" {
+            return Ok(None);
+        }
+        Ok(Some(pending_from_shelved_detail(detail)))
     }
 
     pub async fn perform_pending(
@@ -1347,5 +1455,87 @@ mod tests {
             &query,
             ""
         ));
+    }
+
+    #[test]
+    fn pending_shelved_detail_maps_another_users_shelf_without_opened_files() {
+        let detail = SubmittedChangeDetail {
+            change_id: 77,
+            status: "pending".into(),
+            description: "shelf of another user".into(),
+            user: "alice".into(),
+            client: "alice_ws".into(),
+            time: "2023-11-14T22:13:20+00:00".into(),
+            jobs: vec!["JOB-1".into()],
+            files: vec![
+                SubmittedChangeFile {
+                    depot_path: "//depot/main/a".into(),
+                    action: "edit".into(),
+                    revision: Some(3),
+                    file_type: Some("text".into()),
+                },
+                SubmittedChangeFile {
+                    depot_path: "//depot/main/b".into(),
+                    action: "add".into(),
+                    revision: None,
+                    file_type: Some("binary".into()),
+                },
+            ],
+            integration_evidence: Vec::new(),
+            merge_classification: MergeClassification::Unknown,
+            inspection_status: SubmittedInspectionStatus::Partial,
+            message: None,
+        };
+        let change = pending_from_shelved_detail(detail);
+        assert_eq!(change.id, 77);
+        assert_eq!(change.status, "pending");
+        assert_eq!(change.user, "alice");
+        assert_eq!(change.client, "alice_ws");
+        assert_eq!(change.description, "shelf of another user");
+        assert_eq!(
+            change.updated_at.as_deref(),
+            Some("2023-11-14T22:13:20+00:00")
+        );
+        assert_eq!(change.jobs, vec!["JOB-1".to_owned()]);
+        assert!(change.files.is_empty());
+        assert_eq!(change.shelved_files.len(), 2);
+        assert_eq!(change.shelved_files[0].depot_path, "//depot/main/a");
+        assert_eq!(change.shelved_files[0].action, "edit");
+        assert_eq!(change.shelved_files[0].revision, Some(3));
+        assert_eq!(change.shelved_files[0].file_type.as_deref(), Some("text"));
+        assert_eq!(change.shelved_files[1].depot_path, "//depot/main/b");
+        assert_eq!(change.shelved_files[1].action, "add");
+        assert_eq!(change.shelved_files[1].revision, None);
+        assert_eq!(change.shelved_files[1].file_type.as_deref(), Some("binary"));
+        assert!(change.shelved_files.iter().all(|file| {
+            file.state.is_none()
+                && file.client_path.is_none()
+                && file.head_revision.is_none()
+                && file.lock_ownership.is_none()
+                && file.lock_owner.is_none()
+                && file.other_open.is_empty()
+                && file.exclusive_open.is_none()
+                && file.resolve.is_none()
+        }));
+
+        // A pending changelist without shelves is a valid, empty mapping.
+        let empty = pending_from_shelved_detail(SubmittedChangeDetail {
+            change_id: 78,
+            status: "pending".into(),
+            description: String::new(),
+            user: "bob".into(),
+            client: "bob_ws".into(),
+            time: String::new(),
+            jobs: Vec::new(),
+            files: Vec::new(),
+            integration_evidence: Vec::new(),
+            merge_classification: MergeClassification::Unknown,
+            inspection_status: SubmittedInspectionStatus::Partial,
+            message: None,
+        });
+        assert_eq!(empty.status, "pending");
+        assert!(empty.updated_at.is_none());
+        assert!(empty.shelved_files.is_empty());
+        assert!(empty.files.is_empty());
     }
 }

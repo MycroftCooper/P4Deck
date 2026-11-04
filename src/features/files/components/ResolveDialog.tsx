@@ -122,6 +122,14 @@ export function ResolveDialog({
   const paths = snapshot.nodes.map(
     (node) => node.depotPath || node.absolutePath,
   );
+  /**
+   * A selection with already-resolved (not yet submitted) records and no
+   * unresolved file must re-resolve with `p4 resolve -f`; mixed selections keep
+   * the normal path because those files still have real unresolved conflicts.
+   */
+  const force =
+    snapshot.nodes.some((node) => node.status?.resolve === "resolved") &&
+    !snapshot.nodes.some((node) => node.status?.resolve === "unresolved");
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<ResolvePreflight>();
@@ -173,6 +181,7 @@ export function ResolveDialog({
         sourceDepotPath: sourceVersion?.depotPath,
         sourceRevision: sourceVersion?.revision,
         targetPath: current.clientPath ?? current.depotPath,
+        ...(force ? { force: true } : {}),
       }
     : undefined;
   const expired = !!preflight && preflight.expiresAt <= Date.now();
@@ -300,7 +309,7 @@ export function ResolveDialog({
 
     try {
       const value = await withTimeout(
-        check({ depotPaths: paths }),
+        check({ depotPaths: paths, force }),
         RESOLVE_CHECK_TIMEOUT_MS,
         tr(
           "读取冲突超时（30 秒）。请重试或检查连接。",
@@ -332,20 +341,23 @@ export function ResolveDialog({
               )
             : Math.min(previousIndex, Math.max(0, next.conflicts.length - 1)),
       );
-      requestDesktopAttention({
-        key: `resolve-preflight:${next.contentDigest}`,
-        title: tr("Resolve 等待处理", "Resolve awaits attention"),
-        body: next.blockers.length
-          ? tr(
-              `${next.blockers.length} 个 Resolve 阻断项需要处理。`,
-              `${next.blockers.length} Resolve blocker(s) need review.`,
-            )
-          : tr(
-              `${next.conflicts.filter((item) => item.status === "unresolved").length} 个冲突等待选择策略。`,
-              `${next.conflicts.filter((item) => item.status === "unresolved").length} conflict(s) await a strategy.`,
-            ),
-        kind: "attention",
-      });
+      // Opening a clean file asks for nothing: no conflict and no blocker means
+      // there is no attention to request.
+      if (next.conflicts.length || next.blockers.length)
+        requestDesktopAttention({
+          key: `resolve-preflight:${next.contentDigest}`,
+          title: tr("Resolve 等待处理", "Resolve awaits attention"),
+          body: next.blockers.length
+            ? tr(
+                `${next.blockers.length} 个 Resolve 阻断项需要处理。`,
+                `${next.blockers.length} Resolve blocker(s) need review.`,
+              )
+            : tr(
+                `${next.conflicts.filter((item) => item.status === "unresolved").length} 个冲突等待选择策略。`,
+                `${next.conflicts.filter((item) => item.status === "unresolved").length} conflict(s) await a strategy.`,
+              ),
+          kind: "attention",
+        });
       setPhase("ready");
       return true;
     } catch (cause) {
@@ -842,6 +854,14 @@ export function ResolveDialog({
             )}
           </DialogNotice>
         )}
+        {force && (
+          <DialogNotice>
+            {tr(
+              "重新解决：基于上次解决结果再次解决（p4 resolve -f）；如需保留原始工作区内容，请先 revert 该文件。",
+              "Re-resolve: resolves again on top of the previous resolution (p4 resolve -f). Revert first if you need the original workspace content.",
+            )}
+          </DialogNotice>
+        )}
         <div className="resolve-merge">
           <aside className="resolve-sidebar">
             <div className="resolve-sidebar-head">
@@ -903,7 +923,7 @@ export function ResolveDialog({
                 <p className="resolve-list-empty">
                   {phase === "checking"
                     ? tr("正在读取冲突…", "Reading conflicts…")
-                    : tr("没有待处理的文件。", "No files to resolve.")}
+                    : tr("没有冲突", "No conflicts")}
                 </p>
               )}
             </div>
@@ -1100,9 +1120,19 @@ export function ResolveDialog({
               </>
             ) : (
               <div className="resolve-preview-empty">
-                {phase === "checking"
-                  ? tr("正在读取冲突…", "Reading conflicts…")
-                  : tr("没有待处理的文件。", "No files to resolve.")}
+                {phase === "checking" ? (
+                  tr("正在读取冲突…", "Reading conflicts…")
+                ) : (
+                  <>
+                    <strong>{tr("没有冲突", "No conflicts")}</strong>
+                    <small>
+                      {tr(
+                        "所选文件没有待解决的冲突。",
+                        "No unresolved conflicts in the selected files.",
+                      )}
+                    </small>
+                  </>
+                )}
               </div>
             )}
           </div>

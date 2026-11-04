@@ -774,6 +774,9 @@ function mockXlsxPreview(options?: FilePreviewRequestOptions): FilePreview {
   };
 }
 
+const MOCK_PENDING_DETAIL_MESSAGE =
+  "This changelist is pending; opened files belong to its owner's client and only shelved files are listed.";
+
 export const mockBackend: Backend = {
   async selectedMoveLookup() {
     return { kind: "notFound" as const };
@@ -2987,8 +2990,7 @@ export const mockBackend: Backend = {
   },
   async getSubmittedChangeDetail(request) {
     const change = mockChanges.find(
-      (candidate) =>
-        candidate.id === request.changeId && candidate.status === "submitted",
+      (candidate) => candidate.id === request.changeId,
     );
     if (!change) {
       return {
@@ -3002,7 +3004,35 @@ export const mockBackend: Backend = {
         integrationEvidence: [],
         mergeClassification: "unknown",
         inspectionStatus: "unavailable",
-        message: "Submitted changelist inspection failed.",
+        message:
+          "This changelist could not be inspected in the browser mock: no mock changelist has that number.",
+        status: "unknown",
+      };
+    }
+    if (change.status !== "submitted") {
+      // Pending/shelved CLs: the opened files belong to the owner's client, so
+      // only the shelved subset is exposed (same contract as the native read).
+      const shelved =
+        allMockPendingChanges().find((candidate) => candidate.id === change.id)
+          ?.shelvedFiles ?? [];
+      return {
+        changeId: change.id,
+        description: change.description,
+        user: change.user,
+        client: change.client,
+        time: change.time,
+        jobs: [...change.jobs],
+        files: shelved.map((file) => ({
+          depotPath: file.depotPath,
+          action: file.action,
+          revision: file.revision,
+          fileType: file.fileType,
+        })),
+        integrationEvidence: [],
+        mergeClassification: "unknown",
+        inspectionStatus: "partial",
+        message: MOCK_PENDING_DETAIL_MESSAGE,
+        status: change.status,
       };
     }
     const reliable = change.mergeClassification === "reliableMerge";
@@ -3043,6 +3073,7 @@ export const mockBackend: Backend = {
         : suspected
           ? "Mock inspection is partial; text alone is not reliable integration evidence."
           : undefined,
+      status: "submitted",
     };
   },
   async performClAction(action) {

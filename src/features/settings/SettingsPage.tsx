@@ -24,7 +24,13 @@ import { ConnectionProfilesCard } from "./ConnectionProfilesCard";
 import { BackupSettingsCard } from "./BackupSettingsCard";
 import { UpdateSettingsCard } from "./UpdateSettingsCard";
 import { LogSettingsCard } from "./LogSettingsCard";
-import { defaultUi, type UiPreferences } from "./preferences";
+import {
+  clampGetLatestConfirmThreshold,
+  defaultUi,
+  getLatestConfirmThresholdMax,
+  getLatestConfirmThresholdMin,
+  type UiPreferences,
+} from "./preferences";
 import { AccentSettings } from "./AccentSettings";
 import { BackgroundColorSettings } from "./BackgroundColorSettings";
 import { ShortcutSettingsCard } from "./ShortcutSettingsCard";
@@ -125,6 +131,15 @@ export function SettingsPage({
   const refreshMinutes = ui.autoRefresh ? ui.autoRefreshMinutes : 0;
   const [refreshDraft, setRefreshDraft] = useState(String(refreshMinutes));
   useEffect(() => setRefreshDraft(String(refreshMinutes)), [refreshMinutes]);
+  const confirmThreshold =
+    ui.getLatestConfirmThreshold ?? defaultUi.getLatestConfirmThreshold;
+  const [confirmThresholdDraft, setConfirmThresholdDraft] = useState(
+    String(confirmThreshold),
+  );
+  useEffect(
+    () => setConfirmThresholdDraft(String(confirmThreshold)),
+    [confirmThreshold],
+  );
   const [collapsed, setCollapsed] = useState<Set<string>>(() =>
     readCollapsedSections(
       storage.getItem(SETTINGS_COLLAPSED_KEY),
@@ -305,6 +320,48 @@ export function SettingsPage({
                     {tr(
                       "默认 5 分钟；设为 0 关闭自动刷新。",
                       "Default: 5 minutes. Set to 0 to turn off automatic refresh.",
+                    )}
+                  </small>
+                </label>
+                <label>
+                  <span className="settings-field-label">
+                    {tr(
+                      "获取最新确认阈值（变更文件数）",
+                      "Get Latest confirmation threshold (changed files)",
+                    )}
+                  </span>
+                  <input
+                    type="number"
+                    min={getLatestConfirmThresholdMin}
+                    max={getLatestConfirmThresholdMax}
+                    step={1}
+                    aria-label={tr(
+                      "获取最新确认阈值",
+                      "Get Latest confirmation threshold",
+                    )}
+                    aria-describedby="get-latest-threshold-help"
+                    value={confirmThresholdDraft}
+                    onChange={(event) => {
+                      setConfirmThresholdDraft(event.target.value);
+                      const value = event.target.valueAsNumber;
+                      if (!Number.isSafeInteger(value)) return;
+                      const clamped = clampGetLatestConfirmThreshold(value);
+                      if (clamped !== confirmThreshold)
+                        onUi({ ...ui, getLatestConfirmThreshold: clamped });
+                    }}
+                    onBlur={() => {
+                      const clamped = clampGetLatestConfirmThreshold(
+                        Number(confirmThresholdDraft),
+                      );
+                      setConfirmThresholdDraft(String(clamped));
+                      if (clamped !== confirmThreshold)
+                        onUi({ ...ui, getLatestConfirmThreshold: clamped });
+                    }}
+                  />
+                  <small id="get-latest-threshold-help">
+                    {tr(
+                      "默认 100。预览变更数超过该值时先要求确认；0 表示只要有变更就确认。",
+                      "Default: 100. Get Latest asks for confirmation when the preview exceeds this many changes; 0 confirms on any change.",
                     )}
                   </small>
                 </label>

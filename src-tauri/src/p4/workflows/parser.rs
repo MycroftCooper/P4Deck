@@ -18,6 +18,8 @@ pub struct WorkflowFileFact {
     pub shelved_size: Option<u64>,
     pub shelved_type: Option<String>,
     pub unresolved: usize,
+    /// Already resolved but not yet submitted integration records (`fstat -T resolved`).
+    pub resolved: usize,
     pub other_open: usize,
     pub other_lock: usize,
     pub our_lock: usize,
@@ -88,6 +90,7 @@ pub fn file_facts(events: &[OperationEvent]) -> Vec<WorkflowFileFact> {
                     .and_then(Value::as_str)
                     .map(str::to_owned),
                 unresolved: count(&value, "unresolved"),
+                resolved: count(&value, "resolved"),
                 other_open: count(&value, "otherOpen"),
                 other_lock: count(&value, "otherLock"),
                 our_lock: count(&value, "ourLock"),

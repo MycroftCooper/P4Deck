@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { StrictMode, act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
@@ -179,6 +179,101 @@ it("keep-source resolves the current file, re-inspects and advances", async () =
   expect(check).toHaveBeenCalledTimes(2);
   expect(currentRow()?.textContent?.startsWith("b")).toBe(true);
   expect(document.body.textContent).toContain("待处理 1 · 已解决 1");
+});
+
+it("clean file shows no-conflict empty state without requesting attention", async () => {
+  const notices: CustomEvent[] = [];
+  const listener = (event: Event) => notices.push(event as CustomEvent);
+  window.addEventListener("p4deck:desktop-notice", listener);
+  try {
+    await harness.render(
+      <ResolveDialog
+        nodes={nodes}
+        source={null}
+        connectionKey="connection-a"
+        zh
+        onDismiss={vi.fn()}
+        check={async () =>
+          preflight([], {
+            warnings: [
+              {
+                code: "notResolvable",
+                certainty: "confirmed",
+                message:
+                  "The file has no unresolved integration record; nothing to resolve.",
+                paths: ["//depot/a"],
+              },
+            ],
+          })
+        }
+      />,
+    );
+    await flush();
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("没有冲突");
+    expect(text).toContain("所选文件没有待解决的冲突。");
+    expect(text).toContain("待处理 0 · 已解决 0");
+    expect(text).not.toContain("需手工处理");
+    expect(text).not.toContain("保留双方修改");
+    expect(text).not.toContain("需要选择保留一侧");
+    expect(text).not.toContain("没有待处理的文件");
+    expect(
+      document.querySelector<HTMLInputElement>(
+        ".resolve-sidebar-head input[type='checkbox']",
+      )!.disabled,
+    ).toBe(true);
+    // Opening a clean file must not ask for desktop attention.
+    expect(notices).toHaveLength(0);
+  } finally {
+    window.removeEventListener("p4deck:desktop-notice", listener);
+  }
+});
+
+it("re-resolves already resolved files with force and warns before overwriting", async () => {
+  const resolvedNodes: WorkspaceNode[] = nodes.map((node) => ({
+    ...node,
+    state: "openedEdit",
+    status: {
+      primary: "openedEdit",
+      sync: "current",
+      resolve: "resolved",
+      local: "present",
+      completeness: "complete",
+      evidence: [],
+      errors: [],
+    },
+  }));
+  const check = vi.fn().mockResolvedValue(preflight([conflict("a")]));
+  const stats = vi.fn().mockResolvedValue({ base: {}, source: {}, target: {} });
+  await harness.render(
+    <ResolveDialog
+      nodes={resolvedNodes}
+      source={null}
+      connectionKey="connection-a"
+      zh
+      onDismiss={vi.fn()}
+      check={check}
+      resolveStats={stats}
+    />,
+  );
+  await flush();
+  // Already resolved, nothing unresolved: the whole dialog runs in force mode.
+  expect(check).toHaveBeenCalledWith({
+    depotPaths: ["//depot/a", "//depot/b", "//depot/c"],
+    force: true,
+  });
+  expect(stats.mock.calls[0][0]).toMatchObject({
+    depotPath: "//depot/a",
+    force: true,
+  });
+  const text = document.body.textContent ?? "";
+  expect(text).toContain("重新解决");
+  expect(text).toContain("p4 resolve -f");
+  expect(text).toContain("revert");
+  // The force preflight still returns ordinary unresolved conflicts, so the
+  // existing strategy buttons stay usable.
+  expect(action("保留来源").disabled).toBe(false);
+  expect(action("保留本地").disabled).toBe(false);
 });
 
 it("completes the initial inspection under React StrictMode", async () => {

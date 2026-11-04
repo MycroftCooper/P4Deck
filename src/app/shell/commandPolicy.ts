@@ -88,12 +88,14 @@ export function commandReason(
     return busy
       ? undefined
       : msg("没有正在执行的工具栏任务", "No toolbar operation running");
+  // Refresh is read-only bookkeeping; keep it usable during a mutation so a
+  // long-running or stuck operation never locks the user out of refreshing.
+  if (id === "refresh") return undefined;
   if (busy)
     return msg(
       "请等待当前任务完成，或取消任务",
       "Wait for or cancel the current operation",
     );
-  if (id === "refresh") return undefined;
   if (target.type === "history") {
     if (id === "diff")
       return historyDiffTarget(target)
@@ -244,7 +246,8 @@ export function commandReason(
     ],
     getLatest: ["controlled", "outOfDate", "missing", "openedEdit"],
     getRevision: ["controlled", "outOfDate", "missing", "openedEdit"],
-    checkout: ["controlled", "outOfDate"],
+    // Local edits without checkout can still be checked out, compared, browsed.
+    checkout: ["controlled", "outOfDate", "modified"],
     add: ["untracked"],
     delete: ["controlled", "outOfDate", "openedEdit", "untracked", "ignored"],
     revert: [
@@ -263,7 +266,7 @@ export function commandReason(
       "openedMoveDelete",
       "conflicted",
     ],
-    diff: ["controlled", "outOfDate", "openedEdit", "conflicted"],
+    diff: ["controlled", "outOfDate", "openedEdit", "conflicted", "modified"],
     history: [
       "controlled",
       "outOfDate",
@@ -271,6 +274,8 @@ export function commandReason(
       "openedDelete",
       "conflicted",
       "missing",
+      "modified",
+      "notSynced",
     ],
     revgraph: [
       "controlled",
@@ -279,8 +284,15 @@ export function commandReason(
       "openedDelete",
       "conflicted",
       "missing",
+      "modified",
+      "notSynced",
     ],
   };
+  if ((id === "getLatest" || id === "getRevision") && node.state === "modified")
+    return msg(
+      "本地有未签出修改，请先签出/还原/对账后再获取最新",
+      "Local un-checked-out edits exist; checkout/revert/reconcile before getting latest",
+    );
   if (
     (id === "getLatest" || id === "getRevision") &&
     (node.absolutePath || node.depotPath) &&
@@ -292,6 +304,11 @@ export function commandReason(
     (node.absolutePath || node.depotPath)
   )
     return undefined;
+  if (node.state === "unknown" || node.state === "loading")
+    return msg(
+      "文件状态未知，请点击刷新重新检查",
+      "File status unknown; refresh to re-check",
+    );
   return msg(
     "当前文件状态不支持此操作",
     "Unavailable for the current file state",

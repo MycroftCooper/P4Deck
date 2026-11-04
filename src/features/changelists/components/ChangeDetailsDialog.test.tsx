@@ -1,12 +1,14 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
 import { SubmittedGoTo } from "./SubmittedGoTo";
 import { afterEach, expect, it, vi } from "vitest";
 import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import type {
+  PendingChangeMutationResult,
   RuntimeInfo,
   SubmittedChangeDetail,
+  UnshelvePreflight,
 } from "../../../shared/contracts";
 import {
   ChangeDetailsContext,
@@ -68,7 +70,7 @@ afterEach(() => vi.restoreAllMocks());
 it("reads the exact CL and closing preserves/focuses the original control", async () => {
   const read = vi
     .spyOn(backend, "getSubmittedChangeDetail")
-    .mockResolvedValue(detail(17));
+    .mockResolvedValue({ ...detail(17), status: "submitted" });
   vi.spyOn(backend, "cancelOperation").mockResolvedValue();
   const source = document.createElement("button");
   document.body.append(source);
@@ -79,6 +81,16 @@ it("reads the exact CL and closing preserves/focuses the original control", asyn
   expect(document.querySelector("dialog")?.textContent).toContain(
     "DESCRIPTION-17",
   );
+  expect(document.querySelector("dialog")?.textContent).toContain("已提交");
+  // The CL status is a colored badge in the title bar, not a metadata row.
+  const badge = document.querySelector<HTMLElement>(
+    "dialog .workflow-dialog-title .dialog-status-badge",
+  );
+  expect(badge?.textContent).toBe("已提交");
+  expect(badge?.className).toContain("is-submitted");
+  expect(
+    document.querySelector("dialog .change-details-meta")?.textContent,
+  ).not.toContain("状态");
   expect(document.querySelector("dialog")?.textContent).toContain("无文件");
   expect(document.querySelector("dialog")?.textContent).toContain("模拟数据");
   await act(async () => dialogButton("关闭").click());
@@ -161,6 +173,177 @@ it("shows loaded pending/default details without misusing submitted queries", as
     "pending text",
   );
   expect(document.querySelector("dialog")?.textContent).toContain("default");
+});
+
+it("shows a pending CL reached from the submitted page as pending with shelved files, not an error", async () => {
+  const onLoaded = vi.fn();
+  vi.spyOn(backend, "getSubmittedChangeDetail").mockResolvedValue({
+    ...detail(17),
+    status: "pending",
+    inspectionStatus: "partial",
+    mergeClassification: "unknown",
+    message:
+      "This changelist is pending; opened files belong to its owner's client and only shelved files are listed.",
+    files: [
+      {
+        depotPath: "//depot/shelved/a.txt",
+        action: "edit",
+        revision: 7,
+        fileType: "text",
+      },
+    ],
+  });
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  await harness.render(<Host />);
+  await act(async () => open({ kind: "submitted", changeId: 17, onLoaded }));
+  const text = document.querySelector("dialog")?.textContent ?? "";
+  expect(text).toContain("待提交");
+  expect(text).not.toContain("已提交");
+  const badge = document.querySelector<HTMLElement>(
+    "dialog .workflow-dialog-title .dialog-status-badge",
+  );
+  expect(badge?.textContent).toBe("待提交");
+  expect(badge?.className).toContain("is-pending");
+  expect(text).toContain("1 个搁置文件");
+  expect(text).toContain("搁置文件");
+  expect(text).toContain("a.txt");
+  expect(text).toContain("This changelist is pending");
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  expect(text).not.toContain("重试");
+  // A pending answer must not be replayed as a submitted-row classification.
+  expect(onLoaded).not.toHaveBeenCalled();
+});
+
+it("explains a pending CL with no shelved files and no backend message", async () => {
+  vi.spyOn(backend, "getSubmittedChangeDetail").mockResolvedValue({
+    ...detail(17),
+    status: "pending",
+    inspectionStatus: "partial",
+    mergeClassification: "unknown",
+    files: [],
+  });
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  await harness.render(<Host />);
+  await act(async () => open({ kind: "submitted", changeId: 17 }));
+  const text = document.querySelector("dialog")?.textContent ?? "";
+  expect(text).toContain("待提交");
+  expect(text).toContain("该 CL 尚未提交，仅能查看搁置(shelved)文件。");
+  expect(text).toContain("该 CL 没有搁置文件");
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("opens unshelve into a new CL from a pending CL's shelved files", async () => {
+  vi.spyOn(backend, "getSubmittedChangeDetail").mockResolvedValue({
+    ...detail(17),
+    status: "pending",
+    inspectionStatus: "partial",
+    mergeClassification: "unknown",
+    message:
+      "This changelist is pending; opened files belong to its owner's client and only shelved files are listed.",
+    files: [
+      {
+        depotPath: "//depot/shelved/a.txt",
+        action: "edit",
+        revision: 7,
+        fileType: "text",
+      },
+    ],
+  });
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  const mutation: PendingChangeMutationResult = {
+    operation: {
+      operationId: "create-op",
+      exitCode: 0,
+      durationMs: 1,
+      events: [],
+    },
+    createdChangeId: 4242,
+    affectedChanges: [4242],
+    affectedPaths: [],
+    refreshedChanges: [],
+  };
+  const create = vi
+    .spyOn(backend, "mutatePendingChange")
+    .mockResolvedValue(mutation);
+  const preflight: UnshelvePreflight = {
+    ready: false,
+    mappings: [],
+    blockers: [
+      {
+        code: "fileNotShelved",
+        certainty: "confirmed",
+        message: "Source shelf does not contain every selected file.",
+        paths: ["//depot/shelved/a.txt"],
+      },
+    ],
+    warnings: [],
+    target: {
+      kind: "unshelve",
+      server: "fixture",
+      user: "tester",
+      client: "test",
+      workspace: "",
+      contextGeneration: 1,
+      sourceChangeId: 17,
+      targetChangeId: 4242,
+      depotPaths: ["//depot/shelved/a.txt"],
+    },
+    contentDigest: "digest",
+    expiresAt: Date.now() + 60_000,
+    ttlMs: 60_000,
+    operationIds: [],
+  };
+  const check = vi
+    .spyOn(backend, "preflightUnshelve")
+    .mockResolvedValue(preflight);
+  await harness.render(<Host />);
+  await act(async () => open({ kind: "submitted", changeId: 17 }));
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Unshelve 到新 CL…",
+  );
+  await act(async () => dialogButton("Unshelve 到新 CL…").click());
+  // Details closed; the reused UnshelveDialog carries the exact source and an
+  // auto-generated description for a brand-new numbered CL.
+  const text = document.querySelector("dialog")?.textContent ?? "";
+  expect(text).not.toContain("CL 详情");
+  expect(text).toContain("来源搁置 CL 17");
+  expect(
+    [...document.querySelectorAll<HTMLInputElement>("dialog input")]
+      .map((input) => input.value)
+      .join(" | "),
+  ).toContain("Unshelved from CL17");
+  expect(dialogButton("确认 Unshelve").disabled).toBe(true);
+  // The default create-then-preflight path: one creation, then the exact frozen
+  // source subset and the created CL id go to the existing preflight.
+  await act(async () => dialogButton("运行预检").click());
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "create",
+      description: "Unshelved from CL17",
+      jobs: [],
+    }),
+  );
+  expect(check).toHaveBeenCalledWith({
+    sourceChangeId: 17,
+    depotPaths: ["//depot/shelved/a.txt"],
+    targetWorkspace: "test",
+    targetChangeId: 4242,
+  });
+  expect(document.body.textContent).toContain("已创建 CL #4242");
+});
+
+it("does not offer unshelve into a new CL for submitted details", async () => {
+  vi.spyOn(backend, "getSubmittedChangeDetail").mockResolvedValue({
+    ...detail(17),
+    status: "submitted",
+    files: [{ depotPath: "//depot/a.txt", action: "edit", revision: 3 }],
+  });
+  vi.spyOn(backend, "cancelOperation").mockResolvedValue();
+  await harness.render(<Host />);
+  await act(async () => open({ kind: "submitted", changeId: 17 }));
+  expect(document.querySelector("dialog")?.textContent).not.toContain(
+    "Unshelve 到新 CL",
+  );
 });
 
 it("rejects a mismatched CL response and allows Esc while a read is pending", async () => {

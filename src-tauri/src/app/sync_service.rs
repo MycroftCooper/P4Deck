@@ -18,6 +18,12 @@ const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 const MAX_REPRESENTATIVE_ENTRIES: usize = 200;
 const INLINE_PATH_LIMIT: usize = 128;
 const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
+/// `p4 where` is a client-side mapping read, so a short bound is enough.
+const WHERE_TIMEOUT_MS: u64 = 30_000;
+/// Real p4 diagnostics are kept at the head of the result message.
+const MAX_P4_DETAIL_CHARS: usize = 512;
+/// A failed mapping preflight lists at most this many offending targets.
+const MAX_REPORTED_UNMAPPED_PATHS: usize = 5;
 
 #[derive(Clone)]
 struct TokenRecord {
@@ -225,19 +231,42 @@ impl SyncService {
         );
 
         match execution {
-            Ok(operation) if operation.exit_code == 0 => SyncResult {
-                outcome: SyncOutcome::Succeeded,
-                failure: None,
-                message: "Sync completed from the confirmed server preview.".into(),
-                operation_id: Some(operation_id.clone()),
-                log_reference: Some(operation_id),
-                affected_paths: paths,
-                counts: record.counts,
-                refresh_workspace: true,
-                refresh_depot: true,
-            },
+            Ok(operation) if operation.exit_code == 0 => {
+                // p4 2023.1 can exit 0 while still emitting warning/error
+                // records (severity >= 2); never report those as a clean sync.
+                if let Some(detail) = sync_warning_detail(&operation) {
+                    let failure = classify_failure(&detail);
+                    return SyncResult {
+                        outcome: SyncOutcome::Failed,
+                        failure: Some(failure),
+                        message: failure_message_with_detail(failure, &detail),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id),
+                        affected_paths: paths.clone(),
+                        counts: record.counts.clone(),
+                        refresh_workspace: true,
+                        refresh_depot: true,
+                    };
+                }
+                SyncResult {
+                    outcome: SyncOutcome::Succeeded,
+                    failure: None,
+                    message: "Sync completed from the confirmed server preview.".into(),
+                    operation_id: Some(operation_id.clone()),
+                    log_reference: Some(operation_id),
+                    affected_paths: paths,
+                    counts: record.counts,
+                    refresh_workspace: true,
+                    refresh_depot: true,
+                }
+            }
             Ok(operation) => {
-                let text = event_text(&operation);
+                let detail = p4_detail_text(&operation);
+                let text = if detail.is_empty() {
+                    event_text(&operation)
+                } else {
+                    detail
+                };
                 let cancelled = operation
                     .events
                     .iter()
@@ -258,7 +287,7 @@ impl SyncService {
                         SyncOutcome::Failed
                     },
                     failure: Some(failure),
-                    message: failure_message(failure).into(),
+                    message: failure_message_with_detail(failure, &text),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
@@ -277,7 +306,7 @@ impl SyncService {
                         SyncOutcome::Unknown
                     },
                     failure: Some(failure),
-                    message: failure_message(failure).into(),
+                    message: failure_message_with_detail(failure, &text),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
@@ -289,8 +318,11 @@ impl SyncService {
         }
     }
 
-    /// Direct Get Latest: no preview, no token, no preflight inspection.
+    /// Direct Get Latest: no preview, no token, no server-side inspection.
     ///
+    /// A bounded read-only `p4 where` preflight still verifies that every target
+    /// maps into the current client view, so a mistyped/moved path fails before
+    /// any transfer instead of only producing "not in client view" warnings.
     /// The command always targets `#head` without `-f`. P4 itself reports
     /// writable/opened conflicts (and may schedule a resolve), so the result is
     /// mapped from the real exit code/runner error and never faked as success.
@@ -329,6 +361,9 @@ impl SyncService {
 
         let operation_id = valid_operation_id(request.operation_id)
             .unwrap_or_else(|| format!("sync-latest-{}", Uuid::new_v4()));
+        if let Err(failure) = self.where_preflight(&context, &target, app).await {
+            return failure;
+        }
         let (args, input) = execution_arguments(&target);
         let mutation_guard = self.runner.lock_mutations(&context.server).await;
         let execution = self
@@ -366,19 +401,42 @@ impl SyncService {
         );
 
         match execution {
-            Ok(operation) if operation.exit_code == 0 => SyncResult {
-                outcome: SyncOutcome::Succeeded,
-                failure: None,
-                message: "Get Latest completed.".into(),
-                operation_id: Some(operation_id.clone()),
-                log_reference: Some(operation_id),
-                affected_paths: paths,
-                counts: SyncPlanCounts::default(),
-                refresh_workspace: true,
-                refresh_depot: true,
-            },
+            Ok(operation) if operation.exit_code == 0 => {
+                // A zero exit code is not proof of a clean sync: p4 2023.1 can
+                // emit warning/error records (severity >= 2) and still exit 0.
+                if let Some(detail) = sync_warning_detail(&operation) {
+                    let failure = classify_failure(&detail);
+                    return SyncResult {
+                        outcome: SyncOutcome::Failed,
+                        failure: Some(failure),
+                        message: failure_message_with_detail(failure, &detail),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id),
+                        affected_paths: paths.clone(),
+                        counts: SyncPlanCounts::default(),
+                        refresh_workspace: true,
+                        refresh_depot: true,
+                    };
+                }
+                SyncResult {
+                    outcome: SyncOutcome::Succeeded,
+                    failure: None,
+                    message: "Get Latest completed.".into(),
+                    operation_id: Some(operation_id.clone()),
+                    log_reference: Some(operation_id),
+                    affected_paths: paths,
+                    counts: SyncPlanCounts::default(),
+                    refresh_workspace: true,
+                    refresh_depot: true,
+                }
+            }
             Ok(operation) => {
-                let text = event_text(&operation);
+                let detail = p4_detail_text(&operation);
+                let text = if detail.is_empty() {
+                    event_text(&operation)
+                } else {
+                    detail
+                };
                 let cancelled = operation
                     .events
                     .iter()
@@ -399,7 +457,7 @@ impl SyncService {
                         SyncOutcome::Failed
                     },
                     failure: Some(failure),
-                    message: failure_message(failure).into(),
+                    message: failure_message_with_detail(failure, &text),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
@@ -418,7 +476,7 @@ impl SyncService {
                         SyncOutcome::Unknown
                     },
                     failure: Some(failure),
-                    message: failure_message(failure).into(),
+                    message: failure_message_with_detail(failure, &text),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
@@ -428,6 +486,98 @@ impl SyncService {
                 }
             }
         }
+    }
+
+    /// Read-only `p4 where` mapping preflight for the one-click Get Latest path.
+    ///
+    /// `confirm` previews server state instead, so only `sync_latest` needs this
+    /// extra guard. A target that p4 cannot map into the current client view
+    /// would otherwise only produce "not in client view" warnings after a real
+    /// transfer. Transport failures fail the request instead of skipping the
+    /// check, so an unreachable CLI never reaches `p4 sync`.
+    async fn where_preflight(
+        &self,
+        context: &P4Context,
+        target: &SyncTargetSnapshot,
+        app: Option<&AppHandle>,
+    ) -> Result<(), SyncResult> {
+        let expected = target
+            .paths
+            .iter()
+            .map(|path| strip_recursive_suffix(path).to_owned())
+            .collect::<Vec<_>>();
+        let operation_id = format!("sync-where-{}", Uuid::new_v4());
+        let (args, input) = append_or_stream(Vec::new(), expected.clone());
+        let execution = self
+            .runner
+            .run_with_progress(
+                P4CommandRequest {
+                    operation_id: Some(operation_id.clone()),
+                    source: OperationSource::Gui,
+                    command: "where".into(),
+                    args,
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: Some(WHERE_TIMEOUT_MS),
+                    input: None,
+                },
+                app,
+                None,
+                input,
+            )
+            .await;
+
+        let operation = match execution {
+            Ok(operation) => operation,
+            Err(error) => {
+                let text = error.to_string();
+                let failure = classify_failure(&text);
+                return Err(preflight_failure(
+                    target,
+                    failure,
+                    operation_id,
+                    format!(
+                        "Get Latest was blocked before running p4 sync: p4 where could not run ({}). {}",
+                        bounded_detail(&text),
+                        failure_message(failure)
+                    ),
+                ));
+            }
+        };
+
+        let unmapped = unmapped_where_targets(&operation, &expected);
+        if unmapped.is_empty() && operation.exit_code == 0 {
+            return Ok(());
+        }
+        let detail = p4_detail_text(&operation);
+        let text = if detail.is_empty() {
+            event_text(&operation)
+        } else {
+            detail
+        };
+        let bounded = bounded_detail(&text);
+        let failure = if bounded.is_empty() {
+            SyncFailureCode::CommandFailure
+        } else {
+            classify_failure(&text)
+        };
+        let mut message = if unmapped.is_empty() {
+            format!(
+                "Get Latest was blocked before running p4 sync: p4 where exited with code {} without confirming every target.",
+                operation.exit_code
+            )
+        } else {
+            format!(
+                "Get Latest was blocked before running p4 sync: p4 where reported no mapping for {}.",
+                summarize_paths(&unmapped)
+            )
+        };
+        if !bounded.is_empty() {
+            message.push_str(&format!(" p4 said: {bounded}."));
+        }
+        message.push(' ');
+        message.push_str(failure_message(failure));
+        Err(preflight_failure(target, failure, operation_id, message))
     }
 
     fn plan_from_evaluation(
@@ -674,6 +824,11 @@ fn normalize_sync_path(context: &P4Context, value: &str) -> Result<String, Strin
     } else {
         value
     };
+    if base.trim_end_matches(['/', '\\']).is_empty() {
+        return Err(
+            "Sync target cannot be a depot or workspace root; choose a concrete path.".into(),
+        );
+    }
     if base.contains("...") {
         return Err("Only one trailing recursive /... selector is allowed.".into());
     }
@@ -715,6 +870,115 @@ fn normalize_sync_path(context: &P4Context, value: &str) -> Result<String, Strin
         result.push_str("/...");
     }
     Ok(result)
+}
+
+/// `p4 where` takes files, not recursive selectors, so a trailing `/...` is
+/// removed before the mapping preflight.
+fn strip_recursive_suffix(path: &str) -> &str {
+    path.strip_suffix("/...")
+        .or_else(|| path.strip_suffix("\\..."))
+        .unwrap_or(path)
+}
+
+fn summarize_paths(paths: &[String]) -> String {
+    let mut listed = paths
+        .iter()
+        .take(MAX_REPORTED_UNMAPPED_PATHS)
+        .map(|path| crate::security::redact_text(path))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if paths.len() > MAX_REPORTED_UNMAPPED_PATHS {
+        listed.push_str(&format!(
+            " (+{} more)",
+            paths.len() - MAX_REPORTED_UNMAPPED_PATHS
+        ));
+    }
+    listed
+}
+
+/// Returns the targets that `p4 where` did not map. A nonzero exit code is
+/// never treated as a success, even if a stray mapping line was printed.
+fn unmapped_where_targets(result: &OperationResult, expected: &[String]) -> Vec<String> {
+    let mut mapped = Vec::new();
+    for event in &result.events {
+        if !matches!(event.kind, EventKind::Stdout | EventKind::Stderr) {
+            continue;
+        }
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        let message = message.trim();
+        if message.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(message) {
+            Ok(value) => {
+                if record_is_failure(&value) {
+                    continue;
+                }
+                for key in ["depotFile", "clientFile", "path"] {
+                    if let Some(found) = string(&value, key) {
+                        mapped.push(found);
+                    }
+                }
+            }
+            Err(_) => {
+                if !contains_failure_text(message) {
+                    mapped.push(message.to_owned());
+                }
+            }
+        }
+    }
+    expected
+        .iter()
+        .filter(|expected| {
+            !mapped
+                .iter()
+                .any(|candidate| path_is_within(candidate, expected))
+        })
+        .cloned()
+        .collect()
+}
+
+/// A `p4 where` name covers a target when it is the same path or, for a wildcard
+/// echo, a child of it. Comparison normalizes separators, case and the verbatim
+/// Windows prefix produced by `canonicalize()`.
+fn path_is_within(mapped: &str, expected: &str) -> bool {
+    let mapped = compare_path(mapped);
+    let expected = compare_path(expected);
+    mapped == expected
+        || mapped
+            .strip_prefix(&expected)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn compare_path(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let path = if let Some(unc) = path.strip_prefix("//?/UNC/") {
+        format!("//{unc}")
+    } else {
+        path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+    };
+    path.trim_end_matches('/').to_ascii_lowercase()
+}
+
+fn preflight_failure(
+    target: &SyncTargetSnapshot,
+    failure: SyncFailureCode,
+    operation_id: String,
+    message: String,
+) -> SyncResult {
+    SyncResult {
+        outcome: SyncOutcome::Failed,
+        failure: Some(failure),
+        message,
+        operation_id: Some(operation_id.clone()),
+        log_reference: Some(operation_id),
+        affected_paths: target.paths.clone(),
+        counts: SyncPlanCounts::default(),
+        refresh_workspace: true,
+        refresh_depot: true,
+    }
 }
 
 fn validate_revision(revision: &SyncRevisionSpec) -> Result<(), String> {
@@ -1200,6 +1464,123 @@ fn failure_message(failure: SyncFailureCode) -> &'static str {
     }
 }
 
+/// The real p4 diagnostic plus the existing static hint, so the UI no longer
+/// hides the actionable server text behind a fixed sentence.
+fn failure_message_with_detail(failure: SyncFailureCode, detail: &str) -> String {
+    let hint = failure_message(failure);
+    let detail = bounded_detail(detail);
+    if detail.is_empty() {
+        hint.to_owned()
+    } else {
+        format!("{detail} {hint}")
+    }
+}
+
+/// Redacts and caps p4 output while keeping the head of the actionable text.
+fn bounded_detail(text: &str) -> String {
+    let redacted = crate::security::redact_text(text);
+    let trimmed = redacted.trim();
+    let mut chars = trimmed.chars();
+    let head = chars.by_ref().take(MAX_P4_DETAIL_CHARS).collect::<String>();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
+/// Human-readable p4 diagnostics: with `-Mj` the real text is in `data`, while
+/// plain stderr lines are used verbatim.
+fn p4_detail_text(result: &OperationResult) -> String {
+    let mut parts = Vec::new();
+    for event in &result.events {
+        if !matches!(event.kind, EventKind::Stdout | EventKind::Stderr) {
+            continue;
+        }
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        let message = message.trim();
+        if message.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(message) {
+            Ok(value) => {
+                if let Some(data) = string(&value, "data") {
+                    let data = data.trim();
+                    if !data.is_empty() {
+                        parts.push(data.to_owned());
+                    }
+                }
+            }
+            Err(_) => parts.push(message.to_owned()),
+        }
+    }
+    bounded_detail(&parts.join("\n"))
+}
+
+/// Warnings/errors p4 recorded even though the sync process itself exited 0.
+fn sync_warning_detail(result: &OperationResult) -> Option<String> {
+    let mut parts = Vec::new();
+    for event in &result.events {
+        if !matches!(event.kind, EventKind::Stdout | EventKind::Stderr) {
+            continue;
+        }
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        let message = message.trim();
+        if message.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(message) {
+            Ok(value) => {
+                if record_is_failure(&value) {
+                    parts.push(
+                        string(&value, "data")
+                            .map(|data| data.trim().to_owned())
+                            .filter(|data| !data.is_empty())
+                            .unwrap_or_else(|| message.to_owned()),
+                    );
+                }
+            }
+            Err(_) => {
+                if contains_failure_text(message) {
+                    parts.push(message.to_owned());
+                }
+            }
+        }
+    }
+    (!parts.is_empty()).then(|| bounded_detail(&parts.join("\n")))
+}
+
+/// p4 2023.1 `-Mj` diagnostics carry `severity` (2 = failed), while ordinary
+/// added/updated/deleted/up-to-date records have no severity field.
+fn record_is_failure(value: &Value) -> bool {
+    if number(value, "severity").is_some_and(|severity| severity >= 2) {
+        return true;
+    }
+    string(value, "data").is_some_and(|data| contains_failure_text(&data))
+}
+
+fn contains_failure_text(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    [
+        "file(s) not in client view",
+        "not in client view",
+        "no such file",
+        "must refer to client",
+        "not under client",
+        "clobber writable",
+        "must resolve",
+        "permission denied",
+        "no space",
+        "disk full",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+}
+
 fn rejected(
     failure: SyncFailureCode,
     message: impl Into<String>,
@@ -1339,6 +1720,104 @@ mod tests {
             .any(|issue| issue.code == SyncIssueCode::WritableClobber));
     }
 
+    #[test]
+    fn rejects_root_and_recursive_root_sync_targets() {
+        let context = P4Context {
+            cwd: Some(std::env::current_dir().unwrap().to_string_lossy().into()),
+            ..P4Context::default()
+        };
+        for value in ["//", "///", "////", "//...", "/...", " //... ", "////..."] {
+            assert!(
+                normalize_sync_path(&context, value).is_err(),
+                "{value:?} must be rejected as a root/broad sync target"
+            );
+        }
+        assert_eq!(
+            normalize_sync_path(&context, "//depot/main/file.txt").unwrap(),
+            "//depot/main/file.txt"
+        );
+        assert_eq!(
+            normalize_sync_path(&context, "//depot/main/...").unwrap(),
+            "//depot/main/..."
+        );
+    }
+
+    fn operation_result(exit_code: i32, lines: &[&str]) -> OperationResult {
+        OperationResult {
+            operation_id: "op".into(),
+            exit_code,
+            duration_ms: 1,
+            events: lines
+                .iter()
+                .map(|line| OperationEvent {
+                    operation_id: "op".into(),
+                    kind: EventKind::Stdout,
+                    message: Some((*line).into()),
+                    progress: None,
+                    timestamp: String::new(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn treats_zero_exit_warning_records_as_failures() {
+        let warning = r#"{"code0":"...","data":"//depot/main/a.txt - file(s) not in client view.\n","generic":17,"severity":2}"#;
+        let detail = sync_warning_detail(&operation_result(0, &[warning]))
+            .expect("a severity>=2 record must fail the sync");
+        assert!(detail.contains("file(s) not in client view"), "{detail}");
+
+        let normal = operation_result(
+            0,
+            &[
+                r#"{"depotFile":"//depot/main/a.txt","clientFile":"C:/work/a.txt","rev":"2","action":"updated"}"#,
+            ],
+        );
+        assert_eq!(sync_warning_detail(&normal), None);
+
+        let unchanged = operation_result(
+            0,
+            &[r#"{"depotFile":"//depot/main/a.txt","action":"up-to-date"}"#],
+        );
+        assert_eq!(sync_warning_detail(&unchanged), None);
+
+        let text_warning = operation_result(0, &["//depot/main/b.txt - no such file(s)."]);
+        assert!(sync_warning_detail(&text_warning).is_some());
+    }
+
+    #[test]
+    fn extracts_real_p4_error_text_and_keeps_the_static_hint() {
+        let error = r#"{"code0":"...","data":"//depot/main/a.txt - can't clobber writable file\n","generic":17,"severity":2}"#;
+        let result = operation_result(1, &[error]);
+        let detail = p4_detail_text(&result);
+        assert!(detail.contains("can't clobber writable file"), "{detail}");
+        let message = failure_message_with_detail(SyncFailureCode::CommandFailure, &detail);
+        assert!(message.contains("can't clobber writable file"), "{message}");
+        assert!(message.contains("did not complete cleanly"), "{message}");
+
+        let bounded = bounded_detail(&"x".repeat(MAX_P4_DETAIL_CHARS + 50));
+        assert!(bounded.ends_with('…'), "{bounded}");
+        assert_eq!(
+            bounded.trim_end_matches('…').chars().count(),
+            MAX_P4_DETAIL_CHARS
+        );
+    }
+
+    #[test]
+    fn matches_where_mappings_for_depot_and_verbatim_local_paths() {
+        assert!(path_is_within("//depot/main", "//depot/main"));
+        assert!(path_is_within("//depot/main/sub", "//depot/main"));
+        assert!(!path_is_within("//depot/mainline/file", "//depot/main"));
+        assert!(path_is_within(
+            r"\\?\C:\Work\Main\File.txt",
+            r"c:\work\main\file.txt"
+        ));
+        assert!(path_is_within(
+            r"\\?\UNC\server\share\file.txt",
+            r"\\server\share\file.txt"
+        ));
+    }
+
     use crate::persistence::{log_store::LogStore, operation_journal::OperationJournal};
     use std::path::PathBuf;
 
@@ -1419,6 +1898,86 @@ mod tests {
         }
     }
 
+    /// Deterministic fake `p4` with a separate `where` answer: the read-only
+    /// mapping preflight must be observable independently from the real sync.
+    /// A stdout line prefixed with `stderr:` is written to stderr instead, which
+    /// is where a real `p4` prints command errors.
+    fn fake_p4_with_where(
+        directory: &Path,
+        where_result: (i32, Option<&str>),
+        sync_result: (i32, Option<&str>),
+    ) -> PathBuf {
+        let calls = directory.join("calls.txt");
+        let (where_exit, where_stdout) = where_result;
+        let (sync_exit, sync_stdout) = sync_result;
+        #[cfg(windows)]
+        {
+            let executable = directory.join("fake-p4.cmd");
+            let echo = |line: &str| match line.strip_prefix("stderr:") {
+                Some(text) => format!("echo {text} 1>&2\r\n"),
+                None => format!("echo {line}\r\n"),
+            };
+            let sync_echo = sync_stdout.map(echo).unwrap_or_default();
+            let where_echo = where_stdout.map(echo).unwrap_or_default();
+            let script = format!(
+                "@echo off\r\necho %*>>\"{}\"\r\necho %* | findstr /C:\" where \" >nul\r\nif not errorlevel 1 goto p4deckwhere\r\n{sync_echo}exit /b {sync_exit}\r\n:p4deckwhere\r\n{where_echo}exit /b {where_exit}\r\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            executable
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let executable = directory.join("fake-p4");
+            let echo = |line: &str| match line.strip_prefix("stderr:") {
+                Some(text) => format!("printf '%s\\n' '{text}' >&2\n"),
+                None => format!("printf '%s\\n' '{line}'\n"),
+            };
+            let sync_echo = sync_stdout.map(echo).unwrap_or_default();
+            let where_echo = where_stdout.map(echo).unwrap_or_default();
+            let script = format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{}\"\ncase \" $* \" in\n  *\" where \"*) {where_echo}exit {where_exit};;\nesac\n{sync_echo}exit {sync_exit}\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&executable, permissions).unwrap();
+            executable
+        }
+    }
+
+    /// Fake `p4` for the confirm path: it answers the `sync -n` preview, the
+    /// `fstat` inspection, and finally the real `sync` with `sync_stdout`.
+    fn fake_p4_for_confirm(directory: &Path, preview_stdout: &str, sync_stdout: &str) -> PathBuf {
+        let calls = directory.join("calls.txt");
+        #[cfg(windows)]
+        {
+            let executable = directory.join("fake-p4.cmd");
+            let script = format!(
+                "@echo off\r\necho %*>>\"{}\"\r\necho %* | findstr /C:\" fstat \" >nul\r\nif not errorlevel 1 exit /b 0\r\necho %* | findstr /C:\" -n \" >nul\r\nif not errorlevel 1 goto p4deckpreview\r\necho {sync_stdout}\r\nexit /b 0\r\n:p4deckpreview\r\necho {preview_stdout}\r\nexit /b 0\r\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            executable
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let executable = directory.join("fake-p4");
+            let script = format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{}\"\ncase \" $* \" in\n  *\" fstat \"*) exit 0;;\n  *\" -n \"*) printf '%s\\n' '{preview_stdout}'; exit 0;;\nesac\nprintf '%s\\n' '{sync_stdout}'\nexit 0\n",
+                calls.display()
+            );
+            std::fs::write(&executable, script).unwrap();
+            let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(&executable, permissions).unwrap();
+            executable
+        }
+    }
+
     fn recorded_calls(directory: &Path) -> Vec<String> {
         std::fs::read_to_string(directory.join("calls.txt"))
             .unwrap_or_default()
@@ -1441,13 +2000,19 @@ mod tests {
         }
     }
 
+    const WHERE_MAPPED: &str =
+        r#"{"depotFile":"//depot/main","clientFile":"C:/work/main","path":"C:/work/main"}"#;
+
     #[tokio::test]
-    async fn sync_latest_runs_one_plain_head_sync_and_invalidates_status() {
+    async fn sync_latest_runs_where_then_one_plain_head_sync_and_invalidates_status() {
         let harness = latest_harness("success", |directory| {
-            fake_p4(
+            fake_p4_with_where(
                 directory,
-                0,
-                Some(r#"{"depotFile":"//depot/main/a","action":"updated"}"#),
+                (0, Some(WHERE_MAPPED)),
+                (
+                    0,
+                    Some(r#"{"depotFile":"//depot/main/a","action":"updated"}"#),
+                ),
             )
         });
         let mut request = latest_request();
@@ -1470,10 +2035,21 @@ mod tests {
         let calls = recorded_calls(&harness.directory);
         assert_eq!(
             calls.len(),
-            1,
-            "sync_latest must not run a preview/inspection command: {calls:?}"
+            2,
+            "Get Latest must run one where preflight and one sync: {calls:?}"
         );
-        let line = &calls[0];
+        let where_call = &calls[0];
+        assert!(
+            where_call.contains(" where "),
+            "unexpected invocation: {where_call}"
+        );
+        assert!(where_call.contains("//depot/main"), "{where_call}");
+        assert!(
+            !where_call.contains("/..."),
+            "where must use the stripped target: {where_call}"
+        );
+        assert!(!where_call.contains("#head"), "{where_call}");
+        let line = &calls[1];
         assert!(line.contains(" sync "), "unexpected invocation: {line}");
         assert!(line.contains("//depot/main/...#head"), "{line}");
         assert!(!line.contains("@42"), "{line}");
@@ -1493,14 +2069,68 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_latest_reports_nonzero_exit_as_failed_without_faking_success() {
-        let harness = latest_harness("exit-code", |directory| fake_p4(directory, 3, None));
+    async fn sync_latest_blocks_before_sync_when_where_reports_no_mapping() {
+        const NOT_IN_VIEW: &str = r#"{"code0":"...","data":"//depot/main - file(s) not in client view.\n","generic":17,"severity":2}"#;
+        let harness = latest_harness("where-unmapped", |directory| {
+            fake_p4_with_where(
+                directory,
+                (1, Some(NOT_IN_VIEW)),
+                (
+                    0,
+                    Some(r#"{"depotFile":"//depot/main/a","action":"updated"}"#),
+                ),
+            )
+        });
+        let result = harness.service.sync_latest(latest_request(), None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert!(
+            result.message.contains("no mapping for //depot/main"),
+            "{}",
+            result.message
+        );
+        assert!(
+            result.message.contains("file(s) not in client view"),
+            "{}",
+            result.message
+        );
+        assert!(
+            result.message.contains("did not complete cleanly"),
+            "{}",
+            result.message
+        );
+        let calls = recorded_calls(&harness.directory);
+        assert_eq!(
+            calls.len(),
+            1,
+            "p4 sync must not run after a failed where: {calls:?}"
+        );
+        assert!(calls[0].contains(" where "), "{calls:?}");
+        assert!(!calls[0].contains(" sync "), "{calls:?}");
+        assert!(harness.cache.diagnostics().invalidation_reasons.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_latest_surfaces_real_p4_error_text_on_nonzero_exit() {
+        const NO_SUCH_FILE: &str = r#"stderr:{"code0":"...","data":"//depot/main/a.txt - no such file(s).\n","generic":17,"severity":2}"#;
+        let harness = latest_harness("exit-code", |directory| {
+            fake_p4_with_where(directory, (0, Some(WHERE_MAPPED)), (1, Some(NO_SUCH_FILE)))
+        });
         let result = harness.service.sync_latest(latest_request(), None).await;
 
         assert_eq!(result.outcome, SyncOutcome::Failed);
         assert_eq!(result.failure, Some(SyncFailureCode::CommandFailure));
-        assert!(result.message.contains("did not complete cleanly"));
-        assert_eq!(recorded_calls(&harness.directory).len(), 1);
+        assert!(
+            result.message.contains("no such file(s)"),
+            "real p4 text missing: {}",
+            result.message
+        );
+        assert!(
+            result.message.contains("did not complete cleanly"),
+            "{}",
+            result.message
+        );
+        assert_eq!(recorded_calls(&harness.directory).len(), 2);
         assert_eq!(
             harness
                 .cache
@@ -1513,12 +2143,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_latest_reports_runner_error_as_unknown() {
-        let harness = latest_harness("spawn-error", |directory| directory.join("missing-p4.exe"));
+    async fn sync_latest_treats_zero_exit_warning_records_as_failed() {
+        const WARNING: &str = r#"{"code0":"...","data":"//depot/main/a.txt - file(s) not in client view.\n","generic":17,"severity":2}"#;
+        let harness = latest_harness("zero-exit-warning", |directory| {
+            fake_p4_with_where(directory, (0, Some(WHERE_MAPPED)), (0, Some(WARNING)))
+        });
         let result = harness.service.sync_latest(latest_request(), None).await;
 
-        assert_eq!(result.outcome, SyncOutcome::Unknown);
-        assert!(result.failure.is_some());
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert_eq!(result.failure, Some(SyncFailureCode::CommandFailure));
+        assert!(
+            result.message.contains("file(s) not in client view"),
+            "{}",
+            result.message
+        );
+        assert!(
+            result.message.contains("did not complete cleanly"),
+            "{}",
+            result.message
+        );
+        assert_eq!(recorded_calls(&harness.directory).len(), 2);
+        // The transfer did run, so status invalidation still happens.
         assert_eq!(
             harness
                 .cache
@@ -1526,9 +2171,78 @@ mod tests {
                 .invalidation_reasons
                 .get("FileMutation")
                 .copied(),
-            Some(1),
-            "status cache is invalidated even when the runner errors"
+            Some(1)
         );
+    }
+
+    #[tokio::test]
+    async fn confirm_treats_zero_exit_warning_records_as_failed() {
+        const PREVIEW: &str = r#"{"depotFile":"//depot/main/a.txt","clientFile":"C:/work/a.txt","rev":"2","action":"updated"}"#;
+        const WARNING: &str = r#"{"code0":"...","data":"//depot/main/a.txt - file(s) not in client view.\n","generic":17,"severity":2}"#;
+        let harness = latest_harness("confirm-warning", |directory| {
+            fake_p4_for_confirm(directory, PREVIEW, WARNING)
+        });
+        let plan = harness.service.preview(latest_request(), None).await;
+        assert!(plan.ready, "preview was blocked: {plan:?}");
+        let token = plan.token.clone().expect("a ready preview issues a token");
+        let result = harness
+            .service
+            .confirm(
+                SyncConfirmRequest {
+                    token,
+                    target: plan.target.clone(),
+                    acknowledge_force: false,
+                    operation_id: Some("confirm-warning".into()),
+                },
+                None,
+            )
+            .await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert_eq!(result.failure, Some(SyncFailureCode::CommandFailure));
+        assert!(
+            result.message.contains("file(s) not in client view"),
+            "{}",
+            result.message
+        );
+        assert!(
+            result.message.contains("did not complete cleanly"),
+            "{}",
+            result.message
+        );
+        let calls = recorded_calls(&harness.directory);
+        assert_eq!(
+            calls.len(),
+            5,
+            "preview, confirm recheck and one real sync: {calls:?}"
+        );
+        let last = calls.last().unwrap();
+        assert!(last.contains(" sync "), "{calls:?}");
+        assert!(
+            !last.split_whitespace().any(|argument| argument == "-n"),
+            "{calls:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_latest_reports_where_launch_error_as_failed_without_running_sync() {
+        let harness = latest_harness("spawn-error", |directory| directory.join("missing-p4.exe"));
+        let result = harness.service.sync_latest(latest_request(), None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert!(result.failure.is_some());
+        assert!(
+            result.message.contains("p4 where could not run"),
+            "{}",
+            result.message
+        );
+        assert!(
+            result.message.contains("p4 CLI was not found"),
+            "{}",
+            result.message
+        );
+        assert!(recorded_calls(&harness.directory).is_empty());
+        assert!(harness.cache.diagnostics().invalidation_reasons.is_empty());
     }
 
     #[tokio::test]
@@ -1542,6 +2256,22 @@ mod tests {
         assert!(result
             .message
             .contains("Get Latest was rejected before running p4 sync"));
+        assert!(
+            recorded_calls(&harness.directory).is_empty(),
+            "p4 must not run"
+        );
+        assert!(harness.cache.diagnostics().invalidation_reasons.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_latest_rejects_root_targets_before_running_p4() {
+        let harness = latest_harness("root-target", |directory| fake_p4(directory, 0, None));
+        let mut request = latest_request();
+        request.paths = vec!["//...".into(), "/...".into()];
+        let result = harness.service.sync_latest(request, None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Failed);
+        assert!(result.message.contains("root"), "{}", result.message);
         assert!(
             recorded_calls(&harness.directory).is_empty(),
             "p4 must not run"

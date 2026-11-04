@@ -130,6 +130,7 @@ function profilesDocument(
 function props(
   value: RuntimeInfo,
   locale: "zh-CN" | "en-US" = "zh-CN",
+  onUi: ComponentProps<typeof SettingsPage>["onUi"] = vi.fn(),
 ): ComponentProps<typeof SettingsPage> {
   return {
     runtime: value,
@@ -140,16 +141,17 @@ function props(
     locale,
     onLocale: vi.fn(),
     ui: defaultUi,
-    onUi: vi.fn(),
+    onUi,
   };
 }
 
 async function render(
   value: RuntimeInfo = runtime(),
   locale: "zh-CN" | "en-US" = "zh-CN",
+  onUi: ComponentProps<typeof SettingsPage>["onUi"] = vi.fn(),
 ) {
   await act(async () => {
-    root.render(<SettingsPage {...props(value, locale)} />);
+    root.render(<SettingsPage {...props(value, locale, onUi)} />);
     await Promise.resolve();
   });
 }
@@ -1846,4 +1848,33 @@ it("collapses and persists settings modules, restoring them and falling back whe
       )!
       .getAttribute("aria-expanded"),
   ).toBe("true");
+});
+
+it("persists and clamps the Get Latest confirmation threshold", async () => {
+  const onUi = vi.fn();
+  await render(runtime(), "zh-CN", onUi);
+  const field = input("获取最新确认阈值");
+  expect(field.type).toBe("number");
+  expect(field.value).toBe("100");
+  expect(field.min).toBe("0");
+  expect(field.max).toBe("10000");
+  await change(field, "5");
+  expect(onUi).toHaveBeenLastCalledWith(
+    expect.objectContaining({ getLatestConfirmThreshold: 5 }),
+  );
+  onUi.mockClear();
+  await change(field, "20000");
+  expect(onUi).toHaveBeenLastCalledWith(
+    expect.objectContaining({ getLatestConfirmThreshold: 10000 }),
+  );
+  expect(field.value).toBe("20000");
+  onUi.mockClear();
+  await act(async () => {
+    field.focus();
+    field.blur();
+  });
+  expect(onUi).toHaveBeenLastCalledWith(
+    expect.objectContaining({ getLatestConfirmThreshold: 10000 }),
+  );
+  expect(field.value).toBe("10000");
 });

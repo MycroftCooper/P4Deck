@@ -42,7 +42,7 @@ pnpm dev:desktop:qa # 隔离 QA 桌面开发，端口 1423；先起本地 p4d fi
 
 Windows 使用 `.\scripts\setup-windows.ps1 -Check` 和 `.\scripts\setup-windows.ps1`。当前机器只做前端 Mock 开发时，可用 `.\scripts\doctor.ps1 -FrontendOnly`。初始化脚本会跳过兼容的已有工具，遇到不兼容版本时停止，不会擅自覆盖。详见 [开发环境与新设备部署](ForAIDoc/Coder/开发环境.md)。
 
-从 macOS 换到全新 Windows 设备时，先按 [Windows 迁移与环境恢复手册](ForAIDoc/Coder/Windows迁移与环境恢复.md) 保存当前源码基线。当前仓库没有首个 Git Commit 和 Remote，不能直接假设新设备可通过 `git clone` 恢复现有成果。
+从 macOS 换到全新 Windows 设备时，先按 [Windows 迁移与环境恢复手册](ForAIDoc/Coder/Windows迁移与环境恢复.md) 保存当前源码基线。仓库已托管在 [MycroftCooper/P4Deck](https://github.com/MycroftCooper/P4Deck)，但迁移前仍应保留本机基线，不能只依赖远端恢复未提交成果。
 
 ## 日常调试（热更新）
 
@@ -119,7 +119,7 @@ pnpm check             # TypeScript + Cargo，需要完整桌面环境
 - 发布：先跑 `pnpm ci:quick` 拿到绿色门禁，再执行
   `pnpm wf:release --version 0.1.7 --note "发布说明"`（默认 dry-run，展示 merge/tag 计划），确认后加 `--apply`。
   脚本会校验：当前在 `dev`、工作树干净、`package.json` 版本与 `--version` 一致、最近一次 `ci:quick` 通过且不早于最后一次提交。
-- 仓库当前没有 remote；发布后自行 `git push origin dev master --follow-tags` 到你配置的远端。
+- 仓库远端为 `origin`（<https://github.com/MycroftCooper/P4Deck>）；发布后执行 `git push origin dev master --follow-tags`。安装包与自动更新清单发布到同一仓库的 Releases。
 - 紧急修复：从 `master` 拉 `hotfix/*`，修完先合回 `dev`，再走正常发布；不要在 master 上直改。
 
 ## 文档

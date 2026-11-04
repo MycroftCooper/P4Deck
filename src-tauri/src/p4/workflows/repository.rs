@@ -311,12 +311,30 @@ impl WorkflowRepository {
     ) -> Result<UnshelveInspection, String> {
         command::ensure_context(context)?;
         let paths = command::validate_exact_paths(&request.depot_paths)?;
-        let source = self
+        // Fast path: the source shelf belongs to the current user/client and is
+        // already part of the pending scan. Otherwise fall back to a direct
+        // read-only `describe -s -S` so another user's pending changelist can be
+        // unshelved from (the shelf is server-visible even though the opened
+        // files belong to its owner's client).
+        let source = match self
             .changelists
             .query_pending(context.clone(), app)
             .await?
             .into_iter()
-            .find(|change| change.id == request.source_change_id);
+            .find(|change| change.id == request.source_change_id)
+        {
+            Some(change) => Some(change),
+            None => {
+                self.changelists
+                    .shelved_change(
+                        context,
+                        request.source_change_id,
+                        &format!("{prefix}-source-shelf"),
+                        app,
+                    )
+                    .await?
+            }
+        };
         let target_context = self
             .workspace_context(context, &request.target_workspace, prefix, app)
             .await?;
@@ -441,6 +459,7 @@ impl WorkflowRepository {
         &self,
         context: &P4Context,
         paths: &[String],
+        force: bool,
         prefix: &str,
         app: Option<&AppHandle>,
     ) -> Result<ResolveInspection, String> {
@@ -463,7 +482,7 @@ impl WorkflowRepository {
         let preview_result = self
             .raw_named(
                 context,
-                command::resolve_preview(&paths)?,
+                command::resolve_preview(&paths, force)?,
                 format!("{prefix}-preview"),
                 app,
             )
@@ -530,13 +549,14 @@ impl WorkflowRepository {
         &self,
         context: &P4Context,
         selection: &ResolveSelection,
+        force: bool,
         operation_id: String,
         guard: &MutationGuard,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         self.guarded(
             context,
-            command::resolve(&selection.depot_path, selection.strategy)?,
+            command::resolve(&selection.depot_path, selection.strategy, force)?,
             operation_id,
             1,
             guard,
@@ -567,11 +587,12 @@ impl WorkflowRepository {
         &self,
         context: &P4Context,
         depot_path: &str,
+        force: bool,
         operation_id: String,
         app: Option<&AppHandle>,
     ) -> Result<Option<parser::ResolveDiffCounts>, String> {
         command::ensure_context(context)?;
-        let invocation = command::resolve_interactive(depot_path)?;
+        let invocation = command::resolve_interactive(depot_path, force)?;
         let result = self
             .runner
             .run_with_progress(
@@ -864,6 +885,7 @@ mod shelf_scope_tests {
             shelved_size: None,
             shelved_type: None,
             unresolved: 0,
+            resolved: 0,
             other_open: 0,
             other_lock: 0,
             our_lock: 0,
