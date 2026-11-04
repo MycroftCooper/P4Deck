@@ -534,6 +534,106 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.the.backend.returned.a.non.progressing":
+    "The backend returned a non-progressing cursor; current partial results were preserved.",
+  "search.search.submitted.and.pending.changelists.workspace":
+    "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
+  "search.mock.mode.is.active.results.validate":
+    "Mock mode is active. Results validate interaction only and do not represent server data.",
+  "search.file.path.changelist.user.job.stream":
+    "File, path, changelist, user, job, stream, or shelf…",
+  "search.search.starts.after.a.300ms.pause":
+    "Search starts after a 300ms pause; Enter searches immediately. Maximum 128 Unicode characters.",
+  "search.shelf.deep.search.is.bounded.if":
+    "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
+  "search.seven.result.categories.are.available.use":
+    "Seven result categories are available; use the filters above to narrow the search.",
+  "pending.preflight.does.not.match.the.fixed":
+    "Preflight does not match the fixed target.",
+  "pending.connection.identity.changed.nothing.was.shelved":
+    "Connection identity changed; nothing was shelved.",
+  "pending.the.scope.is.exactly.the.files":
+    "The scope is exactly the files below, never implicitly the entire CL.",
+  "pending.create.a.numbered.cl.before.shelving":
+    "Create a numbered CL before shelving files.",
+  "pending.deleted.shelf.revisions.can.no.longer":
+    "Deleted shelf revisions can no longer be unshelved. Workspace files and the CL are not deleted.",
+  "pending.replacement.overwrites.selected.shelf.revisions.unselected":
+    "Replacement overwrites selected shelf revisions; unselected files remain out of scope.",
+  "pending.i.reviewed.the.scope.and.explicitly":
+    "I reviewed the scope and explicitly confirm this destructive operation.",
+  "pending.operation.in.progress.closing.is.disabled":
+    "Operation in progress; closing is disabled.",
+  "pending.partial.only.the.succeeded.rows.below":
+    "Partial: only the succeeded rows below have per-file facts; the rest stay unknown.",
+  "pending.changelist.creation.outcome.is.unconfirmed.refresh":
+    "Changelist creation outcome is unconfirmed; refresh Pending and retry manually (no automatic replay).",
+  "pending.preflight.does.not.match.the.source":
+    "Preflight does not match the source or target.",
+  "pending.target.changelist.does.not.match.the":
+    "Target changelist does not match the created changelist; nothing was unshelved.",
+  "pending.source.connection.identity.changed.nothing.was":
+    "Source connection identity changed; nothing was unshelved.",
+  "pending.apply.the.fixed.source.shelf.subset":
+    "Apply the fixed source shelf subset to a target workspace and changelist. The source shelf remains and local content is never force-overwritten.",
+  "pending.browser.mock.simulates.the.result.and":
+    "Browser Mock simulates the result and does not access a real P4 server.",
+  "pending.enter.default.0.or.a.valid":
+    "Enter Default (0) or a valid numbered changelist.",
+  "pending.preflight.verifies.mapping.local.overwrite.risk":
+    "Preflight verifies mapping, local overwrite risk, locks, permissions, opened state and Resolve risk. Execution does not enable force overwrite.",
+  "pending.i.reviewed.the.target.mappings.and":
+    "I reviewed the target, mappings and risks; run normal unshelve without force overwrite.",
+  "pending.unshelve.in.progress.closing.is.disabled":
+    "Unshelve in progress; closing is disabled.",
+  "pending.command.completed.command.level.lifecycle.only":
+    "Command completed (command-level lifecycle only). Per-file unshelve state, target CL and Resolve state have no authoritative fact here, so this is not a per-file success; rely on the refreshed target workspace, Pending and Resolve state.",
+  "pending.outcome.uncertain.the.command.may.have":
+    "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the target workspace/Pending/Resolve before confirming again.",
+  "pending.view.refresh.failed.the.display.may":
+    "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
+  "browse.the.preflight.expired.inspect.the.current":
+    "The preflight expired; inspect the current workspace again.",
+  "browse.connection.identity.changed.no.stream.switch":
+    "Connection identity changed; no stream switch was dispatched.",
+  "browse.inspect.the.client.stream.permissions.and":
+    "Inspect the client, stream, permissions, and local state before the official client view switch. P4Deck never forces the switch or cleans files automatically.",
+  "browse.browser.mock.preflight.and.execution.are":
+    "Browser Mock: preflight and execution are simulated; no server or filesystem is accessed.",
+  "browse.update.only.the.client.stream.leave":
+    "Update only the client Stream; leave workspace files untouched (default)",
+  "browse.run.a.normal.sync.to.head":
+    "Run a normal sync to #head after switching; local risks block execution",
+  "browse.sync.may.add.update.or.remove":
+    "Sync may add, update, or remove controlled files. It never uses force, clean, revert, or automatic rollback.",
+  "browse.view.only.switching.does.not.touch":
+    "View-only switching does not touch files. Sync separately before treating content as matching the target stream.",
+  "browse.opened.unresolved.local.changes":
+    "Opened / unresolved / local changes",
+  "browse.i.reviewed.every.warning.and.confirm":
+    "I reviewed every warning and confirm the selected file-handling mode.",
+  "browse.revalidating.switching.the.client.stream.syncing":
+    "Revalidating, switching the client Stream, syncing, and verifying. Cancellation does not roll back completed steps.",
+  "browse.revalidating.switching.the.client.stream.and":
+    "Revalidating, switching the client Stream, and verifying the server result.",
+  "browse.the.switch.may.have.partially.applied":
+    "The switch may have partially applied (no rollback). The durable receipt was queried once with the same operation id and views were refreshed; verify the client stream/workspace identity before any retry with a new id.",
+  "browse.refreshed.workspace.stream.views.remain.authoritative":
+    "Refreshed workspace/Stream views remain authoritative.",
+  "settings.configuration.backup.is.available.in.the":
+    "Configuration backup is available in the P4Deck desktop app.",
+  "settings.outcome.uncertain.the.backup.may.exist":
+    "Outcome uncertain: the backup may exist but the readback did not confirm it. The durable receipt was queried with the same operation id and the list was refreshed; inspect the backup file before any retry with a new id.",
+  "settings.this.webview.could.not.write.layout":
+    "This WebView could not write layout state; keep the rollback bundle and verify after restart.",
+  "settings.restore.staging.is.unconfirmed.the.rollback":
+    "Restore staging is unconfirmed: the rollback bundle/pending manifest readback failed. The durable receipt was queried with the same operation id; inspect pending/rollback state before any retry with a new id.",
+  "settings.back.up.connection.profiles.window.placement":
+    "Back up connection profiles, window placement, and layout. Tickets, trust, passwords, logs, operation journal, terminal history, and rebuildable caches are excluded.",
+  "settings.staging.the.restore.not.completed.it":
+    "Staging the restore (not completed; it applies on the next start)…",
+  "settings.restore.overwrites.the.current.configuration.and":
+    "Restore overwrites the current configuration and applies on the next start; a rollback bundle is created first. Continue?",
   "companySubmit.select.one.numbered.cl.default.multiple":
     "Select one numbered CL; Default, multiple CLs and file submission are unsupported.",
   "companySubmit.a.local.drive.absolute.exe.path":

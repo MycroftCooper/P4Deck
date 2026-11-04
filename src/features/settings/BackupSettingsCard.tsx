@@ -91,12 +91,7 @@ export function BackupSettingsCard({
           <Archive size={18} />
           {t("settings.local.configuration.backup")}
         </h2>
-        <p>
-          {tr(
-            "配置备份只在 P4Deck 桌面版中可用。",
-            "Configuration backup is available in the P4Deck desktop app.",
-          )}
-        </p>
+        <p>{t("settings.configuration.backup.is.available.in.the")}</p>
       </section>
     );
   }
@@ -137,10 +132,7 @@ export function BackupSettingsCard({
         `Created ${legacy.backup.fileName}${omitted}`,
       );
     }
-    return tr(
-      "结果不确定：备份可能已写入但回读未确认。已用同一操作号查询持久回执并刷新列表；请先核对备份文件，不要换新操作号重试。",
-      "Outcome uncertain: the backup may exist but the readback did not confirm it. The durable receipt was queried with the same operation id and the list was refreshed; inspect the backup file before any retry with a new id.",
-    );
+    return t("settings.outcome.uncertain.the.backup.may.exist");
   }
 
   const createBackup = async () => {
@@ -221,19 +213,9 @@ export function BackupSettingsCard({
             : result.message,
         );
         if (!layoutApplied)
-          setError(
-            tr(
-              "当前 WebView 无法写入布局；请保留回滚包并在重启后核对。",
-              "This WebView could not write layout state; keep the rollback bundle and verify after restart.",
-            ),
-          );
+          setError(t("settings.this.webview.could.not.write.layout"));
       } else {
-        setError(
-          tr(
-            "恢复暂存结果不确定：回滚包/pending 清单未得到回读确认。已用同一操作号查询持久回执；请先核对 pending/回滚状态，不要换新操作号重试。",
-            "Restore staging is unconfirmed: the rollback bundle/pending manifest readback failed. The durable receipt was queried with the same operation id; inspect pending/rollback state before any retry with a new id.",
-          ),
-        );
+        setError(t("settings.restore.staging.is.unconfirmed.the.rollback"));
       }
       setOverview(await backend.listConfigBackups());
     } catch (cause) {
@@ -263,12 +245,7 @@ export function BackupSettingsCard({
         <Archive size={18} />
         {t("settings.local.configuration.backup")}
       </h2>
-      <p>
-        {tr(
-          "备份连接 Profile、窗口位置和布局。ticket、trust、密码、日志、操作 Journal、终端历史和可重建缓存不会进入备份。",
-          "Back up connection profiles, window placement, and layout. Tickets, trust, passwords, logs, operation journal, terminal history, and rebuildable caches are excluded.",
-        )}
-      </p>
+      <p>{t("settings.back.up.connection.profiles.window.placement")}</p>
       <div className="settings-actions backup-actions">
         <button
           onClick={() => void createBackup()}
@@ -335,10 +312,7 @@ export function BackupSettingsCard({
       )}
       {busy === "restore" && (
         <div className="settings-notice" role="status">
-          {tr(
-            "正在暂存恢复（尚未完成，重启后才会应用）…",
-            "Staging the restore (not completed; it applies on the next start)…",
-          )}
+          {t("settings.staging.the.restore.not.completed.it")}
         </div>
       )}
       {message && (
@@ -385,9 +359,8 @@ export function BackupSettingsCard({
               </div>
               {confirmRestore === backup.fileName ? (
                 <span className="backup-restore-confirm">
-                  {tr(
-                    "恢复会覆盖当前配置并在下次启动应用；将先自动生成回滚包。确认继续？",
-                    "Restore overwrites the current configuration and applies on the next start; a rollback bundle is created first. Continue?",
+                  {t(
+                    "settings.restore.overwrites.the.current.configuration.and",
                   )}{" "}
                   <button
                     className="danger"

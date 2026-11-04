@@ -496,6 +496,102 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.the.backend.returned.a.non.progressing":
+    "后端返回了不可继续的游标；已保留当前部分结果。",
+  "search.search.submitted.and.pending.changelists.workspace":
+    "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
+  "search.mock.mode.is.active.results.validate":
+    "当前为 Mock 模式；结果用于交互验证，不代表服务器数据。",
+  "search.file.path.changelist.user.job.stream":
+    "文件、路径、CL、用户、Job、Stream 或 Shelf…",
+  "search.search.starts.after.a.300ms.pause":
+    "输入停止 300ms 后自动搜索；Enter 立即搜索。最多 128 个 Unicode 字符。",
+  "search.shelf.deep.search.is.bounded.if":
+    "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
+  "search.seven.result.categories.are.available.use":
+    "支持七类结果；可使用上方筛选缩小范围。",
+  "pending.preflight.does.not.match.the.fixed": "预检结果与固定目标不匹配。",
+  "pending.connection.identity.changed.nothing.was.shelved":
+    "连接身份与预检目标不一致，未执行任何搁置操作。",
+  "pending.the.scope.is.exactly.the.files":
+    "范围固定为下方文件，不会自动扩大为整个 CL。",
+  "pending.create.a.numbered.cl.before.shelving":
+    "需要先创建编号 CL，再选择文件搁置。",
+  "pending.deleted.shelf.revisions.can.no.longer":
+    "删除后这些服务器搁置版本将不可再用于 Unshelve。不会同时删除工作区文件或整个 CL。",
+  "pending.replacement.overwrites.selected.shelf.revisions.unselected":
+    "替换会覆盖所选文件已有的搁置版本；未选文件不在本次范围内。",
+  "pending.i.reviewed.the.scope.and.explicitly":
+    "我已核对文件范围并明确确认此危险操作。",
+  "pending.operation.in.progress.closing.is.disabled":
+    "正在执行；关闭保护已启用。",
+  "pending.partial.only.the.succeeded.rows.below":
+    "部分完成：仅下列 succeeded 行有逐文件事实，其余仍未知。",
+  "pending.changelist.creation.outcome.is.unconfirmed.refresh":
+    "创建 CL 的结果未确认；请刷新 Pending 后手动重试（不会自动重放）",
+  "pending.preflight.does.not.match.the.source": "预检结果与来源或目标不匹配。",
+  "pending.target.changelist.does.not.match.the":
+    "目标 CL 与新建的 CL 不一致，未执行任何 Unshelve。",
+  "pending.source.connection.identity.changed.nothing.was":
+    "源连接身份与预检目标不一致，未执行任何 Unshelve。",
+  "pending.apply.the.fixed.source.shelf.subset":
+    "将固定的来源 Shelf 子集应用到目标工作区与 CL；来源 Shelf 保留，不会强制覆盖本地内容。",
+  "pending.browser.mock.simulates.the.result.and":
+    "浏览器 Mock 会模拟结果，不访问真实 P4 Server。",
+  "pending.enter.default.0.or.a.valid": "请输入 Default（0）或有效的编号 CL。",
+  "pending.preflight.verifies.mapping.local.overwrite.risk":
+    "预检会验证映射、本地覆盖、锁、权限、已有打开状态和 Resolve 风险；执行不会启用强制覆盖。",
+  "pending.i.reviewed.the.target.mappings.and":
+    "我已核对目标、映射和风险；仅按普通 Unshelve 执行，不强制覆盖。",
+  "pending.unshelve.in.progress.closing.is.disabled":
+    "正在 Unshelve；关闭保护已启用。",
+  "pending.command.completed.command.level.lifecycle.only":
+    "命令已完成（仅命令级生命周期）。Unshelve 的逐文件/目标 CL/Resolve 状态没有权威事实，不能据此认定完成；请以刷新后的目标工作区、Pending 与 Resolve 状态为准。",
+  "pending.outcome.uncertain.the.command.may.have":
+    "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对目标工作区/Pending/Resolve，不要直接重复确认。",
+  "pending.view.refresh.failed.the.display.may":
+    "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
+  "browse.the.preflight.expired.inspect.the.current":
+    "预检已过期，请重新检查当前工作区。",
+  "browse.connection.identity.changed.no.stream.switch":
+    "连接身份与预检目标不一致，未执行 Stream 切换。",
+  "browse.inspect.the.client.stream.permissions.and":
+    "检查 Client、Stream、权限和本地文件状态后，使用官方 client view switch；绝不强制切换或自动清理文件。",
+  "browse.browser.mock.preflight.and.execution.are":
+    "Browser Mock：以下预检和执行均为模拟，不访问服务器或文件系统。",
+  "browse.update.only.the.client.stream.leave":
+    "仅更新 Client 的 Stream；不改动工作区文件（默认）",
+  "browse.run.a.normal.sync.to.head":
+    "切换后执行普通 sync 至 #head；本地风险会阻断",
+  "browse.sync.may.add.update.or.remove":
+    "同步可能新增、更新或删除受控文件；不会使用 force、clean、revert 或自动回滚。",
+  "browse.view.only.switching.does.not.touch":
+    "仅切换视图不会触碰文件；之后必须单独同步才能让内容匹配目标 Stream。",
+  "browse.opened.unresolved.local.changes": "打开 / 未解决 / 本地变化",
+  "browse.i.reviewed.every.warning.and.confirm":
+    "我已核对全部警告，并确认所选文件处理方式。",
+  "browse.revalidating.switching.the.client.stream.syncing":
+    "正在重新验证、切换 Client Stream、同步并验证。取消不会回滚已完成步骤。",
+  "browse.revalidating.switching.the.client.stream.and":
+    "正在重新验证、切换 Client Stream 并确认服务器结果。",
+  "browse.the.switch.may.have.partially.applied":
+    "切换可能已部分应用（无回滚）；已用同一操作号查询持久回执并刷新一次。请先核对 Client Stream/工作区身份，不要用新操作号重试。",
+  "browse.refreshed.workspace.stream.views.remain.authoritative":
+    "仍以刷新后的工作区/Stream 视图为准。",
+  "settings.configuration.backup.is.available.in.the":
+    "配置备份只在 P4Deck 桌面版中可用。",
+  "settings.outcome.uncertain.the.backup.may.exist":
+    "结果不确定：备份可能已写入但回读未确认。已用同一操作号查询持久回执并刷新列表；请先核对备份文件，不要换新操作号重试。",
+  "settings.this.webview.could.not.write.layout":
+    "当前 WebView 无法写入布局；请保留回滚包并在重启后核对。",
+  "settings.restore.staging.is.unconfirmed.the.rollback":
+    "恢复暂存结果不确定：回滚包/pending 清单未得到回读确认。已用同一操作号查询持久回执；请先核对 pending/回滚状态，不要换新操作号重试。",
+  "settings.back.up.connection.profiles.window.placement":
+    "备份连接 Profile、窗口位置和布局。ticket、trust、密码、日志、操作 Journal、终端历史和可重建缓存不会进入备份。",
+  "settings.staging.the.restore.not.completed.it":
+    "正在暂存恢复（尚未完成，重启后才会应用）…",
+  "settings.restore.overwrites.the.current.configuration.and":
+    "恢复会覆盖当前配置并在下次启动应用；将先自动生成回滚包。确认继续？",
   "companySubmit.select.one.numbered.cl.default.multiple":
     "仅支持单个编号 CL，不支持 Default、多选或文件提交。",
   "companySubmit.a.local.drive.absolute.exe.path":

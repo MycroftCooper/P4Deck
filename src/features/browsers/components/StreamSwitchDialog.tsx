@@ -53,7 +53,6 @@ export function StreamSwitchDialog({
     connection: ConnectionSnapshot;
   }): Promise<StreamSwitchActionLookup>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [mode, setMode] = useState<StreamSwitchMode>("viewOnly");
   const [phase, setPhase] = useState<Phase>("preflight");
   const [plan, setPlan] = useState<StreamSwitchPreflight>();
@@ -88,12 +87,7 @@ export function StreamSwitchDialog({
       () => {
         setPlan(undefined);
         setAcknowledge(false);
-        setError(
-          tr(
-            "预检已过期，请重新检查当前工作区。",
-            "The preflight expired; inspect the current workspace again.",
-          ),
-        );
+        setError(t("browse.the.preflight.expired.inspect.the.current"));
         setPhase("preflight");
       },
       Math.min(2147483647, Math.max(0, plan.expiresAt - Date.now())),
@@ -176,10 +170,7 @@ export function StreamSwitchDialog({
       if (!mounted.current || seq !== sequence.current) return;
       if (!streamConnectionMatchesTarget(plan.targetSnapshot, dispatching))
         throw new Error(
-          tr(
-            "连接身份与预检目标不一致，未执行 Stream 切换。",
-            "Connection identity changed; no stream switch was dispatched.",
-          ),
+          t("browse.connection.identity.changed.no.stream.switch"),
         );
       let next = await backend.confirmStreamSwitch({
         token: plan.token,
@@ -261,10 +252,7 @@ export function StreamSwitchDialog({
   return (
     <Dialog
       title={t("browse.safe.stream.switch")}
-      description={tr(
-        "检查 Client、Stream、权限和本地文件状态后，使用官方 client view switch；绝不强制切换或自动清理文件。",
-        "Inspect the client, stream, permissions, and local state before the official client view switch. P4Deck never forces the switch or cleans files automatically.",
-      )}
+      description={t("browse.inspect.the.client.stream.permissions.and")}
       source={source}
       zh={zh}
       danger={mode === "sync"}
@@ -341,10 +329,7 @@ export function StreamSwitchDialog({
     >
       {runtime.mode === "mock" && (
         <DialogNotice>
-          {tr(
-            "Browser Mock：以下预检和执行均为模拟，不访问服务器或文件系统。",
-            "Browser Mock: preflight and execution are simulated; no server or filesystem is accessed.",
-          )}
+          {t("browse.browser.mock.preflight.and.execution.are")}
         </DialogNotice>
       )}
       <div className="workflow-context">
@@ -365,10 +350,7 @@ export function StreamSwitchDialog({
                 checked={mode === "viewOnly"}
                 onChange={() => setMode("viewOnly")}
               />
-              {tr(
-                "仅更新 Client 的 Stream；不改动工作区文件（默认）",
-                "Update only the client Stream; leave workspace files untouched (default)",
-              )}
+              {t("browse.update.only.the.client.stream.leave")}
             </label>
             <label className="workflow-checkbox">
               <input
@@ -377,22 +359,13 @@ export function StreamSwitchDialog({
                 checked={mode === "sync"}
                 onChange={() => setMode("sync")}
               />
-              {tr(
-                "切换后执行普通 sync 至 #head；本地风险会阻断",
-                "Run a normal sync to #head after switching; local risks block execution",
-              )}
+              {t("browse.run.a.normal.sync.to.head")}
             </label>
           </fieldset>
           <DialogNotice error={mode === "sync"}>
             {mode === "sync"
-              ? tr(
-                  "同步可能新增、更新或删除受控文件；不会使用 force、clean、revert 或自动回滚。",
-                  "Sync may add, update, or remove controlled files. It never uses force, clean, revert, or automatic rollback.",
-                )
-              : tr(
-                  "仅切换视图不会触碰文件；之后必须单独同步才能让内容匹配目标 Stream。",
-                  "View-only switching does not touch files. Sync separately before treating content as matching the target stream.",
-                )}
+              ? t("browse.sync.may.add.update.or.remove")
+              : t("browse.view.only.switching.does.not.touch")}
           </DialogNotice>
           <PreflightStatus state={preflightState} zh={zh} />
         </>
@@ -416,12 +389,7 @@ export function StreamSwitchDialog({
               </dd>
             </div>
             <div>
-              <dt>
-                {tr(
-                  "打开 / 未解决 / 本地变化",
-                  "Opened / unresolved / local changes",
-                )}
-              </dt>
+              <dt>{t("browse.opened.unresolved.local.changes")}</dt>
               <dd>
                 {plan.risks.openedFiles} / {plan.risks.unresolvedFiles} /{" "}
                 {plan.risks.reconcileFiles}
@@ -450,10 +418,7 @@ export function StreamSwitchDialog({
                 checked={acknowledge}
                 onChange={(event) => setAcknowledge(event.target.checked)}
               />
-              {tr(
-                "我已核对全部警告，并确认所选文件处理方式。",
-                "I reviewed every warning and confirm the selected file-handling mode.",
-              )}
+              {t("browse.i.reviewed.every.warning.and.confirm")}
             </label>
           )}
         </>
@@ -462,14 +427,8 @@ export function StreamSwitchDialog({
         <section aria-live="polite" aria-busy="true">
           <DialogNotice>
             {mode === "sync"
-              ? tr(
-                  "正在重新验证、切换 Client Stream、同步并验证。取消不会回滚已完成步骤。",
-                  "Revalidating, switching the client Stream, syncing, and verifying. Cancellation does not roll back completed steps.",
-                )
-              : tr(
-                  "正在重新验证、切换 Client Stream 并确认服务器结果。",
-                  "Revalidating, switching the client Stream, and verifying the server result.",
-                )}
+              ? t("browse.revalidating.switching.the.client.stream.syncing")
+              : t("browse.revalidating.switching.the.client.stream.and")}
           </DialogNotice>
         </section>
       )}
@@ -485,10 +444,7 @@ export function StreamSwitchDialog({
           </DialogNotice>
           {result?.outcome === "unknown" && (
             <DialogNotice error>
-              {tr(
-                "切换可能已部分应用（无回滚）；已用同一操作号查询持久回执并刷新一次。请先核对 Client Stream/工作区身份，不要用新操作号重试。",
-                "The switch may have partially applied (no rollback). The durable receipt was queried once with the same operation id and views were refreshed; verify the client stream/workspace identity before any retry with a new id.",
-              )}
+              {t("browse.the.switch.may.have.partially.applied")}
             </DialogNotice>
           )}
           {verified && (
@@ -497,9 +453,8 @@ export function StreamSwitchDialog({
               {verified.stream} · {verified.client} · generation{" "}
               {verified.contextGeneration}
               {" · "}
-              {tr(
-                "仍以刷新后的工作区/Stream 视图为准。",
-                "Refreshed workspace/Stream views remain authoritative.",
+              {t(
+                "browse.refreshed.workspace.stream.views.remain.authoritative",
               )}
             </DialogNotice>
           )}

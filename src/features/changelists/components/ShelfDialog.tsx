@@ -128,7 +128,6 @@ function ShelfWorkflowDialog({
     connection: ConnectionSnapshot;
   }): Promise<WorkflowActionLookup>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     ...request,
     paths: [...new Set(request.paths)].sort(),
@@ -222,12 +221,7 @@ function ShelfWorkflowDialog({
         (value.ready && !value.token) ||
         !Number.isFinite(value.expiresAt)
       )
-        throw new Error(
-          tr(
-            "预检结果与固定目标不匹配。",
-            "Preflight does not match the fixed target.",
-          ),
-        );
+        throw new Error(t("pending.preflight.does.not.match.the.fixed"));
       setPreflight(value);
       setPhase(
         !value.ready || value.blockers.length
@@ -276,10 +270,7 @@ function ShelfWorkflowDialog({
         !workflowConnectionMatchesTarget(preflight.target, dispatching, "shelf")
       )
         throw new Error(
-          tr(
-            "连接身份与预检目标不一致，未执行任何搁置操作。",
-            "Connection identity changed; nothing was shelved.",
-          ),
+          t("pending.connection.identity.changed.nothing.was.shelved"),
         );
       // A newer explicit shelf action retires older visual shelf-delete claims.
       invalidateShelfObservations(connectionKey, request.paths);
@@ -363,10 +354,7 @@ function ShelfWorkflowDialog({
       title={
         deleting ? t("pending.delete.shelved.files") : t("pending.shelve.files")
       }
-      description={tr(
-        "范围固定为下方文件，不会自动扩大为整个 CL。",
-        "The scope is exactly the files below, never implicitly the entire CL.",
-      )}
+      description={t("pending.the.scope.is.exactly.the.files")}
       source={snapshot.source}
       zh={zh}
       danger={risky}
@@ -417,10 +405,7 @@ function ShelfWorkflowDialog({
       </div>
       {demo && (
         <DialogNotice>
-          {tr(
-            "浏览器 Mock 会模拟结果，不访问真实 P4 Server。",
-            "Browser Mock simulates the result and does not access a real P4 server.",
-          )}
+          {t("pending.browser.mock.simulates.the.result.and")}
         </DialogNotice>
       )}
       <TargetList
@@ -429,10 +414,7 @@ function ShelfWorkflowDialog({
       />
       {snapshot.changeId <= 0 && (
         <DialogNotice error>
-          {tr(
-            "需要先创建编号 CL，再选择文件搁置。",
-            "Create a numbered CL before shelving files.",
-          )}
+          {t("pending.create.a.numbered.cl.before.shelving")}
         </DialogNotice>
       )}
       {!deleting && snapshot.hasShelf && (
@@ -459,13 +441,9 @@ function ShelfWorkflowDialog({
         <>
           <DialogNotice error>
             {deleting
-              ? tr(
-                  "删除后这些服务器搁置版本将不可再用于 Unshelve。不会同时删除工作区文件或整个 CL。",
-                  "Deleted shelf revisions can no longer be unshelved. Workspace files and the CL are not deleted.",
-                )
-              : tr(
-                  "替换会覆盖所选文件已有的搁置版本；未选文件不在本次范围内。",
-                  "Replacement overwrites selected shelf revisions; unselected files remain out of scope.",
+              ? t("pending.deleted.shelf.revisions.can.no.longer")
+              : t(
+                  "pending.replacement.overwrites.selected.shelf.revisions.unselected",
                 )}
           </DialogNotice>
           <label className="workflow-checkbox">
@@ -474,10 +452,7 @@ function ShelfWorkflowDialog({
               checked={ack}
               onChange={(event) => setAck(event.target.checked)}
             />
-            {tr(
-              "我已核对文件范围并明确确认此危险操作。",
-              "I reviewed the scope and explicitly confirm this destructive operation.",
-            )}
+            {t("pending.i.reviewed.the.scope.and.explicitly")}
           </label>
         </>
       )}
@@ -491,10 +466,7 @@ function ShelfWorkflowDialog({
       {!result && <PreflightStatus state={status} zh={zh} />}
       {phase === "running" && (
         <DialogNotice>
-          {tr(
-            "正在执行；关闭保护已启用。",
-            "Operation in progress; closing is disabled.",
-          )}
+          {t("pending.operation.in.progress.closing.is.disabled")}
         </DialogNotice>
       )}
       {message && (
@@ -502,18 +474,12 @@ function ShelfWorkflowDialog({
       )}
       {lifecycle?.state === "commandCompleted" && (
         <DialogNotice>
-          {tr(
-            "命令已完成（仅命令级生命周期）。逐文件搁置状态没有权威事实，不能据此认定搁置成功；请以刷新后的搁置详情与 Pending 为准。",
-            "Command completed (command-level lifecycle only). Per-file shelf state has no authoritative fact here, so this is not a per-file success; rely on the refreshed shelf detail and Pending.",
-          )}
+          {t("pending.command.completed.command.level.lifecycle.only")}
         </DialogNotice>
       )}
       {lifecycle?.state === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对搁置/CL 状态，不要直接重复确认。",
-            "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the shelf/CL before confirming again.",
-          )}
+          {t("pending.outcome.uncertain.the.command.may.have")}
         </DialogNotice>
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
@@ -526,10 +492,7 @@ function ShelfWorkflowDialog({
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome === "partial" && (
         <DialogNotice>
-          {tr(
-            "部分完成：仅下列 succeeded 行有逐文件事实，其余仍未知。",
-            "Partial: only the succeeded rows below have per-file facts; the rest stay unknown.",
-          )}
+          {t("pending.partial.only.the.succeeded.rows.below")}
         </DialogNotice>
       )}
       {(lifecycle?.state === "legacy"
@@ -554,10 +517,7 @@ function ShelfWorkflowDialog({
       )}
       {refreshFailed && (
         <DialogNotice error>
-          {tr(
-            "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
-            "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
-          )}
+          {t("pending.view.refresh.failed.the.display.may")}
         </DialogNotice>
       )}
       {(lifecycle?.operationId || result?.operationIds.length) && (

@@ -93,9 +93,8 @@ export function UnshelveDialog({
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const newChange = newChangeDescription !== undefined;
-  const newChangeFailure = tr(
-    "创建 CL 的结果未确认；请刷新 Pending 后手动重试（不会自动重放）",
-    "Changelist creation outcome is unconfirmed; refresh Pending and retry manually (no automatic replay).",
+  const newChangeFailure = t(
+    "pending.changelist.creation.outcome.is.unconfirmed.refresh",
   );
   /** Default creation reuses the pending-CL lifecycle rules (no auto retry, host readback only). */
   const createChange =
@@ -325,12 +324,7 @@ export function UnshelveDialog({
         (value.ready && !value.token) ||
         !Number.isFinite(value.expiresAt)
       )
-        throw new Error(
-          tr(
-            "预检结果与来源或目标不匹配。",
-            "Preflight does not match the source or target.",
-          ),
-        );
+        throw new Error(t("pending.preflight.does.not.match.the.source"));
       setPreflight(value);
       setPhase(
         !value.ready || value.blockers.length
@@ -366,12 +360,7 @@ export function UnshelveDialog({
       newChange &&
       preflight.target.targetChangeId !== createdChangeIdRef.current
     ) {
-      setMessage(
-        tr(
-          "目标 CL 与新建的 CL 不一致，未执行任何 Unshelve。",
-          "Target changelist does not match the created changelist; nothing was unshelved.",
-        ),
-      );
+      setMessage(t("pending.target.changelist.does.not.match.the"));
       setPhase("failed");
       setPreflight(undefined);
       setAck(false);
@@ -400,10 +389,7 @@ export function UnshelveDialog({
         )
       )
         throw new Error(
-          tr(
-            "源连接身份与预检目标不一致，未执行任何 Unshelve。",
-            "Source connection identity changed; nothing was unshelved.",
-          ),
+          t("pending.source.connection.identity.changed.nothing.was"),
         );
       const run = await runShelfUnshelve(
         { token: preflight.token, target: preflight.target, operationId: id },
@@ -483,10 +469,7 @@ export function UnshelveDialog({
   return (
     <Dialog
       title={t("pending.unshelve.to.workspace")}
-      description={tr(
-        "将固定的来源 Shelf 子集应用到目标工作区与 CL；来源 Shelf 保留，不会强制覆盖本地内容。",
-        "Apply the fixed source shelf subset to a target workspace and changelist. The source shelf remains and local content is never force-overwritten.",
-      )}
+      description={t("pending.apply.the.fixed.source.shelf.subset")}
       zh={zh}
       source={snapshot.source}
       busy={busy}
@@ -530,10 +513,7 @@ export function UnshelveDialog({
       </div>
       {demo && (
         <DialogNotice>
-          {tr(
-            "浏览器 Mock 会模拟结果，不访问真实 P4 Server。",
-            "Browser Mock simulates the result and does not access a real P4 server.",
-          )}
+          {t("pending.browser.mock.simulates.the.result.and")}
         </DialogNotice>
       )}
       <TargetList
@@ -603,10 +583,7 @@ export function UnshelveDialog({
       </label>
       {!validTarget && (
         <DialogNotice error>
-          {tr(
-            "请输入 Default（0）或有效的编号 CL。",
-            "Enter Default (0) or a valid numbered changelist.",
-          )}
+          {t("pending.enter.default.0.or.a.valid")}
         </DialogNotice>
       )}
       <div className="workflow-context">
@@ -625,10 +602,7 @@ export function UnshelveDialog({
         </DialogNotice>
       )}
       <DialogNotice>
-        {tr(
-          "预检会验证映射、本地覆盖、锁、权限、已有打开状态和 Resolve 风险；执行不会启用强制覆盖。",
-          "Preflight verifies mapping, local overwrite risk, locks, permissions, opened state and Resolve risk. Execution does not enable force overwrite.",
-        )}
+        {t("pending.preflight.verifies.mapping.local.overwrite.risk")}
       </DialogNotice>
       {preflight?.mappings.length ? (
         <div className="workflow-mapping-scroll">
@@ -678,18 +652,12 @@ export function UnshelveDialog({
             checked={ack}
             onChange={(event) => setAck(event.target.checked)}
           />
-          {tr(
-            "我已核对目标、映射和风险；仅按普通 Unshelve 执行，不强制覆盖。",
-            "I reviewed the target, mappings and risks; run normal unshelve without force overwrite.",
-          )}
+          {t("pending.i.reviewed.the.target.mappings.and")}
         </label>
       )}
       {phase === "running" && (
         <DialogNotice>
-          {tr(
-            "正在 Unshelve；关闭保护已启用。",
-            "Unshelve in progress; closing is disabled.",
-          )}
+          {t("pending.unshelve.in.progress.closing.is.disabled")}
         </DialogNotice>
       )}
       {message && (
@@ -697,18 +665,12 @@ export function UnshelveDialog({
       )}
       {lifecycle?.state === "commandCompleted" && (
         <DialogNotice>
-          {tr(
-            "命令已完成（仅命令级生命周期）。Unshelve 的逐文件/目标 CL/Resolve 状态没有权威事实，不能据此认定完成；请以刷新后的目标工作区、Pending 与 Resolve 状态为准。",
-            "Command completed (command-level lifecycle only). Per-file unshelve state, target CL and Resolve state have no authoritative fact here, so this is not a per-file success; rely on the refreshed target workspace, Pending and Resolve state.",
-          )}
+          {t("pending.command.completed.command.level.lifecycle.only")}
         </DialogNotice>
       )}
       {lifecycle?.state === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对目标工作区/Pending/Resolve，不要直接重复确认。",
-            "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the target workspace/Pending/Resolve before confirming again.",
-          )}
+          {t("pending.outcome.uncertain.the.command.may.have")}
         </DialogNotice>
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
@@ -736,10 +698,7 @@ export function UnshelveDialog({
       )}
       {refreshFailed && (
         <DialogNotice error>
-          {tr(
-            "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
-            "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
-          )}
+          {t("pending.view.refresh.failed.the.display.may")}
         </DialogNotice>
       )}
       {(lifecycle?.operationId || result?.operationIds.length) && (

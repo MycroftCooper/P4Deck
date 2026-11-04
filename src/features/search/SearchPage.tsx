@@ -459,12 +459,7 @@ export function SearchPage({
             nextCursorRef.current = undefined;
             setHasMore(false);
             setNextCursor(undefined);
-            setPageError(
-              tr(
-                "后端返回了不可继续的游标；已保留当前部分结果。",
-                "The backend returned a non-progressing cursor; current partial results were preserved.",
-              ),
-            );
+            setPageError(t("search.the.backend.returned.a.non.progressing"));
           } else {
             hasMoreRef.current = result.hasMore;
             nextCursorRef.current = result.nextCursor;
@@ -619,9 +614,8 @@ export function SearchPage({
         {statusText}
       </div>
       <FixedPageHeader
-        description={tr(
-          "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
-          "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
+        description={t(
+          "search.search.submitted.and.pending.changelists.workspace",
         )}
       >
         {mock ? (
@@ -638,12 +632,7 @@ export function SearchPage({
       {mock ? (
         <div className="search-ui-note">
           <AlertTriangle size={15} />
-          <span>
-            {tr(
-              "当前为 Mock 模式；结果用于交互验证，不代表服务器数据。",
-              "Mock mode is active. Results validate interaction only and do not represent server data.",
-            )}
-          </span>
+          <span>{t("search.mock.mode.is.active.results.validate")}</span>
         </div>
       ) : null}
 
@@ -667,10 +656,7 @@ export function SearchPage({
               autoComplete="off"
               maxLength={256}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={tr(
-                "文件、路径、CL、用户、Job、Stream 或 Shelf…",
-                "File, path, changelist, user, job, stream, or shelf…",
-              )}
+              placeholder={t("search.file.path.changelist.user.job.stream")}
             />
             {draft ? (
               <button
@@ -695,10 +681,7 @@ export function SearchPage({
             </button>
           </div>
           <div id="global-search-help" className="search-help">
-            {tr(
-              "输入停止 300ms 后自动搜索；Enter 立即搜索。最多 128 个 Unicode 字符。",
-              "Search starts after a 300ms pause; Enter searches immediately. Maximum 128 Unicode characters.",
-            )}
+            {t("search.search.starts.after.a.300ms.pause")}
           </div>
           <div
             id="global-search-error"
@@ -732,10 +715,7 @@ export function SearchPage({
           </fieldset>
           {kinds.includes("shelf") ? (
             <p className="search-bounded-note" id="search-shelf-bounds">
-              {tr(
-                "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
-                "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
-              )}
+              {t("search.shelf.deep.search.is.bounded.if")}
             </p>
           ) : null}
         </form>
@@ -805,12 +785,7 @@ export function SearchPage({
           <div className="search-empty">
             <FolderSearch size={32} />
             <h3>{t("search.enter.a.query.to.search")}</h3>
-            <p>
-              {tr(
-                "支持七类结果；可使用上方筛选缩小范围。",
-                "Seven result categories are available; use the filters above to narrow the search.",
-              )}
-            </p>
+            <p>{t("search.seven.result.categories.are.available.use")}</p>
           </div>
         ) : null}
 
