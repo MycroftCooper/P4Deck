@@ -2,6 +2,7 @@
   "name": "p4deck",
   "private": true,
   "version": "0.1.11",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {

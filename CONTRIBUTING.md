@@ -14,9 +14,9 @@ pnpm check
 ## 分支
 
 - `dev`：日常开发分支，所有提交先进这里。
-- `master`：发布线，只接受来自 `dev` 的 `--no-ff` merge 和 `v<semver>` tag；不要在 master 上直接开发。
+- `release`：发布线（主分支），只接受来自 `dev` 的 `--no-ff` merge 和 `v<semver>` tag；不要在 release 上直接开发。
 - 发布：`pnpm ci:quick` 通过后执行 `pnpm wf:release --version x.y.z --apply`（默认 dry-run；脚本会校验分支、工作树、版本和门禁新鲜度）。
-- 紧急修复：`hotfix/*` 从 master 拉出，修完先合回 `dev` 再走正常发布。
+- 紧急修复：`hotfix/*` 从 release 拉出，修完先合回 `dev` 再走正常发布。
 
 前端代码不得直接执行进程；所有 P4 调用和输出解析必须位于 Rust Adapter 边界内。
 
