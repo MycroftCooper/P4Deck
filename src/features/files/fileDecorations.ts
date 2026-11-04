@@ -15,6 +15,7 @@ export type FileBadgeId =
   | "untracked"
   | "ignored"
   | "resolve"
+  | "resolved"
   | "modified"
   | "locked"
   | "globalLock"
@@ -56,6 +57,7 @@ const badgeTones: Record<FileBadgeId, FileBadgeTone> = {
   untracked: "neutral",
   ignored: "neutral",
   resolve: "danger",
+  resolved: "teal",
   modified: "amber",
   locked: "warning",
   globalLock: "warning",
@@ -104,6 +106,7 @@ const labels: Record<FileBadgeId, [string, string, string]> = {
   untracked: ["未跟踪", "Untracked", "?"],
   ignored: ["已忽略", "Ignored", "−"],
   resolve: ["需要 Resolve", "Needs resolve", "!"],
+  resolved: ["已解决", "Resolved", "✓"],
   modified: ["本地内容已修改", "Locally modified", "●"],
   locked: ["已锁定", "Locked", "L"],
   globalLock: ["全局锁定", "Globally locked", "L"],
@@ -204,6 +207,7 @@ export function fileBadges(facts: FileDecorationFacts): FileBadge[] {
       });
     }
     if (status?.resolve === "unresolved") badges.push({ id: "resolve" });
+    else if (status?.resolve === "resolved") badges.push({ id: "resolved" });
     if (status?.lockOwnership === "ours")
       badges.push({ id: "locked", owner: "self", detail: status.lockReason });
     if (status?.lockOwnership === "other")

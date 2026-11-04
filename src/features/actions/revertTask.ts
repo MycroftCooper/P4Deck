@@ -14,6 +14,7 @@ import type {
 import type { ConnectionSnapshot } from "../companySubmit/model";
 import { selectionRequest } from "../files/selectionCommands";
 import { readSnapshot } from "../../shared/cache/snapshots";
+import { invalidateData } from "../../shared/cache/dataEffects";
 import {
   pendingSnapshotKey,
   type PendingSnapshot,
@@ -22,6 +23,7 @@ import { blockedMovePaths } from "../changelists/moveOptimism";
 import {
   acceptRemovalObservation,
   finishRemovalObservation,
+  knownNotAppliedWorkflowResult,
 } from "./shelfObservation";
 import { removalLedger } from "./actionStore";
 import {
@@ -368,6 +370,30 @@ export function startRevert(
           result,
           !dispatched || hostRejected,
         );
+        // The removal ledger only reconciles rows it was able to admit optimistically
+        // (a file must have a local path whose status proves it unmodified). A
+        // whole-changelist "还原全部" (Revert all) starts from depot-only rows, so
+        // nothing is admitted and, on success, nothing removed the reverted rows.
+        // `revert`/`revertUnchanged` declare `fileState` effects in the action
+        // catalog, so a dispatched (possibly applied) write must always revalidate
+        // those domains; the authoritative refetch is what repaints the Pending list.
+        if (
+          dispatched &&
+          !hostRejected &&
+          !knownNotAppliedWorkflowResult(result)
+        ) {
+          try {
+            await invalidateData(["pending", "workspaceStatus", "depot"], {
+              connectionKey: scope,
+              refetchType: "active",
+              affectedPaths: targets
+                .map((target) => target.depotPath!)
+                .filter(Boolean),
+            });
+          } catch {
+            /* Refresh failure never retries the write; views keep the prior data. */
+          }
+        }
       }
     })();
   });

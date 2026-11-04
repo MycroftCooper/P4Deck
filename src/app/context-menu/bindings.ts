@@ -12,6 +12,14 @@ export const copy = (value?: string | number): MenuAction => ({
       ? "没有可复制的内容 / Nothing to copy"
       : undefined,
 });
+/**
+ * Serialises only when the item is run: large derived payloads (e.g. a table
+ * as TSV) must never be built just to open the menu.
+ */
+export const copyLazy = (read: () => string, reason?: string): MenuAction => ({
+  run: () => writeClipboardText(read()),
+  reason,
+});
 export const unavailable = (reason: string): MenuAction => ({ reason });
 export function selectText(element: HTMLElement | null) {
   if (!element) return;

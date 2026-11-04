@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 import { dialogHarness } from "../dialogs/testHarness";
@@ -195,7 +195,7 @@ it.each([
         request: expect.objectContaining({ paths: ["//fixture/a"] }),
       }),
     );
-    await act(async () =>
+    await act(async () => {
       finish({
         outcome: "succeeded",
         message: "",
@@ -207,8 +207,11 @@ it.each([
           depotPaths: [],
           reason: "",
         },
-      }),
-    );
-    expect(api.invalidate).not.toHaveBeenCalled();
+      });
+      // Let the settle path run its post-write invalidation (the reported bug:
+      // a succeeded revert left the Pending list stale until a manual refresh).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(api.invalidate).toHaveBeenCalledOnce();
   },
 );

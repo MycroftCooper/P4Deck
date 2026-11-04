@@ -27,10 +27,17 @@ use uuid::Uuid;
 const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 
 #[derive(Clone)]
+struct ResolveTokenPayload {
+    paths: Vec<String>,
+    /// `p4 resolve -f`: the token is only valid for a force re-resolve.
+    force: bool,
+}
+
+#[derive(Clone)]
 enum TokenPayload {
     Shelf(ShelfPreflightRequest),
     Unshelve(UnshelvePreflightRequest),
-    Resolve(Vec<String>),
+    Resolve(ResolveTokenPayload),
     Move(MoveFilesPreflightRequest),
 }
 
@@ -1197,6 +1204,7 @@ impl WorkflowService {
         app: Option<&AppHandle>,
     ) -> ResolvePreflight {
         request.depot_paths = normalized_paths(request.depot_paths);
+        let force = request.force;
         let (context, generation) = self.contexts.snapshot();
         let target = target(
             "resolve",
@@ -1211,12 +1219,13 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 &request.depot_paths,
+                force,
                 &format!("resolve-preflight-{}", Uuid::new_v4()),
                 app,
             )
             .await;
         let evaluation = inspection
-            .map(|value| evaluate_resolve(&request.depot_paths, value))
+            .map(|value| evaluate_resolve(&request.depot_paths, value, force))
             .unwrap_or_else(|_| failed_resolve_evaluation(&request.depot_paths));
         let ready = evaluation.blockers.is_empty();
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
@@ -1226,7 +1235,10 @@ impl WorkflowService {
                     target: target.clone(),
                     content_digest: evaluation.digest.clone(),
                     expires_at,
-                    payload: TokenPayload::Resolve(request.depot_paths),
+                    payload: TokenPayload::Resolve(ResolveTokenPayload {
+                        paths: request.depot_paths,
+                        force,
+                    }),
                 },
                 now_ms(),
             )
@@ -1261,7 +1273,13 @@ impl WorkflowService {
         let active_profile_id = self.contexts.active_profile_id();
         let inspection = self
             .repository
-            .inspect_resolve(&context, &paths, &format!("{operation_id}:inspect"), app)
+            .inspect_resolve(
+                &context,
+                &paths,
+                false,
+                &format!("{operation_id}:inspect"),
+                app,
+            )
             .await?;
         operation.ensure_active()?;
         let resolve_record_digest = content_digest(&(
@@ -1276,7 +1294,7 @@ impl WorkflowService {
             .find(|fact| fact.depot_path == paths[0])
             .cloned()
             .ok_or("Perforce did not return the target file metadata")?;
-        let evaluation = evaluate_resolve(&paths, inspection);
+        let evaluation = evaluate_resolve(&paths, inspection, false);
         if !evaluation.blockers.is_empty()
             || evaluation.conflicts.len() != 1
             || evaluation.conflicts[0].status != "unresolved"
@@ -1385,6 +1403,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 &paths,
+                false,
                 &format!("{operation_id}:final-record"),
                 app,
             )
@@ -1643,6 +1662,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 &[session_record.session.depot_path.clone()],
+                false,
                 &format!("{operation_id}:recheck"),
                 app,
             )
@@ -1653,7 +1673,8 @@ impl WorkflowService {
             &recheck.preview,
             &[session_record.session.depot_path.clone()],
         ));
-        let evaluation = evaluate_resolve(&[session_record.session.depot_path.clone()], recheck);
+        let evaluation =
+            evaluate_resolve(&[session_record.session.depot_path.clone()], recheck, false);
         if !evaluation.blockers.is_empty()
             || resolve_record_digest != session_record.session.resolve_digest
         {
@@ -1818,6 +1839,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 std::slice::from_ref(&session.session.depot_path),
+                false,
                 &format!("{operation_id}:recheck"),
                 app,
             )
@@ -1835,8 +1857,11 @@ impl WorkflowService {
             &recheck.preview,
             std::slice::from_ref(&session.session.depot_path),
         ));
-        let evaluation =
-            evaluate_resolve(std::slice::from_ref(&session.session.depot_path), recheck);
+        let evaluation = evaluate_resolve(
+            std::slice::from_ref(&session.session.depot_path),
+            recheck,
+            false,
+        );
         if !evaluation.blockers.is_empty() || resolve_record_digest != record.resolve_digest {
             return rejected(
                 &session.session.target,
@@ -1857,7 +1882,14 @@ impl WorkflowService {
         };
         let execution = self
             .repository
-            .execute_resolve(&context, &selection, operation_id.clone(), &guard, app)
+            .execute_resolve(
+                &context,
+                &selection,
+                false,
+                operation_id.clone(),
+                &guard,
+                app,
+            )
             .await;
         let mut file = file_result(
             selection.depot_path.clone(),
@@ -1873,6 +1905,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 std::slice::from_ref(&selection.depot_path),
+                false,
                 &format!("{operation_id}:verify"),
                 app,
             )
@@ -1968,7 +2001,7 @@ impl WorkflowService {
             Ok(record) => record,
             Err(result) => return *result,
         };
-        let TokenPayload::Resolve(paths) = record.payload else {
+        let TokenPayload::Resolve(ResolveTokenPayload { paths, force }) = record.payload else {
             return rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TargetMismatch,
@@ -2011,6 +2044,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 &paths,
+                force,
                 &format!("resolve-recheck-{}", Uuid::new_v4()),
                 app,
             )
@@ -2022,7 +2056,7 @@ impl WorkflowService {
                 "Resolve details could not be revalidated safely.",
             );
         };
-        let evaluation = evaluate_resolve(&paths, inspection);
+        let evaluation = evaluate_resolve(&paths, inspection, force);
         if !evaluation.blockers.is_empty() {
             return rejected(
                 &record.target,
@@ -2044,7 +2078,14 @@ impl WorkflowService {
             let operation_id = format!("{base_id}-{}", index + 1);
             let result = self
                 .repository
-                .execute_resolve(&context, selection, operation_id.clone(), &guard, app)
+                .execute_resolve(
+                    &context,
+                    selection,
+                    force,
+                    operation_id.clone(),
+                    &guard,
+                    app,
+                )
                 .await;
             operation_ids.push(operation_id.clone());
             files.push(file_result(
@@ -2058,6 +2099,7 @@ impl WorkflowService {
             .inspect_resolve(
                 &context,
                 &paths,
+                force,
                 &format!("resolve-verify-{}", Uuid::new_v4()),
                 app,
             )
@@ -2123,6 +2165,7 @@ impl WorkflowService {
             .resolve_diff_counts(
                 &context,
                 &request.depot_path,
+                request.force,
                 format!("resolve-stats-counts-{}", Uuid::new_v4()),
                 app,
             )
@@ -2786,9 +2829,13 @@ fn evaluate_unshelve(
     }
 }
 
-fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveEvaluation {
+fn evaluate_resolve(
+    paths: &[String],
+    inspection: ResolveInspection,
+    force: bool,
+) -> ResolveEvaluation {
     let mut blockers = Vec::new();
-    let warnings = Vec::new();
+    let mut warnings = Vec::new();
     let facts = inspection
         .facts
         .iter()
@@ -2889,7 +2936,22 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
             })
             .unwrap_or(conflict_type);
         match fact {
-            Some(fact) if fact.unresolved > 0 && inspection.preview_succeeded => {
+            Some(fact) if fact.unresolved == 0 && !(force && fact.resolved > 0) => {
+                // Clean files are not conflicts: report the fact as a warning so
+                // the UI can say "nothing to resolve" instead of fabricating a
+                // blocked conflict (and without blocking a mixed selection).
+                // In force mode an already resolved record is re-resolvable, so
+                // only files without any resolve record at all land here.
+                warnings.push(issue(
+                    WorkflowIssueCode::NotResolvable,
+                    WorkflowIssueCertainty::Confirmed,
+                    "The file has no unresolved integration record; nothing to resolve.",
+                    vec![path.clone()],
+                ));
+            }
+            // Genuine unresolved records are always conflicts; in force mode an
+            // already resolved (not yet submitted) record is also re-resolvable.
+            Some(fact) if inspection.preview_succeeded => {
                 let typed_conflict = if conflict_type == "unknown"
                     && sources.iter().any(|source| source.role == "base")
                     && sources.iter().any(|source| source.role == "theirs")
@@ -2923,23 +2985,6 @@ fn evaluate_resolve(paths: &[String], inspection: ResolveInspection) -> ResolveE
                         .cloned()
                         .collect(),
                 })
-            }
-            Some(fact) if fact.unresolved == 0 => {
-                blockers.push(issue(
-                    WorkflowIssueCode::NotResolvable,
-                    WorkflowIssueCertainty::Confirmed,
-                    "The file has no unresolved integration record.",
-                    vec![path.clone()],
-                ));
-                conflicts.push(ResolveConflictDetail {
-                    depot_path: path.clone(),
-                    client_path: fact.client_path.clone(),
-                    conflict_type: "unknown".into(),
-                    status: "blocked".into(),
-                    available_strategies: vec![ResolveStrategy::MergePreview],
-                    sources: Vec::new(),
-                    preview: Vec::new(),
-                });
             }
             Some(fact) => {
                 blockers.push(issue(
@@ -4021,6 +4066,7 @@ mod tests {
                     shelved_size: Some(1),
                     shelved_type: Some("text".into()),
                     unresolved: 0,
+                    resolved: 0,
                     other_open: 0,
                     other_lock: 0,
                     our_lock: 0,
@@ -4043,9 +4089,149 @@ mod tests {
                 preview_succeeded: false,
                 operation_ids: Vec::new(),
             },
+            false,
         );
         assert!(!resolve.blockers.is_empty());
         assert_eq!(resolve.conflicts[0].status, "unknown");
+    }
+
+    fn resolve_fact(path: &str, unresolved: usize, resolved: usize) -> parser::WorkflowFileFact {
+        parser::WorkflowFileFact {
+            depot_path: path.into(),
+            client_path: None,
+            action: "edit".into(),
+            change_id: Some(7),
+            have_revision: Some(1),
+            head_revision: Some(2),
+            file_type: "text".into(),
+            digest: "a".into(),
+            shelved_digest: String::new(),
+            size: Some(1),
+            shelved_size: None,
+            shelved_type: None,
+            unresolved,
+            resolved,
+            other_open: 0,
+            other_lock: 0,
+            our_lock: 0,
+        }
+    }
+
+    fn resolve_inspection(
+        facts: Vec<parser::WorkflowFileFact>,
+        preview_succeeded: bool,
+    ) -> ResolveInspection {
+        ResolveInspection {
+            facts,
+            records: Vec::new(),
+            preview: Vec::new(),
+            preview_succeeded,
+            operation_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn resolve_preflight_reports_clean_files_as_no_conflict() {
+        // A file without an unresolved integration record is not a conflict and
+        // must not block the preflight; it is only a NotResolvable warning.
+        let clean = evaluate_resolve(
+            &["//depot/clean".into()],
+            resolve_inspection(vec![resolve_fact("//depot/clean", 0, 0)], true),
+            false,
+        );
+        assert!(clean.conflicts.is_empty());
+        assert!(clean.blockers.is_empty());
+        assert!(clean
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WorkflowIssueCode::NotResolvable
+                && warning.paths == vec!["//depot/clean".to_owned()]));
+
+        // Mixed selection: only the genuinely unresolved file is a conflict, and
+        // the clean file does not block resolving the dirty one.
+        let mixed = evaluate_resolve(
+            &["//depot/dirty".into(), "//depot/clean".into()],
+            resolve_inspection(
+                vec![
+                    resolve_fact("//depot/dirty", 1, 0),
+                    resolve_fact("//depot/clean", 0, 0),
+                ],
+                true,
+            ),
+            false,
+        );
+        assert_eq!(mixed.conflicts.len(), 1);
+        assert_eq!(mixed.conflicts[0].depot_path, "//depot/dirty");
+        assert_eq!(mixed.conflicts[0].status, "unresolved");
+        assert!(mixed.blockers.is_empty());
+        assert!(mixed
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WorkflowIssueCode::NotResolvable
+                && warning.paths == vec!["//depot/clean".to_owned()]));
+    }
+
+    #[test]
+    fn resolve_preflight_force_reopens_already_resolved_files() {
+        // Without force an already resolved (not submitted) record is still not a
+        // conflict: `p4 resolve -n` ignores it until `-f` opts in.
+        let non_force = evaluate_resolve(
+            &["//depot/resolved".into()],
+            resolve_inspection(vec![resolve_fact("//depot/resolved", 0, 1)], true),
+            false,
+        );
+        assert!(non_force.conflicts.is_empty());
+        assert!(non_force.blockers.is_empty());
+        assert!(non_force
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WorkflowIssueCode::NotResolvable
+                && warning.paths == vec!["//depot/resolved".to_owned()]));
+
+        // Force turns the already resolved record into an executable conflict.
+        let forced = evaluate_resolve(
+            &["//depot/resolved".into()],
+            resolve_inspection(vec![resolve_fact("//depot/resolved", 0, 1)], true),
+            true,
+        );
+        assert_eq!(forced.conflicts.len(), 1);
+        assert_eq!(forced.conflicts[0].depot_path, "//depot/resolved");
+        assert_eq!(forced.conflicts[0].status, "unresolved");
+        assert_eq!(forced.conflicts[0].conflict_type, "content");
+        assert!(forced.blockers.is_empty());
+        assert!(forced.warnings.is_empty());
+
+        // Mixed already-resolved plus unresolved is fully executable in force mode.
+        let mixed = evaluate_resolve(
+            &["//depot/resolved".into(), "//depot/dirty".into()],
+            resolve_inspection(
+                vec![
+                    resolve_fact("//depot/resolved", 0, 1),
+                    resolve_fact("//depot/dirty", 1, 0),
+                ],
+                true,
+            ),
+            true,
+        );
+        assert_eq!(mixed.conflicts.len(), 2);
+        assert!(mixed
+            .conflicts
+            .iter()
+            .all(|conflict| conflict.status == "unresolved"));
+        assert!(mixed.blockers.is_empty());
+
+        // A file with no resolve record at all stays a warning even under force.
+        let clean = evaluate_resolve(
+            &["//depot/clean".into()],
+            resolve_inspection(vec![resolve_fact("//depot/clean", 0, 0)], true),
+            true,
+        );
+        assert!(clean.conflicts.is_empty());
+        assert!(clean.blockers.is_empty());
+        assert!(clean
+            .warnings
+            .iter()
+            .any(|warning| warning.code == WorkflowIssueCode::NotResolvable));
     }
 
     #[test]
@@ -4087,6 +4273,7 @@ mod tests {
             shelved_size: None,
             shelved_type: None,
             unresolved: 0,
+            resolved: 0,
             other_open: 0,
             other_lock: 0,
             our_lock: 0,
@@ -4152,6 +4339,18 @@ if %errorlevel%==0 (
   )
   exit /b 0
 )
+echo %* | findstr /C:" resolve -f -n " >nul
+if %errorlevel%==0 (
+  echo {"clientFile":"//depot/a","resolveBaseFile":"//depot/a","resolveBaseRev":"1","resolveFromFile":"//depot/from/a","resolveEndFromRev":"2","resolveType":"content"}
+  echo {"clientFile":"//depot/b","resolveBaseFile":"//depot/b","resolveBaseRev":"1","resolveFromFile":"//depot/from/b","resolveEndFromRev":"2","resolveType":"content"}
+  exit /b 0
+)
+echo %* | findstr /C:" resolve -f -a" >nul
+if %errorlevel%==0 (
+  type nul >"__MARKER__"
+  echo {"data":"resolved"}
+  exit /b 0
+)
 echo %* | findstr /C:" resolve -n " >nul
 if %errorlevel%==0 (
   echo {"clientFile":"//depot/a","resolveBaseFile":"//depot/a","resolveBaseRev":"1","resolveFromFile":"//depot/from/a","resolveEndFromRev":"2","resolveType":"content"}
@@ -4172,6 +4371,14 @@ exit /b 9
     const RESOLVE_UNIX_SCRIPT: &str = r#"#!/bin/sh
 printf '%s\n' "$*" >> "__CALLS__"
 case "$*" in
+*" resolve -f -n "*)
+  printf '%s\n' '{"clientFile":"//depot/a","resolveBaseFile":"//depot/a","resolveBaseRev":"1","resolveFromFile":"//depot/from/a","resolveEndFromRev":"2","resolveType":"content"}'
+  printf '%s\n' '{"clientFile":"//depot/b","resolveBaseFile":"//depot/b","resolveBaseRev":"1","resolveFromFile":"//depot/from/b","resolveEndFromRev":"2","resolveType":"content"}'
+  exit 0;;
+*" resolve -f -a"*)
+  : > "__MARKER__"
+  printf '%s\n' '{"data":"resolved"}'
+  exit 0;;
 *" fstat "*)
   if [ -f "__MARKER__" ]; then u=0; else u=1; fi
   printf '%s\n' "{\"depotFile\":\"//depot/a\",\"clientFile\":\"C:/p4deck-nonexistent/a.txt\",\"action\":\"edit\",\"type\":\"text\",\"unresolved\":\"$u\"}"
@@ -4275,6 +4482,7 @@ exit 9
             .preflight_resolve(
                 ResolvePreflightRequest {
                     depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
+                    force: false,
                 },
                 None,
             )
@@ -4366,6 +4574,45 @@ exit 9
                 .count(),
             2,
             "{calls:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn force_resolve_token_round_trip_executes_with_force_flag() {
+        let harness = resolve_harness("force-round-trip");
+        let preflight = harness
+            .service
+            .preflight_resolve(
+                ResolvePreflightRequest {
+                    depot_paths: vec!["//depot/a".into()],
+                    force: true,
+                },
+                None,
+            )
+            .await;
+        assert!(preflight.ready, "{:?}", preflight.blockers);
+        let token = preflight.token.expect("force preflight returned no token");
+        let result = harness
+            .service
+            .confirm_resolve(
+                ResolveConfirmation {
+                    token,
+                    target: preflight.target,
+                    operation_id: Some("force-resolve".into()),
+                    resolutions: vec![resolve_selection("//depot/a", ResolveStrategy::AcceptYours)],
+                },
+                None,
+            )
+            .await;
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded, "{result:?}");
+        let calls = resolve_calls(&harness.directory);
+        assert!(
+            calls.iter().any(|line| line.contains(" resolve -f -n ")),
+            "force preflight did not pass -f to the preview: {calls:?}"
+        );
+        assert!(
+            calls.iter().any(|line| line.contains(" resolve -f -ay ")),
+            "force confirm did not pass -f to the execution: {calls:?}"
         );
     }
 
@@ -4560,6 +4807,7 @@ exit 9
     fn stats_request(target: &Path) -> ResolveStatsRequest {
         ResolveStatsRequest {
             depot_path: "//depot/a".into(),
+            force: false,
             base_depot_path: Some("//depot/a".into()),
             base_revision: Some(2),
             source_depot_path: Some("//depot/a".into()),

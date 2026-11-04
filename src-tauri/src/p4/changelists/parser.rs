@@ -163,9 +163,14 @@ pub fn parse_submitted_detail(
         number_option(&value, "change").ok_or("p4 describe omitted the submitted changelist ID")?;
     let status = text(&value, "status");
     let user = text(&value, "user");
-    if change_id != expected_change_id || status != "submitted" || user.trim().is_empty() {
+    if change_id != expected_change_id || user.trim().is_empty() {
         return Err("p4 describe returned an unexpected or malformed changelist".into());
     }
+    let submitted = match status.as_str() {
+        "submitted" => true,
+        "pending" | "shelved" => false,
+        _ => return Err("p4 describe returned an unexpected or malformed changelist".into()),
+    };
     let description = normalized_multiline(&text(&value, "desc"));
     let mut files = Vec::new();
     let mut integration_evidence = Vec::new();
@@ -186,7 +191,7 @@ pub fn parse_submitted_detail(
                 .and_then(Value::as_str)
                 .map(str::to_owned),
         };
-        if is_integration_action(&action) {
+        if submitted && is_integration_action(&action) {
             integration_evidence.push(SubmittedIntegrationEvidence {
                 source: SubmittedIntegrationEvidenceSource::DescribeAction,
                 depot_path: file.depot_path.clone(),
@@ -196,16 +201,21 @@ pub fn parse_submitted_detail(
         }
         files.push(file);
     }
-    if files.is_empty() || files.iter().any(|file| file.revision.is_none()) {
+    if submitted && (files.is_empty() || files.iter().any(|file| file.revision.is_none())) {
         return Err("p4 describe returned malformed submitted file data".into());
     }
-    let merge_classification = if integration_evidence.is_empty() {
+    // Pending/shelved changelists only expose shelved files and can legitimately
+    // describe zero files; their integration state is not inspectable here.
+    let merge_classification = if !submitted {
+        MergeClassification::Unknown
+    } else if integration_evidence.is_empty() {
         classify_summary(&description)
     } else {
         MergeClassification::ReliableMerge
     };
     Ok(SubmittedChangeDetail {
         change_id,
+        status,
         description,
         user,
         client: text(&value, "client"),
@@ -758,6 +768,7 @@ mod tests {
             r#"{"change":"42","status":"submitted","user":"buildbot","client":"ws","desc":"Merge by name only","time":"1700000000","job0":"JOB-1","depotFile0":"//depot/main/a","action0":"edit","rev0":"3","type0":"text"}"#,
         )];
         let mut detail = parse_submitted_detail(&events, 42).unwrap();
+        assert_eq!(detail.status, "submitted");
         assert_eq!(
             detail.merge_classification,
             MergeClassification::SuspectedMerge
@@ -784,6 +795,85 @@ mod tests {
             detail.merge_classification,
             MergeClassification::ReliableMerge
         );
+    }
+
+    #[test]
+    fn pending_describe_without_shelved_files_is_a_valid_partial_detail() {
+        // Real-world shape: `p4 -ztag -Mj describe -s 11544041` for a pending CL
+        // that has no shelved files. This used to be rejected as malformed.
+        let events = [event(
+            r#"{"IsPromoted":"1","change":"11544041","changeType":"public","client":"beyond_build_BM_IT-DES004-00263_Beyond_v2d1_Tools_Proj","desc":"[Data][AutoGen] 牧场数据导出\n","shelved":"","status":"pending","time":"1793691022","user":"beyond_build"}"#,
+        )];
+        let detail = parse_submitted_detail(&events, 11_544_041).unwrap();
+        assert_eq!(detail.status, "pending");
+        assert_eq!(detail.change_id, 11_544_041);
+        assert_eq!(detail.user, "beyond_build");
+        assert_eq!(detail.description, "[Data][AutoGen] 牧场数据导出");
+        assert!(detail.files.is_empty());
+        assert!(detail.integration_evidence.is_empty());
+        assert_eq!(detail.merge_classification, MergeClassification::Unknown);
+        assert_eq!(detail.inspection_status, SubmittedInspectionStatus::Partial);
+        // The repository supplies the pending explanation; the parser only flags Partial.
+        assert!(detail.message.is_none());
+    }
+
+    #[test]
+    fn pending_describe_with_shelved_files_parses_files_without_requiring_revisions() {
+        // Shape of `p4 -ztag -Mj describe -s -S <id>` for a pending CL: shelf files
+        // are indexed depotFileN/actionN/revN/typeN records. `add` shelves carry no
+        // revision and must not be rejected for a pending changelist.
+        let events = [event(
+            r#"{"change":"77","status":"pending","user":"alice","client":"ws","desc":"shelf","time":"1700000000","depotFile0":"//depot/main/a","action0":"edit","rev0":"3","type0":"text","depotFile1":"//depot/main/b","action1":"add","type1":"binary"}"#,
+        )];
+        let detail = parse_submitted_detail(&events, 77).unwrap();
+        assert_eq!(detail.status, "pending");
+        assert_eq!(detail.files.len(), 2);
+        assert_eq!(detail.files[0].depot_path, "//depot/main/a");
+        assert_eq!(detail.files[0].action, "edit");
+        assert_eq!(detail.files[0].revision, Some(3));
+        assert_eq!(detail.files[0].file_type.as_deref(), Some("text"));
+        assert_eq!(detail.files[1].depot_path, "//depot/main/b");
+        assert_eq!(detail.files[1].revision, None);
+        assert!(detail.integration_evidence.is_empty());
+        assert_eq!(detail.merge_classification, MergeClassification::Unknown);
+        assert_eq!(detail.inspection_status, SubmittedInspectionStatus::Partial);
+    }
+
+    #[test]
+    fn describe_status_gate_accepts_only_submitted_pending_and_shelved() {
+        for status in ["privat", "deleted", "submitted-pending", ""] {
+            let raw = format!(r#"{{"change":"9","status":"{status}","user":"alice","desc":"x"}}"#);
+            assert!(parse_submitted_detail(&[event(&raw)], 9).is_err());
+        }
+        let shelved = parse_submitted_detail(
+            &[event(
+                r#"{"change":"9","status":"shelved","user":"alice","client":"ws","desc":"x"}"#,
+            )],
+            9,
+        )
+        .unwrap();
+        assert_eq!(shelved.status, "shelved");
+        assert!(shelved.files.is_empty());
+        assert_eq!(
+            shelved.inspection_status,
+            SubmittedInspectionStatus::Partial
+        );
+
+        // Identity and authorship guards survive for every status.
+        assert!(parse_submitted_detail(
+            &[event(
+                r#"{"change":"10","status":"pending","user":"alice","desc":"x"}"#
+            )],
+            9
+        )
+        .is_err());
+        assert!(parse_submitted_detail(
+            &[event(
+                r#"{"change":"9","status":"pending","user":" ","desc":"x"}"#
+            )],
+            9
+        )
+        .is_err());
     }
 
     #[test]

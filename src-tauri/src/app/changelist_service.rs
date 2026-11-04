@@ -588,12 +588,7 @@ impl ChangelistService {
             .await
         {
             Ok(detail) => detail,
-            Err(_) => {
-                return unavailable_detail(
-                    request.change_id,
-                    "Submitted changelist inspection failed.",
-                )
-            }
+            Err(cause) => return unavailable_detail(request.change_id, &cause),
         };
         let (current, current_generation) = self.contexts.snapshot();
         if submitted_cache_key(&current, current_generation, request.change_id) != key {
@@ -814,6 +809,7 @@ fn same_connection(left: &P4Context, right: &P4Context) -> bool {
 fn unavailable_detail(change_id: i64, message: &str) -> SubmittedChangeDetail {
     SubmittedChangeDetail {
         change_id,
+        status: "unknown".into(),
         description: String::new(),
         user: String::new(),
         client: String::new(),
@@ -894,6 +890,7 @@ mod tests {
     fn submitted_detail(id: i64) -> SubmittedChangeDetail {
         SubmittedChangeDetail {
             change_id: id,
+            status: "submitted".into(),
             description: "ordinary".into(),
             user: "u".into(),
             client: "c".into(),
@@ -988,11 +985,14 @@ mod tests {
             .is_none());
 
         let failed = unavailable_detail(99, "inspection failed");
+        assert_eq!(failed.status, "unknown");
         assert_eq!(failed.merge_classification, MergeClassification::Unknown);
         assert_eq!(
             failed.inspection_status,
             SubmittedInspectionStatus::Unavailable
         );
+        // The underlying cause is surfaced verbatim instead of a generic sentence.
+        assert_eq!(failed.message.as_deref(), Some("inspection failed"));
     }
 
     #[test]

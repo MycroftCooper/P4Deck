@@ -4,6 +4,8 @@ import { X } from "lucide-react";
 
 export interface DialogProps {
   title: string;
+  /** Optional prominent marker beside the title (e.g. a colored status badge). */
+  titleBadge?: ReactNode;
   description?: string;
   children: ReactNode;
   footer: ReactNode;
@@ -19,6 +21,7 @@ export interface DialogProps {
 /** One accessible shell; workflow components own validation and execution state. */
 export function Dialog({
   title,
+  titleBadge,
   description,
   children,
   footer,
@@ -89,7 +92,10 @@ export function Dialog({
     >
       <header className="workflow-dialog-heading">
         <div>
-          <h2 id={titleId}>{title}</h2>
+          <div className="workflow-dialog-title">
+            <h2 id={titleId}>{title}</h2>
+            {titleBadge}
+          </div>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
         <button

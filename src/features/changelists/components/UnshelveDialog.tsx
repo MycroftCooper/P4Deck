@@ -4,6 +4,7 @@ import { backend } from "../../../infrastructure/backend";
 import type {
   ClientWorkspace,
   PendingChange,
+  PendingChangeMutationResult,
   UnshelvePreflight,
   UnshelvePreflightRequest,
   WorkflowConfirmation,
@@ -21,6 +22,11 @@ import {
   lookupWorkflowAction,
   type WorkflowActionLookup,
 } from "../../actions/workflowReceipt";
+import {
+  authoritativeChangeId,
+  lifecycleOf,
+  unwrapPendingClLegacy,
+} from "../../actions/pendingClLifecycle";
 import {
   boundedRefresh,
   runShelfUnshelve,
@@ -52,6 +58,9 @@ export function UnshelveDialog({
   execute = (value) => backend.confirmUnshelve(value),
   connection = () => backend.companySubmitConnectionSnapshot(),
   lookup = lookupWorkflowAction,
+  newChangeDescription,
+  createChange: createChangeOverride,
+  deleteChange: deleteChangeOverride,
 }: {
   request: ShelfRequest;
   changes: PendingChange[];
@@ -70,8 +79,63 @@ export function UnshelveDialog({
     operationId: string;
     connection: ConnectionSnapshot;
   }): Promise<WorkflowActionLookup>;
+  /**
+   * Create this CL description up front and unshelve into a brand-new numbered
+   * CL instead of asking for a target number. The creation happens once, right
+   * before the first preflight (never on re-check).
+   */
+  newChangeDescription?: string;
+  /** Test/injected creation hook; defaults to `mutatePendingChange({type:"create"})`. */
+  createChange?(description: string): Promise<number>;
+  /** Best-effort cleanup of the empty CL when the dialog closes before confirm. */
+  deleteChange?(changeId: number): Promise<void>;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
+  const newChange = newChangeDescription !== undefined;
+  const newChangeFailure = tr(
+    "创建 CL 的结果未确认；请刷新 Pending 后手动重试（不会自动重放）",
+    "Changelist creation outcome is unconfirmed; refresh Pending and retry manually (no automatic replay).",
+  );
+  /** Default creation reuses the pending-CL lifecycle rules (no auto retry, host readback only). */
+  const createChange =
+    createChangeOverride ??
+    (async (description: string): Promise<number> => {
+      const operationId = crypto.randomUUID();
+      const raw: unknown = await backend.mutatePendingChange({
+        type: "create",
+        description,
+        jobs: [],
+        operationId,
+      });
+      const lifecycle = lifecycleOf(raw);
+      const legacy = unwrapPendingClLegacy<PendingChangeMutationResult>(raw);
+      // Envelope results may only hand out the host-readback id once committed;
+      // a legacy payload (no lifecycle envelope) keeps its own createdChangeId.
+      const created =
+        lifecycle && lifecycle.state !== "legacy"
+          ? authoritativeChangeId(lifecycle)
+          : legacy?.createdChangeId;
+      if (
+        typeof created !== "number" ||
+        !Number.isSafeInteger(created) ||
+        created <= 0
+      )
+        throw new Error(newChangeFailure);
+      return created;
+    });
+  const deleteChange =
+    deleteChangeOverride ??
+    (async (changeId: number): Promise<void> => {
+      try {
+        await backend.mutatePendingChange({
+          type: "delete",
+          changeId,
+          operationId: crypto.randomUUID(),
+        });
+      } catch {
+        // Best-effort cleanup of an empty CL only; never a surfaced write error.
+      }
+    });
   const [snapshot] = useState(() => ({
     ...request,
     paths: [...new Set(request.paths)].sort(),
@@ -85,6 +149,8 @@ export function UnshelveDialog({
   const [workspaceError, setWorkspaceError] = useState("");
   const [targetWorkspace, setTargetWorkspace] = useState(currentWorkspace);
   const [targetChange, setTargetChange] = useState("0");
+  /** New-CL mode: id of the CL created right before the first preflight. */
+  const [createdChangeId, setCreatedChangeId] = useState<number>();
   const [ack, setAck] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<UnshelvePreflight>();
@@ -96,17 +162,32 @@ export function UnshelveDialog({
   const running = useRef(false);
   const operationId = useRef<string | undefined>(undefined);
   const loadWorkspacesRef = useRef(loadWorkspaces);
+  /** Created CL kept across re-checks; only cleanup reads it on unmount. */
+  const createdChangeIdRef = useRef<number | undefined>(undefined);
+  /** Once confirm is dispatched the CL may hold opened files: never auto-delete it. */
+  const confirmAttemptedRef = useRef(false);
+  const unmountedRef = useRef(false);
+  const deleteChangeRef = useRef(deleteChange);
+  deleteChangeRef.current = deleteChange;
+  /** Cleanup may only delete a CL created on the very same connection. */
+  const connectionKeyRef = useRef(connectionKey);
+  connectionKeyRef.current = connectionKey;
   const staleConnection = snapshot.connectionKey !== connectionKey;
   const sourceChanged =
     request.changeId !== snapshot.changeId ||
     JSON.stringify([...new Set(request.paths)].sort()) !==
       JSON.stringify(snapshot.paths);
   const invalidated = staleConnection || sourceChanged;
-  const targetId = Number(targetChange);
-  const validTarget = Number.isInteger(targetId) && targetId >= 0;
+  const targetId = newChange ? (createdChangeId ?? 0) : Number(targetChange);
+  const validTarget = newChange
+    ? createdChangeId === undefined ||
+      (Number.isSafeInteger(createdChangeId) && createdChangeId > 0)
+    : Number.isInteger(targetId) && targetId >= 0;
   const busy = phase === "checking" || phase === "running";
 
   useEffect(() => {
+    // A new CL lives in the current client; no workspace selection is needed.
+    if (newChange) return;
     let live = true;
     void loadWorkspacesRef
       .current()
@@ -130,7 +211,7 @@ export function UnshelveDialog({
     return () => {
       live = false;
     };
-  }, [currentWorkspace]);
+  }, [currentWorkspace, newChange]);
   useEffect(() => {
     if (!invalidated) return;
     generation.current++;
@@ -151,6 +232,25 @@ export function UnshelveDialog({
     return () => clearTimeout(timer);
   }, [phase, preflight]);
   useEffect(() => () => void ++generation.current, []);
+  useEffect(
+    () => () => {
+      unmountedRef.current = true;
+      const created = createdChangeIdRef.current;
+      // Only an empty, never-confirmed CL created on this connection is removed;
+      // a confirmed dispatch may already hold unshelved files, and a different
+      // connection must never be asked to delete the same numeric id.
+      if (
+        created === undefined ||
+        confirmAttemptedRef.current ||
+        connectionKeyRef.current !== snapshot.connectionKey
+      )
+        return;
+      void Promise.resolve(deleteChangeRef.current(created)).catch(
+        () => undefined,
+      );
+    },
+    [],
+  );
 
   const targetChanged = () => {
     generation.current++;
@@ -171,7 +271,7 @@ export function UnshelveDialog({
       invalidated ||
       !snapshot.paths.length ||
       !targetWorkspace ||
-      !validTarget
+      (!newChange && !validTarget)
     )
       return;
     const epoch = ++generation.current;
@@ -183,11 +283,33 @@ export function UnshelveDialog({
     setRefreshFailed(false);
     setAck(false);
     try {
+      let targetChangeId = newChange
+        ? createdChangeIdRef.current
+        : Number(targetChange);
+      if (targetChangeId === undefined) {
+        // Exactly one creation per dialog; every re-check reuses this id.
+        const created = await createChange(newChangeDescription!);
+        if (!Number.isSafeInteger(created) || created <= 0)
+          throw new Error(newChangeFailure);
+        createdChangeIdRef.current = created;
+        setCreatedChangeId(created);
+        if (unmountedRef.current) {
+          if (
+            !confirmAttemptedRef.current &&
+            connectionKeyRef.current === snapshot.connectionKey
+          )
+            void Promise.resolve(deleteChangeRef.current(created)).catch(
+              () => undefined,
+            );
+          return;
+        }
+        targetChangeId = created;
+      }
       const value = await check({
         sourceChangeId: snapshot.changeId,
         depotPaths: snapshot.paths,
         targetWorkspace,
-        targetChangeId: targetId,
+        targetChangeId,
       });
       if (epoch !== generation.current) return;
       const samePaths =
@@ -196,7 +318,7 @@ export function UnshelveDialog({
       if (
         value.target.kind !== "unshelve" ||
         value.target.sourceChangeId !== snapshot.changeId ||
-        value.target.targetChangeId !== targetId ||
+        value.target.targetChangeId !== targetChangeId ||
         value.target.client !== targetWorkspace ||
         !samePaths ||
         (value.ready && !value.token) ||
@@ -239,6 +361,23 @@ export function UnshelveDialog({
       setPhase("stale");
       return;
     }
+    if (
+      newChange &&
+      preflight.target.targetChangeId !== createdChangeIdRef.current
+    ) {
+      setMessage(
+        tr(
+          "目标 CL 与新建的 CL 不一致，未执行任何 Unshelve。",
+          "Target changelist does not match the created changelist; nothing was unshelved.",
+        ),
+      );
+      setPhase("failed");
+      setPreflight(undefined);
+      setAck(false);
+      return;
+    }
+    // Once confirm is dispatched the CL may hold unshelved files: never delete it.
+    confirmAttemptedRef.current = true;
     const epoch = generation.current;
     running.current = true;
     setPhase("running");
@@ -402,38 +541,64 @@ export function UnshelveDialog({
       />
       <label>
         {tr("目标 Workspace", "Target workspace")}
-        <select
-          data-dialog-autofocus
-          value={targetWorkspace}
-          onChange={(event) => {
-            setTargetWorkspace(event.target.value);
-            targetChanged();
-          }}
-        >
-          {!workspaces.some((item) => item.name === targetWorkspace) && (
-            <option value={targetWorkspace}>{targetWorkspace}</option>
-          )}
-          {workspaces.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}
-              {item.root ? ` · ${item.root}` : ""}
-            </option>
-          ))}
-        </select>
+        {newChange ? (
+          <input
+            data-dialog-autofocus
+            readOnly
+            value={targetWorkspace}
+            aria-readonly="true"
+          />
+        ) : (
+          <select
+            data-dialog-autofocus
+            value={targetWorkspace}
+            onChange={(event) => {
+              setTargetWorkspace(event.target.value);
+              targetChanged();
+            }}
+          >
+            {!workspaces.some((item) => item.name === targetWorkspace) && (
+              <option value={targetWorkspace}>{targetWorkspace}</option>
+            )}
+            {workspaces.map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+                {item.root ? ` · ${item.root}` : ""}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
       {workspaceError && <DialogNotice error>{workspaceError}</DialogNotice>}
       <label>
-        {tr("目标 CL（0 为 Default）", "Target CL (0 means Default)")}
-        <input
-          type="number"
-          min={0}
-          step={1}
-          value={targetChange}
-          onChange={(event) => {
-            setTargetChange(event.target.value);
-            targetChanged();
-          }}
-        />
+        {newChange
+          ? tr("目标 CL", "Target CL")
+          : tr("目标 CL（0 为 Default）", "Target CL (0 means Default)")}
+        {newChange ? (
+          <input
+            readOnly
+            aria-readonly="true"
+            value={
+              createdChangeId !== undefined
+                ? `CL ${createdChangeId}`
+                : tr(
+                    `将新建 CL：${newChangeDescription}`,
+                    `Will create CL: ${newChangeDescription}`,
+                  )
+            }
+          />
+        ) : (
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={targetChange}
+            onChange={(event) => {
+              setTargetChange(event.target.value);
+              targetChanged();
+            }}
+          />
+        )}
       </label>
       {!validTarget && (
         <DialogNotice error>
@@ -445,8 +610,19 @@ export function UnshelveDialog({
       )}
       <div className="workflow-context">
         CL {snapshot.changeId} → {targetWorkspace} ·{" "}
-        {targetId === 0 ? "Default" : `CL ${targetId}`}
+        {newChange
+          ? createdChangeId !== undefined
+            ? `CL ${createdChangeId}`
+            : tr("新建 CL", "new CL")
+          : targetId === 0
+            ? "Default"
+            : `CL ${targetId}`}
       </div>
+      {newChange && createdChangeId !== undefined && (
+        <DialogNotice>
+          {tr("已创建 CL", "Created CL")} #{createdChangeId}
+        </DialogNotice>
+      )}
       <DialogNotice>
         {tr(
           "预检会验证映射、本地覆盖、锁、权限、已有打开状态和 Resolve 风险；执行不会启用强制覆盖。",

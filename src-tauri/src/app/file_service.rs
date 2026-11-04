@@ -2269,6 +2269,10 @@ fn status_snapshot(
         let sync = sync_state(have, head);
         let resolve = if unresolved {
             WorkspaceResolveState::Unresolved
+        } else if number(&value, "resolved").unwrap_or(0) > 0 {
+            // Integration records exist but all are already resolved (not yet
+            // submitted); `p4 resolve -f` can re-resolve them.
+            WorkspaceResolveState::Resolved
         } else {
             WorkspaceResolveState::None
         };
@@ -3476,6 +3480,32 @@ mod tests {
             Some(WorkspaceReconcileAction::Add)
         );
         assert!(!snapshot.errors.is_empty());
+    }
+
+    #[test]
+    fn fstat_resolved_records_reach_status_without_claiming_unresolved() {
+        let fstat = operation(
+            "fstat",
+            &[
+                r#"{"path":"C:/ws/resolved.txt","clientFile":"C:/ws/resolved.txt","depotFile":"//depot/resolved.txt","haveRev":"3","headRev":"3","action":"edit","unresolved":"0","resolved":"1"}"#,
+                r#"{"path":"C:/ws/clean.txt","clientFile":"C:/ws/clean.txt","depotFile":"//depot/clean.txt","haveRev":"2","headRev":"2","action":"edit","unresolved":"0","resolved":"0"}"#,
+            ],
+        );
+        let empty = operation("empty", &[]);
+        let snapshot = status_snapshot(&fstat, &empty, &empty, &empty, &[], false, &[]);
+        let by_name = |name: &str| {
+            snapshot
+                .files
+                .iter()
+                .find(|file| file.path.ends_with(name))
+                .unwrap()
+        };
+        assert_eq!(
+            by_name("resolved.txt").resolve,
+            WorkspaceResolveState::Resolved
+        );
+        assert_ne!(by_name("resolved.txt").status, FileStatusKind::Conflicted);
+        assert_eq!(by_name("clean.txt").resolve, WorkspaceResolveState::None);
     }
 
     #[test]

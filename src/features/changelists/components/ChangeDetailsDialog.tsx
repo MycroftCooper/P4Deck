@@ -15,6 +15,7 @@ import type {
 } from "../../../shared/contracts";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
+import { UnshelveDialog } from "./UnshelveDialog";
 export type ChangeDetailsTarget =
   | {
       kind: "submitted";
@@ -41,6 +42,11 @@ export function useChangeDetailsDialog(
     owner: string;
     nonce: number;
   }>();
+  /** Pending "unshelve this CL's shelved files into a new CL" workflow. */
+  const [unshelve, setUnshelve] = useState<{
+    changeId: number;
+    paths: string[];
+  }>();
   const nonce = useRef(0);
   const owner = `${connectionKey}:${runtime.activeProfileId}:${runtime.contextGeneration}`;
   const open = useCallback<OpenChangeDetails>(
@@ -55,6 +61,7 @@ export function useChangeDetailsDialog(
           ? document.activeElement
           : null;
       const nextNonce = ++nonce.current;
+      setUnshelve(undefined);
       setRequest((previous) => ({
         target,
         source:
@@ -65,20 +72,57 @@ export function useChangeDetailsDialog(
     },
     [owner],
   );
-  useEffect(() => setRequest(undefined), [owner]);
+  const openUnshelve = useCallback((detail: SubmittedChangeDetail) => {
+    const paths = [
+      ...new Set(
+        detail.files
+          .map((file) => file.depotPath)
+          .filter((path) => path.length > 0),
+      ),
+    ];
+    if (!paths.length) return;
+    setRequest(undefined);
+    setUnshelve({ changeId: detail.changeId, paths });
+  }, []);
+  useEffect(() => {
+    setRequest(undefined);
+    setUnshelve(undefined);
+  }, [owner]);
   return {
     open,
-    dialog:
-      request?.owner === owner ? (
-        <ChangeDetailsDialog
-          key={`${owner}:${request.nonce}`}
-          target={request.target}
-          source={request.source}
-          runtime={runtime}
-          zh={zh}
-          onClose={() => setRequest(undefined)}
-        />
-      ) : null,
+    dialog: (
+      <>
+        {request?.owner === owner ? (
+          <ChangeDetailsDialog
+            key={`${owner}:${request.nonce}`}
+            target={request.target}
+            source={request.source}
+            runtime={runtime}
+            zh={zh}
+            onUnshelveIntoNewChange={openUnshelve}
+            onClose={() => setRequest(undefined)}
+          />
+        ) : null}
+        {unshelve ? (
+          <UnshelveDialog
+            request={{
+              changeId: unshelve.changeId,
+              paths: unshelve.paths,
+              mode: "shelve",
+              hasShelf: true,
+              source: null,
+            }}
+            changes={[]}
+            currentWorkspace={runtime.context.client}
+            connectionKey={connectionKey}
+            demo={runtime.mode === "mock"}
+            zh={zh}
+            newChangeDescription={`Unshelved from CL${unshelve.changeId}`}
+            onDismiss={() => setUnshelve(undefined)}
+          />
+        ) : null}
+      </>
+    ),
   };
 }
 function ChangeDetailsDialog({
@@ -87,12 +131,15 @@ function ChangeDetailsDialog({
   runtime,
   zh,
   onClose,
+  onUnshelveIntoNewChange,
 }: {
   target: ChangeDetailsTarget;
   source: HTMLElement | null;
   runtime: RuntimeInfo;
   zh: boolean;
   onClose(): void;
+  /** Only offered for a non-submitted CL whose shelved files are listed. */
+  onUnshelveIntoNewChange?(detail: SubmittedChangeDetail): void;
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const [value, setValue] = useState<SubmittedChangeDetail>();
@@ -157,7 +204,14 @@ function ChangeDetailsDialog({
             detail.message || tr("详情不可用", "Details unavailable"),
           );
         setValue(detail);
-        if (target.kind === "submitted") target.onLoaded?.(detail);
+        // A pending/shelved CL answered through the submitted path must not be
+        // reported back as a submitted-row classification update.
+        const detailStatus = detail.status?.trim().toLowerCase();
+        const submittedDetail = detailStatus
+          ? detailStatus === "submitted"
+          : target.kind === "submitted";
+        if (target.kind === "submitted" && submittedDetail)
+          target.onLoaded?.(detail);
       })
       .catch((e) => {
         if (live) setError(String(e));
@@ -174,13 +228,60 @@ function ChangeDetailsDialog({
           timeStyle: "short",
         }).format(new Date(value.time))
       : "—";
+  // Backends now report the real status; fixtures without it fall back to the
+  // page that opened the dialog (submitted describe vs. pending snapshot).
+  const status = value?.status?.trim().toLowerCase();
+  const submitted = status
+    ? status === "submitted"
+    : target.kind === "submitted";
+  const statusKind: "submitted" | "pending" | "unknown" = status
+    ? status === "submitted"
+      ? "submitted"
+      : status === "pending" || status === "shelved"
+        ? "pending"
+        : "unknown"
+    : target.kind === "submitted"
+      ? "submitted"
+      : "pending";
+  const statusLabel =
+    statusKind === "submitted"
+      ? tr("已提交", "Submitted")
+      : statusKind === "pending"
+        ? tr("待提交", "Pending")
+        : tr("未知", "Unknown");
+  // A CL reached through the submitted path that turns out to be pending only
+  // exposes shelved files; the pending snapshot path lists opened files.
+  const shelvedFiles = target.kind === "submitted" && !submitted;
+  const notice =
+    value?.message ||
+    (shelvedFiles
+      ? tr(
+          "该 CL 尚未提交，仅能查看搁置(shelved)文件。",
+          "This changelist is not submitted yet; only shelved files are available.",
+        )
+      : value?.inspectionStatus === "partial"
+        ? tr("文件列表可能不完整", "File list may be incomplete")
+        : undefined);
   return (
     <Dialog
       title={`${tr("CL 详情", "Changelist details")} · ${target.changeId || "default"}${
         value && value.files.length
-          ? ` · ${value.files.length} ${tr("个文件", "files")}`
+          ? ` · ${value.files.length} ${
+              shelvedFiles
+                ? tr("个搁置文件", "shelved files")
+                : tr("个文件", "files")
+            }`
           : ""
       }`}
+      // Status lives in the title bar as a colored badge so it is the first
+      // thing read; the metadata list below no longer repeats it.
+      titleBadge={
+        value ? (
+          <span className={`dialog-status-badge is-${statusKind}`}>
+            {statusLabel}
+          </span>
+        ) : undefined
+      }
       source={source}
       zh={zh}
       onRequestClose={onClose}
@@ -234,25 +335,17 @@ function ChangeDetailsDialog({
                 <dt>{tr("工作区", "Workspace")}</dt>
                 <dd>{value.client || "—"}</dd>
               </div>
-              <div>
-                <dt>{tr("状态", "Status")}</dt>
-                <dd>
-                  {target.kind === "submitted"
-                    ? tr("已提交", "Submitted")
-                    : tr("待提交", "Pending")}
-                </dd>
-              </div>
             </dl>
             <h3>{tr("描述", "Description")}</h3>
             <p className="change-details-description">
               {value.description || tr("无描述", "No description")}
             </p>
-            {value.inspectionStatus === "partial" && (
-              <DialogNotice>
-                {value.message ||
-                  tr("文件列表可能不完整", "File list may be incomplete")}
-              </DialogNotice>
-            )}
+            {notice && <DialogNotice>{notice}</DialogNotice>}
+            <h3>
+              {shelvedFiles
+                ? tr("搁置文件", "Shelved files")
+                : tr("文件", "Files")}
+            </h3>
             {value.files.length ? (
               <div
                 className="change-details-table-scroll"
@@ -319,7 +412,19 @@ function ChangeDetailsDialog({
                 </ResizableTable>
               </div>
             ) : (
-              <p>{tr("无文件", "No files")}</p>
+              <p>
+                {shelvedFiles
+                  ? tr("该 CL 没有搁置文件", "No shelved files")
+                  : tr("无文件", "No files")}
+              </p>
+            )}
+            {shelvedFiles && value.files.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() => onUnshelveIntoNewChange?.(value)}
+              >
+                {tr("Unshelve 到新 CL…", "Unshelve into new CL…")}
+              </button>
             )}
           </>
         )}
@@ -339,5 +444,6 @@ function pendingDetail(change: PendingChange): SubmittedChangeDetail {
     integrationEvidence: [],
     mergeClassification: "unknown",
     inspectionStatus: "complete",
+    status: "pending",
   };
 }

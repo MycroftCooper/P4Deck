@@ -301,12 +301,24 @@ fn default_policy() -> LogPolicy {
         max_mib: 50,
     }
 }
+/// Strips control characters, then bounds over-long values by keeping both the
+/// head and the tail. A P4 failure summary is printed at the end of stdout, so
+/// truncating to the head alone would drop the only actionable line.
 fn sanitize(value: &str, max: usize) -> String {
-    value
+    let filtered = value
         .chars()
         .filter(|c| !c.is_control() || *c == '\n')
-        .take(max)
-        .collect()
+        .collect::<Vec<_>>();
+    if filtered.len() <= max {
+        return filtered.into_iter().collect();
+    }
+    let head = max / 2;
+    let tail = max - head;
+    let mut result = String::with_capacity(max + 3);
+    result.extend(&filtered[..head]);
+    result.push_str("\n…\n");
+    result.extend(&filtered[filtered.len() - tail..]);
+    result
 }
 fn sanitize_redacted(value: &str, max: usize) -> String {
     sanitize(&security::redact_text(value), max)
@@ -438,6 +450,39 @@ mod tests {
         let saved: LogEntry = serde_json::from_str(text.trim()).unwrap();
         assert!(saved.message.contains("[REDACTED]"));
     }
+    #[test]
+    fn bounds_long_messages_but_keeps_the_tail_error_text() {
+        const TAIL: &str = "p4: //depot/main/file.txt - file(s) not in client view.";
+        let fixture = Fixture::new();
+        let store = LogStore::open(&fixture.path).unwrap();
+        let mut value = entry("long");
+        value.message = format!("{}{TAIL}", "head-message ".repeat(500));
+        value.command = format!("{}{TAIL}", "head-command ".repeat(80));
+        store.push(value).unwrap();
+
+        let saved = store.query(&LogQuery::default());
+        assert_eq!(saved.len(), 1);
+        assert!(
+            saved[0].message.contains(TAIL),
+            "long message lost its tail: {}",
+            saved[0].message
+        );
+        assert!(
+            saved[0].command.contains(TAIL),
+            "long command lost its tail: {}",
+            saved[0].command
+        );
+        assert!(saved[0].message.contains("head-message"));
+        assert!(saved[0].command.contains("head-command"));
+        assert!(saved[0].message.contains("\n…\n"));
+        assert!(saved[0].message.chars().count() <= 4096 + 4);
+        assert!(saved[0].command.chars().count() <= 512 + 4);
+
+        // The bounded form is what is persisted to the session file too.
+        let text = fs::read_to_string(&store.session.lock().path).unwrap();
+        assert!(text.contains(TAIL));
+    }
+
     #[test]
     fn bounds_memory_while_retaining_the_session_file() {
         let fixture = Fixture::new();

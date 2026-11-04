@@ -1069,10 +1069,7 @@ export function PendingPage({
               ),
               emphasis: "primary" as const,
             }
-          : {
-              reason:
-                "该 CL 没有需要 Resolve 的文件 / No files in this CL need resolve",
-            },
+          : { hidden: true },
         "复制标识 default": copy("default"),
         "复制 CL 编号": copy(change.id),
         复制描述: copy(change.description),

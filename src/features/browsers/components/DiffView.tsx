@@ -12,10 +12,13 @@ import {
 import {
   ArrowDown,
   ArrowUp,
+  Braces,
   Columns2,
   CornerDownLeft,
+  FileCode2,
   Rows3,
   Search,
+  UnfoldVertical,
   X,
 } from "lucide-react";
 import type {
@@ -140,6 +143,15 @@ export function DiffView({
 }) {
   const theme = useResolvedTheme();
   const [view, setView] = useState<ViewStyle>("split");
+  // Classic diff by default: hunks keep their context and every longer run of
+  // unchanged lines collapses into an expandable separator. Expanding the whole
+  // file is the explicit opt-in.
+  const [expandAll, setExpandAll] = useState(false);
+  // Incomplete texts cannot hydrate collapsed context, so the readable raw
+  // patch is the default; the structured renderer stays available for compare.
+  const [partialMode, setPartialMode] = useState<"patch" | "structured">(
+    "patch",
+  );
   const [side, setSide] = useState<DiffSideName>("right");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -186,6 +198,10 @@ export function DiffView({
         : undefined,
     [fullText?.left, fullText?.right],
   );
+  // A newly loaded diff always starts from the default partial presentation.
+  useEffect(() => {
+    setPartialMode("patch");
+  }, [diff?.path, diff?.unified]);
   // The backend's `similar` patch is the single source of truth for hunks; the
   // library only parses it instead of re-diffing the full texts.
   const parsedPatch = useMemo<{
@@ -376,6 +392,9 @@ export function DiffView({
       if (phase === "unmount") {
         node.removeEventListener("contextmenu", onMenu);
         node.removeEventListener("pointerdown", onPointerDown);
+        if (hostRef.current === node) hostRef.current = undefined;
+        if (instanceRef.current === (instance as ScrollInstance))
+          instanceRef.current = undefined;
       }
     },
     [onMenu, onPointerDown],
@@ -502,7 +521,10 @@ export function DiffView({
       hunkSeparators: displayText
         ? ("line-info" as const)
         : ("metadata" as const),
-      expandUnchanged: false,
+      // Classic context folding: ≤3 unchanged lines between hunks stay visible,
+      // longer runs collapse into a line-info separator with an expand button.
+      expandUnchanged: displayText ? expandAll : false,
+      collapsedContextThreshold: 3,
       lineDiffType: "word-alt" as const,
       diffIndicators: "bars" as const,
       disableFileHeader: true,
@@ -510,7 +532,7 @@ export function DiffView({
       onPostRender: bindHost,
       ...(displayText ? { loadDiffFiles } : {}),
     }),
-    [theme, view, displayText, loadDiffFiles, bindHost],
+    [theme, view, displayText, expandAll, loadDiffFiles, bindHost],
   );
 
   const validateLine = (targetSide: DiffSideName, number: number) => {
@@ -746,6 +768,58 @@ export function DiffView({
                 {zh ? "部分内容" : "Partial"}
               </span>
             )}
+            {displayText && (
+              <button
+                className="diff-expand-all-toggle"
+                aria-label={zh ? "展开全部" : "Expand all"}
+                title={
+                  zh
+                    ? "展开全部未改动内容"
+                    : "Expand all unchanged context in this file"
+                }
+                aria-pressed={expandAll}
+                disabled={!renderable}
+                onClick={() => setExpandAll((value) => !value)}
+              >
+                <UnfoldVertical size={14} />
+              </button>
+            )}
+            {!displayText && fileDiff && (
+              <button
+                className="diff-structured-toggle"
+                aria-label={
+                  partialMode === "patch"
+                    ? zh
+                      ? "结构化视图"
+                      : "Structured view"
+                    : zh
+                      ? "原始补丁视图"
+                      : "Raw patch view"
+                }
+                title={
+                  partialMode === "patch"
+                    ? zh
+                      ? "切换到结构化视图"
+                      : "Switch to the structured view"
+                    : zh
+                      ? "切换到原始补丁视图"
+                      : "Switch to the raw patch view"
+                }
+                aria-pressed={partialMode === "structured"}
+                disabled={!renderable}
+                onClick={() =>
+                  setPartialMode((value) =>
+                    value === "patch" ? "structured" : "patch",
+                  )
+                }
+              >
+                {partialMode === "patch" ? (
+                  <Braces size={14} />
+                ) : (
+                  <FileCode2 size={14} />
+                )}
+              </button>
+            )}
             <div
               className="diff-view-toggle"
               role="group"
@@ -811,18 +885,32 @@ export function DiffView({
             {...v04Menu}
           >
             {fileDiff ? (
-              <Virtualizer
-                className="diff-scroll-root"
-                style={{ flex: 1, minHeight: 0 }}
-              >
-                <FileDiff
-                  className="diff-renderer"
-                  style={DIFF_STYLE}
-                  fileDiff={fileDiff}
-                  metrics={METRICS}
-                  options={options}
-                />
-              </Virtualizer>
+              !displayText && partialMode === "patch" ? (
+                <div className="diff-fallback diff-patch-view">
+                  <p
+                    className="diff-fallback-note diff-patch-view-note"
+                    role="note"
+                  >
+                    {zh
+                      ? "文件文本不完整，以下为完整原始补丁（含后端 3 行上下文）；折叠上下文无法展开。"
+                      : "File text is incomplete. Showing the full raw patch with the backend's three context lines; collapsed context cannot be expanded."}
+                  </p>
+                  <pre className="diff-patch-fallback">{diff.unified}</pre>
+                </div>
+              ) : (
+                <Virtualizer
+                  className="diff-scroll-root"
+                  style={{ flex: 1, minHeight: 0 }}
+                >
+                  <FileDiff
+                    className="diff-renderer"
+                    style={DIFF_STYLE}
+                    fileDiff={fileDiff}
+                    metrics={METRICS}
+                    options={options}
+                  />
+                </Virtualizer>
+              )
             ) : (
               <div className="diff-fallback" role="alert">
                 <p className="diff-fallback-note">

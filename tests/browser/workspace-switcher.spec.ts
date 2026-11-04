@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const longClient = "fenganmeng_DM42.Beyond_Beyond_v1d6_project";
+const longClient = "testclient_DM42.Beyond_Beyond_v1d6_project";
 
 for (const width of [1280, 390]) {
   test(`workspace dropdown displays long names and switches in place at ${width}px`, async ({

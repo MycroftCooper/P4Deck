@@ -45,6 +45,7 @@ import {
   Columns2,
   LockKeyhole,
   LockKeyholeOpen,
+  X,
 } from "lucide-react";
 import {
   affectedPathAliases,
@@ -66,6 +67,7 @@ import { useContextMenu } from "../context-menu/ContextMenu";
 import { useMenuEnvironment } from "../context-menu/environment";
 import { action } from "../context-menu/bindings";
 import { useLocalPathCapabilities } from "./useLocalPathCapabilities";
+import { defaultUi } from "../../features/settings/preferences";
 import type { FilePageId } from "../panels";
 import {
   commandReason,
@@ -73,6 +75,12 @@ import {
   type CommandId,
   type CommandTarget,
 } from "./commandPolicy";
+import {
+  startOperation,
+  useOperationWatchdog,
+  type ActiveOperation,
+} from "./useOperationWatchdog";
+import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 
 const groups: {
   id: CommandId;
@@ -142,6 +150,11 @@ export function CommandBar({
   const customSubmit = useCustomSubmit(connectionKey, backend);
   const menu = useContextMenu();
   const { preferences, openPage } = useMenuEnvironment();
+  // Defensive read: hosts/tests that provide an older UiPreferences shape must
+  // keep the documented default instead of disabling confirmation entirely.
+  const getLatestConfirmThreshold =
+    preferences.ui.getLatestConfirmThreshold ??
+    defaultUi.getLatestConfirmThreshold;
   const localCapabilities = useLocalPathCapabilities(
     target,
     runtime.mode === "tauri",
@@ -157,6 +170,8 @@ export function CommandBar({
   const [address, setAddress] = useState(targetPath);
   const addressInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
+  // Dismissible inline notices; the toolbar itself stays silent and stable.
+  const [notice, setNotice] = useState("");
   // Route frontend-only failures to the host log without opening a panel.
   const openOperations = useRef(onOpenOperations);
   openOperations.current = onOpenOperations;
@@ -215,12 +230,33 @@ export function CommandBar({
       }
     },
   );
-  const [operation, setOperation] = useState<{
-    id: string;
-    label: string;
-    progress?: number;
-    cancellable: boolean;
-  }>();
+  const [operation, setOperation] = useState<ActiveOperation>();
+  const refreshInFlight = useRef(false);
+  // A hung host call must not leave the toolbar disabled forever. Once the limit
+  // is exceeded the operation is abandoned as an uncertain result.
+  const timedOut = useRef<string | undefined>(undefined);
+  useOperationWatchdog(operation, (stale) => {
+    // The interval may tick again before React clears it; report each
+    // operation exactly once.
+    if (timedOut.current === stale.id) return;
+    timedOut.current = stale.id;
+    if (running.current === stale.id) running.current = undefined;
+    setOperation((old) => (old && old.id === stale.id ? undefined : old));
+    setNotice(
+      zh
+        ? "操作长时间未返回，结果未知，请刷新核对"
+        : "The operation did not return in time. Its result is unknown; refresh to verify.",
+    );
+    void recordFrontendOperationLog({
+      eventId: `${stale.id}-watchdog`,
+      operationId: stale.id,
+      action: "otherOperation",
+      phase: "execute",
+      outcome: "unknown",
+      code: "uncertainOutcome",
+      targetCount: stale.targetCount,
+    });
+  });
   useEffect(() => {
     onBusyChange(!!operation || dialogs.pending);
     return () => onBusyChange(false);
@@ -228,6 +264,9 @@ export function CommandBar({
   useEffect(() => {
     setAddress(targetPath);
     navigation.current++;
+    // Selecting another target must NOT abandon an in-flight operation: the
+    // backend command keeps running and the user still needs its busy state and
+    // Cancel entry. Only a connection/generation change may force-clear it.
     setLocating(false);
   }, [targetPath, targetKey]);
   // P4V Jump to Address Bar (Alt+L / Ctrl+G) is dispatched by the app catalog
@@ -251,9 +290,12 @@ export function CommandBar({
   useEffect(() => {
     navigation.current++;
     generation.current++;
+    running.current = undefined;
+    setOperation(undefined);
+    setNotice("");
     setError("");
     setLocating(false);
-  }, [connectionKey]);
+  }, [connectionKey, runtime.contextGeneration]);
   useEffect(
     () => () => {
       navigation.current++;
@@ -385,28 +427,60 @@ export function CommandBar({
       return;
     }
     if (id === "getLatest" && target.type === "file") {
-      // Direct Get Latest: no safe-sync preview/confirmation. P4 itself reports
-      // conflicts for locally modified files and updates the rest.
+      // One-click Get Latest always runs the cheap `p4 sync -n` preflight in the
+      // background (spinner, no dialog). Only the preview's affected-file count
+      // decides whether an explicit confirmation is required; a preview failure
+      // never executes and never opens a dialog.
       const operationId = crypto.randomUUID();
       const epoch = generation.current;
       running.current = operationId;
-      setOperation({
-        id: operationId,
-        label: zh ? "获取最新" : "Get latest",
-        cancellable: true,
-      });
+      setOperation(
+        startOperation(operationId, zh ? "获取最新" : "Get latest", {
+          kind: "getLatest",
+          cancellable: true,
+          targetCount: nodes.length,
+        }),
+      );
       let paths: readonly string[] = [];
       let failed = true;
       let failure: unknown;
+      let attemptedExecution = false;
+      let delegatedToDialog = false;
       try {
         paths = selectionRequest("getLatest", nodes).paths;
-        const result = await backend.syncLatest({
+        if (!paths.length)
+          throw new Error(
+            zh ? "没有可获取最新的目标" : "No target selected for Get Latest",
+          );
+        const revision = { kind: "head" as const, value: "" };
+        const plan = await backend.previewSync({
           paths: [...paths],
-          revision: { kind: "head", value: "" },
+          revision,
+          force: false,
           operationId,
         });
-        if (result.outcome === "succeeded") failed = false;
-        else failure = new Error(result.message);
+        const affected =
+          plan.counts.added + plan.counts.updated + plan.counts.deleted;
+        if (affected > getLatestConfirmThreshold) {
+          delegatedToDialog = true;
+          failed = false;
+          dialogs.open({
+            kind: "sync",
+            nodes: nodes.map((node) => ({ ...node })),
+            revisionMode: "head",
+            scopeLabel: target.scopeLabel,
+            source: source ?? (document.activeElement as HTMLElement | null),
+          });
+        } else {
+          attemptedExecution = true;
+          const result = await backend.syncLatest({
+            paths: [...paths],
+            revision,
+            operationId,
+          });
+          if (result.outcome === "succeeded") failed = false;
+          else failure = new Error(result.message);
+        }
       } catch (cause) {
         failure = cause;
       } finally {
@@ -415,17 +489,17 @@ export function CommandBar({
           setOperation(undefined);
         }
       }
+      if (delegatedToDialog) return;
       if (failed) {
-        // P4 can partially apply a sync before failing; keep caches honest.
-        void invalidateData(commandActions.getLatest.effects, {
-          connectionKey,
-          affectedPaths: [...paths],
-        }).catch(() => undefined);
-        if (
-          epoch === generation.current &&
-          latest.current.targetKey === targetKey
-        )
-          onFocus({ type: "none" });
+        // Only a real sync attempt may have partially applied. A failed
+        // preflight left the workspace untouched, so it must not invalidate.
+        if (attemptedExecution)
+          void invalidateData(commandActions.getLatest.effects, {
+            connectionKey,
+            affectedPaths: [...paths],
+          }).catch(() => undefined);
+        // Keep the target selected: the user needs it to retry, inspect or
+        // resolve the failure. A failed Get Latest never clears selection.
         throw failure instanceof Error ? failure : new Error(String(failure));
       }
       void (async () => {
@@ -510,11 +584,17 @@ export function CommandBar({
     if (target.type === "file" && (id === "reveal" || id === "openWith")) {
       const operationId = crypto.randomUUID();
       running.current = operationId;
-      setOperation({
-        id: operationId,
-        label: zh ? "等待系统窗口" : "Waiting for system dialog",
-        cancellable: false,
-      });
+      setOperation(
+        startOperation(
+          operationId,
+          zh ? "等待系统窗口" : "Waiting for system dialog",
+          {
+            kind: "other",
+            cancellable: false,
+            targetCount: 1,
+          },
+        ),
+      );
       try {
         await backend.openLocalPath({
           path: target.node.absolutePath,
@@ -541,11 +621,13 @@ export function CommandBar({
       if (!changes || (stale && !changes.some((change) => change.id > 0))) {
         const queryOperationId = crypto.randomUUID();
         running.current = queryOperationId;
-        setOperation({
-          id: queryOperationId,
-          label: zh ? "读取待提交 CL" : "Loading pending changelists",
-          cancellable: true,
-        });
+        setOperation(
+          startOperation(
+            queryOperationId,
+            zh ? "读取待提交 CL" : "Loading pending changelists",
+            { kind: "other", cancellable: true, targetCount: nodes.length },
+          ),
+        );
         try {
           changes = await queryAllPendingChanges(queryOperationId);
         } finally {
@@ -634,7 +716,13 @@ export function CommandBar({
         {
           onStarted: (operationId) => {
             running.current = operationId;
-            setOperation({ id: operationId, label, cancellable: true });
+            setOperation(
+              startOperation(operationId, label, {
+                kind: "other",
+                cancellable: true,
+                targetCount: nodes.length,
+              }),
+            );
           },
           onSettled: (operationId) => {
             if (running.current === operationId) {
@@ -667,6 +755,21 @@ export function CommandBar({
       );
       return;
     }
+    // Refresh is read-only bookkeeping and stays available while a mutation is
+    // pending (commandPolicy). Run it without adopting the in-flight operation
+    // identity, and treat a second concurrent refresh as a no-op.
+    if (id === "refresh" && running.current) {
+      if (operation?.kind === "refresh" || refreshInFlight.current) return;
+      refreshInFlight.current = true;
+      try {
+        await refreshFileLockFacts(connectionKey);
+        if (actionEpoch !== generation.current) return;
+        await invalidateData(commandActions.refresh.effects, { connectionKey });
+      } finally {
+        refreshInFlight.current = false;
+      }
+      return;
+    }
     if (running.current)
       throw new Error(
         zh
@@ -687,11 +790,13 @@ export function CommandBar({
             zh: "获取指定版本",
             en: "Get revision",
           });
-    setOperation({
-      id: operationId,
-      label: zh ? entry.zh : entry.en,
-      cancellable: id !== "refresh",
-    });
+    setOperation(
+      startOperation(operationId, zh ? entry.zh : entry.en, {
+        kind: id === "refresh" ? "refresh" : "sync",
+        cancellable: id !== "refresh",
+        targetCount: nodes.length,
+      }),
+    );
     let affectedPaths: readonly string[] | undefined;
     let feedbackCompleted = false;
     try {
@@ -937,6 +1042,36 @@ export function CommandBar({
           <span>{zh ? "设置" : "Settings"}</span>
         </button>
       </div>
+      {(error || notice) && (
+        <div className="command-notices">
+          {error && (
+            <div className="command-notice command-notice-error" role="alert">
+              <span className="command-notice-message">{error}</span>
+              <button
+                type="button"
+                aria-label={zh ? "关闭错误提示" : "Dismiss error"}
+                title={zh ? "关闭" : "Dismiss"}
+                onClick={() => setError("")}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          {notice && (
+            <div className="command-notice command-notice-warning" role="alert">
+              <span className="command-notice-message">{notice}</span>
+              <button
+                type="button"
+                aria-label={zh ? "关闭提示" : "Dismiss notice"}
+                title={zh ? "关闭" : "Dismiss"}
+                onClick={() => setNotice("")}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

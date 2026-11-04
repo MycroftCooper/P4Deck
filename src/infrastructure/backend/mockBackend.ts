@@ -2,6 +2,8 @@ import { journalMappingForLogLevel } from "../../features/tools/logLevels";
 import type {
   ChangelistSummary,
   ConfigBackupSummary,
+  FilePreview,
+  FilePreviewRequestOptions,
   FileState,
   GlobalSearchItem,
   GlobalSearchKind,
@@ -652,6 +654,129 @@ const workspaceOverrides = new Map<
 >();
 const workspaceScope = () =>
   JSON.stringify([mockActiveProfileId, mockContext.server, mockContext.user]);
+
+/** Browser-demo table payloads for the CSV/XLSX preview (no files are read). */
+const MOCK_XLSX_SHEETS = ["Summary", "明细", "空表"];
+
+function mockTableMatrix(columns: number, rowCount: number): string[][] {
+  return Array.from({ length: rowCount }, (_, row) =>
+    Array.from({ length: columns }, (_, column) =>
+      row === 0 ? `Col ${column + 1}` : `r${row + 1}c${column + 1}`,
+    ),
+  );
+}
+
+function mockCsvRows(): string[][] {
+  const longCell = "长单元格示例 ".repeat(40).trim();
+  return [
+    ["名称", "类型", "数量", "价格", "备注", "空列"],
+    ["示例 A", "csv", "12", "0.125", "含,逗号", ""],
+    ["示例 B", "tsv", "0", "1999.00", '含"引号"', ""],
+    ["示例 C", "xlsx", "3", "1.5", "含\n换行", ""],
+    [longCell, "data", "4", "2.25", "", ""],
+    ...Array.from({ length: 20 }, (_, index) => [
+      `行 ${index + 6}`,
+      "data",
+      String(index),
+      "3.5",
+      "",
+      "",
+    ]),
+  ];
+}
+
+function mockCsvPreview(path: string): FilePreview {
+  const name = path.toLowerCase();
+  const truncated = name.includes("truncated") || name.includes("timeout");
+  const rows = name.includes("empty")
+    ? []
+    : name.includes("wide")
+      ? mockTableMatrix(64, 30)
+      : truncated
+        ? mockTableMatrix(64, 20)
+        : mockCsvRows();
+  return {
+    kind: "table",
+    content: "",
+    size: name.includes("truncated")
+      ? 110_179_268
+      : name.includes("wide")
+        ? 65_536
+        : 2_048,
+    encoding: "UTF-8",
+    encodingGuess: false,
+    table: {
+      format: "csv",
+      delimiter: name.endsWith(".tsv") ? "\t" : ",",
+      sheetName: null,
+      sheetIndex: null,
+      sheetNames: null,
+      rows,
+      rowCount: null,
+      rowCountSource: null,
+      hasMore: truncated,
+      truncated,
+      truncatedReason: name.includes("timeout")
+        ? "timeout"
+        : truncated
+          ? "rowCap"
+          : null,
+      totalColumns: null,
+    },
+  };
+}
+
+function mockXlsxPreview(options?: FilePreviewRequestOptions): FilePreview {
+  const requested = options?.sheetIndex ?? 0;
+  if (
+    !Number.isInteger(requested) ||
+    requested < 0 ||
+    requested >= MOCK_XLSX_SHEETS.length
+  )
+    throw new Error(
+      `Unknown worksheet index (demo): ${requested} of ${MOCK_XLSX_SHEETS.length}`,
+    );
+  const rows =
+    requested === 0
+      ? mockCsvRows()
+      : requested === 1
+        ? [
+            ["编号", "名称", "状态", "备注"],
+            ["1", "条目一", "启用", "中文示例"],
+            ...Array.from({ length: 10 }, (_, index) => [
+              String(index + 2),
+              `条目 ${index + 2}`,
+              "停用",
+              "",
+            ]),
+          ]
+        : [];
+  const truncated = requested !== 2;
+  return {
+    kind: "table",
+    content: "",
+    size: 3_311_864,
+    encoding: null,
+    table: {
+      format: "xlsx",
+      delimiter: null,
+      sheetName: MOCK_XLSX_SHEETS[requested],
+      sheetIndex: requested,
+      sheetNames: MOCK_XLSX_SHEETS,
+      rows,
+      rowCount: 150_000,
+      rowCountSource: "dimension",
+      hasMore: truncated,
+      truncated,
+      truncatedReason: truncated ? "rowCap" : null,
+      totalColumns: null,
+    },
+  };
+}
+
+const MOCK_PENDING_DETAIL_MESSAGE =
+  "This changelist is pending; opened files belong to its owner's client and only shelved files are listed.";
+
 export const mockBackend: Backend = {
   async selectedMoveLookup() {
     return { kind: "notFound" as const };
@@ -2865,8 +2990,7 @@ export const mockBackend: Backend = {
   },
   async getSubmittedChangeDetail(request) {
     const change = mockChanges.find(
-      (candidate) =>
-        candidate.id === request.changeId && candidate.status === "submitted",
+      (candidate) => candidate.id === request.changeId,
     );
     if (!change) {
       return {
@@ -2880,7 +3004,35 @@ export const mockBackend: Backend = {
         integrationEvidence: [],
         mergeClassification: "unknown",
         inspectionStatus: "unavailable",
-        message: "Submitted changelist inspection failed.",
+        message:
+          "This changelist could not be inspected in the browser mock: no mock changelist has that number.",
+        status: "unknown",
+      };
+    }
+    if (change.status !== "submitted") {
+      // Pending/shelved CLs: the opened files belong to the owner's client, so
+      // only the shelved subset is exposed (same contract as the native read).
+      const shelved =
+        allMockPendingChanges().find((candidate) => candidate.id === change.id)
+          ?.shelvedFiles ?? [];
+      return {
+        changeId: change.id,
+        description: change.description,
+        user: change.user,
+        client: change.client,
+        time: change.time,
+        jobs: [...change.jobs],
+        files: shelved.map((file) => ({
+          depotPath: file.depotPath,
+          action: file.action,
+          revision: file.revision,
+          fileType: file.fileType,
+        })),
+        integrationEvidence: [],
+        mergeClassification: "unknown",
+        inspectionStatus: "partial",
+        message: MOCK_PENDING_DETAIL_MESSAGE,
+        status: change.status,
       };
     }
     const reliable = change.mergeClassification === "reliableMerge";
@@ -2921,6 +3073,7 @@ export const mockBackend: Backend = {
         : suspected
           ? "Mock inspection is partial; text alone is not reliable integration evidence."
           : undefined,
+      status: "submitted",
     };
   },
   async performClAction(action) {
@@ -3671,7 +3824,7 @@ export const mockBackend: Backend = {
       refreshDepot: true,
     };
   },
-  async getFilePreview(path) {
+  async getFilePreview(path, options) {
     if (/\.(png|jpe?g|gif|webp)$/i.test(path))
       return {
         kind: "image",
@@ -3681,8 +3834,10 @@ export const mockBackend: Backend = {
         width: 320,
         height: 180,
       };
+    if (/\.(csv|tsv)$/i.test(path)) return mockCsvPreview(path);
+    if (/\.(xlsx|xlsm)$/i.test(path)) return mockXlsxPreview(options);
     if (
-      !/\.(txt|md|ts|tsx|js|jsx|json|cpp|h|rs|py|css|html|xml|yaml|yml|ini|log|csv|svg)$/i.test(
+      !/\.(txt|md|ts|tsx|js|jsx|json|cpp|h|rs|py|css|html|xml|yaml|yml|ini|log|svg)$/i.test(
         path,
       )
     )

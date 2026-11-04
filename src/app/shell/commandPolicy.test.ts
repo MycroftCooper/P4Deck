@@ -254,6 +254,97 @@ it("folder state is not a descendant status aggregate", () => {
     expect(allowed(id, file("controlled", "directory"))).toBe(false);
 });
 
+it("allows checkout and read-only viewers for locally modified files but blocks get latest", () => {
+  for (const id of ["checkout", "diff", "history", "revgraph"] as CommandId[])
+    expect(
+      commandReason(id, file("modified"), false, true, true),
+    ).toBeUndefined();
+  for (const id of ["getLatest", "getRevision"] as CommandId[]) {
+    expect(commandReason(id, file("modified"), false, true, true)).toBe(
+      "本地有未签出修改，请先签出/还原/对账后再获取最新",
+    );
+    expect(commandReason(id, file("modified"), false, true, false)).toBe(
+      "Local un-checked-out edits exist; checkout/revert/reconcile before getting latest",
+    );
+  }
+  expect(allowed("revert", file("modified"))).toBe(false);
+});
+
+it("keeps get latest disabled for modified files even when status claims they are behind", () => {
+  const modified = file("modified");
+  if (modified.type !== "file") throw new Error("fixture");
+  modified.node.status = {
+    primary: "modified",
+    sync: "outOfDate",
+    resolve: "none",
+    local: "modified",
+    completeness: "complete",
+    evidence: [],
+    errors: [],
+  };
+  modified.node.revision = 79;
+  modified.node.headRevision = 80;
+  for (const id of ["getLatest", "getRevision"] as CommandId[])
+    expect(commandReason(id, modified, false, true, true)).toBe(
+      "本地有未签出修改，请先签出/还原/对账后再获取最新",
+    );
+});
+
+it("points an unknown or loading file state at refresh", () => {
+  const gatedIds: CommandId[] = [
+    "getLatest",
+    "getRevision",
+    "checkout",
+    "diff",
+    "history",
+    "revgraph",
+    "revert",
+    "add",
+    "delete",
+    "moveFiles",
+    "shelve",
+    "resolve",
+  ];
+  for (const state of ["unknown", "loading"] as const) {
+    expect(allowed("refresh", file(state))).toBe(true);
+    for (const id of gatedIds) {
+      expect(commandReason(id, file(state), false, true, true)).toBe(
+        "文件状态未知，请点击刷新重新检查",
+      );
+      expect(commandReason(id, file(state), false, true, false)).toBe(
+        "File status unknown; refresh to re-check",
+      );
+    }
+  }
+});
+
+it("allows history and revision graph for not-synced files", () => {
+  expect(allowed("history", file("notSynced"))).toBe(true);
+  expect(allowed("revgraph", file("notSynced"))).toBe(true);
+  expect(allowed("diff", file("notSynced"))).toBe(false);
+});
+
+it("keeps refresh usable while another operation is busy", () => {
+  expect(
+    commandReason("refresh", file("modified"), true, true, true),
+  ).toBeUndefined();
+  expect(
+    commandReason("refresh", { type: "none" }, true, true, true),
+  ).toBeUndefined();
+  expect(commandReason("refresh", file("unknown"), true, true, true)).toBe(
+    undefined,
+  );
+  expect(commandReason("getLatest", file("controlled"), true, true, true)).toBe(
+    "请等待当前任务完成，或取消任务",
+  );
+  expect(
+    commandReason("getLatest", file("controlled"), true, true, false),
+  ).toBe("Wait for or cancel the current operation");
+  expect(commandReason("cancel", { type: "none" }, true, true, true)).toBe(
+    undefined,
+  );
+});
+
 it("routes exactly two historical revisions in ascending order and disables mutations", () => {
   const target = {
     type: "history" as const,

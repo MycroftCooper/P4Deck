@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -315,17 +315,120 @@ it("normalizes CRLF depot text against LF workspace text", async () => {
   ).toBeGreaterThan(0);
 });
 
-it("collapses long unchanged regions and expands them on demand", async () => {
-  await render(largeResult(source(LINES), source(changedLines())));
-  expect(await waitFor(() => shadowText().includes("line 100 changed"))).toBe(
+const BIG_LINES = Array.from(
+  { length: 400 },
+  (_, index) => `line ${index + 1}`,
+);
+const BIG_CHANGES = [40, 120, 200, 280, 360];
+
+function hunkAround(lineNumber: number) {
+  const start = lineNumber - 3;
+  const rows: string[] = [];
+  for (let line = start; line < lineNumber; line++) rows.push(` line ${line}`);
+  rows.push(`-line ${lineNumber}`);
+  rows.push(`+line ${lineNumber} changed`);
+  for (let line = lineNumber + 1; line <= lineNumber + 3; line++)
+    rows.push(` line ${line}`);
+  return `@@ -${start},7 +${start},7 @@\n${rows.join("\n")}\n`;
+}
+
+function bigResult() {
+  const rightLines = [...BIG_LINES];
+  for (const line of BIG_CHANGES) rightLines[line - 1] = `line ${line} changed`;
+  return result({
+    leftText: source(BIG_LINES),
+    rightText: source(rightLines),
+    unified: "--- left\n+++ right\n" + BIG_CHANGES.map(hunkAround).join(""),
+    stats: { additions: 5, deletions: 5, hunks: 5 },
+  });
+}
+
+function contextRows() {
+  return (
+    container()?.shadowRoot?.querySelectorAll(
+      '[data-line][data-line-type^="context"]',
+    ).length ?? 0
+  );
+}
+
+it("defaults to the classic context view with expandable collapsed regions", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
     true,
   );
   const shadow = () => container()!.shadowRoot!;
-  expect(shadow().querySelector('[data-separator="line-info"]')).toBeTruthy();
-  const label = shadow().querySelector("[data-unmodified-lines]")?.textContent;
-  expect(label).toMatch(/^\d+ unmodified lines?$/);
-  const contextRows = () =>
-    shadow().querySelectorAll('[data-line][data-line-type^="context"]').length;
+  // The backend patch carries three context lines per hunk side, so they show.
+  expect(await waitFor(() => contextRows() > 0)).toBe(true);
+  expect(
+    shadow().querySelectorAll('[data-line-type^="change-"]').length,
+  ).toBeGreaterThan(0);
+  // Longer unchanged runs collapse into line-info separators with expand buttons.
+  expect(
+    await waitFor(
+      () =>
+        shadow().querySelectorAll('[data-separator="line-info"]').length > 0,
+    ),
+  ).toBe(true);
+  expect(
+    shadow().querySelectorAll("[data-separator] [data-expand-button]").length,
+  ).toBeGreaterThan(0);
+  const expandAll = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Expand all"]',
+  )!;
+  expect(expandAll.getAttribute("aria-pressed")).toBe("false");
+});
+
+it("expands all unchanged context on demand and restores the default", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
+    true,
+  );
+  const shadow = () => container()!.shadowRoot!;
+  expect(
+    await waitFor(
+      () => shadow().querySelectorAll("[data-separator]").length > 0,
+    ),
+  ).toBe(true);
+  const collapsed = contextRows();
+  await click('button[aria-label="Expand all"]');
+  expect(
+    await waitFor(
+      () => shadow().querySelectorAll("[data-separator]").length === 0,
+    ),
+  ).toBe(true);
+  expect(contextRows()).toBeGreaterThan(collapsed);
+  expect(
+    host
+      .querySelector('button[aria-label="Expand all"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  await click('button[aria-label="Expand all"]');
+  expect(
+    await waitFor(
+      () => shadow().querySelectorAll("[data-separator]").length > 0,
+    ),
+  ).toBe(true);
+  expect(
+    host
+      .querySelector('button[aria-label="Expand all"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("false");
+});
+
+it("expands a collapsed region from its separator", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
+    true,
+  );
+  const shadow = () => container()!.shadowRoot!;
+  expect(
+    await waitFor(
+      () =>
+        shadow().querySelectorAll(
+          '[data-separator="line-info"] [data-expand-button]',
+        ).length > 0,
+    ),
+  ).toBe(true);
   const before = contextRows();
   const button = shadow().querySelector(
     '[data-separator="line-info"] [data-expand-button]',
@@ -360,6 +463,41 @@ it("renders no change rows when only the line endings differ", async () => {
   ).toBe(0);
 });
 
+it("shows the raw patch by default for incomplete text and switches to the structured view", async () => {
+  await render(
+    result({
+      leftText: undefined,
+      rightText: undefined,
+      unified: "--- left\n+++ right\n@@ -1,2 +1,2 @@\n shared\n-alpha\n+beta\n",
+      stats: { additions: 1, deletions: 1, hunks: 1 },
+    }),
+  );
+  expect(host.querySelector(".diff-patch-fallback")?.textContent).toContain(
+    "+beta",
+  );
+  expect(host.querySelector(".diff-patch-view-note")?.textContent).toContain(
+    "incomplete",
+  );
+  expect(host.querySelector('button[aria-label="Expand all"]')).toBeNull();
+  expect(container()).toBeNull();
+  await click('button[aria-label="Structured view"]');
+  expect(
+    await waitFor(
+      () =>
+        (container()?.shadowRoot?.querySelectorAll(
+          '[data-line-type^="change-"]',
+        ).length ?? 0) > 0,
+    ),
+  ).toBe(true);
+  expect(
+    host
+      .querySelector('button[aria-label="Raw patch view"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  await click('button[aria-label="Raw patch view"]');
+  expect(host.querySelector(".diff-patch-fallback")).not.toBeNull();
+});
+
 it("renders a patch that is missing its trailing newline", async () => {
   await render(
     result({
@@ -369,8 +507,13 @@ it("renders a patch that is missing its trailing newline", async () => {
       stats: { additions: 1, deletions: 1, hunks: 1 },
     }),
   );
+  // Incomplete text defaults to the readable raw patch; no alert fallback.
+  expect(host.querySelector(".diff-patch-fallback")?.textContent).toContain(
+    "TWO",
+  );
+  expect(host.querySelector(".diff-fallback")?.getAttribute("role")).toBeNull();
+  await click('button[aria-label="Structured view"]');
   expect(await waitFor(() => shadowText().includes("TWO"))).toBe(true);
-  expect(host.querySelector(".diff-fallback")).toBeNull();
   const shadow = container()!.shadowRoot!;
   expect(
     shadow.querySelectorAll('[data-line][data-line-type="change-deletion"]')
@@ -392,8 +535,11 @@ it("keeps the no-newline marker from the backend patch", async () => {
       stats: { additions: 1, deletions: 1, hunks: 1 },
     }),
   );
+  expect(host.querySelector(".diff-patch-fallback")?.textContent).toContain(
+    "No newline at end of file",
+  );
+  await click('button[aria-label="Structured view"]');
   expect(await waitFor(() => shadowText().includes("same"))).toBe(true);
-  expect(host.querySelector(".diff-fallback")).toBeNull();
   const marker = container()!.shadowRoot!.querySelector(
     "code[data-additions] [data-no-newline]",
   ) as HTMLElement | null;
@@ -427,7 +573,9 @@ it("searches lines parsed from the backend patch when full texts are unavailable
       stats: { additions: 1, deletions: 1, hunks: 1 },
     }),
   );
-  expect(await waitFor(() => shadowText().includes("beta"))).toBe(true);
+  expect(host.querySelector(".diff-patch-fallback")?.textContent).toContain(
+    "+beta",
+  );
   const input = host.querySelector<HTMLInputElement>(
     'input[aria-label="Find text"]',
   )!;

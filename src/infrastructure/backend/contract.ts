@@ -346,6 +346,7 @@ export interface Backend {
   syncLatest(request: SyncPreviewRequest): Promise<SyncResult>;
   getFilePreview(
     path: string,
+    options?: import("../../shared/contracts").FilePreviewRequestOptions,
   ): Promise<import("../../shared/contracts").FilePreview>;
   getDiff(request: DiffRequest): Promise<DiffResult>;
   getFileHistory(request: FileHistoryRequest): Promise<FileHistoryPage>;

@@ -34,15 +34,15 @@
 
 启动前确认没有 `p4deck` 进程，只检查了既有目录的路径与元数据，没有读取 `connection.json`、ticket 或其他凭据内容。原目录被可恢复地移动到同级备份：
 
-- `C:\Users\fenganmeng\AppData\Roaming\dev.p4deck.desktop.native-acceptance-backup-20261010-192846`
-- `C:\Users\fenganmeng\AppData\Local\dev.p4deck.desktop.native-acceptance-backup-20261010-192846`
+- `C:\Users\<USER>\AppData\Roaming\dev.p4deck.desktop.native-acceptance-backup-20261010-192846`
+- `C:\Users\<USER>\AppData\Local\dev.p4deck.desktop.native-acceptance-backup-20261010-192846`
 
 验收应用随后创建全新的 `dev.p4deck.desktop` Roaming/Local 目录。Roaming 下的 `connection.json`、`p4deck.sqlite`、`operations.sqlite` 都是本轮隔离实例新建的；这里只记录文件名、大小和时间，不读取 profile 正文。
 
 验收结束后先精确确认 PID `5780` 的 exe 路径和启动时间，再用 `CloseMainWindow` 正常退出；退出前没有活动 `p4.exe` 子进程。随后已执行恢复：
 
-- 本轮 Roaming 数据移动到 `C:\Users\fenganmeng\AppData\Roaming\dev.p4deck.desktop.native-test-snapshot-20261010-194736`，共 7 个递归条目。
-- 本轮 Local/WebView2 数据移动到 `C:\Users\fenganmeng\AppData\Local\dev.p4deck.desktop.native-test-snapshot-20261010-194736`，共 369 个递归条目。
+- 本轮 Roaming 数据移动到 `C:\Users\<USER>\AppData\Roaming\dev.p4deck.desktop.native-test-snapshot-20261010-194736`，共 7 个递归条目。
+- 本轮 Local/WebView2 数据移动到 `C:\Users\<USER>\AppData\Local\dev.p4deck.desktop.native-test-snapshot-20261010-194736`，共 369 个递归条目。
 - 原 Roaming/Local 备份均已恢复为 `dev.p4deck.desktop` 原名，递归条目数分别为 6 和 291；旧 `.native-acceptance-backup-20261010-192846` 路径已因移动恢复而不存在。
 
 全程只枚举目录位置和元数据数量，没有读取恢复后的 profile、ticket 或 secret。恢复后没有启动 P4Deck，避免原配置自动连接任何真实 Server；最终 exe 留给用户手动启动。
@@ -162,6 +162,6 @@ fixture 由 `scripts/p4d-fixture.ps1` 管理，使用仓库内固定并校验过
 
 有限验证已通过：后端定向测试 21/21（connection service 4、connection setup 7、context 9、workspace root 安全门 1），`cargo check`、Clippy `-D warnings`、Rust fmt、`check:web`、Prettier、前端契约 validator 与 diff-check 均通过；PM 另行复跑 connection service 4/4。单一 localhost 隔离 Root 链 1/1 通过，覆盖 classic Workspace 的首次激活、活动更新和保存均把故意给错但确实存在的 cwd 归一化为服务端 Root；测试后 fixture 已停止。没有运行历史全量 P4D 矩阵，也没有连接本人 Server。
 
-本轮日志核查使用系统 Python `sqlite3`，以 `file:///C:/Users/fenganmeng/AppData/Roaming/dev.p4deck.desktop/p4deck.sqlite?mode=ro` 正常只读连接并包含 WAL；PM 使用同一方法独立复核。在 `2026-10-10 23:15:51 +08:00` 的时间截面，该方法观察到 630 行；`22:33:20 +08:00` 之后有 40 条 error，最新到 `23:15:51 +08:00`，40 条都同时包含 Client/Root 语义。另一 SQLite 运行时的短 URI 只读视图曾看到 27 行、最新到 `2026-10-08`，原因未证实，不能归因为忽略 WAL，也不能仅凭该视图判断本次点击没有发生。现有旧日志没有结构化 `notClientRoot` 或其他已知错误码，因此不能严谨宣称 40 条都是同一具体错误；此前“16 条 notClientRoot”是较早时间截面且分类过强，以本段为准。没有从这批记录中证实新的认证或网络错误。
+本轮日志核查使用系统 Python `sqlite3`，以 `file:///C:/Users/<USER>/AppData/Roaming/dev.p4deck.desktop/p4deck.sqlite?mode=ro` 正常只读连接并包含 WAL；PM 使用同一方法独立复核。在 `2026-10-10 23:15:51 +08:00` 的时间截面，该方法观察到 630 行；`22:33:20 +08:00` 之后有 40 条 error，最新到 `23:15:51 +08:00`，40 条都同时包含 Client/Root 语义。另一 SQLite 运行时的短 URI 只读视图曾看到 27 行、最新到 `2026-10-08`，原因未证实，不能归因为忽略 WAL，也不能仅凭该视图判断本次点击没有发生。现有旧日志没有结构化 `notClientRoot` 或其他已知错误码，因此不能严谨宣称 40 条都是同一具体错误；此前“16 条 notClientRoot”是较早时间截面且分类过强，以本段为准。没有从这批记录中证实新的认证或网络错误。
 
 用户于客户端日期 `2026-10-12` 确认关闭 P4Deck；构建主机日期同为 `2026-10-12`。构建前以 JSON 结果核对源码 HEAD `101b0bbb43efd2dddc5e8b4c9496d28c696fcb05`、工作树 clean 且没有 `p4deck.exe` 进程，随后唯一一次执行 `pnpm tauri build --debug --no-bundle`，exit 0。标准生成物为 `D:\GitCode\P4Deck\src-tauri\target\debug\p4deck.exe`，时间 `2026-10-12T11:17:40.0613135+08:00`，大小 `32,617,472` bytes，SHA-256 `FC7F2CABFE65F078F01D4935BD155B977FC5D0790F22875E29103B44191125A4`，Authenticode 状态 `NotSigned`。构建后再次确认没有 P4Deck 进程；Agent 未启动应用、读取个人配置或连接本人 P4 Server。该生成物已包含本批 Workspace Root 与连接审计源码，但仍需用户原生打开后验收实际连接行为。

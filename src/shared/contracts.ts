@@ -510,7 +510,12 @@ export type WorkspaceReconcileAction =
   "add" | "edit" | "delete" | "moveAdd" | "moveDelete";
 export type WorkspaceSyncState =
   "current" | "outOfDate" | "notSynced" | "unknown";
-export type WorkspaceResolveState = "none" | "unresolved" | "unknown";
+/**
+ * `resolved` means the file has an already-resolved (but not yet submitted)
+ * integration record; it can be re-resolved with `p4 resolve -f`.
+ */
+export type WorkspaceResolveState =
+  "none" | "unresolved" | "unknown" | "resolved";
 export type WorkspaceLocalState =
   | "present"
   | "missing"
@@ -896,6 +901,13 @@ export interface SubmittedChangeDetail {
   mergeClassification: MergeClassification;
   inspectionStatus: "complete" | "partial" | "unavailable";
   message?: string;
+  /**
+   * Real changelist status reported by the server:
+   * "submitted" | "pending" | "shelved" | "unknown" (unknown means the
+   * inspection itself was unavailable). Optional only for older fixtures;
+   * the Rust backend always returns it.
+   */
+  status?: string;
 }
 
 export interface ShelfDetailRequest {
@@ -2448,6 +2460,8 @@ export type ResolveStrategy =
 
 export interface ResolvePreflightRequest {
   depotPaths: string[];
+  /** Re-resolve already resolved files with `p4 resolve -f` (target = last resolution). */
+  force?: boolean;
 }
 
 export interface ResolveVersionSource {
@@ -2498,6 +2512,8 @@ export interface ResolveStatsRequest {
   sourceDepotPath?: string;
   sourceRevision?: number;
   targetPath?: string;
+  /** Measure the `p4 resolve -f` (re-resolve) three-way state instead. */
+  force?: boolean;
 }
 
 export interface ResolveVersionStats {
@@ -2708,13 +2724,62 @@ export interface WorkflowResult {
   refresh: WorkflowRefreshAdvice;
 }
 
+export type FilePreviewKind = "text" | "image" | "table";
+
+/** Why a bounded table preview page was clipped; null when nothing was clipped. */
+export type FilePreviewTruncatedReason =
+  "rowCap" | "colCap" | "cellCap" | "byteCap" | "budgetCap" | "timeout";
+
+/**
+ * Bounded first page of a CSV/XLSX preview. `rows` keeps the sheet's first row
+ * as returned (the frontend decides whether to display it as a header), values
+ * are already formatted by the backend, and `content` stays empty.
+ */
+export interface FilePreviewTable {
+  format: "csv" | "xlsx";
+  /** CSV: auto-detected delimiter. XLSX: null. */
+  delimiter: "," | ";" | "\t" | "|" | null;
+  sheetName: string | null;
+  sheetIndex: number | null;
+  /** XLSX: all worksheet names (bounded); CSV: null. */
+  sheetNames: string[] | null;
+  /** ≤500 rows × ≤64 columns, header row included, empty string = empty cell. */
+  rows: string[][];
+  /** Known total rows; CSV is always null, XLSX only when dimension is trusted. */
+  rowCount: number | null;
+  /** Provenance of `rowCount`; includes the header row and may include empty rows. */
+  rowCountSource: "dimension" | null;
+  hasMore: boolean;
+  truncated: boolean;
+  truncatedReason: FilePreviewTruncatedReason | null;
+  /** Total worksheet columns when the backend knows it (column-cap wording). */
+  totalColumns?: number | null;
+}
+
 export interface FilePreview {
-  kind: "text" | "image";
+  kind: FilePreviewKind;
+  /** text: raw text; image: data URL; table: always "". */
   content: string;
+  /** Real file bytes on disk (not the IPC payload size). */
   size: number;
+  /** text/csv: encoding name; image: null. */
   encoding?: string | null;
+  /** True when `encoding` is a guess rather than a BOM/declared value. */
+  encodingGuess?: boolean;
   width?: number | null;
   height?: number | null;
+  /** Present only for kind === "table". */
+  table?: FilePreviewTable;
+}
+
+/** Optional preview request dimensions; v1 sends only `sheetIndex`. */
+export interface FilePreviewRequestOptions {
+  /** 0-based worksheet index (xlsx). Omitted means 0. */
+  sheetIndex?: number;
+  /** Reserved for paging; v1 never sends it. */
+  offset?: number;
+  /** Reserved for paging; v1 never sends it. */
+  limit?: number;
 }
 
 export interface UndoTarget {

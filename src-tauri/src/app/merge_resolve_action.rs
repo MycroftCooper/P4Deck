@@ -357,6 +357,7 @@ mod tests {
             shelved_size: None,
             shelved_type: None,
             unresolved,
+            resolved: 0,
             other_open: 0,
             other_lock: 0,
             our_lock: 0,

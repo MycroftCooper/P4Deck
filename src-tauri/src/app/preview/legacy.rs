@@ -1,50 +1,21 @@
+//! Legacy text/image preview: unchanged behavior, moved out of the old
+//! single-file `preview.rs` module.
+
 use base64::{engine::general_purpose::STANDARD, Engine};
-use serde::Serialize;
 use std::{
     io::{Cursor, Read},
     path::Path,
 };
 
-const IMAGE_LIMIT: u64 = 8 * 1024 * 1024;
-const TEXT_LIMIT: u64 = 2 * 1024 * 1024;
+use super::{FilePreview, IMAGE_LIMIT, IMAGE_MEGAPIXELS, TEXT_LIMIT};
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FilePreview {
-    kind: &'static str,
-    content: String,
-    size: u64,
-    encoding: Option<&'static str>,
-    width: Option<u32>,
-    height: Option<u32>,
-}
-
-pub fn read(root: &Path, input: &str) -> Result<FilePreview, String> {
-    let root = root.canonicalize().map_err(|e| e.to_string())?;
-    let input = Path::new(input);
-    let path = if input.is_absolute() {
-        input.to_owned()
-    } else {
-        root.join(input)
-    };
-    let path = path
-        .canonicalize()
-        .map_err(|_| "File is not available locally. Sync it first, then retry.".to_string())?;
-    if !path.starts_with(&root) {
-        return Err("Preview is restricted to the current workspace directory".into());
-    }
-    if !std::fs::metadata(&path)
-        .map_err(|e| e.to_string())?
-        .is_file()
-    {
-        return Err("Select a regular file".into());
-    }
+pub(crate) fn preview(path: &Path, size: u64) -> Result<FilePreview, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let metadata = file.metadata().map_err(|e| e.to_string())?;
     if !metadata.is_file() {
         return Err("Select a file, not a directory".into());
     }
-    if metadata.len() > IMAGE_LIMIT {
+    if size > IMAGE_LIMIT {
         return Err("Preview limit: 2 MiB for text, 8 MiB for images".into());
     }
     let mut bytes = Vec::new();
@@ -70,17 +41,17 @@ fn classify(bytes: &[u8]) -> Result<FilePreview, String> {
         let (width, height) = image::ImageReader::with_format(Cursor::new(bytes), format)
             .into_dimensions()
             .map_err(|_| "Invalid or damaged image".to_string())?;
-        if u64::from(width) * u64::from(height) > 20_000_000 {
+        if u64::from(width) * u64::from(height) > IMAGE_MEGAPIXELS {
             return Err("Image exceeds the 20 megapixel preview limit".into());
         }
-        return Ok(FilePreview {
-            kind: "image",
-            content: format!("data:{mime};base64,{}", STANDARD.encode(bytes)),
+        return Ok(FilePreview::legacy(
+            "image",
+            format!("data:{mime};base64,{}", STANDARD.encode(bytes)),
             size,
-            encoding: None,
-            width: Some(width),
-            height: Some(height),
-        });
+            None,
+            Some(width),
+            Some(height),
+        ));
     }
     if size > TEXT_LIMIT {
         return Err("Text exceeds the 2 MiB preview limit".into());
@@ -120,19 +91,20 @@ fn classify(bytes: &[u8]) -> Result<FilePreview, String> {
     {
         return Err("Binary files cannot be previewed as text".into());
     }
-    Ok(FilePreview {
-        kind: "text",
-        content: text,
+    Ok(FilePreview::legacy(
+        "text",
+        text,
         size,
-        encoding: Some(encoding),
-        width: None,
-        height: None,
-    })
+        Some(encoding),
+        None,
+        None,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn json_is_raw_text_in_all_supported_encodings_and_wire_contract() {
         // Invalid JSON syntax is still readable text, never silently discarded.
@@ -157,6 +129,11 @@ mod tests {
                 assert_eq!(wire["content"], text);
                 assert_eq!(wire["size"], bytes.len());
                 assert!(wire["encoding"].is_string());
+                // New optional fields must not leak into the legacy wire shape.
+                assert!(wire.get("table").is_none());
+                assert!(wire.get("encodingGuess").is_none());
+                assert!(wire["width"].is_null());
+                assert!(wire["height"].is_null());
             }
         }
     }
@@ -170,9 +147,11 @@ mod tests {
         assert_eq!(text.lines().count(), 9);
         let path = root.join("synthetic.json");
         std::fs::write(&path, text.as_bytes()).unwrap();
-        let preview = read(&root, "synthetic.json").unwrap();
-        assert_eq!(preview.kind, "text");
-        assert_eq!(preview.content, text);
+        let size = std::fs::metadata(&path).unwrap().len();
+        let preview = preview(&path.canonicalize().unwrap(), size).unwrap();
+        let wire = serde_json::to_value(&preview).unwrap();
+        assert_eq!(wire["kind"], "text");
+        assert_eq!(wire["content"], text);
         std::fs::remove_file(path).unwrap();
         std::fs::remove_dir(root).unwrap();
     }
@@ -185,18 +164,21 @@ mod tests {
         assert!(classify(&[b'{', 0, b'}', 0]).is_err());
         assert!(classify(&vec![b' '; TEXT_LIMIT as usize + 1]).is_err());
     }
+
     #[test]
     fn text_and_encodings() {
         assert_eq!(classify("你好\ntext".as_bytes()).unwrap().kind, "text");
         assert_eq!(classify(&[0xff, 0xfe, 65, 0]).unwrap().content, "A");
         assert_eq!(classify(&[]).unwrap().content, "");
     }
+
     #[test]
     fn rejects_binary_and_large_text() {
         assert!(classify(&[0, 1, 2]).is_err());
         assert!(classify(&vec![b'a'; TEXT_LIMIT as usize + 1]).is_err());
         assert!(classify(&[0xff, 0xfe, 65]).is_err());
     }
+
     #[test]
     fn validates_images() {
         let mut data = Cursor::new(Vec::new());
@@ -207,14 +189,8 @@ mod tests {
         assert_eq!(preview.width, Some(2));
         assert_eq!(preview.height, Some(3));
         assert!(preview.content.starts_with("data:image/png;base64,"));
+        let wire = serde_json::to_value(&preview).unwrap();
+        assert!(wire.get("table").is_none());
         assert!(classify(b"\x89PNG\r\n\x1a\ninvalid").is_err());
-    }
-    #[test]
-    fn restricts_workspace() {
-        let root = std::env::temp_dir().join(format!("p4deck-preview-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir(&root).unwrap();
-        assert!(read(&root, "..").is_err());
-        assert!(read(&root, ".").is_err());
-        std::fs::remove_dir(root).unwrap();
     }
 }
