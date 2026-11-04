@@ -1,4 +1,5 @@
 import { t } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -793,7 +794,9 @@ export function ResolveDialog({
   const localTime = (value?: string) => {
     if (!value) return t("files.not.returned");
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : formatLocalTime(parsed.getTime(), zh ? "zh-CN" : "en-US");
   };
   const versionMeta = (value: ResolveVersionStats | undefined) =>
     `${t("files.user")}: ${value?.user ?? t("files.not.returned")} · ${t("files.time")}: ${localTime(value?.time)}`;

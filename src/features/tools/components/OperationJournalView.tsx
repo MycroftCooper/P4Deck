@@ -1,4 +1,5 @@
 import { tFor } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ActionAdmission } from "../../actions/ActionAdmission";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -332,11 +333,11 @@ export function OperationJournalView({
                   </td>
                   <td>
                     <time dateTime={record.startedAt}>
-                      {new Date(record.startedAt).toLocaleString()}
+                      {formatLocalTime(record.startedAt, zh ? "zh-CN" : "en-US")}
                     </time>
                     <span>
                       {record.finishedAt
-                        ? new Date(record.finishedAt).toLocaleString()
+                        ? formatLocalTime(record.finishedAt, zh ? "zh-CN" : "en-US")
                         : tFor(zh ? "zh-CN" : "en-US", "tools.in.progress")}
                     </span>
                   </td>

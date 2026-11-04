@@ -1,4 +1,5 @@
 import { tFor } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -431,7 +432,7 @@ export function LogView({
                 >
                   <td>
                     <time dateTime={entry.timestamp}>
-                      {new Date(entry.timestamp).toLocaleString()}
+                      {formatLocalTime(entry.timestamp, zh ? "zh-CN" : "en-US")}
                     </time>
                   </td>
                   <td>{logLevelLabel(entry.level, zh)}</td>

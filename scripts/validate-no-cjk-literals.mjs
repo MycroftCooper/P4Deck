@@ -42,6 +42,17 @@ const EXEMPT_FILES = [
   "src/shared/i18n/i18n.test.ts",
 ];
 
+/**
+ * Lookup indexes where the Chinese text is a KEY, not rendered copy:
+ *  - labels.ts          maps a Chinese menu label to a catalog key
+ *  - context-menu/catalog.ts  the menu inventory; its `label` fields are always
+ *                             passed through menuLabel() before render
+ */
+const KEY_INDEX_FILES = [
+  "src/app/context-menu/labels.ts",
+  "src/app/context-menu/catalog.ts",
+];
+
 const violations = [];
 
 for (const abs of walk(path.join(ROOT, "src"))) {
@@ -49,6 +60,8 @@ for (const abs of walk(path.join(ROOT, "src"))) {
   if (!/\.(ts|tsx)$/.test(file)) continue;
   if (/\.test\.(ts|tsx)$/.test(file)) continue;
   if (EXEMPT_FILES.includes(file)) continue;
+
+  const keyIndexOnly = KEY_INDEX_FILES.includes(file);
 
   const lines = fs.readFileSync(abs, "utf8").split(/\r?\n/);
   let inBlockComment = false;
@@ -70,6 +83,17 @@ for (const abs of walk(path.join(ROOT, "src"))) {
     // Ignore a trailing line comment only; keep the code part checked.
     const code = line.split("//")[0];
     if (!CJK.test(code)) return;
+    // In a key index the Chinese sits on the left of a `key: "catalog.key"`
+    // pair; only the mapped value is what renders. Flag object values only.
+    if (keyIndexOnly) {
+      // labels.ts:  中文键: "contextMenu.key",
+      const isIndexEntry = /^\s*(?:"[^"]+"|[\w\u4e00-\u9fff ]+)\s*:\s*"[^"]*"\s*,?\s*$/.test(code);
+      const valueHasCjk = /:\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code);
+      if (isIndexEntry && !valueHasCjk) return;
+      // catalog.ts:  label: "中文" / title: "中文"  (always routed through menuLabel)
+      if (/^\s*(label|title):\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code)) return;
+      if (/^\s*"?(label|title)"?\s*:\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code)) return;
+    }
     violations.push({ file, line: i + 1, text: trimmed.slice(0, 160) });
   });
 }

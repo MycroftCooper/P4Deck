@@ -1,4 +1,6 @@
 import { t } from "../../shared/i18n";
+import { isZh } from "../../shared/locale";
+import { formatLocalTime } from "../../shared/lib/localTime";
 import { useServerStatus } from "./useServerStatus";
 import type { ServerStatusHint } from "./serverStatus";
 import {
@@ -351,7 +353,7 @@ export function StatusBar({
             : autoRefreshPaused
               ? t("shell.auto.refresh.paused")
               : autoRefresh.lastUpdated
-                ? `${t("shell.updated")} ${new Date(autoRefresh.lastUpdated).toLocaleTimeString()}`
+                ? `${t("shell.updated")} ${formatLocalTime(autoRefresh.lastUpdated, isZh() ? "zh-CN" : "en-US")}`
                 : t("shell.auto.refresh")}
         </span>
       </button>

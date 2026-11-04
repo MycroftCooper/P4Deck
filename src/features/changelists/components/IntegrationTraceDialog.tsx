@@ -1,4 +1,5 @@
 import { t } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -289,7 +290,7 @@ function IntegrationTraceDialogInner({
         {t("pending.files.queried")}: {next}/{uniqueFiles} ·{" "}
         {t("pending.read.budget")}: {requests}/12 ·{" "}
         {readAt
-          ? new Date(readAt).toLocaleString()
+          ? formatLocalTime(readAt, zh ? "zh-CN" : "en-US")
           : t("pending.not.read")}
       </p>
       {detail &&
