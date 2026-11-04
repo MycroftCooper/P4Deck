@@ -496,6 +496,41 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.write.action.no.shortcut.use.the":
+    "写操作：不分配快捷键，仍需工具栏/命令面板并确认",
+  "settings.requires.a.nonempty.numbered.pending.changelist":
+    "需选中非空、已编号的待提交 CL",
+  "settings.shortcuts.are.not.recorded.from.editable": "输入框内不录制快捷键",
+  "settings.unsupported.key.use.ctrl.cmd.alt":
+    "该按键不可绑定：需要 Ctrl/Cmd、Alt 或功能键（Esc 取消，Backspace/Delete 清除）",
+  "settings.restored.the.p4v.aligned.defaults": "已恢复 P4V 对齐的默认快捷键",
+  "settings.defaults.follow.p4v.write.actions.intentionally":
+    "默认键位与 P4V 对齐；写操作不分配快捷键，仍需工具栏/命令面板并确认。点击「录制」后按下新组合键，Esc 取消，Backspace/Delete 清除绑定。",
+  "settings.press.the.new.key.combination": "请按下新组合键…",
+  "settings.default.binding.restored": "已恢复该项默认键",
+  "settings.shortcut.reserved.warning":
+    "该组合可能被浏览器/系统占用（{name}），桌面端通常仍可用",
+  "settings.shortcut.conflict": "与「{name}」({id}) 冲突，请先清除或修改另一项",
+  "settings.shortcut.bound": "已绑定 {shortcut}",
+  "settings.shortcut.overridden": "已自定义 {count} 项",
+  "settings.commandGroup.app": "应用",
+  "settings.commandGroup.connection": "连接",
+  "settings.commandGroup.changes": "变更",
+  "settings.commandGroup.navigation": "导航",
+  "settings.commandGroup.file": "文件",
+  "settings.commandGroup.tools": "工具",
+  "settings.reservedKey.mod+t": "浏览器新标签页",
+  "settings.reservedKey.mod+shift+t": "浏览器重新打开标签页",
+  "settings.reservedKey.mod+w": "关闭窗口",
+  "settings.reservedKey.mod+shift+w": "关闭窗口",
+  "settings.reservedKey.mod+n": "新窗口",
+  "settings.reservedKey.mod+q": "退出应用",
+  "settings.reservedKey.mod+p": "打印",
+  "settings.reservedKey.mod+s": "保存网页",
+  "settings.reservedKey.mod+o": "打开文件",
+  "settings.reservedKey.mod+f": "浏览器查找",
+  "settings.reservedKey.mod+shift+esc": "任务管理器",
+  "settings.reservedKey.alt+f4": "关闭窗口",
   "search.the.backend.returned.a.non.progressing":
     "后端返回了不可继续的游标；已保留当前部分结果。",
   "search.search.submitted.and.pending.changelists.workspace":

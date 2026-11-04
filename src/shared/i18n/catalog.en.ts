@@ -534,6 +534,44 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.write.action.no.shortcut.use.the":
+    "Write action: no shortcut; use the toolbar or palette with confirmation",
+  "settings.requires.a.nonempty.numbered.pending.changelist":
+    "Requires a nonempty numbered pending changelist",
+  "settings.shortcuts.are.not.recorded.from.editable":
+    "Shortcuts are not recorded from editable fields",
+  "settings.unsupported.key.use.ctrl.cmd.alt":
+    "Unsupported key: use Ctrl/Cmd, Alt or a function key (Esc cancels, Backspace/Delete clears)",
+  "settings.restored.the.p4v.aligned.defaults":
+    "Restored the P4V-aligned defaults",
+  "settings.defaults.follow.p4v.write.actions.intentionally":
+    "Defaults follow P4V. Write actions intentionally have no shortcut and still require confirmation. Click Record and press a combination; Esc cancels, Backspace/Delete clears the binding.",
+  "settings.press.the.new.key.combination": "Press the new key combination…",
+  "settings.default.binding.restored": "Default binding restored",
+  "settings.shortcut.reserved.warning":
+    "This combination may be reserved by the browser/system ({name}); the desktop app usually still receives it",
+  "settings.shortcut.conflict":
+    'Conflicts with "{name}" ({id}); clear or change that command first',
+  "settings.shortcut.bound": "Bound {shortcut}",
+  "settings.shortcut.overridden": "{count} customized",
+  "settings.commandGroup.app": "App",
+  "settings.commandGroup.connection": "Connection",
+  "settings.commandGroup.changes": "Changes",
+  "settings.commandGroup.navigation": "Navigation",
+  "settings.commandGroup.file": "File",
+  "settings.commandGroup.tools": "Tools",
+  "settings.reservedKey.mod+t": "browser new tab",
+  "settings.reservedKey.mod+shift+t": "browser reopen tab",
+  "settings.reservedKey.mod+w": "close window",
+  "settings.reservedKey.mod+shift+w": "close window",
+  "settings.reservedKey.mod+n": "new window",
+  "settings.reservedKey.mod+q": "quit app",
+  "settings.reservedKey.mod+p": "print",
+  "settings.reservedKey.mod+s": "save page",
+  "settings.reservedKey.mod+o": "open file",
+  "settings.reservedKey.mod+f": "browser find",
+  "settings.reservedKey.mod+shift+esc": "task manager",
+  "settings.reservedKey.alt+f4": "close window",
   "search.the.backend.returned.a.non.progressing":
     "The backend returned a non-progressing cursor; current partial results were preserved.",
   "search.search.submitted.and.pending.changelists.workspace":
