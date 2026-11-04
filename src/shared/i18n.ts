@@ -25,6 +25,8 @@ export {
   messageFor,
 } from "./i18n/index";
 export type { MsgParams } from "./i18n/types";
+/** The catalog key union, for code that indexes translations dynamically. */
+export type { MsgKey } from "./i18n/catalog.zh";
 
 /**
  * Set the module-locale resolver without touching React state. Used by tests
