@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContext, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileCode2, LoaderCircle } from "lucide-react";
@@ -16,7 +17,7 @@ export function DiffPathInput({
   label,
   target,
   locked,
-  zh,
+  zh: _zh,
   onChange,
   raw = false,
   children,
@@ -107,13 +108,7 @@ export function DiffPathInput({
         title={error || target || context.cwd}
         value={draft?.owner === owner ? draft.text : display}
         disabled={locked}
-        placeholder={
-          raw
-            ? label
-            : zh
-              ? "工作区内路径 · 可粘贴本地或 Depot 路径"
-              : "Workspace path · paste a local or depot path"
-        }
+        placeholder={raw ? label : t("docking.workspace.path.paste.a.local")}
         onChange={(event) => {
           setDraft({ owner, text: event.target.value });
           setFailure(undefined);

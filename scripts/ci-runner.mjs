@@ -178,6 +178,7 @@ const webSteps = [
     "scripts/validate-frontend-contracts.mjs",
   ),
   nodeStep("version-consistency", "versions", "scripts/validate-versions.mjs"),
+  nodeStep("i18n-literals", "i18n", "scripts/validate-no-cjk-literals.mjs"),
   nodeStep("ci-step-result-tests", "node-test", "--test", [
     "scripts/ci-step-result.test.mjs",
   ]),

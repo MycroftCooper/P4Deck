@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 /** Local presentation input only. IPC scope/revision contract belongs to BE. */
 export interface PassiveStatusView {
   connection: "unknown" | "reachable" | "failed";
@@ -47,26 +48,32 @@ export function passiveStatusPresentation(
               : s.connection === "reachable"
                 ? "healthy"
                 : "unknown";
-  const unknown = zh ? "暂无近期样本" : "No recent samples";
+  const unknown = tFor(zh ? "zh-CN" : "en-US", "shell.no.recent.samples");
   const connection = {
     unknown,
-    reachable: zh ? "连接正常" : "Reachable",
-    failed: zh ? "连接失败" : "Connection failed",
+    reachable: tFor(zh ? "zh-CN" : "en-US", "shell.reachable"),
+    failed: tFor(zh ? "zh-CN" : "en-US", "shell.connection.failed"),
   }[s.connection];
   const access = {
     unknown,
-    ok: zh ? "最近请求已授权" : "Last request authorized",
-    loginRequired: zh ? "需要登录或登录已过期" : "Sign in required or expired",
-    permissionDenied: zh ? "权限不足" : "Permission denied",
+    ok: tFor(zh ? "zh-CN" : "en-US", "shell.last.request.authorized"),
+    loginRequired: tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.sign.in.required.or.expired",
+    ),
+    permissionDenied: tFor(zh ? "zh-CN" : "en-US", "shell.permission.denied"),
   }[s.access];
   // "本机响应" shows the latest request duration directly; bucketed quality refines the wording.
   const lastMs = zh
     ? `最近 ${s.lastElapsedMs} ms`
     : `Last ${s.lastElapsedMs} ms`;
   const baseQuality = {
-    smooth: zh ? "流畅" : "Smooth",
-    slow: zh ? "变慢" : "Slower",
-    persistentTimeout: zh ? "持续超时" : "Persistent timeouts",
+    smooth: tFor(zh ? "zh-CN" : "en-US", "shell.smooth"),
+    slow: tFor(zh ? "zh-CN" : "en-US", "shell.slower"),
+    persistentTimeout: tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.persistent.timeouts",
+    ),
   }[s.quality as "smooth" | "slow" | "persistentTimeout"];
   const quality =
     baseQuality && s.lastElapsedMs != null
@@ -79,23 +86,32 @@ export function passiveStatusPresentation(
               ? `样本不足（${s.samples}/5）`
               : `Insufficient samples (${s.samples}/5)`
             : s.observedAt
-              ? zh
-                ? "已观察请求，尚未测速"
-                : "Requests observed; no speed sample yet"
+              ? tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "shell.requests.observed.no.speed.sample",
+                )
               : unknown));
   const rows = [
-    { label: zh ? "连接" : "Connection", value: connection },
-    { label: zh ? "登录 / 权限" : "Login / permissions", value: access },
-    { label: zh ? "本机响应" : "Local response", value: quality },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.connection"),
+      value: connection,
+    },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.login.permissions"),
+      value: access,
+    },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.local.response"),
+      value: quality,
+    },
   ];
   const note =
-    (zh
-      ? "已有请求的本机观测，非服务器负载"
-      : "Observed existing requests; not server load") +
+    tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.observed.existing.requests.not.server",
+    ) +
     (s.connectionSource === "manual"
-      ? zh
-        ? "；连接来自手动检查"
-        : "; connection from manual check"
+      ? tFor(zh ? "zh-CN" : "en-US", "shell.connection.from.manual.check")
       : "");
   return {
     icon,

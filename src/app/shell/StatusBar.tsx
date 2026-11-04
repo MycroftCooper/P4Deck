@@ -1,3 +1,6 @@
+import { t } from "../../shared/i18n";
+import { isZh } from "../../shared/locale";
+import { formatLocalTime } from "../../shared/lib/localTime";
 import { useServerStatus } from "./useServerStatus";
 import type { ServerStatusHint } from "./serverStatus";
 import {
@@ -177,11 +180,7 @@ export function StatusBar({
       if (!live.current) return;
       pending.current.delete(id);
       setCancelling(new Set(pending.current));
-      setCancelError(
-        zh
-          ? "取消请求失败，请重试或查看日志。"
-          : "Cancellation failed. Retry or inspect the logs.",
-      );
+      setCancelError(t("shell.cancellation.failed.retry.or.inspect"));
       setTasksOpen(true);
     }
   };
@@ -205,11 +204,7 @@ export function StatusBar({
       if (!live.current) return;
       ids.forEach((id) => pending.current.delete(id));
       setCancelling(new Set(pending.current));
-      setCancelError(
-        zh
-          ? "取消全部任务的请求失败，请重试或逐项取消。"
-          : "Cancelling all tasks failed. Retry or cancel tasks individually.",
-      );
+      setCancelError(t("shell.cancelling.all.tasks.failed.retry"));
       setTasksOpen(true);
     } finally {
       allPending.current = false;
@@ -222,30 +217,23 @@ export function StatusBar({
         className={`disk-status ${metrics?.low ? "low-space" : ""}`}
         title={
           disk.data
-            ? `${disk.data.path}\n${zh ? "可用" : "Available"}: ${size(disk.data.available)} / ${size(disk.data.total)}`
+            ? `${disk.data.path}\n${t("shell.available")}: ${size(disk.data.available)} / ${size(disk.data.total)}`
             : native
-              ? String(
-                  disk.error ??
-                    (zh ? "正在读取磁盘容量" : "Reading disk capacity"),
-                )
-              : zh
-                ? "浏览器无法读取本地磁盘容量，请使用桌面版"
-                : "Local disk capacity requires the desktop app"
+              ? String(disk.error ?? t("shell.reading.disk.capacity"))
+              : t("shell.local.disk.capacity.requires.the")
         }
       >
         <HardDrive size={13} />
-        <span>{zh ? "磁盘" : "Disk"}</span>
+        <span>{t("shell.disk")}</span>
         <progress
-          aria-label={zh ? "磁盘已用容量" : "Disk used capacity"}
+          aria-label={t("shell.disk.used.capacity")}
           value={metrics?.percent ?? 0}
           max={100}
         />
         <span>
           {metrics && disk.data
             ? `${Math.round(metrics.percent)}% · ${size(metrics.used)} / ${size(disk.data.total)}`
-            : zh
-              ? "容量不可用"
-              : "Unavailable"}
+            : t("shell.unavailable")}
         </span>
       </div>
       <div
@@ -273,25 +261,17 @@ export function StatusBar({
           aria-controls={tasksOpen ? tasksId : undefined}
           onClick={() => setTasksOpen((value) => !value)}
           {...menu("U06", () => ({ 打开日志栏: action(() => onOpenLogs()) }))}
-          title={
-            zh
-              ? "P4 操作进度；并发任务取平均值，无可量化进度时显示运行状态"
-              : "P4 progress; concurrent operations averaged, unknown progress is indeterminate"
-          }
+          title={t("shell.p4.progress.concurrent.operations.averaged")}
         >
           <span>
             {eventError
-              ? zh
-                ? "进度不可用"
-                : "Progress unavailable"
+              ? t("shell.progress.unavailable")
               : progress.count
-                ? `P4 · ${progress.count} ${zh ? "项执行中" : "running"}`
-                : zh
-                  ? "P4 空闲"
-                  : "P4 idle"}
+                ? `P4 · ${progress.count} ${t("shell.running")}`
+                : t("shell.p4.idle")}
           </span>
           <progress
-            aria-label={zh ? "P4 操作进度" : "P4 operation progress"}
+            aria-label={t("shell.p4.operation.progress")}
             max={100}
             value={progress.count ? progress.percent : 0}
           />
@@ -346,12 +326,8 @@ export function StatusBar({
         title={
           autoRefresh.error ||
           (autoRefreshPaused
-            ? zh
-              ? "自动刷新已暂停；点击恢复"
-              : "Auto refresh paused; click to resume"
-            : zh
-              ? "自动刷新只运行幂等只读请求；点击暂停"
-              : "Auto refresh runs idempotent reads only; click to pause")
+            ? t("shell.auto.refresh.paused.click.to")
+            : t("shell.auto.refresh.runs.idempotent.reads"))
         }
       >
         {autoRefreshPaused ? (
@@ -364,18 +340,12 @@ export function StatusBar({
         )}
         <span>
           {autoRefresh.phase === "failed"
-            ? zh
-              ? "刷新失败"
-              : "Refresh failed"
+            ? t("shell.refresh.failed")
             : autoRefreshPaused
-              ? zh
-                ? "自动刷新已暂停"
-                : "Auto refresh paused"
+              ? t("shell.auto.refresh.paused")
               : autoRefresh.lastUpdated
-                ? `${zh ? "更新于" : "Updated"} ${new Date(autoRefresh.lastUpdated).toLocaleTimeString()}`
-                : zh
-                  ? "自动刷新"
-                  : "Auto refresh"}
+                ? `${t("shell.updated")} ${formatLocalTime(autoRefresh.lastUpdated, isZh() ? "zh-CN" : "en-US")}`
+                : t("shell.auto.refresh")}
         </span>
       </button>
       {children}

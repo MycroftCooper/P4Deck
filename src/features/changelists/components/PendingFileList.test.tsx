@@ -14,7 +14,7 @@ import {
   type MenuEnvironmentValue,
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
-import { messages } from "../../../shared/i18n";
+import { messages, setLocale } from "../../../shared/i18n";
 import type { PendingFile, RuntimeInfo } from "../../../shared/contracts";
 import { CommandContext } from "../../../app/shell/CommandContext";
 import { PendingFileList } from "./PendingFileList";
@@ -56,6 +56,8 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.stubGlobal(
     "ResizeObserver",
     class {

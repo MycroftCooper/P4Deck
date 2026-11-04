@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 export function switchFailure(cause: unknown, zh: boolean) {
   const value =
     cause && typeof cause === "object"
@@ -27,7 +28,5 @@ export function switchFailure(cause: unknown, zh: boolean) {
     ? zh
       ? copy[0]
       : copy[1]
-    : zh
-      ? "切换请求未完成，请刷新后重试。"
-      : "The switch request did not complete. Refresh and retry.";
+    : t("workspaces.the.switch.request.did.not");
 }

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
@@ -128,10 +129,10 @@ export function SelectedFilesSubmitDialog({
   if (!active && !attempted)
     return (
       <Dialog
-        title={tr("连接已改变", "Connection changed")}
+        title={t("pending.connection.changed")}
         zh={zh}
         onRequestClose={dismiss}
-        footer={<button onClick={dismiss}>{tr("关闭", "Close")}</button>}
+        footer={<button onClick={dismiss}>{t("pending.close")}</button>}
       >
         <DialogNotice>
           {tr(
@@ -148,8 +149,8 @@ export function SelectedFilesSubmitDialog({
         workspace={expected.connection.client}
         routeLabel={
           expected.customSubmitExecutablePath.trim()
-            ? tr("自定义提交工具", "Custom submit tool")
-            : tr("原生提交确认", "Native submit confirmation")
+            ? t("pending.custom.submit.tool")
+            : t("pending.native.submit.confirmation")
         }
         zh={zh}
         onDismiss={dismiss}
@@ -158,7 +159,7 @@ export function SelectedFilesSubmitDialog({
     );
   return (
     <Dialog
-      title={tr("提交选中文件", "Submit selected files")}
+      title={t("pending.submit.selected.files")}
       zh={zh}
       busy={busy}
       onRequestClose={() => {
@@ -170,7 +171,7 @@ export function SelectedFilesSubmitDialog({
             disabled={busy || !active}
             onClick={() => void perform("status")}
           >
-            {tr("检查状态", "Check status")}
+            {t("pending.check.status")}
           </button>
           <button
             className="primary"
@@ -182,16 +183,16 @@ export function SelectedFilesSubmitDialog({
             }
             onClick={() => void perform("claim")}
           >
-            {tr("继续提交", "Continue to submit")}
+            {t("pending.continue.to.submit")}
           </button>
           <button disabled={busy} onClick={dismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
         </>
       }
     >
       <small>
-        {tr("操作", "Operation")}: {request.current?.operationId}
+        {t("pending.operation")}: {request.current?.operationId}
       </small>
       {!active && (
         <DialogNotice error>
@@ -204,7 +205,7 @@ export function SelectedFilesSubmitDialog({
       <p>
         {receipt?.newChangeId
           ? `CL ${receipt.newChangeId}`
-          : tr("新 CL 状态未知", "New CL status unknown")}
+          : t("pending.new.cl.status.unknown")}
       </p>
       <DialogNotice>
         {handedOff
@@ -238,7 +239,7 @@ export function SelectedFilesSubmitDialog({
               {file.originalChangeId === 0
                 ? "Default"
                 : `CL ${file.originalChangeId}`}{" "}
-              · {file.depotPath} · {tr("未知", "unknown")}
+              · {file.depotPath} · {t("pending.unknown.2")}
             </li>
           ))}
         </ul>

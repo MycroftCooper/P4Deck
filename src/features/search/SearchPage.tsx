@@ -1,3 +1,4 @@
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   AlertTriangle,
@@ -47,38 +48,40 @@ const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
 
 function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
   const labels: Record<GlobalSearchKind, [string, string]> = {
-    submittedChange: ["已提交 CL", "Submitted"],
-    pendingChange: ["待提交 CL", "Pending"],
-    workspaceFile: ["工作区文件", "Workspace files"],
-    depotFile: ["Depot 文件", "Depot files"],
+    submittedChange: ["search.submittedChange", "search.submittedChange"],
+    pendingChange: ["search.pendingChange", "search.pendingChange"],
+    workspaceFile: ["search.workspaceFile", "search.workspaceFile"],
+    depotFile: ["search.depotFile", "search.depotFile"],
     job: ["Job", "Jobs"],
     stream: ["Stream", "Streams"],
     shelf: ["Shelf", "Shelves"],
   };
-  return labels[kind][zh ? 0 : 1];
+  return tFor(zh ? "zh-CN" : "en-US", labels[kind][0] as MsgKey);
 }
 
 function fieldLabel(field: string, zh: boolean): string {
   const labels: Record<string, [string, string]> = {
-    title: ["标题", "Title"],
-    summary: ["摘要", "Summary"],
-    description: ["描述", "Description"],
-    user: ["用户", "User"],
-    client: ["工作区", "Client"],
+    title: ["search.title", "search.title"],
+    summary: ["search.summary", "search.summary"],
+    description: ["search.description", "search.description"],
+    user: ["search.user", "search.user"],
+    client: ["search.client", "search.client"],
     jobs: ["Job", "Jobs"],
     jobId: ["Job ID", "Job ID"],
-    status: ["状态", "Status"],
-    absolutePath: ["本地路径", "Local path"],
-    depotPath: ["Depot 路径", "Depot path"],
-    streamPath: ["Stream 路径", "Stream path"],
-    name: ["名称", "Name"],
-    owner: ["所有者", "Owner"],
-    type: ["类型", "Type"],
-    parent: ["父 Stream", "Parent stream"],
-    changeId: ["变更号", "Change ID"],
-    time: ["时间", "Time"],
+    status: ["search.status", "search.status"],
+    absolutePath: ["search.absolutePath", "search.absolutePath"],
+    depotPath: ["search.depotPath", "search.depotPath"],
+    streamPath: ["search.streamPath", "search.streamPath"],
+    name: ["search.name", "search.name"],
+    owner: ["search.owner", "search.owner"],
+    type: ["search.type", "search.type"],
+    parent: ["search.parent", "search.parent"],
+    changeId: ["search.changeId", "search.changeId"],
+    time: ["search.time", "search.time"],
   };
-  return labels[field]?.[zh ? 0 : 1] ?? field;
+  return labels[field]
+    ? tFor(zh ? "zh-CN" : "en-US", labels[field][0] as MsgKey)
+    : field;
 }
 
 function HighlightedText({
@@ -106,7 +109,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Stream</span>
         <span>
-          {zh ? "路径：" : "Path: "}
+          {t("search.path")}
           <HighlightedText
             value={item.target.streamPath}
             field="streamPath"
@@ -121,7 +124,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Shelf</span>
         <span>
-          {zh ? "编号 CL：" : "Numbered CL: "}
+          {t("search.numbered.cl")}
           <HighlightedText value={changeId} field="changeId" item={item} />
         </span>
       </span>
@@ -234,9 +237,7 @@ function VirtualSearchResults({
                 disabled={disabled || navigationBusy === item.identity}
                 title={
                   disabled
-                    ? zh
-                      ? "尚无 Job 详情页，无法导航。"
-                      : "No Job details page exists yet; navigation is unavailable."
+                    ? t("search.no.job.details.page.exists")
                     : zh
                       ? `打开 ${item.title}`
                       : `Open ${item.title}`
@@ -261,20 +262,16 @@ function VirtualSearchResults({
                     />
                   </span>
                   <small>
-                    {zh ? "匹配：" : "Matched: "}
+                    {t("search.matched")}
                     {item.matchedFields
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
-                    {disabled
-                      ? zh
-                        ? " · 暂无可用详情页"
-                        : " · no destination page"
-                      : ""}
+                    {disabled ? t("search.no.destination.page") : ""}
                   </small>
                 </span>
                 {disabled ? (
                   <span className="search-navigation-unavailable">
-                    {zh ? "不可导航" : "Unavailable"}
+                    {t("search.unavailable")}
                   </span>
                 ) : navigationBusy === item.identity ? (
                   <LoaderCircle className="spin" size={15} />
@@ -295,14 +292,12 @@ function validationMessage(
   zh: boolean,
 ): string {
   if (reason === "control")
-    return zh
-      ? "搜索内容不能包含控制字符。"
-      : "Search text cannot contain control characters.";
+    return t("search.search.text.cannot.contain.control");
   if (reason === "tooLong")
     return zh
       ? `搜索内容最多 ${GLOBAL_SEARCH_MAX_CHARACTERS} 个 Unicode 字符。`
       : `Search text is limited to ${GLOBAL_SEARCH_MAX_CHARACTERS} Unicode characters.`;
-  return zh ? "请输入搜索内容。" : "Enter a search query.";
+  return t("search.enter.a.search.query");
 }
 
 export function SearchPage({
@@ -464,12 +459,7 @@ export function SearchPage({
             nextCursorRef.current = undefined;
             setHasMore(false);
             setNextCursor(undefined);
-            setPageError(
-              tr(
-                "后端返回了不可继续的游标；已保留当前部分结果。",
-                "The backend returned a non-progressing cursor; current partial results were preserved.",
-              ),
-            );
+            setPageError(t("search.the.backend.returned.a.non.progressing"));
           } else {
             hasMoreRef.current = result.hasMore;
             nextCursorRef.current = result.nextCursor;
@@ -585,17 +575,17 @@ export function SearchPage({
   const statusText = navigationNotice
     ? navigationNotice
     : phase === "loading"
-      ? tr("正在搜索。", "Searching.")
+      ? t("search.searching")
       : loadingMore
-        ? tr("正在加载更多结果。", "Loading more results.")
+        ? t("search.loading.more.results")
         : phase === "error"
-          ? tr("搜索失败。", "Search failed.")
+          ? t("search.search.failed")
           : phase === "ready"
             ? tr(
                 `已加载 ${items.length} 条，共匹配 ${totalMatched} 条。`,
                 `${items.length} loaded, ${totalMatched} matched.`,
               )
-            : tr("等待搜索。", "Ready to search.");
+            : t("search.ready.to.search");
 
   const openItem = async (item: GlobalSearchItem) => {
     if (item.target.type === "job") return;
@@ -624,18 +614,17 @@ export function SearchPage({
         {statusText}
       </div>
       <FixedPageHeader
-        description={tr(
-          "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
-          "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
+        description={t(
+          "search.search.submitted.and.pending.changelists.workspace",
         )}
       >
         {mock ? (
           <span className="search-ui-badge">
-            {tr("模拟结果 · 未访问 P4", "Simulated · No P4 access")}
+            {t("search.simulated.no.p4.access")}
           </span>
         ) : (
           <span className="search-production-badge">
-            {tr("真实 P4 搜索", "Live P4 search")}
+            {t("search.live.p4.search")}
           </span>
         )}
       </FixedPageHeader>
@@ -643,19 +632,11 @@ export function SearchPage({
       {mock ? (
         <div className="search-ui-note">
           <AlertTriangle size={15} />
-          <span>
-            {tr(
-              "当前为 Mock 模式；结果用于交互验证，不代表服务器数据。",
-              "Mock mode is active. Results validate interaction only and do not represent server data.",
-            )}
-          </span>
+          <span>{t("search.mock.mode.is.active.results.validate")}</span>
         </div>
       ) : null}
 
-      <section
-        className="search-card"
-        aria-label={tr("搜索条件", "Search controls")}
-      >
+      <section className="search-card" aria-label={t("search.search.controls")}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -663,7 +644,7 @@ export function SearchPage({
           }}
         >
           <label className="search-query-label" htmlFor="global-search-input">
-            {tr("搜索内容", "Search query")}
+            {t("search.search.query")}
           </label>
           <div className="search-input-row">
             <Search size={18} aria-hidden="true" />
@@ -675,16 +656,13 @@ export function SearchPage({
               autoComplete="off"
               maxLength={256}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={tr(
-                "文件、路径、CL、用户、Job、Stream 或 Shelf…",
-                "File, path, changelist, user, job, stream, or shelf…",
-              )}
+              placeholder={t("search.file.path.changelist.user.job.stream")}
             />
             {draft ? (
               <button
                 type="button"
                 className="search-clear"
-                aria-label={tr("清空搜索", "Clear search")}
+                aria-label={t("search.clear.search")}
                 onClick={() => setDraft("")}
               >
                 <X size={14} />
@@ -699,14 +677,11 @@ export function SearchPage({
               ) : (
                 <Search size={14} />
               )}
-              {tr("搜索", "Search")}
+              {t("search.search")}
             </button>
           </div>
           <div id="global-search-help" className="search-help">
-            {tr(
-              "输入停止 300ms 后自动搜索；Enter 立即搜索。最多 128 个 Unicode 字符。",
-              "Search starts after a 300ms pause; Enter searches immediately. Maximum 128 Unicode characters.",
-            )}
+            {t("search.search.starts.after.a.300ms.pause")}
           </div>
           <div
             id="global-search-error"
@@ -714,12 +689,10 @@ export function SearchPage({
             role={validationError || noKinds ? "alert" : undefined}
           >
             {validationError ||
-              (noKinds
-                ? tr("请至少选择一个类别。", "Select at least one category.")
-                : "")}
+              (noKinds ? t("search.select.at.least.one.category") : "")}
           </div>
           <fieldset className="search-kind-picker">
-            <legend>{tr("搜索类别", "Categories")}</legend>
+            <legend>{t("search.categories")}</legend>
             {GLOBAL_SEARCH_KINDS.map((kind) => (
               <label key={kind}>
                 <input
@@ -742,10 +715,7 @@ export function SearchPage({
           </fieldset>
           {kinds.includes("shelf") ? (
             <p className="search-bounded-note" id="search-shelf-bounds">
-              {tr(
-                "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
-                "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
-              )}
+              {t("search.shelf.deep.search.is.bounded.if")}
             </p>
           ) : null}
         </form>
@@ -753,12 +723,12 @@ export function SearchPage({
 
       <section
         className="search-card search-results"
-        aria-label={tr("搜索结果", "Search results")}
+        aria-label={t("search.search.results")}
         aria-busy={phase === "loading" || loadingMore}
       >
         <div className="search-results-heading">
           <div>
-            <h2>{tr("搜索结果", "Results")}</h2>
+            <h2>{t("search.results")}</h2>
             {phase === "ready" ? (
               <p>
                 {tr(
@@ -771,7 +741,7 @@ export function SearchPage({
           {phase === "ready" || phase === "error" ? (
             <button className="secondary" onClick={submit}>
               <RefreshCw size={14} />
-              {tr("整体重试", "Retry all")}
+              {t("search.retry.all")}
             </button>
           ) : null}
         </div>
@@ -793,36 +763,29 @@ export function SearchPage({
         {phase === "loading" ? (
           <div className="search-empty">
             <LoaderCircle className="spin" size={32} />
-            <h3>{tr("正在搜索", "Searching")}</h3>
-            <p>{tr("正在查询所选类别…", "Querying selected categories…")}</p>
+            <h3>{t("search.searching.2")}</h3>
+            <p>{t("search.querying.selected.categories")}</p>
           </div>
         ) : phase === "error" ? (
           <div className="search-error" role="alert">
             <AlertTriangle size={22} />
             <div>
-              <strong>{tr("搜索失败", "Search failed")}</strong>
+              <strong>{t("search.search.failed.2")}</strong>
               <p>{error}</p>
             </div>
-            <button onClick={submit}>{tr("重试", "Retry")}</button>
+            <button onClick={submit}>{t("search.retry")}</button>
           </div>
         ) : phase === "ready" && !items.length && !failures ? (
           <div className="search-empty">
             <FolderSearch size={32} />
-            <h3>{tr("没有匹配结果", "No results")}</h3>
-            <p>
-              {tr("请尝试其他关键词或类别。", "Try another query or category.")}
-            </p>
+            <h3>{t("search.no.results")}</h3>
+            <p>{t("search.try.another.query.or.category")}</p>
           </div>
         ) : phase === "idle" ? (
           <div className="search-empty">
             <FolderSearch size={32} />
-            <h3>{tr("输入内容开始搜索", "Enter a query to search")}</h3>
-            <p>
-              {tr(
-                "支持七类结果；可使用上方筛选缩小范围。",
-                "Seven result categories are available; use the filters above to narrow the search.",
-              )}
-            </p>
+            <h3>{t("search.enter.a.query.to.search")}</h3>
+            <p>{t("search.seven.result.categories.are.available.use")}</p>
           </div>
         ) : null}
 
@@ -849,11 +812,11 @@ export function SearchPage({
                       </span>
                     </div>
                     <small>
-                      {tr("扫描", "Scanned")} {facet?.scannedCount ?? 0}
+                      {t("search.scanned")} {facet?.scannedCount ?? 0}
                       {truncated
-                        ? tr(" · 达到扫描上限", " · scan limit reached")
+                        ? t("search.scan.limit.reached")
                         : facet?.partial && !facet.error
-                          ? tr(" · 部分结果", " · partial")
+                          ? t("search.partial")
                           : ""}
                     </small>
                   </header>
@@ -861,9 +824,7 @@ export function SearchPage({
                     <div className="search-category-partial" role="status">
                       <AlertTriangle size={14} />
                       <span>
-                        <strong>
-                          {tr("不完整原因：", "Partial reason: ")}
-                        </strong>
+                        <strong>{t("search.partial.reason")}</strong>
                         {facet.partialReason}
                       </span>
                     </div>
@@ -882,7 +843,7 @@ export function SearchPage({
                           size={13}
                           className={categoryLoading === kind ? "spin" : ""}
                         />
-                        {tr("重试此类别", "Retry category")}
+                        {t("search.retry.category")}
                       </button>
                     </div>
                   ) : null}
@@ -895,7 +856,7 @@ export function SearchPage({
                     />
                   ) : !facet?.error ? (
                     <p className="search-group-empty">
-                      {tr("此类别没有匹配项。", "No matches in this category.")}
+                      {t("search.no.matches.in.this.category")}
                     </p>
                   ) : null}
                 </section>
@@ -909,12 +870,8 @@ export function SearchPage({
             <span>{pageError}</span>
             {hasMore ? (
               <>
-                <button onClick={loadMore}>
-                  {tr("重试加载", "Retry page")}
-                </button>
-                <button onClick={submit}>
-                  {tr("重新开始搜索", "Restart search")}
-                </button>
+                <button onClick={loadMore}>{t("search.retry.page")}</button>
+                <button onClick={submit}>{t("search.restart.search")}</button>
               </>
             ) : null}
           </div>
@@ -930,9 +887,7 @@ export function SearchPage({
             ) : (
               <ArrowDown size={14} />
             )}
-            {loadingMore
-              ? tr("加载中…", "Loading…")
-              : tr("继续加载", "Load more")}
+            {loadingMore ? t("search.loading") : t("search.load.more")}
           </button>
         ) : null}
       </section>

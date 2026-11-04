@@ -9,6 +9,7 @@ import type {
   StreamGraphResult,
 } from "../../../shared/contracts";
 import { StreamGraphPage } from "./StreamGraphPage";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   queryStreamGraph: vi.fn(),
@@ -145,6 +146,8 @@ async function clickButton(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

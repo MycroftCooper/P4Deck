@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, vi, beforeEach } from "vitest";
 import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { SelectedFilesPreviewDialog } from "./SelectedFilesPreviewDialog";
+import { setLocale } from "../../../shared/i18n";
 const dirtyGuard = vi.hoisted(() => ({ clear: vi.fn() }));
 vi.mock("../../../app/closeGuard", () => ({
   useUnsavedEditor: () => dirtyGuard.clear,
@@ -43,6 +44,11 @@ async function type(text: string) {
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("shows only selected origins and clearly preserves a new CL after cancellation", async () => {
   await setup();
   expect(document.querySelectorAll("li")).toHaveLength(2);

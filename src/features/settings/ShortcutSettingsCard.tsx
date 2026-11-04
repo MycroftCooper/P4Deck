@@ -1,3 +1,4 @@
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { Keyboard } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -29,28 +30,85 @@ const groupOrder: AppCommandGroup[] = [
 ];
 
 const groupLabels: Record<AppCommandGroup, { zh: string; en: string }> = {
-  app: { zh: "应用", en: "App" },
-  connection: { zh: "连接", en: "Connection" },
-  changes: { zh: "变更", en: "Changes" },
-  navigation: { zh: "导航", en: "Navigation" },
-  file: { zh: "文件", en: "File" },
-  tools: { zh: "工具", en: "Tools" },
+  app: { zh: "settings.commandGroup.app", en: "settings.commandGroup.app" },
+  connection: {
+    zh: "settings.commandGroup.connection",
+    en: "settings.commandGroup.connection",
+  },
+  changes: {
+    zh: "settings.commandGroup.changes",
+    en: "settings.commandGroup.changes",
+  },
+  navigation: {
+    zh: "settings.commandGroup.navigation",
+    en: "settings.commandGroup.navigation",
+  },
+  file: { zh: "settings.commandGroup.file", en: "settings.commandGroup.file" },
+  tools: {
+    zh: "settings.commandGroup.tools",
+    en: "settings.commandGroup.tools",
+  },
 };
 
 /** Browser/Windows keys that may be swallowed before the app sees them. */
 const systemReserved: readonly [string, { zh: string; en: string }][] = [
-  ["Mod+T", { zh: "浏览器新标签页", en: "browser new tab" }],
-  ["Mod+Shift+T", { zh: "浏览器重新打开标签页", en: "browser reopen tab" }],
-  ["Mod+W", { zh: "关闭窗口", en: "close window" }],
-  ["Mod+Shift+W", { zh: "关闭窗口", en: "close window" }],
-  ["Mod+N", { zh: "新窗口", en: "new window" }],
-  ["Mod+Q", { zh: "退出应用", en: "quit app" }],
-  ["Mod+P", { zh: "打印", en: "print" }],
-  ["Mod+S", { zh: "保存网页", en: "save page" }],
-  ["Mod+O", { zh: "打开文件", en: "open file" }],
-  ["Mod+F", { zh: "浏览器查找", en: "browser find" }],
-  ["Mod+Shift+Esc", { zh: "任务管理器", en: "task manager" }],
-  ["Alt+F4", { zh: "关闭窗口", en: "close window" }],
+  [
+    "Mod+T",
+    { zh: "settings.reservedKey.mod+t", en: "settings.reservedKey.mod+t" },
+  ],
+  [
+    "Mod+Shift+T",
+    {
+      zh: "settings.reservedKey.mod+shift+t",
+      en: "settings.reservedKey.mod+shift+t",
+    },
+  ],
+  [
+    "Mod+W",
+    { zh: "settings.reservedKey.mod+w", en: "settings.reservedKey.mod+w" },
+  ],
+  [
+    "Mod+Shift+W",
+    {
+      zh: "settings.reservedKey.mod+shift+w",
+      en: "settings.reservedKey.mod+shift+w",
+    },
+  ],
+  [
+    "Mod+N",
+    { zh: "settings.reservedKey.mod+n", en: "settings.reservedKey.mod+n" },
+  ],
+  [
+    "Mod+Q",
+    { zh: "settings.reservedKey.mod+q", en: "settings.reservedKey.mod+q" },
+  ],
+  [
+    "Mod+P",
+    { zh: "settings.reservedKey.mod+p", en: "settings.reservedKey.mod+p" },
+  ],
+  [
+    "Mod+S",
+    { zh: "settings.reservedKey.mod+s", en: "settings.reservedKey.mod+s" },
+  ],
+  [
+    "Mod+O",
+    { zh: "settings.reservedKey.mod+o", en: "settings.reservedKey.mod+o" },
+  ],
+  [
+    "Mod+F",
+    { zh: "settings.reservedKey.mod+f", en: "settings.reservedKey.mod+f" },
+  ],
+  [
+    "Mod+Shift+Esc",
+    {
+      zh: "settings.reservedKey.mod+shift+esc",
+      en: "settings.reservedKey.mod+shift+esc",
+    },
+  ],
+  [
+    "Alt+F4",
+    { zh: "settings.reservedKey.alt+f4", en: "settings.reservedKey.alt+f4" },
+  ],
 ];
 
 function detectPlatform(): ShortcutPlatform {
@@ -71,30 +129,38 @@ function isEditableTarget(target: EventTarget | null | undefined): boolean {
 }
 
 function availability(command: AppCommandDefinition, zh: boolean): string {
-  const tr = (a: string, b: string) => (zh ? a : b);
   if (command.risk === "mutation")
-    return tr(
-      "写操作：不分配快捷键，仍需工具栏/命令面板并确认",
-      "Write action: no shortcut; use the toolbar or palette with confirmation",
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "settings.write.action.no.shortcut.use.the",
     );
   switch (command.requires) {
     case "runtime":
-      return tr("需连接运行时加载完成", "Requires the connection runtime");
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "settings.requires.the.connection.runtime",
+      );
     case "connected":
-      return tr("需连接可用", "Requires an available connection");
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "settings.requires.an.available.connection",
+      );
     case "file":
-      return tr("需先选择文件或目录", "Requires a selected file or folder");
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "settings.requires.a.selected.file.or",
+      );
     case "pending":
-      return tr(
-        "需选中非空、已编号的待提交 CL",
-        "Requires a nonempty numbered pending changelist",
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "settings.requires.a.nonempty.numbered.pending.changelist",
       );
     case "swarm":
-      return tr("需已配置 Swarm", "Requires configured Swarm");
+      return tFor(zh ? "zh-CN" : "en-US", "settings.requires.configured.swarm");
     case "mainWindow":
-      return tr("仅主窗口可用", "Main window only");
+      return tFor(zh ? "zh-CN" : "en-US", "settings.main.window.only");
     default:
-      return tr("始终可用", "Always available");
+      return tFor(zh ? "zh-CN" : "en-US", "settings.always.available");
   }
 }
 
@@ -124,9 +190,9 @@ function reservedWarning(
     ([key]) => normalizedShortcut(key, platform) === normalized,
   );
   if (!reserved) return undefined;
-  return zh
-    ? `该组合可能被浏览器/系统占用（${reserved[1].zh}），桌面端通常仍可用`
-    : `This combination may be reserved by the browser/system (${reserved[1].en}); the desktop app usually still receives it`;
+  return tFor(zh ? "zh-CN" : "en-US", "settings.shortcut.reserved.warning", {
+    name: tFor(zh ? "zh-CN" : "en-US", reserved[1].zh as MsgKey),
+  });
 }
 
 type Message = { tone: "info" | "warn" | "error"; text: string };
@@ -138,7 +204,6 @@ interface Props {
 }
 
 export function ShortcutSettingsCard({ zh, platform }: Props) {
-  const tr = (a: string, b: string) => (zh ? a : b);
   const detected = useMemo(detectPlatform, []);
   const activePlatform = platform ?? detected;
   const overrides = useShortcutOverrides();
@@ -155,7 +220,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setRecording(undefined);
         setMessage({
           tone: "info",
-          text: tr("已取消录制", "Recording cancelled"),
+          text: t("settings.recording.cancelled"),
         });
         return;
       }
@@ -166,7 +231,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setRecording(undefined);
         setMessage({
           tone: "info",
-          text: tr("已清除该命令的绑定", "Binding cleared"),
+          text: t("settings.binding.cleared"),
         });
         return;
       }
@@ -178,10 +243,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setRecording(undefined);
         setMessage({
           tone: "warn",
-          text: tr(
-            "输入框内不录制快捷键",
-            "Shortcuts are not recorded from editable fields",
-          ),
+          text: t("settings.shortcuts.are.not.recorded.from.editable"),
         });
         return;
       }
@@ -191,10 +253,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         event.stopPropagation();
         setMessage({
           tone: "error",
-          text: tr(
-            "该按键不可绑定：需要 Ctrl/Cmd、Alt 或功能键（Esc 取消，Backspace/Delete 清除）",
-            "Unsupported key: use Ctrl/Cmd, Alt or a function key (Esc cancels, Backspace/Delete clears)",
-          ),
+          text: t("settings.unsupported.key.use.ctrl.cmd.alt"),
         });
         return;
       }
@@ -209,10 +268,10 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
       if (conflict) {
         setMessage({
           tone: "error",
-          text: tr(
-            `与「${conflict.zh}」(${conflict.id}) 冲突，请先清除或修改另一项`,
-            `Conflicts with "${conflict.en}" (${conflict.id}); clear or change that command first`,
-          ),
+          text: tFor(zh ? "zh-CN" : "en-US", "settings.shortcut.conflict", {
+            name: tFor(zh ? "zh-CN" : "en-US", conflict.zh as MsgKey),
+            id: conflict.id,
+          }),
         });
         return;
       }
@@ -224,10 +283,9 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
           ? { tone: "warn", text: warning }
           : {
               tone: "info",
-              text: tr(
-                `已绑定 ${shortcutLabel(candidate, mac)}`,
-                `Bound ${shortcutLabel(candidate, mac)}`,
-              ),
+              text: tFor(zh ? "zh-CN" : "en-US", "settings.shortcut.bound", {
+                shortcut: shortcutLabel(candidate, mac),
+              }),
             },
       );
     };
@@ -242,7 +300,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
       <div className="shortcut-settings-header">
         <h2>
           <Keyboard size={18} />
-          {tr("快捷键", "Keyboard shortcuts")}
+          {t("settings.keyboard.shortcuts")}
         </h2>
         <div className="shortcut-settings-actions">
           <button
@@ -253,29 +311,20 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
               setRecording(undefined);
               setMessage({
                 tone: "info",
-                text: tr(
-                  "已恢复 P4V 对齐的默认快捷键",
-                  "Restored the P4V-aligned defaults",
-                ),
+                text: t("settings.restored.the.p4v.aligned.defaults"),
               });
             }}
           >
-            {tr("恢复默认快捷键", "Restore default shortcuts")}
+            {t("settings.restore.default.shortcuts")}
           </button>
         </div>
       </div>
-      <p>
-        {tr(
-          "默认键位与 P4V 对齐；写操作不分配快捷键，仍需工具栏/命令面板并确认。点击「录制」后按下新组合键，Esc 取消，Backspace/Delete 清除绑定。",
-          "Defaults follow P4V. Write actions intentionally have no shortcut and still require confirmation. Click Record and press a combination; Esc cancels, Backspace/Delete clears the binding.",
-        )}
-      </p>
+      <p>{t("settings.defaults.follow.p4v.write.actions.intentionally")}</p>
       {overriddenCount > 0 && (
         <p className="shortcut-overridden-count">
-          {tr(
-            `已自定义 ${overriddenCount} 项`,
-            `${overriddenCount} customised`,
-          )}
+          {tFor(zh ? "zh-CN" : "en-US", "settings.shortcut.overridden", {
+            count: overriddenCount,
+          })}
         </p>
       )}
       {message && (
@@ -294,7 +343,9 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         if (!commands.length) return null;
         return (
           <div className="shortcut-group" key={group}>
-            <h3>{tr(groupLabels[group].zh, groupLabels[group].en)}</h3>
+            <h3>
+              {tFor(zh ? "zh-CN" : "en-US", groupLabels[group].zh as MsgKey)}
+            </h3>
             <ul className="shortcut-list">
               {commands.map((command) => {
                 const shortcuts = commandShortcuts(command, overrides);
@@ -310,7 +361,9 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                     className={isRecording ? "recording" : undefined}
                   >
                     <div className="shortcut-identity">
-                      <span>{zh ? command.zh : command.en}</span>
+                      <span>
+                        {tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)}
+                      </span>
                       <small>
                         {command.id} · {availability(command, zh)}
                       </small>
@@ -324,7 +377,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                         ))
                       ) : (
                         <span className="shortcut-unbound">
-                          {tr("未绑定", "Unbound")}
+                          {t("settings.unbound")}
                         </span>
                       )}
                     </div>
@@ -338,72 +391,71 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                               setRecording(undefined);
                               setMessage({
                                 tone: "info",
-                                text: tr("已取消录制", "Recording cancelled"),
+                                text: t("settings.recording.cancelled"),
                               });
                             }}
                           >
-                            {tr("取消 (Esc)", "Cancel (Esc)")}
+                            {t("settings.cancel.esc")}
                           </button>
                         ) : (
                           <button
                             type="button"
                             className="secondary"
                             aria-pressed={false}
-                            aria-label={`${tr("录制", "Record")} ${
-                              zh ? command.zh : command.en
-                            }`}
+                            aria-label={`${t("settings.record")} ${tFor(
+                              zh ? "zh-CN" : "en-US",
+                              command.zh as MsgKey,
+                            )}`}
                             onClick={() => {
                               setRecording(command.id);
                               setMessage({
                                 tone: "info",
-                                text: tr(
-                                  "请按下新组合键…",
-                                  "Press the new key combination…",
+                                text: t(
+                                  "settings.press.the.new.key.combination",
                                 ),
                               });
                             }}
                           >
-                            {tr("录制", "Record")}
+                            {t("settings.record")}
                           </button>
                         ))}
                       {canBind && shortcuts.length > 0 && (
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${tr("清除", "Clear")} ${
-                            zh ? command.zh : command.en
-                          }`}
+                          aria-label={`${t("settings.clear")} ${tFor(
+                            zh ? "zh-CN" : "en-US",
+                            command.zh as MsgKey,
+                          )}`}
                           onClick={() => {
                             setShortcutOverride(command.id, null);
                             setRecording(undefined);
                             setMessage({
                               tone: "info",
-                              text: tr("已清除该命令的绑定", "Binding cleared"),
+                              text: t("settings.binding.cleared"),
                             });
                           }}
                         >
-                          {tr("清除", "Clear")}
+                          {t("settings.clear")}
                         </button>
                       )}
                       {canBind && overridden && (
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${tr("恢复默认", "Restore default")} ${
-                            zh ? command.zh : command.en
-                          }`}
+                          aria-label={`${t("settings.restore.default")} ${tFor(
+                            zh ? "zh-CN" : "en-US",
+                            command.zh as MsgKey,
+                          )}`}
                           onClick={() => {
                             clearShortcutOverride(command.id);
                             setMessage({
                               tone: "info",
-                              text: tr(
-                                "已恢复该项默认键",
-                                "Default binding restored",
-                              ),
+                              text: t("settings.default.binding.restored"),
                             });
                           }}
                         >
-                          {tr("恢复默认", "Default")}
+                          {t("settings.default")}
                         </button>
                       )}
                     </div>

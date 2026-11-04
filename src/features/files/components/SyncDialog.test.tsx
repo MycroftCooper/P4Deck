@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, beforeEach } from "vitest";
 import { dialogButton, dialogHarness } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -9,6 +9,7 @@ import type {
   WorkspaceNode,
 } from "../../../shared/contracts";
 import { SyncDialog } from "./SyncDialog";
+import { setLocale } from "../../../shared/i18n";
 
 const harness = dialogHarness();
 const nodes: WorkspaceNode[] = [
@@ -81,6 +82,11 @@ function result(): SyncResult {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
 
 it("requires a real preview token before confirming and reports the result", async () => {
   const preview = vi.spyOn(backend, "previewSync").mockResolvedValue(plan());

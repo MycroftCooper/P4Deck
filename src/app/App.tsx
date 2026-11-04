@@ -1,3 +1,4 @@
+import { t as translate } from "../shared/i18n";
 import { useCustomExitRefresh } from "../features/companySubmit/useCustomExitRefresh";
 import { recordFrontendOperationLog } from "../infrastructure/backend/frontendOperationLog";
 import {
@@ -214,11 +215,7 @@ function ConnectedApp({
     async (target: GlobalSearchTarget) => {
       const page = pageForSearchTarget(target);
       if (target.type === "job" || !page)
-        throw new Error(
-          zh
-            ? "该搜索结果的详情页尚未接入。"
-            : "This search result has no details page yet.",
-        );
+        throw new Error(translate("app.search.result.has.no.details.page"));
       if (target.type === "stream") {
         locateStream(target.streamPath);
         return;
@@ -336,9 +333,7 @@ function ConnectedApp({
         ),
       ),
       swarmReason: !swarmTarget
-        ? zh
-          ? "请先选择 CL 或 Depot 文件"
-          : "Select a changelist or depot file first"
+        ? translate("app.select.a.changelist.or.depot")
         : swarm && swarm.enabled
           ? undefined
           : swarm?.reason,
@@ -564,9 +559,9 @@ function ConnectedApp({
                   )}
                   {detachedRebound && (
                     <div className="runtime-rebound" role="status">
-                      {zh
-                        ? "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。"
-                        : "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection."}
+                      {translate(
+                        "app.connection.or.runtime.generation.changed",
+                      )}
                     </div>
                   )}
                   <div

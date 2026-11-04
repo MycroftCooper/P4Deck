@@ -1,7 +1,7 @@
 {
   "name": "p4deck",
   "private": true,
-  "version": "0.1.11",
+  "version": "0.1.12",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -36,6 +36,9 @@
     "validate:versions": "node scripts/validate-versions.mjs",
     "validate:bundle": "node scripts/verify-desktop-bundle.mjs",
     "validate:frontend-contracts": "node scripts/validate-frontend-contracts.mjs",
+    "validate:i18n-literals": "node scripts/validate-no-cjk-literals.mjs",
+    "i18n:audit": "node scripts/i18n-audit-logic.mjs",
+    "i18n:converge": "node scripts/i18n-converge.mjs",
     "ci:quick": "node scripts/ci-runner.mjs quick",
     "ci:local": "node scripts/ci-runner.mjs local",
     "ci:bundle": "node scripts/ci-runner.mjs bundle",

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import type { PendingChange } from "../../../shared/contracts";
@@ -35,35 +36,33 @@ export function CheckoutChangelistDialog({
   const changelistId = alwaysUseDefault ? 0 : selected;
   const description =
     changelistId === 0
-      ? tr("默认待提交变更列表", "Default pending changelist")
+      ? t("files.default.pending.changelist")
       : (snapshot.find((change) => change.id === changelistId)?.description ??
         "");
   return (
     <Dialog
-      title={tr("选择签出目标 CL", "Select checkout changelist")}
+      title={t("files.select.checkout.changelist")}
       source={source}
       zh={zh}
       onRequestClose={() => onClose(null)}
       footer={
         <>
-          <button onClick={() => onClose(null)}>{tr("取消", "Cancel")}</button>
+          <button onClick={() => onClose(null)}>{t("files.cancel")}</button>
           <button
             className="primary"
             onClick={() => onClose({ changelistId, alwaysUseDefault })}
           >
-            {tr("签出", "Check out")}
+            {t("files.check.out")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {client} · {count} {tr("个目标", "targets")}
-        {recursive
-          ? tr(" · 包含目录下的文件", " · Includes files in selected folders")
-          : ""}
+        {client} · {count} {t("files.targets")}
+        {recursive ? t("files.includes.files.in.selected.folders") : ""}
       </div>
       <label>
-        {tr("目标 CL", "Target changelist")}
+        {t("files.target.changelist")}
         <select
           autoFocus
           data-dialog-autofocus
@@ -80,7 +79,7 @@ export function CheckoutChangelistDialog({
         </select>
       </label>
       <label>
-        {tr("CL 描述", "Changelist description")}
+        {t("files.changelist.description")}
         <textarea readOnly rows={4} value={description} />
       </label>
       <label className="workflow-checkbox">

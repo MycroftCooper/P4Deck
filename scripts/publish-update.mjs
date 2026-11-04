@@ -72,6 +72,32 @@ import {
 
 export const PRODUCT = "P4Deck";
 export const RELEASE_NOTES_DEFAULT = "";
+
+/**
+ * Reject release notes that carry the Windows codepage mojibake signature:
+ * Chinese text that was passed inline on the command line (or through a
+ * non-UTF-8 console) gets folded so every CJK char becomes an ASCII `?` and
+ * full-width punctuation is best-fit folded (`：`→`:`, `…`→`.`, `（`→`(`).
+ * A legitimate note for this product is Chinese and therefore contains CJK
+ * characters; a fully-mangled note has none while still containing stray `?`.
+ * Set P4DECK_ALLOW_NOTES_QUERY=1 only for a genuine English-only note that has
+ * a literal ASCII `?` in it.
+ */
+export function assertNotesNotMojibake(notes) {
+  if (!notes) return;
+  const asciiQueryCount = (notes.match(/\?/g) || []).length;
+  const hasCjk =
+    /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/.test(
+      notes,
+    );
+  if (asciiQueryCount > 0 && !hasCjk) {
+    throw new Error(
+      `release notes contain ${asciiQueryCount} ASCII '?' but no CJK characters — this is the Windows codepage mojibake signature (Chinese folded to '?'). ` +
+        "Put the Chinese notes in a UTF-8 file and pass --notes-file, and do not pass them inline via --notes from a legacy console. " +
+        "To publish a genuine English-only note that contains a literal '?', set P4DECK_ALLOW_NOTES_QUERY=1.",
+    );
+  }
+}
 const DEFAULT_KEY_DIR = ".p4deck";
 const DEFAULT_API_URL = "https://api.github.com";
 const NSIS_BUNDLE_DIR = path.join(
@@ -1035,6 +1061,9 @@ async function main() {
       (args.notesFile
         ? readFileSync(path.resolve(args.notesFile), "utf8").trim()
         : RELEASE_NOTES_DEFAULT);
+    if (!process.env.P4DECK_ALLOW_NOTES_QUERY) {
+      assertNotesNotMojibake(notes);
+    }
     collected = await collectAssets({
       plan,
       version,

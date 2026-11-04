@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
@@ -30,7 +31,7 @@ export function ChangelistFormDialog({
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const initialDescription =
     initial?.description ??
-    (mode === "create" ? tr("新ChangeList", "New changelist") : "");
+    (mode === "create" ? t("pending.new.changelist") : "");
   const [description, setDescription] = useState(initialDescription);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -59,13 +60,11 @@ export function ChangelistFormDialog({
     setError("");
     setNotice("");
     if (!description.trim()) {
-      setError(tr("请填写 CL 描述。", "Enter a changelist description."));
+      setError(t("pending.enter.a.changelist.description"));
       return;
     }
     if (mode === "edit" && (!changeId || changeId < 1)) {
-      setError(
-        tr("只能编辑已编号的 CL。", "A numbered changelist is required."),
-      );
+      setError(t("pending.a.numbered.changelist.is.required"));
       return;
     }
     const draft = {
@@ -101,7 +100,7 @@ export function ChangelistFormDialog({
     <Dialog
       title={
         mode === "create"
-          ? tr("新建 Changelist", "New changelist")
+          ? t("pending.new.changelist.2")
           : tr(`编辑 CL ${changeId ?? ""}`, `Edit CL ${changeId ?? ""}`)
       }
       description={tr(
@@ -115,7 +114,7 @@ export function ChangelistFormDialog({
       footer={
         <>
           <button type="button" disabled={busy} onClick={dismiss}>
-            {tr("取消", "Cancel")}
+            {t("pending.cancel")}
           </button>
           <button
             type="submit"
@@ -125,19 +124,19 @@ export function ChangelistFormDialog({
           >
             {busy
               ? mode === "create"
-                ? tr("正在新建…", "Creating…")
-                : tr("正在保存…", "Saving…")
+                ? t("pending.creating")
+                : t("pending.saving")
               : !onSubmit
-                ? tr("检查表单（不提交）", "Check form (no submission)")
+                ? t("pending.check.form.no.submission")
                 : mode === "create"
-                  ? tr("新建", "Create")
-                  : tr("保存", "Save")}
+                  ? t("pending.create")
+                  : t("pending.save")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {tr("工作区", "Workspace")} <strong>{client || "—"}</strong>
+        {t("pending.workspace")} <strong>{client || "—"}</strong>
       </div>
       {!onSubmit && (
         <DialogNotice>
@@ -156,7 +155,7 @@ export function ChangelistFormDialog({
       >
         <fieldset disabled={busy}>
           <label>
-            {tr("描述（必填）", "Description (required)")}
+            {t("pending.description.required")}
             <textarea
               autoFocus
               data-dialog-autofocus
@@ -183,7 +182,7 @@ export function ChangelistFormDialog({
         <section
           className="workflow-discard"
           role="alert"
-          aria-label={tr("未保存的修改", "Unsaved changes")}
+          aria-label={t("pending.unsaved.changes")}
         >
           <p>
             {tr(
@@ -192,7 +191,7 @@ export function ChangelistFormDialog({
             )}
           </p>
           <button type="button" onClick={() => setDiscard(false)}>
-            {tr("继续编辑", "Keep editing")}
+            {t("pending.keep.editing")}
           </button>
           <button
             type="button"
@@ -202,7 +201,7 @@ export function ChangelistFormDialog({
               onDismiss();
             }}
           >
-            {tr("放弃修改并关闭", "Discard and close")}
+            {t("pending.discard.and.close")}
           </button>
         </section>
       )}

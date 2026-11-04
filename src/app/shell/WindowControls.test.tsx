@@ -3,6 +3,7 @@ import { act } from "react";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../dialogs/testHarness";
 import { WindowControls } from "./WindowControls";
+import { setLocale } from "../../shared/i18n";
 const d = vi.hoisted(() => ({
   events: new Map<string, (e: { payload: unknown }) => void>(),
   invoke: vi.fn(),
@@ -37,6 +38,8 @@ vi.mock("@tauri-apps/api/window", () => ({
 vi.mock("../closeGuard", () => ({ requestGuardedClose: d.close }));
 const root = dialogHarness();
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
     return 1;

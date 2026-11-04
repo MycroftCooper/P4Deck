@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import {
   useEffect,
   useLayoutEffect,
@@ -57,20 +58,16 @@ export function SubmittedChangeFiles({
     const operationId = crypto.randomUUID();
     const load = async () => {
       if (runtime.mode !== "mock" && runtime.connection.state !== "connected")
-        throw new Error(zh ? "连接不可用" : "Connection unavailable");
+        throw new Error(t("pending.connection.unavailable"));
       const result = await backend.getSubmittedChangeDetail({
         changeId,
         operationId,
       });
       if (!live) return;
       if (result.changeId !== changeId)
-        throw new Error(
-          zh ? "返回的 CL 与目标不符" : "Returned CL does not match the target",
-        );
+        throw new Error(t("pending.returned.cl.does.not.match"));
       if (result.inspectionStatus === "unavailable")
-        throw new Error(
-          result.message || (zh ? "详情不可用" : "Details unavailable"),
-        );
+        throw new Error(result.message || t("pending.details.unavailable"));
       cache.set(changeId, result);
       setDetail(result);
     };
@@ -94,11 +91,9 @@ export function SubmittedChangeFiles({
     <section
       ref={element}
       className="submitted-change-files"
-      aria-label={`${zh ? "改动文件" : "Changed files"} · CL ${changeId}`}
+      aria-label={`${t("pending.changed.files")} · CL ${changeId}`}
     >
-      {!detail && !error && (
-        <p role="status">{zh ? "正在加载文件…" : "Loading files…"}</p>
-      )}
+      {!detail && !error && <p role="status">{t("pending.loading.files")}</p>}
       {error && (
         <p role="alert">
           {error}{" "}
@@ -106,7 +101,7 @@ export function SubmittedChangeFiles({
             className="secondary"
             onClick={() => setAttempt((value) => value + 1)}
           >
-            {zh ? "重试" : "Retry"}
+            {t("pending.retry")}
           </button>
         </p>
       )}
@@ -123,8 +118,7 @@ export function SubmittedChangeFiles({
           </p>
           {detail.inspectionStatus !== "complete" && (
             <p role="status">
-              {detail.message ||
-                (zh ? "文件列表可能不完整" : "File list may be incomplete")}
+              {detail.message || t("pending.file.list.may.be.incomplete")}
             </p>
           )}
           {detail.files.length ? (
@@ -137,12 +131,8 @@ export function SubmittedChangeFiles({
           ) : (
             <p>
               {detail.inspectionStatus === "complete"
-                ? zh
-                  ? "没有可显示的文件"
-                  : "No files to display"
-                : zh
-                  ? "尚无可显示文件，列表未完整读取"
-                  : "No files loaded yet; listing is incomplete"}
+                ? t("pending.no.files.to.display")
+                : t("pending.no.files.loaded.yet.listing")}
             </p>
           )}
         </>

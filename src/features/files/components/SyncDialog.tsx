@@ -1,3 +1,4 @@
+import { tFor } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
@@ -251,7 +252,7 @@ export function SyncDialog({
 
   return (
     <Dialog
-      title={tr("安全同步", "Safe sync")}
+      title={tFor(zh ? "zh-CN" : "en-US", "files.safe.sync")}
       description={tr(
         "先运行真实 p4 sync -n，核对服务器计划后才能执行。",
         "A real p4 sync -n preview must be reviewed before execution.",
@@ -266,20 +267,26 @@ export function SyncDialog({
         <>
           {phase === "preview" && (
             <>
-              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.cancel")}
+              </button>
               <button
                 className="primary"
                 data-dialog-autofocus
                 disabled={busy || !revision || !paths.length}
                 onClick={() => void preview()}
               >
-                {busy ? tr("正在预览…", "Previewing…") : tr("预览", "Preview")}
+                {busy
+                  ? tFor(zh ? "zh-CN" : "en-US", "files.previewing")
+                  : tFor(zh ? "zh-CN" : "en-US", "files.preview")}
               </button>
             </>
           )}
           {phase === "review" && (
             <>
-              <button onClick={resetPreview}>{tr("返回修改", "Back")}</button>
+              <button onClick={resetPreview}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.back")}
+              </button>
               <button
                 className={plan?.target.force ? "danger" : "primary"}
                 disabled={
@@ -290,21 +297,23 @@ export function SyncDialog({
                 }
                 onClick={() => void confirm()}
               >
-                {tr("确认并执行", "Confirm and sync")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.confirm.and.sync")}
               </button>
             </>
           )}
           {phase === "confirming" && (
             <button className="danger" onClick={() => void cancelCurrent()}>
-              {tr("取消同步", "Cancel sync")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.cancel.sync")}
             </button>
           )}
           {phase === "result" && (
             <>
-              <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.close")}
+              </button>
               {result?.outcome !== "succeeded" && (
                 <button className="primary" onClick={resetPreview}>
-                  {tr("重新预览", "Preview again")}
+                  {tFor(zh ? "zh-CN" : "en-US", "files.preview.again")}
                 </button>
               )}
             </>
@@ -315,13 +324,16 @@ export function SyncDialog({
       {simulated && <DialogNotice>{simulated}</DialogNotice>}
       <div className="workflow-context">
         {snapshot.scopeLabel ? `${snapshot.scopeLabel} · ` : ""}
-        {snapshot.nodes.length} {tr("个目标", "targets")}
+        {snapshot.nodes.length} {tFor(zh ? "zh-CN" : "en-US", "files.targets")}
       </div>
       {phase === "preview" && (
         <>
-          <TargetList paths={paths} label={tr("同步范围", "Sync scope")} />
+          <TargetList
+            paths={paths}
+            label={tFor(zh ? "zh-CN" : "en-US", "files.sync.scope.2")}
+          />
           <label>
-            {tr("目标版本", "Target revision")}
+            {tFor(zh ? "zh-CN" : "en-US", "files.target.revision")}
             <select
               value={kind}
               disabled={snapshot.fixedRevision !== undefined}
@@ -330,20 +342,26 @@ export function SyncDialog({
                 setValue("");
               }}
             >
-              <option value="head">{tr("最新版本", "Latest / head")}</option>
+              <option value="head">
+                {tFor(zh ? "zh-CN" : "en-US", "files.latest.head.2")}
+              </option>
               <option value="revision">
-                {tr("文件修订号", "File revision")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.file.revision.2")}
               </option>
               <option value="change">
-                {tr("截至 CL", "As of changelist")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.as.of.changelist.2")}
               </option>
-              <option value="date">{tr("截至日期", "As of date")}</option>
-              <option value="label">{tr("标签", "Label")}</option>
+              <option value="date">
+                {tFor(zh ? "zh-CN" : "en-US", "files.as.of.date.2")}
+              </option>
+              <option value="label">
+                {tFor(zh ? "zh-CN" : "en-US", "files.label")}
+              </option>
             </select>
           </label>
           {kind !== "head" && (
             <label>
-              {tr("值", "Value")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.value")}
               <input
                 type={kind === "date" ? "date" : "text"}
                 inputMode={
@@ -384,30 +402,35 @@ export function SyncDialog({
         <>
           <PreflightStatus state={previewState} zh={zh} />
           <p className="workflow-context">
-            {tr("目标", "Target")}:{" "}
+            {tFor(zh ? "zh-CN" : "en-US", "files.target")}:{" "}
             <code>{revisionLabel(plan.target.revision)}</code>
           </p>
           <div
             className="sync-counts"
-            aria-label={tr("变更计数", "Change counts")}
+            aria-label={tFor(zh ? "zh-CN" : "en-US", "files.change.counts")}
           >
             <span>
-              {tr("新增", "Add")} {plan.counts.added}
+              {tFor(zh ? "zh-CN" : "en-US", "files.add")} {plan.counts.added}
             </span>
             <span>
-              {tr("更新", "Update")} {plan.counts.updated}
+              {tFor(zh ? "zh-CN" : "en-US", "files.update")}{" "}
+              {plan.counts.updated}
             </span>
             <span>
-              {tr("删除", "Delete")} {plan.counts.deleted}
+              {tFor(zh ? "zh-CN" : "en-US", "files.delete")}{" "}
+              {plan.counts.deleted}
             </span>
             <span>
-              {tr("已最新", "Up to date")} {plan.counts.upToDate}
+              {tFor(zh ? "zh-CN" : "en-US", "files.up.to.date")}{" "}
+              {plan.counts.upToDate}
             </span>
             <span>
-              {tr("警告", "Warnings")} {plan.counts.warnings}
+              {tFor(zh ? "zh-CN" : "en-US", "files.warnings")}{" "}
+              {plan.counts.warnings}
             </span>
             <span>
-              {tr("冲突", "Conflicts")} {plan.counts.conflicts}
+              {tFor(zh ? "zh-CN" : "en-US", "files.conflicts")}{" "}
+              {plan.counts.conflicts}
             </span>
           </div>
           {(plan.partial || plan.truncated) && (
@@ -428,7 +451,7 @@ export function SyncDialog({
               (entry) =>
                 `${entry.kind}: ${entry.depotPath ?? entry.clientPath ?? entry.message}`,
             )}
-            label={tr("代表性文件", "Representative files")}
+            label={tFor(zh ? "zh-CN" : "en-US", "files.representative.files")}
           />
           {plan.target.force && (
             <label className="workflow-checkbox">
@@ -462,7 +485,7 @@ export function SyncDialog({
           </DialogNotice>
           {result && (
             <p className="workflow-context">
-              {tr("结果", "Result")}: {result.outcome}
+              {tFor(zh ? "zh-CN" : "en-US", "files.result")}: {result.outcome}
               {result.operationId ? ` · ${result.operationId}` : ""}
             </p>
           )}

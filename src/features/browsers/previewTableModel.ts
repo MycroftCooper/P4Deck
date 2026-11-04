@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import type { FilePreview, FilePreviewTable } from "../../shared/contracts";
 
 /** Rendering hard limits; the backend is expected to stay inside them. */
@@ -157,7 +158,7 @@ export function clipCell(value: string, zh: boolean): string {
   if (value.length <= CELL_TEXT_LIMIT) return value;
   return (
     value.slice(0, CELL_TEXT_LIMIT) +
-    (zh ? "…[单元格过长]" : "…[cell truncated]")
+    tFor(zh ? "zh-CN" : "en-US", "browse.cell.truncated")
   );
 }
 
@@ -211,38 +212,28 @@ export function truncationNotes(
     );
   } else if (reason === "cellCap") {
     notes.push(
-      zh
-        ? "达到单元格上限，后续内容未显示"
-        : "Cell limit reached; later content is not shown",
+      tFor(zh ? "zh-CN" : "en-US", "browse.cell.limit.reached.later.content"),
     );
   } else if (reason === "byteCap") {
     notes.push(
-      zh
-        ? "达到读取上限，仅显示已读取部分"
-        : "Read limit reached; showing the part that was read",
+      tFor(zh ? "zh-CN" : "en-US", "browse.read.limit.reached.showing.the"),
     );
   } else if (reason === "budgetCap") {
     notes.push(
-      zh
-        ? "文本预算用尽，后续行未显示"
-        : "Text budget reached; later rows are not shown",
+      tFor(zh ? "zh-CN" : "en-US", "browse.text.budget.reached.later.rows"),
     );
   } else if (reason === "timeout") {
     notes.push(
-      zh
-        ? "读取超时，仅显示已读取部分"
-        : "Read timed out; showing the part that was read",
+      tFor(zh ? "zh-CN" : "en-US", "browse.read.timed.out.showing.the"),
     );
   } else if (table.hasMore) {
-    notes.push(zh ? "仍有更多行未显示" : "More rows are not shown");
+    notes.push(tFor(zh ? "zh-CN" : "en-US", "browse.more.rows.are.not.shown"));
   } else if (table.truncated) {
-    notes.push(zh ? "内容已截断" : "Content was truncated");
+    notes.push(tFor(zh ? "zh-CN" : "en-US", "browse.content.was.truncated"));
   }
   if (uiTruncated) {
     notes.push(
-      zh
-        ? "数据超出界面上限，已截断显示"
-        : "Data exceeded the UI limit and was truncated",
+      tFor(zh ? "zh-CN" : "en-US", "browse.data.exceeded.the.ui.limit"),
     );
   }
   return notes;

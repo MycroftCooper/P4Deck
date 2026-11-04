@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useState } from "react";
 import {
   backgroundPresets,
@@ -29,7 +30,7 @@ export function BackgroundColorSettings({
   return (
     <div className="background-settings">
       <div className="background-settings-heading">
-        <strong>{tr("背景色", "Background color")}</strong>
+        <strong>{t("settings.background.color")}</strong>
         <small>
           {tr(
             "默认跟随主题；选择或输入颜色后即时预览并保存，深浅主题会自动调整明暗以保持文字可读。",
@@ -40,7 +41,7 @@ export function BackgroundColorSettings({
       <div
         className="background-swatches"
         role="group"
-        aria-label={tr("背景色预设", "Background presets")}
+        aria-label={t("settings.background.presets")}
       >
         <button
           type="button"
@@ -52,7 +53,7 @@ export function BackgroundColorSettings({
             className="background-swatch-sample is-default"
             aria-hidden="true"
           />
-          {tr("跟随主题", "Theme default")}
+          {t("settings.theme.default")}
         </button>
         {backgroundPresets.map((preset) => (
           <button
@@ -74,16 +75,16 @@ export function BackgroundColorSettings({
       </div>
       <div className="background-custom">
         <label>
-          {tr("自定义颜色", "Custom color")}
+          {t("settings.custom.color")}
           <input
             type="color"
             value={swatchValue}
-            aria-label={tr("自定义背景颜色", "Custom background color")}
+            aria-label={t("settings.custom.background.color")}
             onChange={(event) => onChange(event.target.value)}
           />
         </label>
         <label>
-          {tr("颜色值（#RRGGBB）", "Color value (#RRGGBB)")}
+          {t("settings.color.value.rrggbb")}
           <input
             className="background-hex"
             value={draft}
@@ -115,7 +116,7 @@ export function BackgroundColorSettings({
           disabled={!active}
           onClick={() => onChange(defaultBackgroundTone)}
         >
-          {tr("恢复默认背景", "Reset background")}
+          {t("settings.reset.background")}
         </button>
       </div>
       {active && (
@@ -138,7 +139,7 @@ export function BackgroundColorSettings({
                   borderColor: tokens["--border"],
                 }}
               >
-                <span>{dark ? tr("深色", "Dark") : tr("浅色", "Light")}</span>
+                <span>{dark ? t("settings.dark") : t("settings.light")}</span>
                 <span
                   className="background-preview-chrome"
                   style={{
@@ -147,7 +148,7 @@ export function BackgroundColorSettings({
                     borderColor: tokens["--border"],
                   }}
                 >
-                  {tr("工具栏", "Toolbar")}
+                  {t("settings.toolbar")}
                 </span>
                 <span
                   className="background-preview-panel"
@@ -157,7 +158,7 @@ export function BackgroundColorSettings({
                     borderColor: tokens["--border"],
                   }}
                 >
-                  {tr("面板文字", "Panel text")}
+                  {t("settings.panel.text")}
                 </span>
               </div>
             );

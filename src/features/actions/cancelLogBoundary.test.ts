@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, beforeEach } from "vitest";
 import {
   bestEffortLogNote,
   bestEffortLogReceipt,
@@ -7,6 +7,7 @@ import {
   cancelIntentState,
 } from "./cancelLogBoundary";
 import type { CancelOperationResult } from "../../shared/contracts";
+import { setLocale } from "../../shared/i18n";
 
 const result = (state: CancelOperationResult["state"]): CancelOperationResult =>
   ({
@@ -22,6 +23,11 @@ const forbiddenEn = [
   "rolled back",
   "successfully cancelled",
 ];
+
+// The UI translates through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
 
 it("cancel wording is intent-only: never claims rollback/not-submitted for any state", () => {
   for (const state of [

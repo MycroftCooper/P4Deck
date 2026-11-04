@@ -1,4 +1,5 @@
-import { expect, it, vi } from "vitest";
+import { setLocale } from "../../shared/i18n";
+import { expect, it, vi, beforeEach } from "vitest";
 import {
   investigateFiles,
   mapBranchFile,
@@ -30,6 +31,11 @@ const options = () => ({
   fileListComplete: true,
   intermediates: false,
 });
+// These expectations are written in English.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("maps exact roots without matching similarly named siblings", () => {
   expect(map("//d/main/a").target).toBe("//d/release/a");
   expect(map("//d/mainly/a").target).toBeUndefined();

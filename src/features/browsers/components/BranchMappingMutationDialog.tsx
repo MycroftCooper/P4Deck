@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -362,10 +363,10 @@ export function BranchMappingMutationDialog({
 
   const title =
     mode === "create"
-      ? tr("创建 Branch Mapping", "Create Branch Mapping")
+      ? t("browse.create.branch.mapping")
       : mode === "edit"
-        ? tr("编辑 Branch Mapping", "Edit Branch Mapping")
-        : tr("删除 Branch Mapping", "Delete Branch Mapping");
+        ? t("browse.edit.branch.mapping")
+        : t("browse.delete.branch.mapping");
   const busy = phase === "checking" || phase === "running";
   const observed = branchObservedSummary(result?.observed);
   const preflightState = busy
@@ -400,7 +401,7 @@ export function BranchMappingMutationDialog({
         <>
           {phase === "edit" && (
             <>
-              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button onClick={onDismiss}>{t("browse.cancel")}</button>
               <button
                 className={mode === "delete" ? "danger" : "primary"}
                 data-dialog-autofocus
@@ -412,7 +413,7 @@ export function BranchMappingMutationDialog({
                 }
                 onClick={() => void runPreflight()}
               >
-                {tr("开始预检", "Run preflight")}
+                {t("browse.run.preflight")}
               </button>
             </>
           )}
@@ -423,12 +424,12 @@ export function BranchMappingMutationDialog({
                 backend.cancelOperation(activeOperation.current)
               }
             >
-              {tr("取消预检", "Cancel preflight")}
+              {t("browse.cancel.preflight")}
             </button>
           )}
           {phase === "review" && (
             <>
-              <button onClick={reset}>{tr("返回编辑", "Back to edit")}</button>
+              <button onClick={reset}>{t("browse.back.to.edit")}</button>
               <button
                 className={mode === "delete" ? "danger" : "primary"}
                 disabled={
@@ -441,8 +442,8 @@ export function BranchMappingMutationDialog({
                 onClick={() => void confirm()}
               >
                 {mode === "delete"
-                  ? tr("确认永久删除", "Confirm permanent delete")
-                  : tr("确认保存", "Confirm save")}
+                  ? t("browse.confirm.permanent.delete")
+                  : t("browse.confirm.save")}
               </button>
             </>
           )}
@@ -453,15 +454,15 @@ export function BranchMappingMutationDialog({
                 backend.cancelOperation(activeOperation.current)
               }
             >
-              {tr("取消操作", "Cancel operation")}
+              {t("browse.cancel.operation")}
             </button>
           )}
           {phase === "result" && (
             <>
-              <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+              <button onClick={onDismiss}>{t("browse.close")}</button>
               {result?.outcome !== "succeeded" && (
                 <button className="primary" onClick={reset}>
-                  {tr("重新预检", "Preflight again")}
+                  {t("browse.preflight.again")}
                 </button>
               )}
             </>
@@ -478,7 +479,7 @@ export function BranchMappingMutationDialog({
         </DialogNotice>
       )}
       <div className="workflow-context">
-        <strong>{name || tr("新 Mapping", "New mapping")}</strong>
+        <strong>{name || t("browse.new.mapping")}</strong>
         {" · "}
         {runtime.context.server} · {runtime.context.user}
       </div>
@@ -505,9 +506,9 @@ export function BranchMappingMutationDialog({
         <div className="branch-mutation-editor">
           <div className="branch-mutation-fields">
             <label>
-              <span>{tr("名称", "Name")}</span>
+              <span>{t("browse.name")}</span>
               <input
-                aria-label={tr("Branch Mapping 名称", "Branch Mapping name")}
+                aria-label={t("browse.branch.mapping.name")}
                 value={draft.name}
                 disabled={mode === "edit"}
                 maxLength={128}
@@ -539,7 +540,7 @@ export function BranchMappingMutationDialog({
                   setDraft({ ...draft, locked: event.target.checked })
                 }
               />
-              {tr("锁定 Mapping", "Lock mapping")}
+              {t("browse.lock.mapping")}
             </label>
           </div>
           {draftIssues.map((message) => (
@@ -558,17 +559,17 @@ export function BranchMappingMutationDialog({
                 setDraft({ ...draft, view: [...draft.view, blankLine()] })
               }
             >
-              <Plus size={14} /> {tr("添加行", "Add line")}
+              <Plus size={14} /> {t("browse.add.line")}
             </button>
           </div>
           <div style={{ overflowX: "auto" }}>
             <ResizeHeader
               columns={[
                 "#",
-                tr("模式", "Mode"),
-                tr("来源", "Source"),
-                tr("目标", "Target"),
-                tr("操作", "Actions"),
+                t("browse.mode"),
+                t("browse.source"),
+                t("browse.target"),
+                t("browse.actions"),
               ]}
               resize={tableColumns}
             />
@@ -655,7 +656,7 @@ export function BranchMappingMutationDialog({
       {phase === "review" && preflight && (
         <div className="branch-preflight-review">
           <DialogNotice>
-            {tr("一次性令牌剩余", "One-use token remaining")} ·{" "}
+            {t("browse.one.use.token.remaining")} ·{" "}
             {Math.max(0, Math.ceil((preflight.expiresAt - Date.now()) / 1000))}s
           </DialogNotice>
           <dl>
@@ -707,13 +708,13 @@ export function BranchMappingMutationDialog({
         >
           <strong>
             {result?.outcome === "succeeded"
-              ? tr("已由服务器回读验证", "Verified by server readback")
+              ? t("browse.verified.by.server.readback")
               : result?.outcome === "unknown"
-                ? tr("结果不确定", "Outcome uncertain")
-                : tr("操作未成功", "Operation did not succeed")}
+                ? t("browse.outcome.uncertain")
+                : t("browse.operation.did.not.succeed")}
           </strong>
           <br />
-          {error || result?.message || tr("未知结果", "Unknown result")}
+          {error || result?.message || t("browse.unknown.result")}
           {result?.failure && (
             <>
               <br />
@@ -732,10 +733,10 @@ export function BranchMappingMutationDialog({
       )}
       {phase === "result" && result?.outcome === "succeeded" && observed && (
         <DialogNotice>
-          {tr("服务器回读：", "Server readback: ")}
-          {observed.name} · {observed.viewLines} {tr("行", "lines")} · Owner{" "}
+          {t("browse.server.readback")}
+          {observed.name} · {observed.viewLines} {t("browse.lines")} · Owner{" "}
           {observed.owner}
-          {observed.locked ? tr(" · 已锁定", " · locked") : ""}
+          {observed.locked ? t("browse.locked") : ""}
           {" · "}
           {tr(
             "仍以刷新后的列表/详情为准。",
@@ -745,7 +746,7 @@ export function BranchMappingMutationDialog({
       )}
       {phase === "result" && result && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+          {t("browse.operation")} {result.operationIds.join(", ")}
         </p>
       )}
     </Dialog>

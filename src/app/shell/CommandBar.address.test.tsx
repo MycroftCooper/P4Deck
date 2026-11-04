@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, beforeEach } from "vitest";
 import {
   getShortcutOverrides,
   resetShortcutOverrides,
@@ -9,6 +9,7 @@ import {
 import { dialogHarness } from "../dialogs/testHarness";
 import { CommandBar } from "./CommandBar";
 import type { RuntimeInfo } from "../../shared/contracts";
+import { setLocale } from "../../shared/i18n";
 
 afterEach(() => {
   resetShortcutOverrides();
@@ -55,6 +56,11 @@ const runtime: RuntimeInfo = {
     server: "fixture.invalid",
   },
 };
+
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
 
 it("focuses and selects the unified address bar for navigation.focusAddress", async () => {
   await root.render(

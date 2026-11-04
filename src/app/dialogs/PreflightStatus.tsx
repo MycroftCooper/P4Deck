@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { DialogNotice } from "./Dialog";
 export type PreflightState =
   | {
@@ -38,7 +39,7 @@ export function PreflightStatus({
   };
   return (
     <section
-      aria-label={zh ? "预检状态" : "Preflight status"}
+      aria-label={t("dialogs.preflight.status")}
       aria-busy={state.kind === "checking"}
     >
       <DialogNotice
@@ -53,13 +54,13 @@ export function PreflightStatus({
         <>
           {state.blockers.map((value, index) => (
             <DialogNotice key={`b${index}`} error>
-              {zh ? "阻塞：" : "Blocker: "}
+              {t("dialogs.blocker")}
               {value}
             </DialogNotice>
           ))}
           {state.warnings.map((value, index) => (
             <DialogNotice key={`w${index}`}>
-              {zh ? "警告：" : "Warning: "}
+              {t("dialogs.warning")}
               {value}
             </DialogNotice>
           ))}

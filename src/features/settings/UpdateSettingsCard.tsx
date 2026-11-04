@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { Download, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { currentAppVersion } from "../../app/update/updaterClient";
@@ -46,7 +47,7 @@ export function UpdateSettingsCard({
         "Automatic updates are available in the desktop app only.",
       )
     : snapshot.phase === "checking"
-      ? tr("正在检查更新…", "Checking for updates…")
+      ? t("settings.checking.for.updates")
       : snapshot.phase === "available"
         ? tr(
             `有新版本 v${snapshot.version}（当前 v${snapshot.currentVersion}）。`,
@@ -54,13 +55,13 @@ export function UpdateSettingsCard({
           )
         : snapshot.phase === "downloading"
           ? percent === undefined
-            ? tr("正在下载更新…", "Downloading the update…")
+            ? t("settings.downloading.the.update")
             : tr(
                 `正在下载更新 ${percent}%。`,
                 `Downloading the update (${percent}%).`,
               )
           : snapshot.phase === "installing"
-            ? tr("正在安装更新…", "Installing the update…")
+            ? t("settings.installing.the.update")
             : snapshot.phase === "ready"
               ? snapshot.applied
                 ? tr(
@@ -72,7 +73,7 @@ export function UpdateSettingsCard({
                     `Version v${snapshot.version} is downloaded. Confirm install and restart to apply it.`,
                   )
               : snapshot.phase === "restarting"
-                ? tr("正在重启…", "Restarting…")
+                ? t("settings.restarting")
                 : snapshot.phase === "error"
                   ? snapshot.applied
                     ? tr(
@@ -91,7 +92,7 @@ export function UpdateSettingsCard({
     <section className="settings-card">
       <h2>
         <Download size={18} />
-        {tr("更新", "Updates")}
+        {t("settings.updates")}
       </h2>
       <p
         className={`update-settings-status ${snapshot.phase === "error" ? "is-error" : ""}`}
@@ -108,8 +109,8 @@ export function UpdateSettingsCard({
         >
           <RefreshCw size={14} aria-hidden="true" />
           {snapshot.phase === "checking"
-            ? tr("正在检查…", "Checking…")
-            : tr("检查更新", "Check for updates")}
+            ? t("settings.checking.3")
+            : t("settings.check.for.updates")}
         </button>
       </div>
       <p>

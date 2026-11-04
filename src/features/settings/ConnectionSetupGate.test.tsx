@@ -6,6 +6,7 @@ import { activeSetupKey, ConnectionSetupGate } from "./ConnectionSetupGate";
 import type { RuntimeInfo, ConnectionProfiles } from "../../shared/contracts";
 import type { Preferences } from "../../app/hooks/usePreferences";
 import type { useRuntime } from "../../app/hooks/useRuntime";
+import { setLocale } from "../../shared/i18n";
 const backend = vi.hoisted(() => ({ listConnectionProfiles: vi.fn() }));
 const native = vi.hoisted(() => ({ enabled: false, invoke: vi.fn() }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
@@ -44,6 +45,8 @@ const runtime = (
 });
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   native.enabled = false;
   native.invoke.mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

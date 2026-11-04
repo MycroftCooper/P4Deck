@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import type { DiffResult, RuntimeInfo } from "../../../shared/contracts";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
 import { DiffView } from "./DiffView";
+import { setLocale } from "../../../shared/i18n";
 
 const runtime: RuntimeInfo = {
   mode: "tauri",
@@ -115,6 +116,8 @@ async function click(selector: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

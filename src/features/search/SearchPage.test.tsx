@@ -11,6 +11,7 @@ import type {
 } from "../../shared/contracts";
 import { GLOBAL_SEARCH_KINDS } from "./searchModel";
 import { SearchPage } from "./SearchPage";
+import { setLocale } from "../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   globalSearch: vi.fn(),
@@ -132,6 +133,8 @@ function button(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

@@ -76,3 +76,10 @@
 .connection-setup-actions * {
   -webkit-app-region: no-drag;
 }
+
+/* Host-level fallback chrome (src-tauri/src/shell_recovery.rs): a window that
+   never paints its page keeps a native caption bar so it can always be closed,
+   and the document is inset so the shell never covers the system buttons. */
+:root:has(> body > .native-caption-bar) body #root {
+  height: calc(100% - 32px);
+}

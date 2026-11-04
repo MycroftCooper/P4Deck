@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import type { RevisionGraph } from "../../../shared/contracts";
 import {
   focusEvidence,
@@ -53,23 +54,21 @@ export function GraphFocusPanel({
   return (
     <div className="graph-focus-panel">
       <button disabled={loading || !sourceId} onClick={onInvestigate}>
-        {tr("分支 / CL 调查", "Branch / CL investigation")}
+        {t("browse.branch.cl.investigation")}
       </button>
       <div className="graph-focus-controls">
         <label>
-          {tr("模式", "Mode")}
+          {t("browse.mode")}
           <select
             value={mode}
             onChange={(e) => onMode(e.target.value as GraphFocusMode)}
           >
-            <option value="target">
-              {tr("目标合入查询", "Trace to target")}
-            </option>
-            <option value="sources">{tr("来源追溯", "Trace origins")}</option>
+            <option value="target">{t("browse.trace.to.target")}</option>
+            <option value="sources">{t("browse.trace.origins")}</option>
           </select>
         </label>
         <label>
-          {tr("选定文件版本", "Selected file revision")}
+          {t("browse.selected.file.revision")}
           <select value={sourceId} onChange={(e) => onSource(e.target.value)}>
             {graph.nodes.map((n) => (
               <option key={n.id} value={n.id}>
@@ -80,7 +79,7 @@ export function GraphFocusPanel({
         </label>
         {mode === "target" && (
           <label>
-            {tr("目标分支中的完整文件路径", "Full file path in target branch")}
+            {t("browse.full.file.path.in.target")}
             <div className="graph-target-input">
               <input
                 value={target}
@@ -102,7 +101,7 @@ export function GraphFocusPanel({
                 }
                 onClick={onRead}
               >
-                {tr("查询目标", "Read target")}
+                {t("browse.read.target")}
               </button>
             </div>
           </label>
@@ -111,9 +110,9 @@ export function GraphFocusPanel({
       <div className="graph-evidence" role="status">
         <strong>
           {!sourceId
-            ? tr("请选择版本", "Select a revision")
+            ? t("browse.select.a.revision")
             : mode === "target" && !target
-              ? tr("输入目标文件后查询", "Enter a target file")
+              ? t("browse.enter.a.target.file")
               : evidence.edges.length
                 ? tr(
                     "发现集成记录路径；内容是否仍包含：未知",
@@ -132,14 +131,14 @@ export function GraphFocusPanel({
         </span>
         <span>
           {stale
-            ? tr("旧缓存 / 新鲜度未确认", "Stale cache / freshness unverified")
-            : tr("近期快照", "Recent snapshot")}{" "}
+            ? t("browse.stale.cache.freshness.unverified")
+            : t("browse.recent.snapshot")}{" "}
           ·{" "}
           {updatedAt
             ? new Date(updatedAt).toLocaleString(zh ? "zh-CN" : "en-US")
             : "—"}{" "}
-          · {tr("读取尝试", "Read attempts")} {reads}/{GRAPH_BUDGET} ·{" "}
-          {tr("追溯深度上限", "Depth limit")} {GRAPH_DEPTH}
+          · {t("browse.read.attempts")} {reads}/{GRAPH_BUDGET} ·{" "}
+          {t("browse.depth.limit")} {GRAPH_DEPTH}
         </span>
         {(evidence.incomplete || evidence.caution) && (
           <span>
@@ -151,7 +150,7 @@ export function GraphFocusPanel({
         )}
         <details>
           <summary>
-            {tr("查看原始证据", "Inspect evidence")} ({evidence.edges.length})
+            {t("browse.inspect.evidence")} ({evidence.edges.length})
           </summary>
           <ul>
             {evidence.edges.map((e) => {
@@ -161,8 +160,8 @@ export function GraphFocusPanel({
                 <li key={e.id}>
                   {a?.depotPath}#{a?.revision} → {b?.depotPath}#{b?.revision} ·
                   CL {b?.changelistId || "?"} · {e.relationship} ·{" "}
-                  {tr("关联文件范围", "Related-file range")} (
-                  {e.startRevision ?? "?"}, {e.endRevision ?? "?"}]
+                  {t("browse.related.file.range")} ({e.startRevision ?? "?"},{" "}
+                  {e.endRevision ?? "?"}]
                 </li>
               );
             })}
@@ -171,10 +170,10 @@ export function GraphFocusPanel({
       </div>
       <details className="graph-lane-picker">
         <summary>
-          {tr("显示轨道", "Visible lanes")} ({visible.size}/{paths.length})
+          {t("browse.visible.lanes")} ({visible.size}/{paths.length})
         </summary>
         <button onClick={() => solo()}>
-          {tr("恢复查询聚焦", "Restore query focus")}
+          {t("browse.restore.query.focus")}
         </button>
         {paths.map((path) => (
           <div key={path}>
@@ -188,7 +187,7 @@ export function GraphFocusPanel({
             </label>
             <button
               onClick={() => solo(path)}
-              title={tr("只显示此轨道", "Show only this lane")}
+              title={t("browse.show.only.this.lane")}
             >
               Solo
             </button>

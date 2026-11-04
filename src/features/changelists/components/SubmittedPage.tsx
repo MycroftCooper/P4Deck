@@ -1,3 +1,5 @@
+import { t as translate } from "../../../shared/i18n";
+import { isZh } from "../../../shared/locale";
 import { submittedTags, matchesSubmittedTags } from "../submittedTags";
 import { isStreamList } from "../../browsers/components/ReadOnlyPages";
 import { useSnapshotQuery } from "../../../shared/cache/useSnapshotQuery";
@@ -305,7 +307,7 @@ export function SubmittedPage({
   >(undefined);
   const handledNavigation = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
-  const zh = t.language === "Switch to English";
+  const zh = isZh();
 
   const cancelQuery = useCallback(() => {
     generation.current++;
@@ -439,11 +441,7 @@ export function SubmittedPage({
         applyResults(results);
         if (!append) reconcileSelection(combined);
         if (invalidContinuation)
-          setPageError(
-            zh
-              ? "后端返回了不可继续的游标；已保留当前部分结果。"
-              : "The backend returned a non-progressing cursor; current partial results were preserved.",
-          );
+          setPageError(translate("pending.the.backend.returned.a.non"));
         writePagedSnapshot<SubmittedSnapshot>(key, {
           ...results,
           base,
@@ -708,25 +706,19 @@ export function SubmittedPage({
             <SubmittedGoTo zh={zh} />
             <button
               className="secondary"
-              title={zh ? "周报提示词" : "Weekly report prompt"}
-              aria-label={zh ? "周报提示词" : "Weekly report prompt"}
+              title={translate("pending.weekly.report.prompt")}
+              aria-label={translate("pending.weekly.report.prompt")}
               onClick={(event) =>
                 setReport({ owner: reportOwner, source: event.currentTarget })
               }
             >
               <FileText size={15} aria-hidden="true" />
-              <span>{zh ? "周报提示词" : "Weekly report prompt"}</span>
+              <span>{translate("pending.weekly.report.prompt")}</span>
             </button>
           </>
         }
         resultSummary={
-          <small
-            title={
-              zh
-                ? "仅筛选已加载记录，可继续加载更多；规则不验证 CI 身份。"
-                : "Filters loaded records; load more to continue. Rules do not verify CI identity."
-            }
-          >
+          <small title={translate("pending.filters.loaded.records.load.more")}>
             {zh
               ? `已加载 ${changes.length} 条中显示 ${visibleChanges.length} 条`
               : `Showing ${visibleChanges.length} of ${changes.length} loaded`}
@@ -738,7 +730,7 @@ export function SubmittedPage({
               tagOptions={tagOptions}
               typeControl={
                 <label className="submitted-filter-field submitted-kind-filter">
-                  <span>{zh ? "提交类型" : "Submission type"}</span>
+                  <span>{translate("pending.submission.type")}</span>
                   <select
                     value={kindFilter}
                     onChange={(event) => (
@@ -750,7 +742,7 @@ export function SubmittedPage({
                       })
                     )}
                   >
-                    <option value="all">{zh ? "全部" : "All"}</option>
+                    <option value="all">{translate("pending.all")}</option>
                     {submissionKinds.map((kind) => (
                       <option key={kind} value={kind}>
                         {submissionKindLabel(kind, zh)}
@@ -794,15 +786,11 @@ export function SubmittedPage({
                 <div className="submitted-error-message">
                   <span>
                     {error.includes("must refer to client")
-                      ? zh
-                        ? "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。"
-                        : "P4 could not resolve the query path. Check Depot Path; use /... for a directory scope."
-                      : zh
-                        ? "查询失败，请查看技术详情。"
-                        : "Query failed. See technical details."}
+                      ? translate("pending.p4.could.not.resolve.the")
+                      : translate("pending.query.failed.see.technical.details")}
                   </span>
                   <details>
-                    <summary>{zh ? "技术详情" : "Technical details"}</summary>
+                    <summary>{translate("pending.technical.details")}</summary>
                     <pre>{error}</pre>
                   </details>
                 </div>

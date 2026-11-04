@@ -1,3 +1,5 @@
+import { tFor } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ActionAdmission } from "../../actions/ActionAdmission";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -55,39 +57,41 @@ export function operationRecoveryGuidance(
   if (failure === "unknown" || failure === "interrupted") {
     return {
       tone: "danger",
-      title: zh ? "结果未知，必须人工核对" : "Unknown result: verify manually",
-      steps: zh
-        ? "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。"
-        : "Do not immediately retry a mutation. Open related logs, refresh Pending and Workspace, then verify the server-side result. P4Deck never replays automatically.",
+      title: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.unknown.result.verify.manually",
+      ),
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.do.not.immediately.retry.a"),
     };
   }
   if (failure === "cancelled") {
     return {
       tone: "warning",
-      title: zh
-        ? "已请求取消，执行范围可能不完整"
-        : "Cancel requested; execution may be partial",
-      steps: zh
-        ? "刷新 Pending 和 Workspace 后再决定是否继续。取消只停止剩余工作，不会撤销已完成部分。"
-        : "Refresh Pending and Workspace before continuing. Cancel stops remaining work and does not undo completed work.",
+      title: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.cancel.requested.execution.may.be",
+      ),
+      steps: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.refresh.pending.and.workspace.before",
+      ),
     };
   }
   if (failure === "authExpired") {
     return {
       tone: "warning",
-      title: zh ? "认证已失效" : "Authentication expired",
-      steps: zh
-        ? "重新登录后先刷新。若中断的是写操作，请先从服务器侧核对，再明确决定是否重试。"
-        : "Log in again and refresh first. If a mutation was interrupted, verify it server-side before explicitly retrying.",
+      title: tFor(zh ? "zh-CN" : "en-US", "tools.authentication.expired"),
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.log.in.again.and.refresh"),
     };
   }
   if (failure === "offline" || failure === "serverUnreachable") {
     return {
       tone: "warning",
-      title: zh ? "连接已中断" : "Connection interrupted",
-      steps: zh
-        ? "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。"
-        : "Reconnect and refresh after the network or server returns. Reads may retry; mutations are not replayed automatically.",
+      title: tFor(zh ? "zh-CN" : "en-US", "tools.connection.interrupted"),
+      steps: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.reconnect.and.refresh.after.the",
+      ),
     };
   }
   return undefined;
@@ -204,26 +208,27 @@ export function OperationJournalView({
       />
       <div
         className="diagnostic-toolbar"
-        aria-label={zh ? "操作筛选" : "Operation filters"}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.operation.filters")}
       >
         <input
-          aria-label={zh ? "搜索操作" : "Search operations"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.search.operations")}
           value={keyword}
-          placeholder={
-            zh
-              ? "操作 ID、工作区、状态或错误"
-              : "ID, workspace, state, or error"
-          }
+          placeholder={tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.id.workspace.state.or.error",
+          )}
           onChange={(event) => setKeyword(event.target.value)}
         />
         <select
-          aria-label={zh ? "操作状态" : "Operation state"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.operation.state")}
           value={state}
           onChange={(event) =>
             setState(event.target.value as JournalState | "")
           }
         >
-          <option value="">{zh ? "全部状态" : "All states"}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.states")}
+          </option>
           {(
             [
               "queued",
@@ -238,13 +243,15 @@ export function OperationJournalView({
           ))}
         </select>
         <select
-          aria-label={zh ? "操作类型" : "Operation type"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.operation.type")}
           value={category}
           onChange={(event) =>
             setCategory(event.target.value as OperationCategory | "")
           }
         >
-          <option value="">{zh ? "全部类型" : "All types"}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.types")}
+          </option>
           {(
             [
               "query",
@@ -259,7 +266,7 @@ export function OperationJournalView({
           ))}
         </select>
         <label className="compact-field">
-          <span>{zh ? "开始" : "From"}</span>
+          <span>{tFor(zh ? "zh-CN" : "en-US", "tools.from")}</span>
           <input
             type="datetime-local"
             value={from}
@@ -267,7 +274,7 @@ export function OperationJournalView({
           />
         </label>
         <label className="compact-field">
-          <span>{zh ? "结束" : "To"}</span>
+          <span>{tFor(zh ? "zh-CN" : "en-US", "tools.to")}</span>
           <input
             type="datetime-local"
             value={to}
@@ -275,7 +282,8 @@ export function OperationJournalView({
           />
         </label>
         <button onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={13} /> {zh ? "应用 / 刷新" : "Apply / refresh"}
+          <RefreshCw size={13} />{" "}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
         </button>
       </div>
 
@@ -287,9 +295,7 @@ export function OperationJournalView({
               : `${recoveryRecords.length} operation(s) need manual recovery`}
           </strong>
           <span>
-            {zh
-              ? "先核对日志和服务器实际状态，再决定是否重试；写操作不会自动重放。"
-              : "Verify logs and server state before retrying. Mutations are never replayed automatically."}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.verify.logs.and.server.state")}
           </span>
         </div>
       )}
@@ -306,16 +312,16 @@ export function OperationJournalView({
           aria-rowcount={records.length + 1}
         >
           <caption className="sr-only">
-            {zh ? "操作记录" : "Operation journal"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.operation.journal")}
           </caption>
           <thead>
             <tr>
-              <th>{zh ? "状态" : "State"}</th>
-              <th>{zh ? "操作摘要" : "Summary"}</th>
-              <th>{zh ? "开始 / 结束" : "Started / finished"}</th>
-              <th>{zh ? "耗时" : "Duration"}</th>
-              <th>{zh ? "错误 / 恢复" : "Error / recovery"}</th>
-              <th>{zh ? "关联日志" : "Logs"}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.state")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.summary")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.started.finished")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.duration")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.error.recovery")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.logs")}</th>
             </tr>
           </thead>
           <tbody>
@@ -345,14 +351,18 @@ export function OperationJournalView({
                   </td>
                   <td>
                     <time dateTime={record.startedAt}>
-                      {new Date(record.startedAt).toLocaleString()}
+                      {formatLocalTime(
+                        record.startedAt,
+                        zh ? "zh-CN" : "en-US",
+                      )}
                     </time>
                     <span>
                       {record.finishedAt
-                        ? new Date(record.finishedAt).toLocaleString()
-                        : zh
-                          ? "进行中"
-                          : "In progress"}
+                        ? formatLocalTime(
+                            record.finishedAt,
+                            zh ? "zh-CN" : "en-US",
+                          )
+                        : tFor(zh ? "zh-CN" : "en-US", "tools.in.progress")}
                     </span>
                   </td>
                   <td>{duration(record)}</td>
@@ -376,7 +386,7 @@ export function OperationJournalView({
                       className="link-button"
                       onClick={() => onOpenLogs(record.operationId)}
                     >
-                      {zh ? "查看日志" : "View logs"}
+                      {tFor(zh ? "zh-CN" : "en-US", "tools.view.logs")}
                     </button>
                   </td>
                 </tr>
@@ -391,35 +401,35 @@ export function OperationJournalView({
         </ResizableTable>
         {!records.length && !loading && !error && (
           <div className="empty-state">
-            {zh ? "暂无匹配操作" : "No matching operations"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.no.matching.operations")}
           </div>
         )}
       </div>
       {error && (
         <div className="inline-error" role="alert">
           {error}{" "}
-          <button onClick={() => void load()}>{zh ? "重试" : "Retry"}</button>
+          <button onClick={() => void load()}>
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry")}
+          </button>
         </div>
       )}
       {appendError && (
         <div className="inline-error" role="alert">
           {appendError}{" "}
           <button onClick={() => void load(nextCursor)}>
-            {zh ? "重试继续加载" : "Retry load more"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry.load.more")}
           </button>
         </div>
       )}
       <div className="diagnostic-footer" role="status" aria-live="polite">
         <span>
           {loading
-            ? zh
-              ? "正在加载…"
-              : "Loading…"
-            : `${records.length} ${zh ? "条" : "records"}`}
+            ? tFor(zh ? "zh-CN" : "en-US", "tools.loading")
+            : `${records.length} ${tFor(zh ? "zh-CN" : "en-US", "tools.records")}`}
         </span>
         {nextCursor && !appendError && (
           <button onClick={() => void load(nextCursor)} disabled={loading}>
-            {zh ? "继续加载" : "Load more"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.load.more")}
           </button>
         )}
       </div>

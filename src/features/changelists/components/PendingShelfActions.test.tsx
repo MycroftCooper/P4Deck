@@ -9,7 +9,7 @@ import {
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
 import type { PendingChange, RuntimeInfo } from "../../../shared/contracts";
-import { messages } from "../../../shared/i18n";
+import { activateLocale, messages } from "../../../shared/i18n";
 import type { ShelfRequest } from "./ShelfDialog";
 import { PendingPage } from "./PendingPage";
 import { workspaceCache } from "../../files/workspaceQueries";
@@ -71,6 +71,8 @@ function environment(): MenuEnvironmentValue {
 }
 
 beforeEach(() => {
+  // This suite renders the English UI; align the module resolver.
+  activateLocale("en-US");
   workspaceCache.clear();
   vi.stubGlobal(
     "ResizeObserver",

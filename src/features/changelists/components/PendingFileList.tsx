@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import type { OpenedFileSelection, SelectedOpenedFile } from "../selectedFiles";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -348,7 +349,7 @@ export function PendingFileList({
       {filtered && (
         <div className="pending-file-tools">
           <span role="status">
-            {nodes.length} / {files.length} {zh ? "文件" : "files"}
+            {nodes.length} / {files.length} {t("pending.files.3")}
           </span>
           <button
             type="button"
@@ -358,7 +359,7 @@ export function PendingFileList({
               clearSelection();
             }}
           >
-            {zh ? "清除筛选" : "Clear filters"}
+            {t("pending.clear.filters")}
           </button>
         </div>
       )}
@@ -387,15 +388,12 @@ export function PendingFileList({
             role="row"
             aria-rowindex={1}
           >
-            <div
-              role="columnheader"
-              aria-label={zh ? "文件状态图标" : "File status icon"}
-            >
+            <div role="columnheader" aria-label={t("pending.file.status.icon")}>
               {columnResizer(0, "Icon")}
             </div>
             <div role="columnheader">
-              {zh ? "文件名称" : "File name"}
-              {columnResizer(1, zh ? "文件名称" : "File name")}
+              {t("pending.file.name")}
+              {columnResizer(1, t("pending.file.name"))}
             </div>
             <div
               role="columnheader"
@@ -403,7 +401,7 @@ export function PendingFileList({
             >
               <button
                 type="button"
-                aria-label={zh ? "按路径排序" : "Sort by path"}
+                aria-label={t("pending.sort.by.path")}
                 title={
                   zh
                     ? `切换为${pathOrder === "asc" ? "降序" : "升序"}`
@@ -413,24 +411,23 @@ export function PendingFileList({
                   setPathOrder((value) => (value === "asc" ? "desc" : "asc"))
                 }
               >
-                {zh ? "文件路径" : "File path"}{" "}
-                {pathOrder === "asc" ? "↑" : "↓"}
+                {t("pending.file.path")} {pathOrder === "asc" ? "↑" : "↓"}
               </button>
-              {columnResizer(2, zh ? "文件路径" : "File path")}
+              {columnResizer(2, t("pending.file.path"))}
             </div>
             <div role="columnheader">
               <label>
                 <select
-                  aria-label={zh ? "按状态筛选" : "Filter by status"}
+                  aria-label={t("pending.filter.by.status")}
                   value={statusFilter}
                   onChange={(event) => {
                     setStatusFilter(event.target.value);
                     clearSelection();
                   }}
                 >
-                  <option value="">{zh ? "所有状态" : "All statuses"}</option>
+                  <option value="">{t("pending.all.statuses")}</option>
                   <option value="__resolve">
-                    {zh ? "需要 Resolve" : "Needs resolve"}
+                    {t("pending.needs.resolve")}
                   </option>
                   {statuses.map((status) => (
                     <option key={status} value={status}>
@@ -439,30 +436,30 @@ export function PendingFileList({
                   ))}
                 </select>
               </label>
-              {columnResizer(3, zh ? "状态" : "Status")}
+              {columnResizer(3, t("pending.status"))}
             </div>
             <div role="columnheader">
               <label>
                 <select
-                  aria-label={zh ? "按类型筛选" : "Filter by type"}
+                  aria-label={t("pending.filter.by.type")}
                   value={typeFilter}
                   onChange={(event) => {
                     setTypeFilter(event.target.value);
                     clearSelection();
                   }}
                 >
-                  <option value="">{zh ? "所有类型" : "All types"}</option>
+                  <option value="">{t("pending.all.types")}</option>
                   {types.map((extension) => (
                     <option
                       key={extension || "(none)"}
                       value={extension || "(none)"}
                     >
-                      {extension || (zh ? "无后缀" : "No extension")}
+                      {extension || t("pending.no.extension")}
                     </option>
                   ))}
                 </select>
               </label>
-              {columnResizer(4, zh ? "类型" : "Type")}
+              {columnResizer(4, t("pending.type"))}
             </div>
           </div>
         </div>
@@ -513,9 +510,7 @@ export function PendingFileList({
                                     .map((n) => n.depotPath!),
                                   source,
                                 ),
-                              onShelf
-                                ? undefined
-                                : "入口尚未接通 / Not connected",
+                              onShelf ? undefined : t("pending.not.connected"),
                             ),
                           ],
                         ),
@@ -533,9 +528,7 @@ export function PendingFileList({
                                     .map((n) => n.depotPath!),
                                   source,
                                 ),
-                              onShelf
-                                ? undefined
-                                : "入口尚未接通 / Not connected",
+                              onShelf ? undefined : t("pending.not.connected"),
                             ),
                           ],
                         ),
@@ -543,19 +536,19 @@ export function PendingFileList({
                       "复制 Depot 路径": copy(node.depotPath),
                       查看搁置内容: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       在新页签查看搁置内容: action(
                         () => onInspect?.(node.depotPath!, true),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       与工作副本比较: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       与基线比较: action(
                         () => onInspect?.(node.depotPath!),
-                        onInspect ? undefined : "入口尚未接通 / Not connected",
+                        onInspect ? undefined : t("pending.not.connected"),
                       ),
                       复制搁置来源标识: copy(`${node.depotPath}@=${changeId}`),
                       "复制 Depot 路径列表": copy(
@@ -591,7 +584,7 @@ export function PendingFileList({
                           ),
                         onSubmitSelected
                           ? undefined
-                          : "入口尚未接通 / Not connected",
+                          : t("pending.not.connected"),
                       ),
                       ...Object.fromEntries(
                         ["搁置此文件…", "搁置所选文件…"].map((label) => [
@@ -610,7 +603,7 @@ export function PendingFileList({
                                 (row) => row.changelistId === changeId,
                               )
                               ? undefined
-                              : "入口尚未接通 / Not connected",
+                              : t("pending.not.connected"),
                           ),
                         ]),
                       ),
@@ -740,14 +733,12 @@ export function PendingFileList({
                     title={file.action}
                   >
                     {file.resolve === "unresolved"
-                      ? `${statusLabel(status)} · ${zh ? "需要 Resolve" : "Needs resolve"}`
+                      ? `${statusLabel(status)} · ${t("pending.needs.resolve")}`
                       : statusLabel(status)}
-                    {needsLatest
-                      ? ` · ${zh ? "需获取最新" : "Needs get latest"}`
-                      : ""}
+                    {needsLatest ? ` · ${t("pending.needs.get.latest")}` : ""}
                   </span>
                   <span role="gridcell" className="pending-file-type">
-                    {extension || (zh ? "无后缀" : "No extension")}
+                    {extension || t("pending.no.extension")}
                   </span>
                 </div>
               );
@@ -756,12 +747,8 @@ export function PendingFileList({
           {!nodes.length && (
             <p className="pending-file-empty" role="status">
               {filtered
-                ? zh
-                  ? "没有匹配的文件"
-                  : "No matching files"
-                : zh
-                  ? "没有文件"
-                  : "No files"}
+                ? t("pending.no.matching.files")
+                : t("pending.no.files")}
             </p>
           )}
         </div>

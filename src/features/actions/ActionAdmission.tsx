@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { backend } from "../../infrastructure/backend";
 import { admissionPort } from "./admissionPort";
@@ -7,7 +8,7 @@ function FenceRow({
   fence,
   controller,
   busy,
-  zh,
+  zh: _zh,
 }: {
   fence: WriteFence;
   controller: Controller;
@@ -21,12 +22,8 @@ function FenceRow({
         {fence.operationId} · {fence.scope.server} / {fence.scope.user} /{" "}
         {fence.scope.client} ·{" "}
         {fence.active
-          ? zh
-            ? "仍在执行"
-            : "Still running"
-          : zh
-            ? "结果待核"
-            : "Outcome unknown"}
+          ? t("actions.still.running")
+          : t("actions.outcome.unknown")}
       </span>
       {!fence.active && fence.outcome === "unknown" && (
         <div>
@@ -37,16 +34,14 @@ function FenceRow({
               disabled={busy}
               onChange={(e) => setAck(e.target.checked)}
             />
-            {zh
-              ? "我已确认相关操作或外部工具已停止。解除只允许后续写入，不撤销或重试历史操作，其结果仍待核。"
-              : "I confirmed the operation or external tool has stopped. Release permits later writes; it does not undo or retry this operation. Its outcome stays unknown."}
+            {t("actions.i.confirmed.the.operation.or")}
           </label>
           <button
             className="settings-secondary"
             disabled={!ack || busy}
             onClick={() => void controller.release(fence, ack)}
           >
-            {zh ? "解除本次写入阻塞" : "Release this write block"}
+            {t("actions.release.this.write.block")}
           </button>
         </div>
       )}
@@ -66,7 +61,7 @@ export function AdmissionList({
   );
   if (!state.fences.length) return null;
   return (
-    <section aria-label={zh ? "待核写入阻塞" : "Unresolved write blocks"}>
+    <section aria-label={t("actions.unresolved.write.blocks")}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {state.fences.map((f) => (
           <FenceRow

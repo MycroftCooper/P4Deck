@@ -19,7 +19,7 @@ import type {
   PendingChangePage,
   RuntimeInfo,
 } from "../../../shared/contracts";
-import { messages } from "../../../shared/i18n";
+import { activateLocale, messages } from "../../../shared/i18n";
 import { PendingPage } from "./PendingPage";
 import { CommandExecutionContext } from "../../../app/shell/CommandContext";
 import { workspaceCache } from "../../files/workspaceQueries";
@@ -93,6 +93,8 @@ function environment(): MenuEnvironmentValue {
 }
 
 beforeEach(() => {
+  // This suite renders the English UI; align the module resolver.
+  activateLocale("en-US");
   workspaceCache.clear();
   vi.stubGlobal(
     "ResizeObserver",

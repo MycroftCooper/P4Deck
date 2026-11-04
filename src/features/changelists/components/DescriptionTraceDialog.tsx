@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -232,7 +233,7 @@ function DescriptionTraceContent({
   async function load(refresh = false) {
     if (active.current) return;
     if (runtime.mode !== "mock" && runtime.connection.state !== "connected") {
-      setError(tr("连接不可用", "Connection unavailable"));
+      setError(t("pending.connection.unavailable"));
       return;
     }
     if (!refresh && snapshot?.complete) return;
@@ -355,7 +356,7 @@ function DescriptionTraceContent({
   }
   return (
     <Dialog
-      title={`${tr("追踪合并去向", "Trace integration destinations")} · CL ${changeId}`}
+      title={`${t("pending.trace.integration.destinations")} · CL ${changeId}`}
       zh={zh}
       source={source}
       onRequestClose={() => {
@@ -373,11 +374,11 @@ function DescriptionTraceContent({
             onClick={() => void load()}
           >
             {snapshot && snapshot.pages > 0
-              ? tr("继续查询（最多10页）", "Continue search (up to 10 pages)")
-              : tr("查询合并去向", "Find destinations")}
+              ? t("pending.continue.search.up.to.10")
+              : t("pending.find.destinations")}
           </button>
           <button disabled={busy} onClick={() => void load(true)}>
-            {tr("刷新调查", "Refresh investigation")}
+            {t("pending.refresh.investigation")}
           </button>
           {busy && (
             <button
@@ -391,7 +392,7 @@ function DescriptionTraceContent({
                 );
               }}
             >
-              {tr("取消读取", "Cancel reads")}
+              {t("pending.cancel.reads")}
             </button>
           )}
         </>
@@ -408,17 +409,17 @@ function DescriptionTraceContent({
                 "Direct and indirect submissions linked by CI source CL metadata",
               )}
             >
-              {tr("CL 引用链", "CL reference chain")}
+              {t("pending.cl.reference.chain")}
             </div>
             <small>
-              {tr("范围", "Range")}:{" "}
+              {t("pending.range")}:{" "}
               {formatLocalTime(snapshot.from, zh ? "zh-CN" : "en-US")} →{" "}
               {formatLocalTime(snapshot.to, zh ? "zh-CN" : "en-US")}
             </small>
             <p role="status">
-              {tr("候选", "Candidates")}: {snapshot.rows.length} ·{" "}
-              {tr("已扫描", "Scanned")}: {snapshot.scanned} ·{" "}
-              {tr("页", "Pages")}: {snapshot.pages} ·{" "}
+              {t("pending.candidates")}: {snapshot.rows.length} ·{" "}
+              {t("pending.scanned")}: {snapshot.scanned} · {t("pending.pages")}:{" "}
+              {snapshot.pages} ·{" "}
               {formatLocalTime(snapshot.readAt, zh ? "zh-CN" : "en-US")}
             </p>
             {(!snapshot.complete || !!error) && (
@@ -428,7 +429,7 @@ function DescriptionTraceContent({
                       "达到本轮上限 · 未完成",
                       "Query limit reached · Incomplete",
                     )
-                  : tr("未完成", "Incomplete")}
+                  : t("pending.incomplete")}
               </small>
             )}
           </div>
@@ -445,7 +446,7 @@ function DescriptionTraceContent({
             className="description-trace-results"
             style={{ overflow: "auto", maxHeight: "50vh" }}
             role="table"
-            aria-label={tr("CL引用链候选", "CL-reference candidates")}
+            aria-label={t("pending.cl.reference.candidates")}
           >
             <div
               role="row"
@@ -457,8 +458,8 @@ function DescriptionTraceContent({
               {[
                 "CL",
                 "Workspace / Client",
-                tr("时间", "Time"),
-                tr("描述", "Description"),
+                t("pending.time"),
+                t("pending.description"),
               ].map((label, index) => (
                 <strong
                   role="columnheader"
@@ -526,7 +527,7 @@ function DescriptionTraceContent({
                             whiteSpace: "pre-wrap",
                           }}
                         >
-                          {row.client || tr("未知", "Unknown")}
+                          {row.client || t("pending.unknown")}
                         </div>
                         <div role="cell">
                           {formatLocalTime(row.time, zh ? "zh-CN" : "en-US")}
@@ -561,8 +562,8 @@ function DescriptionTraceContent({
                             }
                           >
                             {expandedDescriptions.has(row.id)
-                              ? tr("收起描述", "Collapse description")
-                              : tr("展开描述", "Expand description")}
+                              ? t("pending.collapse.description")
+                              : t("pending.expand.description")}
                           </button>
                         </div>
                       </div>

@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -29,7 +30,7 @@ export function Dialog({
   onRequestClose,
   source,
   busy = false,
-  zh,
+  zh: _zh,
   danger,
 }: DialogProps) {
   const titleId = useId(),
@@ -103,7 +104,7 @@ export function Dialog({
           className="workflow-dialog-close"
           disabled={busy}
           onClick={onRequestClose}
-          aria-label={zh ? "关闭对话框" : "Close dialog"}
+          aria-label={t("dialogs.close.dialog")}
         >
           <X size={18} />
         </button>
@@ -111,7 +112,7 @@ export function Dialog({
       <div
         className="workflow-dialog-body"
         tabIndex={0}
-        aria-label={zh ? "对话框内容" : "Dialog content"}
+        aria-label={t("dialogs.dialog.content")}
       >
         {children}
       </div>

@@ -1,3 +1,6 @@
+import { t as translate } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
+import { isZh } from "../../../shared/locale";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useObjectSelection } from "../SelectionContext";
@@ -86,23 +89,23 @@ export function FileWorkbench({
   const fileMenu = useFileMenu();
   const { select } = useContext(SelectionContext);
   const error = operationError || (listing.error ? String(listing.error) : "");
-  const zh = t.files === "文件";
+  const zh = isZh();
   const labels: Record<string, string> = {
-    loading: zh ? "状态待检查" : "Status pending",
-    controlled: zh ? "受版本控制" : "Controlled",
-    openedEdit: zh ? "已签出编辑" : "Open for edit",
-    openedAdd: zh ? "待添加" : "Added",
-    openedDelete: zh ? "待删除" : "Deleted",
-    openedMoveAdd: zh ? "移动目标" : "Move target",
-    openedMoveDelete: zh ? "移动来源" : "Move source",
-    modified: zh ? "本地已修改" : "Modified locally",
-    untracked: zh ? "未跟踪" : "Untracked",
-    outOfDate: zh ? "待更新" : "Out of date",
-    notSynced: zh ? "尚未同步" : "Not synced",
-    conflicted: zh ? "有冲突" : "Conflicted",
-    missing: zh ? "本地缺失" : "Missing locally",
-    ignored: zh ? "已忽略" : "Ignored",
-    unknown: zh ? "状态未知" : "Unknown",
+    loading: translate("files.status.pending"),
+    controlled: translate("files.controlled"),
+    openedEdit: translate("files.open.for.edit"),
+    openedAdd: translate("files.added"),
+    openedDelete: translate("files.deleted"),
+    openedMoveAdd: translate("files.move.target"),
+    openedMoveDelete: translate("files.move.source"),
+    modified: translate("files.modified.locally"),
+    untracked: translate("files.untracked"),
+    outOfDate: translate("files.out.of.date"),
+    notSynced: translate("files.not.synced"),
+    conflicted: translate("files.conflicted"),
+    missing: translate("files.missing.locally"),
+    ignored: translate("files.ignored"),
+    unknown: translate("files.unknown"),
   };
   const visibleNodes = useMemo(
     () => visibleWorkspaceNodes(nodes, "all", localDeleteHidden),
@@ -171,7 +174,7 @@ export function FileWorkbench({
       <FixedPageHeader>
         <span className="fixed-page-meta">
           {directory?.split(/[\\/]/).filter(Boolean).pop() ||
-            (zh ? "工作区文件" : "Workspace files")}
+            translate("files.workspace.files")}
           <span className="heading-count">{nodes.length}</span>
         </span>
         <button
@@ -188,7 +191,9 @@ export function FileWorkbench({
           {visibleNodes.length} {t.files}
         </span>
         <button className="density-button" onClick={() => setCompact(!compact)}>
-          {compact ? (zh ? "紧凑" : "Compact") : zh ? "舒适" : "Comfortable"}
+          {compact
+            ? translate("files.compact")
+            : translate("files.comfortable")}
         </button>
       </div>
       {error ? (
@@ -275,9 +280,7 @@ export function FileWorkbench({
                       title={statusExplanation(node, zh)}
                     >
                       {isDepot
-                        ? zh
-                          ? "Depot 文件"
-                          : "Depot file"
+                        ? translate("files.depot.file")
                         : labels[node.state]}
                       {!isDepot &&
                       needsSync &&
@@ -285,7 +288,7 @@ export function FileWorkbench({
                       node.state !== "notSynced" ? (
                         <span className="file-state-stale">
                           {" "}
-                          · {zh ? "需获取最新" : "needs sync"}
+                          · {translate("files.needs.sync")}
                         </span>
                       ) : null}
                     </em>
@@ -295,7 +298,10 @@ export function FileWorkbench({
                     <span>{node.changelistId ?? "—"}</span>
                     <time>
                       {node.modifiedAt
-                        ? new Date(node.modifiedAt).toLocaleDateString()
+                        ? formatLocalTime(
+                            node.modifiedAt,
+                            zh ? "zh-CN" : "en-US",
+                          )
                         : "—"}
                     </time>
                   </button>
@@ -304,7 +310,7 @@ export function FileWorkbench({
             </div>
             {!busy && !visibleNodes.length ? (
               <div className="empty-state">
-                {zh ? "当前筛选下没有文件" : "No files in this view"}
+                {translate("files.no.files.in.this.view")}
               </div>
             ) : null}
           </div>
@@ -320,7 +326,7 @@ export function statusExplanation(node: WorkspaceNode, zh: boolean) {
   const evidence = status.evidence.map((item) => item.summary);
   if (status.ignore)
     evidence.push(
-      `${zh ? "忽略规则" : "Ignore rule"}: ${status.ignore.rule} (${status.ignore.source}${status.ignore.line ? `:${status.ignore.line}` : ""})`,
+      `${translate("files.ignore.rule")}: ${status.ignore.rule} (${status.ignore.source}${status.ignore.line ? `:${status.ignore.line}` : ""})`,
     );
   if (status.completeness !== "complete")
     evidence.push(

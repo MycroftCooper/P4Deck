@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
@@ -89,10 +90,7 @@ export function SubmitDialog(props: Props) {
         if (epoch !== generation.current) return;
         if (change?.id !== origin.id)
           throw new Error(
-            tr(
-              "找不到此 CL 的文件摘要，请刷新后重试。",
-              "Changelist summary unavailable. Refresh and retry.",
-            ),
+            t("pending.changelist.summary.unavailable.refresh.and.retry"),
           );
         setSummary(change);
         setPhase("unchecked");
@@ -149,17 +147,12 @@ export function SubmitDialog(props: Props) {
         (result.ready && (!result.change || !result.token)) ||
         !Number.isFinite(result.expiresAt)
       )
-        throw new Error(
-          tr(
-            "预检结果与目标不匹配。",
-            "Preflight result does not match the target.",
-          ),
-        );
+        throw new Error(t("pending.preflight.result.does.not.match.the"));
       setCheck(result);
       setSummary(result.change);
       requestDesktopAttention({
         key: `submit-preflight:${origin.id}:${result.fileSummary.contentDigest}`,
-        title: tr("Submit 等待确认", "Submit awaits confirmation"),
+        title: t("pending.submit.awaits.confirmation"),
         body: result.blockers.length
           ? tr(
               `CL ${origin.id} 有 ${result.blockers.length} 个阻断项。`,
@@ -227,10 +220,7 @@ export function SubmitDialog(props: Props) {
         return;
       if (!submitConnectionMatchesTarget(check.target, dispatching))
         throw new Error(
-          tr(
-            "连接身份与提交预检目标不一致，未执行提交。",
-            "Connection identity changed; nothing was submitted.",
-          ),
+          t("pending.connection.identity.changed.nothing.was.submitted"),
         );
       const result = await props.submit(
         { token: check.token!, target: check.target, operationId: id },
@@ -255,7 +245,7 @@ export function SubmitDialog(props: Props) {
       if (life.state !== "submitted") {
         requestDesktopAttention({
           key: `submit-result:${origin.id}:${life.operationId ?? life.state}`,
-          title: tr("Submit 需要处理", "Submit needs attention"),
+          title: t("pending.submit.needs.attention"),
           body: result.message,
           kind: "failure",
         });
@@ -283,10 +273,7 @@ export function SubmitDialog(props: Props) {
   return (
     <Dialog
       title={tr(`提交整个 CL ${origin.id}`, `Submit entire CL ${origin.id}`)}
-      description={tr(
-        "提交范围始终是这个 CL 的全部文件，不会只提交当前选择的文件。",
-        "Submission always covers every file in this CL, not just selected files.",
-      )}
+      description={t("pending.submission.always.covers.every.file.in")}
       zh={zh}
       source={props.source}
       busy={busy}
@@ -294,11 +281,11 @@ export function SubmitDialog(props: Props) {
       footer={
         <>
           <button disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
           {phase === "submitting" && (
             <button onClick={() => void cancel()}>
-              {tr("取消操作", "Cancel operation")}
+              {t("pending.cancel.operation")}
             </button>
           )}
           <button
@@ -312,7 +299,7 @@ export function SubmitDialog(props: Props) {
             }
             onClick={() => void inspect()}
           >
-            {tr("重新预检", "Run preflight")}
+            {t("pending.run.preflight.2")}
           </button>
           <button
             className="primary"
@@ -324,92 +311,78 @@ export function SubmitDialog(props: Props) {
             }
             onClick={() => void confirm()}
           >
-            {tr("确认提交整个 CL", "Confirm entire CL submission")}
+            {t("pending.confirm.entire.cl.submission")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
         {origin.client} · CL {origin.id} ·{" "}
-        {summary?.files.length ?? origin.count}{" "}
-        {tr("个文件（整个 CL）", "files (entire CL)")}
+        {summary?.files.length ?? origin.count} {t("pending.files.entire.cl")}
       </div>
       {(!props.check || !props.submit) && (
         <DialogNotice>
-          {tr(
-            "界面预览：提交预检/执行尚未接通。文件摘要不代表已通过权限、冲突或最新状态检查，不能提交。",
-            "UI preview: preflight/execution is not connected. A file summary does not validate permissions, conflicts or current state. Submission is unavailable.",
-          )}
+          {t("pending.ui.preview.preflight.execution.is.not")}
         </DialogNotice>
       )}
       {staleConnection && (
         <DialogNotice error>
-          {tr(
-            "连接已改变，请关闭后重新打开。旧预检已失效。",
-            "Connection changed. Close and reopen; previous checks are invalid.",
-          )}
+          {t("pending.connection.changed.close.and.reopen.previous")}
         </DialogNotice>
       )}
       {phase === "summary" && (
-        <DialogNotice>
-          {tr("正在加载文件摘要…", "Loading file summary…")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.loading.file.summary")}</DialogNotice>
       )}
       {summary && (
         <>
           <p className="workflow-summary-description">
-            {summary.description || tr("未填写描述", "No description")}
+            {summary.description || t("pending.no.description.2")}
           </p>
           <TargetList
             paths={summary.files.map((file) => file.depotPath)}
-            label={tr("整个 CL 的文件清单", "Entire CL file list")}
+            label={t("pending.entire.cl.file.list")}
           />
           {!summary.files.length && (
             <DialogNotice error>
-              {tr("空 CL 不可提交。", "An empty CL cannot be submitted.")}
+              {t("pending.an.empty.cl.cannot.be")}
             </DialogNotice>
           )}
         </>
       )}
       {phase === "unchecked" && (
-        <DialogNotice>{tr("尚未预检", "Not checked")}</DialogNotice>
+        <DialogNotice>{t("pending.not.checked")}</DialogNotice>
       )}
       {phase === "checking" && (
-        <DialogNotice>
-          {tr("正在预检，请稍候…", "Preflight in progress…")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.preflight.in.progress")}</DialogNotice>
       )}
       {phase === "submitting" && (
         <DialogNotice>
-          {tr(
-            "正在提交；关闭此界面不能撤销服务器已接收的操作。",
-            "Submitting. Closing this view cannot undo operations accepted by the server.",
-          )}
+          {t("pending.submitting.closing.this.view.cannot.undo")}
         </DialogNotice>
       )}
       {phase === "blocked" && (
         <DialogNotice error>
-          {tr("预检未通过，不能提交。", "Preflight blocked submission.")}
+          {t("pending.preflight.blocked.submission")}
         </DialogNotice>
       )}
       {phase === "stale" && (
         <DialogNotice error>
-          {tr("预检已过期，请重新检查。", "Preflight expired. Check again.")}
+          {t("pending.preflight.expired.check.again")}
         </DialogNotice>
       )}
       {check?.blockers.map((item, index) => (
         <DialogNotice key={`b${item.code}-${index}`} error>
           {item.certainty === "unknown"
-            ? tr("未知阻塞：", "Unknown blocker: ")
-            : tr("阻塞：", "Blocker: ")}
+            ? t("pending.unknown.blocker")
+            : t("pending.blocker")}
           {item.message}
         </DialogNotice>
       ))}
       {check?.warnings.map((item, index) => (
         <DialogNotice key={`w${item.code}-${index}`}>
           {item.certainty === "unknown"
-            ? tr("未知：", "Unknown: ")
-            : tr("警告：", "Warning: ")}
+            ? t("pending.unknown.5")
+            : t("pending.warning")}
           {item.message}
         </DialogNotice>
       ))}
@@ -420,32 +393,26 @@ export function SubmitDialog(props: Props) {
       )}
       {lifecycle?.state === "submitted" && (
         <DialogNotice>
-          {tr("提交结果（权威）：", "Authoritative submit result: ")}
+          {t("pending.authoritative.submit.result")}
           CL {lifecycle.submittedChangeId}
           {lifecycle.submittedChangeId !== submitResult?.changeId
             ? ""
-            : ` ${tr("（原 CL 号）", "(same change id)")}`}
+            : ` ${t("pending.same.change.id")}`}
           {!lifecycle.envelope
-            ? tr(
-                " · 旧版结果（无命令级 envelope）",
-                " · legacy result (no command envelope)",
-              )
+            ? t("pending.legacy.result.no.command.envelope")
             : ""}
         </DialogNotice>
       )}
       {phase === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "结果不确定：提交可能已到达服务器。已用同一操作号查询持久回执，并以真实结果/刷新纠正；请先核对 Pending/Submitted，不要用新操作号直接重试。",
-            "Outcome uncertain: the submit may have reached the server. The durable receipt was queried with the same operation id and corrected from real data; inspect Pending/Submitted before any retry with a new operation id.",
-          )}
+          {t("pending.outcome.uncertain.the.submit.may.have")}
         </DialogNotice>
       )}
       {submitResult &&
         lifecycle?.state !== "submitted" &&
         lifecycle?.state !== "unknown" && (
           <DialogNotice error>
-            {tr("结果：", "Outcome: ")}
+            {t("pending.outcome")}
             {submitResult.outcome}
             {submitResult.failure ? ` · ${submitResult.failure}` : ""}.{" "}
             {submitResult.refresh.reason}
@@ -453,10 +420,10 @@ export function SubmitDialog(props: Props) {
         )}
       {(lifecycle?.operationId ?? submitResult?.operationId) && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")}{" "}
+          {t("pending.operation.2")}{" "}
           {lifecycle?.operationId ?? submitResult?.operationId}
           {submitResult?.logReference
-            ? ` · ${tr("日志", "Log")} ${submitResult.logReference}`
+            ? ` · ${t("pending.log")} ${submitResult.logReference}`
             : ""}
         </p>
       )}
@@ -467,10 +434,7 @@ export function SubmitDialog(props: Props) {
             checked={acknowledged}
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
-          {tr(
-            "确认提交整个 CL，并已阅读上述警告。",
-            "Confirm the entire CL and acknowledge the warnings above.",
-          )}
+          {t("pending.confirm.the.entire.cl.and.acknowledge")}
         </label>
       )}
     </Dialog>

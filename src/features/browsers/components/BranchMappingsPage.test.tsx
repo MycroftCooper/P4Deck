@@ -14,6 +14,7 @@ import {
   BranchMappingsPage,
   measureBranchMappingRow,
 } from "./BranchMappingsPage";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   queryBranchMappings: vi.fn(),
@@ -143,6 +144,8 @@ async function click(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

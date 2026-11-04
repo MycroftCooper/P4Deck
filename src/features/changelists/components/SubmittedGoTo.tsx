@@ -1,14 +1,15 @@
+import { t } from "../../../shared/i18n";
 import { useRef, useState } from "react";
 import { ArrowRight, Hash } from "lucide-react";
 import { parseChangeNumber } from "../submittedFilters";
 import { useChangeDetails } from "./ChangeDetailsDialog";
 
-export function SubmittedGoTo({ zh }: { zh: boolean }) {
+export function SubmittedGoTo({ zh: _zh }: { zh: boolean }) {
   const open = useChangeDetails();
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const label = zh ? "转到 CL" : "Go to CL";
+  const label = t("pending.go.to.cl");
   return (
     <form
       className="submitted-go-to diff-path-field"
@@ -53,9 +54,7 @@ export function SubmittedGoTo({ zh }: { zh: boolean }) {
           id="submitted-go-to-hint"
           role="alert"
         >
-          {zh
-            ? "请输入有效的正整数 CL 号"
-            : "Enter a positive integer changelist number"}
+          {t("pending.enter.a.positive.integer.changelist")}
         </small>
       )}
     </form>

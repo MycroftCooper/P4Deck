@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { it, expect, vi } from "vitest";
 import { PendingPage } from "../changelists/components/PendingPage";
-import { messages } from "../../shared/i18n";
+import { activateLocale, messages } from "../../shared/i18n";
 import {
   MenuEnvironment,
   type MenuEnvironmentValue,
@@ -62,6 +62,8 @@ vi.mock("../../app/context-menu/ContextMenu", async (importOriginal) => ({
     }),
 }));
 it("removes the standalone preview from all Pending menus while retaining original Submit", async () => {
+  // This suite renders the English UI; align the module resolver.
+  activateLocale("en-US");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal(
     "ResizeObserver",

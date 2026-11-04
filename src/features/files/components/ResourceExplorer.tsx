@@ -1,3 +1,4 @@
+import { t as translate } from "../../../shared/i18n";
 import { recordFrontendOperationLog } from "../../../infrastructure/backend/frontendOperationLog";
 import { pathKey } from "../address";
 import { nextRevealStep, type ResourceReveal } from "../resourceReveal";
@@ -116,22 +117,14 @@ export function ResourceExplorer({
     () => select([]),
   );
   const connectionNotice = checkingConnection
-    ? zh
-      ? "正在自动检查连接与登录状态…"
-      : "Checking connection and login automatically…"
+    ? translate("files.checking.connection.and.login.automatically")
     : !ready
       ? env.runtime.p4Version === "loading"
-        ? zh
-          ? "正在初始化连接…"
-          : "Initializing connection…"
-        : zh
-          ? "未连接，请在设置中添加或选择连接。"
-          : "Not connected. Add or select a connection in Settings."
+        ? translate("files.initializing.connection")
+        : translate("files.not.connected.add.or.select")
       : blocked || (ready && env.runtime.connection.state !== "connected")
         ? mode === "workspace" && !env.runtime.context.cwd?.trim()
-          ? zh
-            ? "未配置工作区根目录，请先选择工作区。"
-            : "No workspace root configured. Select a workspace."
+          ? translate("files.no.workspace.root.configured.select")
           : connectionPresentation(env.runtime.connection, zh).detail
         : "";
   const notice =
@@ -139,18 +132,12 @@ export function ResourceExplorer({
     connectionNotice ||
     (!tree.root.loaded
       ? tree.root.loading
-        ? zh
-          ? "正在加载文件…"
-          : "Loading files…"
+        ? translate("files.loading.files")
         : ""
       : rootOpen[mode] && !tree.rows.length
         ? filter
-          ? zh
-            ? "已展开目录中没有匹配项"
-            : "No matches in expanded folders"
-          : zh
-            ? "此目录为空"
-            : "This folder is empty"
+          ? translate("files.no.matches.in.expanded.folders")
+          : translate("files.this.folder.is.empty")
         : "");
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = rootOpen[mode] ? tree.rows : [];
@@ -174,9 +161,7 @@ export function ResourceExplorer({
   const selectRoot = () => {
     if (mode === "workspace" && !root.absolutePath) {
       setRootSelectNotice(
-        zh
-          ? "未配置工作区根目录，请先选择工作区。"
-          : "No workspace root configured. Select a workspace first.",
+        translate("files.no.workspace.root.configured.select.2"),
       );
       return;
     }
@@ -237,11 +222,7 @@ export function ResourceExplorer({
       onRevealConsumed?.(reveal.id);
     };
     if (blocked) {
-      finish(
-        zh
-          ? "工作区不可用，无法定位"
-          : "Workspace unavailable; cannot locate target",
-      );
+      finish(translate("files.workspace.unavailable.cannot.locate.target"));
       return;
     }
     if (pathKey(reveal.path) === pathKey(root.absolutePath)) {
@@ -382,17 +363,13 @@ export function ResourceExplorer({
       <label className="tree-search">
         <Search size={13} />
         <input
-          aria-label={zh ? "筛选资源文件" : "Filter resource files"}
+          aria-label={translate("files.filter.resource.files")}
           value={filter}
           onChange={(event) => {
             cancelReveal();
             setFilter(event.target.value);
           }}
-          placeholder={
-            zh
-              ? "筛选已展开的文件和目录…"
-              : "Filter expanded files and folders…"
-          }
+          placeholder={translate("files.filter.expanded.files.and.folders")}
         />
       </label>
       <div
@@ -428,7 +405,7 @@ export function ResourceExplorer({
       >
         <button
           className="tree-toggle"
-          aria-label={`${rootOpen[mode] ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${root.name}`}
+          aria-label={`${rootOpen[mode] ? translate("files.collapse") : translate("files.expand")} ${root.name}`}
           aria-expanded={rootOpen[mode]}
           onClick={(event) => {
             event.stopPropagation();
@@ -461,12 +438,12 @@ export function ResourceExplorer({
               ready &&
               !checkingConnection && (
                 <button onClick={() => env.openPage("settings")}>
-                  {zh ? "连接设置" : "Connection settings"}
+                  {translate("files.connection.settings")}
                 </button>
               )}
             {tree.root.error && (
               <button onClick={() => void refresh().catch(() => undefined)}>
-                {zh ? "重试" : "Retry"}
+                {translate("files.retry")}
               </button>
             )}
           </div>
@@ -526,13 +503,9 @@ export function ResourceExplorer({
                   >
                     <span>
                       {row.state === "loading"
-                        ? zh
-                          ? "正在加载…"
-                          : "Loading…"
+                        ? translate("files.loading")
                         : row.state === "empty"
-                          ? zh
-                            ? "空目录"
-                            : "Empty folder"
+                          ? translate("files.empty.folder")
                           : row.message}
                     </span>
                     {row.state === "error" && (
@@ -541,7 +514,7 @@ export function ResourceExplorer({
                           void tree.refresh(row.parent).catch(() => undefined)
                         }
                       >
-                        {zh ? "重试" : "Retry"}
+                        {translate("files.retry")}
                       </button>
                     )}
                   </div>
@@ -591,7 +564,7 @@ export function ResourceExplorer({
                     <button
                       className="tree-toggle"
                       tabIndex={-1}
-                      aria-label={`${expanded ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${node.name}`}
+                      aria-label={`${expanded ? translate("files.collapse") : translate("files.expand")} ${node.name}`}
                       aria-expanded={expanded}
                       onClick={(event) => {
                         event.stopPropagation();

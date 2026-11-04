@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
@@ -521,7 +522,7 @@ export function BranchMappingsPage({
     setDetailError(detail || !selectedName ? "" : cancelled);
     setPreviewPhase(preview ? "ready" : selectedName ? "error" : "idle");
     setPreviewError(preview || !selectedName ? "" : cancelled);
-    setNotice(tr("已取消当前请求。", "Current request was cancelled."));
+    setNotice(t("browse.current.request.was.cancelled"));
   };
 
   const items = page?.items ?? [];
@@ -600,7 +601,7 @@ export function BranchMappingsPage({
     return (
       <section className="branch-mappings-page">
         <div className="workspace-empty" role="status">
-          {tr("正在加载连接运行时…", "Loading connection runtime…")}
+          {t("browse.loading.connection.runtime")}
         </div>
       </section>
     );
@@ -619,7 +620,7 @@ export function BranchMappingsPage({
             setMutation({ mode: "create", source: event.currentTarget });
           }}
         >
-          <Plus size={15} /> {tr("新建", "Create")}
+          <Plus size={15} /> {t("browse.create")}
         </button>
         <button
           disabled={busy || !remoteReady}
@@ -632,7 +633,7 @@ export function BranchMappingsPage({
             size={15}
             className={listPhase === "loading" ? "spin" : ""}
           />
-          {tr("刷新", "Refresh")}
+          {t("browse.refresh")}
         </button>
       </FixedPageHeader>
 
@@ -653,7 +654,7 @@ export function BranchMappingsPage({
         }}
       >
         <label>
-          <span>{tr("名称过滤", "Name filter")}</span>
+          <span>{t("browse.name.filter")}</span>
           <span className="search-field">
             <Search size={15} />
             <input
@@ -678,11 +679,11 @@ export function BranchMappingsPage({
           />
         </label>
         <button type="submit" className="secondary">
-          {tr("应用过滤", "Apply filters")}
+          {t("browse.apply.filters")}
         </button>
         {busy && (
           <button type="button" className="secondary" onClick={cancel}>
-            <X size={14} /> {tr("取消", "Cancel")}
+            <X size={14} /> {t("browse.cancel")}
           </button>
         )}
       </form>
@@ -696,22 +697,19 @@ export function BranchMappingsPage({
             {page.items.length} / {page.stats.matchedCount}
           </span>
         )}
-        {page?.partial && <span>{tr("部分结果", "Partial")}</span>}
+        {page?.partial && <span>{t("browse.partial")}</span>}
         {page?.truncated && (
           <span className="status-warning">
-            {tr("达到安全上限", "Safety limit reached")}{" "}
-            {page.stats.safetyLimit}
+            {t("browse.safety.limit.reached")} {page.stats.safetyLimit}
           </span>
         )}
         {!!page?.stats.invalidRecordCount && (
           <span>
-            {tr("无效记录", "Invalid records")}: {page.stats.invalidRecordCount}
+            {t("browse.invalid.records")}: {page.stats.invalidRecordCount}
           </span>
         )}
-        {listPhase === "loading" && <span>{tr("加载中…", "Loading…")}</span>}
-        {listPhase === "loadingMore" && (
-          <span>{tr("继续加载中…", "Loading more…")}</span>
-        )}
+        {listPhase === "loading" && <span>{t("browse.loading")}</span>}
+        {listPhase === "loadingMore" && <span>{t("browse.loading.more")}</span>}
       </div>
       {notice && (
         <div className="branch-mapping-notice" role="status">
@@ -726,7 +724,7 @@ export function BranchMappingsPage({
               listPhase === "error" ? void startFresh(!!page) : void loadMore()
             }
           >
-            {tr("重试", "Retry")}
+            {t("browse.retry")}
           </button>
         </div>
       )}
@@ -736,14 +734,14 @@ export function BranchMappingsPage({
       >
         <section
           className="branch-mapping-list-panel"
-          aria-label={tr("Branch Mapping 列表", "Branch Mapping list panel")}
+          aria-label={t("browse.branch.mapping.list.panel")}
         >
           <div
             ref={listRef}
             className="branch-mapping-list"
             role="listbox"
             tabIndex={0}
-            aria-label={tr("Branch Mapping 列表", "Branch Mappings")}
+            aria-label={t("browse.branch.mappings")}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 closeDetail();
@@ -806,9 +804,7 @@ export function BranchMappingsPage({
                         onClick={() => void loadDetail(item.name)}
                       >
                         <strong>{item.name}</strong>
-                        <span>
-                          {item.owner || tr("Owner 未知", "Unknown owner")}
-                        </span>
+                        <span>{item.owner || t("browse.unknown.owner")}</span>
                         <small>{item.description || "—"}</small>
                         <span className="branch-mapping-summary-meta">
                           <code>{item.options || "—"}</code>
@@ -832,7 +828,7 @@ export function BranchMappingsPage({
               }
               onClick={() => void loadMore()}
             >
-              <ChevronDown size={14} /> {tr("继续加载", "Load more")}
+              <ChevronDown size={14} /> {t("browse.load.more")}
             </button>
           )}
         </section>
@@ -840,7 +836,7 @@ export function BranchMappingsPage({
         {selectedName && (
           <aside
             className="branch-mapping-detail"
-            aria-label={tr("Branch Mapping 详情", "Branch Mapping details")}
+            aria-label={t("browse.branch.mapping.details")}
             onKeyDown={(event) => {
               if (event.key !== "Escape") return;
               event.preventDefault();
@@ -849,7 +845,7 @@ export function BranchMappingsPage({
           >
             <header>
               <div>
-                <span>{tr("所选 Mapping", "Selected mapping")}</span>
+                <span>{t("browse.selected.mapping")}</span>
                 <h2>{selectedName}</h2>
               </div>
               <button
@@ -865,13 +861,13 @@ export function BranchMappingsPage({
               </button>
             </header>
             {detailPhase === "loading" && (
-              <div role="status">{tr("加载详情…", "Loading details…")}</div>
+              <div role="status">{t("browse.loading.details")}</div>
             )}
             {detailError && (
               <div className="workspace-load-error" role="alert">
                 <span>{detailError}</span>
                 <button onClick={() => void loadDetail(selectedName)}>
-                  {tr("重试", "Retry")}
+                  {t("browse.retry")}
                 </button>
               </div>
             )}
@@ -909,9 +905,7 @@ export function BranchMappingsPage({
                 </p>
                 {!!detail.unknownFields.length && (
                   <div className="branch-unknown-fields" role="note">
-                    <strong>
-                      {tr("未知字段（只读）", "Unknown fields (read-only)")}
-                    </strong>
+                    <strong>{t("browse.unknown.fields.read.only")}</strong>
                     {detail.unknownFields.map((field, index) => (
                       <div key={`${field.name}-${index}`}>
                         <code>{field.name}</code>
@@ -949,7 +943,7 @@ export function BranchMappingsPage({
                       });
                     }}
                   >
-                    <Edit3 size={14} /> {tr("编辑", "Edit")}
+                    <Edit3 size={14} /> {t("browse.edit")}
                   </button>
                   <button
                     className="danger"
@@ -962,7 +956,7 @@ export function BranchMappingsPage({
                       });
                     }}
                   >
-                    <Trash2 size={14} /> {tr("删除", "Delete")}
+                    <Trash2 size={14} /> {t("browse.delete")}
                   </button>
                 </div>
                 <section
@@ -973,10 +967,10 @@ export function BranchMappingsPage({
                   <ResizeHeader
                     columns={[
                       "#",
-                      tr("模式", "Mode"),
-                      tr("来源", "Source"),
+                      t("browse.mode"),
+                      t("browse.source"),
                       "↔",
-                      tr("目标", "Target"),
+                      t("browse.target"),
                     ]}
                     resize={tableColumns}
                   />
@@ -1009,11 +1003,11 @@ export function BranchMappingsPage({
 
                 <section
                   className="branch-impact"
-                  aria-label={tr("影响预览", "Impact preview")}
+                  aria-label={t("browse.impact.preview")}
                 >
                   <header>
                     <div>
-                      <h3>{tr("影响预览", "Impact preview")}</h3>
+                      <h3>{t("browse.impact.preview")}</h3>
                       <p>
                         {tr(
                           "只运行 integrate -n；不会修改 workspace，也不会打开文件。",
@@ -1024,7 +1018,7 @@ export function BranchMappingsPage({
                     <div
                       className="branch-direction"
                       role="group"
-                      aria-label={tr("预览方向", "Preview direction")}
+                      aria-label={t("browse.preview.direction")}
                     >
                       {(["forward", "reverse"] as const).map((direction) => (
                         <button
@@ -1057,14 +1051,14 @@ export function BranchMappingsPage({
                     onClick={() => void loadPreview()}
                   >
                     {previewPhase === "loading"
-                      ? tr("预览中…", "Previewing…")
-                      : tr("运行只读预览", "Run read-only preview")}
+                      ? t("browse.previewing")
+                      : t("browse.run.read.only.preview")}
                   </button>
                   {previewError && (
                     <div className="workspace-load-error" role="alert">
                       <span>{previewError}</span>
                       <button onClick={() => void loadPreview()}>
-                        {tr("重试", "Retry")}
+                        {t("browse.retry")}
                       </button>
                     </div>
                   )}
@@ -1096,7 +1090,7 @@ export function BranchMappingsPage({
                       )}
                       {!preview.blockers.length && !preview.items.length && (
                         <div className="workspace-empty">
-                          {tr("没有受影响文件。", "No affected files.")}
+                          {t("browse.no.affected.files")}
                         </div>
                       )}
                       {!!preview.items.length && (

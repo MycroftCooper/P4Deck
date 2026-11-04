@@ -1,3 +1,4 @@
+import { t as translate } from "../../shared/i18n";
 import { Download } from "lucide-react";
 import { openUpdatePanel } from "./updatePanelStore";
 import {
@@ -24,7 +25,7 @@ function entryCopy(
       };
     case "downloading":
       return {
-        text: zh ? "正在下载更新" : "Downloading update",
+        text: translate("update.downloading.update"),
         label: zh
           ? percent === undefined
             ? "正在下载更新，点击查看进度"
@@ -35,31 +36,23 @@ function entryCopy(
       };
     case "installing":
       return {
-        text: zh ? "正在安装更新…" : "Installing update…",
-        label: zh
-          ? "正在安装更新，点击查看进度"
-          : "Installing the update. Open the update panel for progress.",
+        text: translate("update.installing.update"),
+        label: translate("update.installing.the.update.open.the"),
       };
     case "ready":
       return {
         text: zh ? `待重启 ${version}` : `Restart to update ${version}`,
-        label: zh
-          ? "更新已下载，确认安装并重启后生效；点击查看"
-          : "The update is downloaded. Confirm install and restart to apply it.",
+        label: translate("update.the.update.is.downloaded.confirm"),
       };
     default:
       return snapshot.applied
         ? {
-            text: zh ? "更新待重启" : "Restart pending",
-            label: zh
-              ? "更新已安装，请手动重启应用完成更新"
-              : "The update is installed; restart the app manually to finish.",
+            text: translate("update.restart.pending"),
+            label: translate("update.the.update.is.installed.restart"),
           }
         : {
-            text: zh ? "更新失败" : "Update failed",
-            label: zh
-              ? "更新失败，点击查看原因"
-              : "The update failed. Open the panel for details.",
+            text: translate("update.update.failed"),
+            label: translate("update.the.update.failed.open.the"),
           };
   }
 }

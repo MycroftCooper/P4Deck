@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import {
   createContext,
   useCallback,
@@ -137,10 +138,7 @@ export function ContextMenuProvider({
         {children}
         {request &&
           createPortal(
-            <div
-              role="region"
-              aria-label={zh ? "右键菜单层" : "Context menu layer"}
-            >
+            <div role="region" aria-label={t("contextMenu.context.menu.layer")}>
               <MenuPanel
                 key={request.token}
                 title={request.title}
@@ -315,9 +313,7 @@ function MenuPanel({
         </div>
         <div className="menu-hint" role="status">
           {items[active]?.reason ||
-            (zh
-              ? "↑ ↓ 选择 · Enter 执行 · Esc 关闭"
-              : "↑ ↓ Navigate · Enter Run · Esc Close")}
+            t("contextMenu.navigate.enter.run.esc.close")}
         </div>
       </div>
       {submenu && submenuItem?.children && (

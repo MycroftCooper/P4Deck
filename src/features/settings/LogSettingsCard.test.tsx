@@ -1,8 +1,9 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { LogSettingsCard } from "./LogSettingsCard";
+import { setLocale } from "../../shared/i18n";
 const backend = vi.hoisted(() => ({
   openLogsFolder: vi.fn(),
   deleteAllLogs: vi.fn(),
@@ -31,6 +32,8 @@ const originals = ["showModal", "close"].map((key) =>
   Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, key),
 );
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

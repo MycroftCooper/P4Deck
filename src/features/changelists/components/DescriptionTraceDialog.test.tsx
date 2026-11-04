@@ -36,6 +36,7 @@ vi.mock("../../../app/dialogs/Dialog", () => ({
   ),
 }));
 import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
+import { setLocale } from "../../../shared/i18n";
 const runtime = {
   mode: "mock",
   context: {
@@ -88,6 +89,8 @@ function page(
 }
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   appCache.clear();
   vi.resetAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { GraphInvestigationDialog } from "./GraphInvestigationDialog";
 import { GraphFocusPanel } from "./GraphFocusPanel";
 import {
@@ -226,9 +227,7 @@ export function FileReviewPage({
     ) {
       setOwnedError({
         owner: primaryOwner,
-        message: zh
-          ? "请选择单个文件；读取预算已达上限时请手动刷新。"
-          : "Select a single file; refresh manually when the read budget is exhausted.",
+        message: t("browse.select.a.single.file.refresh"),
       });
       return;
     }
@@ -468,9 +467,7 @@ export function FileReviewPage({
         if (nonProgressing)
           setOwnedError({
             owner: ownerAtStart,
-            message: zh
-              ? "后端返回了重复游标；已保留当前版本图。"
-              : "The backend returned a repeated cursor; the current graph was preserved.",
+            message: t("browse.the.backend.returned.a.repeated"),
           });
       })
       .catch((cause) => {
@@ -566,8 +563,8 @@ export function FileReviewPage({
     createPortal(
       <button
         type="button"
-        title={zh ? "刷新" : "Refresh"}
-        aria-label={zh ? "刷新" : "Refresh"}
+        title={t("browse.refresh")}
+        aria-label={t("browse.refresh")}
         aria-busy={loading}
         disabled={loading || !queryPath || !remoteReady}
         onClick={reload}
@@ -684,40 +681,30 @@ export function FileReviewPage({
               setLoadingOwner("");
             }}
           >
-            {zh ? "取消读取" : "Cancel read"}
+            {t("browse.cancel.read")}
           </button>
         )}
         <div className="review-toolbar">
           <>
             <span>
               {graph
-                ? `${graph.nodes.length} ${zh ? "个版本（已加载）" : "revisions loaded"}`
+                ? `${graph.nodes.length} ${t("browse.revisions.loaded")}`
                 : error
-                  ? zh
-                    ? "版本数量未知（读取失败）"
-                    : "Revision count unavailable (read failed)"
-                  : zh
-                    ? "尚未取得版本数量"
-                    : "Revision count not yet available"}
+                  ? t("browse.revision.count.unavailable.read.failed")
+                  : t("browse.revision.count.not.yet.available")}
             </span>
             <span className="graph-legend">
-              {zh
-                ? "实线：版本 / 分支　虚线：合并 / 复制"
-                : "Solid: revision / branch · Dashed: merge / copy"}
+              {t("browse.solid.revision.branch.dashed.merge")}
             </span>
             {(graph?.partial || graph?.truncated) && (
               <span role="status" className="filter-count">
                 {graph.truncated
-                  ? zh
-                    ? "已达到 2,000 版本安全上限"
-                    : "2,000-revision safety limit reached"
-                  : zh
-                    ? "记录不完整或存在尚未展开的引用节点"
-                    : "Records are incomplete or references remain unexpanded"}
+                  ? t("browse.2.000.revision.safety.limit")
+                  : t("browse.records.are.incomplete.or.references")}
               </span>
             )}
             <button
-              aria-label={zh ? "缩小" : "Zoom out"}
+              aria-label={t("browse.zoom.out.2")}
               onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
             >
               <Minus size={14} />
@@ -726,7 +713,7 @@ export function FileReviewPage({
               {Math.round(zoom * 100)}%
             </button>
             <button
-              aria-label={zh ? "放大" : "Zoom in"}
+              aria-label={t("browse.zoom.in.2")}
               onClick={() => setZoom((v) => Math.min(3, v + 0.25))}
             >
               <Plus size={14} />
@@ -734,35 +721,25 @@ export function FileReviewPage({
             <button
               disabled={!canCompare || !onCompareRevisions}
               onClick={compareGraphNodes}
-              title={
-                zh
-                  ? "在新页签比较所选版本"
-                  : "Compare selected revisions in a new tab"
-              }
+              title={t("browse.compare.selected.revisions.in.a")}
             >
-              {zh ? "比较所选版本" : "Compare selected revisions"}
+              {t("browse.compare.selected.revisions")}
             </button>
           </>
         </div>
         {!queryPath ? (
           <div className="workspace-empty">
-            {zh
-              ? "在文件页选中文件后打开此页签，或在上方输入路径。"
-              : "Select a file and open this tab, or enter a path above."}
+            {t("browse.select.a.file.and.open")}
           </div>
         ) : loading && !data ? (
           <div className="workspace-empty" role="status">
-            {zh ? "正在加载…" : "Loading…"}
+            {t("browse.loading.2")}
           </div>
         ) : !graph?.nodes.length ? (
           <div className="workspace-empty">
             {error
-              ? zh
-                ? "加载失败，请重试。"
-                : "Loading failed. Retry."
-              : zh
-                ? "暂无版本记录"
-                : "No revisions"}
+              ? t("browse.loading.failed.retry")
+              : t("browse.no.revisions")}
           </div>
         ) : (
           <div className="graph-scroll">
@@ -807,7 +784,7 @@ export function FileReviewPage({
                   key={node.id}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? (zh ? "，先选（左侧）" : ", first selected (left)") : candidates[1]?.id === node.id ? (zh ? "，后选（右侧）" : ", last selected (right)") : ""}`}
+                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? t("browse.first.selected.left") : candidates[1]?.id === node.id ? t("browse.last.selected.right") : ""}`}
                   aria-pressed={selection.isSelected(node)}
                   className={`${candidates[0]?.id === node.id ? "compare-first" : candidates[1]?.id === node.id ? "compare-last" : ""} ${node.id === sourceId ? "selected" : ""} graph-lane-${graph.lanes.indexOf(node.depotPath) % 4}`}
                   transform={`translate(${node.x},${node.y})`}
@@ -886,7 +863,7 @@ export function FileReviewPage({
                   }
                   onClick={() => expandGraphNode()}
                 >
-                  {zh ? "展开所选引用节点" : "Expand selected reference"}
+                  {t("browse.expand.selected.reference")}
                 </button>
               )}
               {graph.hasMore && graphCursor && (
@@ -896,7 +873,7 @@ export function FileReviewPage({
                   }
                   onClick={loadMoreGraph}
                 >
-                  {zh ? "展开更多版本" : "Expand more revisions"}
+                  {t("browse.expand.more.revisions")}
                 </button>
               )}
             </div>
