@@ -118,7 +118,10 @@ export function TaskList({
         <p>
           {selected} ·{" "}
           {tasks.some((task) => task.id === selected)
-            ? tFor(zh ? "zh-CN" : "en-US", "shell.running.cancellation.does.not.undo")
+            ? tFor(
+                zh ? "zh-CN" : "en-US",
+                "shell.running.cancellation.does.not.undo",
+              )
             : tFor(zh ? "zh-CN" : "en-US", "shell.finished")}
         </p>
       )}
@@ -126,7 +129,10 @@ export function TaskList({
         <footer role="presentation">
           <button
             className="p4-cancel-all"
-            aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.cancel.all.p4.tasks")}
+            aria-label={tFor(
+              zh ? "zh-CN" : "en-US",
+              "shell.cancel.all.p4.tasks",
+            )}
             disabled={
               cancellingAll || tasks.every((task) => cancelling.has(task.id))
             }

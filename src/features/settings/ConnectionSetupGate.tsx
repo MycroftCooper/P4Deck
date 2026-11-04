@@ -141,14 +141,10 @@ export function ConnectionSetupGate({
         </div>
       )}
       {loading ? (
-        <p role="status">
-          {t("settings.loading.connection.profiles")}
-        </p>
+        <p role="status">{t("settings.loading.connection.profiles")}</p>
       ) : editing ? (
         <>
-          <p role="status">
-            {t("settings.save.a.connection.then.activate")}
-          </p>
+          <p role="status">{t("settings.save.a.connection.then.activate")}</p>
           <ConnectionProfilesCard
             runtime={runtime}
             onRuntime={state.applyRuntime}
@@ -187,9 +183,7 @@ function SetupPrompt({
       onCancel={(event) => event.preventDefault()}
     >
       <header className="workflow-dialog-heading">
-        <h2 id="connection-setup-title">
-          {t("settings.set.up.p4.to.get")}
-        </h2>
+        <h2 id="connection-setup-title">{t("settings.set.up.p4.to.get")}</h2>
       </header>
       <div className="workflow-dialog-body">
         <p id="connection-setup-description">

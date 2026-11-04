@@ -332,8 +332,7 @@ export function SubmitDialog(props: Props) {
     >
       <div className="workflow-context">
         {origin.client} · CL {origin.id} ·{" "}
-        {summary?.files.length ?? origin.count}{" "}
-        {t("pending.files.entire.cl")}
+        {summary?.files.length ?? origin.count} {t("pending.files.entire.cl")}
       </div>
       {(!props.check || !props.submit) && (
         <DialogNotice>
@@ -352,9 +351,7 @@ export function SubmitDialog(props: Props) {
         </DialogNotice>
       )}
       {phase === "summary" && (
-        <DialogNotice>
-          {t("pending.loading.file.summary")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.loading.file.summary")}</DialogNotice>
       )}
       {summary && (
         <>
@@ -376,9 +373,7 @@ export function SubmitDialog(props: Props) {
         <DialogNotice>{t("pending.not.checked")}</DialogNotice>
       )}
       {phase === "checking" && (
-        <DialogNotice>
-          {t("pending.preflight.in.progress")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.preflight.in.progress")}</DialogNotice>
       )}
       {phase === "submitting" && (
         <DialogNotice>

@@ -64,9 +64,7 @@ export function ChangelistFormDialog({
       return;
     }
     if (mode === "edit" && (!changeId || changeId < 1)) {
-      setError(
-        t("pending.a.numbered.changelist.is.required"),
-      );
+      setError(t("pending.a.numbered.changelist.is.required"));
       return;
     }
     const draft = {

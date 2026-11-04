@@ -180,9 +180,7 @@ export function StatusBar({
       if (!live.current) return;
       pending.current.delete(id);
       setCancelling(new Set(pending.current));
-      setCancelError(
-        t("shell.cancellation.failed.retry.or.inspect"),
-      );
+      setCancelError(t("shell.cancellation.failed.retry.or.inspect"));
       setTasksOpen(true);
     }
   };
@@ -206,9 +204,7 @@ export function StatusBar({
       if (!live.current) return;
       ids.forEach((id) => pending.current.delete(id));
       setCancelling(new Set(pending.current));
-      setCancelError(
-        t("shell.cancelling.all.tasks.failed.retry"),
-      );
+      setCancelError(t("shell.cancelling.all.tasks.failed.retry"));
       setTasksOpen(true);
     } finally {
       allPending.current = false;
@@ -223,10 +219,7 @@ export function StatusBar({
           disk.data
             ? `${disk.data.path}\n${t("shell.available")}: ${size(disk.data.available)} / ${size(disk.data.total)}`
             : native
-              ? String(
-                  disk.error ??
-                    (t("shell.reading.disk.capacity")),
-                )
+              ? String(disk.error ?? t("shell.reading.disk.capacity"))
               : t("shell.local.disk.capacity.requires.the")
         }
       >
@@ -268,9 +261,7 @@ export function StatusBar({
           aria-controls={tasksOpen ? tasksId : undefined}
           onClick={() => setTasksOpen((value) => !value)}
           {...menu("U06", () => ({ 打开日志栏: action(() => onOpenLogs()) }))}
-          title={
-            t("shell.p4.progress.concurrent.operations.averaged")
-          }
+          title={t("shell.p4.progress.concurrent.operations.averaged")}
         >
           <span>
             {eventError

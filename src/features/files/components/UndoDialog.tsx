@@ -61,7 +61,10 @@ export function UndoDialog({
           next.expiresAt <= Date.now()
         )
           throw new Error(
-            tFor(zh ? "zh-CN" : "en-US", "files.preview.target.differs.or.expired"),
+            tFor(
+              zh ? "zh-CN" : "en-US",
+              "files.preview.target.differs.or.expired",
+            ),
           );
         if (mounted.current) setPlan(next);
       } else {

@@ -54,7 +54,10 @@ export function PassiveServerStatusDetails({
   return (
     <dl
       className="passive-server-details"
-      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.p4.passive.connection.status")}
+      aria-label={tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.p4.passive.connection.status",
+      )}
       title={view.note}
     >
       {view.rows.map((row) => (
@@ -97,7 +100,10 @@ export function PassiveStatusPanel({
   const checkTitle = checkingServer
     ? tFor(zh ? "zh-CN" : "en-US", "shell.checking")
     : onCheckServer
-      ? tFor(zh ? "zh-CN" : "en-US", "shell.check.reachability.only.preserve.response")
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "shell.check.reachability.only.preserve.response",
+        )
       : reason;
   return (
     <section
@@ -107,10 +113,15 @@ export function PassiveStatusPanel({
       aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.p4.connection.status")}
     >
       <header role="presentation">
-        <span>{tFor(zh ? "zh-CN" : "en-US", "shell.p4.connection.status")}</span>
+        <span>
+          {tFor(zh ? "zh-CN" : "en-US", "shell.p4.connection.status")}
+        </span>
         <button
           onClick={onClose}
-          aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.close.connection.status")}
+          aria-label={tFor(
+            zh ? "zh-CN" : "en-US",
+            "shell.close.connection.status",
+          )}
         >
           ×
         </button>

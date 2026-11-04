@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import {it, expect, vi, beforeEach} from "vitest";
+import { it, expect, vi, beforeEach } from "vitest";
 import { dialogHarness } from "../dialogs/testHarness";
 import { PassiveStatusPanel } from "./PassiveServerStatus";
 import { setLocale } from "../../shared/i18n";

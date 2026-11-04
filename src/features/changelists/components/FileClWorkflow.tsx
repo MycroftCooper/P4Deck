@@ -137,9 +137,7 @@ export function FileClWorkflow({
         </>
       ) : null}
       {scope && !scope.paths.length && (
-        <DialogNotice>
-          {t("pending.no.files.selected")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.no.files.selected")}</DialogNotice>
       )}
       {scope &&
         !scope.unknown.length &&

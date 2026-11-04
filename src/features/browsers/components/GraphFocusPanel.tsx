@@ -63,9 +63,7 @@ export function GraphFocusPanel({
             value={mode}
             onChange={(e) => onMode(e.target.value as GraphFocusMode)}
           >
-            <option value="target">
-              {t("browse.trace.to.target")}
-            </option>
+            <option value="target">{t("browse.trace.to.target")}</option>
             <option value="sources">{t("browse.trace.origins")}</option>
           </select>
         </label>
@@ -162,8 +160,8 @@ export function GraphFocusPanel({
                 <li key={e.id}>
                   {a?.depotPath}#{a?.revision} → {b?.depotPath}#{b?.revision} ·
                   CL {b?.changelistId || "?"} · {e.relationship} ·{" "}
-                  {t("browse.related.file.range")} (
-                  {e.startRevision ?? "?"}, {e.endRevision ?? "?"}]
+                  {t("browse.related.file.range")} ({e.startRevision ?? "?"},{" "}
+                  {e.endRevision ?? "?"}]
                 </li>
               );
             })}

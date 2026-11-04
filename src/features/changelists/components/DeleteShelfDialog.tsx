@@ -71,9 +71,7 @@ export function DeleteShelfDialog({
   return (
     <Dialog
       title={t("pending.delete.shelved.revisions")}
-      description={
-        t("pending.delete.only.server.shelf.revisions")
-      }
+      description={t("pending.delete.only.server.shelf.revisions")}
       source={request.source}
       zh={zh}
       danger
@@ -102,8 +100,7 @@ export function DeleteShelfDialog({
       }
     >
       <div className="workflow-context">
-        CL {snapshot.changeId} · {snapshot.paths.length}{" "}
-        {t("pending.files")}
+        CL {snapshot.changeId} · {snapshot.paths.length} {t("pending.files")}
       </div>
       <TargetList
         paths={snapshot.paths}

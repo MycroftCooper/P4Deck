@@ -700,8 +700,7 @@ export function BranchMappingsPage({
         {page?.partial && <span>{t("browse.partial")}</span>}
         {page?.truncated && (
           <span className="status-warning">
-            {t("browse.safety.limit.reached")}{" "}
-            {page.stats.safetyLimit}
+            {t("browse.safety.limit.reached")} {page.stats.safetyLimit}
           </span>
         )}
         {!!page?.stats.invalidRecordCount && (
@@ -710,9 +709,7 @@ export function BranchMappingsPage({
           </span>
         )}
         {listPhase === "loading" && <span>{t("browse.loading")}</span>}
-        {listPhase === "loadingMore" && (
-          <span>{t("browse.loading.more")}</span>
-        )}
+        {listPhase === "loadingMore" && <span>{t("browse.loading.more")}</span>}
       </div>
       {notice && (
         <div className="branch-mapping-notice" role="status">
@@ -807,9 +804,7 @@ export function BranchMappingsPage({
                         onClick={() => void loadDetail(item.name)}
                       >
                         <strong>{item.name}</strong>
-                        <span>
-                          {item.owner || t("browse.unknown.owner")}
-                        </span>
+                        <span>{item.owner || t("browse.unknown.owner")}</span>
                         <small>{item.description || "—"}</small>
                         <span className="branch-mapping-summary-meta">
                           <code>{item.options || "—"}</code>
@@ -910,9 +905,7 @@ export function BranchMappingsPage({
                 </p>
                 {!!detail.unknownFields.length && (
                   <div className="branch-unknown-fields" role="note">
-                    <strong>
-                      {t("browse.unknown.fields.read.only")}
-                    </strong>
+                    <strong>{t("browse.unknown.fields.read.only")}</strong>
                     {detail.unknownFields.map((field, index) => (
                       <div key={`${field.name}-${index}`}>
                         <code>{field.name}</code>

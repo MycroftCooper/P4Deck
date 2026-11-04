@@ -109,19 +109,31 @@ export function DiagnosticsView({
           format: "json",
         });
         setExportStatus(
-          tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export.verified.by.readback"),
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.diagnostic.export.verified.by.readback",
+          ),
         );
       } else if (result.state === "legacy") {
         const legacy = controlPlaneLegacy<DiagnosticExportResult>(result);
         if (legacy) setExportResult(legacy);
         setExportStatus(
           legacy?.simulated
-            ? tFor(zh ? "zh-CN" : "en-US", "tools.mock.simulation.complete.no.file")
-            : tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export.completed.legacy.result"),
+            ? tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.mock.simulation.complete.no.file",
+              )
+            : tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.diagnostic.export.completed.legacy.result",
+              ),
         );
       } else {
         setExportStatus(
-          tFor(zh ? "zh-CN" : "en-US", "tools.export.outcome.uncertain.the.file"),
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.export.outcome.uncertain.the.file",
+          ),
         );
       }
     } catch (cause) {
@@ -142,7 +154,10 @@ export function DiagnosticsView({
     <div className="diagnostic-view diagnostics-view">
       {!native && (
         <div className="mock-disclosure" role="note">
-          {tFor(zh ? "zh-CN" : "en-US", "tools.browser.mock.metrics.and.export")}
+          {tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.browser.mock.metrics.and.export",
+          )}
         </div>
       )}
       <section aria-labelledby="cache-heading" className="diagnostic-card">
@@ -152,11 +167,15 @@ export function DiagnosticsView({
               {tFor(zh ? "zh-CN" : "en-US", "tools.status.cache.diagnostics")}
             </h3>
             <p>
-              {tFor(zh ? "zh-CN" : "en-US", "tools.only.backend.provided.cumulative.counters")}
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.only.backend.provided.cumulative.counters",
+              )}
             </p>
           </div>
           <button onClick={() => void refresh()} disabled={cacheBusy}>
-            <RefreshCw size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.refresh")}
+            <RefreshCw size={13} />{" "}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.refresh")}
           </button>
         </header>
         {cache && (
@@ -180,21 +199,29 @@ export function DiagnosticsView({
               <dd>{bytes(cache.estimatedBytes)}</dd>
             </div>
             <div>
-              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.offline.stale.fallbacks")}</dt>
+              <dt>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.offline.stale.fallbacks")}
+              </dt>
               <dd>{cache.staleFallbacks}</dd>
             </div>
             <div>
-              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.evicted.invalidated")}</dt>
+              <dt>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.evicted.invalidated")}
+              </dt>
               <dd>
                 {cache.evicted} / {cache.invalidated}
               </dd>
             </div>
             <div>
-              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.coalesced.requests")}</dt>
+              <dt>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.coalesced.requests")}
+              </dt>
               <dd>{cache.coalesced}</dd>
             </div>
             <div>
-              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.superseded.responses")}</dt>
+              <dt>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.superseded.responses")}
+              </dt>
               <dd>{cache.superseded}</dd>
             </div>
             <div>
@@ -223,16 +250,22 @@ export function DiagnosticsView({
       <section aria-labelledby="export-heading" className="diagnostic-card">
         <header>
           <div>
-            <h3 id="export-heading">{tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export")}</h3>
+            <h3 id="export-heading">
+              {tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export")}
+            </h3>
             <p>
-              {tFor(zh ? "zh-CN" : "en-US", "tools.the.backend.produces.a.size")}
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.the.backend.produces.a.size",
+              )}
             </p>
           </div>
           <button
             onClick={() => void exportDiagnostics()}
             disabled={exportBusy}
           >
-            <Download size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.export")}
+            <Download size={13} />{" "}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.export")}
           </button>
         </header>
         {exportResult && (
@@ -250,13 +283,17 @@ export function DiagnosticsView({
                   void navigator.clipboard.writeText(exportResult.path)
                 }
               >
-                <Copy size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.copy.path")}
+                <Copy size={13} />{" "}
+                {tFor(zh ? "zh-CN" : "en-US", "tools.copy.path")}
               </button>
             )}
           </div>
         )}
         <p className="policy-boundary">
-          {tFor(zh ? "zh-CN" : "en-US", "tools.the.existing.safe.open.capability")}
+          {tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.the.existing.safe.open.capability",
+          )}
         </p>
         <div className="sr-status" role="status" aria-live="polite">
           {exportStatus}

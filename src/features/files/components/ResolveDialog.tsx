@@ -207,8 +207,7 @@ export function ResolveDialog({
         ),
       );
     };
-    if (!p || typeof p !== "object")
-      fail(t("files.no.resolve.data.returned"));
+    if (!p || typeof p !== "object") fail(t("files.no.resolve.data.returned"));
     if (
       !p!.target ||
       p!.target.kind !== "resolve" ||
@@ -220,11 +219,8 @@ export function ResolveDialog({
       !Array.isArray(p!.blockers) ||
       !Array.isArray(p!.warnings)
     )
-      fail(
-        t("files.conflicts.blockers.are.not.arrays"),
-      );
-    if (!Number.isFinite(p!.expiresAt))
-      fail(t("files.missing.expiry"));
+      fail(t("files.conflicts.blockers.are.not.arrays"));
+    if (!Number.isFinite(p!.expiresAt)) fail(t("files.missing.expiry"));
     const expected = [...paths].sort();
     if (
       JSON.stringify([...p!.target.depotPaths].sort()) !==
@@ -450,8 +446,7 @@ export function ResolveDialog({
           resolvedPath: options.resolvedPath,
         });
         if (!checked) setMessage(detail);
-        else
-          setMessage(t("files.resolved.per.durable.receipt"));
+        else setMessage(t("files.resolved.per.durable.receipt"));
       }
     };
     try {
@@ -613,10 +608,8 @@ export function ResolveDialog({
   };
   const blockedReason = (conflict: ResolveConflictDetail | undefined) => {
     if (!conflict) return t("files.no.file.to.resolve");
-    if (conflict.status === "blocked")
-      return t("files.blocked.by.backend");
-    if (conflict.status === "unknown")
-      return t("files.conflict.state.unknown");
+    if (conflict.status === "blocked") return t("files.blocked.by.backend");
+    if (conflict.status === "unknown") return t("files.conflict.state.unknown");
     if (!executableStrategies(conflict).length)
       return t("files.no.executable.strategy");
     return undefined;
@@ -688,10 +681,7 @@ export function ResolveDialog({
         operationId: crypto.randomUUID(),
       });
       const session = unwrapMergeLegacy<ManualMergeSession>(opened);
-      if (!session)
-        throw new Error(
-          t("files.unable.to.open.merge.session"),
-        );
+      if (!session) throw new Error(t("files.unable.to.open.merge.session"));
       const external = await backend.runExternalMerge({
         sessionId: session.sessionId,
         result: session.result,
@@ -707,13 +697,10 @@ export function ResolveDialog({
         );
       if (external.status === "cancelled" || external.status === "timeout")
         throw new Error(
-          external.reason ??
-            t("files.p4merge.was.cancelled.or.timed"),
+          external.reason ?? t("files.p4merge.was.cancelled.or.timed"),
         );
       if (external.status !== "completed" && external.status !== "unchanged")
-        throw new Error(
-          external.reason ?? t("files.p4merge.failed"),
-        );
+        throw new Error(external.reason ?? t("files.p4merge.failed"));
       const merged =
         external.status === "completed"
           ? (external.result ?? session.result)
@@ -741,8 +728,7 @@ export function ResolveDialog({
       const saved = unwrapMergeLegacy<ManualMergeSaveResult>(savedRaw);
       if (!saved?.resolveToken)
         throw new Error(
-          saved?.message ??
-            t("files.saving.the.merge.result.failed"),
+          saved?.message ?? t("files.saving.the.merge.result.failed"),
         );
       const resolvedRaw = await backend.confirmManualMergeResolve({
         token: saved.resolveToken,
@@ -764,11 +750,7 @@ export function ResolveDialog({
         resolvedPath: current.depotPath,
       });
       if (checked)
-        setMessage(
-          t("files.p4merge.merge.completed") +
-            " " +
-            resolved.message,
-        );
+        setMessage(t("files.p4merge.merge.completed") + " " + resolved.message);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause));
       setPhase("failed");

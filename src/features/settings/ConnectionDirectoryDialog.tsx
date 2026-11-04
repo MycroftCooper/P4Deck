@@ -189,9 +189,7 @@ export function ConnectionDirectoryDialog({
         />
       </label>
       {!snapshot.server.trim() && (
-        <DialogNotice error>
-          {t("settings.enter.server.first")}
-        </DialogNotice>
+        <DialogNotice error>{t("settings.enter.server.first")}</DialogNotice>
       )}
       {!identity && (
         <DialogNotice error>
@@ -252,8 +250,7 @@ export function ConnectionDirectoryDialog({
                           "email" in item ? item.email : undefined,
                         ]
                           .filter(Boolean)
-                          .join(" · ") ||
-                        t("settings.no.additional.details")
+                          .join(" · ") || t("settings.no.additional.details")
                       : [
                           "root" in item ? item.root : undefined,
                           "stream" in item ? item.stream : undefined,
@@ -265,8 +262,7 @@ export function ConnectionDirectoryDialog({
                             : undefined,
                         ]
                           .filter(Boolean)
-                          .join(" · ") ||
-                        t("settings.no.additional.details")}
+                          .join(" · ") || t("settings.no.additional.details")}
                   </span>
                 </button>
               ))}

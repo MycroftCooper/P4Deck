@@ -70,8 +70,8 @@ export function OperationConfirmDialog({
       }
     >
       <div className="workflow-context">
-        {snapshot.scopeLabel} {snapshot.nodes.length} {t("dialogs.targets")}{" "}
-        · {folders} {t("dialogs.folders")}
+        {snapshot.scopeLabel} {snapshot.nodes.length} {t("dialogs.targets")} ·{" "}
+        {folders} {t("dialogs.folders")}
       </div>
       {danger && (
         <DialogNotice error>

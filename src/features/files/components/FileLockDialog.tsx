@@ -165,9 +165,7 @@ export function FileLockDialog({
   }
 
   const title =
-    operation === "lock"
-      ? t("files.lock.files")
-      : t("files.unlock.files");
+    operation === "lock" ? t("files.lock.files") : t("files.unlock.files");
   const retry = () => {
     generation.current += 1;
     setPreflight(undefined);
@@ -261,14 +259,13 @@ export function FileLockDialog({
         <>
           <DialogNotice>
             {t("files.applicable")} {preflight.counts.applicable} ·{" "}
-            {t("files.already.satisfied")}{" "}
-            {preflight.counts.alreadySatisfied} · {t("files.blocked")}{" "}
-            {preflight.counts.blocked} · +l {preflight.counts.exclusive}
+            {t("files.already.satisfied")} {preflight.counts.alreadySatisfied} ·{" "}
+            {t("files.blocked")} {preflight.counts.blocked} · +l{" "}
+            {preflight.counts.exclusive}
           </DialogNotice>
           {preflight.logReference && (
             <DialogNotice>
-              {t("files.preflight.log")} ·{" "}
-              <code>{preflight.logReference}</code>
+              {t("files.preflight.log")} · <code>{preflight.logReference}</code>
             </DialogNotice>
           )}
           <div className="workflow-mapping-scroll">

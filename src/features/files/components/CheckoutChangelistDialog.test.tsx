@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import {expect, it, vi, beforeEach} from "vitest";
+import { expect, it, vi, beforeEach } from "vitest";
 import {
   dialogHarness,
   dialogButton,

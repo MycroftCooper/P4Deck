@@ -27,8 +27,11 @@ export function isCopyCommandLabel(label: string): boolean {
 }
 
 /** Which path field a copy submenu entry refers to. */
-export function copyFieldFor(label: string): "name" | "depotPath" | "relativePath" | "absolutePath" {
-  if (/文件名|目录名|名称|file name|folder name|name/i.test(label)) return "name";
+export function copyFieldFor(
+  label: string,
+): "name" | "depotPath" | "relativePath" | "absolutePath" {
+  if (/文件名|目录名|名称|file name|folder name|name/i.test(label))
+    return "name";
   if (/Depot|depot/i.test(label)) return "depotPath";
   if (/相对|relative/i.test(label)) return "relativePath";
   return "absolutePath";

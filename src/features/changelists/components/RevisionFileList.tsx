@@ -143,9 +143,7 @@ export function RevisionFileList({
         columns={[
           { id: "icon", label: "" },
           { id: "path", label: t("pending.path") },
-          ...(showFileType
-            ? [{ id: "type", label: t("pending.type") }]
-            : []),
+          ...(showFileType ? [{ id: "type", label: t("pending.type") }] : []),
           { id: "action", label: t("pending.action") },
           { id: "revision", label: t("pending.revision") },
         ]}
@@ -269,9 +267,7 @@ export function RevisionFileList({
             );
           })}
         </div>
-        {!files.length && (
-          <p>{t("pending.this.change.contains.no.files")}</p>
-        )}
+        {!files.length && <p>{t("pending.this.change.contains.no.files")}</p>}
       </div>
     </section>
   );

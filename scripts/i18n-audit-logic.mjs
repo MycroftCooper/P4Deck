@@ -32,7 +32,10 @@ const files = walk(path.join(ROOT, "src")).filter(
 const COMPARE_PATTERNS = [
   { name: "strict-eq", re: /===\s*["'`][^"'`]*[\u4e00-\u9fff]/ },
   { name: "eq-rev", re: /["'`][^"'`]*[\u4e00-\u9fff][^"'`]*["'`]\s*===/ },
-  { name: "incl", re: /\.(includes|startsWith|endsWith|match|test)\s*\(\s*["'`][^"'`]*[\u4e00-\u9fff]/ },
+  {
+    name: "incl",
+    re: /\.(includes|startsWith|endsWith|match|test)\s*\(\s*["'`][^"'`]*[\u4e00-\u9fff]/,
+  },
   { name: "sw-case", re: /case\s+["'`][^"'`]*[\u4e00-\u9fff]/ },
   { name: "map-key", re: /^\s*["'`]?[\u4e00-\u9fff][^:"'`]*["'`]?\s*:/ },
 ];

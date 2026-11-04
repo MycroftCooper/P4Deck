@@ -721,9 +721,7 @@ export function FileReviewPage({
             <button
               disabled={!canCompare || !onCompareRevisions}
               onClick={compareGraphNodes}
-              title={
-                t("browse.compare.selected.revisions.in.a")
-              }
+              title={t("browse.compare.selected.revisions.in.a")}
             >
               {t("browse.compare.selected.revisions")}
             </button>
@@ -786,7 +784,7 @@ export function FileReviewPage({
                   key={node.id}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? (t("browse.first.selected.left")) : candidates[1]?.id === node.id ? (t("browse.last.selected.right")) : ""}`}
+                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? t("browse.first.selected.left") : candidates[1]?.id === node.id ? t("browse.last.selected.right") : ""}`}
                   aria-pressed={selection.isSelected(node)}
                   className={`${candidates[0]?.id === node.id ? "compare-first" : candidates[1]?.id === node.id ? "compare-last" : ""} ${node.id === sourceId ? "selected" : ""} graph-lane-${graph.lanes.indexOf(node.depotPath) % 4}`}
                   transform={`translate(${node.x},${node.y})`}

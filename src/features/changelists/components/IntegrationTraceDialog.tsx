@@ -410,9 +410,7 @@ function IntegrationTraceDialogInner({
               "仅下一跳记录；忽略/撤销/编辑动作和缺失范围需独立核对。",
               "Next-hop records only; ignored/undo/edit actions and missing ranges require separate verification.",
             )}
-            {hop.batch.incomplete
-              ? t("pending.incomplete.results")
-              : ""}
+            {hop.batch.incomplete ? t("pending.incomplete.results") : ""}
           </p>
         </details>
       ))}

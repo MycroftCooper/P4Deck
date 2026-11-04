@@ -418,8 +418,8 @@ function DescriptionTraceContent({
             </small>
             <p role="status">
               {t("pending.candidates")}: {snapshot.rows.length} ·{" "}
-              {t("pending.scanned")}: {snapshot.scanned} ·{" "}
-              {t("pending.pages")}: {snapshot.pages} ·{" "}
+              {t("pending.scanned")}: {snapshot.scanned} · {t("pending.pages")}:{" "}
+              {snapshot.pages} ·{" "}
               {formatLocalTime(snapshot.readAt, zh ? "zh-CN" : "en-US")}
             </p>
             {(!snapshot.complete || !!error) && (

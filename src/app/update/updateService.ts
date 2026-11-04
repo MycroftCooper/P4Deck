@@ -109,15 +109,27 @@ export function updateFailureText(
     return tFor(zh ? "zh-CN" : "en-US", "update.the.update.is.installed.but");
   if (verificationFailure.test(error ?? ""))
     return scope === "install"
-      ? tFor(zh ? "zh-CN" : "en-US", "update.the.update.package.failed.verification")
-      : tFor(zh ? "zh-CN" : "en-US", "update.the.update.package.failed.verification.2");
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "update.the.update.package.failed.verification",
+        )
+      : tFor(
+          zh ? "zh-CN" : "en-US",
+          "update.the.update.package.failed.verification.2",
+        );
   for (const [pattern, cn, en] of failureReasons)
     if (pattern.test(error ?? "")) return zh ? cn : en;
   if (scope === "check")
     return tFor(zh ? "zh-CN" : "en-US", "update.the.update.check.failed");
   if (scope === "install")
-    return tFor(zh ? "zh-CN" : "en-US", "update.installing.the.update.failed.the");
-  return tFor(zh ? "zh-CN" : "en-US", "update.downloading.or.installing.the.update");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "update.installing.the.update.failed.the",
+    );
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    "update.downloading.or.installing.the.update",
+  );
 }
 
 function reportFailure(

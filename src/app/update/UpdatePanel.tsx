@@ -210,8 +210,7 @@ function UpdateDialog({
     >
       <p className="update-versions">
         <span>
-          {t("update.current")}{" "}
-          <code>{snapshot.currentVersion || "—"}</code>
+          {t("update.current")} <code>{snapshot.currentVersion || "—"}</code>
         </span>
         {snapshot.version && (
           <>
@@ -278,9 +277,7 @@ function UpdateDialog({
         </DialogNotice>
       )}
       {snapshot.phase === "restarting" && (
-        <DialogNotice>
-          {t("update.restarting.the.app")}
-        </DialogNotice>
+        <DialogNotice>{t("update.restarting.the.app")}</DialogNotice>
       )}
       {snapshot.phase === "checking" && (
         <p className="update-checking" role="status">
@@ -288,9 +285,7 @@ function UpdateDialog({
         </p>
       )}
       {snapshot.phase === "idle" && (
-        <DialogNotice>
-          {t("update.you.are.up.to.date")}
-        </DialogNotice>
+        <DialogNotice>{t("update.you.are.up.to.date")}</DialogNotice>
       )}
       {snapshot.phase === "error" && (
         <DialogNotice error>

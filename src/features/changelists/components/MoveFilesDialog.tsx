@@ -294,8 +294,8 @@ export function MoveFilesDialog({
                   {files.map((f) => (
                     <li key={f.depotPath}>
                       {name(f.sourceChangeId)} →{" "}
-                      {target === "new" ? t("pending.new.cl") : name(target)}{" "}
-                      · {f.depotPath}
+                      {target === "new" ? t("pending.new.cl") : name(target)} ·{" "}
+                      {f.depotPath}
                       {target === f.sourceChangeId
                         ? ` · ${stateLabel("alreadyInTarget")}`
                         : ""}
@@ -373,9 +373,7 @@ export function MoveFilesDialog({
         )}
         {busy && (
           <>
-            <span role="status">
-              {t("pending.moving.or.checking")}
-            </span>
+            <span role="status">{t("pending.moving.or.checking")}</span>
             <button
               type="button"
               onClick={() => {

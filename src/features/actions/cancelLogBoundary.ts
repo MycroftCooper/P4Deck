@@ -32,12 +32,24 @@ export function cancelIntentMessage(
   zh: boolean,
 ): string {
   if (state === "cancelRequested")
-    return tFor(zh ? "zh-CN" : "en-US", "actions.cancellation.was.requested.it.does");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.cancellation.was.requested.it.does",
+    );
   if (state === "notFound")
-    return tFor(zh ? "zh-CN" : "en-US", "actions.no.live.registration.matched.now");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.no.live.registration.matched.now",
+    );
   if (state === "unknown")
-    return tFor(zh ? "zh-CN" : "en-US", "actions.the.cancellation.outcome.is.unknown");
-  return tFor(zh ? "zh-CN" : "en-US", "actions.cancellation.was.requested.legacy.response");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.the.cancellation.outcome.is.unknown",
+    );
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    "actions.cancellation.was.requested.legacy.response",
+  );
 }
 export interface CancelBoundaryReceipt {
   state: CancelIntentState;
@@ -78,7 +90,10 @@ export function bestEffortLogNote(
 ): string {
   if (receipt.status === "recorded") return "";
   if (receipt.status === "duplicate")
-    return tFor(zh ? "zh-CN" : "en-US", "actions.log.already.recorded.duplicate.deduplicated");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.log.already.recorded.duplicate.deduplicated",
+    );
   if (receipt.status === "rejected")
     return tFor(zh ? "zh-CN" : "en-US", "actions.the.log.entry.was.rejected");
   return tFor(zh ? "zh-CN" : "en-US", "actions.the.log.is.unavailable.the");

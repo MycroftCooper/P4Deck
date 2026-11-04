@@ -155,10 +155,16 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                     kind === "diff"
                       ? tFor(zh ? "zh-CN" : "en-US", "docking.diff.file.path")
                       : kind === "revgraph"
-                        ? tFor(zh ? "zh-CN" : "en-US", "docking.revision.graph.file.path")
+                        ? tFor(
+                            zh ? "zh-CN" : "en-US",
+                            "docking.revision.graph.file.path",
+                          )
                         : kind === "history"
                           ? tFor(zh ? "zh-CN" : "en-US", "docking.depot.path")
-                          : tFor(zh ? "zh-CN" : "en-US", "docking.preview.file.path")
+                          : tFor(
+                              zh ? "zh-CN" : "en-US",
+                              "docking.preview.file.path",
+                            )
                   }
                   raw={kind === "history" || kind === "preview"}
                   target={params.target}
@@ -174,7 +180,7 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                 <span className="target-control-value" title={params.target}>
                   <span className="target-control-text">
                     {params.target ||
-                      (tFor(zh ? "zh-CN" : "en-US", "docking.no.file.selected"))}
+                      tFor(zh ? "zh-CN" : "en-US", "docking.no.file.selected")}
                   </span>
                   <span ref={setRefreshSlot} className="target-refresh-slot" />
                 </span>

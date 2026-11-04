@@ -59,9 +59,7 @@ export function CheckoutChangelistDialog({
     >
       <div className="workflow-context">
         {client} · {count} {t("files.targets")}
-        {recursive
-          ? t("files.includes.files.in.selected.folders")
-          : ""}
+        {recursive ? t("files.includes.files.in.selected.folders") : ""}
       </div>
       <label>
         {t("files.target.changelist")}

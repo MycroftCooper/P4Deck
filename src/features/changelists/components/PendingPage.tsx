@@ -124,9 +124,7 @@ const openedStates: Record<string, WorkspaceNode["state"]> = {
  * instead of reading as a permanent dead end.
  */
 const withAdmissionHint = (text: string, _zh: boolean) =>
-  `${text} ${
-    translate("pending.release.write.blocks.under.tools")
-  }`;
+  `${text} ${translate("pending.release.write.blocks.under.tools")}`;
 
 /** Unshelve runs immediately into the current workspace/default CL: no dialog, no FE preflight. */
 function DirectUnshelve({
@@ -934,9 +932,7 @@ export function PendingPage({
       await applyMutation(
         raw,
         isZh() ? "删除后的刷新不完整" : "Delete refresh incomplete",
-        isZh()
-          ? "CL 删除已由服务器确认"
-          : "Changelist delete confirmed",
+        isZh() ? "CL 删除已由服务器确认" : "Changelist delete confirmed",
       );
     } catch (cause) {
       settlePendingClIntent(operationId);
@@ -963,12 +959,8 @@ export function PendingPage({
       if (recovered.result && pendingClCommitted(recovered.result)) {
         await applyMutation(
           recovered.result,
-          isZh()
-            ? "删除后的刷新不完整"
-            : "Delete refresh incomplete",
-          isZh()
-            ? "CL 删除已由服务器确认"
-            : "Changelist delete confirmed",
+          isZh() ? "删除后的刷新不完整" : "Delete refresh incomplete",
+          isZh() ? "CL 删除已由服务器确认" : "Changelist delete confirmed",
         );
       } else {
         void reload().catch(() => undefined);
@@ -1304,9 +1296,7 @@ export function PendingPage({
               );
               await applyMutation(
                 raw,
-                isZh()
-                  ? "保存后的刷新不完整"
-                  : "Save refresh incomplete",
+                isZh() ? "保存后的刷新不完整" : "Save refresh incomplete",
                 form.change
                   ? isZh()
                     ? "CL 编辑已由服务器确认"
@@ -1325,9 +1315,7 @@ export function PendingPage({
               if (recovered.result && pendingClCommitted(recovered.result)) {
                 await applyMutation(
                   recovered.result,
-                  isZh()
-                    ? "保存后的刷新不完整"
-                    : "Save refresh incomplete",
+                  isZh() ? "保存后的刷新不完整" : "Save refresh incomplete",
                   form.change
                     ? isZh()
                       ? "CL 编辑已由服务器确认"
@@ -1358,11 +1346,7 @@ export function PendingPage({
               ? "筛选已缓存的 CL、描述或文件路径"
               : "Filter cached CL, description, or file path"
           }
-          aria-label={
-            isZh()
-              ? "筛选 Pending CL"
-              : "Filter pending changelists"
-          }
+          aria-label={isZh() ? "筛选 Pending CL" : "Filter pending changelists"}
         />
         <button
           className="secondary"
@@ -1459,9 +1443,7 @@ export function PendingPage({
                   · {a.request.files.length}
                 </span>
                 <details>
-                  <summary>
-                    {isZh() ? "逐文件状态" : "File status"}
-                  </summary>
+                  <summary>{isZh() ? "逐文件状态" : "File status"}</summary>
                   {a.request.files.map((file) => (
                     <div key={file.depotPath}>
                       {file.depotPath} ·{" "}
@@ -1491,9 +1473,7 @@ export function PendingPage({
                         .catch((cause) => setError(String(cause)))
                     }
                   >
-                    {isZh()
-                      ? "停止后续操作"
-                      : "Stop remaining operations"}
+                    {isZh() ? "停止后续操作" : "Stop remaining operations"}
                   </button>
                 ) : (
                   <button
@@ -1512,15 +1492,11 @@ export function PendingPage({
           className="pending-move-temporary"
           key={group.operationId}
           aria-label={
-            isZh()
-              ? "新 CL，编号待确认"
-              : "New CL, number not confirmed"
+            isZh() ? "新 CL，编号待确认" : "New CL, number not confirmed"
           }
         >
           <strong>
-            {isZh()
-              ? "新 CL，编号待确认"
-              : "New CL, number not confirmed"}
+            {isZh() ? "新 CL，编号待确认" : "New CL, number not confirmed"}
           </strong>{" "}
           · {group.description}
           <ul>
@@ -1680,9 +1656,9 @@ export function PendingPage({
                       <span
                         className="pending-resolve-badge"
                         role="img"
-                        title={
-                          translate("pending.changelist.has.files.that.need")
-                        }
+                        title={translate(
+                          "pending.changelist.has.files.that.need",
+                        )}
                         aria-label={translate("pending.needs.resolve")}
                       >
                         !

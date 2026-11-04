@@ -108,11 +108,7 @@ export function DiffPathInput({
         title={error || target || context.cwd}
         value={draft?.owner === owner ? draft.text : display}
         disabled={locked}
-        placeholder={
-          raw
-            ? label
-            : t("docking.workspace.path.paste.a.local")
-        }
+        placeholder={raw ? label : t("docking.workspace.path.paste.a.local")}
         onChange={(event) => {
           setDraft({ owner, text: event.target.value });
           setFailure(undefined);

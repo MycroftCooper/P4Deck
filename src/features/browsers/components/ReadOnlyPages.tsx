@@ -487,9 +487,7 @@ export function ReadOnlyPage({
                 changelistId: item.changelistId,
                 source: source ?? null,
               }),
-            remoteReady
-              ? undefined
-              : t("browse.connection.unavailable"),
+            remoteReady ? undefined : t("browse.connection.unavailable"),
           ),
           Diff: action(
             () => compareHistory(queue),
@@ -589,9 +587,7 @@ export function ReadOnlyPage({
         )
       ) : (
         <FixedPageHeader
-          description={
-            t("browse.streams.types.and.parent.relationships")
-          }
+          description={t("browse.streams.types.and.parent.relationships")}
         >
           <div className="section-title-actions">
             <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>

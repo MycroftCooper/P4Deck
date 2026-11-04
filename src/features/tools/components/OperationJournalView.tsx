@@ -57,15 +57,24 @@ export function operationRecoveryGuidance(
   if (failure === "unknown" || failure === "interrupted") {
     return {
       tone: "danger",
-      title: tFor(zh ? "zh-CN" : "en-US", "tools.unknown.result.verify.manually"),
+      title: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.unknown.result.verify.manually",
+      ),
       steps: tFor(zh ? "zh-CN" : "en-US", "tools.do.not.immediately.retry.a"),
     };
   }
   if (failure === "cancelled") {
     return {
       tone: "warning",
-      title: tFor(zh ? "zh-CN" : "en-US", "tools.cancel.requested.execution.may.be"),
-      steps: tFor(zh ? "zh-CN" : "en-US", "tools.refresh.pending.and.workspace.before"),
+      title: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.cancel.requested.execution.may.be",
+      ),
+      steps: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.refresh.pending.and.workspace.before",
+      ),
     };
   }
   if (failure === "authExpired") {
@@ -79,7 +88,10 @@ export function operationRecoveryGuidance(
     return {
       tone: "warning",
       title: tFor(zh ? "zh-CN" : "en-US", "tools.connection.interrupted"),
-      steps: tFor(zh ? "zh-CN" : "en-US", "tools.reconnect.and.refresh.after.the"),
+      steps: tFor(
+        zh ? "zh-CN" : "en-US",
+        "tools.reconnect.and.refresh.after.the",
+      ),
     };
   }
   return undefined;
@@ -201,9 +213,10 @@ export function OperationJournalView({
         <input
           aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.search.operations")}
           value={keyword}
-          placeholder={
-            tFor(zh ? "zh-CN" : "en-US", "tools.id.workspace.state.or.error")
-          }
+          placeholder={tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.id.workspace.state.or.error",
+          )}
           onChange={(event) => setKeyword(event.target.value)}
         />
         <select
@@ -213,7 +226,9 @@ export function OperationJournalView({
             setState(event.target.value as JournalState | "")
           }
         >
-          <option value="">{tFor(zh ? "zh-CN" : "en-US", "tools.all.states")}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.states")}
+          </option>
           {(
             [
               "queued",
@@ -234,7 +249,9 @@ export function OperationJournalView({
             setCategory(event.target.value as OperationCategory | "")
           }
         >
-          <option value="">{tFor(zh ? "zh-CN" : "en-US", "tools.all.types")}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.types")}
+          </option>
           {(
             [
               "query",
@@ -265,7 +282,8 @@ export function OperationJournalView({
           />
         </label>
         <button onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
+          <RefreshCw size={13} />{" "}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
         </button>
       </div>
 
@@ -333,11 +351,17 @@ export function OperationJournalView({
                   </td>
                   <td>
                     <time dateTime={record.startedAt}>
-                      {formatLocalTime(record.startedAt, zh ? "zh-CN" : "en-US")}
+                      {formatLocalTime(
+                        record.startedAt,
+                        zh ? "zh-CN" : "en-US",
+                      )}
                     </time>
                     <span>
                       {record.finishedAt
-                        ? formatLocalTime(record.finishedAt, zh ? "zh-CN" : "en-US")
+                        ? formatLocalTime(
+                            record.finishedAt,
+                            zh ? "zh-CN" : "en-US",
+                          )
                         : tFor(zh ? "zh-CN" : "en-US", "tools.in.progress")}
                     </span>
                   </td>
@@ -384,7 +408,9 @@ export function OperationJournalView({
       {error && (
         <div className="inline-error" role="alert">
           {error}{" "}
-          <button onClick={() => void load()}>{tFor(zh ? "zh-CN" : "en-US", "tools.retry")}</button>
+          <button onClick={() => void load()}>
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry")}
+          </button>
         </div>
       )}
       {appendError && (

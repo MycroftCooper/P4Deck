@@ -473,7 +473,7 @@ export function DiffView({
       const targetSide = current?.side ?? "right";
       const reference = targetSide === "left" ? diff?.left : diff?.right;
       const label =
-        targetSide === "left" ? (t("browse.left")) : t("browse.right");
+        targetSide === "left" ? t("browse.left") : t("browse.right");
       return {
         复制所选文本: copy(selectionText() || current?.text || ""),
         全选当前侧: {
@@ -550,9 +550,7 @@ export function DiffView({
   const goToLine = () => {
     const number = Number(lineNumber);
     if (!validateLine(side, number)) {
-      setLineError(
-        t("browse.line.is.not.in.the"),
-      );
+      setLineError(t("browse.line.is.not.in.the"));
       return;
     }
     setLineError("");
@@ -650,9 +648,7 @@ export function DiffView({
                 ref={searchInput}
                 aria-label={t("browse.find.text")}
                 placeholder={t("browse.find.in.both.sides")}
-                title={
-                  t("browse.find.in.both.sides.ctrl")
-                }
+                title={t("browse.find.in.both.sides.ctrl")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -670,9 +666,7 @@ export function DiffView({
             </span>
             <button
               aria-label={t("browse.previous.match")}
-              title={
-                t("browse.previous.match.shift.enter")
-              }
+              title={t("browse.previous.match.shift.enter")}
               disabled={!found.matches.length}
               onClick={() => jumpMatch(-1)}
             >
@@ -763,9 +757,7 @@ export function DiffView({
               <button
                 className="diff-expand-all-toggle"
                 aria-label={t("browse.expand.all")}
-                title={
-                  t("browse.expand.all.unchanged.context.in")
-                }
+                title={t("browse.expand.all.unchanged.context.in")}
                 aria-pressed={expandAll}
                 disabled={!renderable}
                 onClick={() => setExpandAll((value) => !value)}
@@ -845,10 +837,7 @@ export function DiffView({
         </div>
         {diff?.binary || diff?.unsupported ? (
           <div className="workspace-empty">
-            <strong>
-              {diff.reason ??
-                (t("browse.text.diff.unavailable"))}
-            </strong>
+            <strong>{diff.reason ?? t("browse.text.diff.unavailable")}</strong>
             <div>
               {diff.left.label}: {diff.left.fileType ?? "unknown"} ·{" "}
               {diff.left.size ?? 0} bytes · {diff.left.digest ?? "no digest"}

@@ -155,7 +155,9 @@ function ChangeDetailsDialog({
       if (target.kind === "pending" && target.snapshot)
         return pendingDetail(target.snapshot);
       if (runtime.mode !== "mock" && runtime.connection.state !== "connected")
-        throw new Error(tFor(zh ? "zh-CN" : "en-US", "pending.connection.unavailable"));
+        throw new Error(
+          tFor(zh ? "zh-CN" : "en-US", "pending.connection.unavailable"),
+        );
       if (target.kind === "submitted")
         return backend.getSubmittedChangeDetail({
           changeId: target.changeId,
@@ -202,7 +204,8 @@ function ChangeDetailsDialog({
           );
         if (detail.inspectionStatus === "unavailable")
           throw new Error(
-            detail.message || tFor(zh ? "zh-CN" : "en-US", "pending.details.unavailable"),
+            detail.message ||
+              tFor(zh ? "zh-CN" : "en-US", "pending.details.unavailable"),
           );
         setValue(detail);
         // A pending/shelved CL answered through the submitted path must not be
@@ -302,7 +305,9 @@ function ChangeDetailsDialog({
           </DialogNotice>
         )}
         {!value && !error && (
-          <DialogNotice>{tFor(zh ? "zh-CN" : "en-US", "pending.loading")}</DialogNotice>
+          <DialogNotice>
+            {tFor(zh ? "zh-CN" : "en-US", "pending.loading")}
+          </DialogNotice>
         )}
         {error && (
           <>
@@ -339,7 +344,8 @@ function ChangeDetailsDialog({
             </dl>
             <h3>{tFor(zh ? "zh-CN" : "en-US", "pending.description")}</h3>
             <p className="change-details-description">
-              {value.description || tFor(zh ? "zh-CN" : "en-US", "pending.no.description")}
+              {value.description ||
+                tFor(zh ? "zh-CN" : "en-US", "pending.no.description")}
             </p>
             {notice && <DialogNotice>{notice}</DialogNotice>}
             <h3>
@@ -360,11 +366,15 @@ function ChangeDetailsDialog({
                 >
                   <thead>
                     <tr>
-                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.file.name")}</th>
+                      <th>
+                        {tFor(zh ? "zh-CN" : "en-US", "pending.file.name")}
+                      </th>
                       <th>{tFor(zh ? "zh-CN" : "en-US", "pending.path")}</th>
                       <th>{tFor(zh ? "zh-CN" : "en-US", "pending.type")}</th>
                       <th>{tFor(zh ? "zh-CN" : "en-US", "pending.action")}</th>
-                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.revision")}</th>
+                      <th>
+                        {tFor(zh ? "zh-CN" : "en-US", "pending.revision")}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

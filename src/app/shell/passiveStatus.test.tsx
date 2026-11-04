@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {it, expect, beforeEach} from "vitest";
+import { it, expect, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   passiveStatusPresentation,

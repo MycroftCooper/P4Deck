@@ -94,7 +94,7 @@ function streamSummary(
 
 function boolLabel(value: boolean | undefined, _zh: boolean) {
   if (value === undefined) return t("browse.unknown");
-  return value ? (t("browse.yes")) : t("browse.no");
+  return value ? t("browse.yes") : t("browse.no");
 }
 
 export function StreamGraphPage({
@@ -393,10 +393,7 @@ export function StreamGraphPage({
       writePagedSnapshot(active.key, next);
       setResult(next);
       setPhase("ready");
-      if (nonProgressing)
-        setNotice(
-          t("browse.the.backend.returned.a.non"),
-        );
+      if (nonProgressing) setNotice(t("browse.the.backend.returned.a.non"));
     } catch (cause) {
       if (requestToken.current !== active.token) return;
       const failure = streamGraphError(cause);
@@ -491,9 +488,7 @@ export function StreamGraphPage({
   return (
     <section className="stream-graph-page">
       <FixedPageHeader
-        description={
-          t("browse.explore.the.official.parent.child")
-        }
+        description={t("browse.explore.the.official.parent.child")}
       >
         <button
           onClick={() => void startFresh(true)}
@@ -592,9 +587,7 @@ export function StreamGraphPage({
           </>
         )}
         {phase === "loading" && <span>{t("browse.loading")}</span>}
-        {phase === "loadingMore" && (
-          <span>{t("browse.loading.more")}</span>
-        )}
+        {phase === "loadingMore" && <span>{t("browse.loading.more")}</span>}
       </div>
       {notice && (
         <div className="stream-graph-notice" role="status">
@@ -642,9 +635,7 @@ export function StreamGraphPage({
               <Plus size={14} />
             </button>
             <button
-              aria-label={
-                t("browse.reset.stream.graph.zoom")
-              }
+              aria-label={t("browse.reset.stream.graph.zoom")}
               onClick={() => {
                 setZoomIndex(1);
                 scrollRef.current?.scrollTo({ top: 0, left: 0 });
@@ -760,9 +751,7 @@ export function StreamGraphPage({
                           <small>{node.stream}</small>
                         </span>
                         <span className="stream-graph-badges">
-                          <span>
-                            {node.kind || (t("browse.unknown.type"))}
-                          </span>
+                          <span>{node.kind || t("browse.unknown.type")}</span>
                           {current && (
                             <span className="current">
                               {t("browse.current")}
@@ -777,9 +766,7 @@ export function StreamGraphPage({
                             <span>{t("browse.orphan")}</span>
                           )}
                           {row.relation === "unloadedParent" && (
-                            <span>
-                              {t("browse.parent.not.loaded")}
-                            </span>
+                            <span>{t("browse.parent.not.loaded")}</span>
                           )}
                           {row.depth > 48 && <span>Layer {row.depth + 1}</span>}
                         </span>
@@ -845,7 +832,7 @@ export function StreamGraphPage({
               </div>
               <div>
                 <dt>Type</dt>
-                <dd>{selected.node.kind || (t("browse.unknown"))}</dd>
+                <dd>{selected.node.kind || t("browse.unknown")}</dd>
               </div>
               <div>
                 <dt>Parent</dt>
@@ -879,8 +866,7 @@ export function StreamGraphPage({
             {selected.node.description && <p>{selected.node.description}</p>}
             <div className="stream-graph-detail-actions">
               <button onClick={locateInStreams}>
-                <LocateFixed size={14} />{" "}
-                {t("browse.locate.in.streams")}
+                <LocateFixed size={14} /> {t("browse.locate.in.streams")}
               </button>
               <button
                 onClick={(event) =>

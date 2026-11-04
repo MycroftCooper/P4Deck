@@ -231,9 +231,7 @@ export function WorkspaceSwitcher({
               );
             })}
             {loading && (
-              <p role="status">
-                {t("workspaces.loading.workspaces")}
-              </p>
+              <p role="status">{t("workspaces.loading.workspaces")}</p>
             )}
             {!loading && !error && !filtered.length && (
               <p role="status">
@@ -248,8 +246,7 @@ export function WorkspaceSwitcher({
           </div>
           {switching && (
             <p role="status">
-              {t("workspaces.verifying.and.switching.to")} {switching}
-              …
+              {t("workspaces.verifying.and.switching.to")} {switching}…
             </p>
           )}
           {error && (

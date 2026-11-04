@@ -248,8 +248,6 @@ export function reportPrompt(
     }
   }
   if (!selected.length)
-    lines.push(
-      t("pending.no.submissions.in.selected.categories"),
-    );
+    lines.push(t("pending.no.submissions.in.selected.categories"));
   return lines.join("\n");
 }

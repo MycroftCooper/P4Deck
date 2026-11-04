@@ -189,7 +189,8 @@ function processFile(file) {
   const pairs = [...src.matchAll(PAIR_RE)];
 
   if (edits) results.push({ file, ns, edits, out, pairs: pairs.length });
-  else if (pairs.length) results.push({ file, ns, edits: 0, out: src, pairs: pairs.length });
+  else if (pairs.length)
+    results.push({ file, ns, edits: 0, out: src, pairs: pairs.length });
   return out;
 }
 
@@ -230,9 +231,9 @@ function previewDiff(before, after) {
   return out;
 }
 
-let files = walk(path.join(ROOT, "src")).filter(
-  (p) => /\.(ts|tsx)$/.test(p) && !/\.test\.(ts|tsx)$/.test(p),
-).map(rel);
+let files = walk(path.join(ROOT, "src"))
+  .filter((p) => /\.(ts|tsx)$/.test(p) && !/\.test\.(ts|tsx)$/.test(p))
+  .map(rel);
 if (ONLY) files = files.filter((f) => f.includes(ONLY));
 
 for (const f of files) processFile(f);
@@ -240,12 +241,16 @@ for (const f of files) processFile(f);
 const totalEdits = results.reduce((a, r) => a + r.edits, 0);
 const touched = results.filter((r) => r.edits > 0);
 
-console.log(`${WRITE ? "APPLYING" : "DRY RUN"} — ${touched.length} files, ${totalEdits} replacements, ${keys.size} new keys`);
+console.log(
+  `${WRITE ? "APPLYING" : "DRY RUN"} — ${touched.length} files, ${totalEdits} replacements, ${keys.size} new keys`,
+);
 for (const r of touched.sort((a, b) => b.edits - a.edits))
   console.log(`  ${String(r.edits).padStart(3)}  ${r.file}`);
 const pairOnly = results.filter((r) => r.edits === 0 && r.pairs);
 if (pairOnly.length) {
-  console.log(`\nProperty-pair sites needing manual handling (${pairOnly.length} files):`);
+  console.log(
+    `\nProperty-pair sites needing manual handling (${pairOnly.length} files):`,
+  );
   for (const r of pairOnly) console.log(`  ${r.pairs}x  ${r.file}`);
 }
 
@@ -259,7 +264,10 @@ if (!WRITE) {
         files: touched.map((r) => ({
           file: r.file,
           edits: r.edits,
-          preview: previewDiff(fs.readFileSync(path.join(ROOT, r.file), "utf8"), r.out),
+          preview: previewDiff(
+            fs.readFileSync(path.join(ROOT, r.file), "utf8"),
+            r.out,
+          ),
         })),
         keys: keys.size,
       },
@@ -277,18 +285,26 @@ if (WRITE) {
   // Append new keys to both catalogs, grouped at the end under a marker.
   const append = (catalogPath, pick) => {
     let text = fs.readFileSync(catalogPath, "utf8");
-    const marker = "  // ---- codemod-converged ------------------------------------------------";
+    const marker =
+      "  // ---- codemod-converged ------------------------------------------------";
     // Merge with keys already converged by a previous run, otherwise the
     // block is replaced and earlier keys are lost.
     const existing = new Map();
-    const blockRe = /  \/\/ ---- codemod-converged[^\n]*\n([\s\S]*?)(?=\n\} as const|\n\};)/;
+    const blockRe =
+      /  \/\/ ---- codemod-converged[^\n]*\n([\s\S]*?)(?=\n\} as const|\n\};)/;
     const prev = text.match(blockRe);
     if (prev)
       for (const m of prev[1].matchAll(/^  "([^"]+)": "((?:[^"\\]|\\.)*)",$/gm))
         existing.set(m[1], m[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\"));
     for (const [k, v] of keys) {
       // Never shadow a curated key that already exists outside the block.
-      if (!existing.has(k) && new RegExp(`^  "${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`, "m").test(text.replace(blockRe, ""))) {
+      if (
+        !existing.has(k) &&
+        new RegExp(
+          `^  "${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":`,
+          "m",
+        ).test(text.replace(blockRe, ""))
+      ) {
         throw new Error(
           `key "${k}" already exists in ${path.basename(catalogPath)} with different text; ` +
             `refusing to overwrite a curated translation`,
@@ -339,5 +355,7 @@ if (WRITE) {
     }
     fs.writeFileSync(path.join(ROOT, r.file), out);
   }
-  console.log(`\nApplied to ${touched.length} files; added ${keys.size} keys to both catalogs.`);
+  console.log(
+    `\nApplied to ${touched.length} files; added ${keys.size} keys to both catalogs.`,
+  );
 }

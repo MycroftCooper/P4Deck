@@ -25,7 +25,10 @@ for (const file of files) {
     continue;
   }
   let src = fs.readFileSync(abs, "utf8");
-  if (/setLocale\("en-US"\)/.test(src) || /activateLocale\("en-US"\)/.test(src)) {
+  if (
+    /setLocale\("en-US"\)/.test(src) ||
+    /activateLocale\("en-US"\)/.test(src)
+  ) {
     console.log(`SKIP (already aligned) ${file}`);
     continue;
   }

@@ -194,7 +194,7 @@ export function HistoryTable({
                 tabIndex={0}
                 aria-selected={isSelected(item)}
                 data-selection-order={selectionOrder?.(item) || undefined}
-                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? (t("browse.first.selected")) : t("browse.last.selected.get.this.revision")) : ""}`}
+                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? t("browse.first.selected") : t("browse.last.selected.get.this.revision")) : ""}`}
                 title={
                   selectionOrder?.(item)
                     ? selectionOrder(item) === 1

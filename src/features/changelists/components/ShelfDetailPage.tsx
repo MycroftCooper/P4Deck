@@ -169,18 +169,14 @@ export function ShelfDetailPage({
         if (!active || generation !== requestGeneration.current) return;
         if (!ownsShelfResult(value, runtime, changeId, generation)) {
           setRestartRequired(true);
-          setError(
-            t("pending.the.shelf.response.does.not"),
-          );
+          setError(t("pending.the.shelf.response.does.not"));
           return;
         }
         setDetail(value);
         setRestartRequired(false);
         if (value.hasMore && !value.nextCursor) {
           setRestartRequired(true);
-          setError(
-            t("pending.the.backend.did.not.return"),
-          );
+          setError(t("pending.the.backend.did.not.return"));
         }
       })
       .catch((cause) => {
@@ -246,9 +242,7 @@ export function ShelfDetailPage({
     if (!detail?.hasMore || loadingMore || restartRequired) return;
     if (!cursor || usedCursors.current.has(cursor)) {
       setRestartRequired(true);
-      setError(
-        t("pending.the.shelf.cursor.cannot.advance"),
-      );
+      setError(t("pending.the.shelf.cursor.cannot.advance"));
       return;
     }
     usedCursors.current.add(cursor);
@@ -268,9 +262,7 @@ export function ShelfDetailPage({
         if (generation !== requestGeneration.current) return;
         if (!ownsShelfResult(page, runtime, changeId, generation)) {
           setRestartRequired(true);
-          setError(
-            t("pending.the.shelf.page.does.not"),
-          );
+          setError(t("pending.the.shelf.page.does.not"));
           return;
         }
         setDetail((current) => {
@@ -282,9 +274,7 @@ export function ShelfDetailPage({
           const stalled = incoming.length !== page.files.length;
           if (stalled || (page.hasMore && !page.nextCursor)) {
             setRestartRequired(true);
-            setError(
-              t("pending.the.shelf.snapshot.returned.duplicates"),
-            );
+            setError(t("pending.the.shelf.snapshot.returned.duplicates"));
           }
           return {
             ...page,
@@ -299,9 +289,9 @@ export function ShelfDetailPage({
           const failure = shelfError(cause);
           setRestartRequired(true);
           setError(
-            `${failure.message} ${
-              t("pending.current.results.were.preserved.restart")
-            }`,
+            `${failure.message} ${t(
+              "pending.current.results.were.preserved.restart",
+            )}`,
           );
         }
       })
@@ -427,7 +417,7 @@ export function ShelfDetailPage({
           </h1>
           <p>
             {detail?.description ||
-              (t("pending.shelf.detail.and.content.preview"))}
+              t("pending.shelf.detail.and.content.preview")}
           </p>
         </div>
         {!refreshSlot && refreshButton}
@@ -476,9 +466,7 @@ export function ShelfDetailPage({
               : t("pending.fresh")}
           </span>
           {(detail.inspectionStatus === "partial" || detail.truncated) && (
-            <strong>
-              {detail.message ?? (t("pending.partial.result"))}
-            </strong>
+            <strong>{detail.message ?? t("pending.partial.result")}</strong>
           )}
         </div>
       )}
@@ -487,9 +475,7 @@ export function ShelfDetailPage({
           {t("pending.loading.shelf")}
         </div>
       ) : detail && !detail.totalFiles ? (
-        <div className="workspace-empty">
-          {t("pending.shelf.is.empty")}
-        </div>
+        <div className="workspace-empty">{t("pending.shelf.is.empty")}</div>
       ) : detail ? (
         <div className="shelf-detail-layout">
           <section className="review-surface">
@@ -500,10 +486,7 @@ export function ShelfDetailPage({
               aria-label="Shelved files"
             >
               <ResizeHeader
-                columns={[
-                  t("pending.path"),
-                  t("pending.action.type.size"),
-                ]}
+                columns={[t("pending.path"), t("pending.action.type.size")]}
                 resize={tableColumns}
               />
               <div
@@ -567,9 +550,7 @@ export function ShelfDetailPage({
                   loadMore();
                 }}
               >
-                {loadingMore
-                  ? t("pending.loading")
-                  : t("pending.load.more")}
+                {loadingMore ? t("pending.loading") : t("pending.load.more")}
               </button>
             )}
           </section>
@@ -621,7 +602,7 @@ export function ShelfDetailPage({
                 <strong>
                   {preview?.reason ??
                     diff?.reason ??
-                    (t("pending.text.preview.unsupported"))}
+                    t("pending.text.preview.unsupported")}
                 </strong>
                 <div>
                   {selected.fileType ?? "unknown"} · {selected.size ?? 0} B ·{" "}

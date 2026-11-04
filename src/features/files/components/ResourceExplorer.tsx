@@ -222,9 +222,7 @@ export function ResourceExplorer({
       onRevealConsumed?.(reveal.id);
     };
     if (blocked) {
-      finish(
-        translate("files.workspace.unavailable.cannot.locate.target"),
-      );
+      finish(translate("files.workspace.unavailable.cannot.locate.target"));
       return;
     }
     if (pathKey(reveal.path) === pathKey(root.absolutePath)) {
@@ -371,9 +369,7 @@ export function ResourceExplorer({
             cancelReveal();
             setFilter(event.target.value);
           }}
-          placeholder={
-            translate("files.filter.expanded.files.and.folders")
-          }
+          placeholder={translate("files.filter.expanded.files.and.folders")}
         />
       </label>
       <div
@@ -409,7 +405,7 @@ export function ResourceExplorer({
       >
         <button
           className="tree-toggle"
-          aria-label={`${rootOpen[mode] ? (translate("files.collapse")) : translate("files.expand")} ${root.name}`}
+          aria-label={`${rootOpen[mode] ? translate("files.collapse") : translate("files.expand")} ${root.name}`}
           aria-expanded={rootOpen[mode]}
           onClick={(event) => {
             event.stopPropagation();
@@ -568,7 +564,7 @@ export function ResourceExplorer({
                     <button
                       className="tree-toggle"
                       tabIndex={-1}
-                      aria-label={`${expanded ? (translate("files.collapse")) : translate("files.expand")} ${node.name}`}
+                      aria-label={`${expanded ? translate("files.collapse") : translate("files.expand")} ${node.name}`}
                       aria-expanded={expanded}
                       onClick={(event) => {
                         event.stopPropagation();

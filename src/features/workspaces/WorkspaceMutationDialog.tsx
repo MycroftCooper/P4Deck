@@ -297,10 +297,16 @@ export function WorkspaceMutationDialog({
         <DialogNotice error={!resultVerified}>
           <strong>
             {resultVerified
-              ? tFor(zh ? "zh-CN" : "en-US", "workspaces.verified.by.server.readback")
+              ? tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "workspaces.verified.by.server.readback",
+                )
               : result.outcome === "unknown"
                 ? tFor(zh ? "zh-CN" : "en-US", "workspaces.outcome.uncertain")
-                : tFor(zh ? "zh-CN" : "en-US", "workspaces.operation.did.not.succeed")}
+                : tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "workspaces.operation.did.not.succeed",
+                  )}
           </strong>
           <br />
           {result.message}
@@ -342,7 +348,8 @@ export function WorkspaceMutationDialog({
       )}
       {operationId.current && (
         <p className="workflow-context">
-          {tFor(zh ? "zh-CN" : "en-US", "workspaces.operation")} {operationId.current}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.operation")}{" "}
+          {operationId.current}
         </p>
       )}
       {error && !result && <DialogNotice error>{error}</DialogNotice>}

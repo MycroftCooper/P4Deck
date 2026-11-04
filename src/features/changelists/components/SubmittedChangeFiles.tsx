@@ -65,13 +65,9 @@ export function SubmittedChangeFiles({
       });
       if (!live) return;
       if (result.changeId !== changeId)
-        throw new Error(
-          t("pending.returned.cl.does.not.match"),
-        );
+        throw new Error(t("pending.returned.cl.does.not.match"));
       if (result.inspectionStatus === "unavailable")
-        throw new Error(
-          result.message || (t("pending.details.unavailable")),
-        );
+        throw new Error(result.message || t("pending.details.unavailable"));
       cache.set(changeId, result);
       setDetail(result);
     };
@@ -97,9 +93,7 @@ export function SubmittedChangeFiles({
       className="submitted-change-files"
       aria-label={`${t("pending.changed.files")} · CL ${changeId}`}
     >
-      {!detail && !error && (
-        <p role="status">{t("pending.loading.files")}</p>
-      )}
+      {!detail && !error && <p role="status">{t("pending.loading.files")}</p>}
       {error && (
         <p role="alert">
           {error}{" "}
@@ -124,8 +118,7 @@ export function SubmittedChangeFiles({
           </p>
           {detail.inspectionStatus !== "complete" && (
             <p role="status">
-              {detail.message ||
-                (t("pending.file.list.may.be.incomplete"))}
+              {detail.message || t("pending.file.list.may.be.incomplete")}
             </p>
           )}
           {detail.files.length ? (

@@ -57,7 +57,10 @@ export function passiveStatusPresentation(
   const access = {
     unknown,
     ok: tFor(zh ? "zh-CN" : "en-US", "shell.last.request.authorized"),
-    loginRequired: tFor(zh ? "zh-CN" : "en-US", "shell.sign.in.required.or.expired"),
+    loginRequired: tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.sign.in.required.or.expired",
+    ),
     permissionDenied: tFor(zh ? "zh-CN" : "en-US", "shell.permission.denied"),
   }[s.access];
   // "本机响应" shows the latest request duration directly; bucketed quality refines the wording.
@@ -67,7 +70,10 @@ export function passiveStatusPresentation(
   const baseQuality = {
     smooth: tFor(zh ? "zh-CN" : "en-US", "shell.smooth"),
     slow: tFor(zh ? "zh-CN" : "en-US", "shell.slower"),
-    persistentTimeout: tFor(zh ? "zh-CN" : "en-US", "shell.persistent.timeouts"),
+    persistentTimeout: tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.persistent.timeouts",
+    ),
   }[s.quality as "smooth" | "slow" | "persistentTimeout"];
   const quality =
     baseQuality && s.lastElapsedMs != null
@@ -80,15 +86,30 @@ export function passiveStatusPresentation(
               ? `样本不足（${s.samples}/5）`
               : `Insufficient samples (${s.samples}/5)`
             : s.observedAt
-              ? tFor(zh ? "zh-CN" : "en-US", "shell.requests.observed.no.speed.sample")
+              ? tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "shell.requests.observed.no.speed.sample",
+                )
               : unknown));
   const rows = [
-    { label: tFor(zh ? "zh-CN" : "en-US", "shell.connection"), value: connection },
-    { label: tFor(zh ? "zh-CN" : "en-US", "shell.login.permissions"), value: access },
-    { label: tFor(zh ? "zh-CN" : "en-US", "shell.local.response"), value: quality },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.connection"),
+      value: connection,
+    },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.login.permissions"),
+      value: access,
+    },
+    {
+      label: tFor(zh ? "zh-CN" : "en-US", "shell.local.response"),
+      value: quality,
+    },
   ];
   const note =
-    (tFor(zh ? "zh-CN" : "en-US", "shell.observed.existing.requests.not.server")) +
+    tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.observed.existing.requests.not.server",
+    ) +
     (s.connectionSource === "manual"
       ? tFor(zh ? "zh-CN" : "en-US", "shell.connection.from.manual.check")
       : "");

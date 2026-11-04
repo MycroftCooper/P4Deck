@@ -10,7 +10,13 @@ interface Props {
   active: PageId | null;
   onOpenPage(page: PageId): void;
 }
-export function ActivityBar({ zh: _zh, labels, pages, active, onOpenPage }: Props) {
+export function ActivityBar({
+  zh: _zh,
+  labels,
+  pages,
+  active,
+  onOpenPage,
+}: Props) {
   const menu = useContextMenu();
   return (
     <nav

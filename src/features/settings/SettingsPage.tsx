@@ -1,5 +1,5 @@
 import { tFor } from "../../shared/i18n";
-﻿import { FixedPageHeader } from "../../app/docking/chrome";
+import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   Archive,
   Bell,
@@ -276,7 +276,10 @@ export function SettingsPage({
                       )}
                     </option>
                     <option value="true">
-                      {tFor(zh ? "zh-CN" : "en-US", "settings.on.always.use.default")}
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.on.always.use.default",
+                      )}
                     </option>
                   </select>
                 </label>
@@ -369,7 +372,10 @@ export function SettingsPage({
                 <label>
                   <span className="settings-field-label">
                     <Bell size={14} aria-hidden="true" />
-                    {tFor(zh ? "zh-CN" : "en-US", "settings.desktop.notifications")}
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.desktop.notifications",
+                    )}
                   </span>
                   <select
                     value={String(ui.desktopNotifications)}
@@ -385,13 +391,20 @@ export function SettingsPage({
                       );
                     }}
                   >
-                    <option value="false">{tFor(zh ? "zh-CN" : "en-US", "settings.off")}</option>
-                    <option value="true">{tFor(zh ? "zh-CN" : "en-US", "settings.on")}</option>
+                    <option value="false">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.off")}
+                    </option>
+                    <option value="true">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.on")}
+                    </option>
                   </select>
                 </label>
                 <label>
                   <span className="settings-field-label">
-                    {tFor(zh ? "zh-CN" : "en-US", "settings.notification.scope")}
+                    {tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.notification.scope",
+                    )}
                   </span>
                   <select
                     value={String(ui.notifyOnlyFailures)}
@@ -410,7 +423,10 @@ export function SettingsPage({
                       )}
                     </option>
                     <option value="true">
-                      {tFor(zh ? "zh-CN" : "en-US", "settings.failures.and.attention.only")}
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.failures.and.attention.only",
+                      )}
                     </option>
                   </select>
                 </label>
@@ -444,9 +460,15 @@ export function SettingsPage({
                       onTheme(event.target.value as ThemeMode)
                     }
                   >
-                    <option value="system">{tFor(zh ? "zh-CN" : "en-US", "settings.system")}</option>
-                    <option value="light">{tFor(zh ? "zh-CN" : "en-US", "settings.light.2")}</option>
-                    <option value="dark">{tFor(zh ? "zh-CN" : "en-US", "settings.dark.2")}</option>
+                    <option value="system">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.system")}
+                    </option>
+                    <option value="light">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.light.2")}
+                    </option>
+                    <option value="dark">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.dark.2")}
+                    </option>
                   </select>
                 </label>
                 <label>
@@ -467,8 +489,12 @@ export function SettingsPage({
                       onUi({ ...ui, compact: event.target.value === "true" })
                     }
                   >
-                    <option value="false">{tFor(zh ? "zh-CN" : "en-US", "settings.comfortable")}</option>
-                    <option value="true">{tFor(zh ? "zh-CN" : "en-US", "settings.compact")}</option>
+                    <option value="false">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.comfortable")}
+                    </option>
+                    <option value="true">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.compact")}
+                    </option>
                   </select>
                 </label>
                 <label>
@@ -520,12 +546,19 @@ export function SettingsPage({
                       })
                     }
                   >
-                    <option value="false">{tFor(zh ? "zh-CN" : "en-US", "settings.off")}</option>
-                    <option value="true">{tFor(zh ? "zh-CN" : "en-US", "settings.on")}</option>
+                    <option value="false">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.off")}
+                    </option>
+                    <option value="true">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.on")}
+                    </option>
                   </select>
                 </label>
                 <label>
-                  {tFor(zh ? "zh-CN" : "en-US", "settings.show.activity.bar.labels")}
+                  {tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "settings.show.activity.bar.labels",
+                  )}
                   <select
                     value={String(ui.activityBarText)}
                     onChange={(event) =>
@@ -535,8 +568,12 @@ export function SettingsPage({
                       })
                     }
                   >
-                    <option value="true">{tFor(zh ? "zh-CN" : "en-US", "settings.on")}</option>
-                    <option value="false">{tFor(zh ? "zh-CN" : "en-US", "settings.off")}</option>
+                    <option value="true">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.on")}
+                    </option>
+                    <option value="false">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.off")}
+                    </option>
                   </select>
                 </label>
                 <label>
@@ -550,8 +587,12 @@ export function SettingsPage({
                       })
                     }
                   >
-                    <option value="true">{tFor(zh ? "zh-CN" : "en-US", "settings.on")}</option>
-                    <option value="false">{tFor(zh ? "zh-CN" : "en-US", "settings.off")}</option>
+                    <option value="true">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.on")}
+                    </option>
+                    <option value="false">
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.off")}
+                    </option>
                   </select>
                 </label>
               </div>

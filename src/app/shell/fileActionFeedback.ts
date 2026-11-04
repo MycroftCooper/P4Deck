@@ -31,9 +31,7 @@ export function fileActionFeedback(
         : warnings
           ? t("shell.operation.finished.with.warnings")
           : t("shell.completed");
-  const scope = failed
-    ? t("shell.some.files.may.have.changed")
-    : "";
+  const scope = failed ? t("shell.some.files.may.have.changed") : "";
   return {
     failed,
     message: [

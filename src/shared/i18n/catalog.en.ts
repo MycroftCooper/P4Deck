@@ -147,7 +147,8 @@ export const en: Catalog & Record<MsgKey, string> = {
     "The Stream workbench will connect real operations in a later batch.",
   // ---- context-menu labels (from labels.ts) ---------------------
   "contextMenu.submit.selected.files": "Submit selected files",
-  "contextMenu.trace.integration.destinations": "Trace integration destinations",
+  "contextMenu.trace.integration.destinations":
+    "Trace integration destinations",
   "contextMenu.view.submitted.cl": "View submitted CL",
   "contextMenu.get.this.revision": "Get this revision",
   "contextMenu.refresh": "Refresh",
@@ -195,20 +196,28 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.folder.to": "Copy folder to",
   "contextMenu.branch.folder": "Branch folder",
   "contextMenu.tag.files.in.folder": "Tag files in folder",
-  "contextMenu.get.latest.for.entire.workspace": "Get latest for entire workspace",
-  "contextMenu.get.revision.for.entire.workspace": "Get revision for entire workspace",
-  "contextMenu.check.out.eligible.workspace.files": "Check out eligible workspace files",
-  "contextMenu.mark.controlled.workspace.files.for": "Mark controlled workspace files for delete",
+  "contextMenu.get.latest.for.entire.workspace":
+    "Get latest for entire workspace",
+  "contextMenu.get.revision.for.entire.workspace":
+    "Get revision for entire workspace",
+  "contextMenu.check.out.eligible.workspace.files":
+    "Check out eligible workspace files",
+  "contextMenu.mark.controlled.workspace.files.for":
+    "Mark controlled workspace files for delete",
   "contextMenu.revert.entire.workspace": "Revert entire workspace",
   "contextMenu.search.workspace": "Search workspace",
-  "contextMenu.open.terminal.at.workspace.root": "Open terminal at workspace root",
+  "contextMenu.open.terminal.at.workspace.root":
+    "Open terminal at workspace root",
   "contextMenu.reconcile.entire.workspace": "Reconcile entire workspace",
-  "contextMenu.revert.unchanged.workspace.files": "Revert unchanged workspace files",
+  "contextMenu.revert.unchanged.workspace.files":
+    "Revert unchanged workspace files",
   "contextMenu.browse.depot": "Browse depot",
   "contextMenu.get.latest.in.mapped.scope": "Get latest in mapped scope",
   "contextMenu.get.revision.in.mapped.scope": "Get revision in mapped scope",
-  "contextMenu.check.out.eligible.mapped.files": "Check out eligible mapped files",
-  "contextMenu.mark.controlled.mapped.files.for": "Mark controlled mapped files for delete",
+  "contextMenu.check.out.eligible.mapped.files":
+    "Check out eligible mapped files",
+  "contextMenu.mark.controlled.mapped.files.for":
+    "Mark controlled mapped files for delete",
   "contextMenu.revert.mapped.files": "Revert mapped files",
   "contextMenu.search.this.depot": "Search this depot",
   "contextMenu.copy.branch": "Copy / branch",
@@ -221,7 +230,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.clear.selection": "Clear selection",
   "contextMenu.reveal.current.folder": "Reveal current folder",
   "contextMenu.search.current.folder": "Search current folder",
-  "contextMenu.open.terminal.in.current.folder": "Open terminal in current folder",
+  "contextMenu.open.terminal.in.current.folder":
+    "Open terminal in current folder",
   "contextMenu.refresh.depots": "Refresh depots",
   "contextMenu.select.all.visible.results": "Select all visible results",
   "contextMenu.expand.collapse": "Expand / collapse",
@@ -239,7 +249,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.view.shelved.content": "View shelved content",
   "contextMenu.revert.this.file": "Revert this file",
   "contextMenu.shelve.this.file": "Shelve this file",
-  "contextMenu.mark.selected.files.for.delete": "Mark selected files for delete",
+  "contextMenu.mark.selected.files.for.delete":
+    "Mark selected files for delete",
   "contextMenu.revert.selected.files": "Revert selected files",
   "contextMenu.view.shelf.details": "View shelf details",
   "contextMenu.unshelve.to.cl": "Unshelve to CL",
@@ -257,14 +268,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.undo.this.cl": "Undo this CL",
   "contextMenu.view.this.revision": "View this revision",
   "contextMenu.view.revision.in.new.tab": "View revision in new tab",
-  "contextMenu.compare.with.previous.revision": "Compare with previous revision",
+  "contextMenu.compare.with.previous.revision":
+    "Compare with previous revision",
   "contextMenu.get.this.revision.2": "Get this revision",
   "contextMenu.get.selected.file.revisions": "Get selected file revisions",
   "contextMenu.view.selected.file.diffs": "View selected file diffs",
   "contextMenu.new.cl": "New CL",
   "contextMenu.open.changelist": "Open changelist",
   "contextMenu.select.for.compare": "Select for compare",
-  "contextMenu.compare.with.selected.revision": "Compare with selected revision",
+  "contextMenu.compare.with.selected.revision":
+    "Compare with selected revision",
   "contextMenu.compare.selected.revisions": "Compare selected revisions",
   "contextMenu.select.all.on.this.side": "Select all on this side",
   "contextMenu.open.this.side.s.revision": "Open this side's revision",
@@ -287,13 +300,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.switch.to.this.workspace": "Switch to this workspace",
   "contextMenu.edit.workspace": "Edit workspace",
   "contextMenu.rename.workspace": "Rename workspace",
-  "contextMenu.create.workspace.from.configuration": "Create workspace from configuration",
+  "contextMenu.create.workspace.from.configuration":
+    "Create workspace from configuration",
   "contextMenu.delete.workspace": "Delete workspace",
   "contextMenu.reveal.root.folder": "Reveal root folder",
   "contextMenu.new.workspace": "New workspace",
   "contextMenu.view.related.workspaces": "View related workspaces",
-  "contextMenu.create.workspace.for.this.stream": "Create workspace for this stream",
-  "contextMenu.switch.workspace.to.this.stream": "Switch workspace to this stream",
+  "contextMenu.create.workspace.for.this.stream":
+    "Create workspace for this stream",
+  "contextMenu.switch.workspace.to.this.stream":
+    "Switch workspace to this stream",
   "contextMenu.edit.stream": "Edit stream",
   "contextMenu.new.child.stream": "New child stream",
   "contextMenu.copy.changes": "Copy changes",
@@ -316,7 +332,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.settings": "Settings",
   "contextMenu.show.activity.bar.labels": "Show activity bar labels",
   "contextMenu.open.settings": "Open settings",
-  "contextMenu.collapse.expand.resource.sidebar": "Collapse / expand resource sidebar",
+  "contextMenu.collapse.expand.resource.sidebar":
+    "Collapse / expand resource sidebar",
   "contextMenu.refresh.resources": "Refresh resources",
   "contextMenu.collapse.expand.bottom.tools": "Collapse / expand bottom tools",
   "contextMenu.show.terminal": "Show terminal",
@@ -370,7 +387,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.summaries": "Summaries",
   "contextMenu.selected.revision.identifiers": "Selected revision identifiers",
   "contextMenu.selected.text": "Selected text",
-  "contextMenu.this.side.s.file.revision": "This side's file / revision identifier",
+  "contextMenu.this.side.s.file.revision":
+    "This side's file / revision identifier",
   "contextMenu.file.path": "File path",
   "contextMenu.image": "Image",
   "contextMenu.known.path": "Known path",
@@ -398,40 +416,54 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.get.latest.recursive": "Get latest (recursive)…",
   "contextMenu.get.revision.recursive": "Get revision (recursive)…",
   "contextMenu.check.out.recursive": "Check out (recursive)…",
-  "contextMenu.add.untracked.files.recursive": "Add untracked files (recursive)…",
+  "contextMenu.add.untracked.files.recursive":
+    "Add untracked files (recursive)…",
   "contextMenu.mark.for.delete.recursive": "Mark for delete (recursive)…",
   "contextMenu.revert.recursive": "Revert (recursive)…",
   "contextMenu.copy.folder.name": "Copy › folder name",
   "contextMenu.reconcile.recursive": "Reconcile (recursive)…",
-  "contextMenu.revert.unchanged.files.recursive": "Revert unchanged files (recursive)…",
-  "contextMenu.remove.from.workspace.recursive": "Remove from workspace (recursive)…",
+  "contextMenu.revert.unchanged.files.recursive":
+    "Revert unchanged files (recursive)…",
+  "contextMenu.remove.from.workspace.recursive":
+    "Remove from workspace (recursive)…",
   "contextMenu.get.latest.for.the.whole": "Get latest for the whole workspace…",
-  "contextMenu.get.revision.for.the.whole": "Get revision for the whole workspace…",
-  "contextMenu.check.out.applicable.files.in": "Check out applicable files in the workspace…",
+  "contextMenu.get.revision.for.the.whole":
+    "Get revision for the whole workspace…",
+  "contextMenu.check.out.applicable.files.in":
+    "Check out applicable files in the workspace…",
   "contextMenu.revert.the.whole.workspace": "Revert the whole workspace…",
   "contextMenu.copy.workspace.root.path": "Copy workspace root path",
   "contextMenu.reconcile.the.whole.workspace": "Reconcile the whole workspace…",
-  "contextMenu.revert.unmodified.files.in.the": "Revert unmodified files in the workspace…",
+  "contextMenu.revert.unmodified.files.in.the":
+    "Revert unmodified files in the workspace…",
   "contextMenu.get.latest.for.the.mapping": "Get latest for the mapping scope…",
-  "contextMenu.get.revision.for.the.mapping": "Get revision for the mapping scope…",
+  "contextMenu.get.revision.for.the.mapping":
+    "Get revision for the mapping scope…",
   "contextMenu.check.out.files.in.the": "Check out files in the mapping scope…",
-  "contextMenu.mark.controlled.files.in.the": "Mark controlled files in the mapping scope for delete…",
-  "contextMenu.revert.files.in.the.mapping": "Revert files in the mapping scope…",
+  "contextMenu.mark.controlled.files.in.the":
+    "Mark controlled files in the mapping scope for delete…",
+  "contextMenu.revert.files.in.the.mapping":
+    "Revert files in the mapping scope…",
   "contextMenu.copy.depot.path.2": "Copy depot path",
   "contextMenu.copy.file.names": "Copy › file names",
   "contextMenu.copy.local.paths": "Copy › local paths",
   "contextMenu.copy.relative.paths": "Copy › relative paths",
   "contextMenu.copy.depot.paths": "Copy › depot paths",
   "contextMenu.get.latest.include.recursive": "Get latest (include recursive)…",
-  "contextMenu.get.revision.include.recursive": "Get revision (include recursive)…",
+  "contextMenu.get.revision.include.recursive":
+    "Get revision (include recursive)…",
   "contextMenu.check.out.include.recursive": "Check out (include recursive)…",
-  "contextMenu.add.untracked.files.include.recursive": "Add untracked files (include recursive)…",
-  "contextMenu.mark.for.delete.include.recursive": "Mark for delete (include recursive)…",
+  "contextMenu.add.untracked.files.include.recursive":
+    "Add untracked files (include recursive)…",
+  "contextMenu.mark.for.delete.include.recursive":
+    "Mark for delete (include recursive)…",
   "contextMenu.revert.include.recursive": "Revert (include recursive)…",
   "contextMenu.copy.names": "Copy › names",
   "contextMenu.reconcile.include.recursive": "Reconcile (include recursive)…",
-  "contextMenu.revert.unchanged.files.include.recursive": "Revert unchanged files (include recursive)…",
-  "contextMenu.remove.from.workspace.include.recursive": "Remove from workspace (include recursive)…",
+  "contextMenu.revert.unchanged.files.include.recursive":
+    "Revert unchanged files (include recursive)…",
+  "contextMenu.remove.from.workspace.include.recursive":
+    "Remove from workspace (include recursive)…",
   "contextMenu.copy.current.folder.path": "Copy current folder path",
   "contextMenu.copy.identity.default": "Copy identity default",
   "contextMenu.move.files.to.the.numbered": "Move files to the numbered CL…",
@@ -449,31 +481,39 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.shelf.origin.identity": "Copy shelf origin identity",
   "contextMenu.copy.depot.paths.2": "Copy depot paths",
   "contextMenu.copy.shelf.origin.identities": "Copy shelf origin identities",
-  "contextMenu.unshelve.selected.shelved.files": "Unshelve selected shelved files…",
+  "contextMenu.unshelve.selected.shelved.files":
+    "Unshelve selected shelved files…",
   "contextMenu.copy.exact.revision.identity": "Copy exact revision identity",
   "contextMenu.copy.owning.cl.number": "Copy owning CL number",
-  "contextMenu.copy.exact.revision.identities": "Copy exact revision identities",
-  "contextMenu.get.these.revisions.for.the": "Get these revisions for the selected files…",
+  "contextMenu.copy.exact.revision.identities":
+    "Copy exact revision identities",
+  "contextMenu.get.these.revisions.for.the":
+    "Get these revisions for the selected files…",
   "contextMenu.copy.cl.numbers": "Copy CL numbers",
   "contextMenu.copy.summaries": "Copy summaries",
-  "contextMenu.copy.selected.revision.identities": "Copy selected revision identities",
+  "contextMenu.copy.selected.revision.identities":
+    "Copy selected revision identities",
   "contextMenu.copy.selected.text": "Copy selected text",
-  "contextMenu.copy.this.side.s.file": "Copy this side's file / revision identity",
+  "contextMenu.copy.this.side.s.file":
+    "Copy this side's file / revision identity",
   "contextMenu.copy.file.path": "Copy file path",
   "contextMenu.copy.image": "Copy image",
   "contextMenu.copy.known.path": "Copy known path",
   "contextMenu.copy.current.target.identity": "Copy current target identity",
   "contextMenu.copy.whole.table.tsv": "Copy whole table (TSV)",
   "contextMenu.copy.local.path": "Copy › local path",
-  "contextMenu.copy.displayed.file.path.or": "Copy displayed file path or CL number",
+  "contextMenu.copy.displayed.file.path.or":
+    "Copy displayed file path or CL number",
   "contextMenu.copy.current.query": "Copy current query",
   "contextMenu.copy.names.2": "Copy names",
   "contextMenu.copy.root.paths": "Copy root paths",
   "contextMenu.copy.stream.path": "Copy stream path",
   "contextMenu.copy.name": "Copy name",
   "contextMenu.copy.parent.stream.path": "Copy parent stream path",
-  "contextMenu.create.a.workspace.for.this": "Create a workspace for this stream…",
-  "contextMenu.switch.the.current.workspace.to": "Switch the current workspace to this stream…",
+  "contextMenu.create.a.workspace.for.this":
+    "Create a workspace for this stream…",
+  "contextMenu.switch.the.current.workspace.to":
+    "Switch the current workspace to this stream…",
   "contextMenu.copy.change": "Copy change…",
   "contextMenu.copy.stream.paths": "Copy stream paths",
   "contextMenu.move.to.another.group": "Move to another group › Target group",
@@ -494,21 +534,31 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- codemod-converged ------------------------------------------------
-  "actions.cancellation.was.requested.it.does": "Cancellation was requested. It does not roll back changes already applied on the server; the operation record remains authoritative.",
-  "actions.cancellation.was.requested.legacy.response": "Cancellation was requested (legacy response without details). It does not mean a rollback or that nothing was submitted.",
-  "actions.i.confirmed.the.operation.or": "I confirmed the operation or external tool has stopped. Release permits later writes; it does not undo or retry this operation. Its outcome stays unknown.",
-  "actions.log.already.recorded.duplicate.deduplicated": "Log already recorded (duplicate deduplicated).",
-  "actions.no.live.registration.matched.now": "No live registration matched now. This is not evidence that the operation did not run or complete; check the operation record.",
+  "actions.cancellation.was.requested.it.does":
+    "Cancellation was requested. It does not roll back changes already applied on the server; the operation record remains authoritative.",
+  "actions.cancellation.was.requested.legacy.response":
+    "Cancellation was requested (legacy response without details). It does not mean a rollback or that nothing was submitted.",
+  "actions.i.confirmed.the.operation.or":
+    "I confirmed the operation or external tool has stopped. Release permits later writes; it does not undo or retry this operation. Its outcome stays unknown.",
+  "actions.log.already.recorded.duplicate.deduplicated":
+    "Log already recorded (duplicate deduplicated).",
+  "actions.no.live.registration.matched.now":
+    "No live registration matched now. This is not evidence that the operation did not run or complete; check the operation record.",
   "actions.outcome.unknown": "Outcome unknown",
   "actions.release.this.write.block": "Release this write block",
   "actions.still.running": "Still running",
-  "actions.the.cancellation.outcome.is.unknown": "The cancellation outcome is unknown. Check the operation record; do not retry the business action because of it.",
-  "actions.the.log.entry.was.rejected": "The log entry was rejected; the business result is unaffected.",
-  "actions.the.log.is.unavailable.the": "The log is unavailable; the business result is unaffected and the action is not replayed.",
+  "actions.the.cancellation.outcome.is.unknown":
+    "The cancellation outcome is unknown. Check the operation record; do not retry the business action because of it.",
+  "actions.the.log.entry.was.rejected":
+    "The log entry was rejected; the business result is unaffected.",
+  "actions.the.log.is.unavailable.the":
+    "The log is unavailable; the business result is unaffected and the action is not replayed.",
   "actions.unresolved.write.blocks": "Unresolved write blocks",
   "app.select.a.changelist.or.depot": "Select a changelist or depot file first",
-  "app.connection.or.runtime.generation.changed": "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection.",
-  "app.search.result.has.no.details.page": "This search result has no details page yet.",
+  "app.connection.or.runtime.generation.changed":
+    "The connection or runtime generation changed. Stale requests were cancelled and this window rebound to the current connection.",
+  "app.search.result.has.no.details.page":
+    "This search result has no details page yet.",
   "browse.2.000.revision.safety.limit": "2,000-revision safety limit reached",
   "browse.actions": "Actions",
   "browse.add.line": "Add line",
@@ -527,7 +577,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.cancel.operation": "Cancel operation",
   "browse.cancel.preflight": "Cancel preflight",
   "browse.cancel.read": "Cancel read",
-  "browse.cell.limit.reached.later.content": "Cell limit reached; later content is not shown",
+  "browse.cell.limit.reached.later.content":
+    "Cell limit reached; later content is not shown",
   "browse.cell.truncated": "…[cell truncated]",
   "browse.classic.workspace": "Classic workspace",
   "browse.clear.search": "Clear search",
@@ -538,23 +589,27 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.collecting.bounded.evidence": "Collecting bounded evidence…",
   "browse.cols": "cols",
   "browse.compare.selected.revisions": "Compare selected revisions",
-  "browse.compare.selected.revisions.in.a": "Compare selected revisions in a new tab",
+  "browse.compare.selected.revisions.in.a":
+    "Compare selected revisions in a new tab",
   "browse.completed": "Completed",
   "browse.confirm.permanent.delete": "Confirm permanent delete",
   "browse.confirm.save": "Confirm save",
   "browse.confirm.switch.and.sync": "Confirm switch and sync",
   "browse.confirm.view.only.switch": "Confirm view-only switch",
-  "browse.connection.or.file.revision.is": "Connection or file revision is invalid",
+  "browse.connection.or.file.revision.is":
+    "Connection or file revision is invalid",
   "browse.connection.unavailable": "Connection unavailable",
   "browse.content.was.truncated": "Content was truncated",
-  "browse.could.not.parse.the.structured": "Could not parse the structured diff. Raw patch preview below.",
+  "browse.could.not.parse.the.structured":
+    "Could not parse the structured diff. Raw patch preview below.",
   "browse.create": "Create",
   "browse.create.branch.mapping": "Create Branch Mapping",
   "browse.current": "Current",
   "browse.current.file.revision": "Current file revision",
   "browse.current.query.was.cancelled": "Current query was cancelled.",
   "browse.current.request.was.cancelled": "Current request was cancelled.",
-  "browse.data.exceeded.the.ui.limit": "Data exceeded the UI limit and was truncated",
+  "browse.data.exceeded.the.ui.limit":
+    "Data exceeded the UI limit and was truncated",
   "browse.delete": "Delete",
   "browse.delete.branch.mapping": "Delete Branch Mapping",
   "browse.deleted": "Deleted",
@@ -575,16 +630,19 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.enter.a.valid.cl.number": "Enter a valid CL number",
   "browse.existing.mapping.name": "Existing mapping name",
   "browse.expand.all": "Expand all",
-  "browse.expand.all.unchanged.context.in": "Expand all unchanged context in this file",
+  "browse.expand.all.unchanged.context.in":
+    "Expand all unchanged context in this file",
   "browse.expand.description": "Expand description",
   "browse.expand.more.revisions": "Expand more revisions",
   "browse.expand.selected.reference": "Expand selected reference",
-  "browse.explore.the.official.parent.child": "Explore the official parent → child stream forest. Graph actions never mutate the workspace directly.",
+  "browse.explore.the.official.parent.child":
+    "Explore the official parent → child stream forest. Graph actions never mutate the workspace directly.",
   "browse.fewer.frozen.header.rows": "Fewer frozen header rows",
   "browse.file.history": "File history",
   "browse.file.is.empty": "File is empty",
   "browse.file.mapping": "File mapping",
-  "browse.file.text.is.incomplete.showing": "File text is incomplete. Showing the full raw patch with the backend's three context lines; collapsed context cannot be expanded.",
+  "browse.file.text.is.incomplete.showing":
+    "File text is incomplete. Showing the full raw patch with the backend's three context lines; collapsed context cannot be expanded.",
   "browse.files": "files",
   "browse.find.in.both.sides": "Find in both sides…",
   "browse.find.in.both.sides.ctrl": "Find in both sides (Ctrl+F)",
@@ -600,7 +658,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.get.target.latest.selection": "Get target: latest selection",
   "browse.go.to.line": "Go to line",
   "browse.guessed": " (guessed)",
-  "browse.history.reached.its.safety.limit": "History reached its safety limit and was truncated.",
+  "browse.history.reached.its.safety.limit":
+    "History reached its safety limit and was truncated.",
   "browse.history.results.are.partial": "History results are partial.",
   "browse.hunks": "hunks",
   "browse.impact.preview": "Impact preview",
@@ -613,7 +672,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.invalid.relations": "Invalid relations",
   "browse.jump.side": "Jump side",
   "browse.jump.to.line": "Jump to line",
-  "browse.last.selected.get.this.revision": "Last selected · Get this revision target",
+  "browse.last.selected.get.this.revision":
+    "Last selected · Get this revision target",
   "browse.last.selected.right": ", last selected (right)",
   "browse.left": "Left",
   "browse.line": "Line",
@@ -680,14 +740,17 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.query.prefer.cache": "Query (prefer cache)",
   "browse.raw.patch.view": "Raw patch view",
   "browse.read.attempts": "Read attempts",
-  "browse.read.limit.reached.showing.the": "Read limit reached; showing the part that was read",
+  "browse.read.limit.reached.showing.the":
+    "Read limit reached; showing the part that was read",
   "browse.read.target": "Read target",
-  "browse.read.timed.out.showing.the": "Read timed out; showing the part that was read",
+  "browse.read.timed.out.showing.the":
+    "Read timed out; showing the part that was read",
   "browse.reading": "Reading…",
   "browse.recent.snapshot": "Recent snapshot",
   "browse.record.paths": "Record paths",
   "browse.records": "records",
-  "browse.records.are.incomplete.or.references": "Records are incomplete or references remain unexpanded",
+  "browse.records.are.incomplete.or.references":
+    "Records are incomplete or references remain unexpanded",
   "browse.refresh": "Refresh",
   "browse.related.file.range": "Related-file range",
   "browse.reset": "Reset",
@@ -696,7 +759,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.retry": "Retry",
   "browse.reverse.mapping": "Reverse mapping",
   "browse.revision.count.not.yet.available": "Revision count not yet available",
-  "browse.revision.count.unavailable.read.failed": "Revision count unavailable (read failed)",
+  "browse.revision.count.unavailable.read.failed":
+    "Revision count unavailable (read failed)",
   "browse.revisions.loaded": "revisions loaded",
   "browse.right": "Right",
   "browse.risk.paths.up.to.100": "Risk paths (up to 100)",
@@ -710,12 +774,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.scope": "Scope",
   "browse.search.list": "Search list",
   "browse.search.list.2": "Search list…",
-  "browse.select.a.file.and.open": "Select a file and open this tab, or enter a path above.",
-  "browse.select.a.file.before.opening": "Select a file before opening History, or enter its depot path.",
+  "browse.select.a.file.and.open":
+    "Select a file and open this tab, or enter a path above.",
+  "browse.select.a.file.before.opening":
+    "Select a file before opening History, or enter its depot path.",
   "browse.select.a.file.or.enter": "Select a file or enter a path above.",
   "browse.select.a.revision": "Select a revision",
-  "browse.select.a.single.file.refresh": "Select a single file; refresh manually when the read budget is exhausted.",
-  "browse.select.two.valid.revisions.of": "Select two valid revisions of the same file",
+  "browse.select.a.single.file.refresh":
+    "Select a single file; refresh manually when the read budget is exhausted.",
+  "browse.select.two.valid.revisions.of":
+    "Select two valid revisions of the same file",
   "browse.selected.file.revision": "Selected file revision",
   "browse.selected.mapping": "Selected mapping",
   "browse.selected.node": "Selected node",
@@ -723,15 +791,18 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.show.only.this.lane": "Show only this lane",
   "browse.side.by.side.view": "Side-by-side view",
   "browse.snapshot.time": "Snapshot time",
-  "browse.solid.revision.branch.dashed.merge": "Solid: revision / branch · Dashed: merge / copy",
+  "browse.solid.revision.branch.dashed.merge":
+    "Solid: revision / branch · Dashed: merge / copy",
   "browse.source": "Source",
   "browse.source.branch.root": "Source branch root",
   "browse.source.revision.target.file": "Source revision → target file",
-  "browse.stale.cache.freshness.unverified": "Stale cache / freshness unverified",
+  "browse.stale.cache.freshness.unverified":
+    "Stale cache / freshness unverified",
   "browse.stream.details": "Stream details",
   "browse.stream.graph.visualization": "Stream Graph visualization",
   "browse.stream.text.filter": "Stream text filter",
-  "browse.streams.types.and.parent.relationships": "Streams, types and parent relationships on this server.",
+  "browse.streams.types.and.parent.relationships":
+    "Streams, types and parent relationships on this server.",
   "browse.structured.view": "Structured view",
   "browse.submitted.cl.file.by.file": "Submitted CL (file by file)",
   "browse.switch.to.the.raw.patch": "Switch to the raw patch view",
@@ -743,12 +814,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.target.branch.investigation": "Target branch investigation",
   "browse.target.branch.root": "Target branch root",
   "browse.target.size": "Target size",
-  "browse.text.budget.reached.later.rows": "Text budget reached; later rows are not shown",
+  "browse.text.budget.reached.later.rows":
+    "Text budget reached; later rows are not shown",
   "browse.text.diff.unavailable": "Text diff unavailable",
   "browse.text.filter": "Text filter",
-  "browse.the.backend.returned.a.non": "The backend returned a non-progressing cursor; current nodes were preserved and paging stopped.",
-  "browse.the.backend.returned.a.repeated": "The backend returned a repeated cursor; the current graph was preserved.",
-  "browse.the.backend.returned.a.repeated.2": "The backend returned a repeated cursor; current history was preserved.",
+  "browse.the.backend.returned.a.non":
+    "The backend returned a non-progressing cursor; current nodes were preserved and paging stopped.",
+  "browse.the.backend.returned.a.repeated":
+    "The backend returned a repeated cursor; the current graph was preserved.",
+  "browse.the.backend.returned.a.repeated.2":
+    "The backend returned a repeated cursor; current history was preserved.",
   "browse.this.worksheet.is.empty": "This worksheet is empty",
   "browse.trace.origins": "Trace origins",
   "browse.trace.to.target": "Trace to target",
@@ -777,34 +852,52 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.zoom.out.stream.graph": "Zoom out Stream Graph",
   "commands.command.palette": "Command palette",
   "commands.filter.commands": "Filter commands",
-  "commands.preflight.confirmation.required": " · preflight/confirmation required",
+  "commands.preflight.confirmation.required":
+    " · preflight/confirmation required",
   "commands.type.a.command.or.id": "Type a command or ID",
-  "companySubmit.an.earlier.snapshot.has.a": "An earlier snapshot has a simulation session; switching connection does not unlock requests.",
-  "companySubmit.awaiting.host.planning.tool.availability": "Awaiting host planning; tool availability unverified.",
+  "companySubmit.an.earlier.snapshot.has.a":
+    "An earlier snapshot has a simulation session; switching connection does not unlock requests.",
+  "companySubmit.awaiting.host.planning.tool.availability":
+    "Awaiting host planning; tool availability unverified.",
   "companySubmit.check.status": "Check status",
   "companySubmit.close": "Close",
-  "companySubmit.connection.identity.unavailable.real.launch": "Connection identity unavailable; real launch remains disabled.",
+  "companySubmit.connection.identity.unavailable.real.launch":
+    "Connection identity unavailable; real launch remains disabled.",
   "companySubmit.custom.submit.tool": "Custom submit tool",
-  "companySubmit.custom.submit.tool.not.connected": "Custom submit tool (not connected)",
-  "companySubmit.custom.submit.tool.plan.preview": "Custom submit tool plan preview",
-  "companySubmit.exit.code.display.only.not": "Exit code (display only; not success/failure evidence): ",
-  "companySubmit.external.tool.started.running.this": "External tool started/running. This is launch intent only, not a successful submission; confirm in the tool and later submitted-CL readback.",
-  "companySubmit.host.positively.reports.the.tool": "Host positively reports the tool did not start, so nothing was submitted (neither success nor failure).",
-  "companySubmit.launch.custom.submit.tool.disabled": "Launch custom submit tool (disabled)",
-  "companySubmit.launch.outcome.unknown.check.status": "Launch outcome unknown. Check status; no automatic retry.",
+  "companySubmit.custom.submit.tool.not.connected":
+    "Custom submit tool (not connected)",
+  "companySubmit.custom.submit.tool.plan.preview":
+    "Custom submit tool plan preview",
+  "companySubmit.exit.code.display.only.not":
+    "Exit code (display only; not success/failure evidence): ",
+  "companySubmit.external.tool.started.running.this":
+    "External tool started/running. This is launch intent only, not a successful submission; confirm in the tool and later submitted-CL readback.",
+  "companySubmit.host.positively.reports.the.tool":
+    "Host positively reports the tool did not start, so nothing was submitted (neither success nor failure).",
+  "companySubmit.launch.custom.submit.tool.disabled":
+    "Launch custom submit tool (disabled)",
+  "companySubmit.launch.outcome.unknown.check.status":
+    "Launch outcome unknown. Check status; no automatic retry.",
   "companySubmit.local.absolute.exe.path": "Local absolute .exe path",
-  "companySubmit.no.fallback.to.native.submission": "No fallback to native submission. Closing this dialog does not stop the external tool; cancelling does not stop it either and does not mean nothing was submitted.",
-  "companySubmit.not.started.check.the.configuration": "Not started. Check the configuration and selected CL.",
+  "companySubmit.no.fallback.to.native.submission":
+    "No fallback to native submission. Closing this dialog does not stop the external tool; cancelling does not stop it either and does not mean nothing was submitted.",
+  "companySubmit.not.started.check.the.configuration":
+    "Not started. Check the configuration and selected CL.",
   "companySubmit.path.used.for.this.attempt": "Path used for this attempt: ",
   "companySubmit.reading.active.configuration": "Reading active configuration…",
-  "companySubmit.reading.host.connection.identity": "Reading host connection identity…",
-  "companySubmit.real.launch.is.disabled.pending": "Real launch is disabled pending isolated verification of working directory, authentication and background sessions.",
+  "companySubmit.reading.host.connection.identity":
+    "Reading host connection identity…",
+  "companySubmit.real.launch.is.disabled.pending":
+    "Real launch is disabled pending isolated verification of working directory, authentication and background sessions.",
   "companySubmit.refresh.connection.identity": "Refresh connection identity",
   "companySubmit.starting": "Starting…",
-  "companySubmit.this.records.that.launch.attempt": "This records that launch attempt, not the current saved configuration. Checking status does not restart the tool.",
-  "companySubmit.tool.process.exited.or.is": "Tool process exited or is not pollable: submission outcome unknown. Exit code is display-only and never success/failure evidence; check the tool and wait for submitted-CL readback.",
+  "companySubmit.this.records.that.launch.attempt":
+    "This records that launch attempt, not the current saved configuration. Checking status does not restart the tool.",
+  "companySubmit.tool.process.exited.or.is":
+    "Tool process exited or is not pollable: submission outcome unknown. Exit code is display-only and never success/failure evidence; check the tool and wait for submitted-CL readback.",
   "contextMenu.context.menu.layer": "Context menu layer",
-  "contextMenu.navigate.enter.run.esc.close": "↑ ↓ Navigate · Enter Run · Esc Close",
+  "contextMenu.navigate.enter.run.esc.close":
+    "↑ ↓ Navigate · Enter Run · Esc Close",
   "dialogs.add.to.p4": "Add to P4",
   "dialogs.blocker": "Blocker: ",
   "dialogs.cancel": "Cancel",
@@ -826,13 +919,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "docking.close.all.tabs": "Close all tabs",
   "docking.depot.path": "Depot path",
   "docking.diff.file.path": "Diff file path",
-  "docking.following.file.selection.click.to": "Following file selection; click to lock current target",
+  "docking.following.file.selection.click.to":
+    "Following file selection; click to lock current target",
   "docking.new.tab": "New tab",
   "docking.no.file.selected": "No file selected",
   "docking.preview.file.path": "Preview file path",
   "docking.revision.graph.file.path": "Revision graph file path",
-  "docking.target.locked.click.to.follow": "Target locked; click to follow file selection",
-  "docking.workspace.path.paste.a.local": "Workspace path · paste a local or depot path",
+  "docking.target.locked.click.to.follow":
+    "Target locked; click to follow file selection",
+  "docking.workspace.path.paste.a.local":
+    "Workspace path · paste a local or depot path",
   "files.accept.auto.merge": "Accept auto-merge",
   "files.accept.block.both": "Accept block Both",
   "files.accept.block.theirs": "Accept block Theirs",
@@ -866,7 +962,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.check.conflict.blocks": "Check conflict blocks",
   "files.check.out": "Check out",
   "files.checking": "Checking…",
-  "files.checking.connection.and.login.automatically": "Checking connection and login automatically…",
+  "files.checking.connection.and.login.automatically":
+    "Checking connection and login automatically…",
   "files.close": "Close",
   "files.collapse": "Collapse",
   "files.comfortable": "Comfortable",
@@ -882,7 +979,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.conflict.without.depotpath": "conflict without depotPath",
   "files.conflicted": "Conflicted",
   "files.conflicts": "Conflicts",
-  "files.conflicts.blockers.are.not.arrays": "conflicts/blockers are not arrays",
+  "files.conflicts.blockers.are.not.arrays":
+    "conflicts/blockers are not arrays",
   "files.conflicts.pending": "Conflicts pending",
   "files.conflicts.remain": "Conflicts remain",
   "files.connection.settings": "Connection settings",
@@ -900,20 +998,23 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.execution.is.unavailable": "Execution is unavailable.",
   "files.expand": "Expand",
   "files.file": "File",
-  "files.file.no.additional.status.supplied": "File; no additional status supplied",
+  "files.file.no.additional.status.supplied":
+    "File; no additional status supplied",
   "files.file.revision": "File revision (#)",
   "files.file.revision.2": "File revision",
   "files.file.revision.number": "File revision number",
   "files.files": "files",
   "files.files.2": "Files",
-  "files.filter.expanded.files.and.folders": "Filter expanded files and folders…",
+  "files.filter.expanded.files.and.folders":
+    "Filter expanded files and folders…",
   "files.filter.resource.files": "Filter resource files",
   "files.find.next": "Find next",
   "files.get.revision": "Get revision",
   "files.get.revision.2": "Get revision",
   "files.ignore.rule": "Ignore rule",
   "files.ignored": "Ignored",
-  "files.includes.files.in.selected.folders": " · Includes files in selected folders",
+  "files.includes.files.in.selected.folders":
+    " · Includes files in selected folders",
   "files.incoming.revision": "Incoming revision",
   "files.initializing.connection": "Initializing connection…",
   "files.invalid": "invalid",
@@ -927,7 +1028,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.latest.head": "Latest (head)",
   "files.latest.head.2": "Latest / head",
   "files.loading": "Loading…",
-  "files.loading.authoritative.merge.inputs": "Loading authoritative merge inputs…",
+  "files.loading.authoritative.merge.inputs":
+    "Loading authoritative merge inputs…",
   "files.loading.files": "Loading files…",
   "files.local.save.is.not.proven": "local save is not proven",
   "files.lock": "Lock",
@@ -954,15 +1056,20 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.no.file.to.resolve": "No file to resolve",
   "files.no.files.in.this.view": "No files in this view",
   "files.no.matches.in.expanded.folders": "No matches in expanded folders",
-  "files.no.recognizable.result.was.returned": "No recognizable result was returned.",
+  "files.no.recognizable.result.was.returned":
+    "No recognizable result was returned.",
   "files.no.recognizable.save.result": "No recognizable save result",
-  "files.no.recognizable.validation.result": "No recognizable validation result",
+  "files.no.recognizable.validation.result":
+    "No recognizable validation result",
   "files.no.remaining.conflicts": "No remaining conflicts",
   "files.no.resolve.data.returned": "no resolve data returned",
-  "files.no.workspace.root.configured.select": "No workspace root configured. Select a workspace.",
-  "files.no.workspace.root.configured.select.2": "No workspace root configured. Select a workspace first.",
+  "files.no.workspace.root.configured.select":
+    "No workspace root configured. Select a workspace.",
+  "files.no.workspace.root.configured.select.2":
+    "No workspace root configured. Select a workspace first.",
   "files.none": "none",
-  "files.not.connected.add.or.select": "Not connected. Add or select a connection in Settings.",
+  "files.not.connected.add.or.select":
+    "Not connected. Add or select a connection in Settings.",
   "files.not.returned": "not returned",
   "files.not.synced": "Not synced",
   "files.open.for.edit": "Open for edit",
@@ -987,7 +1094,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.preview": "Preview",
   "files.preview.again": "Preview again",
   "files.preview.and.review": "Preview and review",
-  "files.preview.target.differs.or.expired": "Preview target differs or expired",
+  "files.preview.target.differs.or.expired":
+    "Preview target differs or expired",
   "files.previewing": "Previewing…",
   "files.previous.conflict": "Previous conflict",
   "files.reading.conflicts": "Reading conflicts…",
@@ -1000,7 +1108,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.resolve.awaits.attention": "Resolve awaits attention",
   "files.resolve.files": "Resolve files",
   "files.resolve.needs.attention": "Resolve needs attention",
-  "files.resolve.returned.an.unknown.result": "Resolve returned an unknown result.",
+  "files.resolve.returned.an.unknown.result":
+    "Resolve returned an unknown result.",
   "files.resolved.per.durable.receipt": "Resolved per durable receipt.",
   "files.result": "Result",
   "files.retry": "Retry",
@@ -1053,19 +1162,24 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.warnings": "Warnings",
   "files.will.run": "will run",
   "files.workspace.files": "Workspace files",
-  "files.workspace.unavailable.cannot.locate.target": "Workspace unavailable; cannot locate target",
+  "files.workspace.unavailable.cannot.locate.target":
+    "Workspace unavailable; cannot locate target",
   "files.yes": "yes",
   "files.you": "You: ",
   "notify.long.p4.operation.completed": "Long P4 operation completed",
-  "notify.p4.authentication.needs.attention": "P4 authentication needs attention",
+  "notify.p4.authentication.needs.attention":
+    "P4 authentication needs attention",
   "notify.p4.operation.needs.attention": "P4 operation needs attention",
   "notify.return.to.p4deck.for.details": "Return to P4Deck for details.",
   "notify.the.operation.completed": "The operation completed.",
-  "PageRenderertsx.checking.connection.and.login.automatically": "Checking connection and login automatically…",
+  "PageRenderertsx.checking.connection.and.login.automatically":
+    "Checking connection and login automatically…",
   "PageRenderertsx.connection.settings": "Connection settings",
-  "PageRenderertsx.not.connected.add.or.select": "Not connected. Add or select a connection in Settings.",
+  "PageRenderertsx.not.connected.add.or.select":
+    "Not connected. Add or select a connection in Settings.",
   "pending.12.read.budget.reached": "12-read budget reached",
-  "pending.a.numbered.changelist.is.required": "A numbered changelist is required.",
+  "pending.a.numbered.changelist.is.required":
+    "A numbered changelist is required.",
   "pending.action": "Action",
   "pending.action.type.size": "Action / type / size",
   "pending.actions": "actions",
@@ -1086,7 +1200,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.candidates": "Candidates",
   "pending.changed.files": "Changed files",
   "pending.changelist.details": "Changelist details",
-  "pending.changelist.has.files.that.need": "Changelist has files that need resolve",
+  "pending.changelist.has.files.that.need":
+    "Changelist has files that need resolve",
   "pending.check.connection.again": "Check connection again",
   "pending.check.form.no.submission": "Check form (no submission)",
   "pending.check.status": "Check status",
@@ -1113,12 +1228,14 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.created.cl": "Created CL",
   "pending.creating": "Creating…",
   "pending.current.list.snapshot": "Current list snapshot",
-  "pending.current.results.were.preserved.restart": "Current results were preserved; restart from the first page.",
+  "pending.current.results.were.preserved.restart":
+    "Current results were preserved; restart from the first page.",
   "pending.current.workspace": "Current workspace",
   "pending.custom.submit.tool": "Custom submit tool",
   "pending.delete": "Delete",
   "pending.delete.all": "Delete all",
-  "pending.delete.only.server.shelf.revisions": "Delete only server shelf revisions; keep workspace files and the changelist.",
+  "pending.delete.only.server.shelf.revisions":
+    "Delete only server shelf revisions; keep workspace files and the changelist.",
   "pending.delete.selected.shelf.revisions": "Delete selected shelf revisions",
   "pending.delete.shelved.files": "Delete shelved files",
   "pending.delete.shelved.revisions": "Delete shelved revisions",
@@ -1133,7 +1250,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.empty.description": "(Empty description)",
   "pending.end.exclusive": "End (exclusive)",
   "pending.enter.a.changelist.description": "Enter a changelist description.",
-  "pending.enter.a.positive.integer.changelist": "Enter a positive integer changelist number",
+  "pending.enter.a.positive.integer.changelist":
+    "Enter a positive integer changelist number",
   "pending.entire.cl.file.list": "Entire CL file list",
   "pending.existing.shelf.handling": "Existing shelf handling",
   "pending.expand.description": "Expand description",
@@ -1152,7 +1270,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.filter.by.status": "Filter by status",
   "pending.filter.by.type": "Filter by type",
   "pending.filter.target.changelists": "Filter target changelists",
-  "pending.filters.loaded.records.load.more": "Filters loaded records; load more to continue. Rules do not verify CI identity.",
+  "pending.filters.loaded.records.load.more":
+    "Filters loaded records; load more to continue. Rules do not verify CI identity.",
   "pending.find.destinations": "Find destinations",
   "pending.fixed.source.files": "Fixed source files",
   "pending.fresh": "fresh",
@@ -1195,7 +1314,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.no.description.2": "No description",
   "pending.no.extension": "No extension",
   "pending.no.files": "No files",
-  "pending.no.files.loaded.yet.listing": "No files loaded yet; listing is incomplete",
+  "pending.no.files.loaded.yet.listing":
+    "No files loaded yet; listing is incomplete",
   "pending.no.files.selected": "No files selected.",
   "pending.no.files.to.display": "No files to display",
   "pending.no.matching.changelists": "No matching changelists.",
@@ -1203,7 +1323,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.no.opened.files": "No opened files",
   "pending.no.risk.found": "No risk found",
   "pending.no.shelved.files": "No shelved files",
-  "pending.no.submissions.in.selected.categories": "No submissions in selected categories.",
+  "pending.no.submissions.in.selected.categories":
+    "No submissions in selected categories.",
   "pending.not.checked": "Not checked",
   "pending.not.confirmed": "Not confirmed",
   "pending.not.moved": "Not moved",
@@ -1215,7 +1336,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.operation.cancelled": "Operation cancelled.",
   "pending.operations": "Operations",
   "pending.outcome": "Outcome: ",
-  "pending.p4.could.not.resolve.the": "P4 could not resolve the query path. Check Depot Path; use /... for a directory scope.",
+  "pending.p4.could.not.resolve.the":
+    "P4 could not resolve the query path. Check Depot Path; use /... for a directory scope.",
   "pending.pages": "Pages",
   "pending.pages.2": "pages",
   "pending.partial.records.unknown": "Partial records / unknown",
@@ -1227,7 +1349,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.preflight.expired.check.again": "Preflight expired. Check again.",
   "pending.preflight.in.progress": "Preflight in progress…",
   "pending.preserve.existing.content": "Preserve existing content",
-  "pending.query.failed.see.technical.details": "Query failed. See technical details.",
+  "pending.query.failed.see.technical.details":
+    "Query failed. See technical details.",
   "pending.query.integration.records": "Query integration records",
   "pending.range": "Range",
   "pending.read": "Read",
@@ -1237,9 +1360,11 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.record.cl": "Record CL",
   "pending.refresh": "Refresh",
   "pending.refresh.investigation": "Refresh investigation",
-  "pending.release.write.blocks.under.tools": "Release write blocks under Tools → Operation Log.",
+  "pending.release.write.blocks.under.tools":
+    "Release write blocks under Tools → Operation Log.",
   "pending.replace": "Replace",
-  "pending.replace.selected.shelf.revisions": "Replace selected shelf revisions",
+  "pending.replace.selected.shelf.revisions":
+    "Replace selected shelf revisions",
   "pending.resolve.risk": "Resolve risk",
   "pending.restart": "Restart",
   "pending.retry": "Retry",
@@ -1255,10 +1380,12 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.scanned": "Scanned",
   "pending.select.a.shelved.file.to": "Select a shelved file to preview",
   "pending.selected.files.and.original.cl": "Selected files and original CL",
-  "pending.selected.files.have.unresolved.items": "Selected files have unresolved items; verify them first.",
+  "pending.selected.files.have.unresolved.items":
+    "Selected files have unresolved items; verify them first.",
   "pending.selected.files.move.completed": "Selected files move completed.",
   "pending.shelf.cl": "Shelf CL",
-  "pending.shelf.detail.and.content.preview": "Shelf detail and content preview",
+  "pending.shelf.detail.and.content.preview":
+    "Shelf detail and content preview",
   "pending.shelf.is.empty": "Shelf is empty",
   "pending.shelve.all": "Shelve all",
   "pending.shelve.files": "Shelve files",
@@ -1287,13 +1414,20 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.target.workspace": "Target workspace",
   "pending.technical.details": "Technical details",
   "pending.text.preview.unsupported": "Text preview unsupported",
-  "pending.the.backend.did.not.return": "The backend did not return a usable shelf cursor; restart the query.",
-  "pending.the.backend.returned.a.non": "The backend returned a non-progressing cursor; current partial results were preserved.",
-  "pending.the.shelf.cursor.cannot.advance": "The shelf cursor cannot advance; restart from the first page.",
-  "pending.the.shelf.page.does.not": "The shelf page does not match the current connection or request generation; current results were preserved. Restart the query.",
-  "pending.the.shelf.response.does.not": "The shelf response does not match the current connection or request generation; restart the query.",
-  "pending.the.shelf.snapshot.returned.duplicates": "The shelf snapshot returned duplicates or a non-progressing cursor; current results were preserved. Restart the query.",
-  "pending.these.are.simulated.browser.mock": "These are simulated Browser Mock files; no real P4 Server was accessed.",
+  "pending.the.backend.did.not.return":
+    "The backend did not return a usable shelf cursor; restart the query.",
+  "pending.the.backend.returned.a.non":
+    "The backend returned a non-progressing cursor; current partial results were preserved.",
+  "pending.the.shelf.cursor.cannot.advance":
+    "The shelf cursor cannot advance; restart from the first page.",
+  "pending.the.shelf.page.does.not":
+    "The shelf page does not match the current connection or request generation; current results were preserved. Restart the query.",
+  "pending.the.shelf.response.does.not":
+    "The shelf response does not match the current connection or request generation; restart the query.",
+  "pending.the.shelf.snapshot.returned.duplicates":
+    "The shelf snapshot returned duplicates or a non-progressing cursor; current results were preserved. Restart the query.",
+  "pending.these.are.simulated.browser.mock":
+    "These are simulated Browser Mock files; no real P4 Server was accessed.",
   "pending.this.change.contains.no.files": "This change contains no files",
   "pending.time": "Time",
   "pending.trace.integration.destinations": "Trace integration destinations",
@@ -1328,7 +1462,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.loading.more.results": "Loading more results.",
   "search.matched": "Matched: ",
   "search.no.destination.page": " · no destination page",
-  "search.no.job.details.page.exists": "No Job details page exists yet; navigation is unavailable.",
+  "search.no.job.details.page.exists":
+    "No Job details page exists yet; navigation is unavailable.",
   "search.no.matches.in.this.category": "No matches in this category.",
   "search.no.results": "No results",
   "search.numbered.cl": "Numbered CL: ",
@@ -1351,7 +1486,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.search.failed.2": "Search failed",
   "search.search.query": "Search query",
   "search.search.results": "Search results",
-  "search.search.text.cannot.contain.control": "Search text cannot contain control characters.",
+  "search.search.text.cannot.contain.control":
+    "Search text cannot contain control characters.",
   "search.searching": "Searching.",
   "search.searching.2": "Searching",
   "search.select.at.least.one.category": "Select at least one category.",
@@ -1361,7 +1497,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.accent.color": "Accent color",
   "settings.accent.text": "Accent text",
   "settings.always.available": "Always available",
-  "settings.applied.and.saved.instantly.lightness": "Applied and saved instantly; lightness adapts for readable contrast. Success, warning and error colors remain independent.",
+  "settings.applied.and.saved.instantly.lightness":
+    "Applied and saved instantly; lightness adapts for readable contrast. Success, warning and error colors remain independent.",
   "settings.back": "Back",
   "settings.back.to.edit": "Back to edit",
   "settings.background.color": "Background color",
@@ -1385,7 +1522,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.color.value.rrggbb": "Color value (#RRGGBB)",
   "settings.comfortable": "Comfortable",
   "settings.compact": "Compact",
-  "settings.complete.the.corresponding.cli.trust": "Complete the corresponding CLI, Trust, or login recovery in the main Settings card, then retry.",
+  "settings.complete.the.corresponding.cli.trust":
+    "Complete the corresponding CLI, Trust, or login recovery in the main Settings card, then retry.",
   "settings.configure.p4": "Configure P4",
   "settings.confirm.deletion": "Confirm deletion",
   "settings.confirm.staged.restore": "Confirm staged restore",
@@ -1425,7 +1563,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.edit.saved.connection": "Edit saved connection",
   "settings.email": "Email",
   "settings.enter.server.first": "Enter Server first.",
-  "settings.enter.six.hex.digits.the": "Enter six hex digits; the last valid color stays applied.",
+  "settings.enter.six.hex.digits.the":
+    "Enter six hex digits; the last valid color stays applied.",
   "settings.enter.user.first": "Enter User first.",
   "settings.exit.application": "Exit application",
   "settings.failures.and.attention.only": "Failures and attention only",
@@ -1466,7 +1605,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.no.additional.details": "No additional details",
   "settings.no.connection.file": "No connection file",
   "settings.no.local.backups.yet": "No local backups yet.",
-  "settings.no.p4.connection.is.active": "No P4 connection is active. Open settings to save and activate a connection.",
+  "settings.no.p4.connection.is.active":
+    "No P4 connection is active. Open settings to save and activate a connection.",
   "settings.no.placement.file": "No placement file",
   "settings.notification.scope": "Notification scope",
   "settings.off": "Off",
@@ -1490,7 +1630,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.refresh": "Refresh",
   "settings.reload.profiles": "Reload profiles",
   "settings.requires.a.selected.file.or": "Requires a selected file or folder",
-  "settings.requires.an.available.connection": "Requires an available connection",
+  "settings.requires.an.available.connection":
+    "Requires an available connection",
   "settings.requires.configured.swarm": "Requires configured Swarm",
   "settings.requires.the.connection.runtime": "Requires the connection runtime",
   "settings.reset.appearance": "Reset appearance",
@@ -1502,7 +1643,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.restore.failed": "Restore failed: ",
   "settings.restore.waiting.for.restart": "Restore waiting for restart: ",
   "settings.retry.root": "Retry Root",
-  "settings.save.a.connection.then.activate": "Save a connection, then activate it to complete verification.",
+  "settings.save.a.connection.then.activate":
+    "Save a connection, then activate it to complete verification.",
   "settings.save.connection": "Save connection",
   "settings.save.the.current.changes.first": "Save the current changes first.",
   "settings.saved.connection.deleted": "Saved connection deleted.",
@@ -1527,8 +1669,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.standard.sync": "Standard sync",
   "settings.sync.mode": "Sync mode",
   "settings.system": "System",
-  "settings.that.connection.name.already.exists": "That connection name already exists.",
-  "settings.the.operation.did.not.complete": "The operation did not complete. The current connection was not changed; retry.",
+  "settings.that.connection.name.already.exists":
+    "That connection name already exists.",
+  "settings.the.operation.did.not.complete":
+    "The operation did not complete. The current connection was not changed; retry.",
   "settings.theme": "Theme",
   "settings.theme.default": "Theme default",
   "settings.there.are.no.changes.to": "There are no changes to save.",
@@ -1551,28 +1695,34 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.writing.confirmed.trust": "Writing confirmed Trust…",
   "shell.address": "Address",
   "shell.address.and.actions": "Address and actions",
-  "shell.another.operation.is.running.try": "Another operation is running; try again later",
+  "shell.another.operation.is.running.try":
+    "Another operation is running; try again later",
   "shell.auto.refresh": "Auto refresh",
   "shell.auto.refresh.paused": "Auto refresh paused",
   "shell.auto.refresh.paused.click.to": "Auto refresh paused; click to resume",
-  "shell.auto.refresh.runs.idempotent.reads": "Auto refresh runs idempotent reads only; click to pause",
+  "shell.auto.refresh.runs.idempotent.reads":
+    "Auto refresh runs idempotent reads only; click to pause",
   "shell.available": "Available",
   "shell.cancel.all": "Cancel all",
   "shell.cancel.all.p4.tasks": "Cancel all P4 tasks",
   "shell.cancel.task": "Cancel task",
-  "shell.cancellation.failed.retry.or.inspect": "Cancellation failed. Retry or inspect the logs.",
+  "shell.cancellation.failed.retry.or.inspect":
+    "Cancellation failed. Retry or inspect the logs.",
   "shell.cancelling": "Cancelling",
   "shell.cancelling.2": "Cancelling…",
-  "shell.cancelling.all.tasks.failed.retry": "Cancelling all tasks failed. Retry or cancel tasks individually.",
+  "shell.cancelling.all.tasks.failed.retry":
+    "Cancelling all tasks failed. Retry or cancel tasks individually.",
   "shell.check.now": "Check now",
-  "shell.check.reachability.only.preserve.response": "Check reachability only; preserve response quality and access status",
+  "shell.check.reachability.only.preserve.response":
+    "Check reachability only; preserve response quality and access status",
   "shell.checking": "Checking…",
   "shell.close.connection.status": "Close connection status",
   "shell.close.window": "Close window",
   "shell.completed": "Completed",
   "shell.connecting": "Connecting",
   "shell.connection": "Connection",
-  "shell.connection.changed.select.the.target": "Connection changed; select the target again",
+  "shell.connection.changed.select.the.target":
+    "Connection changed; select the target again",
   "shell.connection.failed": "Connection failed",
   "shell.connection.from.manual.check": "; connection from manual check",
   "shell.copy.address": "Copy address",
@@ -1588,28 +1738,34 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.go": "Go",
   "shell.last.request.authorized": "Last request authorized",
   "shell.loading.pending.changelists": "Loading pending changelists",
-  "shell.local.depot.path.enter.or": "Local / depot path · Enter or paste to navigate",
-  "shell.local.disk.capacity.requires.the": "Local disk capacity requires the desktop app",
+  "shell.local.depot.path.enter.or":
+    "Local / depot path · Enter or paste to navigate",
+  "shell.local.disk.capacity.requires.the":
+    "Local disk capacity requires the desktop app",
   "shell.local.response": "Local response",
   "shell.login.permissions": "Login / permissions",
-  "shell.manual.check.requires.the.desktop": "Manual check requires the desktop app.",
+  "shell.manual.check.requires.the.desktop":
+    "Manual check requires the desktop app.",
   "shell.maximize": "Maximize",
   "shell.minimize": "Minimize",
   "shell.no.recent.samples": "No recent samples",
   "shell.no.target.selected.for.get": "No target selected for Get Latest",
   "shell.object.actions": "Object actions",
-  "shell.observed.existing.requests.not.server": "Observed existing requests; not server load",
+  "shell.observed.existing.requests.not.server":
+    "Observed existing requests; not server load",
   "shell.open.tab": "Open tab",
   "shell.operation": "Operation",
   "shell.operation.cancelled": "Operation cancelled",
   "shell.operation.did.not.fully.succeed": "Operation did not fully succeed",
-  "shell.operation.feedback.received.no.exit": "Operation feedback received (no exit status provided)",
+  "shell.operation.feedback.received.no.exit":
+    "Operation feedback received (no exit status provided)",
   "shell.operation.finished.with.warnings": "Operation finished with warnings",
   "shell.p4.connection.status": "P4 connection status",
   "shell.p4.idle": "P4 idle",
   "shell.p4.operation.progress": "P4 operation progress",
   "shell.p4.passive.connection.status": "P4 passive connection status",
-  "shell.p4.progress.concurrent.operations.averaged": "P4 progress; concurrent operations averaged, unknown progress is indeterminate",
+  "shell.p4.progress.concurrent.operations.averaged":
+    "P4 progress; concurrent operations averaged, unknown progress is indeterminate",
   "shell.p4.tasks": "P4 tasks",
   "shell.page.navigation": "Page navigation",
   "shell.pages": "Pages",
@@ -1623,29 +1779,37 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.reachable": "Reachable",
   "shell.reading.disk.capacity": "Reading disk capacity",
   "shell.refresh.failed": "Refresh failed",
-  "shell.refresh.files.and.pending.lists": "Refresh files and pending lists (does not sync)",
-  "shell.requests.observed.no.speed.sample": "Requests observed; no speed sample yet",
+  "shell.refresh.files.and.pending.lists":
+    "Refresh files and pending lists (does not sync)",
+  "shell.requests.observed.no.speed.sample":
+    "Requests observed; no speed sample yet",
   "shell.resize.resource.sidebar": "Resize resource sidebar",
   "shell.restore.window": "Restore window",
   "shell.running": "running",
-  "shell.running.cancellation.does.not.undo": "Running; cancellation does not undo completed changes",
+  "shell.running.cancellation.does.not.undo":
+    "Running; cancellation does not undo completed changes",
   "shell.settings": "Settings",
   "shell.show.tab": "Show tab",
   "shell.sign.in.required.or.expired": "Sign in required or expired",
   "shell.slower": "Slower",
   "shell.smooth": "Smooth",
-  "shell.some.files.may.have.changed": "Some files may have changed. Failure or cancellation does not roll back completed changes; refresh and inspect the logs.",
-  "shell.the.connection.is.not.ready": "The connection is not ready or the status is unavailable, so a manual check is unavailable.",
-  "shell.the.operation.did.not.return": "The operation did not return in time. Its result is unknown; refresh to verify.",
+  "shell.some.files.may.have.changed":
+    "Some files may have changed. Failure or cancellation does not roll back completed changes; refresh and inspect the logs.",
+  "shell.the.connection.is.not.ready":
+    "The connection is not ready or the status is unavailable, so a manual check is unavailable.",
+  "shell.the.operation.did.not.return":
+    "The operation did not return in time. Its result is unknown; refresh to verify.",
   "shell.theme": "Theme",
-  "shell.this.operation.may.have.partially": "This operation may have partially applied. Failure or cancellation does not roll back changes; inspect logs and file state.",
+  "shell.this.operation.may.have.partially":
+    "This operation may have partially applied. Failure or cancellation does not roll back changes; inspect logs and file state.",
   "shell.unavailable": "Unavailable",
   "shell.updated": "Updated",
   "shell.waiting.for.system.dialog": "Waiting for system dialog",
   "shell.window.action.failed": "Window action failed",
   "swarm.configure.swarm": "Configure Swarm…",
   "swarm.open.in.swarm": "Open in Swarm",
-  "swarm.swarm.was.not.opened.safely": "Swarm was not opened safely. The connection may have changed; retry.",
+  "swarm.swarm.was.not.opened.safely":
+    "Swarm was not opened safely. The connection may have changed; retry.",
   "tools.actions": "Actions",
   "tools.all.levels": "All levels",
   "tools.all.sources": "All sources",
@@ -1653,8 +1817,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.all.types": "All types",
   "tools.apply.refresh": "Apply / refresh",
   "tools.authentication.expired": "Authentication expired",
-  "tools.browser.mock.metrics.and.export": "Browser Mock: metrics and export are local simulations; no P4 Server is contacted and no diagnostic file is created.",
-  "tools.cancel.requested.execution.may.be": "Cancel requested; execution may be partial",
+  "tools.browser.mock.metrics.and.export":
+    "Browser Mock: metrics and export are local simulations; no P4 Server is contacted and no diagnostic file is created.",
+  "tools.cancel.requested.execution.may.be":
+    "Cancel requested; execution may be partial",
   "tools.cancelled": "Cancelled",
   "tools.capacity.5.50.mib": "Capacity (5–50 MiB)",
   "tools.clear": "Clear",
@@ -1669,16 +1835,20 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.current.entries": "Current entries",
   "tools.current.session.logs": "Current session logs",
   "tools.diagnostic.export": "Diagnostic export",
-  "tools.diagnostic.export.completed.legacy.result": "Diagnostic export completed (legacy result).",
-  "tools.diagnostic.export.verified.by.readback": "Diagnostic export verified by readback (path/size/sha256; content never read).",
-  "tools.do.not.immediately.retry.a": "Do not immediately retry a mutation. Open related logs, refresh Pending and Workspace, then verify the server-side result. P4Deck never replays automatically.",
+  "tools.diagnostic.export.completed.legacy.result":
+    "Diagnostic export completed (legacy result).",
+  "tools.diagnostic.export.verified.by.readback":
+    "Diagnostic export verified by readback (path/size/sha256; content never read).",
+  "tools.do.not.immediately.retry.a":
+    "Do not immediately retry a mutation. Open related logs, refresh Pending and Workspace, then verify the server-side result. P4Deck never replays automatically.",
   "tools.duration": "Duration",
   "tools.error.recovery": "Error / recovery",
   "tools.estimated.usage": "Estimated usage",
   "tools.evicted.invalidated": "Evicted / invalidated",
   "tools.export": "Export",
   "tools.export.failed": "Export failed: ",
-  "tools.export.outcome.uncertain.the.file": "Export outcome uncertain: the file may exist but readback did not confirm it. The durable receipt was queried with the same operation id; inspect the export folder before any retry with a new id.",
+  "tools.export.outcome.uncertain.the.file":
+    "Export outcome uncertain: the file may exist but readback did not confirm it. The durable receipt was queried with the same operation id; inspect the export folder before any retry with a new id.",
   "tools.exporting.redacted.diagnostics": "Exporting redacted diagnostics…",
   "tools.follow.tail": "Follow tail",
   "tools.from": "From",
@@ -1692,19 +1862,23 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.loading.policy": "Loading policy…",
   "tools.loads.total.time": "Loads / total time",
   "tools.log.filters": "Log filters",
-  "tools.log.in.again.and.refresh": "Log in again and refresh first. If a mutation was interrupted, verify it server-side before explicitly retrying.",
+  "tools.log.in.again.and.refresh":
+    "Log in again and refresh first. If a mutation was interrupted, verify it server-side before explicitly retrying.",
   "tools.log.level": "Log level",
   "tools.log.policy.saved": "Log policy saved.",
-  "tools.log.policy.saved.readback.matches": "Log policy saved (readback matches every field).",
+  "tools.log.policy.saved.readback.matches":
+    "Log policy saved (readback matches every field).",
   "tools.log.retention.policy": "Log retention policy",
   "tools.log.source": "Log source",
   "tools.logs": "Logs",
   "tools.message.or.command": "Message or command",
-  "tools.mock.simulation.complete.no.file": "Mock simulation complete; no file was written.",
+  "tools.mock.simulation.complete.no.file":
+    "Mock simulation complete; no file was written.",
   "tools.no.matching.logs": "No matching logs",
   "tools.no.matching.operations": "No matching operations",
   "tools.offline.stale.fallbacks": "Offline stale fallbacks",
-  "tools.only.backend.provided.cumulative.counters": "Only backend-provided cumulative counters and current usage are shown.",
+  "tools.only.backend.provided.cumulative.counters":
+    "Only backend-provided cumulative counters and current usage are shown.",
   "tools.operation": "Operation",
   "tools.operation.filter": "Operation filter",
   "tools.operation.filters": "Operation filters",
@@ -1712,18 +1886,24 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.operation.state": "Operation state",
   "tools.operation.type": "Operation type",
   "tools.p4.log": "P4 log",
-  "tools.reconnect.and.refresh.after.the": "Reconnect and refresh after the network or server returns. Reads may retry; mutations are not replayed automatically.",
+  "tools.reconnect.and.refresh.after.the":
+    "Reconnect and refresh after the network or server returns. Reads may retry; mutations are not replayed automatically.",
   "tools.records": "records",
   "tools.refresh": "Refresh",
-  "tools.refresh.pending.and.workspace.before": "Refresh Pending and Workspace before continuing. Cancel stops remaining work and does not undo completed work.",
+  "tools.refresh.pending.and.workspace.before":
+    "Refresh Pending and Workspace before continuing. Cancel stops remaining work and does not undo completed work.",
   "tools.refreshing.cache.metrics": "Refreshing cache metrics…",
-  "tools.retention.and.capacity.are.enforced": "Retention and capacity are enforced by the backend. New logs never expand or switch tools automatically; new unviewed errors only mark the bottom Log entry with a red dot.",
+  "tools.retention.and.capacity.are.enforced":
+    "Retention and capacity are enforced by the backend. New logs never expand or switch tools automatically; new unviewed errors only mark the bottom Log entry with a red dot.",
   "tools.retention.days.1.30": "Retention days (1–30)",
-  "tools.retention.must.be.1.30": "Retention must be 1–30 days and capacity 5–50 MiB.",
+  "tools.retention.must.be.1.30":
+    "Retention must be 1–30 days and capacity 5–50 MiB.",
   "tools.retry": "Retry",
   "tools.retry.load.more": "Retry load more",
-  "tools.save.failed.previous.policy.restored": "Save failed; previous policy restored: ",
-  "tools.save.outcome.uncertain.the.readback": "Save outcome uncertain: the readback did not match every field. The durable receipt was queried with the same operation id; the last known policy was restored for inspection.",
+  "tools.save.failed.previous.policy.restored":
+    "Save failed; previous policy restored: ",
+  "tools.save.outcome.uncertain.the.readback":
+    "Save outcome uncertain: the readback did not match every field. The durable receipt was queried with the same operation id; the last known policy was restored for inspection.",
   "tools.save.policy": "Save policy",
   "tools.saving": "Saving…",
   "tools.search.logs": "Search logs",
@@ -1734,13 +1914,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.status.cache.diagnostics": "Status cache diagnostics",
   "tools.summary": "Summary",
   "tools.superseded.responses": "Superseded responses",
-  "tools.the.backend.produces.a.size": "The backend produces a size-bounded redacted JSON file without passwords, tickets, full fingerprints, or raw environment variables.",
-  "tools.the.existing.safe.open.capability": "The existing safe-open capability only permits Workspace paths, so it is not used for the diagnostics export directory.",
+  "tools.the.backend.produces.a.size":
+    "The backend produces a size-bounded redacted JSON file without passwords, tickets, full fingerprints, or raw environment variables.",
+  "tools.the.existing.safe.open.capability":
+    "The existing safe-open capability only permits Workspace paths, so it is not used for the diagnostics export directory.",
   "tools.time": "Time",
   "tools.to": "To",
   "tools.truncated": " · truncated",
   "tools.unknown.result.verify.manually": "Unknown result: verify manually",
-  "tools.verify.logs.and.server.state": "Verify logs and server state before retrying. Mutations are never replayed automatically.",
+  "tools.verify.logs.and.server.state":
+    "Verify logs and server state before retrying. Mutations are never replayed automatically.",
   "tools.view.logs": "View logs",
   "tools.view.operation": "View operation",
   "update.check.again": "Check again",
@@ -1754,14 +1937,17 @@ export const en: Catalog & Record<MsgKey, string> = {
   "update.download.update": "Download update",
   "update.downloaded": "Downloaded",
   "update.downloading": "Downloading…",
-  "update.downloading.or.installing.the.update": "Downloading or installing the update failed.",
+  "update.downloading.or.installing.the.update":
+    "Downloading or installing the update failed.",
   "update.downloading.update": "Downloading update",
   "update.install.and.restart.now": "Install and restart now",
   "update.install.then.restart": "Install, then restart",
   "update.installer.size": "Installer size",
   "update.installing": "Installing…",
-  "update.installing.the.update.failed.the": "Installing the update failed; the app still runs the current version. Retry or download the installer manually.",
-  "update.installing.the.update.open.the": "Installing the update. Open the update panel for progress.",
+  "update.installing.the.update.failed.the":
+    "Installing the update failed; the app still runs the current version. Retry or download the installer manually.",
+  "update.installing.the.update.open.the":
+    "Installing the update. Open the update panel for progress.",
   "update.installing.update": "Installing update…",
   "update.installing.update.2": "Installing update",
   "update.later": "Later",
@@ -1773,12 +1959,18 @@ export const en: Catalog & Record<MsgKey, string> = {
   "update.restarting.2": "Restarting…",
   "update.restarting.the.app": "Restarting the app…",
   "update.the.update.check.failed": "The update check failed.",
-  "update.the.update.failed.open.the": "The update failed. Open the panel for details.",
-  "update.the.update.is.downloaded.confirm": "The update is downloaded. Confirm install and restart to apply it.",
-  "update.the.update.is.installed.but": "The update is installed, but the automatic restart failed. Restart P4Deck manually to finish updating.",
-  "update.the.update.is.installed.restart": "The update is installed; restart the app manually to finish.",
-  "update.the.update.package.failed.verification": "The update package failed verification and installation was cancelled. Retry later or download the installer manually.",
-  "update.the.update.package.failed.verification.2": "The update package failed verification. Retry later or download the installer manually.",
+  "update.the.update.failed.open.the":
+    "The update failed. Open the panel for details.",
+  "update.the.update.is.downloaded.confirm":
+    "The update is downloaded. Confirm install and restart to apply it.",
+  "update.the.update.is.installed.but":
+    "The update is installed, but the automatic restart failed. Restart P4Deck manually to finish updating.",
+  "update.the.update.is.installed.restart":
+    "The update is installed; restart the app manually to finish.",
+  "update.the.update.package.failed.verification":
+    "The update package failed verification and installation was cancelled. Retry later or download the installer manually.",
+  "update.the.update.package.failed.verification.2":
+    "The update package failed verification. Retry later or download the installer manually.",
   "update.update.downloaded": "Update downloaded",
   "update.update.failed": "Update failed",
   "update.you.are.up.to.date": "You are up to date.",
@@ -1789,18 +1981,21 @@ export const en: Catalog & Record<MsgKey, string> = {
   "workspaces.close": "Close",
   "workspaces.confirm": "Confirm",
   "workspaces.connection.settings": "Connection settings…",
-  "workspaces.connection.settings.not.connected": "Connection settings: Not connected",
+  "workspaces.connection.settings.not.connected":
+    "Connection settings: Not connected",
   "workspaces.connection.unavailable": "Connection unavailable",
   "workspaces.current": "Current",
   "workspaces.current.workspace": "Current workspace",
   "workspaces.delete.workspace": "Delete Workspace",
-  "workspaces.loading.failed.refresh.to.retry": "Loading failed. Refresh to retry.",
+  "workspaces.loading.failed.refresh.to.retry":
+    "Loading failed. Refresh to retry.",
   "workspaces.loading.workspaces": "Loading workspaces…",
   "workspaces.new.name": "New name",
   "workspaces.new.workspace": "New Workspace...",
   "workspaces.no.longer.exists": "no longer exists",
   "workspaces.no.matching.workspaces": "No matching workspaces",
-  "workspaces.no.workspaces.owned.by.the": "No workspaces owned by the current user",
+  "workspaces.no.workspaces.owned.by.the":
+    "No workspaces owned by the current user",
   "workspaces.not.connected": "Not connected",
   "workspaces.old.name.readback": "Old name readback: ",
   "workspaces.operation": "Operation",
@@ -1818,25 +2013,31 @@ export const en: Catalog & Record<MsgKey, string> = {
   "workspaces.search.workspace.host.path": "Search workspace, host, path…",
   "workspaces.search.workspaces": "Search workspaces",
   "workspaces.search.workspaces.2": "Search workspaces",
-  "workspaces.simulated.mock.workspace.switching.only": "Simulated Mock: workspace switching only updates the simulated context and never accesses a real network.",
+  "workspaces.simulated.mock.workspace.switching.only":
+    "Simulated Mock: workspace switching only updates the simulated context and never accesses a real network.",
   "workspaces.standard": "Standard",
   "workspaces.still.exists": "still exists",
-  "workspaces.switch.failed.the.current.workspace": "Switch failed; the current workspace remains active.",
-  "workspaces.switch.failed.the.previous.workspace": "Switch failed; the previous workspace remains active.",
-  "workspaces.switch.to.another.workspace.first": "Switch to another workspace first",
+  "workspaces.switch.failed.the.current.workspace":
+    "Switch failed; the current workspace remains active.",
+  "workspaces.switch.failed.the.previous.workspace":
+    "Switch failed; the previous workspace remains active.",
+  "workspaces.switch.to.another.workspace.first":
+    "Switch to another workspace first",
   "workspaces.switch.to.this.workspace": "Switch to this workspace",
   "workspaces.switch.unavailable": "Switch unavailable",
   "workspaces.switch.workspace": "Switch workspace",
-  "workspaces.the.switch.request.did.not": "The switch request did not complete. Refresh and retry.",
+  "workspaces.the.switch.request.did.not":
+    "The switch request did not complete. Refresh and retry.",
   "workspaces.updated": "Updated",
   "workspaces.verified.by.server.readback": "Verified by server readback",
   "workspaces.verified.committing.workspace": "Verified; committing workspace…",
-  "workspaces.verify.and.activate.a.connection": "Verify and activate a connection in Settings first. Workspaces are not scanned automatically while the connection is unverified.",
+  "workspaces.verify.and.activate.a.connection":
+    "Verify and activate a connection in Settings first. Workspaces are not scanned automatically while the connection is unverified.",
   "workspaces.verifying.and.switching": "Verifying and switching…",
   "workspaces.verifying.and.switching.to": "Verifying and switching to",
   "workspaces.verifying.target.workspace": "Verifying target workspace…",
   "workspaces.working": "Working…",
   "workspaces.workspace.readback": "Workspace readback: ",
-  "workspaces.workspaces.owned.by.the.current": "Workspaces owned by the current user, across hosts.",
-
+  "workspaces.workspaces.owned.by.the.current":
+    "Workspaces owned by the current user, across hosts.",
 };

@@ -361,9 +361,7 @@ function ShelfWorkflowDialog({
   return (
     <Dialog
       title={
-        deleting
-          ? t("pending.delete.shelved.files")
-          : t("pending.shelve.files")
+        deleting ? t("pending.delete.shelved.files") : t("pending.shelve.files")
       }
       description={tr(
         "范围固定为下方文件，不会自动扩大为整个 CL。",

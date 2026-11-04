@@ -112,9 +112,7 @@ export function useDesktopNotifications(
             void center.notify({
               key: `${event.operationId}:failure`,
               title: t("notify.p4.operation.needs.attention"),
-              body:
-                event.message ||
-                (t("notify.return.to.p4deck.for.details")),
+              body: event.message || t("notify.return.to.p4deck.for.details"),
               kind: "failure",
             });
           if (event.type === "completed") {
@@ -125,9 +123,7 @@ export function useDesktopNotifications(
               void center.notify({
                 key: `${event.operationId}:completed`,
                 title: t("notify.long.p4.operation.completed"),
-                body:
-                  event.message ||
-                  (t("notify.the.operation.completed")),
+                body: event.message || t("notify.the.operation.completed"),
                 kind: "success",
               });
           }

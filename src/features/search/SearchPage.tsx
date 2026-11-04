@@ -264,9 +264,7 @@ function VirtualSearchResults({
                     {item.matchedFields
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
-                    {disabled
-                      ? t("search.no.destination.page")
-                      : ""}
+                    {disabled ? t("search.no.destination.page") : ""}
                   </small>
                 </span>
                 {disabled ? (
@@ -647,10 +645,7 @@ export function SearchPage({
         </div>
       ) : null}
 
-      <section
-        className="search-card"
-        aria-label={t("search.search.controls")}
-      >
+      <section className="search-card" aria-label={t("search.search.controls")}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -709,9 +704,7 @@ export function SearchPage({
             role={validationError || noKinds ? "alert" : undefined}
           >
             {validationError ||
-              (noKinds
-                ? t("search.select.at.least.one.category")
-                : "")}
+              (noKinds ? t("search.select.at.least.one.category") : "")}
           </div>
           <fieldset className="search-kind-picker">
             <legend>{t("search.categories")}</legend>
@@ -804,9 +797,7 @@ export function SearchPage({
           <div className="search-empty">
             <FolderSearch size={32} />
             <h3>{t("search.no.results")}</h3>
-            <p>
-              {t("search.try.another.query.or.category")}
-            </p>
+            <p>{t("search.try.another.query.or.category")}</p>
           </div>
         ) : phase === "idle" ? (
           <div className="search-empty">
@@ -856,9 +847,7 @@ export function SearchPage({
                     <div className="search-category-partial" role="status">
                       <AlertTriangle size={14} />
                       <span>
-                        <strong>
-                          {t("search.partial.reason")}
-                        </strong>
+                        <strong>{t("search.partial.reason")}</strong>
                         {facet.partialReason}
                       </span>
                     </div>
@@ -904,12 +893,8 @@ export function SearchPage({
             <span>{pageError}</span>
             {hasMore ? (
               <>
-                <button onClick={loadMore}>
-                  {t("search.retry.page")}
-                </button>
-                <button onClick={submit}>
-                  {t("search.restart.search")}
-                </button>
+                <button onClick={loadMore}>{t("search.retry.page")}</button>
+                <button onClick={submit}>{t("search.restart.search")}</button>
               </>
             ) : null}
           </div>
@@ -925,9 +910,7 @@ export function SearchPage({
             ) : (
               <ArrowDown size={14} />
             )}
-            {loadingMore
-              ? t("search.loading")
-              : t("search.load.more")}
+            {loadingMore ? t("search.loading") : t("search.load.more")}
           </button>
         ) : null}
       </section>

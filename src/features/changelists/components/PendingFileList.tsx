@@ -388,10 +388,7 @@ export function PendingFileList({
             role="row"
             aria-rowindex={1}
           >
-            <div
-              role="columnheader"
-              aria-label={t("pending.file.status.icon")}
-            >
+            <div role="columnheader" aria-label={t("pending.file.status.icon")}>
               {columnResizer(0, "Icon")}
             </div>
             <div role="columnheader">
@@ -414,8 +411,7 @@ export function PendingFileList({
                   setPathOrder((value) => (value === "asc" ? "desc" : "asc"))
                 }
               >
-                {t("pending.file.path")}{" "}
-                {pathOrder === "asc" ? "↑" : "↓"}
+                {t("pending.file.path")} {pathOrder === "asc" ? "↑" : "↓"}
               </button>
               {columnResizer(2, t("pending.file.path"))}
             </div>
@@ -458,7 +454,7 @@ export function PendingFileList({
                       key={extension || "(none)"}
                       value={extension || "(none)"}
                     >
-                      {extension || (t("pending.no.extension"))}
+                      {extension || t("pending.no.extension")}
                     </option>
                   ))}
                 </select>
@@ -743,12 +739,10 @@ export function PendingFileList({
                     {file.resolve === "unresolved"
                       ? `${statusLabel(status)} · ${t("pending.needs.resolve")}`
                       : statusLabel(status)}
-                    {needsLatest
-                      ? ` · ${t("pending.needs.get.latest")}`
-                      : ""}
+                    {needsLatest ? ` · ${t("pending.needs.get.latest")}` : ""}
                   </span>
                   <span role="gridcell" className="pending-file-type">
-                    {extension || (t("pending.no.extension"))}
+                    {extension || t("pending.no.extension")}
                   </span>
                 </div>
               );

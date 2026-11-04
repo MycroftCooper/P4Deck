@@ -59,9 +59,7 @@ export function AccentSettings({
           }}
         />
         {!valid && (
-          <small role="status">
-            {t("settings.enter.six.hex.digits.the")}
-          </small>
+          <small role="status">{t("settings.enter.six.hex.digits.the")}</small>
         )}
       </label>
       <div
@@ -80,9 +78,7 @@ export function AccentSettings({
                 borderRadius: 4,
               }}
             >
-              <span>
-                {dark ? (t("settings.dark")) : t("settings.light")}
-              </span>{" "}
+              <span>{dark ? t("settings.dark") : t("settings.light")}</span>{" "}
               <span style={{ color: tokens["--accent"] }}>
                 {t("settings.accent.text")}
               </span>{" "}
@@ -100,9 +96,7 @@ export function AccentSettings({
           );
         })}
       </div>
-      <small>
-        {t("settings.applied.and.saved.instantly.lightness")}
-      </small>
+      <small>{t("settings.applied.and.saved.instantly.lightness")}</small>
     </div>
   );
 }

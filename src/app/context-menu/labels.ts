@@ -293,7 +293,8 @@ const labelKeys: Record<string, string> = {
   "复制目录到…": "contextMenu.copy.folder.to",
   "创建目录分支…": "contextMenu.branch.folder",
   "给目录文件打标签…": "contextMenu.tag.files.in.folder",
-  "标记删除整个工作区受控文件…": "contextMenu.mark.controlled.workspace.files.for",
+  "标记删除整个工作区受控文件…":
+    "contextMenu.mark.controlled.workspace.files.for",
   复制工作区根路径: "contextMenu.copy.workspace.root.path",
   "复制 Depot 路径": "contextMenu.copy.depot.path.2",
   "复制/分支…": "contextMenu.copy.branch",
@@ -307,13 +308,16 @@ const labelKeys: Record<string, string> = {
   "获取最新（含递归）…": "contextMenu.get.latest.include.recursive",
   "获取指定版本（含递归）…": "contextMenu.get.revision.include.recursive",
   "签出（含递归）…": "contextMenu.check.out.include.recursive",
-  "添加未跟踪文件（含递归）…": "contextMenu.add.untracked.files.include.recursive",
+  "添加未跟踪文件（含递归）…":
+    "contextMenu.add.untracked.files.include.recursive",
   "标记删除（含递归）…": "contextMenu.mark.for.delete.include.recursive",
   "还原（含递归）…": "contextMenu.revert.include.recursive",
   "复制 › 名称列表": "contextMenu.copy.names",
   "对账（含递归）…": "contextMenu.reconcile.include.recursive",
-  "还原未修改文件（含递归）…": "contextMenu.revert.unchanged.files.include.recursive",
-  "从工作区移除（含递归）…": "contextMenu.remove.from.workspace.include.recursive",
+  "还原未修改文件（含递归）…":
+    "contextMenu.revert.unchanged.files.include.recursive",
+  "从工作区移除（含递归）…":
+    "contextMenu.remove.from.workspace.include.recursive",
   复制当前目录路径: "contextMenu.copy.current.folder.path",
   "复制标识 default": "contextMenu.copy.identity.default",
   "复制 CL 编号": "contextMenu.copy.change.number",

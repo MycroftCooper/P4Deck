@@ -31,7 +31,8 @@ const rel = (p) => path.relative(ROOT, p).replaceAll("\\", "/");
 const IMPORT_T = /^import \{ t \} from "([^"]*shared\/i18n)";\n/;
 /** A local binding named t that is not the catalog call: t.prop or a param. */
 const LOCAL_T_USE = /(?<![.\w])t\.[a-zA-Z_]/;
-const LOCAL_T_DECL = /(?:\bt\s*,\s*|\bt\s*:\s*)(?:Messages|typeof messages|\{)|:\s*\{\s*[^}]*\bt\b/;
+const LOCAL_T_DECL =
+  /(?:\bt\s*,\s*|\bt\s*:\s*)(?:Messages|typeof messages|\{)|:\s*\{\s*[^}]*\bt\b/;
 
 const files = walk(path.join(ROOT, "src"))
   .filter((p) => /\.(ts|tsx)$/.test(p) && !/\.test\.(ts|tsx)$/.test(p))
@@ -48,12 +49,18 @@ for (const file of files) {
   // declares a t prop/parameter.
   if (!LOCAL_T_USE.test(body) && !LOCAL_T_DECL.test(body)) continue;
 
-  let out = src.replace(IMPORT_T, `import { t as translate } from "${m[1]}";\n`);
+  let out = src.replace(
+    IMPORT_T,
+    `import { t as translate } from "${m[1]}";\n`,
+  );
   let n = 0;
-  out = out.replace(/(?<![.\w])t\("((?:[a-zA-Z][\w]*)(?:\.[a-zA-Z][\w]*)+)"\)/g, (w) => {
-    n++;
-    return w.replace(/^t\(/, "translate(");
-  });
+  out = out.replace(
+    /(?<![.\w])t\("((?:[a-zA-Z][\w]*)(?:\.[a-zA-Z][\w]*)+)"\)/g,
+    (w) => {
+      n++;
+      return w.replace(/^t\(/, "translate(");
+    },
+  );
   if (!n) continue;
   if (WRITE) fs.writeFileSync(abs, out);
   console.log(`${WRITE ? "PATCHED" : "PLAN"} ${file} (${n})`);

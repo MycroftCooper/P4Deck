@@ -291,9 +291,7 @@ export function ManualMergeEditor({
         return;
       }
       if (!value) {
-        setMessage(
-          t("files.no.recognizable.validation.result"),
-        );
+        setMessage(t("files.no.recognizable.validation.result"));
         return;
       }
       setValidation(value);
@@ -525,8 +523,7 @@ export function ManualMergeEditor({
   if (!session)
     return (
       <DialogNotice error={!!message}>
-        {message ||
-          t("files.loading.authoritative.merge.inputs")}
+        {message || t("files.loading.authoritative.merge.inputs")}
       </DialogNotice>
     );
 

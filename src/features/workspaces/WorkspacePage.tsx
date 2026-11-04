@@ -184,9 +184,7 @@ export function WorkspacePage({
   return (
     <section className="workspaces-page">
       <FixedPageHeader
-        description={
-          translate("workspaces.workspaces.owned.by.the.current")
-        }
+        description={translate("workspaces.workspaces.owned.by.the.current")}
       >
         <span className="fixed-page-meta">{items.length}</span>
         <button disabled={loading || !ready} onClick={() => void reload()}>
@@ -199,9 +197,7 @@ export function WorkspacePage({
           <Search size={15} />
           <input
             aria-label={translate("workspaces.search.workspaces")}
-            placeholder={
-              translate("workspaces.search.workspace.host.path")
-            }
+            placeholder={translate("workspaces.search.workspace.host.path")}
             value={search}
             disabled={!ready}
             onChange={(event) => {
@@ -384,7 +380,9 @@ export function WorkspacePage({
                                 expectedGeneration: runtime.contextGeneration,
                               }),
                             !ready || item.name === runtime.context.client
-                              ? translate("workspaces.switch.to.another.workspace.first")
+                              ? translate(
+                                  "workspaces.switch.to.another.workspace.first",
+                                )
                               : undefined,
                           ),
                         },
@@ -400,7 +398,9 @@ export function WorkspacePage({
                                 expectedGeneration: runtime.contextGeneration,
                               }),
                             !ready || item.name === runtime.context.client
-                              ? translate("workspaces.switch.to.another.workspace.first")
+                              ? translate(
+                                  "workspaces.switch.to.another.workspace.first",
+                                )
                               : undefined,
                           ),
                         },
@@ -423,7 +423,7 @@ export function WorkspacePage({
                     </span>
                     <span title={item.owner}>{item.owner || "—"}</span>
                     <span title={item.host}>
-                      {item.host || (translate("workspaces.any.host"))}
+                      {item.host || translate("workspaces.any.host")}
                     </span>
                     <span title={item.root}>{item.root}</span>
                     <time title={date(item.updated)}>{date(item.updated)}</time>

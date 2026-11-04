@@ -441,9 +441,7 @@ export function SubmittedPage({
         applyResults(results);
         if (!append) reconcileSelection(combined);
         if (invalidContinuation)
-          setPageError(
-            translate("pending.the.backend.returned.a.non"),
-          );
+          setPageError(translate("pending.the.backend.returned.a.non"));
         writePagedSnapshot<SubmittedSnapshot>(key, {
           ...results,
           base,
@@ -720,11 +718,7 @@ export function SubmittedPage({
           </>
         }
         resultSummary={
-          <small
-            title={
-              translate("pending.filters.loaded.records.load.more")
-            }
-          >
+          <small title={translate("pending.filters.loaded.records.load.more")}>
             {zh
               ? `已加载 ${changes.length} 条中显示 ${visibleChanges.length} 条`
               : `Showing ${visibleChanges.length} of ${changes.length} loaded`}

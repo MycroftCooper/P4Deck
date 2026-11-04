@@ -28,6 +28,7 @@ export const fallbackLocale: Locale = "zh-CN";
  * `one` is only reachable for languages that have a distinct singular; the
  * resolver consults Intl.PluralRules and falls back to `other`.
  */
-export const pluralPattern = /\{(\w+),\s*one:\s*([^,}]*),\s*other:\s*([^}]*)\}/g;
+export const pluralPattern =
+  /\{(\w+),\s*one:\s*([^,}]*),\s*other:\s*([^}]*)\}/g;
 
 export const placeholderPattern = /\{(\w+)\}/g;

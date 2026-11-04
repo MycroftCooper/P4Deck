@@ -215,9 +215,7 @@ function ConnectedApp({
     async (target: GlobalSearchTarget) => {
       const page = pageForSearchTarget(target);
       if (target.type === "job" || !page)
-        throw new Error(
-          translate("app.search.result.has.no.details.page"),
-        );
+        throw new Error(translate("app.search.result.has.no.details.page"));
       if (target.type === "stream") {
         locateStream(target.streamPath);
         return;
@@ -561,7 +559,9 @@ function ConnectedApp({
                   )}
                   {detachedRebound && (
                     <div className="runtime-rebound" role="status">
-                      {translate("app.connection.or.runtime.generation.changed")}
+                      {translate(
+                        "app.connection.or.runtime.generation.changed",
+                      )}
                     </div>
                   )}
                   <div

@@ -59,16 +59,12 @@ export function SwarmAction({
             return;
           }
           void openSwarmLink(runtime, target).catch(() =>
-            setError(
-              t("swarm.swarm.was.not.opened.safely"),
-            ),
+            setError(t("swarm.swarm.was.not.opened.safely")),
           );
         }}
       >
         {configure ? <Settings size={14} /> : <ExternalLink size={14} />}
-        {configure
-          ? t("swarm.configure.swarm")
-          : t("swarm.open.in.swarm")}
+        {configure ? t("swarm.configure.swarm") : t("swarm.open.in.swarm")}
       </button>
       {error ? (
         <span role="alert" className="swarm-open-error">

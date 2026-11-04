@@ -90,15 +90,9 @@ export function RevisionDialog({
             setValue("");
           }}
         >
-          <option value="head">
-            {t("files.latest.head")}
-          </option>
-          <option value="revision">
-            {t("files.file.revision")}
-          </option>
-          <option value="change">
-            {t("files.as.of.changelist")}
-          </option>
+          <option value="head">{t("files.latest.head")}</option>
+          <option value="revision">{t("files.file.revision")}</option>
+          <option value="change">{t("files.as.of.changelist")}</option>
           <option value="date">{t("files.as.of.date")}</option>
         </select>
       </label>

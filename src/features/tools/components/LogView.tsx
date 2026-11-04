@@ -233,7 +233,10 @@ export function LogView({
         setPolicy(readback);
         setDraft(readback);
         setPolicyStatus(
-          tFor(zh ? "zh-CN" : "en-US", "tools.log.policy.saved.readback.matches"),
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.log.policy.saved.readback.matches",
+          ),
         );
       } else if (result.state === "legacy") {
         const savedLegacy = controlPlaneLegacy<LogPolicy>(result) ?? draft;
@@ -244,7 +247,10 @@ export function LogView({
         // Uncertain: never show "saved"; restore the last known policy and be explicit.
         setDraft(policy);
         setPolicyStatus(
-          tFor(zh ? "zh-CN" : "en-US", "tools.save.outcome.uncertain.the.readback"),
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.save.outcome.uncertain.the.readback",
+          ),
         );
       }
     } catch (cause) {
@@ -278,7 +284,9 @@ export function LogView({
           value={level}
           onChange={(event) => setLevel(event.target.value as LogLevel | "")}
         >
-          <option value="">{tFor(zh ? "zh-CN" : "en-US", "tools.all.levels")}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.levels")}
+          </option>
           {LOG_LEVELS.map((value) => (
             <option key={value} value={value}>
               {logLevelLabel(value, zh)}
@@ -292,7 +300,9 @@ export function LogView({
             setSource(event.target.value as OperationSource | "")
           }
         >
-          <option value="">{tFor(zh ? "zh-CN" : "en-US", "tools.all.sources")}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.sources")}
+          </option>
           <option value="gui">GUI</option>
           <option value="terminal">Terminal</option>
         </select>
@@ -304,7 +314,8 @@ export function LogView({
           onChange={(event) => setCommand(event.target.value)}
         />
         <button onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
+          <RefreshCw size={13} />{" "}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
         </button>
         <button
           onClick={() => {
@@ -331,7 +342,8 @@ export function LogView({
       {operationFilter && (
         <div className="active-filter" role="status">
           <span>
-            {tFor(zh ? "zh-CN" : "en-US", "tools.operation.filter")}: {operationFilter}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.operation.filter")}:{" "}
+            {operationFilter}
           </span>
           <button onClick={() => onOpenJournal(operationFilter)}>
             {tFor(zh ? "zh-CN" : "en-US", "tools.view.operation")}
@@ -343,11 +355,15 @@ export function LogView({
       )}
 
       <details className="policy-panel">
-        <summary>{tFor(zh ? "zh-CN" : "en-US", "tools.log.retention.policy")}</summary>
+        <summary>
+          {tFor(zh ? "zh-CN" : "en-US", "tools.log.retention.policy")}
+        </summary>
         {draft ? (
           <div className="policy-grid">
             <label>
-              <span>{tFor(zh ? "zh-CN" : "en-US", "tools.retention.days.1.30")}</span>
+              <span>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.retention.days.1.30")}
+              </span>
               <input
                 type="number"
                 min={1}
@@ -362,7 +378,9 @@ export function LogView({
               />
             </label>
             <label>
-              <span>{tFor(zh ? "zh-CN" : "en-US", "tools.capacity.5.50.mib")}</span>
+              <span>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.capacity.5.50.mib")}
+              </span>
               <input
                 type="number"
                 min={5}
@@ -374,7 +392,10 @@ export function LogView({
               />
             </label>
             <p className="policy-boundary">
-              {tFor(zh ? "zh-CN" : "en-US", "tools.retention.and.capacity.are.enforced")}
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.retention.and.capacity.are.enforced",
+              )}
             </p>
             <button onClick={() => void savePolicy()} disabled={policyBusy}>
               {tFor(zh ? "zh-CN" : "en-US", "tools.save.policy")}
@@ -400,7 +421,9 @@ export function LogView({
           className="diagnostic-table"
           aria-rowcount={entries.length + 1}
         >
-          <caption className="sr-only">{tFor(zh ? "zh-CN" : "en-US", "tools.p4.log")}</caption>
+          <caption className="sr-only">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.p4.log")}
+          </caption>
           <thead>
             <tr>
               <th>{tFor(zh ? "zh-CN" : "en-US", "tools.time")}</th>
@@ -409,7 +432,9 @@ export function LogView({
               <th>{tFor(zh ? "zh-CN" : "en-US", "tools.command.message")}</th>
               <th>{tFor(zh ? "zh-CN" : "en-US", "tools.operation")}</th>
               <th>
-                <span className="sr-only">{tFor(zh ? "zh-CN" : "en-US", "tools.actions")}</span>
+                <span className="sr-only">
+                  {tFor(zh ? "zh-CN" : "en-US", "tools.actions")}
+                </span>
               </th>
             </tr>
           </thead>
@@ -452,7 +477,10 @@ export function LogView({
                   </td>
                   <td>
                     <button
-                      aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.copy.log")}
+                      aria-label={tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "tools.copy.log",
+                      )}
                       onClick={() =>
                         void navigator.clipboard.writeText(
                           `${entry.timestamp}\n${entry.command}\n${entry.message}`,
@@ -481,7 +509,9 @@ export function LogView({
       {error && (
         <div className="inline-error" role="alert">
           {error}{" "}
-          <button onClick={() => void load()}>{tFor(zh ? "zh-CN" : "en-US", "tools.retry")}</button>
+          <button onClick={() => void load()}>
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry")}
+          </button>
         </div>
       )}
       {appendError && (

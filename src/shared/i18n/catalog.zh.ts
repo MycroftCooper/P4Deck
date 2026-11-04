@@ -93,10 +93,10 @@ export const zh = {
   "merge.inspectionComplete": "完整",
   "merge.inspectionPartial": "部分完成",
   "merge.inspectionUnavailable": "不可用",
-  "merge.reliableHint": "仅明确的 describe/filelog Integration 证据会标记为可靠合并。",
+  "merge.reliableHint":
+    "仅明确的 describe/filelog Integration 证据会标记为可靠合并。",
   "merge.suspectedHint": "疑似项保持可见，不会被“隐藏可靠合并”过滤。",
-  "merge.unknownHint":
-    "检查不完整或失败，未将此项当作普通提交或可靠合并。",
+  "merge.unknownHint": "检查不完整或失败，未将此项当作普通提交或可靠合并。",
 
   // ---- submitted detail --------------------------------------------------
   "submitted.detailLoading": "正在加载真实提交详情…",
@@ -196,7 +196,8 @@ export const zh = {
   "contextMenu.get.latest.for.entire.workspace": "获取整个工作区最新版本",
   "contextMenu.get.revision.for.entire.workspace": "获取整个工作区指定版本",
   "contextMenu.check.out.eligible.workspace.files": "签出整个工作区适用文件",
-  "contextMenu.mark.controlled.workspace.files.for": "标记删除整个工作区受控文件",
+  "contextMenu.mark.controlled.workspace.files.for":
+    "标记删除整个工作区受控文件",
   "contextMenu.revert.entire.workspace": "还原整个工作区",
   "contextMenu.search.workspace": "在工作区中搜索",
   "contextMenu.open.terminal.at.workspace.root": "在工作区根打开命令行",
@@ -423,13 +424,16 @@ export const zh = {
   "contextMenu.get.latest.include.recursive": "获取最新（含递归）…",
   "contextMenu.get.revision.include.recursive": "获取指定版本（含递归）…",
   "contextMenu.check.out.include.recursive": "签出（含递归）…",
-  "contextMenu.add.untracked.files.include.recursive": "添加未跟踪文件（含递归）…",
+  "contextMenu.add.untracked.files.include.recursive":
+    "添加未跟踪文件（含递归）…",
   "contextMenu.mark.for.delete.include.recursive": "标记删除（含递归）…",
   "contextMenu.revert.include.recursive": "还原（含递归）…",
   "contextMenu.copy.names": "复制 › 名称列表",
   "contextMenu.reconcile.include.recursive": "对账（含递归）…",
-  "contextMenu.revert.unchanged.files.include.recursive": "还原未修改文件（含递归）…",
-  "contextMenu.remove.from.workspace.include.recursive": "从工作区移除（含递归）…",
+  "contextMenu.revert.unchanged.files.include.recursive":
+    "还原未修改文件（含递归）…",
+  "contextMenu.remove.from.workspace.include.recursive":
+    "从工作区移除（含递归）…",
   "contextMenu.copy.current.folder.path": "复制当前目录路径",
   "contextMenu.copy.identity.default": "复制标识 default",
   "contextMenu.move.files.to.the.numbered": "移动文件到编号 CL…",
@@ -492,20 +496,28 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- codemod-converged ------------------------------------------------
-  "actions.cancellation.was.requested.it.does": "取消请求已发送；它不会回滚服务器上已生效的更改，状态仍以操作记录为准。",
-  "actions.cancellation.was.requested.legacy.response": "取消请求已发送（旧响应未提供明细）；不代表回滚或未提交。",
-  "actions.i.confirmed.the.operation.or": "我已确认相关操作或外部工具已停止。解除只允许后续写入，不撤销或重试历史操作，其结果仍待核。",
-  "actions.log.already.recorded.duplicate.deduplicated": "日志已记录（重复事件已去重）。",
-  "actions.no.live.registration.matched.now": "当前没有匹配的活动注册；这不代表操作未运行或未完成，请查看操作记录。",
+  "actions.cancellation.was.requested.it.does":
+    "取消请求已发送；它不会回滚服务器上已生效的更改，状态仍以操作记录为准。",
+  "actions.cancellation.was.requested.legacy.response":
+    "取消请求已发送（旧响应未提供明细）；不代表回滚或未提交。",
+  "actions.i.confirmed.the.operation.or":
+    "我已确认相关操作或外部工具已停止。解除只允许后续写入，不撤销或重试历史操作，其结果仍待核。",
+  "actions.log.already.recorded.duplicate.deduplicated":
+    "日志已记录（重复事件已去重）。",
+  "actions.no.live.registration.matched.now":
+    "当前没有匹配的活动注册；这不代表操作未运行或未完成，请查看操作记录。",
   "actions.outcome.unknown": "结果待核",
   "actions.release.this.write.block": "解除本次写入阻塞",
   "actions.still.running": "仍在执行",
-  "actions.the.cancellation.outcome.is.unknown": "取消结果未知；请以操作记录为准，不要据此重试业务操作。",
+  "actions.the.cancellation.outcome.is.unknown":
+    "取消结果未知；请以操作记录为准，不要据此重试业务操作。",
   "actions.the.log.entry.was.rejected": "日志条目被拒绝；业务结果不受影响。",
-  "actions.the.log.is.unavailable.the": "日志暂不可用；业务结果不受影响，也不会重放业务。",
+  "actions.the.log.is.unavailable.the":
+    "日志暂不可用；业务结果不受影响，也不会重放业务。",
   "actions.unresolved.write.blocks": "待核写入阻塞",
   "app.select.a.changelist.or.depot": "请先选择 CL 或 Depot 文件",
-  "app.connection.or.runtime.generation.changed": "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。",
+  "app.connection.or.runtime.generation.changed":
+    "连接或运行时代次已变化；此窗口已取消旧请求并重新绑定到当前连接。",
   "app.search.result.has.no.details.page": "该搜索结果的详情页尚未接入。",
   "browse.2.000.revision.safety.limit": "已达到 2,000 版本安全上限",
   "browse.actions": "操作",
@@ -545,7 +557,8 @@ export const zh = {
   "browse.connection.or.file.revision.is": "连接或文件修订无效",
   "browse.connection.unavailable": "连接不可用",
   "browse.content.was.truncated": "内容已截断",
-  "browse.could.not.parse.the.structured": "结构化差异解析失败，以下为原始 patch 预览。",
+  "browse.could.not.parse.the.structured":
+    "结构化差异解析失败，以下为原始 patch 预览。",
   "browse.create": "新建",
   "browse.create.branch.mapping": "创建 Branch Mapping",
   "browse.current": "当前",
@@ -577,12 +590,14 @@ export const zh = {
   "browse.expand.description": "展开描述",
   "browse.expand.more.revisions": "展开更多版本",
   "browse.expand.selected.reference": "展开所选引用节点",
-  "browse.explore.the.official.parent.child": "按官方 parent → child 关系查看 Stream 森林；图上操作不会直接修改工作区。",
+  "browse.explore.the.official.parent.child":
+    "按官方 parent → child 关系查看 Stream 森林；图上操作不会直接修改工作区。",
   "browse.fewer.frozen.header.rows": "减少冻结表头行",
   "browse.file.history": "文件历史",
   "browse.file.is.empty": "文件为空",
   "browse.file.mapping": "文件映射",
-  "browse.file.text.is.incomplete.showing": "文件文本不完整，以下为完整原始补丁（含后端 3 行上下文）；折叠上下文无法展开。",
+  "browse.file.text.is.incomplete.showing":
+    "文件文本不完整，以下为完整原始补丁（含后端 3 行上下文）；折叠上下文无法展开。",
   "browse.files": "文件",
   "browse.find.in.both.sides": "在两侧查找…",
   "browse.find.in.both.sides.ctrl": "在两侧查找 (Ctrl+F)",
@@ -598,7 +613,8 @@ export const zh = {
   "browse.get.target.latest.selection": "获取目标：后选",
   "browse.go.to.line": "跳转行号",
   "browse.guessed": "（推测）",
-  "browse.history.reached.its.safety.limit": "历史结果达到安全上限，当前结果已截断。",
+  "browse.history.reached.its.safety.limit":
+    "历史结果达到安全上限，当前结果已截断。",
   "browse.history.results.are.partial": "历史结果不完整。",
   "browse.hunks": "区块",
   "browse.impact.preview": "影响预览",
@@ -685,7 +701,8 @@ export const zh = {
   "browse.recent.snapshot": "近期快照",
   "browse.record.paths": "记录路径",
   "browse.records": "条记录",
-  "browse.records.are.incomplete.or.references": "记录不完整或存在尚未展开的引用节点",
+  "browse.records.are.incomplete.or.references":
+    "记录不完整或存在尚未展开的引用节点",
   "browse.refresh": "刷新",
   "browse.related.file.range": "关联文件范围",
   "browse.reset": "重置",
@@ -708,11 +725,14 @@ export const zh = {
   "browse.scope": "调查范围",
   "browse.search.list": "搜索当前列表",
   "browse.search.list.2": "搜索当前列表…",
-  "browse.select.a.file.and.open": "在文件页选中文件后打开此页签，或在上方输入路径。",
-  "browse.select.a.file.before.opening": "从文件页选择文件后打开 History，或输入 Depot 文件路径。",
+  "browse.select.a.file.and.open":
+    "在文件页选中文件后打开此页签，或在上方输入路径。",
+  "browse.select.a.file.before.opening":
+    "从文件页选择文件后打开 History，或输入 Depot 文件路径。",
   "browse.select.a.file.or.enter": "选择文件，或在上方输入路径。",
   "browse.select.a.revision": "请选择版本",
-  "browse.select.a.single.file.refresh": "请选择单个文件；读取预算已达上限时请手动刷新。",
+  "browse.select.a.single.file.refresh":
+    "请选择单个文件；读取预算已达上限时请手动刷新。",
   "browse.select.two.valid.revisions.of": "请选择同一文件的两个有效修订",
   "browse.selected.file.revision": "选定文件版本",
   "browse.selected.mapping": "所选 Mapping",
@@ -721,7 +741,8 @@ export const zh = {
   "browse.show.only.this.lane": "只显示此轨道",
   "browse.side.by.side.view": "并排视图",
   "browse.snapshot.time": "快照时间",
-  "browse.solid.revision.branch.dashed.merge": "实线：版本 / 分支　虚线：合并 / 复制",
+  "browse.solid.revision.branch.dashed.merge":
+    "实线：版本 / 分支　虚线：合并 / 复制",
   "browse.source": "来源",
   "browse.source.branch.root": "源分支根目录",
   "browse.source.revision.target.file": "来源版本 → 目标文件",
@@ -729,7 +750,8 @@ export const zh = {
   "browse.stream.details": "Stream 详情",
   "browse.stream.graph.visualization": "Stream 图可视化",
   "browse.stream.text.filter": "Stream 文本过滤",
-  "browse.streams.types.and.parent.relationships": "查看服务器上的分支流、类型和父子关系。",
+  "browse.streams.types.and.parent.relationships":
+    "查看服务器上的分支流、类型和父子关系。",
   "browse.structured.view": "结构化视图",
   "browse.submitted.cl.file.by.file": "整个已提交 CL（逐文件）",
   "browse.switch.to.the.raw.patch": "切换到原始补丁视图",
@@ -744,9 +766,12 @@ export const zh = {
   "browse.text.budget.reached.later.rows": "文本预算用尽，后续行未显示",
   "browse.text.diff.unavailable": "无法显示文本差异",
   "browse.text.filter": "文本过滤",
-  "browse.the.backend.returned.a.non": "后端返回了未前进的游标；已保留当前节点并停止分页。",
-  "browse.the.backend.returned.a.repeated": "后端返回了重复游标；已保留当前版本图。",
-  "browse.the.backend.returned.a.repeated.2": "后端返回了重复游标；已保留当前历史记录。",
+  "browse.the.backend.returned.a.non":
+    "后端返回了未前进的游标；已保留当前节点并停止分页。",
+  "browse.the.backend.returned.a.repeated":
+    "后端返回了重复游标；已保留当前版本图。",
+  "browse.the.backend.returned.a.repeated.2":
+    "后端返回了重复游标；已保留当前历史记录。",
   "browse.this.worksheet.is.empty": "此工作表为空",
   "browse.trace.origins": "来源追溯",
   "browse.trace.to.target": "目标合入查询",
@@ -777,32 +802,46 @@ export const zh = {
   "commands.filter.commands": "筛选命令",
   "commands.preflight.confirmation.required": " · 需要预检/确认",
   "commands.type.a.command.or.id": "输入命令名称或 ID",
-  "companySubmit.an.earlier.snapshot.has.a": "旧连接快照仍有模拟会话；切换连接不会解锁请求。",
-  "companySubmit.awaiting.host.planning.tool.availability": "等待宿主规划；工具存在性未核验。",
+  "companySubmit.an.earlier.snapshot.has.a":
+    "旧连接快照仍有模拟会话；切换连接不会解锁请求。",
+  "companySubmit.awaiting.host.planning.tool.availability":
+    "等待宿主规划；工具存在性未核验。",
   "companySubmit.check.status": "检查状态",
   "companySubmit.close": "关闭",
-  "companySubmit.connection.identity.unavailable.real.launch": "无法取得有效连接身份，真实启动保持禁用。",
+  "companySubmit.connection.identity.unavailable.real.launch":
+    "无法取得有效连接身份，真实启动保持禁用。",
   "companySubmit.custom.submit.tool": "自定义提交工具",
   "companySubmit.custom.submit.tool.not.connected": "自定义提交工具（未接入）",
   "companySubmit.custom.submit.tool.plan.preview": "自定义提交工具方案预览",
-  "companySubmit.exit.code.display.only.not": "退出码（仅展示，不构成成功/失败依据）：",
-  "companySubmit.external.tool.started.running.this": "外部工具已启动/运行中；这只表示启动意图，不代表提交成功，结果由工具与后续 submitted CL 回读确认。",
-  "companySubmit.host.positively.reports.the.tool": "host 正证据：工具未启动，因此未提交（这不代表成功，也不代表失败）。",
-  "companySubmit.launch.custom.submit.tool.disabled": "启动自定义提交工具（禁用）",
-  "companySubmit.launch.outcome.unknown.check.status": "启动结果未知，请检查状态；不会自动重试。",
+  "companySubmit.exit.code.display.only.not":
+    "退出码（仅展示，不构成成功/失败依据）：",
+  "companySubmit.external.tool.started.running.this":
+    "外部工具已启动/运行中；这只表示启动意图，不代表提交成功，结果由工具与后续 submitted CL 回读确认。",
+  "companySubmit.host.positively.reports.the.tool":
+    "host 正证据：工具未启动，因此未提交（这不代表成功，也不代表失败）。",
+  "companySubmit.launch.custom.submit.tool.disabled":
+    "启动自定义提交工具（禁用）",
+  "companySubmit.launch.outcome.unknown.check.status":
+    "启动结果未知，请检查状态；不会自动重试。",
   "companySubmit.local.absolute.exe.path": "自定义提交工具本机 .exe 绝对路径",
-  "companySubmit.no.fallback.to.native.submission": "不会回退到普通提交；关闭此窗口不会终止外部工具。取消操作不会终止外部工具，也不代表未提交。",
-  "companySubmit.not.started.check.the.configuration": "未启动，请检查配置和所选 CL。",
+  "companySubmit.no.fallback.to.native.submission":
+    "不会回退到普通提交；关闭此窗口不会终止外部工具。取消操作不会终止外部工具，也不代表未提交。",
+  "companySubmit.not.started.check.the.configuration":
+    "未启动，请检查配置和所选 CL。",
   "companySubmit.path.used.for.this.attempt": "本次尝试路径：",
   "companySubmit.reading.active.configuration": "正在读取生效配置…",
   "companySubmit.reading.host.connection.identity": "正在读取宿主连接身份…",
-  "companySubmit.real.launch.is.disabled.pending": "真实启动禁用；工作目录、认证与后台会话行为尚待隔离验证。",
+  "companySubmit.real.launch.is.disabled.pending":
+    "真实启动禁用；工作目录、认证与后台会话行为尚待隔离验证。",
   "companySubmit.refresh.connection.identity": "重新读取连接身份",
   "companySubmit.starting": "正在启动…",
-  "companySubmit.this.records.that.launch.attempt": "这是该次启动尝试的记录，不代表当前已保存配置；检查状态不会重新启动工具。",
-  "companySubmit.tool.process.exited.or.is": "工具进程已退出或无法轮询：提交结果未知。退出码仅展示，绝不作为成功/失败依据；请检查工具并等待 submitted CL 回读。",
+  "companySubmit.this.records.that.launch.attempt":
+    "这是该次启动尝试的记录，不代表当前已保存配置；检查状态不会重新启动工具。",
+  "companySubmit.tool.process.exited.or.is":
+    "工具进程已退出或无法轮询：提交结果未知。退出码仅展示，绝不作为成功/失败依据；请检查工具并等待 submitted CL 回读。",
   "contextMenu.context.menu.layer": "右键菜单层",
-  "contextMenu.navigate.enter.run.esc.close": "↑ ↓ 选择 · Enter 执行 · Esc 关闭",
+  "contextMenu.navigate.enter.run.esc.close":
+    "↑ ↓ 选择 · Enter 执行 · Esc 关闭",
   "dialogs.add.to.p4": "添加到 P4",
   "dialogs.blocker": "阻塞：",
   "dialogs.cancel": "取消",
@@ -824,13 +863,15 @@ export const zh = {
   "docking.close.all.tabs": "关闭所有页签",
   "docking.depot.path": "Depot 路径",
   "docking.diff.file.path": "差异文件路径",
-  "docking.following.file.selection.click.to": "正在跟随文件选择；点击锁定当前目标",
+  "docking.following.file.selection.click.to":
+    "正在跟随文件选择；点击锁定当前目标",
   "docking.new.tab": "新页签",
   "docking.no.file.selected": "尚未选择文件",
   "docking.preview.file.path": "预览文件路径",
   "docking.revision.graph.file.path": "修订图文件路径",
   "docking.target.locked.click.to.follow": "目标已锁定；点击恢复跟随文件选择",
-  "docking.workspace.path.paste.a.local": "工作区内路径 · 可粘贴本地或 Depot 路径",
+  "docking.workspace.path.paste.a.local":
+    "工作区内路径 · 可粘贴本地或 Depot 路径",
   "files.accept.auto.merge": "接受自动合并",
   "files.accept.block.both": "采用当前块 Both",
   "files.accept.block.theirs": "采用当前块 Theirs",
@@ -864,7 +905,8 @@ export const zh = {
   "files.check.conflict.blocks": "需检查冲突块",
   "files.check.out": "签出",
   "files.checking": "预检中…",
-  "files.checking.connection.and.login.automatically": "正在自动检查连接与登录状态…",
+  "files.checking.connection.and.login.automatically":
+    "正在自动检查连接与登录状态…",
   "files.close": "关闭",
   "files.collapse": "折叠",
   "files.comfortable": "舒适",
@@ -957,8 +999,10 @@ export const zh = {
   "files.no.recognizable.validation.result": "未收到可识别的校验结果",
   "files.no.remaining.conflicts": "无剩余冲突",
   "files.no.resolve.data.returned": "未返回 Resolve 数据",
-  "files.no.workspace.root.configured.select": "未配置工作区根目录，请先选择工作区。",
-  "files.no.workspace.root.configured.select.2": "未配置工作区根目录，请先选择工作区。",
+  "files.no.workspace.root.configured.select":
+    "未配置工作区根目录，请先选择工作区。",
+  "files.no.workspace.root.configured.select.2":
+    "未配置工作区根目录，请先选择工作区。",
   "files.none": "无",
   "files.not.connected.add.or.select": "未连接，请在设置中添加或选择连接。",
   "files.not.returned": "未返回",
@@ -1059,9 +1103,11 @@ export const zh = {
   "notify.p4.operation.needs.attention": "P4 操作需要处理",
   "notify.return.to.p4deck.for.details": "请返回 P4Deck 查看详情。",
   "notify.the.operation.completed": "操作已完成。",
-  "PageRenderertsx.checking.connection.and.login.automatically": "正在自动检查连接与登录状态…",
+  "PageRenderertsx.checking.connection.and.login.automatically":
+    "正在自动检查连接与登录状态…",
   "PageRenderertsx.connection.settings": "连接设置",
-  "PageRenderertsx.not.connected.add.or.select": "未连接，请在设置中添加或选择连接。",
+  "PageRenderertsx.not.connected.add.or.select":
+    "未连接，请在设置中添加或选择连接。",
   "pending.12.read.budget.reached": "达到12次读取预算",
   "pending.a.numbered.changelist.is.required": "只能编辑已编号的 CL。",
   "pending.action": "动作",
@@ -1111,12 +1157,14 @@ export const zh = {
   "pending.created.cl": "已创建 CL",
   "pending.creating": "正在新建…",
   "pending.current.list.snapshot": "当前列表快照",
-  "pending.current.results.were.preserved.restart": "已保留当前结果；请从第一页重新加载。",
+  "pending.current.results.were.preserved.restart":
+    "已保留当前结果；请从第一页重新加载。",
   "pending.current.workspace": "当前工作区",
   "pending.custom.submit.tool": "自定义提交工具",
   "pending.delete": "删除",
   "pending.delete.all": "删除全部",
-  "pending.delete.only.server.shelf.revisions": "仅删除服务器搁置版本，不会同时删除工作区文件或整个 CL。",
+  "pending.delete.only.server.shelf.revisions":
+    "仅删除服务器搁置版本，不会同时删除工作区文件或整个 CL。",
   "pending.delete.selected.shelf.revisions": "确认删除所选搁置版本",
   "pending.delete.shelved.files": "删除搁置内容",
   "pending.delete.shelved.revisions": "删除搁置内容",
@@ -1150,7 +1198,8 @@ export const zh = {
   "pending.filter.by.status": "按状态筛选",
   "pending.filter.by.type": "按类型筛选",
   "pending.filter.target.changelists": "筛选目标 CL",
-  "pending.filters.loaded.records.load.more": "仅筛选已加载记录，可继续加载更多；规则不验证 CI 身份。",
+  "pending.filters.loaded.records.load.more":
+    "仅筛选已加载记录，可继续加载更多；规则不验证 CI 身份。",
   "pending.find.destinations": "查询合并去向",
   "pending.fixed.source.files": "固定来源文件",
   "pending.fresh": "最新",
@@ -1213,7 +1262,8 @@ export const zh = {
   "pending.operation.cancelled": "操作已取消。",
   "pending.operations": "操作记录",
   "pending.outcome": "结果：",
-  "pending.p4.could.not.resolve.the": "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。",
+  "pending.p4.could.not.resolve.the":
+    "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。",
   "pending.pages": "页",
   "pending.pages.2": "页",
   "pending.partial.records.unknown": "部分记录 / 未知",
@@ -1235,7 +1285,8 @@ export const zh = {
   "pending.record.cl": "记录 CL",
   "pending.refresh": "刷新",
   "pending.refresh.investigation": "刷新调查",
-  "pending.release.write.blocks.under.tools": "可到「工具 → 操作日志」解除写入阻塞。",
+  "pending.release.write.blocks.under.tools":
+    "可到「工具 → 操作日志」解除写入阻塞。",
   "pending.replace": "替换",
   "pending.replace.selected.shelf.revisions": "替换所选文件的搁置版本",
   "pending.resolve.risk": "Resolve 风险",
@@ -1253,7 +1304,8 @@ export const zh = {
   "pending.scanned": "已扫描",
   "pending.select.a.shelved.file.to": "选择 Shelf 文件以预览",
   "pending.selected.files.and.original.cl": "仅选中文件及原 CL",
-  "pending.selected.files.have.unresolved.items": "选中文件有未确认项，请先核实。",
+  "pending.selected.files.have.unresolved.items":
+    "选中文件有未确认项，请先核实。",
   "pending.selected.files.move.completed": "所选文件移动完成。",
   "pending.shelf.cl": "搁置 CL",
   "pending.shelf.detail.and.content.preview": "独立 Shelf 详情与内容预览",
@@ -1285,13 +1337,20 @@ export const zh = {
   "pending.target.workspace": "目标 Workspace",
   "pending.technical.details": "技术详情",
   "pending.text.preview.unsupported": "不支持文本预览",
-  "pending.the.backend.did.not.return": "后端未返回可继续的 Shelf 游标；请重新加载。",
-  "pending.the.backend.returned.a.non": "后端返回了不可继续的游标；已保留当前部分结果。",
-  "pending.the.shelf.cursor.cannot.advance": "Shelf 游标不可继续；请从第一页重新加载。",
-  "pending.the.shelf.page.does.not": "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。",
-  "pending.the.shelf.response.does.not": "Shelf 响应与当前连接或请求代次不匹配；请重新加载。",
-  "pending.the.shelf.snapshot.returned.duplicates": "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。",
-  "pending.these.are.simulated.browser.mock": "这是浏览器 Mock 的模拟提交文件，未访问真实 P4 Server。",
+  "pending.the.backend.did.not.return":
+    "后端未返回可继续的 Shelf 游标；请重新加载。",
+  "pending.the.backend.returned.a.non":
+    "后端返回了不可继续的游标；已保留当前部分结果。",
+  "pending.the.shelf.cursor.cannot.advance":
+    "Shelf 游标不可继续；请从第一页重新加载。",
+  "pending.the.shelf.page.does.not":
+    "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。",
+  "pending.the.shelf.response.does.not":
+    "Shelf 响应与当前连接或请求代次不匹配；请重新加载。",
+  "pending.the.shelf.snapshot.returned.duplicates":
+    "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。",
+  "pending.these.are.simulated.browser.mock":
+    "这是浏览器 Mock 的模拟提交文件，未访问真实 P4 Server。",
   "pending.this.change.contains.no.files": "此提交没有文件",
   "pending.time": "时间",
   "pending.trace.integration.destinations": "追踪合并去向",
@@ -1359,7 +1418,8 @@ export const zh = {
   "settings.accent.color": "主题强调色",
   "settings.accent.text": "强调文字",
   "settings.always.available": "始终可用",
-  "settings.applied.and.saved.instantly.lightness": "立即生效并保存；浅深主题自动调整明暗以保持可读性。成功、警告和错误颜色保持独立。",
+  "settings.applied.and.saved.instantly.lightness":
+    "立即生效并保存；浅深主题自动调整明暗以保持可读性。成功、警告和错误颜色保持独立。",
   "settings.back": "返回修改",
   "settings.back.to.edit": "返回修改",
   "settings.background.color": "背景色",
@@ -1383,7 +1443,8 @@ export const zh = {
   "settings.color.value.rrggbb": "颜色值（#RRGGBB）",
   "settings.comfortable": "舒适",
   "settings.compact": "紧凑",
-  "settings.complete.the.corresponding.cli.trust": "请在设置主区完成对应的 CLI、Trust 或登录恢复后重试。",
+  "settings.complete.the.corresponding.cli.trust":
+    "请在设置主区完成对应的 CLI、Trust 或登录恢复后重试。",
   "settings.configure.p4": "去配置 P4",
   "settings.confirm.deletion": "确认删除",
   "settings.confirm.staged.restore": "确认暂存恢复",
@@ -1423,7 +1484,8 @@ export const zh = {
   "settings.edit.saved.connection": "编辑已保存连接",
   "settings.email": "邮箱",
   "settings.enter.server.first": "请先填写 Server。",
-  "settings.enter.six.hex.digits.the": "请输入六位十六进制颜色；当前主题保持上次有效值。",
+  "settings.enter.six.hex.digits.the":
+    "请输入六位十六进制颜色；当前主题保持上次有效值。",
   "settings.enter.user.first": "请先填写 User。",
   "settings.exit.application": "退出应用",
   "settings.failures.and.attention.only": "仅失败与需处理事件",
@@ -1464,7 +1526,8 @@ export const zh = {
   "settings.no.additional.details": "无附加信息",
   "settings.no.connection.file": "无连接文件",
   "settings.no.local.backups.yet": "还没有本地备份。",
-  "settings.no.p4.connection.is.active": "还没有生效的 P4 连接。请先前往设置保存并启用连接。",
+  "settings.no.p4.connection.is.active":
+    "还没有生效的 P4 连接。请先前往设置保存并启用连接。",
   "settings.no.placement.file": "无窗口位置",
   "settings.notification.scope": "通知范围",
   "settings.off": "关闭",
@@ -1500,7 +1563,8 @@ export const zh = {
   "settings.restore.failed": "恢复失败：",
   "settings.restore.waiting.for.restart": "恢复等待重启：",
   "settings.retry.root": "重试解析",
-  "settings.save.a.connection.then.activate": "保存连接后，点击“启用连接”完成验证。",
+  "settings.save.a.connection.then.activate":
+    "保存连接后，点击“启用连接”完成验证。",
   "settings.save.connection": "保存连接",
   "settings.save.the.current.changes.first": "请先保存当前修改。",
   "settings.saved.connection.deleted": "已保存连接已删除。",
@@ -1526,7 +1590,8 @@ export const zh = {
   "settings.sync.mode": "同步方式",
   "settings.system": "跟随系统",
   "settings.that.connection.name.already.exists": "连接名称已存在。",
-  "settings.the.operation.did.not.complete": "操作未完成；当前连接未改动，请重试。",
+  "settings.the.operation.did.not.complete":
+    "操作未完成；当前连接未改动，请重试。",
   "settings.theme": "主题",
   "settings.theme.default": "跟随主题",
   "settings.there.are.no.changes.to": "没有需要保存的修改。",
@@ -1553,17 +1618,21 @@ export const zh = {
   "shell.auto.refresh": "自动刷新",
   "shell.auto.refresh.paused": "自动刷新已暂停",
   "shell.auto.refresh.paused.click.to": "自动刷新已暂停；点击恢复",
-  "shell.auto.refresh.runs.idempotent.reads": "自动刷新只运行幂等只读请求；点击暂停",
+  "shell.auto.refresh.runs.idempotent.reads":
+    "自动刷新只运行幂等只读请求；点击暂停",
   "shell.available": "可用",
   "shell.cancel.all": "取消全部",
   "shell.cancel.all.p4.tasks": "取消全部 P4 任务",
   "shell.cancel.task": "取消任务",
-  "shell.cancellation.failed.retry.or.inspect": "取消请求失败，请重试或查看日志。",
+  "shell.cancellation.failed.retry.or.inspect":
+    "取消请求失败，请重试或查看日志。",
   "shell.cancelling": "正在取消",
   "shell.cancelling.2": "取消中…",
-  "shell.cancelling.all.tasks.failed.retry": "取消全部任务的请求失败，请重试或逐项取消。",
+  "shell.cancelling.all.tasks.failed.retry":
+    "取消全部任务的请求失败，请重试或逐项取消。",
   "shell.check.now": "手动检查",
-  "shell.check.reachability.only.preserve.response": "仅检查可达性，不评估响应质量或清除登录与权限状态",
+  "shell.check.reachability.only.preserve.response":
+    "仅检查可达性，不评估响应质量或清除登录与权限状态",
   "shell.checking": "检查中…",
   "shell.close.connection.status": "关闭连接状态",
   "shell.close.window": "关闭窗口",
@@ -1586,8 +1655,10 @@ export const zh = {
   "shell.go": "跳转",
   "shell.last.request.authorized": "最近请求已授权",
   "shell.loading.pending.changelists": "读取待提交 CL",
-  "shell.local.depot.path.enter.or": "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转",
-  "shell.local.disk.capacity.requires.the": "浏览器无法读取本地磁盘容量，请使用桌面版",
+  "shell.local.depot.path.enter.or":
+    "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转",
+  "shell.local.disk.capacity.requires.the":
+    "浏览器无法读取本地磁盘容量，请使用桌面版",
   "shell.local.response": "本机响应",
   "shell.login.permissions": "登录 / 权限",
   "shell.manual.check.requires.the.desktop": "手动检查仅桌面版可用。",
@@ -1596,18 +1667,21 @@ export const zh = {
   "shell.no.recent.samples": "暂无近期样本",
   "shell.no.target.selected.for.get": "没有可获取最新的目标",
   "shell.object.actions": "对象操作",
-  "shell.observed.existing.requests.not.server": "已有请求的本机观测，非服务器负载",
+  "shell.observed.existing.requests.not.server":
+    "已有请求的本机观测，非服务器负载",
   "shell.open.tab": "打开页签",
   "shell.operation": "任务",
   "shell.operation.cancelled": "操作已取消",
   "shell.operation.did.not.fully.succeed": "操作未完全成功",
-  "shell.operation.feedback.received.no.exit": "已收到操作反馈（未提供退出状态）",
+  "shell.operation.feedback.received.no.exit":
+    "已收到操作反馈（未提供退出状态）",
   "shell.operation.finished.with.warnings": "操作结束，存在警告",
   "shell.p4.connection.status": "P4 连接状态",
   "shell.p4.idle": "P4 空闲",
   "shell.p4.operation.progress": "P4 操作进度",
   "shell.p4.passive.connection.status": "P4 被动连接状态",
-  "shell.p4.progress.concurrent.operations.averaged": "P4 操作进度；并发任务取平均值，无可量化进度时显示运行状态",
+  "shell.p4.progress.concurrent.operations.averaged":
+    "P4 操作进度；并发任务取平均值，无可量化进度时显示运行状态",
   "shell.p4.tasks": "P4 任务",
   "shell.page.navigation": "页面导航",
   "shell.pages": "页面",
@@ -1621,29 +1695,36 @@ export const zh = {
   "shell.reachable": "连接正常",
   "shell.reading.disk.capacity": "正在读取磁盘容量",
   "shell.refresh.failed": "刷新失败",
-  "shell.refresh.files.and.pending.lists": "刷新文件与待提交列表（不会自动同步）",
+  "shell.refresh.files.and.pending.lists":
+    "刷新文件与待提交列表（不会自动同步）",
   "shell.requests.observed.no.speed.sample": "已观察请求，尚未测速",
   "shell.resize.resource.sidebar": "调整资源侧栏宽度",
   "shell.restore.window": "还原窗口",
   "shell.running": "项执行中",
-  "shell.running.cancellation.does.not.undo": "执行中；取消不会回滚已完成的修改",
+  "shell.running.cancellation.does.not.undo":
+    "执行中；取消不会回滚已完成的修改",
   "shell.settings": "设置",
   "shell.show.tab": "切换到页签",
   "shell.sign.in.required.or.expired": "需要登录或登录已过期",
   "shell.slower": "变慢",
   "shell.smooth": "流畅",
-  "shell.some.files.may.have.changed": "部分文件可能已改变。取消或失败不会回滚已完成部分，请刷新并检查日志。",
-  "shell.the.connection.is.not.ready": "当前连接未就绪或状态暂不可用，无法手动检查。",
-  "shell.the.operation.did.not.return": "操作长时间未返回，结果未知，请刷新核对",
+  "shell.some.files.may.have.changed":
+    "部分文件可能已改变。取消或失败不会回滚已完成部分，请刷新并检查日志。",
+  "shell.the.connection.is.not.ready":
+    "当前连接未就绪或状态暂不可用，无法手动检查。",
+  "shell.the.operation.did.not.return":
+    "操作长时间未返回，结果未知，请刷新核对",
   "shell.theme": "主题",
-  "shell.this.operation.may.have.partially": "此操作可能已部分执行；失败或取消不会自动回滚，请检查日志和文件状态。",
+  "shell.this.operation.may.have.partially":
+    "此操作可能已部分执行；失败或取消不会自动回滚，请检查日志和文件状态。",
   "shell.unavailable": "容量不可用",
   "shell.updated": "更新于",
   "shell.waiting.for.system.dialog": "等待系统窗口",
   "shell.window.action.failed": "窗控操作失败",
   "swarm.configure.swarm": "配置 Swarm…",
   "swarm.open.in.swarm": "在 Swarm 中打开",
-  "swarm.swarm.was.not.opened.safely": "未能安全打开 Swarm；连接可能已切换，请重试。",
+  "swarm.swarm.was.not.opened.safely":
+    "未能安全打开 Swarm；连接可能已切换，请重试。",
   "tools.actions": "动作",
   "tools.all.levels": "全部级别",
   "tools.all.sources": "全部来源",
@@ -1651,7 +1732,8 @@ export const zh = {
   "tools.all.types": "全部类型",
   "tools.apply.refresh": "应用 / 刷新",
   "tools.authentication.expired": "认证已失效",
-  "tools.browser.mock.metrics.and.export": "浏览器 Mock：指标和导出均为本地模拟，不访问 P4 Server，也不会创建诊断文件。",
+  "tools.browser.mock.metrics.and.export":
+    "浏览器 Mock：指标和导出均为本地模拟，不访问 P4 Server，也不会创建诊断文件。",
   "tools.cancel.requested.execution.may.be": "已请求取消，执行范围可能不完整",
   "tools.cancelled": "已取消",
   "tools.capacity.5.50.mib": "容量上限（5–50 MiB）",
@@ -1667,16 +1749,20 @@ export const zh = {
   "tools.current.entries": "当前条目",
   "tools.current.session.logs": "本次运行日志",
   "tools.diagnostic.export": "诊断导出",
-  "tools.diagnostic.export.completed.legacy.result": "诊断导出完成（旧版结果）。",
-  "tools.diagnostic.export.verified.by.readback": "诊断导出已完成（路径/大小/sha256 由回读确认；未读取导出内容）。",
-  "tools.do.not.immediately.retry.a": "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。",
+  "tools.diagnostic.export.completed.legacy.result":
+    "诊断导出完成（旧版结果）。",
+  "tools.diagnostic.export.verified.by.readback":
+    "诊断导出已完成（路径/大小/sha256 由回读确认；未读取导出内容）。",
+  "tools.do.not.immediately.retry.a":
+    "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。",
   "tools.duration": "耗时",
   "tools.error.recovery": "错误 / 恢复",
   "tools.estimated.usage": "估算占用",
   "tools.evicted.invalidated": "淘汰 / 失效",
   "tools.export": "导出",
   "tools.export.failed": "导出失败：",
-  "tools.export.outcome.uncertain.the.file": "导出结果不确定：文件可能已写入但回读未确认。已用同一操作号查询持久回执；请核对导出目录，不要换新操作号重试。",
+  "tools.export.outcome.uncertain.the.file":
+    "导出结果不确定：文件可能已写入但回读未确认。已用同一操作号查询持久回执；请核对导出目录，不要换新操作号重试。",
   "tools.exporting.redacted.diagnostics": "正在导出脱敏诊断…",
   "tools.follow.tail": "跟随尾部",
   "tools.from": "开始",
@@ -1690,10 +1776,12 @@ export const zh = {
   "tools.loading.policy": "正在读取策略…",
   "tools.loads.total.time": "加载次数 / 总耗时",
   "tools.log.filters": "日志筛选",
-  "tools.log.in.again.and.refresh": "重新登录后先刷新。若中断的是写操作，请先从服务器侧核对，再明确决定是否重试。",
+  "tools.log.in.again.and.refresh":
+    "重新登录后先刷新。若中断的是写操作，请先从服务器侧核对，再明确决定是否重试。",
   "tools.log.level": "日志级别",
   "tools.log.policy.saved": "日志策略已保存。",
-  "tools.log.policy.saved.readback.matches": "日志策略已保存（回读逐字段一致）。",
+  "tools.log.policy.saved.readback.matches":
+    "日志策略已保存（回读逐字段一致）。",
   "tools.log.retention.policy": "日志保留策略",
   "tools.log.source": "日志来源",
   "tools.logs": "关联日志",
@@ -1702,7 +1790,8 @@ export const zh = {
   "tools.no.matching.logs": "暂无匹配日志",
   "tools.no.matching.operations": "暂无匹配操作",
   "tools.offline.stale.fallbacks": "离线 stale 回退",
-  "tools.only.backend.provided.cumulative.counters": "仅展示后端实际提供的累计计数与当前占用。",
+  "tools.only.backend.provided.cumulative.counters":
+    "仅展示后端实际提供的累计计数与当前占用。",
   "tools.operation": "操作",
   "tools.operation.filter": "操作筛选",
   "tools.operation.filters": "操作筛选",
@@ -1710,18 +1799,22 @@ export const zh = {
   "tools.operation.state": "操作状态",
   "tools.operation.type": "操作类型",
   "tools.p4.log": "P4 日志",
-  "tools.reconnect.and.refresh.after.the": "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。",
+  "tools.reconnect.and.refresh.after.the":
+    "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。",
   "tools.records": "条",
   "tools.refresh": "刷新",
-  "tools.refresh.pending.and.workspace.before": "刷新 Pending 和 Workspace 后再决定是否继续。取消只停止剩余工作，不会撤销已完成部分。",
+  "tools.refresh.pending.and.workspace.before":
+    "刷新 Pending 和 Workspace 后再决定是否继续。取消只停止剩余工作，不会撤销已完成部分。",
   "tools.refreshing.cache.metrics": "正在刷新缓存指标…",
-  "tools.retention.and.capacity.are.enforced": "保留期与容量由后端强制执行。新日志不会自动展开或切换工具区；未查看的新 Error 只在底部日志入口显示红点。",
+  "tools.retention.and.capacity.are.enforced":
+    "保留期与容量由后端强制执行。新日志不会自动展开或切换工具区；未查看的新 Error 只在底部日志入口显示红点。",
   "tools.retention.days.1.30": "保留天数（1–30）",
   "tools.retention.must.be.1.30": "保留期必须为 1–30 天，容量必须为 5–50 MiB。",
   "tools.retry": "重试",
   "tools.retry.load.more": "重试继续加载",
   "tools.save.failed.previous.policy.restored": "保存失败，已恢复原策略：",
-  "tools.save.outcome.uncertain.the.readback": "保存结果不确定：回读未逐字段匹配。已用同一操作号查询持久回执；已恢复上次已知策略，请核对后再操作。",
+  "tools.save.outcome.uncertain.the.readback":
+    "保存结果不确定：回读未逐字段匹配。已用同一操作号查询持久回执；已恢复上次已知策略，请核对后再操作。",
   "tools.save.policy": "保存策略",
   "tools.saving": "正在保存…",
   "tools.search.logs": "搜索日志",
@@ -1732,13 +1825,16 @@ export const zh = {
   "tools.status.cache.diagnostics": "状态缓存诊断",
   "tools.summary": "操作摘要",
   "tools.superseded.responses": "过时代次响应",
-  "tools.the.backend.produces.a.size": "后端生成受控大小的脱敏 JSON；不包含密码、ticket、完整 fingerprint 或原始环境变量。",
-  "tools.the.existing.safe.open.capability": "当前安全打开能力仅允许 Workspace 内路径，因此不会用它打开诊断导出目录。",
+  "tools.the.backend.produces.a.size":
+    "后端生成受控大小的脱敏 JSON；不包含密码、ticket、完整 fingerprint 或原始环境变量。",
+  "tools.the.existing.safe.open.capability":
+    "当前安全打开能力仅允许 Workspace 内路径，因此不会用它打开诊断导出目录。",
   "tools.time": "时间",
   "tools.to": "结束",
   "tools.truncated": " · 已截断",
   "tools.unknown.result.verify.manually": "结果未知，必须人工核对",
-  "tools.verify.logs.and.server.state": "先核对日志和服务器实际状态，再决定是否重试；写操作不会自动重放。",
+  "tools.verify.logs.and.server.state":
+    "先核对日志和服务器实际状态，再决定是否重试；写操作不会自动重放。",
   "tools.view.logs": "查看日志",
   "tools.view.operation": "查看操作",
   "update.check.again": "重新检查",
@@ -1758,7 +1854,8 @@ export const zh = {
   "update.install.then.restart": "立即安装后重启",
   "update.installer.size": "安装包大小",
   "update.installing": "正在安装…",
-  "update.installing.the.update.failed.the": "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。",
+  "update.installing.the.update.failed.the":
+    "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。",
   "update.installing.the.update.open.the": "正在安装更新，点击查看进度",
   "update.installing.update": "正在安装更新…",
   "update.installing.update.2": "正在安装更新",
@@ -1772,11 +1869,16 @@ export const zh = {
   "update.restarting.the.app": "正在重启应用…",
   "update.the.update.check.failed": "检查更新失败。",
   "update.the.update.failed.open.the": "更新失败，点击查看原因",
-  "update.the.update.is.downloaded.confirm": "更新已下载，确认安装并重启后生效；点击查看",
-  "update.the.update.is.installed.but": "更新已安装，但自动重启失败；请手动重启 P4Deck 完成更新。",
-  "update.the.update.is.installed.restart": "更新已安装，请手动重启应用完成更新",
-  "update.the.update.package.failed.verification": "更新包校验失败，安装已取消；请稍后重试或手动下载安装包。",
-  "update.the.update.package.failed.verification.2": "更新包校验失败；请稍后重试或手动下载安装包。",
+  "update.the.update.is.downloaded.confirm":
+    "更新已下载，确认安装并重启后生效；点击查看",
+  "update.the.update.is.installed.but":
+    "更新已安装，但自动重启失败；请手动重启 P4Deck 完成更新。",
+  "update.the.update.is.installed.restart":
+    "更新已安装，请手动重启应用完成更新",
+  "update.the.update.package.failed.verification":
+    "更新包校验失败，安装已取消；请稍后重试或手动下载安装包。",
+  "update.the.update.package.failed.verification.2":
+    "更新包校验失败；请稍后重试或手动下载安装包。",
   "update.update.downloaded": "更新已下载",
   "update.update.failed": "更新失败",
   "update.you.are.up.to.date": "当前已是最新版本。",
@@ -1816,11 +1918,14 @@ export const zh = {
   "workspaces.search.workspace.host.path": "搜索工作区、主机、路径…",
   "workspaces.search.workspaces": "搜索工作区",
   "workspaces.search.workspaces.2": "搜索 Workspace",
-  "workspaces.simulated.mock.workspace.switching.only": "Simulated Mock：Workspace 切换只更新模拟 Context，不访问真实网络。",
+  "workspaces.simulated.mock.workspace.switching.only":
+    "Simulated Mock：Workspace 切换只更新模拟 Context，不访问真实网络。",
   "workspaces.standard": "标准同步",
   "workspaces.still.exists": "仍然存在",
-  "workspaces.switch.failed.the.current.workspace": "切换失败，当前 Workspace 保持不变。",
-  "workspaces.switch.failed.the.previous.workspace": "切换失败，原 Workspace 保持不变。",
+  "workspaces.switch.failed.the.current.workspace":
+    "切换失败，当前 Workspace 保持不变。",
+  "workspaces.switch.failed.the.previous.workspace":
+    "切换失败，原 Workspace 保持不变。",
   "workspaces.switch.to.another.workspace.first": "请先切换到其他工作区",
   "workspaces.switch.to.this.workspace": "切换到此工作区",
   "workspaces.switch.unavailable": "当前不可切换",
@@ -1829,14 +1934,15 @@ export const zh = {
   "workspaces.updated": "更新时间",
   "workspaces.verified.by.server.readback": "已由服务器回读验证",
   "workspaces.verified.committing.workspace": "验证通过，正在提交 Workspace…",
-  "workspaces.verify.and.activate.a.connection": "请先在设置中验证并激活连接；连接未验证时不会自动扫描 Workspace。",
+  "workspaces.verify.and.activate.a.connection":
+    "请先在设置中验证并激活连接；连接未验证时不会自动扫描 Workspace。",
   "workspaces.verifying.and.switching": "正在验证并切换…",
   "workspaces.verifying.and.switching.to": "正在验证并切换到",
   "workspaces.verifying.target.workspace": "正在验证目标 Workspace…",
   "workspaces.working": "处理中…",
   "workspaces.workspace.readback": "工作区回读：",
-  "workspaces.workspaces.owned.by.the.current": "当前用户拥有的工作区，跨主机集中查看。",
-
+  "workspaces.workspaces.owned.by.the.current":
+    "当前用户拥有的工作区，跨主机集中查看。",
 } as const satisfies Catalog;
 
 /** Every valid message key, derived from the Chinese catalog. */

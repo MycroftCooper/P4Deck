@@ -584,9 +584,7 @@ export function ConnectionSpecCreateDialog({
             <div>
               <dt>{t("settings.type")}</dt>
               <dd>
-                {kind === "user"
-                  ? t("settings.user")
-                  : t("settings.workspace")}
+                {kind === "user" ? t("settings.user") : t("settings.workspace")}
               </dd>
             </div>
             <div>

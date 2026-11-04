@@ -286,9 +286,7 @@ export function StreamSwitchDialog({
                 disabled={busy}
                 onClick={() => void preflight()}
               >
-                {busy
-                  ? t("browse.inspecting")
-                  : t("browse.run.preflight.2")}
+                {busy ? t("browse.inspecting") : t("browse.run.preflight.2")}
               </button>
             </>
           )}

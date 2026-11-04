@@ -138,10 +138,7 @@ export function ContextMenuProvider({
         {children}
         {request &&
           createPortal(
-            <div
-              role="region"
-              aria-label={t("contextMenu.context.menu.layer")}
-            >
+            <div role="region" aria-label={t("contextMenu.context.menu.layer")}>
               <MenuPanel
                 key={request.token}
                 title={request.title}
@@ -316,7 +313,7 @@ function MenuPanel({
         </div>
         <div className="menu-hint" role="status">
           {items[active]?.reason ||
-            (t("contextMenu.navigate.enter.run.esc.close"))}
+            t("contextMenu.navigate.enter.run.esc.close")}
         </div>
       </div>
       {submenu && submenuItem?.children && (

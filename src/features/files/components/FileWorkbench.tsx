@@ -174,7 +174,7 @@ export function FileWorkbench({
       <FixedPageHeader>
         <span className="fixed-page-meta">
           {directory?.split(/[\\/]/).filter(Boolean).pop() ||
-            (translate("files.workspace.files"))}
+            translate("files.workspace.files")}
           <span className="heading-count">{nodes.length}</span>
         </span>
         <button
@@ -191,7 +191,9 @@ export function FileWorkbench({
           {visibleNodes.length} {t.files}
         </span>
         <button className="density-button" onClick={() => setCompact(!compact)}>
-          {compact ? (translate("files.compact")) : translate("files.comfortable")}
+          {compact
+            ? translate("files.compact")
+            : translate("files.comfortable")}
         </button>
       </div>
       {error ? (
@@ -296,7 +298,10 @@ export function FileWorkbench({
                     <span>{node.changelistId ?? "—"}</span>
                     <time>
                       {node.modifiedAt
-                        ? formatLocalTime(node.modifiedAt, zh ? "zh-CN" : "en-US")
+                        ? formatLocalTime(
+                            node.modifiedAt,
+                            zh ? "zh-CN" : "en-US",
+                          )
                         : "—"}
                     </time>
                   </button>

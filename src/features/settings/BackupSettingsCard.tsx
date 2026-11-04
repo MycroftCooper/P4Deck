@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n";
-﻿import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
+import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { backend } from "../../infrastructure/backend";
 import type {
@@ -380,8 +380,7 @@ export function BackupSettingsCard({
                     ? t("settings.window.placement")
                     : t("settings.no.placement.file")}
                   {" · "}
-                  {backup.localStorageKeys.length}{" "}
-                  {t("settings.layout.keys")}
+                  {backup.localStorageKeys.length} {t("settings.layout.keys")}
                 </small>
               </div>
               {confirmRestore === backup.fileName ? (

@@ -31,10 +31,7 @@ export function setLocale(locale: Locale) {
  * Returns `undefined` for a missing or empty key so callers can distinguish
  * "no translation" from an empty string.
  */
-export function lookup(
-  locale: Locale,
-  key: MsgKey,
-): string | undefined {
+export function lookup(locale: Locale, key: MsgKey): string | undefined {
   const value = catalogs[locale]?.[key];
   if (typeof value !== "string" || !value) return undefined;
   return value;

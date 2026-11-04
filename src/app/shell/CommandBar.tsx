@@ -243,9 +243,7 @@ export function CommandBar({
     timedOut.current = stale.id;
     if (running.current === stale.id) running.current = undefined;
     setOperation((old) => (old && old.id === stale.id ? undefined : old));
-    setNotice(
-      t("shell.the.operation.did.not.return"),
-    );
+    setNotice(t("shell.the.operation.did.not.return"));
     void recordFrontendOperationLog({
       eventId: `${stale.id}-watchdog`,
       operationId: stale.id,
@@ -366,9 +364,7 @@ export function CommandBar({
       epoch !== generation.current ||
       latest.current.connectionKey !== connectionKey
     )
-      throw new Error(
-        t("shell.connection.changed.select.the.target"),
-      );
+      throw new Error(t("shell.connection.changed.select.the.target"));
     return executeTarget(id, actionTarget, actionNodes, capabilities, source);
   }
   async function executeTarget(
@@ -446,9 +442,7 @@ export function CommandBar({
       try {
         paths = selectionRequest("getLatest", nodes).paths;
         if (!paths.length)
-          throw new Error(
-            t("shell.no.target.selected.for.get"),
-          );
+          throw new Error(t("shell.no.target.selected.for.get"));
         const revision = { kind: "head" as const, value: "" };
         const plan = await backend.previewSync({
           paths: [...paths],
@@ -582,15 +576,11 @@ export function CommandBar({
       const operationId = crypto.randomUUID();
       running.current = operationId;
       setOperation(
-        startOperation(
-          operationId,
-          t("shell.waiting.for.system.dialog"),
-          {
-            kind: "other",
-            cancellable: false,
-            targetCount: 1,
-          },
-        ),
+        startOperation(operationId, t("shell.waiting.for.system.dialog"), {
+          kind: "other",
+          cancellable: false,
+          targetCount: 1,
+        }),
       );
       try {
         await backend.openLocalPath({
@@ -768,9 +758,7 @@ export function CommandBar({
       return;
     }
     if (running.current)
-      throw new Error(
-        t("shell.another.operation.is.running.try"),
-      );
+      throw new Error(t("shell.another.operation.is.running.try"));
     const operationId = crypto.randomUUID();
     const epoch = generation.current;
     running.current = operationId;
@@ -851,7 +839,7 @@ export function CommandBar({
       )
         onFocus({ type: "none" });
       throw new Error(
-        `${String(cause)}${id !== "refresh" ? "\n" + (t("shell.this.operation.may.have.partially")) : ""}`,
+        `${String(cause)}${id !== "refresh" ? "\n" + t("shell.this.operation.may.have.partially") : ""}`,
       );
     } finally {
       if (!feedbackCompleted) {
@@ -907,9 +895,7 @@ export function CommandBar({
         <input
           ref={addressInput}
           aria-label={t("shell.address")}
-          placeholder={
-            t("shell.local.depot.path.enter.or")
-          }
+          placeholder={t("shell.local.depot.path.enter.or")}
           value={address}
           onChange={(e) => {
             navigation.current++;

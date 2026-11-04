@@ -87,12 +87,17 @@ for (const abs of walk(path.join(ROOT, "src"))) {
     // pair; only the mapped value is what renders. Flag object values only.
     if (keyIndexOnly) {
       // labels.ts:  中文键: "contextMenu.key",
-      const isIndexEntry = /^\s*(?:"[^"]+"|[\w\u4e00-\u9fff ]+)\s*:\s*"[^"]*"\s*,?\s*$/.test(code);
+      const isIndexEntry =
+        /^\s*(?:"[^"]+"|[\w\u4e00-\u9fff ]+)\s*:\s*"[^"]*"\s*,?\s*$/.test(code);
       const valueHasCjk = /:\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code);
       if (isIndexEntry && !valueHasCjk) return;
       // catalog.ts:  label: "中文" / title: "中文"  (always routed through menuLabel)
-      if (/^\s*(label|title):\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code)) return;
-      if (/^\s*"?(label|title)"?\s*:\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code)) return;
+      if (/^\s*(label|title):\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code))
+        return;
+      if (
+        /^\s*"?(label|title)"?\s*:\s*"(?:[^"\\]|\\.)*[\u4e00-\u9fff]/.test(code)
+      )
+        return;
     }
     violations.push({ file, line: i + 1, text: trimmed.slice(0, 160) });
   });

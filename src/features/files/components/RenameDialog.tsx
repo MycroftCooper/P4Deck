@@ -187,9 +187,7 @@ export function RenameDialog({
       const legacy = unwrapLocalIoLegacy<RenameMoveResult>(value);
       if (!legacy) {
         withdrawLocalIoProjection(operationId);
-        setFailure(
-          t("files.no.recognizable.result.was.returned"),
-        );
+        setFailure(t("files.no.recognizable.result.was.returned"));
         setPhase("result");
         void Promise.resolve(onRefresh?.()).catch(() => undefined);
         return;
@@ -237,9 +235,7 @@ export function RenameDialog({
     ) : phase === "review" ? (
       <>
         <button onClick={dismiss}>{t("files.cancel")}</button>
-        <button onClick={() => void preview()}>
-          {t("files.run.again")}
-        </button>
+        <button onClick={() => void preview()}>{t("files.run.again")}</button>
         <button
           className="primary"
           disabled={
@@ -325,9 +321,7 @@ export function RenameDialog({
         <DialogNotice error>{reasons[error][zh ? 0 : 1]}</DialogNotice>
       )}
       {phase === "checking" && (
-        <DialogNotice>
-          {t("files.reading.the.p4.snapshot")}
-        </DialogNotice>
+        <DialogNotice>{t("files.reading.the.p4.snapshot")}</DialogNotice>
       )}
       {preflight && (
         <section
@@ -361,9 +355,7 @@ export function RenameDialog({
             <dd>{preflight.targetExists ? t("files.yes") : t("files.no")}</dd>
             <dt>{t("files.case.only.risk")}</dt>
             <dd>
-              {preflight.caseOnlyRisk
-                ? t("files.blocked.2")
-                : t("files.none")}
+              {preflight.caseOnlyRisk ? t("files.blocked.2") : t("files.none")}
             </dd>
           </dl>
           {preflight.blockers.map((item) => (

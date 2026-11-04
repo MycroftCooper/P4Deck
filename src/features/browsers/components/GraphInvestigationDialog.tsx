@@ -96,9 +96,7 @@ export function GraphInvestigationDialog({
       let view: BranchViewLine[] = [];
       if (mapping === "branch") {
         if (!branch.trim())
-          throw new Error(
-            t("browse.enter.a.branch.mapping.name"),
-          );
+          throw new Error(t("browse.enter.a.branch.mapping.name"));
         takeInvestigationRead(budget, controller.signal);
         const result = await readGraphMapping(
           scope,
@@ -193,9 +191,7 @@ export function GraphInvestigationDialog({
               setReport(undefined);
             }}
           >
-            <option value="file">
-              {t("browse.current.file.revision")}
-            </option>
+            <option value="file">{t("browse.current.file.revision")}</option>
             <option value="change">
               {t("browse.submitted.cl.file.by.file")}
             </option>
@@ -309,16 +305,13 @@ export function GraphInvestigationDialog({
       </p>
       {error && <DialogNotice error>{error}</DialogNotice>}
       {busy && (
-        <DialogNotice>
-          {t("browse.collecting.bounded.evidence")}
-        </DialogNotice>
+        <DialogNotice>{t("browse.collecting.bounded.evidence")}</DialogNotice>
       )}
       {report && (
         <>
           <DialogNotice>
-            {t("browse.record.paths")} {known} ·{" "}
-            {t("browse.needs.review")} {review} ·{" "}
-            {t("browse.unknown.not.queried")}{" "}
+            {t("browse.record.paths")} {known} · {t("browse.needs.review")}{" "}
+            {review} · {t("browse.unknown.not.queried")}{" "}
             {report.total - known - review} / {report.total} ·{" "}
             {t("browse.read.attempts")} {report.reads}/20
           </DialogNotice>
@@ -354,9 +347,7 @@ export function GraphInvestigationDialog({
             >
               <thead>
                 <tr>
-                  <th>
-                    {t("browse.source.revision.target.file")}
-                  </th>
+                  <th>{t("browse.source.revision.target.file")}</th>
                   <th>
                     {tr(
                       "记录证据（不证明内容包含）",

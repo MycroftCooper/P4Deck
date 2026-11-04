@@ -267,20 +267,26 @@ export function SyncDialog({
         <>
           {phase === "preview" && (
             <>
-              <button onClick={onDismiss}>{tFor(zh ? "zh-CN" : "en-US", "files.cancel")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.cancel")}
+              </button>
               <button
                 className="primary"
                 data-dialog-autofocus
                 disabled={busy || !revision || !paths.length}
                 onClick={() => void preview()}
               >
-                {busy ? tFor(zh ? "zh-CN" : "en-US", "files.previewing") : tFor(zh ? "zh-CN" : "en-US", "files.preview")}
+                {busy
+                  ? tFor(zh ? "zh-CN" : "en-US", "files.previewing")
+                  : tFor(zh ? "zh-CN" : "en-US", "files.preview")}
               </button>
             </>
           )}
           {phase === "review" && (
             <>
-              <button onClick={resetPreview}>{tFor(zh ? "zh-CN" : "en-US", "files.back")}</button>
+              <button onClick={resetPreview}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.back")}
+              </button>
               <button
                 className={plan?.target.force ? "danger" : "primary"}
                 disabled={
@@ -302,7 +308,9 @@ export function SyncDialog({
           )}
           {phase === "result" && (
             <>
-              <button onClick={onDismiss}>{tFor(zh ? "zh-CN" : "en-US", "files.close")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.close")}
+              </button>
               {result?.outcome !== "succeeded" && (
                 <button className="primary" onClick={resetPreview}>
                   {tFor(zh ? "zh-CN" : "en-US", "files.preview.again")}
@@ -320,7 +328,10 @@ export function SyncDialog({
       </div>
       {phase === "preview" && (
         <>
-          <TargetList paths={paths} label={tFor(zh ? "zh-CN" : "en-US", "files.sync.scope.2")} />
+          <TargetList
+            paths={paths}
+            label={tFor(zh ? "zh-CN" : "en-US", "files.sync.scope.2")}
+          />
           <label>
             {tFor(zh ? "zh-CN" : "en-US", "files.target.revision")}
             <select
@@ -331,15 +342,21 @@ export function SyncDialog({
                 setValue("");
               }}
             >
-              <option value="head">{tFor(zh ? "zh-CN" : "en-US", "files.latest.head.2")}</option>
+              <option value="head">
+                {tFor(zh ? "zh-CN" : "en-US", "files.latest.head.2")}
+              </option>
               <option value="revision">
                 {tFor(zh ? "zh-CN" : "en-US", "files.file.revision.2")}
               </option>
               <option value="change">
                 {tFor(zh ? "zh-CN" : "en-US", "files.as.of.changelist.2")}
               </option>
-              <option value="date">{tFor(zh ? "zh-CN" : "en-US", "files.as.of.date.2")}</option>
-              <option value="label">{tFor(zh ? "zh-CN" : "en-US", "files.label")}</option>
+              <option value="date">
+                {tFor(zh ? "zh-CN" : "en-US", "files.as.of.date.2")}
+              </option>
+              <option value="label">
+                {tFor(zh ? "zh-CN" : "en-US", "files.label")}
+              </option>
             </select>
           </label>
           {kind !== "head" && (
@@ -396,19 +413,24 @@ export function SyncDialog({
               {tFor(zh ? "zh-CN" : "en-US", "files.add")} {plan.counts.added}
             </span>
             <span>
-              {tFor(zh ? "zh-CN" : "en-US", "files.update")} {plan.counts.updated}
+              {tFor(zh ? "zh-CN" : "en-US", "files.update")}{" "}
+              {plan.counts.updated}
             </span>
             <span>
-              {tFor(zh ? "zh-CN" : "en-US", "files.delete")} {plan.counts.deleted}
+              {tFor(zh ? "zh-CN" : "en-US", "files.delete")}{" "}
+              {plan.counts.deleted}
             </span>
             <span>
-              {tFor(zh ? "zh-CN" : "en-US", "files.up.to.date")} {plan.counts.upToDate}
+              {tFor(zh ? "zh-CN" : "en-US", "files.up.to.date")}{" "}
+              {plan.counts.upToDate}
             </span>
             <span>
-              {tFor(zh ? "zh-CN" : "en-US", "files.warnings")} {plan.counts.warnings}
+              {tFor(zh ? "zh-CN" : "en-US", "files.warnings")}{" "}
+              {plan.counts.warnings}
             </span>
             <span>
-              {tFor(zh ? "zh-CN" : "en-US", "files.conflicts")} {plan.counts.conflicts}
+              {tFor(zh ? "zh-CN" : "en-US", "files.conflicts")}{" "}
+              {plan.counts.conflicts}
             </span>
           </div>
           {(plan.partial || plan.truncated) && (

@@ -91,7 +91,9 @@ export function PreviewTable({
         aria-rowcount={model.ariaRowCount}
         aria-colcount={model.columnCount}
       >
-        <caption className="sr-only">{tFor(zh ? "zh-CN" : "en-US", "browse.table.content")}</caption>
+        <caption className="sr-only">
+          {tFor(zh ? "zh-CN" : "en-US", "browse.table.content")}
+        </caption>
         <thead>
           {/* Always present: holds the column letters and the resize grips. */}
           <tr>

@@ -156,9 +156,7 @@ function Content({
   )
     return (
       <div className="workspace-empty" role="status">
-        <p>
-          {translate("PageRenderertsx.not.connected.add.or.select")}
-        </p>
+        <p>{translate("PageRenderertsx.not.connected.add.or.select")}</p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
           {translate("PageRenderertsx.connection.settings")}
         </button>
@@ -175,7 +173,9 @@ function Content({
     return (
       <div className="workspace-empty" role="status">
         <p>
-          {translate("PageRenderertsx.checking.connection.and.login.automatically")}
+          {translate(
+            "PageRenderertsx.checking.connection.and.login.automatically",
+          )}
         </p>
       </div>
     );

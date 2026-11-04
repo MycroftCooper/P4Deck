@@ -171,8 +171,7 @@ export function FilePreviewPage({
             )}
             {shownTable.format === "csv" && shownTable.delimiter && (
               <span className="preview-toolbar-secondary">
-                {t("browse.delimiter")}{" "}
-                {delimiterLabel(shownTable.delimiter)}
+                {t("browse.delimiter")} {delimiterLabel(shownTable.delimiter)}
               </span>
             )}
             {shownTable.sheetNames && shownTable.sheetNames.length > 1 && (

@@ -73,17 +73,9 @@ export function CompanySubmitPreview({
   const state =
     simulation?.binding === requestBinding(request) ? simulation : undefined;
   return (
-    <section
-      aria-label={
-        t("companySubmit.custom.submit.tool.plan.preview")
-      }
-    >
-      <h2>
-        {t("companySubmit.custom.submit.tool.not.connected")}
-      </h2>
-      <p>
-        {t("companySubmit.real.launch.is.disabled.pending")}
-      </p>
+    <section aria-label={t("companySubmit.custom.submit.tool.plan.preview")}>
+      <h2>{t("companySubmit.custom.submit.tool.not.connected")}</h2>
+      <p>{t("companySubmit.real.launch.is.disabled.pending")}</p>
       {error ? (
         <p role="alert">{tr(errors[error])}</p>
       ) : !result ? (
@@ -110,9 +102,7 @@ export function CompanySubmitPreview({
       )}
       {state && <p role="status">{tr(phases[state.state.state])}</p>}
       {simulation && !state && (
-        <p role="status">
-          {t("companySubmit.an.earlier.snapshot.has.a")}
-        </p>
+        <p role="status">{t("companySubmit.an.earlier.snapshot.has.a")}</p>
       )}
       <button type="button" disabled>
         {t("companySubmit.launch.custom.submit.tool.disabled")}
