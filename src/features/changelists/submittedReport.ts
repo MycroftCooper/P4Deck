@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type {
   ChangelistSummary,
   ClQuery,
@@ -224,7 +225,7 @@ export function reportPrompt(
     const group = groups.get(key) ?? {
       title: task
         ? `${task[1].trim()} ${key}`
-        : tr("独立提交", "Independent submissions"),
+        : t("pending.independent.submissions"),
       rows: [],
     };
     group.rows.push(row);
@@ -241,14 +242,14 @@ export function reportPrompt(
         `  - ${label}${tags} CL ${row.id} · ${row.time} · ${row.user}@${row.client}`,
       );
       for (const line of (
-        row.description || tr("（空描述）", "(Empty description)")
+        row.description || t("pending.empty.description")
       ).split(/\r?\n/))
         lines.push(`    | ${line}`);
     }
   }
   if (!selected.length)
     lines.push(
-      tr("无符合所选类别的提交。", "No submissions in selected categories."),
+      t("pending.no.submissions.in.selected.categories"),
     );
   return lines.join("\n");
 }

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
@@ -201,7 +202,7 @@ export function UnshelveDialog({
             host: "",
             root: "",
             stream: "",
-            description: tr("当前工作区", "Current workspace"),
+            description: t("pending.current.workspace"),
             updated: null,
             accessed: null,
           });
@@ -470,18 +471,18 @@ export function UnshelveDialog({
                     : "blocked",
                 blockers: preflight.blockers.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.6") : ""}${item.message}`,
                 ),
                 warnings: preflight.warnings.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.7") : ""}${item.message}`,
                 ),
               }
             : { kind: "idle" };
 
   return (
     <Dialog
-      title={tr("Unshelve 到工作区", "Unshelve to workspace")}
+      title={t("pending.unshelve.to.workspace")}
       description={tr(
         "将固定的来源 Shelf 子集应用到目标工作区与 CL；来源 Shelf 保留，不会强制覆盖本地内容。",
         "Apply the fixed source shelf subset to a target workspace and changelist. The source shelf remains and local content is never force-overwritten.",
@@ -493,11 +494,11 @@ export function UnshelveDialog({
       footer={
         <>
           <button disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
           {phase === "running" && (
             <button onClick={() => void cancel()}>
-              {tr("取消操作", "Cancel operation")}
+              {t("pending.cancel.operation")}
             </button>
           )}
           <button
@@ -511,21 +512,21 @@ export function UnshelveDialog({
             }
             onClick={() => void inspect()}
           >
-            {tr("运行预检", "Run preflight")}
+            {t("pending.run.preflight")}
           </button>
           <button
             className="primary"
             disabled={phase !== "ready" || !preflight?.token || !ack}
             onClick={() => void confirm()}
           >
-            {tr("确认 Unshelve", "Confirm unshelve")}
+            {t("pending.confirm.unshelve")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {tr("来源搁置", "Source shelf")} CL {snapshot.changeId} ·{" "}
-        {snapshot.paths.length} {tr("个文件", "files")}
+        {t("pending.source.shelf")} CL {snapshot.changeId} ·{" "}
+        {snapshot.paths.length} {t("pending.files")}
       </div>
       {demo && (
         <DialogNotice>
@@ -537,10 +538,10 @@ export function UnshelveDialog({
       )}
       <TargetList
         paths={snapshot.paths.map((path) => `${path}@=${snapshot.changeId}`)}
-        label={tr("固定来源文件", "Fixed source files")}
+        label={t("pending.fixed.source.files")}
       />
       <label>
-        {tr("目标 Workspace", "Target workspace")}
+        {t("pending.target.workspace")}
         {newChange ? (
           <input
             data-dialog-autofocus
@@ -572,8 +573,8 @@ export function UnshelveDialog({
       {workspaceError && <DialogNotice error>{workspaceError}</DialogNotice>}
       <label>
         {newChange
-          ? tr("目标 CL", "Target CL")
-          : tr("目标 CL（0 为 Default）", "Target CL (0 means Default)")}
+          ? t("pending.target.cl")
+          : t("pending.target.cl.0.means.default")}
         {newChange ? (
           <input
             readOnly
@@ -613,14 +614,14 @@ export function UnshelveDialog({
         {newChange
           ? createdChangeId !== undefined
             ? `CL ${createdChangeId}`
-            : tr("新建 CL", "new CL")
+            : t("pending.new.cl.2")
           : targetId === 0
             ? "Default"
             : `CL ${targetId}`}
       </div>
       {newChange && createdChangeId !== undefined && (
         <DialogNotice>
-          {tr("已创建 CL", "Created CL")} #{createdChangeId}
+          {t("pending.created.cl")} #{createdChangeId}
         </DialogNotice>
       )}
       <DialogNotice>
@@ -639,29 +640,29 @@ export function UnshelveDialog({
           >
             <thead>
               <tr>
-                <th>{tr("来源", "Source")}</th>
-                <th>{tr("目标映射", "Target mapping")}</th>
-                <th>{tr("状态", "Status")}</th>
+                <th>{t("pending.source")}</th>
+                <th>{t("pending.target.mapping")}</th>
+                <th>{t("pending.status")}</th>
               </tr>
             </thead>
             <tbody>
               {preflight.mappings.map((mapping) => (
                 <tr key={mapping.depotPath}>
                   <td>{mapping.depotPath}</td>
-                  <td>{mapping.targetPath ?? tr("未映射", "Unmapped")}</td>
+                  <td>{mapping.targetPath ?? t("pending.unmapped")}</td>
                   <td>
                     {[
-                      !mapping.mapped && tr("映射失败", "unmapped"),
+                      !mapping.mapped && t("pending.unmapped.2"),
                       mapping.locallyModified &&
-                        tr("本地修改", "local modification"),
-                      mapping.locked && tr("已锁定", "locked"),
+                        t("pending.local.modification"),
+                      mapping.locked && t("pending.locked"),
                       mapping.openedChangeId !== undefined &&
-                        `${tr("已打开于", "opened in")} CL ${mapping.openedChangeId}`,
+                        `${t("pending.opened.in")} CL ${mapping.openedChangeId}`,
                       mapping.resolveRisk !== "none" &&
-                        `${tr("Resolve 风险", "Resolve risk")}: ${mapping.resolveRisk}`,
+                        `${t("pending.resolve.risk")}: ${mapping.resolveRisk}`,
                     ]
                       .filter(Boolean)
-                      .join(" · ") || tr("未发现风险", "No risk found")}
+                      .join(" · ") || t("pending.no.risk.found")}
                   </td>
                 </tr>
               ))}
@@ -712,7 +713,7 @@ export function UnshelveDialog({
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
         <DialogNotice error>
-          {tr("结果：", "Outcome: ")}
+          {t("pending.outcome")}
           {lifecycle.outcome}
           {result?.failure ? ` · ${result.failure}` : ""} ·{" "}
           {result?.refresh.reason}
@@ -743,10 +744,10 @@ export function UnshelveDialog({
       )}
       {(lifecycle?.operationId || result?.operationIds.length) && (
         <p className="workflow-context">
-          {tr("操作记录", "Operations")}{" "}
+          {t("pending.operations")}{" "}
           {lifecycle?.operationId ?? result?.operationIds.join(", ")}
           {result?.logReference
-            ? ` · ${tr("日志", "Log")} ${result.logReference}`
+            ? ` · ${t("pending.log")} ${result.logReference}`
             : ""}
         </p>
       )}

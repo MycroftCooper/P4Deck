@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useState } from "react";
 import { Square } from "lucide-react";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -34,17 +35,17 @@ export function TaskList({
       id={id}
       className="task-list"
       role="dialog"
-      aria-label={zh ? "P4 任务" : "P4 tasks"}
+      aria-label={t("shell.p4.tasks")}
     >
       <header role="presentation">
-        {zh ? "P4 任务" : "P4 tasks"}
+        {t("shell.p4.tasks")}
         <button onClick={onClose} aria-label="关闭任务列表 / Close task list">
           ×
         </button>
       </header>
       {!tasks.length && (
         <p className="task-idle" role="status">
-          {zh ? "P4 空闲" : "P4 idle"}
+          {t("shell.p4.idle")}
         </p>
       )}
       {tasks.map((task) => (
@@ -88,14 +89,14 @@ export function TaskList({
                 : ""}
             </small>
             <progress
-              aria-label={`${task.label} ${zh ? "进度" : "progress"}`}
+              aria-label={`${task.label} ${t("shell.progress")}`}
               max={100}
               value={task.progress}
             />
           </button>
           <button
             className="task-cancel"
-            aria-label={`${zh ? "取消任务" : "Cancel task"}: ${task.label} (${task.id})`}
+            aria-label={`${t("shell.cancel.task")}: ${task.label} (${task.id})`}
             title={
               cancelling.has(task.id)
                 ? zh
@@ -139,7 +140,7 @@ export function TaskList({
         <footer role="presentation">
           <button
             className="p4-cancel-all"
-            aria-label={zh ? "取消全部 P4 任务" : "Cancel all P4 tasks"}
+            aria-label={t("shell.cancel.all.p4.tasks")}
             disabled={
               cancellingAll || tasks.every((task) => cancelling.has(task.id))
             }
@@ -152,7 +153,7 @@ export function TaskList({
               strokeWidth={0}
               aria-hidden="true"
             />
-            <span>{zh ? "取消全部" : "Cancel all"}</span>
+            <span>{t("shell.cancel.all")}</span>
           </button>
         </footer>
       )}

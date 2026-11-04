@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import type { OpenedFileSelection, SelectedOpenedFile } from "../selectedFiles";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -348,7 +349,7 @@ export function PendingFileList({
       {filtered && (
         <div className="pending-file-tools">
           <span role="status">
-            {nodes.length} / {files.length} {zh ? "文件" : "files"}
+            {nodes.length} / {files.length} {t("pending.files.3")}
           </span>
           <button
             type="button"
@@ -358,7 +359,7 @@ export function PendingFileList({
               clearSelection();
             }}
           >
-            {zh ? "清除筛选" : "Clear filters"}
+            {t("pending.clear.filters")}
           </button>
         </div>
       )}
@@ -389,13 +390,13 @@ export function PendingFileList({
           >
             <div
               role="columnheader"
-              aria-label={zh ? "文件状态图标" : "File status icon"}
+              aria-label={t("pending.file.status.icon")}
             >
               {columnResizer(0, "Icon")}
             </div>
             <div role="columnheader">
-              {zh ? "文件名称" : "File name"}
-              {columnResizer(1, zh ? "文件名称" : "File name")}
+              {t("pending.file.name")}
+              {columnResizer(1, t("pending.file.name"))}
             </div>
             <div
               role="columnheader"
@@ -403,7 +404,7 @@ export function PendingFileList({
             >
               <button
                 type="button"
-                aria-label={zh ? "按路径排序" : "Sort by path"}
+                aria-label={t("pending.sort.by.path")}
                 title={
                   zh
                     ? `切换为${pathOrder === "asc" ? "降序" : "升序"}`
@@ -413,24 +414,24 @@ export function PendingFileList({
                   setPathOrder((value) => (value === "asc" ? "desc" : "asc"))
                 }
               >
-                {zh ? "文件路径" : "File path"}{" "}
+                {t("pending.file.path")}{" "}
                 {pathOrder === "asc" ? "↑" : "↓"}
               </button>
-              {columnResizer(2, zh ? "文件路径" : "File path")}
+              {columnResizer(2, t("pending.file.path"))}
             </div>
             <div role="columnheader">
               <label>
                 <select
-                  aria-label={zh ? "按状态筛选" : "Filter by status"}
+                  aria-label={t("pending.filter.by.status")}
                   value={statusFilter}
                   onChange={(event) => {
                     setStatusFilter(event.target.value);
                     clearSelection();
                   }}
                 >
-                  <option value="">{zh ? "所有状态" : "All statuses"}</option>
+                  <option value="">{t("pending.all.statuses")}</option>
                   <option value="__resolve">
-                    {zh ? "需要 Resolve" : "Needs resolve"}
+                    {t("pending.needs.resolve")}
                   </option>
                   {statuses.map((status) => (
                     <option key={status} value={status}>
@@ -439,30 +440,30 @@ export function PendingFileList({
                   ))}
                 </select>
               </label>
-              {columnResizer(3, zh ? "状态" : "Status")}
+              {columnResizer(3, t("pending.status"))}
             </div>
             <div role="columnheader">
               <label>
                 <select
-                  aria-label={zh ? "按类型筛选" : "Filter by type"}
+                  aria-label={t("pending.filter.by.type")}
                   value={typeFilter}
                   onChange={(event) => {
                     setTypeFilter(event.target.value);
                     clearSelection();
                   }}
                 >
-                  <option value="">{zh ? "所有类型" : "All types"}</option>
+                  <option value="">{t("pending.all.types")}</option>
                   {types.map((extension) => (
                     <option
                       key={extension || "(none)"}
                       value={extension || "(none)"}
                     >
-                      {extension || (zh ? "无后缀" : "No extension")}
+                      {extension || (t("pending.no.extension"))}
                     </option>
                   ))}
                 </select>
               </label>
-              {columnResizer(4, zh ? "类型" : "Type")}
+              {columnResizer(4, t("pending.type"))}
             </div>
           </div>
         </div>
@@ -740,14 +741,14 @@ export function PendingFileList({
                     title={file.action}
                   >
                     {file.resolve === "unresolved"
-                      ? `${statusLabel(status)} · ${zh ? "需要 Resolve" : "Needs resolve"}`
+                      ? `${statusLabel(status)} · ${t("pending.needs.resolve")}`
                       : statusLabel(status)}
                     {needsLatest
-                      ? ` · ${zh ? "需获取最新" : "Needs get latest"}`
+                      ? ` · ${t("pending.needs.get.latest")}`
                       : ""}
                   </span>
                   <span role="gridcell" className="pending-file-type">
-                    {extension || (zh ? "无后缀" : "No extension")}
+                    {extension || (t("pending.no.extension"))}
                   </span>
                 </div>
               );

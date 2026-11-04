@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useState } from "react";
 import type { WorkspaceNode } from "../../shared/contracts";
 import { compactTargets } from "../../features/files/selectionCommands";
@@ -28,11 +29,11 @@ export function OperationConfirmDialog({
   const [ack, setAck] = useState(false);
   const needsAcknowledgement = snapshot.operation !== "revert";
   const names = {
-    getLatest: tr("获取最新版本", "Get latest"),
-    checkout: tr("签出", "Check out"),
-    add: tr("添加到 P4", "Add to P4"),
-    delete: tr("标记删除", "Mark for delete"),
-    revert: tr("还原", "Revert"),
+    getLatest: t("dialogs.get.latest"),
+    checkout: t("dialogs.check.out"),
+    add: t("dialogs.add.to.p4"),
+    delete: t("dialogs.mark.for.delete"),
+    revert: t("dialogs.revert"),
   };
   const danger = ["delete", "revert"].includes(snapshot.operation);
   const folders = snapshot.nodes.filter(
@@ -40,10 +41,10 @@ export function OperationConfirmDialog({
   ).length;
   return (
     <Dialog
-      title={tr("确认操作：", "Confirm: ") + names[snapshot.operation]}
+      title={t("dialogs.confirm") + names[snapshot.operation]}
       description={
         snapshot.operation === "revert"
-          ? tr("确认还原以下文件？", "Revert the following files?")
+          ? t("dialogs.revert.the.following.files")
           : tr(
               "下面是固定的操作范围，不会跟随外部选择变化。",
               "This scope is frozen and does not follow selection changes.",
@@ -56,21 +57,21 @@ export function OperationConfirmDialog({
       footer={
         <>
           <button data-dialog-autofocus onClick={() => onClose(null)}>
-            {tr("取消", "Cancel")}
+            {t("dialogs.cancel")}
           </button>
           <button
             className={danger ? "danger" : "primary"}
             disabled={!snapshot.nodes.length || (needsAcknowledgement && !ack)}
             onClick={() => onClose(true)}
           >
-            {tr("确认执行", "Confirm operation")}
+            {t("dialogs.confirm.operation")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {snapshot.scopeLabel} {snapshot.nodes.length} {tr("个目标", "targets")}{" "}
-        · {folders} {tr("个目录", "folders")}
+        {snapshot.scopeLabel} {snapshot.nodes.length} {t("dialogs.targets")}{" "}
+        · {folders} {t("dialogs.folders")}
       </div>
       {danger && (
         <DialogNotice error>
@@ -106,7 +107,7 @@ export function OperationConfirmDialog({
           (node) =>
             `${node.absolutePath || node.depotPath}${node.kind === "directory" ? " /…" : ""}`,
         )}
-        label={tr("完整目标范围", "Full target scope")}
+        label={t("dialogs.full.target.scope")}
       />
       {needsAcknowledgement && (
         <DialogNotice>

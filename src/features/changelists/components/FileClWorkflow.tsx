@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useState } from "react";
 import type { PendingChange, WorkspaceNode } from "../../../shared/contracts";
 import { queryAllPendingChanges } from "../pendingQueries";
@@ -95,18 +96,18 @@ export function FileClWorkflow({
     <Dialog
       title={
         mode === "moveFiles"
-          ? tr("移动文件到 CL", "Move files to changelist")
-          : tr("搁置文件", "Shelve files")
+          ? t("pending.move.files.to.changelist")
+          : t("pending.shelve.files")
       }
       zh={zh}
       source={source}
       onRequestClose={onDismiss}
       footer={
         <>
-          <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+          <button onClick={onDismiss}>{t("pending.close")}</button>
           {error && (
             <button onClick={() => setRetry((value) => value + 1)}>
-              {tr("重试", "Retry")}
+              {t("pending.retry")}
             </button>
           )}
         </>
@@ -131,13 +132,13 @@ export function FileClWorkflow({
           </DialogNotice>
           <TargetList
             paths={scope.unknown}
-            label={tr("归属未知的文件", "Files with unknown membership")}
+            label={t("pending.files.with.unknown.membership")}
           />
         </>
       ) : null}
       {scope && !scope.paths.length && (
         <DialogNotice>
-          {tr("没有选择文件。", "No files selected.")}
+          {t("pending.no.files.selected")}
         </DialogNotice>
       )}
       {scope &&
@@ -158,7 +159,7 @@ export function FileClWorkflow({
                   scope.paths.filter((path) => scope.origins[path] === id)
                     .length
                 }{" "}
-                {tr("个文件", "files")}
+                {t("pending.files")}
               </button>
             ))}
           </>

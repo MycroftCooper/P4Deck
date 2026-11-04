@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RuntimeInfo, ShelfDetail } from "../../../shared/contracts";
 import { ShelfDetailPage } from "./ShelfDetailPage";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   getShelfDetail: vi.fn(),
@@ -83,6 +84,8 @@ const detail: ShelfDetail = {
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

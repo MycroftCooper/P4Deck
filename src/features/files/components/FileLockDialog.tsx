@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
@@ -165,8 +166,8 @@ export function FileLockDialog({
 
   const title =
     operation === "lock"
-      ? tr("锁定文件", "Lock files")
-      : tr("解锁文件", "Unlock files");
+      ? t("files.lock.files")
+      : t("files.unlock.files");
   const retry = () => {
     generation.current += 1;
     setPreflight(undefined);
@@ -182,20 +183,20 @@ export function FileLockDialog({
             void backend.cancelOperation(activeOperation.current);
         }}
       >
-        {tr("取消剩余操作", "Cancel remaining")}
+        {t("files.cancel.remaining")}
       </button>
     ) : phase === "result" ? (
       <>
-        <button onClick={retry}>{tr("人工重试", "Retry manually")}</button>
+        <button onClick={retry}>{t("files.retry.manually")}</button>
         <button className="primary" onClick={onDismiss}>
-          {tr("关闭", "Close")}
+          {t("files.close")}
         </button>
       </>
     ) : phase === "review" ? (
       <>
-        <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={onDismiss}>{t("files.cancel")}</button>
         <button onClick={() => void runPreflight()}>
-          {tr("重新预检", "Check again")}
+          {t("files.check.again")}
         </button>
         <button
           className="primary"
@@ -205,21 +206,21 @@ export function FileLockDialog({
           onClick={() => void confirm()}
         >
           {operation === "lock"
-            ? tr("确认锁定", "Confirm lock")
-            : tr("确认解锁", "Confirm unlock")}
+            ? t("files.confirm.lock")
+            : t("files.confirm.unlock")}
         </button>
       </>
     ) : (
       <>
-        <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={onDismiss}>{t("files.cancel")}</button>
         <button
           className="primary"
           disabled={!paths.length || phase === "checking"}
           onClick={() => void runPreflight()}
         >
           {phase === "checking"
-            ? tr("预检中…", "Checking…")
-            : tr("开始预检", "Run preflight")}
+            ? t("files.checking")
+            : t("files.run.preflight")}
         </button>
       </>
     );
@@ -238,7 +239,7 @@ export function FileLockDialog({
       footer={footer}
     >
       <div className="workflow-context">
-        {title} · {paths.length} {tr("个文件", "files")}
+        {title} · {paths.length} {t("files.files")}
       </div>
       <PreflightStatus
         zh={zh}
@@ -259,14 +260,14 @@ export function FileLockDialog({
       {preflight && (
         <>
           <DialogNotice>
-            {tr("适用", "Applicable")} {preflight.counts.applicable} ·{" "}
-            {tr("已满足", "already satisfied")}{" "}
-            {preflight.counts.alreadySatisfied} · {tr("阻塞", "blocked")}{" "}
+            {t("files.applicable")} {preflight.counts.applicable} ·{" "}
+            {t("files.already.satisfied")}{" "}
+            {preflight.counts.alreadySatisfied} · {t("files.blocked")}{" "}
             {preflight.counts.blocked} · +l {preflight.counts.exclusive}
           </DialogNotice>
           {preflight.logReference && (
             <DialogNotice>
-              {tr("预检日志", "Preflight log")} ·{" "}
+              {t("files.preflight.log")} ·{" "}
               <code>{preflight.logReference}</code>
             </DialogNotice>
           )}
@@ -279,11 +280,11 @@ export function FileLockDialog({
             >
               <thead>
                 <tr>
-                  <th>{tr("文件", "File")}</th>
-                  <th>{tr("打开状态 / CL", "Opened / CL")}</th>
-                  <th>{tr("类型", "Type")}</th>
-                  <th>{tr("锁状态", "Lock")}</th>
-                  <th>{tr("处理", "Decision")}</th>
+                  <th>{t("files.file")}</th>
+                  <th>{t("files.opened.cl")}</th>
+                  <th>{t("files.type")}</th>
+                  <th>{t("files.lock")}</th>
+                  <th>{t("files.decision")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -307,8 +308,8 @@ export function FileLockDialog({
                     </td>
                     <td>
                       {file.applicable
-                        ? tr("将执行", "will run")
-                        : (file.reason ?? tr("不可用", "unavailable"))}
+                        ? t("files.will.run")
+                        : (file.reason ?? t("files.unavailable"))}
                     </td>
                   </tr>
                 ))}
@@ -332,7 +333,7 @@ export function FileLockDialog({
           <p>{result.message}</p>
           {(result.operationId || result.logReference) && (
             <p>
-              {tr("操作 / 日志", "Operation / log")} ·{" "}
+              {t("files.operation.log")} ·{" "}
               <code>{result.operationId ?? result.logReference}</code>
             </p>
           )}

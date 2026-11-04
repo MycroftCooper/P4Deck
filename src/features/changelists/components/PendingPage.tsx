@@ -1,3 +1,4 @@
+import { t as translate } from "../../../shared/i18n";
 import { isZh } from "../../../shared/locale";
 import {
   useRemovalActions,
@@ -1603,7 +1604,7 @@ export function PendingPage({
                     type: "file" as const,
                     node: revertNodes[0],
                     nodes: revertNodes,
-                    scopeLabel: `${label} · ${zh ? "全部已打开文件" : "All opened files"}`,
+                    scopeLabel: `${label} · ${translate("pending.all.opened.files")}`,
                     wholeChangelistId: change.id,
                   }
                 : undefined;
@@ -1696,7 +1697,7 @@ export function PendingPage({
                             ? "此 CL 有需要 Resolve 的文件"
                             : "Changelist has files that need resolve"
                         }
-                        aria-label={zh ? "需要 Resolve" : "Needs resolve"}
+                        aria-label={translate("pending.needs.resolve")}
                       >
                         !
                       </span>
@@ -1707,7 +1708,7 @@ export function PendingPage({
                     <div
                       className="pending-cl-actions"
                       role="group"
-                      aria-label={`${label} ${zh ? "操作" : "actions"}`}
+                      aria-label={`${label} ${translate("pending.actions")}`}
                     >
                       <button
                         type="button"
@@ -1732,7 +1733,7 @@ export function PendingPage({
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         <Send size={14} />
-                        <span>{zh ? "提交" : "Submit"}</span>
+                        <span>{translate("pending.submit")}</span>
                       </button>
                       <button
                         type="button"
@@ -1755,7 +1756,7 @@ export function PendingPage({
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         <RotateCcw size={14} />
-                        <span>{zh ? "还原全部" : "Revert all"}</span>
+                        <span>{translate("pending.revert.all")}</span>
                       </button>
                       <button
                         type="button"
@@ -1780,7 +1781,7 @@ export function PendingPage({
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         <ListChecks size={14} />
-                        <span>{zh ? "还原未更改" : "Revert unchanged"}</span>
+                        <span>{translate("pending.revert.unchanged")}</span>
                       </button>
                       <button
                         type="button"
@@ -1806,7 +1807,7 @@ export function PendingPage({
                         onKeyDown={(event) => event.stopPropagation()}
                       >
                         <FolderArchive size={14} />
-                        <span>{zh ? "全部 Shelve" : "Shelve all"}</span>
+                        <span>{translate("pending.shelve.all")}</span>
                       </button>
                     </div>
                     {change.id ? (
@@ -1948,7 +1949,7 @@ export function PendingPage({
                                 onKeyDown={(event) => event.stopPropagation()}
                               >
                                 <PackageOpen size={13} aria-hidden="true" />
-                                {zh ? "移动全部到CL" : "Move all to CL"}
+                                {translate("pending.move.all.to.cl")}
                               </button>
                               <button
                                 type="button"
@@ -1971,7 +1972,7 @@ export function PendingPage({
                                 onKeyDown={(event) => event.stopPropagation()}
                               >
                                 <Trash2 size={13} aria-hidden="true" />
-                                {zh ? "删除全部" : "Delete all"}
+                                {translate("pending.delete.all")}
                               </button>
                             </span>
                           </h4>

@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import {
   currentReply,
   inputHint,
@@ -74,11 +75,11 @@ export function CompanySubmitPreview({
   return (
     <section
       aria-label={
-        zh ? "自定义提交工具方案预览" : "Custom submit tool plan preview"
+        t("companySubmit.custom.submit.tool.plan.preview")
       }
     >
       <h2>
-        {zh ? "自定义提交工具（未接入）" : "Custom submit tool (not connected)"}
+        {t("companySubmit.custom.submit.tool.not.connected")}
       </h2>
       <p>
         {zh

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { TableHeader } from "../../../app/context-menu/TableHeader";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import {
@@ -143,12 +144,12 @@ export function RevisionFileList({
         resize={resize}
         columns={[
           { id: "icon", label: "" },
-          { id: "path", label: zh ? "路径" : "Path" },
+          { id: "path", label: t("pending.path") },
           ...(showFileType
-            ? [{ id: "type", label: zh ? "类型" : "Type" }]
+            ? [{ id: "type", label: t("pending.type") }]
             : []),
-          { id: "action", label: zh ? "动作" : "Action" },
-          { id: "revision", label: zh ? "版本" : "Revision" },
+          { id: "action", label: t("pending.action") },
+          { id: "revision", label: t("pending.revision") },
         ]}
       />
       <div
@@ -167,7 +168,7 @@ export function RevisionFileList({
         }
         data-testid="revision-file-virtual-list"
         role="listbox"
-        aria-label={zh ? "提交文件" : "Submitted files"}
+        aria-label={t("pending.submitted.files")}
         tabIndex={files.length ? -1 : 0}
       >
         <div
@@ -258,7 +259,7 @@ export function RevisionFileList({
                   {file.depotPath}
                 </span>
                 {showFileType && (
-                  <small title={zh ? "文件类型" : "File type"}>
+                  <small title={t("pending.file.type")}>
                     {file.fileType || "—"}
                   </small>
                 )}
@@ -271,7 +272,7 @@ export function RevisionFileList({
           })}
         </div>
         {!files.length && (
-          <p>{zh ? "此提交没有文件" : "This change contains no files"}</p>
+          <p>{t("pending.this.change.contains.no.files")}</p>
         )}
       </div>
     </section>

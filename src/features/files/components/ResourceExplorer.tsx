@@ -1,3 +1,4 @@
+import { t as translate } from "../../../shared/i18n";
 import { recordFrontendOperationLog } from "../../../infrastructure/backend/frontendOperationLog";
 import { pathKey } from "../address";
 import { nextRevealStep, type ResourceReveal } from "../resourceReveal";
@@ -382,7 +383,7 @@ export function ResourceExplorer({
       <label className="tree-search">
         <Search size={13} />
         <input
-          aria-label={zh ? "筛选资源文件" : "Filter resource files"}
+          aria-label={translate("files.filter.resource.files")}
           value={filter}
           onChange={(event) => {
             cancelReveal();
@@ -428,7 +429,7 @@ export function ResourceExplorer({
       >
         <button
           className="tree-toggle"
-          aria-label={`${rootOpen[mode] ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${root.name}`}
+          aria-label={`${rootOpen[mode] ? (translate("files.collapse")) : translate("files.expand")} ${root.name}`}
           aria-expanded={rootOpen[mode]}
           onClick={(event) => {
             event.stopPropagation();
@@ -461,12 +462,12 @@ export function ResourceExplorer({
               ready &&
               !checkingConnection && (
                 <button onClick={() => env.openPage("settings")}>
-                  {zh ? "连接设置" : "Connection settings"}
+                  {translate("files.connection.settings")}
                 </button>
               )}
             {tree.root.error && (
               <button onClick={() => void refresh().catch(() => undefined)}>
-                {zh ? "重试" : "Retry"}
+                {translate("files.retry")}
               </button>
             )}
           </div>
@@ -541,7 +542,7 @@ export function ResourceExplorer({
                           void tree.refresh(row.parent).catch(() => undefined)
                         }
                       >
-                        {zh ? "重试" : "Retry"}
+                        {translate("files.retry")}
                       </button>
                     )}
                   </div>
@@ -591,7 +592,7 @@ export function ResourceExplorer({
                     <button
                       className="tree-toggle"
                       tabIndex={-1}
-                      aria-label={`${expanded ? (zh ? "折叠" : "Collapse") : zh ? "展开" : "Expand"} ${node.name}`}
+                      aria-label={`${expanded ? (translate("files.collapse")) : translate("files.expand")} ${node.name}`}
                       aria-expanded={expanded}
                       onClick={(event) => {
                         event.stopPropagation();

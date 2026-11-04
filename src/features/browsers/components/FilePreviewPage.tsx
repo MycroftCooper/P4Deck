@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
@@ -126,8 +127,8 @@ export function FilePreviewPage({
   const refreshButton = (
     <button
       type="button"
-      title={tr("刷新", "Refresh")}
-      aria-label={tr("刷新", "Refresh")}
+      title={t("browse.refresh")}
+      aria-label={t("browse.refresh")}
       aria-busy={loading}
       disabled={!target || loading}
       onClick={reload}
@@ -137,7 +138,7 @@ export function FilePreviewPage({
         className={loading ? "spin" : ""}
         aria-hidden="true"
       />
-      {!refreshSlot && <span>{tr("刷新", "Refresh")}</span>}
+      {!refreshSlot && <span>{t("browse.refresh")}</span>}
     </button>
   );
   return (
@@ -159,25 +160,25 @@ export function FilePreviewPage({
               {shownTable.format === "xlsx" ? "XLSX" : "CSV"}
             </span>
             <span className="preview-table-stats" title={rowCountTitle}>
-              {tableModel?.columnCount ?? 0} {tr("列", "cols")} ×{" "}
-              {tableModel?.dataRowCount ?? 0} {tr("行", "rows")}
+              {tableModel?.columnCount ?? 0} {t("browse.cols")} ×{" "}
+              {tableModel?.dataRowCount ?? 0} {t("browse.rows")}
             </span>
             {shownTable.format === "csv" && shownEncoding && (
               <span className="preview-toolbar-secondary">
-                {tr("编码", "Encoding")} {shownEncoding}
-                {shownEncodingGuess ? tr("（推测）", " (guessed)") : ""}
+                {t("browse.encoding")} {shownEncoding}
+                {shownEncodingGuess ? t("browse.guessed") : ""}
               </span>
             )}
             {shownTable.format === "csv" && shownTable.delimiter && (
               <span className="preview-toolbar-secondary">
-                {tr("分隔符", "Delimiter")}{" "}
+                {t("browse.delimiter")}{" "}
                 {delimiterLabel(shownTable.delimiter)}
               </span>
             )}
             {shownTable.sheetNames && shownTable.sheetNames.length > 1 && (
               <select
                 className="preview-table-select"
-                aria-label={tr("工作表", "Worksheet")}
+                aria-label={t("browse.worksheet")}
                 value={sheetIndex}
                 onChange={(event) =>
                   setView({
@@ -199,13 +200,13 @@ export function FilePreviewPage({
             <span
               className="preview-table-steps"
               role="group"
-              aria-label={tr("冻结表头行数", "Frozen header rows")}
+              aria-label={t("browse.frozen.header.rows")}
             >
               <button
                 type="button"
                 className="preview-table-step"
-                aria-label={tr("减少冻结表头行", "Fewer frozen header rows")}
-                title={tr("减少冻结表头行", "Fewer frozen header rows")}
+                aria-label={t("browse.fewer.frozen.header.rows")}
+                title={t("browse.fewer.frozen.header.rows")}
                 disabled={headerRows <= 0}
                 onClick={() =>
                   setView({ target, sheetIndex, headerRows: headerRows - 1 })
@@ -222,8 +223,8 @@ export function FilePreviewPage({
               <button
                 type="button"
                 className="preview-table-step"
-                aria-label={tr("增加冻结表头行", "More frozen header rows")}
-                title={tr("增加冻结表头行", "More frozen header rows")}
+                aria-label={t("browse.more.frozen.header.rows")}
+                title={t("browse.more.frozen.header.rows")}
                 disabled={headerRows >= headerRowLimit}
                 onClick={() =>
                   setView({ target, sheetIndex, headerRows: headerRows + 1 })
@@ -240,22 +241,22 @@ export function FilePreviewPage({
               {data.width} × {data.height}
             </span>
             <button
-              aria-label={tr("缩小图片", "Zoom out")}
+              aria-label={t("browse.zoom.out")}
               onClick={() => setZoom((n) => Math.max(0.1, (n ?? 1) / 1.25))}
             >
               <Minus size={14} />
             </button>
             <button onClick={() => setZoom(1)}>
-              {zoom === null ? tr("适应", "Fit") : `${Math.round(zoom * 100)}%`}
+              {zoom === null ? t("browse.fit") : `${Math.round(zoom * 100)}%`}
             </button>
             <button
-              aria-label={tr("放大图片", "Zoom in")}
+              aria-label={t("browse.zoom.in")}
               onClick={() => setZoom((n) => Math.min(4, (n ?? 1) * 1.25))}
             >
               <Plus size={14} />
             </button>
             <button onClick={() => setZoom(null)}>
-              {tr("适应窗口", "Fit to window")}
+              {t("browse.fit.to.window")}
             </button>
           </>
         ) : (
@@ -263,7 +264,7 @@ export function FilePreviewPage({
             <FileText size={14} />
             <span>{data?.encoding ?? "—"}</span>
             <span>
-              {lines.length} {tr("行", "lines")}
+              {lines.length} {t("browse.lines")}
             </span>
           </>
         )}
@@ -314,7 +315,7 @@ export function FilePreviewPage({
       >
         {error ? (
           <div role="alert" className="preview-empty">
-            {tr("无法预览", "Preview unavailable")}
+            {t("browse.preview.unavailable")}
             <p>{error}</p>
           </div>
         ) : !target ? (
@@ -326,11 +327,11 @@ export function FilePreviewPage({
           </div>
         ) : loading && !data ? (
           <div role="status" className="preview-empty">
-            {tr("正在读取…", "Reading…")}
+            {t("browse.reading")}
           </div>
         ) : data?.kind === "text" && data.content.length === 0 ? (
           <div role="status" className="preview-empty">
-            {tr("文件为空", "File is empty")}
+            {t("browse.file.is.empty")}
           </div>
         ) : data?.kind === "text" ? (
           <div className="preview-text" ref={scroll}>

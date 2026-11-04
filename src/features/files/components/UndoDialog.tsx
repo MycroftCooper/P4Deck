@@ -1,3 +1,4 @@
+import { tFor } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -60,7 +61,7 @@ export function UndoDialog({
           next.expiresAt <= Date.now()
         )
           throw new Error(
-            tr("预览目标不一致或已过期", "Preview target differs or expired"),
+            tFor(zh ? "zh-CN" : "en-US", "files.preview.target.differs.or.expired"),
           );
         if (mounted.current) setPlan(next);
       } else {
@@ -146,7 +147,7 @@ export function UndoDialog({
   };
   return (
     <Dialog
-      title={tr("撤销此修订", "Undo this revision")}
+      title={tFor(zh ? "zh-CN" : "en-US", "files.undo.this.revision")}
       zh={zh}
       danger
       busy={busy}
@@ -159,16 +160,16 @@ export function UndoDialog({
       footer={
         <>
           <button disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+            {tFor(zh ? "zh-CN" : "en-US", "files.close")}
           </button>
           {!finished && (
             <button disabled={busy} onClick={() => void run(false)}>
-              {tr("预览", "Preview")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.preview")}
             </button>
           )}
           {plan && !finished && (
             <button disabled={busy} onClick={() => void run(true)}>
-              {tr("确认 Undo", "Confirm Undo")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.confirm.undo")}
             </button>
           )}
         </>

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { createPortal } from "react-dom";
@@ -143,7 +144,7 @@ export function ShelfDetailPage({
 
   useEffect(() => {
     if (!Number.isSafeInteger(changeId) || changeId <= 0) {
-      setError(zh ? "Shelf 编号无效。" : "Invalid shelf changelist ID.");
+      setError(t("pending.invalid.shelf.changelist.id"));
       return;
     }
     if (runtime.p4Version === "loading") {
@@ -387,7 +388,7 @@ export function ShelfDetailPage({
     setLoading(false);
     setLoadingMore(false);
     setContentLoading(false);
-    setError(zh ? "操作已取消。" : "Operation cancelled.");
+    setError(t("pending.operation.cancelled"));
   };
 
   useEffect(
@@ -408,8 +409,8 @@ export function ShelfDetailPage({
   const refreshButton = (
     <button
       type="button"
-      title={zh ? "刷新" : "Refresh"}
-      aria-label={zh ? "刷新" : "Refresh"}
+      title={t("pending.refresh")}
+      aria-label={t("pending.refresh")}
       aria-busy={loading}
       disabled={loading}
       onClick={() => {
@@ -423,7 +424,7 @@ export function ShelfDetailPage({
         className={loading ? "spin" : ""}
         aria-hidden="true"
       />
-      {!refreshSlot && <span>{zh ? "刷新" : "Refresh"}</span>}
+      {!refreshSlot && <span>{t("pending.refresh")}</span>}
     </button>
   );
   return (
@@ -433,7 +434,7 @@ export function ShelfDetailPage({
         <div>
           <span className="workspace-eyebrow">PERFORCE / SHELF</span>
           <h1>
-            {zh ? "搁置 CL" : "Shelf CL"}{" "}
+            {t("pending.shelf.cl")}{" "}
             {Number.isFinite(changeId) ? changeId : target}
           </h1>
           <p>
@@ -448,7 +449,7 @@ export function ShelfDetailPage({
           disabled={!loading && !loadingMore && !contentLoading}
           onClick={cancel}
         >
-          {zh ? "取消" : "Cancel"}
+          {t("pending.cancel")}
         </button>
         <SwarmAction
           runtime={runtime}
@@ -469,7 +470,7 @@ export function ShelfDetailPage({
                 setRefresh((value) => value + 1);
               }}
             >
-              {zh ? "重新加载" : "Restart"}
+              {t("pending.restart")}
             </button>
           )}
         </div>
@@ -481,7 +482,7 @@ export function ShelfDetailPage({
           </span>
           <span>{detail.time}</span>
           <span>
-            {detail.totalFiles} {zh ? "个文件" : "files"}
+            {detail.totalFiles} {t("pending.files")}
           </span>
           <span>
             {detail.cacheFreshness === "cached"
@@ -494,18 +495,18 @@ export function ShelfDetailPage({
           </span>
           {(detail.inspectionStatus === "partial" || detail.truncated) && (
             <strong>
-              {detail.message ?? (zh ? "部分结果" : "Partial result")}
+              {detail.message ?? (t("pending.partial.result"))}
             </strong>
           )}
         </div>
       )}
       {loading && !detail ? (
         <div className="workspace-empty" role="status">
-          {zh ? "正在读取 Shelf…" : "Loading shelf…"}
+          {t("pending.loading.shelf")}
         </div>
       ) : detail && !detail.totalFiles ? (
         <div className="workspace-empty">
-          {zh ? "Shelf 为空" : "Shelf is empty"}
+          {t("pending.shelf.is.empty")}
         </div>
       ) : detail ? (
         <div className="shelf-detail-layout">
@@ -518,8 +519,8 @@ export function ShelfDetailPage({
             >
               <ResizeHeader
                 columns={[
-                  zh ? "路径" : "Path",
-                  zh ? "动作 / 类型 / 大小" : "Action / type / size",
+                  t("pending.path"),
+                  t("pending.action.type.size"),
                 ]}
                 resize={tableColumns}
               />
@@ -603,10 +604,10 @@ export function ShelfDetailPage({
                   void writeClipboardText(`${selected.depotPath}@=${changeId}`)
                 }
               >
-                <Copy size={13} /> {zh ? "复制 Depot spec" : "Copy depot spec"}
+                <Copy size={13} /> {t("pending.copy.depot.spec")}
               </button>
               <select
-                aria-label={zh ? "比较基线" : "Diff baseline"}
+                aria-label={t("pending.diff.baseline")}
                 value={baseline.kind}
                 onChange={(event) =>
                   setBaseline({
@@ -626,7 +627,7 @@ export function ShelfDetailPage({
                   compare();
                 }}
               >
-                {zh ? "比较" : "Diff"}
+                {t("pending.diff")}
               </button>
             </div>
             {!selected ? (
@@ -637,14 +638,14 @@ export function ShelfDetailPage({
               </div>
             ) : contentLoading && !preview && !diff ? (
               <div className="workspace-empty" role="status">
-                {zh ? "正在读取 Shelf 内容…" : "Loading shelved content…"}
+                {t("pending.loading.shelved.content")}
               </div>
             ) : preview?.unsupported || diff?.unsupported || diff?.binary ? (
               <div className="workspace-empty">
                 <strong>
                   {preview?.reason ??
                     diff?.reason ??
-                    (zh ? "不支持文本预览" : "Text preview unsupported")}
+                    (t("pending.text.preview.unsupported"))}
                 </strong>
                 <div>
                   {selected.fileType ?? "unknown"} · {selected.size ?? 0} B ·{" "}

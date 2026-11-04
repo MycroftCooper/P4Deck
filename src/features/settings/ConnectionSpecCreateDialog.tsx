@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
@@ -128,11 +129,11 @@ export function ConnectionSpecCreateDialog({
     if (busy) return;
     const trimmedName = name.trim();
     if (!snapshot.server.trim()) {
-      setError(tr("请先填写 Server。", "Enter Server first."));
+      setError(t("settings.enter.server.first"));
       return;
     }
     if (!trimmedName) {
-      setError(tr("名称不能为空。", "Name is required."));
+      setError(t("settings.name.is.required"));
       return;
     }
     if (
@@ -359,8 +360,8 @@ export function ConnectionSpecCreateDialog({
     <Dialog
       title={
         kind === "user"
-          ? tr("新建 P4 用户", "Create P4 user")
-          : tr("新建 Workspace", "Create workspace")
+          ? t("settings.create.p4.user")
+          : t("settings.create.workspace")
       }
       description={tr(
         `目标服务器：${snapshot.server || "—"}。打开或取消不会写服务器；只有预检后明确确认才会创建。创建成功也只填入当前设置，不会自动保存或切换连接。`,
@@ -374,7 +375,7 @@ export function ConnectionSpecCreateDialog({
         phase === "edit" ? (
           <>
             <button type="button" className="secondary" onClick={onDismiss}>
-              {tr("取消", "Cancel")}
+              {t("settings.cancel")}
             </button>
             <button
               type="button"
@@ -382,7 +383,7 @@ export function ConnectionSpecCreateDialog({
               disabled={busy}
               onClick={() => void inspect()}
             >
-              {busy ? tr("预检中…", "Checking…") : tr("预检", "Preflight")}
+              {busy ? t("settings.checking.2") : t("settings.preflight")}
             </button>
           </>
         ) : phase === "review" ? (
@@ -397,7 +398,7 @@ export function ConnectionSpecCreateDialog({
                 setConfirmed(false);
               }}
             >
-              {tr("返回修改", "Back")}
+              {t("settings.back")}
             </button>
             <button
               type="button"
@@ -407,13 +408,13 @@ export function ConnectionSpecCreateDialog({
               }
               onClick={() => void create()}
             >
-              {busy ? tr("创建中…", "Creating…") : tr("确认创建", "Create")}
+              {busy ? t("settings.creating.2") : t("settings.create")}
             </button>
           </>
         ) : (
           <>
             <button type="button" className="secondary" onClick={onDismiss}>
-              {tr("关闭", "Close")}
+              {t("settings.close")}
             </button>
             {!created && (
               <button
@@ -427,7 +428,7 @@ export function ConnectionSpecCreateDialog({
                   setError("");
                 }}
               >
-                {tr("返回修改", "Back to edit")}
+                {t("settings.back.to.edit")}
               </button>
             )}
             {created && createdWorkspaceUsable && (
@@ -438,7 +439,7 @@ export function ConnectionSpecCreateDialog({
                   onCreated(kind === "user" ? result.name : result.workspace!)
                 }
               >
-                {tr("填入连接设置", "Use in connection settings")}
+                {t("settings.use.in.connection.settings")}
               </button>
             )}
           </>
@@ -449,8 +450,8 @@ export function ConnectionSpecCreateDialog({
         <fieldset disabled={busy}>
           <label>
             {kind === "user"
-              ? tr("用户 ID", "User ID")
-              : tr("Workspace 名称", "Workspace name")}
+              ? t("settings.user.id")
+              : t("settings.workspace.name")}
             <input
               data-dialog-autofocus
               value={name}
@@ -461,7 +462,7 @@ export function ConnectionSpecCreateDialog({
           {kind === "user" ? (
             <>
               <label>
-                {tr("姓名", "Full name")}
+                {t("settings.full.name")}
                 <input
                   required
                   value={fullName}
@@ -469,7 +470,7 @@ export function ConnectionSpecCreateDialog({
                 />
               </label>
               <label>
-                {tr("邮箱", "Email")}
+                {t("settings.email")}
                 <input
                   required
                   type="email"
@@ -501,14 +502,14 @@ export function ConnectionSpecCreateDialog({
                 </small>
               </label>
               <label>
-                {tr("描述（可选）", "Description (optional)")}
+                {t("settings.description.optional")}
                 <input
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                 />
               </label>
               <label>
-                {tr("映射类型", "Mapping type")}
+                {t("settings.mapping.type")}
                 <select
                   value={mappingKind}
                   onChange={(event) =>
@@ -577,36 +578,36 @@ export function ConnectionSpecCreateDialog({
         <>
           <dl className="connection-create-summary">
             <div>
-              <dt>{tr("服务器", "Server")}</dt>
+              <dt>{t("settings.server")}</dt>
               <dd>{snapshot.server}</dd>
             </div>
             <div>
-              <dt>{tr("类型", "Type")}</dt>
+              <dt>{t("settings.type")}</dt>
               <dd>
                 {kind === "user"
-                  ? tr("用户", "User")
-                  : tr("工作区", "Workspace")}
+                  ? t("settings.user")
+                  : t("settings.workspace")}
               </dd>
             </div>
             <div>
-              <dt>{tr("名称", "Name")}</dt>
+              <dt>{t("settings.name")}</dt>
               <dd>{preflight.name}</dd>
             </div>
             {kind === "user" ? (
               <>
                 <div>
-                  <dt>{tr("姓名", "Full name")}</dt>
+                  <dt>{t("settings.full.name")}</dt>
                   <dd>{fullName.trim()}</dd>
                 </div>
                 <div>
-                  <dt>{tr("邮箱", "Email")}</dt>
+                  <dt>{t("settings.email")}</dt>
                   <dd>{email.trim()}</dd>
                 </div>
               </>
             ) : (
               <>
                 <div>
-                  <dt>{tr("所有者", "Owner")}</dt>
+                  <dt>{t("settings.owner")}</dt>
                   <dd>{snapshot.user}</dd>
                 </div>
                 <div>
@@ -614,7 +615,7 @@ export function ConnectionSpecCreateDialog({
                   <dd>{root.trim()}</dd>
                 </div>
                 <div>
-                  <dt>{tr("映射", "Mapping")}</dt>
+                  <dt>{t("settings.mapping")}</dt>
                   <dd>
                     {mappingKind === "stream"
                       ? `Stream · ${stream.trim()}`
@@ -622,11 +623,11 @@ export function ConnectionSpecCreateDialog({
                   </dd>
                 </div>
                 <div>
-                  <dt>{tr("同步方式", "Sync mode")}</dt>
+                  <dt>{t("settings.sync.mode")}</dt>
                   <dd>
                     {syncMode === "virtual"
-                      ? tr("P4VFS 虚拟同步", "P4VFS virtual sync")
-                      : tr("标准同步", "Standard sync")}
+                      ? t("settings.p4vfs.virtual.sync")
+                      : t("settings.standard.sync")}
                   </dd>
                 </div>
               </>
@@ -696,7 +697,7 @@ export function ConnectionSpecCreateDialog({
           )}
           {result && !!result.operationIds.length && (
             <p className="workflow-context">
-              {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+              {t("settings.operation")} {result.operationIds.join(", ")}
             </p>
           )}
         </>

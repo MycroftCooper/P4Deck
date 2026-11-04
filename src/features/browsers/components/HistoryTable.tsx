@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { formatLocalTime as historyTime } from "../../../shared/lib/localTime";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -158,7 +159,7 @@ export function HistoryTable({
       className="history-table"
       style={{ minWidth: widths.reduce((sum, value) => sum + value, 0) }}
       role="grid"
-      aria-label={zh ? "文件历史" : "File history"}
+      aria-label={t("browse.file.history")}
       aria-multiselectable="true"
     >
       <div
@@ -197,7 +198,7 @@ export function HistoryTable({
                 tabIndex={0}
                 aria-selected={isSelected(item)}
                 data-selection-order={selectionOrder?.(item) || undefined}
-                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? (zh ? "，先选版本" : ", first selected") : zh ? "，后选版本，获取此版本的目标" : ", last selected, Get this revision target") : ""}`}
+                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? (t("browse.first.selected")) : t("browse.last.selected.get.this.revision")) : ""}`}
                 title={
                   selectionOrder?.(item)
                     ? selectionOrder(item) === 1

@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useMemo } from "react";
 import { backend } from "../../infrastructure/backend";
 import type { RuntimeInfo } from "../../shared/contracts";
@@ -110,7 +111,7 @@ export function useDesktopNotifications(
           if (event.type === "error")
             void center.notify({
               key: `${event.operationId}:failure`,
-              title: zh ? "P4 操作需要处理" : "P4 operation needs attention",
+              title: t("notify.p4.operation.needs.attention"),
               body:
                 event.message ||
                 (zh
@@ -125,10 +126,10 @@ export function useDesktopNotifications(
             if (elapsed >= 15_000)
               void center.notify({
                 key: `${event.operationId}:completed`,
-                title: zh ? "P4 长操作已完成" : "Long P4 operation completed",
+                title: t("notify.long.p4.operation.completed"),
                 body:
                   event.message ||
-                  (zh ? "操作已完成。" : "The operation completed."),
+                  (t("notify.the.operation.completed")),
                 kind: "success",
               });
           }
@@ -153,7 +154,7 @@ export function useDesktopNotifications(
     )
       void center.notify({
         key: `auth:${runtime.activeProfileId ?? "environment"}:${runtime.contextGeneration}`,
-        title: zh ? "P4 认证需要处理" : "P4 authentication needs attention",
+        title: t("notify.p4.authentication.needs.attention"),
         body: runtime.connection.message,
         kind: "attention",
       });

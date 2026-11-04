@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
@@ -118,8 +119,8 @@ export function ConnectionDirectoryDialog({
     <Dialog
       title={
         kind === "user"
-          ? tr("浏览服务器用户", "Browse server users")
-          : tr("浏览服务器 Workspace", "Browse server workspaces")
+          ? t("settings.browse.server.users")
+          : t("settings.browse.server.workspaces")
       }
       description={tr(
         `只查询当前未保存设置中的服务器 ${snapshot.server || "—"}；选择结果只会填入字段，不会保存或切换连接。`,
@@ -132,7 +133,7 @@ export function ConnectionDirectoryDialog({
       footer={
         <>
           <button type="button" className="secondary" onClick={onDismiss}>
-            {tr("取消", "Cancel")}
+            {t("settings.cancel")}
           </button>
           <button
             type="button"
@@ -140,14 +141,14 @@ export function ConnectionDirectoryDialog({
             disabled={!canQuery || busy}
             onClick={() => void browse()}
           >
-            {busy ? tr("查询中…", "Searching…") : tr("查询", "Search")}
+            {busy ? t("settings.searching") : t("settings.search")}
           </button>
         </>
       }
     >
       {kind === "user" && (
         <label>
-          {tr("查询身份", "Query identity")}
+          {t("settings.query.identity")}
           <input
             data-dialog-autofocus
             value={queryUser}
@@ -168,7 +169,7 @@ export function ConnectionDirectoryDialog({
         </label>
       )}
       <label>
-        {tr("按名称前缀搜索", "Name prefix")}
+        {t("settings.name.prefix")}
         <input
           data-dialog-autofocus={kind === "workspace" ? true : undefined}
           value={prefix}
@@ -189,7 +190,7 @@ export function ConnectionDirectoryDialog({
       </label>
       {!snapshot.server.trim() && (
         <DialogNotice error>
-          {tr("请先填写 Server。", "Enter Server first.")}
+          {t("settings.enter.server.first")}
         </DialogNotice>
       )}
       {!identity && (
@@ -211,8 +212,8 @@ export function ConnectionDirectoryDialog({
           <DialogNotice error={!connectionReady}>
             {result.simulated && "Browser Mock simulated · "}
             {connectionReady
-              ? `${tr("查询成功", "Query succeeded")} · ${result.stats.matchedCount} / ${result.stats.scannedCount}`
-              : `${status?.title} · ${status?.detail} ${tr("请在设置主区完成对应的 CLI、Trust 或登录恢复后重试。", "Complete the corresponding CLI, Trust, or login recovery in the main Settings card, then retry.")} ${status?.recovery}`}
+              ? `${t("settings.query.succeeded")} · ${result.stats.matchedCount} / ${result.stats.scannedCount}`
+              : `${status?.title} · ${status?.detail} ${t("settings.complete.the.corresponding.cli.trust")} ${status?.recovery}`}
             {connectionReady && (result.partial || result.truncated)
               ? tr(
                   " · 有界结果，可能不完整",
@@ -226,8 +227,8 @@ export function ConnectionDirectoryDialog({
               role="listbox"
               aria-label={
                 kind === "user"
-                  ? tr("服务器用户", "Server users")
-                  : tr("服务器 Workspace", "Server workspaces")
+                  ? t("settings.server.users")
+                  : t("settings.server.workspaces")
               }
             >
               {items.map((item) => (
@@ -252,7 +253,7 @@ export function ConnectionDirectoryDialog({
                         ]
                           .filter(Boolean)
                           .join(" · ") ||
-                        tr("无附加信息", "No additional details")
+                        t("settings.no.additional.details")
                       : [
                           "root" in item ? item.root : undefined,
                           "stream" in item ? item.stream : undefined,
@@ -265,7 +266,7 @@ export function ConnectionDirectoryDialog({
                         ]
                           .filter(Boolean)
                           .join(" · ") ||
-                        tr("无附加信息", "No additional details")}
+                        t("settings.no.additional.details")}
                   </span>
                 </button>
               ))}

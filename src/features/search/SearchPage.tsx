@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   AlertTriangle,
@@ -106,7 +107,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Stream</span>
         <span>
-          {zh ? "路径：" : "Path: "}
+          {t("search.path")}
           <HighlightedText
             value={item.target.streamPath}
             field="streamPath"
@@ -121,7 +122,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Shelf</span>
         <span>
-          {zh ? "编号 CL：" : "Numbered CL: "}
+          {t("search.numbered.cl")}
           <HighlightedText value={changeId} field="changeId" item={item} />
         </span>
       </span>
@@ -261,7 +262,7 @@ function VirtualSearchResults({
                     />
                   </span>
                   <small>
-                    {zh ? "匹配：" : "Matched: "}
+                    {t("search.matched")}
                     {item.matchedFields
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
@@ -274,7 +275,7 @@ function VirtualSearchResults({
                 </span>
                 {disabled ? (
                   <span className="search-navigation-unavailable">
-                    {zh ? "不可导航" : "Unavailable"}
+                    {t("search.unavailable")}
                   </span>
                 ) : navigationBusy === item.identity ? (
                   <LoaderCircle className="spin" size={15} />
@@ -302,7 +303,7 @@ function validationMessage(
     return zh
       ? `搜索内容最多 ${GLOBAL_SEARCH_MAX_CHARACTERS} 个 Unicode 字符。`
       : `Search text is limited to ${GLOBAL_SEARCH_MAX_CHARACTERS} Unicode characters.`;
-  return zh ? "请输入搜索内容。" : "Enter a search query.";
+  return t("search.enter.a.search.query");
 }
 
 export function SearchPage({
@@ -585,17 +586,17 @@ export function SearchPage({
   const statusText = navigationNotice
     ? navigationNotice
     : phase === "loading"
-      ? tr("正在搜索。", "Searching.")
+      ? t("search.searching")
       : loadingMore
-        ? tr("正在加载更多结果。", "Loading more results.")
+        ? t("search.loading.more.results")
         : phase === "error"
-          ? tr("搜索失败。", "Search failed.")
+          ? t("search.search.failed")
           : phase === "ready"
             ? tr(
                 `已加载 ${items.length} 条，共匹配 ${totalMatched} 条。`,
                 `${items.length} loaded, ${totalMatched} matched.`,
               )
-            : tr("等待搜索。", "Ready to search.");
+            : t("search.ready.to.search");
 
   const openItem = async (item: GlobalSearchItem) => {
     if (item.target.type === "job") return;
@@ -631,11 +632,11 @@ export function SearchPage({
       >
         {mock ? (
           <span className="search-ui-badge">
-            {tr("模拟结果 · 未访问 P4", "Simulated · No P4 access")}
+            {t("search.simulated.no.p4.access")}
           </span>
         ) : (
           <span className="search-production-badge">
-            {tr("真实 P4 搜索", "Live P4 search")}
+            {t("search.live.p4.search")}
           </span>
         )}
       </FixedPageHeader>
@@ -654,7 +655,7 @@ export function SearchPage({
 
       <section
         className="search-card"
-        aria-label={tr("搜索条件", "Search controls")}
+        aria-label={t("search.search.controls")}
       >
         <form
           onSubmit={(event) => {
@@ -663,7 +664,7 @@ export function SearchPage({
           }}
         >
           <label className="search-query-label" htmlFor="global-search-input">
-            {tr("搜索内容", "Search query")}
+            {t("search.search.query")}
           </label>
           <div className="search-input-row">
             <Search size={18} aria-hidden="true" />
@@ -684,7 +685,7 @@ export function SearchPage({
               <button
                 type="button"
                 className="search-clear"
-                aria-label={tr("清空搜索", "Clear search")}
+                aria-label={t("search.clear.search")}
                 onClick={() => setDraft("")}
               >
                 <X size={14} />
@@ -699,7 +700,7 @@ export function SearchPage({
               ) : (
                 <Search size={14} />
               )}
-              {tr("搜索", "Search")}
+              {t("search.search")}
             </button>
           </div>
           <div id="global-search-help" className="search-help">
@@ -715,11 +716,11 @@ export function SearchPage({
           >
             {validationError ||
               (noKinds
-                ? tr("请至少选择一个类别。", "Select at least one category.")
+                ? t("search.select.at.least.one.category")
                 : "")}
           </div>
           <fieldset className="search-kind-picker">
-            <legend>{tr("搜索类别", "Categories")}</legend>
+            <legend>{t("search.categories")}</legend>
             {GLOBAL_SEARCH_KINDS.map((kind) => (
               <label key={kind}>
                 <input
@@ -753,12 +754,12 @@ export function SearchPage({
 
       <section
         className="search-card search-results"
-        aria-label={tr("搜索结果", "Search results")}
+        aria-label={t("search.search.results")}
         aria-busy={phase === "loading" || loadingMore}
       >
         <div className="search-results-heading">
           <div>
-            <h2>{tr("搜索结果", "Results")}</h2>
+            <h2>{t("search.results")}</h2>
             {phase === "ready" ? (
               <p>
                 {tr(
@@ -771,7 +772,7 @@ export function SearchPage({
           {phase === "ready" || phase === "error" ? (
             <button className="secondary" onClick={submit}>
               <RefreshCw size={14} />
-              {tr("整体重试", "Retry all")}
+              {t("search.retry.all")}
             </button>
           ) : null}
         </div>
@@ -793,30 +794,30 @@ export function SearchPage({
         {phase === "loading" ? (
           <div className="search-empty">
             <LoaderCircle className="spin" size={32} />
-            <h3>{tr("正在搜索", "Searching")}</h3>
-            <p>{tr("正在查询所选类别…", "Querying selected categories…")}</p>
+            <h3>{t("search.searching.2")}</h3>
+            <p>{t("search.querying.selected.categories")}</p>
           </div>
         ) : phase === "error" ? (
           <div className="search-error" role="alert">
             <AlertTriangle size={22} />
             <div>
-              <strong>{tr("搜索失败", "Search failed")}</strong>
+              <strong>{t("search.search.failed.2")}</strong>
               <p>{error}</p>
             </div>
-            <button onClick={submit}>{tr("重试", "Retry")}</button>
+            <button onClick={submit}>{t("search.retry")}</button>
           </div>
         ) : phase === "ready" && !items.length && !failures ? (
           <div className="search-empty">
             <FolderSearch size={32} />
-            <h3>{tr("没有匹配结果", "No results")}</h3>
+            <h3>{t("search.no.results")}</h3>
             <p>
-              {tr("请尝试其他关键词或类别。", "Try another query or category.")}
+              {t("search.try.another.query.or.category")}
             </p>
           </div>
         ) : phase === "idle" ? (
           <div className="search-empty">
             <FolderSearch size={32} />
-            <h3>{tr("输入内容开始搜索", "Enter a query to search")}</h3>
+            <h3>{t("search.enter.a.query.to.search")}</h3>
             <p>
               {tr(
                 "支持七类结果；可使用上方筛选缩小范围。",
@@ -849,11 +850,11 @@ export function SearchPage({
                       </span>
                     </div>
                     <small>
-                      {tr("扫描", "Scanned")} {facet?.scannedCount ?? 0}
+                      {t("search.scanned")} {facet?.scannedCount ?? 0}
                       {truncated
-                        ? tr(" · 达到扫描上限", " · scan limit reached")
+                        ? t("search.scan.limit.reached")
                         : facet?.partial && !facet.error
-                          ? tr(" · 部分结果", " · partial")
+                          ? t("search.partial")
                           : ""}
                     </small>
                   </header>
@@ -862,7 +863,7 @@ export function SearchPage({
                       <AlertTriangle size={14} />
                       <span>
                         <strong>
-                          {tr("不完整原因：", "Partial reason: ")}
+                          {t("search.partial.reason")}
                         </strong>
                         {facet.partialReason}
                       </span>
@@ -882,7 +883,7 @@ export function SearchPage({
                           size={13}
                           className={categoryLoading === kind ? "spin" : ""}
                         />
-                        {tr("重试此类别", "Retry category")}
+                        {t("search.retry.category")}
                       </button>
                     </div>
                   ) : null}
@@ -895,7 +896,7 @@ export function SearchPage({
                     />
                   ) : !facet?.error ? (
                     <p className="search-group-empty">
-                      {tr("此类别没有匹配项。", "No matches in this category.")}
+                      {t("search.no.matches.in.this.category")}
                     </p>
                   ) : null}
                 </section>
@@ -910,10 +911,10 @@ export function SearchPage({
             {hasMore ? (
               <>
                 <button onClick={loadMore}>
-                  {tr("重试加载", "Retry page")}
+                  {t("search.retry.page")}
                 </button>
                 <button onClick={submit}>
-                  {tr("重新开始搜索", "Restart search")}
+                  {t("search.restart.search")}
                 </button>
               </>
             ) : null}
@@ -931,8 +932,8 @@ export function SearchPage({
               <ArrowDown size={14} />
             )}
             {loadingMore
-              ? tr("加载中…", "Loading…")
-              : tr("继续加载", "Load more")}
+              ? t("search.loading")
+              : t("search.load.more")}
           </button>
         ) : null}
       </section>

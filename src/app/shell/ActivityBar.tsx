@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { activityPageIds, type PageId } from "../panels";
 import { pageIcons } from "../pageIcons";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -17,13 +18,13 @@ export function ActivityBar({ zh, labels, pages, active, onOpenPage }: Props) {
         打开设置: action(() => onOpenPage("settings")),
       }))}
       className="activity-bar toolbar-navigation"
-      aria-label={zh ? "页面导航" : "Page navigation"}
+      aria-label={t("shell.page.navigation")}
     >
       <div className="activity-scroll">
         <div
           className="activity-group"
           role="group"
-          aria-label={zh ? "页面" : "Pages"}
+          aria-label={t("shell.pages")}
         >
           {activityPageIds.map((page) => {
             const Icon = pageIcons[page];

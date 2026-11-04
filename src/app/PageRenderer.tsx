@@ -1,3 +1,4 @@
+import { t as translate } from "../shared/i18n";
 import { lazy, Suspense } from "react";
 import { FileWorkbench } from "../features/files/components/FileWorkbench";
 import { canScanWorkspace } from "../features/files/workspaceQueries";
@@ -161,7 +162,7 @@ function Content({
             : "Not connected. Add or select a connection in Settings."}
         </p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {zh ? "连接设置" : "Connection settings"}
+          {translate("PageRenderertsx.connection.settings")}
         </button>
       </div>
     );
@@ -197,7 +198,7 @@ function Content({
           {status.title} · {status.detail}
         </p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {zh ? "连接设置" : "Connection settings"}
+          {translate("PageRenderertsx.connection.settings")}
         </button>
       </div>
     );

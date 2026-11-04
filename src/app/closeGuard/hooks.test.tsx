@@ -79,6 +79,36 @@ it.each(["window", "application"] as const)(
   },
 );
 
+it("acknowledges the painted shell so the host drops its fallback caption bar", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  invoke.mockClear();
+  invoke.mockImplementation(async (command) =>
+    command === "close_guard_register" ? { generation: "7" } : true,
+  );
+  const { useCloseGuardReady } = await import("./index");
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  function Shell() {
+    useCloseGuardReady();
+    return <div className="app-shell" />;
+  }
+  try {
+    await act(async () => root.render(<Shell />));
+    expect(invoke).toHaveBeenCalledWith("shell_recovery_connected");
+    // A rejected acknowledgement must never break the shell.
+    invoke.mockRejectedValueOnce(new Error("no such window state"));
+    await act(async () => root.render(<Shell key="again" />));
+    expect(attemptedShellAck(invoke)).toBe(true);
+  } finally {
+    await act(async () => root.unmount());
+    vi.unstubAllGlobals();
+  }
+});
+
+function attemptedShellAck(mock: typeof invoke) {
+  return mock.mock.calls.some((call) => call[0] === "shell_recovery_connected");
+}
+
 it("uses the exact register/report/probe IPC shape without a caller-supplied window label", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   invoke.mockClear();

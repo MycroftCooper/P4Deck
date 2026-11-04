@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useServerStatus } from "./useServerStatus";
 import type { ServerStatusHint } from "./serverStatus";
 import {
@@ -222,11 +223,11 @@ export function StatusBar({
         className={`disk-status ${metrics?.low ? "low-space" : ""}`}
         title={
           disk.data
-            ? `${disk.data.path}\n${zh ? "可用" : "Available"}: ${size(disk.data.available)} / ${size(disk.data.total)}`
+            ? `${disk.data.path}\n${t("shell.available")}: ${size(disk.data.available)} / ${size(disk.data.total)}`
             : native
               ? String(
                   disk.error ??
-                    (zh ? "正在读取磁盘容量" : "Reading disk capacity"),
+                    (t("shell.reading.disk.capacity")),
                 )
               : zh
                 ? "浏览器无法读取本地磁盘容量，请使用桌面版"
@@ -234,9 +235,9 @@ export function StatusBar({
         }
       >
         <HardDrive size={13} />
-        <span>{zh ? "磁盘" : "Disk"}</span>
+        <span>{t("shell.disk")}</span>
         <progress
-          aria-label={zh ? "磁盘已用容量" : "Disk used capacity"}
+          aria-label={t("shell.disk.used.capacity")}
           value={metrics?.percent ?? 0}
           max={100}
         />
@@ -285,13 +286,13 @@ export function StatusBar({
                 ? "进度不可用"
                 : "Progress unavailable"
               : progress.count
-                ? `P4 · ${progress.count} ${zh ? "项执行中" : "running"}`
+                ? `P4 · ${progress.count} ${t("shell.running")}`
                 : zh
                   ? "P4 空闲"
                   : "P4 idle"}
           </span>
           <progress
-            aria-label={zh ? "P4 操作进度" : "P4 operation progress"}
+            aria-label={t("shell.p4.operation.progress")}
             max={100}
             value={progress.count ? progress.percent : 0}
           />
@@ -372,7 +373,7 @@ export function StatusBar({
                 ? "自动刷新已暂停"
                 : "Auto refresh paused"
               : autoRefresh.lastUpdated
-                ? `${zh ? "更新于" : "Updated"} ${new Date(autoRefresh.lastUpdated).toLocaleTimeString()}`
+                ? `${t("shell.updated")} ${new Date(autoRefresh.lastUpdated).toLocaleTimeString()}`
                 : zh
                   ? "自动刷新"
                   : "Auto refresh"}

@@ -1,3 +1,4 @@
+import { t as translate } from "../../../shared/i18n";
 import { isZh } from "../../../shared/locale";
 import { submittedTags, matchesSubmittedTags } from "../submittedTags";
 import { isStreamList } from "../../browsers/components/ReadOnlyPages";
@@ -709,14 +710,14 @@ export function SubmittedPage({
             <SubmittedGoTo zh={zh} />
             <button
               className="secondary"
-              title={zh ? "周报提示词" : "Weekly report prompt"}
-              aria-label={zh ? "周报提示词" : "Weekly report prompt"}
+              title={translate("pending.weekly.report.prompt")}
+              aria-label={translate("pending.weekly.report.prompt")}
               onClick={(event) =>
                 setReport({ owner: reportOwner, source: event.currentTarget })
               }
             >
               <FileText size={15} aria-hidden="true" />
-              <span>{zh ? "周报提示词" : "Weekly report prompt"}</span>
+              <span>{translate("pending.weekly.report.prompt")}</span>
             </button>
           </>
         }
@@ -739,7 +740,7 @@ export function SubmittedPage({
               tagOptions={tagOptions}
               typeControl={
                 <label className="submitted-filter-field submitted-kind-filter">
-                  <span>{zh ? "提交类型" : "Submission type"}</span>
+                  <span>{translate("pending.submission.type")}</span>
                   <select
                     value={kindFilter}
                     onChange={(event) => (
@@ -751,7 +752,7 @@ export function SubmittedPage({
                       })
                     )}
                   >
-                    <option value="all">{zh ? "全部" : "All"}</option>
+                    <option value="all">{translate("pending.all")}</option>
                     {submissionKinds.map((kind) => (
                       <option key={kind} value={kind}>
                         {submissionKindLabel(kind, zh)}
@@ -803,7 +804,7 @@ export function SubmittedPage({
                         : "Query failed. See technical details."}
                   </span>
                   <details>
-                    <summary>{zh ? "技术详情" : "Technical details"}</summary>
+                    <summary>{translate("pending.technical.details")}</summary>
                     <pre>{error}</pre>
                   </details>
                 </div>

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -91,9 +92,9 @@ function streamSummary(
   };
 }
 
-function boolLabel(value: boolean | undefined, zh: boolean) {
-  if (value === undefined) return zh ? "未知" : "Unknown";
-  return value ? (zh ? "是" : "Yes") : zh ? "否" : "No";
+function boolLabel(value: boolean | undefined, _zh: boolean) {
+  if (value === undefined) return t("browse.unknown");
+  return value ? (t("browse.yes")) : t("browse.no");
 }
 
 export function StreamGraphPage({
@@ -477,14 +478,14 @@ export function StreamGraphPage({
     if (session.current) session.current.token = token;
     cancelOperations();
     setPhase(result ? "ready" : "idle");
-    setNotice(zh ? "已取消当前查询。" : "Current query was cancelled.");
+    setNotice(t("browse.current.query.was.cancelled"));
   };
 
   if (runtime.p4Version === "loading")
     return (
       <section className="stream-graph-page">
         <div className="workspace-empty" role="status">
-          {zh ? "正在加载连接运行时…" : "Loading connection runtime…"}
+          {t("browse.loading.connection.runtime")}
         </div>
       </section>
     );
@@ -505,7 +506,7 @@ export function StreamGraphPage({
           }
         >
           <RefreshCw size={15} className={phase === "loading" ? "spin" : ""} />
-          {zh ? "刷新" : "Refresh"}
+          {t("browse.refresh")}
         </button>
       </FixedPageHeader>
 
@@ -521,21 +522,21 @@ export function StreamGraphPage({
         }}
       >
         <label>
-          <span>{zh ? "Depot 范围" : "Depot scope"}</span>
+          <span>{t("browse.depot.scope")}</span>
           <input
-            aria-label={zh ? "Depot 范围" : "Depot scope"}
+            aria-label={t("browse.depot.scope")}
             placeholder="//depot"
             value={depotInput}
             onChange={(event) => setDepotInput(event.target.value)}
           />
         </label>
         <label className="stream-graph-text-filter">
-          <span>{zh ? "文本过滤" : "Text filter"}</span>
+          <span>{t("browse.text.filter")}</span>
           <span className="search-field">
             <Search size={15} />
             <input
-              aria-label={zh ? "Stream 文本过滤" : "Stream text filter"}
-              placeholder={zh ? "名称、路径、Owner…" : "Name, path, owner…"}
+              aria-label={t("browse.stream.text.filter")}
+              placeholder={t("browse.name.path.owner")}
               value={textInput}
               onChange={(event) => setTextInput(event.target.value)}
             />
@@ -552,12 +553,12 @@ export function StreamGraphPage({
               }))
             }
           />
-          {zh ? "包含已删除" : "Include deleted"}
+          {t("browse.include.deleted")}
         </label>
-        <button type="submit">{zh ? "应用过滤" : "Apply filters"}</button>
+        <button type="submit">{t("browse.apply.filters")}</button>
         {(phase === "loading" || phase === "loadingMore") && (
           <button type="button" onClick={cancel}>
-            <X size={14} /> {zh ? "取消" : "Cancel"}
+            <X size={14} /> {t("browse.cancel")}
           </button>
         )}
       </form>
@@ -565,7 +566,7 @@ export function StreamGraphPage({
       <div className="stream-graph-status" aria-live="polite">
         {result?.simulated && (
           <span className="status-warning">
-            {zh ? "Browser Mock 模拟数据" : "Browser Mock simulated data"}
+            {t("browse.browser.mock.simulated.data")}
           </span>
         )}
         {result && (
@@ -582,7 +583,7 @@ export function StreamGraphPage({
                   ? "新鲜"
                   : "Fresh"}
             </span>
-            {result.partial && <span>{zh ? "部分结果" : "Partial"}</span>}
+            {result.partial && <span>{t("browse.partial")}</span>}
             {result.truncated && (
               <span className="status-warning">
                 {zh
@@ -592,15 +593,15 @@ export function StreamGraphPage({
             )}
             {!!result.stats.invalidRelationCount && (
               <span>
-                {zh ? "异常关系" : "Invalid relations"}:{" "}
+                {t("browse.invalid.relations")}:{" "}
                 {result.stats.invalidRelationCount}
               </span>
             )}
           </>
         )}
-        {phase === "loading" && <span>{zh ? "加载中…" : "Loading…"}</span>}
+        {phase === "loading" && <span>{t("browse.loading")}</span>}
         {phase === "loadingMore" && (
-          <span>{zh ? "继续加载中…" : "Loading more…"}</span>
+          <span>{t("browse.loading.more")}</span>
         )}
       </div>
       {notice && (
@@ -616,7 +617,7 @@ export function StreamGraphPage({
               phase === "error" ? void startFresh(!!result) : void loadMore()
             }
           >
-            {zh ? "重试" : "Retry"}
+            {t("browse.retry")}
           </button>
         </div>
       )}
@@ -624,21 +625,21 @@ export function StreamGraphPage({
       <div className={`stream-graph-layout ${selected ? "with-detail" : ""}`}>
         <section
           className="stream-graph-panel"
-          aria-label={zh ? "Stream 图可视化" : "Stream Graph visualization"}
+          aria-label={t("browse.stream.graph.visualization")}
         >
           <div className="stream-graph-toolbar">
             <span>
-              {zh ? "缩放" : "Zoom"}: {Math.round(zoom * 100)}%
+              {t("browse.zoom")}: {Math.round(zoom * 100)}%
             </span>
             <button
-              aria-label={zh ? "缩小 Stream Graph" : "Zoom out Stream Graph"}
+              aria-label={t("browse.zoom.out.stream.graph")}
               disabled={zoomIndex === 0}
               onClick={() => setZoomIndex((value) => Math.max(0, value - 1))}
             >
               <Minus size={14} />
             </button>
             <button
-              aria-label={zh ? "放大 Stream Graph" : "Zoom in Stream Graph"}
+              aria-label={t("browse.zoom.in.stream.graph")}
               disabled={zoomIndex === ZOOM_LEVELS.length - 1}
               onClick={() =>
                 setZoomIndex((value) =>
@@ -650,17 +651,17 @@ export function StreamGraphPage({
             </button>
             <button
               aria-label={
-                zh ? "重置 Stream Graph 缩放" : "Reset Stream Graph zoom"
+                t("browse.reset.stream.graph.zoom")
               }
               onClick={() => {
                 setZoomIndex(1);
                 scrollRef.current?.scrollTo({ top: 0, left: 0 });
               }}
             >
-              <RotateCcw size={14} /> {zh ? "重置" : "Reset"}
+              <RotateCcw size={14} /> {t("browse.reset")}
             </button>
             <span className="stream-graph-scroll-hint">
-              {zh ? "使用滚动条平移图形" : "Use scrollbars to pan the graph"}
+              {t("browse.use.scrollbars.to.pan.the")}
             </span>
           </div>
           <div
@@ -668,7 +669,7 @@ export function StreamGraphPage({
             className="stream-graph-viewport"
             role="tree"
             tabIndex={0}
-            aria-label={zh ? "Stream 有向森林" : "Directed stream forest"}
+            aria-label={t("browse.directed.stream.forest")}
             data-testid="stream-graph-virtual-list"
             onKeyDown={(event) => {
               const index = Number(
@@ -705,7 +706,7 @@ export function StreamGraphPage({
           >
             {!rows.length && phase !== "loading" ? (
               <div className="workspace-empty" role="status">
-                {zh ? "没有匹配的 Stream。" : "No matching streams."}
+                {t("browse.no.matching.streams")}
               </div>
             ) : (
               <div
@@ -768,24 +769,24 @@ export function StreamGraphPage({
                         </span>
                         <span className="stream-graph-badges">
                           <span>
-                            {node.kind || (zh ? "未知类型" : "Unknown type")}
+                            {node.kind || (t("browse.unknown.type"))}
                           </span>
                           {current && (
                             <span className="current">
-                              {zh ? "当前" : "Current"}
+                              {t("browse.current")}
                             </span>
                           )}
                           {node.deleted && (
                             <span className="deleted">
-                              {zh ? "已删除" : "Deleted"}
+                              {t("browse.deleted")}
                             </span>
                           )}
                           {row.relation === "orphan" && (
-                            <span>{zh ? "孤立" : "Orphan"}</span>
+                            <span>{t("browse.orphan")}</span>
                           )}
                           {row.relation === "unloadedParent" && (
                             <span>
-                              {zh ? "父节点未加载" : "Parent not loaded"}
+                              {t("browse.parent.not.loaded")}
                             </span>
                           )}
                           {row.depth > 48 && <span>Layer {row.depth + 1}</span>}
@@ -808,7 +809,7 @@ export function StreamGraphPage({
               onClick={() => void loadMore()}
             >
               <ChevronDown size={14} />
-              {zh ? "继续加载 Stream" : "Load more streams"}
+              {t("browse.load.more.streams")}
             </button>
           )}
         </section>
@@ -816,7 +817,7 @@ export function StreamGraphPage({
         {selected && (
           <aside
             className="stream-graph-details"
-            aria-label={zh ? "Stream 详情" : "Stream details"}
+            aria-label={t("browse.stream.details")}
             onKeyDown={(event) => {
               if (event.key !== "Escape") return;
               event.preventDefault();
@@ -828,11 +829,11 @@ export function StreamGraphPage({
           >
             <header>
               <div>
-                <span>{zh ? "所选节点" : "Selected node"}</span>
+                <span>{t("browse.selected.node")}</span>
                 <h2>{selected.node.name || selected.node.stream}</h2>
               </div>
               <button
-                aria-label={zh ? "关闭 Stream 详情" : "Close Stream details"}
+                aria-label={t("browse.close.stream.details")}
                 onClick={() => {
                   setSelectedPath(undefined);
                   focusIndex(rows.indexOf(selected));
@@ -852,7 +853,7 @@ export function StreamGraphPage({
               </div>
               <div>
                 <dt>Type</dt>
-                <dd>{selected.node.kind || (zh ? "未知" : "Unknown")}</dd>
+                <dd>{selected.node.kind || (t("browse.unknown"))}</dd>
               </div>
               <div>
                 <dt>Parent</dt>
@@ -887,7 +888,7 @@ export function StreamGraphPage({
             <div className="stream-graph-detail-actions">
               <button onClick={locateInStreams}>
                 <LocateFixed size={14} />{" "}
-                {zh ? "在 Streams 中定位" : "Locate in Streams"}
+                {t("browse.locate.in.streams")}
               </button>
               <button
                 onClick={(event) =>
@@ -897,7 +898,7 @@ export function StreamGraphPage({
                   })
                 }
               >
-                {zh ? "打开安全切换流程" : "Open safe switch flow"}
+                {t("browse.open.safe.switch.flow")}
               </button>
             </div>
           </aside>

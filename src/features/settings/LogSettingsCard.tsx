@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { useRef, useState } from "react";
 import { FolderOpen, ScrollText, Trash2 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
@@ -67,7 +68,7 @@ export function LogSettingsCard({
                   `日志已清空（回读确认剩余 ${remaining} 条）；后续日志将继续写入。`,
                   `Logs cleared (readback confirms ${remaining} remaining); new logs will continue to be recorded.`,
                 )
-              : tr("已清空模拟日志。", "Simulated logs cleared."),
+              : tFor(zh ? "zh-CN" : "en-US", "settings.simulated.logs.cleared"),
           );
         } else {
           setError(
@@ -88,7 +89,7 @@ export function LogSettingsCard({
     <section className="settings-card log-settings-card">
       <h2>
         <ScrollText size={18} />
-        {tr("日志", "Logs")}
+        {tFor(zh ? "zh-CN" : "en-US", "settings.logs")}
       </h2>
       <p>
         {tr(
@@ -103,7 +104,7 @@ export function LogSettingsCard({
           onClick={() => void run("open")}
         >
           <FolderOpen size={16} />
-          {tr("打开日志文件夹", "Open log folder")}
+          {tFor(zh ? "zh-CN" : "en-US", "settings.open.log.folder")}
         </button>
         <button
           className="danger"
@@ -116,7 +117,7 @@ export function LogSettingsCard({
           }}
         >
           <Trash2 size={16} />
-          {tr("删除全部日志", "Delete all logs")}
+          {tFor(zh ? "zh-CN" : "en-US", "settings.delete.all.logs")}
         </button>
       </div>
       {!native && (
@@ -133,7 +134,7 @@ export function LogSettingsCard({
         <Dialog
           zh={zh}
           danger
-          title={tr("删除全部日志？", "Delete all logs?")}
+          title={tFor(zh ? "zh-CN" : "en-US", "settings.delete.all.logs.2")}
           source={source.current}
           busy={!!busy}
           onRequestClose={() => {
@@ -147,7 +148,7 @@ export function LogSettingsCard({
                 disabled={!!busy}
                 onClick={() => setConfirm(false)}
               >
-                {tr("取消", "Cancel")}
+                {tFor(zh ? "zh-CN" : "en-US", "settings.cancel")}
               </button>
               <button
                 className="danger"
@@ -155,8 +156,8 @@ export function LogSettingsCard({
                 onClick={() => void run("delete")}
               >
                 {busy === "delete"
-                  ? tr("正在删除…", "Deleting…")
-                  : tr("确认删除", "Confirm deletion")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "settings.deleting")
+                  : tFor(zh ? "zh-CN" : "en-US", "settings.confirm.deletion")}
               </button>
             </>
           }

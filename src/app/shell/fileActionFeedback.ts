@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type { FileActionResult } from "../../shared/contracts";
 
 /** A resolved bridge promise does not imply that the P4 process succeeded. */
@@ -52,7 +53,7 @@ export function fileActionFeedback(
       result.message,
       warnings,
       scope,
-      operation ? `${zh ? "任务" : "Operation"}: ${operation.operationId}` : "",
+      operation ? `${t("shell.operation")}: ${operation.operationId}` : "",
     ]
       .filter(Boolean)
       .join("\n"),

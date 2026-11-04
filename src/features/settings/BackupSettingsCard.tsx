@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 ﻿import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { backend } from "../../infrastructure/backend";
@@ -88,7 +89,7 @@ export function BackupSettingsCard({
       <section className="settings-card backup-settings-card">
         <h2>
           <Archive size={18} />
-          {tr("本地配置备份", "Local configuration backup")}
+          {t("settings.local.configuration.backup")}
         </h2>
         <p>
           {tr(
@@ -260,7 +261,7 @@ export function BackupSettingsCard({
     <section className="settings-card backup-settings-card">
       <h2>
         <Archive size={18} />
-        {tr("本地配置备份", "Local configuration backup")}
+        {t("settings.local.configuration.backup")}
       </h2>
       <p>
         {tr(
@@ -275,8 +276,8 @@ export function BackupSettingsCard({
         >
           <Archive size={15} />
           {busy === "create"
-            ? tr("正在备份…", "Creating…")
-            : tr("创建本地备份", "Create local backup")}
+            ? t("settings.creating")
+            : t("settings.create.local.backup")}
         </button>
         <button
           className="secondary"
@@ -284,14 +285,14 @@ export function BackupSettingsCard({
           disabled={Boolean(busy)}
         >
           <FolderOpen size={15} />
-          {tr("打开备份文件夹", "Open backup folder")}
+          {t("settings.open.backup.folder")}
         </button>
         <button
           className="secondary"
           onClick={() => void refresh()}
           disabled={Boolean(busy)}
         >
-          {tr("刷新", "Refresh")}
+          {t("settings.refresh")}
         </button>
       </div>
 
@@ -313,10 +314,10 @@ export function BackupSettingsCard({
         >
           <span>
             {lastRestore.state === "failed"
-              ? tr("恢复失败：", "Restore failed: ")
+              ? t("settings.restore.failed")
               : lastRestore.state === "succeeded"
-                ? tr("最近恢复成功：", "Last restore succeeded: ")
-                : tr("恢复等待重启：", "Restore waiting for restart: ")}
+                ? t("settings.last.restore.succeeded")
+                : t("settings.restore.waiting.for.restart")}
             {lastRestore.sourceFileName}
             {lastRestore.message
               ? ` · ${lastRestore.message}`
@@ -351,12 +352,12 @@ export function BackupSettingsCard({
         </div>
       )}
 
-      <div className="backup-list" aria-label={tr("本地备份", "Local backups")}>
+      <div className="backup-list" aria-label={t("settings.local.backups")}>
         {!overview?.backups.length ? (
           <p className="backup-empty">
             {busy === "load"
-              ? tr("正在读取备份…", "Loading backups…")
-              : tr("还没有本地备份。", "No local backups yet.")}
+              ? t("settings.loading.backups")
+              : t("settings.no.local.backups.yet")}
           </p>
         ) : (
           overview.backups.map((backup) => (
@@ -365,22 +366,22 @@ export function BackupSettingsCard({
                 <strong>{backup.fileName}</strong>
                 <span>
                   {backup.kind === "preRestore"
-                    ? tr("恢复前回滚包", "Pre-restore rollback")
-                    : tr("手动备份", "Manual backup")}
+                    ? t("settings.pre.restore.rollback")
+                    : t("settings.manual.backup")}
                   {" · "}
                   {time(backup.createdAt, zh)} · {size(backup.sizeBytes)}
                 </span>
                 <small>
                   {backup.includesConnection
-                    ? tr("连接配置", "Connection profiles")
-                    : tr("无连接文件", "No connection file")}
+                    ? t("settings.connection.profiles")
+                    : t("settings.no.connection.file")}
                   {" · "}
                   {backup.includesWindowPlacement
-                    ? tr("窗口位置", "Window placement")
-                    : tr("无窗口位置", "No placement file")}
+                    ? t("settings.window.placement")
+                    : t("settings.no.placement.file")}
                   {" · "}
                   {backup.localStorageKeys.length}{" "}
-                  {tr("个布局键", "layout keys")}
+                  {t("settings.layout.keys")}
                 </small>
               </div>
               {confirmRestore === backup.fileName ? (
@@ -394,13 +395,13 @@ export function BackupSettingsCard({
                     disabled={Boolean(busy)}
                     onClick={() => void confirmRestoreRun(backup.fileName)}
                   >
-                    {tr("确认暂存恢复", "Confirm staged restore")}
+                    {t("settings.confirm.staged.restore")}
                   </button>
                   <button
                     disabled={Boolean(busy)}
                     onClick={() => setConfirmRestore(undefined)}
                   >
-                    {tr("取消", "Cancel")}
+                    {t("settings.cancel")}
                   </button>
                 </span>
               ) : (
@@ -410,7 +411,7 @@ export function BackupSettingsCard({
                   onClick={() => setConfirmRestore(backup.fileName)}
                 >
                   <RotateCcw size={14} />
-                  {tr("恢复", "Restore")}
+                  {t("settings.restore")}
                 </button>
               )}
             </article>
@@ -418,7 +419,7 @@ export function BackupSettingsCard({
         )}
       </div>
       <small className="backup-directory">
-        {tr("备份目录：", "Backup directory: ")}
+        {t("settings.backup.directory")}
         <code>{overview?.directory ?? "—"}</code>
       </small>
     </section>

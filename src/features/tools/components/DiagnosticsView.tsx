@@ -1,3 +1,4 @@
+import { tFor } from "../../../shared/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Download, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
@@ -79,7 +80,7 @@ export function DiagnosticsView({
     setExportBusy(true);
     setExportResult(undefined);
     setExportStatus(
-      zh ? "正在导出脱敏诊断…" : "Exporting redacted diagnostics…",
+      tFor(zh ? "zh-CN" : "en-US", "tools.exporting.redacted.diagnostics"),
     );
     const operationId = crypto.randomUUID();
     try {
@@ -133,7 +134,7 @@ export function DiagnosticsView({
       }
     } catch (cause) {
       setExportStatus(
-        `${zh ? "导出失败：" : "Export failed: "}${String(cause)}`,
+        `${tFor(zh ? "zh-CN" : "en-US", "tools.export.failed")}${String(cause)}`,
       );
     } finally {
       setExportBusy(false);
@@ -158,7 +159,7 @@ export function DiagnosticsView({
         <header>
           <div>
             <h3 id="cache-heading">
-              {zh ? "状态缓存诊断" : "Status cache diagnostics"}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.status.cache.diagnostics")}
             </h3>
             <p>
               {zh
@@ -167,49 +168,49 @@ export function DiagnosticsView({
             </p>
           </div>
           <button onClick={() => void refresh()} disabled={cacheBusy}>
-            <RefreshCw size={13} /> {zh ? "刷新" : "Refresh"}
+            <RefreshCw size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.refresh")}
           </button>
         </header>
         {cache && (
           <dl className="metric-grid">
             <div>
-              <dt>{zh ? "命中 / 未命中" : "Hits / misses"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.hits.misses")}</dt>
               <dd>
                 {cache.hits} / {cache.misses}
               </dd>
             </div>
             <div>
-              <dt>{zh ? "命中率（推导）" : "Hit rate (derived)"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.hit.rate.derived")}</dt>
               <dd>{hitRate}</dd>
             </div>
             <div>
-              <dt>{zh ? "当前条目" : "Current entries"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.current.entries")}</dt>
               <dd>{cache.entries}</dd>
             </div>
             <div>
-              <dt>{zh ? "估算占用" : "Estimated usage"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.estimated.usage")}</dt>
               <dd>{bytes(cache.estimatedBytes)}</dd>
             </div>
             <div>
-              <dt>{zh ? "离线 stale 回退" : "Offline stale fallbacks"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.offline.stale.fallbacks")}</dt>
               <dd>{cache.staleFallbacks}</dd>
             </div>
             <div>
-              <dt>{zh ? "淘汰 / 失效" : "Evicted / invalidated"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.evicted.invalidated")}</dt>
               <dd>
                 {cache.evicted} / {cache.invalidated}
               </dd>
             </div>
             <div>
-              <dt>{zh ? "合并请求" : "Coalesced requests"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.coalesced.requests")}</dt>
               <dd>{cache.coalesced}</dd>
             </div>
             <div>
-              <dt>{zh ? "过时代次响应" : "Superseded responses"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.superseded.responses")}</dt>
               <dd>{cache.superseded}</dd>
             </div>
             <div>
-              <dt>{zh ? "加载次数 / 总耗时" : "Loads / total time"}</dt>
+              <dt>{tFor(zh ? "zh-CN" : "en-US", "tools.loads.total.time")}</dt>
               <dd>
                 {cache.loadCount} / {cache.totalLoadMs} ms
               </dd>
@@ -218,14 +219,14 @@ export function DiagnosticsView({
         )}
         {cacheBusy && (
           <div role="status" aria-live="polite">
-            {zh ? "正在刷新缓存指标…" : "Refreshing cache metrics…"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.refreshing.cache.metrics")}
           </div>
         )}
         {cacheError && (
           <div className="inline-error" role="alert">
             {cacheError}{" "}
             <button onClick={() => void refresh()}>
-              {zh ? "重试" : "Retry"}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.retry")}
             </button>
           </div>
         )}
@@ -234,7 +235,7 @@ export function DiagnosticsView({
       <section aria-labelledby="export-heading" className="diagnostic-card">
         <header>
           <div>
-            <h3 id="export-heading">{zh ? "诊断导出" : "Diagnostic export"}</h3>
+            <h3 id="export-heading">{tFor(zh ? "zh-CN" : "en-US", "tools.diagnostic.export")}</h3>
             <p>
               {zh
                 ? "后端生成受控大小的脱敏 JSON；不包含密码、ticket、完整 fingerprint 或原始环境变量。"
@@ -245,7 +246,7 @@ export function DiagnosticsView({
             onClick={() => void exportDiagnostics()}
             disabled={exportBusy}
           >
-            <Download size={13} /> {zh ? "导出" : "Export"}
+            <Download size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.export")}
           </button>
         </header>
         {exportResult && (
@@ -265,7 +266,7 @@ export function DiagnosticsView({
                   void navigator.clipboard.writeText(exportResult.path)
                 }
               >
-                <Copy size={13} /> {zh ? "复制路径" : "Copy path"}
+                <Copy size={13} /> {tFor(zh ? "zh-CN" : "en-US", "tools.copy.path")}
               </button>
             )}
           </div>

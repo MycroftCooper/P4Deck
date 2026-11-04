@@ -36,6 +36,7 @@ import {
   IntegrationTraceDialog,
   readIntegrationBatch,
 } from "./IntegrationTraceDialog";
+import { setLocale } from "../../../shared/i18n";
 const runtime = {
   mode: "mock",
   context: { server: "mock", user: "u", client: "c" },
@@ -72,6 +73,8 @@ const batch: IntegrationTraceBatch = {
 };
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   appCache.clear();
   vi.clearAllMocks();
   api.detail.mockResolvedValue(detail);

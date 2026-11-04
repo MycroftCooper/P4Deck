@@ -36,6 +36,11 @@ export function useCloseGuard() {
 export function useCloseGuardReady() {
   useLayoutEffect(() => {
     closeState.setReady(true);
+    // The host keeps a native caption bar on windows whose page never painted;
+    // this acknowledgement removes it. Not routed through close admission so it
+    // still succeeds during a close fence.
+    if (isTauri())
+      void invoke("shell_recovery_connected").catch(() => undefined);
     return () => closeState.setReady(false);
   }, []);
 }

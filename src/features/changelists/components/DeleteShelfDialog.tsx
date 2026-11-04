@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { lookupWorkflowAction } from "../../actions/workflowReceipt";
 import { useContext, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
@@ -69,7 +70,7 @@ export function DeleteShelfDialog({
   };
   return (
     <Dialog
-      title={zh ? "删除搁置内容" : "Delete shelved revisions"}
+      title={t("pending.delete.shelved.revisions")}
       description={
         zh
           ? "仅删除服务器搁置版本，不会同时删除工作区文件或整个 CL。"
@@ -82,7 +83,7 @@ export function DeleteShelfDialog({
       footer={
         <>
           <button data-dialog-autofocus onClick={onDismiss}>
-            {zh ? "取消" : "Cancel"}
+            {t("pending.cancel")}
           </button>
           <button
             className="danger"
@@ -97,18 +98,18 @@ export function DeleteShelfDialog({
             }
             onClick={confirm}
           >
-            {zh ? "确认删除所选搁置版本" : "Delete selected shelf revisions"}
+            {t("pending.delete.selected.shelf.revisions")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
         CL {snapshot.changeId} · {snapshot.paths.length}{" "}
-        {zh ? "个文件" : "files"}
+        {t("pending.files")}
       </div>
       <TargetList
         paths={snapshot.paths}
-        label={zh ? "明确的文件范围" : "Explicit file scope"}
+        label={t("pending.explicit.file.scope")}
       />
     </Dialog>
   );

@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -80,7 +81,7 @@ function IntegrationTraceDialogInner({
   function begin() {
     if (active.current) return;
     if (runtime.mode !== "mock" && runtime.connection.state !== "connected") {
-      setWarnings([tr("连接不可用", "Connection unavailable")]);
+      setWarnings([t("pending.connection.unavailable")]);
       return;
     }
     if (budget.current >= 12) {
@@ -100,7 +101,7 @@ function IntegrationTraceDialogInner({
   }
   function take() {
     if (budget.current >= 12)
-      throw new Error(tr("达到12次读取预算", "12-read budget reached"));
+      throw new Error(t("pending.12.read.budget.reached"));
     budget.current++;
     setRequests(budget.current);
   }
@@ -236,7 +237,7 @@ function IntegrationTraceDialogInner({
     `${record.sourcePath}#(${record.sourceStart},${record.sourceEnd}] → ${record.targetPath}#(${record.targetStart},${record.targetEnd}] · ${record.how} · CL ${record.recordChange}`;
   return (
     <Dialog
-      title={`${tr("追踪合并去向", "Trace integration destinations")} · CL ${changeId}`}
+      title={`${t("pending.trace.integration.destinations")} · CL ${changeId}`}
       zh={zh}
       source={source}
       onRequestClose={() => {
@@ -252,11 +253,11 @@ function IntegrationTraceDialogInner({
             onClick={() => void run()}
           >
             {detail
-              ? tr("继续查询下一批文件", "Read next file batch")
-              : tr("查询集成记录", "Query integration records")}
+              ? t("pending.read.next.file.batch")
+              : t("pending.query.integration.records")}
           </button>
           <button disabled={busy} onClick={() => void run(true)}>
-            {tr("刷新调查", "Refresh investigation")}
+            {t("pending.refresh.investigation")}
           </button>
           {busy && (
             <button
@@ -272,7 +273,7 @@ function IntegrationTraceDialogInner({
                 ]);
               }}
             >
-              {tr("取消读取", "Cancel reads")}
+              {t("pending.cancel.reads")}
             </button>
           )}
         </>
@@ -285,11 +286,11 @@ function IntegrationTraceDialogInner({
         )}
       </p>
       <p role="status">
-        {tr("已查询文件", "Files queried")}: {next}/{uniqueFiles} ·{" "}
-        {tr("读取预算", "Read budget")}: {requests}/12 ·{" "}
+        {t("pending.files.queried")}: {next}/{uniqueFiles} ·{" "}
+        {t("pending.read.budget")}: {requests}/12 ·{" "}
         {readAt
           ? new Date(readAt).toLocaleString()
-          : tr("尚未读取", "Not read")}
+          : t("pending.not.read")}
       </p>
       {detail &&
         (detail.inspectionStatus !== "complete" ||
@@ -327,17 +328,17 @@ function IntegrationTraceDialogInner({
       {groups.map((group) => (
         <details key={group.change}>
           <summary>
-            {tr("记录 CL", "Record CL")} {group.change} · {group.covered.size}/
+            {t("pending.record.cl")} {group.change} · {group.covered.size}/
             {group.total} ·{" "}
             {group.full
-              ? tr("完整文件记录覆盖", "Full file record coverage")
-              : tr("部分记录 / 未知", "Partial records / unknown")}
+              ? t("pending.full.file.record.coverage")
+              : t("pending.partial.records.unknown")}
           </summary>
           <button
             disabled={busy || !!metadata[group.change]}
             onClick={() => void inspect(group.change)}
           >
-            {tr("核对目标CL与时间", "Verify destination CL and time")}
+            {t("pending.verify.destination.cl.and.time")}
           </button>
           {metadata[group.change] && (
             <p>
@@ -350,7 +351,7 @@ function IntegrationTraceDialogInner({
                     file.revision === record.targetEnd,
                 ),
               )
-                ? `${tr("目标 CL", "Destination CL")} ${group.change} · ${metadata[group.change].time}`
+                ? `${t("pending.destination.cl")} ${group.change} · ${metadata[group.change].time}`
                 : tr(
                     "记录CL未能与全部目标修订核对，目标CL/时间未知",
                     "Record CL could not be verified against all destination revisions; destination CL/time unknown",
@@ -409,7 +410,7 @@ function IntegrationTraceDialogInner({
               "Next-hop records only; ignored/undo/edit actions and missing ranges require separate verification.",
             )}
             {hop.batch.incomplete
-              ? tr("结果不完整。", "Incomplete results.")
+              ? t("pending.incomplete.results")
               : ""}
           </p>
         </details>

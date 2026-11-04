@@ -16,6 +16,7 @@ import type {
 } from "../../../shared/contracts";
 import { ReadOnlyPage } from "./ReadOnlyPages";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
+import { setLocale } from "../../../shared/i18n";
 
 vi.mock("../../files/components/SyncDialog", () => ({
   SyncDialog: ({
@@ -172,6 +173,8 @@ async function click(element: Element, options: MouseEventInit = {}) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.stubGlobal(
     "ResizeObserver",
     class {

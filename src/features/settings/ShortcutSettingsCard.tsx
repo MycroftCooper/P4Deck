@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { Keyboard } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -79,22 +80,22 @@ function availability(command: AppCommandDefinition, zh: boolean): string {
     );
   switch (command.requires) {
     case "runtime":
-      return tr("需连接运行时加载完成", "Requires the connection runtime");
+      return t("settings.requires.the.connection.runtime");
     case "connected":
-      return tr("需连接可用", "Requires an available connection");
+      return t("settings.requires.an.available.connection");
     case "file":
-      return tr("需先选择文件或目录", "Requires a selected file or folder");
+      return t("settings.requires.a.selected.file.or");
     case "pending":
       return tr(
         "需选中非空、已编号的待提交 CL",
         "Requires a nonempty numbered pending changelist",
       );
     case "swarm":
-      return tr("需已配置 Swarm", "Requires configured Swarm");
+      return t("settings.requires.configured.swarm");
     case "mainWindow":
-      return tr("仅主窗口可用", "Main window only");
+      return t("settings.main.window.only");
     default:
-      return tr("始终可用", "Always available");
+      return t("settings.always.available");
   }
 }
 
@@ -155,7 +156,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setRecording(undefined);
         setMessage({
           tone: "info",
-          text: tr("已取消录制", "Recording cancelled"),
+          text: t("settings.recording.cancelled"),
         });
         return;
       }
@@ -166,7 +167,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
         setRecording(undefined);
         setMessage({
           tone: "info",
-          text: tr("已清除该命令的绑定", "Binding cleared"),
+          text: t("settings.binding.cleared"),
         });
         return;
       }
@@ -242,7 +243,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
       <div className="shortcut-settings-header">
         <h2>
           <Keyboard size={18} />
-          {tr("快捷键", "Keyboard shortcuts")}
+          {t("settings.keyboard.shortcuts")}
         </h2>
         <div className="shortcut-settings-actions">
           <button
@@ -260,7 +261,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
               });
             }}
           >
-            {tr("恢复默认快捷键", "Restore default shortcuts")}
+            {t("settings.restore.default.shortcuts")}
           </button>
         </div>
       </div>
@@ -324,7 +325,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                         ))
                       ) : (
                         <span className="shortcut-unbound">
-                          {tr("未绑定", "Unbound")}
+                          {t("settings.unbound")}
                         </span>
                       )}
                     </div>
@@ -338,18 +339,18 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                               setRecording(undefined);
                               setMessage({
                                 tone: "info",
-                                text: tr("已取消录制", "Recording cancelled"),
+                                text: t("settings.recording.cancelled"),
                               });
                             }}
                           >
-                            {tr("取消 (Esc)", "Cancel (Esc)")}
+                            {t("settings.cancel.esc")}
                           </button>
                         ) : (
                           <button
                             type="button"
                             className="secondary"
                             aria-pressed={false}
-                            aria-label={`${tr("录制", "Record")} ${
+                            aria-label={`${t("settings.record")} ${
                               zh ? command.zh : command.en
                             }`}
                             onClick={() => {
@@ -363,14 +364,14 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                               });
                             }}
                           >
-                            {tr("录制", "Record")}
+                            {t("settings.record")}
                           </button>
                         ))}
                       {canBind && shortcuts.length > 0 && (
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${tr("清除", "Clear")} ${
+                          aria-label={`${t("settings.clear")} ${
                             zh ? command.zh : command.en
                           }`}
                           onClick={() => {
@@ -378,18 +379,18 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                             setRecording(undefined);
                             setMessage({
                               tone: "info",
-                              text: tr("已清除该命令的绑定", "Binding cleared"),
+                              text: t("settings.binding.cleared"),
                             });
                           }}
                         >
-                          {tr("清除", "Clear")}
+                          {t("settings.clear")}
                         </button>
                       )}
                       {canBind && overridden && (
                         <button
                           type="button"
                           className="secondary"
-                          aria-label={`${tr("恢复默认", "Restore default")} ${
+                          aria-label={`${t("settings.restore.default")} ${
                             zh ? command.zh : command.en
                           }`}
                           onClick={() => {
@@ -403,7 +404,7 @@ export function ShortcutSettingsCard({ zh, platform }: Props) {
                             });
                           }}
                         >
-                          {tr("恢复默认", "Default")}
+                          {t("settings.default")}
                         </button>
                       )}
                     </div>

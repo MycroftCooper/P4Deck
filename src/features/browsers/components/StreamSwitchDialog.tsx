@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
@@ -254,12 +255,12 @@ export function StreamSwitchDialog({
               blockers: plan.blockers.map((item) => item.message),
               warnings: plan.warnings.map((item) => item.message),
             } as const);
-  const current = plan?.currentStream || tr("传统工作区", "Classic workspace");
+  const current = plan?.currentStream || t("browse.classic.workspace");
   const verified = verifiedStreamSwitch(result);
 
   return (
     <Dialog
-      title={tr("安全切换 Stream", "Safe stream switch")}
+      title={t("browse.safe.stream.switch")}
       description={tr(
         "检查 Client、Stream、权限和本地文件状态后，使用官方 client view switch；绝不强制切换或自动清理文件。",
         "Inspect the client, stream, permissions, and local state before the official client view switch. P4Deck never forces the switch or cleans files automatically.",
@@ -278,7 +279,7 @@ export function StreamSwitchDialog({
         <>
           {phase === "preflight" && (
             <>
-              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button onClick={onDismiss}>{t("browse.cancel")}</button>
               <button
                 className="primary"
                 data-dialog-autofocus
@@ -286,14 +287,14 @@ export function StreamSwitchDialog({
                 onClick={() => void preflight()}
               >
                 {busy
-                  ? tr("检查中…", "Inspecting…")
-                  : tr("运行预检", "Run preflight")}
+                  ? t("browse.inspecting")
+                  : t("browse.run.preflight.2")}
               </button>
             </>
           )}
           {phase === "review" && (
             <>
-              <button onClick={() => reset()}>{tr("重新选择", "Back")}</button>
+              <button onClick={() => reset()}>{t("browse.back")}</button>
               <button
                 className={mode === "sync" ? "danger" : "primary"}
                 disabled={
@@ -306,8 +307,8 @@ export function StreamSwitchDialog({
                 onClick={() => void confirm()}
               >
                 {mode === "sync"
-                  ? tr("确认切换并同步", "Confirm switch and sync")
-                  : tr("确认仅切换视图", "Confirm view-only switch")}
+                  ? t("browse.confirm.switch.and.sync")
+                  : t("browse.confirm.view.only.switch")}
               </button>
             </>
           )}
@@ -318,21 +319,21 @@ export function StreamSwitchDialog({
                 operation.current && backend.cancelOperation(operation.current)
               }
             >
-              {tr("取消操作", "Cancel operation")}
+              {t("browse.cancel.operation")}
             </button>
           )}
           {phase === "result" && (
             <>
-              <button onClick={finishAndClose}>{tr("关闭", "Close")}</button>
+              <button onClick={finishAndClose}>{t("browse.close")}</button>
               {result?.streamChanged && !result.syncCompleted && (
                 <button className="primary" onClick={() => reset("sync")}>
-                  {tr("重新预检并完成同步", "Preflight recovery sync")}
+                  {t("browse.preflight.recovery.sync")}
                 </button>
               )}
               {(!result || result.outcome !== "succeeded") &&
                 !(result?.streamChanged && !result.syncCompleted) && (
                   <button className="primary" onClick={() => reset()}>
-                    {tr("重新预检", "Run preflight again")}
+                    {t("browse.run.preflight.again")}
                   </button>
                 )}
             </>
@@ -358,7 +359,7 @@ export function StreamSwitchDialog({
       {phase === "preflight" && (
         <>
           <fieldset className="workflow-choice-grid">
-            <legend>{tr("文件处理方式", "Workspace file handling")}</legend>
+            <legend>{t("browse.workspace.file.handling")}</legend>
             <label className="workflow-checkbox">
               <input
                 type="radio"
@@ -403,15 +404,15 @@ export function StreamSwitchDialog({
           <PreflightStatus state={preflightState} zh={zh} />
           <dl className="stream-switch-summary">
             <div>
-              <dt>{tr("当前", "Current")}</dt>
+              <dt>{t("browse.current")}</dt>
               <dd>{current}</dd>
             </div>
             <div>
-              <dt>{tr("目标", "Target")}</dt>
+              <dt>{t("browse.target")}</dt>
               <dd>{plan.targetStream}</dd>
             </div>
             <div>
-              <dt>{tr("类型 / 父级", "Type / parent")}</dt>
+              <dt>{t("browse.type.parent")}</dt>
               <dd>
                 {plan.targetType || "—"} · {plan.targetParent || "—"}
               </dd>
@@ -429,9 +430,9 @@ export function StreamSwitchDialog({
               </dd>
             </div>
             <div>
-              <dt>{tr("目标规模", "Target size")}</dt>
+              <dt>{t("browse.target.size")}</dt>
               <dd>
-                {plan.risks.targetFileCount ?? "?"} {tr("文件", "files")} ·{" "}
+                {plan.risks.targetFileCount ?? "?"} {t("browse.files")} ·{" "}
                 {plan.risks.targetFileBytes == null
                   ? "?"
                   : formatBytes(plan.risks.targetFileBytes)}
@@ -439,7 +440,7 @@ export function StreamSwitchDialog({
             </div>
           </dl>
           <TargetList
-            label={tr("风险涉及路径（最多 100 条）", "Risk paths (up to 100)")}
+            label={t("browse.risk.paths.up.to.100")}
             paths={[...plan.blockers, ...plan.warnings].flatMap(
               (item) => item.paths,
             )}
@@ -478,9 +479,9 @@ export function StreamSwitchDialog({
         <section aria-live="polite">
           <DialogNotice error={!result || result.outcome !== "succeeded"}>
             {result?.outcome === "succeeded"
-              ? tr("已由服务器回读验证", "Verified by server readback")
+              ? t("browse.verified.by.server.readback")
               : result?.outcome === "unknown"
-                ? tr("结果不确定", "Outcome uncertain")
+                ? t("browse.outcome.uncertain")
                 : ""}{" "}
             {result?.message || error}
           </DialogNotice>
@@ -494,7 +495,7 @@ export function StreamSwitchDialog({
           )}
           {verified && (
             <DialogNotice>
-              {tr("服务器回读身份：", "Verified server identity: ")}
+              {t("browse.verified.server.identity")}
               {verified.stream} · {verified.client} · generation{" "}
               {verified.contextGeneration}
               {" · "}
@@ -507,21 +508,21 @@ export function StreamSwitchDialog({
           {result && (
             <dl className="stream-switch-summary">
               <div>
-                <dt>{tr("结果", "Outcome")}</dt>
+                <dt>{t("browse.outcome")}</dt>
                 <dd>{result.outcome}</dd>
               </div>
               <div>
-                <dt>{tr("已验证 Stream", "Verified stream")}</dt>
-                <dd>{result.verifiedStream || tr("未知", "Unknown")}</dd>
+                <dt>{t("browse.verified.stream")}</dt>
+                <dd>{result.verifiedStream || t("browse.unknown")}</dd>
               </div>
               <div>
-                <dt>{tr("同步", "Sync")}</dt>
+                <dt>{t("browse.sync")}</dt>
                 <dd>
                   {result.syncCompleted
-                    ? tr("完成", "Completed")
+                    ? t("browse.completed")
                     : result.syncPerformed
-                      ? tr("未完成", "Incomplete")
-                      : tr("未执行", "Not run")}
+                      ? t("browse.incomplete")
+                      : t("browse.not.run")}
                 </dd>
               </div>
               <div>

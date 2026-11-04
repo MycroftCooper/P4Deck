@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
@@ -179,7 +180,7 @@ export function WorkspaceMutationDialog({
     result?.outcome === "succeeded" && result.verified === true;
   return (
     <Dialog
-      title={`${request.action === "rename" ? tr("重命名工作区", "Rename Workspace") : tr("删除工作区", "Delete Workspace")} '${request.workspace}'`}
+      title={`${request.action === "rename" ? tFor(zh ? "zh-CN" : "en-US", "workspaces.rename.workspace") : tFor(zh ? "zh-CN" : "en-US", "workspaces.delete.workspace")} '${request.workspace}'`}
       zh={zh}
       busy={busy}
       onRequestClose={() => {
@@ -188,7 +189,7 @@ export function WorkspaceMutationDialog({
       footer={
         <>
           <button disabled={busy} onClick={onClose}>
-            {tr("取消", "Cancel")}
+            {tFor(zh ? "zh-CN" : "en-US", "workspaces.cancel")}
           </button>
           {busy && (
             <button
@@ -196,7 +197,7 @@ export function WorkspaceMutationDialog({
                 void backend.cancelOperation(operationId.current ?? "")
               }
             >
-              {tr("取消操作", "Cancel operation")}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.cancel.operation")}
             </button>
           )}
           {!result && (
@@ -208,15 +209,15 @@ export function WorkspaceMutationDialog({
               onClick={() => void (preview ? confirm() : inspect())}
             >
               {busy
-                ? tr("处理中…", "Working…")
+                ? tFor(zh ? "zh-CN" : "en-US", "workspaces.working")
                 : preview
-                  ? tr("确认执行", "Confirm")
-                  : tr("检查并预览", "Review")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.confirm")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.review")}
             </button>
           )}
           {result && (
             <button className="primary" onClick={onClose}>
-              {tr("关闭", "Close")}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.close")}
             </button>
           )}
         </>
@@ -235,7 +236,7 @@ export function WorkspaceMutationDialog({
       </p>
       {request.action === "rename" && !result && (
         <label>
-          {tr("新名称", "New name")}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.new.name")}
           <input
             disabled={busy}
             value={name}
@@ -296,10 +297,10 @@ export function WorkspaceMutationDialog({
         <DialogNotice error={!resultVerified}>
           <strong>
             {resultVerified
-              ? tr("已由服务器回读验证", "Verified by server readback")
+              ? tFor(zh ? "zh-CN" : "en-US", "workspaces.verified.by.server.readback")
               : result.outcome === "unknown"
-                ? tr("结果不确定", "Outcome uncertain")
-                : tr("操作未成功", "Operation did not succeed")}
+                ? tFor(zh ? "zh-CN" : "en-US", "workspaces.outcome.uncertain")
+                : tFor(zh ? "zh-CN" : "en-US", "workspaces.operation.did.not.succeed")}
           </strong>
           <br />
           {result.message}
@@ -313,20 +314,20 @@ export function WorkspaceMutationDialog({
             result.observedExists !== undefined && (
               <>
                 <br />
-                {tr("工作区回读：", "Workspace readback: ")}
+                {tFor(zh ? "zh-CN" : "en-US", "workspaces.workspace.readback")}
                 {result.observedExists
-                  ? tr("仍然存在", "still exists")
-                  : tr("已不存在", "no longer exists")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.still.exists")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.no.longer.exists")}
               </>
             )}
           {request.action === "rename" &&
             result.observedExists !== undefined && (
               <>
                 <br />
-                {tr("旧名称回读：", "Old name readback: ")}
+                {tFor(zh ? "zh-CN" : "en-US", "workspaces.old.name.readback")}
                 {result.observedExists
-                  ? tr("仍然存在", "still exists")
-                  : tr("已不存在", "no longer exists")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.still.exists")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.no.longer.exists")}
               </>
             )}
         </DialogNotice>
@@ -341,7 +342,7 @@ export function WorkspaceMutationDialog({
       )}
       {operationId.current && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")} {operationId.current}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.operation")} {operationId.current}
         </p>
       )}
       {error && !result && <DialogNotice error>{error}</DialogNotice>}

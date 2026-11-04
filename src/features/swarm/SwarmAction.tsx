@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useState } from "react";
 import { ExternalLink, Settings } from "lucide-react";
 import { action, unavailable } from "../../app/context-menu/bindings";
@@ -15,7 +16,7 @@ function settings() {
 
 export function swarmMenuAction(
   runtime: RuntimeInfo,
-  zh: boolean,
+  _zh: boolean,
   target: SwarmLinkTarget,
 ): MenuAction {
   const link = buildSwarmLink(runtime.context.swarmBaseUrl, target);
@@ -23,7 +24,7 @@ export function swarmMenuAction(
     if (link.code === "notConfigured")
       return {
         ...action(settings),
-        label: zh ? "配置 Swarm…" : "Configure Swarm…",
+        label: t("swarm.configure.swarm"),
       };
     return unavailable(link.reason);
   }

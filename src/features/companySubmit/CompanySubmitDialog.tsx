@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { Dialog } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
 import { CompanySubmitPreparation } from "./CompanySubmitPreparation";
@@ -24,7 +25,7 @@ export function CompanySubmitDialog({
       source={source}
       zh={zh}
       onRequestClose={onClose}
-      footer={<button onClick={onClose}>{zh ? "关闭" : "Close"}</button>}
+      footer={<button onClick={onClose}>{t("companySubmit.close")}</button>}
     >
       <CompanySubmitPreparation
         changeIds={[changeId]}

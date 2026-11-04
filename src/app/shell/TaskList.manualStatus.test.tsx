@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { it, expect, vi } from "vitest";
+import {it, expect, vi, beforeEach} from "vitest";
 import { dialogHarness } from "../dialogs/testHarness";
 import { PassiveStatusPanel } from "./PassiveServerStatus";
+import { setLocale } from "../../shared/i18n";
 
 const h = dialogHarness();
 it.each([false, true])(
@@ -69,6 +70,11 @@ it.each([false, true])(
     expect(close).not.toHaveBeenCalled();
   },
 );
+
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
 
 it("browser/non-desktop shares the same explicit unavailable reason", async () => {
   await h.render(

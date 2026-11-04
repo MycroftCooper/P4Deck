@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { Dialog } from "../../app/dialogs/Dialog";
 import type { CustomSubmitView } from "./useCustomSubmit";
 
@@ -45,16 +46,16 @@ export function CustomSubmitStatusDialog({
                 : "Tool process exited or is not pollable: submission outcome unknown. Exit code is display-only and never success/failure evidence; check the tool and wait for submitted-CL readback.";
   return (
     <Dialog
-      title={zh ? "自定义提交工具" : "Custom submit tool"}
+      title={tFor(zh ? "zh-CN" : "en-US", "companySubmit.custom.submit.tool")}
       zh={zh}
       onRequestClose={onClose}
       footer={
         <>
           <button type="button" onClick={onRefresh} disabled={pending}>
-            {zh ? "检查状态" : "Check status"}
+            {tFor(zh ? "zh-CN" : "en-US", "companySubmit.check.status")}
           </button>
           <button type="button" onClick={onClose}>
-            {zh ? "关闭" : "Close"}
+            {tFor(zh ? "zh-CN" : "en-US", "companySubmit.close")}
           </button>
         </>
       }
@@ -64,7 +65,7 @@ export function CustomSubmitStatusDialog({
         <>
           <p>CL {session.changeId}</p>
           <p style={{ overflowWrap: "anywhere" }}>
-            {zh ? "本次尝试路径：" : "Path used for this attempt: "}
+            {tFor(zh ? "zh-CN" : "en-US", "companySubmit.path.used.for.this.attempt")}
             {session.executablePath}
           </p>
           <p>

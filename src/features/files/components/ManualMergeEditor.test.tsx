@@ -18,6 +18,7 @@ import {
   manualMergeBlocksForTest,
   resolveManualMergeBlock,
 } from "./ManualMergeEditor";
+import { setLocale } from "../../../shared/i18n";
 
 const conflict = (id: number, yours: string, theirs: string, eol = "\n") =>
   `<<<<<<< P4DECK YOURS:${id}${eol}${yours}${eol}======= P4DECK${eol}${theirs}${eol}>>>>>>> P4DECK THEIRS:${id}${eol}`;
@@ -64,6 +65,8 @@ let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

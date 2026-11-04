@@ -1,3 +1,4 @@
+import { t, tFor } from "../../shared/i18n";
 import {
   createContext,
   useContext,
@@ -112,7 +113,7 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
     : zh
       ? "正在跟随文件选择；点击锁定当前目标"
       : "Following file selection; click to lock current target";
-  const newTabLabel = zh ? "新页签" : "New tab";
+  const newTabLabel = tFor(zh ? "zh-CN" : "en-US", "docking.new.tab");
   // Global pages with a compact title bar; their actions portal into it.
   const titled = !!kind && !isMultiPage(kind);
   return (
@@ -185,7 +186,7 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                 <span className="target-control-value" title={params.target}>
                   <span className="target-control-text">
                     {params.target ||
-                      (zh ? "尚未选择文件" : "No file selected")}
+                      (tFor(zh ? "zh-CN" : "en-US", "docking.no.file.selected"))}
                   </span>
                   <span ref={setRefreshSlot} className="target-refresh-slot" />
                 </span>
@@ -231,7 +232,6 @@ export const dockTheme = {
 export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
   const popout = useContext(PopoutContext);
   const closeAll = useContext(CloseAllContext);
-  const zh = useContext(LanguageContext);
   return (
     <div
       className="dock-actions"
@@ -264,8 +264,8 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
       </button>
       <button
         type="button"
-        title={zh ? "关闭所有页签" : "Close all tabs"}
-        aria-label={zh ? "关闭所有页签" : "Close all tabs"}
+        title={t("docking.close.all.tabs")}
+        aria-label={t("docking.close.all.tabs")}
         disabled={!closeAll.enabled}
         onClick={closeAll.run}
       >

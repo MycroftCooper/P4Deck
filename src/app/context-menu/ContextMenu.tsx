@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import {
   createContext,
   useCallback,
@@ -139,7 +140,7 @@ export function ContextMenuProvider({
           createPortal(
             <div
               role="region"
-              aria-label={zh ? "右键菜单层" : "Context menu layer"}
+              aria-label={t("contextMenu.context.menu.layer")}
             >
               <MenuPanel
                 key={request.token}

@@ -1,10 +1,11 @@
-import { expect, it } from "vitest";
+import {expect, it} from "vitest";
 import type { LogLevel } from "../../shared/contracts";
 import {
   LOG_LEVELS,
   journalMappingForLogLevel,
   logLevelLabel,
 } from "./logLevels";
+
 
 it("labels every log level, including the cancelled level in both languages", () => {
   expect(LOG_LEVELS).toEqual(["info", "warning", "error", "cancelled"]);

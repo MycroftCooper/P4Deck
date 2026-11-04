@@ -1,18 +1,24 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import {expect, it, vi, beforeEach} from "vitest";
 import {
   dialogHarness,
   dialogButton,
   chooseSelect,
 } from "../../../app/dialogs/testHarness";
 import { CheckoutChangelistDialog } from "./CheckoutChangelistDialog";
+import { setLocale } from "../../../shared/i18n";
 
 const harness = dialogHarness();
 const changes = [
   { id: 101, description: "Fix checkout\nDetails" },
   { id: 102, description: "Other work" },
 ];
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("returns the selected numbered changelist and displays its complete description", async () => {
   const close = vi.fn();
   await harness.render(

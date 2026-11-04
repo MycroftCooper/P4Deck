@@ -11,6 +11,7 @@ import type {
 } from "../../../shared/contracts";
 import { FileReviewPage, type ReviewKind } from "./FileReviewPage";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   getDiff: vi.fn(),
@@ -171,6 +172,8 @@ async function click(element: Element) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   appCache.clear();
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }

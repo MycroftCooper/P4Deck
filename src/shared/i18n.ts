@@ -12,6 +12,27 @@ import { zh as catalogZh, type MsgKey } from "./i18n/catalog.zh";
 import { en as catalogEn } from "./i18n/catalog.en";
 import { setLocale } from "./i18n/t";
 
+// Re-export the runtime so both `shared/i18n` and `shared/i18n/index` resolve.
+// TypeScript prefers the file `i18n.ts` over the `i18n/` directory, so a bare
+// `import { t } from "../shared/i18n"` must land here.
+export {
+  changeLocale,
+  t,
+  tFor,
+  useT,
+  useLocale,
+  useIsZh,
+  messageFor,
+} from "./i18n/index";
+export type { MsgParams } from "./i18n/types";
+
+/**
+ * Set the module-locale resolver without touching React state. Used by tests
+ * that render a specific locale, and by non-React code that must resolve
+ * messages for an explicit locale.
+ */
+export { setLocale };
+
 /** Legacy flat keys that used to live in this module -> their new catalog key. */
 const legacyKeys = {
   app: "common.app",

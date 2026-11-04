@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
@@ -187,7 +188,7 @@ export function RenameDialog({
       if (!legacy) {
         withdrawLocalIoProjection(operationId);
         setFailure(
-          tr("未收到可识别的结果。", "No recognizable result was returned."),
+          t("files.no.recognizable.result.was.returned"),
         );
         setPhase("result");
         void Promise.resolve(onRefresh?.()).catch(() => undefined);
@@ -225,19 +226,19 @@ export function RenameDialog({
             if (operationId) void backend.cancelOperation(operationId);
           }}
         >
-          {tr("取消操作", "Cancel operation")}
+          {t("files.cancel.operation")}
         </button>
-        <button disabled>{tr("确认中…", "Confirming…")}</button>
+        <button disabled>{t("files.confirming")}</button>
       </>
     ) : phase === "result" ? (
       <button className="primary" onClick={onDismiss}>
-        {tr("关闭", "Close")}
+        {t("files.close")}
       </button>
     ) : phase === "review" ? (
       <>
-        <button onClick={dismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={dismiss}>{t("files.cancel")}</button>
         <button onClick={() => void preview()}>
-          {tr("重新预检", "Run again")}
+          {t("files.run.again")}
         </button>
         <button
           className="primary"
@@ -246,27 +247,27 @@ export function RenameDialog({
           }
           onClick={() => void confirm()}
         >
-          {tr("确认重命名 / 移动", "Confirm rename / move")}
+          {t("files.confirm.rename.move")}
         </button>
       </>
     ) : (
       <>
-        <button onClick={dismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={dismiss}>{t("files.cancel")}</button>
         <button
           className="primary"
           disabled={!!error || blockedInput || phase === "checking"}
           onClick={() => void preview()}
         >
           {phase === "checking"
-            ? tr("预检中…", "Checking…")
-            : tr("开始预检", "Preview and review")}
+            ? t("files.checking")
+            : t("files.preview.and.review")}
         </button>
       </>
     );
 
   return (
     <Dialog
-      title={tr("重命名 / 移动", "Rename / move")}
+      title={t("files.rename.move")}
       description={tr(
         "单文件安全流程：先预检映射、打开状态、目标与 CL，再使用一次性令牌确认。",
         "Safe single-file flow: preview mapping, opened state, target and changelist, then confirm with a one-use token.",
@@ -277,14 +278,14 @@ export function RenameDialog({
       footer={footer}
     >
       <div className="workflow-context">
-        {tr("阶段", "Phase")} · {phase}
+        {t("files.phase")} · {phase}
       </div>
       <label>
-        {tr("源路径", "Source path")}
+        {t("files.source.path")}
         <input readOnly value={from} />
       </label>
       <label>
-        {tr("目标路径", "Destination path")}
+        {t("files.destination.path")}
         <input
           data-dialog-autofocus
           value={target}
@@ -325,44 +326,44 @@ export function RenameDialog({
       )}
       {phase === "checking" && (
         <DialogNotice>
-          {tr("正在读取 P4 快照…", "Reading the P4 snapshot…")}
+          {t("files.reading.the.p4.snapshot")}
         </DialogNotice>
       )}
       {preflight && (
         <section
           className="workflow-review"
-          aria-label={tr("预检结果", "Preflight result")}
+          aria-label={t("files.preflight.result")}
         >
-          <h3>{tr("映射与状态", "Mapping and state")}</h3>
+          <h3>{t("files.mapping.and.state")}</h3>
           <dl>
-            <dt>{tr("源 Depot", "Source depot")}</dt>
+            <dt>{t("files.source.depot")}</dt>
             <dd>{preflight.source?.depotPath ?? "—"}</dd>
-            <dt>{tr("源本地", "Source local")}</dt>
+            <dt>{t("files.source.local")}</dt>
             <dd>{preflight.source?.localPath ?? "—"}</dd>
-            <dt>{tr("目标 Depot", "Target depot")}</dt>
+            <dt>{t("files.target.depot")}</dt>
             <dd>{preflight.target?.depotPath ?? "—"}</dd>
-            <dt>{tr("目标本地", "Target local")}</dt>
+            <dt>{t("files.target.local")}</dt>
             <dd>{preflight.target?.localPath ?? "—"}</dd>
-            <dt>{tr("打开状态 / CL", "Opened action / CL")}</dt>
+            <dt>{t("files.opened.action.cl")}</dt>
             <dd>
               {preflight.sourceState
                 ? `${preflight.sourceState.action} / ${preflight.sourceState.changeId || "Default"}`
                 : "—"}
             </dd>
-            <dt>{tr("目标 CL", "Target CL")}</dt>
+            <dt>{t("files.target.cl")}</dt>
             <dd>
               {preflight.targetChangeId || "Default"} ·{" "}
               {preflight.targetChangeValid
-                ? tr("有效", "valid")
-                : tr("无效", "invalid")}
+                ? t("files.valid")
+                : t("files.invalid")}
             </dd>
-            <dt>{tr("目标存在", "Target exists")}</dt>
-            <dd>{preflight.targetExists ? tr("是", "yes") : tr("否", "no")}</dd>
-            <dt>{tr("仅大小写风险", "Case-only risk")}</dt>
+            <dt>{t("files.target.exists")}</dt>
+            <dd>{preflight.targetExists ? t("files.yes") : t("files.no")}</dd>
+            <dt>{t("files.case.only.risk")}</dt>
             <dd>
               {preflight.caseOnlyRisk
-                ? tr("已阻止", "blocked")
-                : tr("无", "none")}
+                ? t("files.blocked.2")
+                : t("files.none")}
             </dd>
           </dl>
           {preflight.blockers.map((item) => (
@@ -400,7 +401,7 @@ export function RenameDialog({
           {result.failure && <p>{result.failure}</p>}
           {result.operationId && (
             <p>
-              {tr("操作记录", "Operation")} {result.operationId}
+              {t("files.operation")} {result.operationId}
             </p>
           )}
           <p>{result.refresh.reason}</p>
@@ -416,10 +417,10 @@ export function RenameDialog({
             )}
           </p>
           <button onClick={() => setDiscard(false)}>
-            {tr("继续编辑", "Keep editing")}
+            {t("files.keep.editing")}
           </button>
           <button className="danger" onClick={onDismiss}>
-            {tr("放弃并关闭", "Discard and close")}
+            {t("files.discard.and.close")}
           </button>
         </section>
       )}

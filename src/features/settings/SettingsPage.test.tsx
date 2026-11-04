@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -11,6 +11,7 @@ import type {
 import { defaultUi } from "./preferences";
 import { SettingsPage } from "./SettingsPage";
 import { ConnectionSpecCreateDialog } from "./ConnectionSpecCreateDialog";
+import { setLocale } from "../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   listConfigBackups: vi.fn(),
@@ -150,6 +151,8 @@ async function render(
   locale: "zh-CN" | "en-US" = "zh-CN",
   onUi: ComponentProps<typeof SettingsPage>["onUi"] = vi.fn(),
 ) {
+  // The page translates through the module locale.
+  setLocale(locale);
   await act(async () => {
     root.render(<SettingsPage {...props(value, locale, onUi)} />);
     await Promise.resolve();
@@ -261,6 +264,8 @@ async function waitForResolvedRoot(expected?: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, createRef, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ import {
 } from "./OperationJournalView";
 import { ToolArea, type ToolHandle } from "../ToolArea";
 import { ToolPanel } from "../ToolPanel";
-import { messages } from "../../../shared/i18n";
+import { messages, setLocale } from "../../../shared/i18n";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
 
 const backend = vi.hoisted(() => ({
@@ -80,6 +80,8 @@ function button(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

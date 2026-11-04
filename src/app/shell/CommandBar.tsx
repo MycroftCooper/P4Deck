@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { startGenericFileAction } from "../../features/actions/genericFileTask";
 import { discardGenericFileProjectionsForTarget } from "../../features/actions/genericFileProjection";
 import { revertTargets, startRevert } from "../../features/actions/revertTask";
@@ -435,7 +436,7 @@ export function CommandBar({
       const epoch = generation.current;
       running.current = operationId;
       setOperation(
-        startOperation(operationId, zh ? "获取最新" : "Get latest", {
+        startOperation(operationId, t("shell.get.latest"), {
           kind: "getLatest",
           cancellable: true,
           targetCount: nodes.length,
@@ -450,7 +451,7 @@ export function CommandBar({
         paths = selectionRequest("getLatest", nodes).paths;
         if (!paths.length)
           throw new Error(
-            zh ? "没有可获取最新的目标" : "No target selected for Get Latest",
+            t("shell.no.target.selected.for.get"),
           );
         const revision = { kind: "head" as const, value: "" };
         const plan = await backend.previewSync({
@@ -587,7 +588,7 @@ export function CommandBar({
       setOperation(
         startOperation(
           operationId,
-          zh ? "等待系统窗口" : "Waiting for system dialog",
+          t("shell.waiting.for.system.dialog"),
           {
             kind: "other",
             cancellable: false,
@@ -624,7 +625,7 @@ export function CommandBar({
         setOperation(
           startOperation(
             queryOperationId,
-            zh ? "读取待提交 CL" : "Loading pending changelists",
+            t("shell.loading.pending.changelists"),
             { kind: "other", cancellable: true, targetCount: nodes.length },
           ),
         );
@@ -704,7 +705,7 @@ export function CommandBar({
       nodes.length > 0 &&
       nodes.every((n) => n.state === "untracked" || n.state === "ignored")
     ) {
-      const label = zh ? "正在删除本地文件…" : "Deleting local files…";
+      const label = t("shell.deleting.local.files");
       startLocalDelete(
         connectionKey,
         runtime,
@@ -856,7 +857,7 @@ export function CommandBar({
       )
         onFocus({ type: "none" });
       throw new Error(
-        `${String(cause)}${id !== "refresh" ? "\n" + (zh ? "此操作可能已部分执行；失败或取消不会自动回滚，请检查日志和文件状态。" : "This operation may have partially applied. Failure or cancellation does not roll back changes; inspect logs and file state.") : ""}`,
+        `${String(cause)}${id !== "refresh" ? "\n" + (t("shell.this.operation.may.have.partially")) : ""}`,
       );
     } finally {
       if (!feedbackCompleted) {
@@ -889,7 +890,7 @@ export function CommandBar({
         },
         打开界面设置: action(() => openPage("settings")),
       }))}
-      aria-label={zh ? "地址和操作" : "Address and actions"}
+      aria-label={t("shell.address.and.actions")}
     >
       {dialogs.element}
       <form
@@ -911,7 +912,7 @@ export function CommandBar({
         </span>
         <input
           ref={addressInput}
-          aria-label={zh ? "统一地址栏" : "Address"}
+          aria-label={t("shell.address")}
           placeholder={
             zh
               ? "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转"
@@ -939,16 +940,16 @@ export function CommandBar({
         {locating && <LoaderCircle size={15} className="spin" />}
         <button
           type="submit"
-          title={zh ? "跳转" : "Go"}
-          aria-label={zh ? "跳转" : "Go"}
+          title={t("shell.go")}
+          aria-label={t("shell.go")}
           disabled={!ready || !address.trim()}
         >
           <ArrowRight size={16} />
         </button>
         <button
           type="button"
-          title={zh ? "复制当前对象的地址" : "Copy current target address"}
-          aria-label={zh ? "复制地址" : "Copy address"}
+          title={t("shell.copy.current.target.address")}
+          aria-label={t("shell.copy.address")}
           disabled={!targetPath}
           onClick={() =>
             attempt(async () => {
@@ -960,8 +961,8 @@ export function CommandBar({
         </button>
         <button
           type="button"
-          title={zh ? "粘贴、清理并跳转" : "Paste, clean and navigate"}
-          aria-label={zh ? "粘贴地址" : "Paste address"}
+          title={t("shell.paste.clean.and.navigate")}
+          aria-label={t("shell.paste.address")}
           disabled={!ready}
           onClick={() =>
             attempt(async () => {
@@ -976,7 +977,7 @@ export function CommandBar({
         <div
           className="global-tools"
           role="toolbar"
-          aria-label={zh ? "对象操作" : "Object actions"}
+          aria-label={t("shell.object.actions")}
         >
           {groups.map((group, index) => (
             <div className="command-group" key={index}>
@@ -1034,12 +1035,12 @@ export function CommandBar({
           type="button"
           className="command-settings"
           aria-current={settingsActive ? "page" : undefined}
-          title={zh ? "设置" : "Settings"}
-          aria-label={zh ? "设置" : "Settings"}
+          title={t("shell.settings")}
+          aria-label={t("shell.settings")}
           onClick={() => openPage("settings")}
         >
           <Settings size={17} aria-hidden="true" />
-          <span>{zh ? "设置" : "Settings"}</span>
+          <span>{t("shell.settings")}</span>
         </button>
       </div>
       {(error || notice) && (
@@ -1049,8 +1050,8 @@ export function CommandBar({
               <span className="command-notice-message">{error}</span>
               <button
                 type="button"
-                aria-label={zh ? "关闭错误提示" : "Dismiss error"}
-                title={zh ? "关闭" : "Dismiss"}
+                aria-label={t("shell.dismiss.error")}
+                title={t("shell.dismiss")}
                 onClick={() => setError("")}
               >
                 <X size={14} aria-hidden="true" />
@@ -1062,8 +1063,8 @@ export function CommandBar({
               <span className="command-notice-message">{notice}</span>
               <button
                 type="button"
-                aria-label={zh ? "关闭提示" : "Dismiss notice"}
-                title={zh ? "关闭" : "Dismiss"}
+                aria-label={t("shell.dismiss.notice")}
+                title={t("shell.dismiss")}
                 onClick={() => setNotice("")}
               >
                 <X size={14} aria-hidden="true" />

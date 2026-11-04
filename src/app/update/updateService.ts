@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { notifyFailure, notifyUser } from "../../shared/notice";
 import {
   checkForUpdate,
@@ -119,7 +120,7 @@ export function updateFailureText(
   for (const [pattern, cn, en] of failureReasons)
     if (pattern.test(error ?? "")) return zh ? cn : en;
   if (scope === "check")
-    return zh ? "检查更新失败。" : "The update check failed.";
+    return t("update.the.update.check.failed");
   if (scope === "install")
     return zh
       ? "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。"

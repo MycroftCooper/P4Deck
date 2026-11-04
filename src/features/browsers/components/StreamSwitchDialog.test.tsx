@@ -1,6 +1,6 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import {afterEach, expect, it, vi, beforeEach} from "vitest";
 import { dialogButton, dialogHarness } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -9,6 +9,7 @@ import type {
   StreamSwitchResult,
 } from "../../../shared/contracts";
 import { StreamSwitchDialog } from "./StreamSwitchDialog";
+import { setLocale } from "../../../shared/i18n";
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
@@ -148,6 +149,11 @@ function render(
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
 
 it("runs preflight before a one-time confirmation and applies verified runtime", async () => {
   const preflight = vi

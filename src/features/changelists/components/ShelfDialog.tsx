@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { invalidateShelfObservations } from "../../actions/shelfObservation";
 import { useContext, useEffect, useRef, useState } from "react";
 import { MenuEnvironment } from "../../../app/context-menu/environment";
@@ -348,11 +349,11 @@ function ShelfWorkflowDialog({
                     : "blocked",
                 blockers: preflight.blockers.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.3") : ""}${item.message}`,
                 ),
                 warnings: preflight.warnings.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.4") : ""}${item.message}`,
                 ),
               }
             : { kind: "idle" };
@@ -361,8 +362,8 @@ function ShelfWorkflowDialog({
     <Dialog
       title={
         deleting
-          ? tr("删除搁置内容", "Delete shelved files")
-          : tr("搁置文件", "Shelve files")
+          ? t("pending.delete.shelved.files")
+          : t("pending.shelve.files")
       }
       description={tr(
         "范围固定为下方文件，不会自动扩大为整个 CL。",
@@ -377,15 +378,15 @@ function ShelfWorkflowDialog({
         <>
           {onBack && (
             <button disabled={busy} onClick={onBack}>
-              {tr("返回 CL 分组", "Back to CL groups")}
+              {t("pending.back.to.cl.groups")}
             </button>
           )}
           <button data-dialog-autofocus disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
           {phase === "running" && (
             <button onClick={() => void cancel()}>
-              {tr("取消操作", "Cancel operation")}
+              {t("pending.cancel.operation")}
             </button>
           )}
           <button
@@ -398,7 +399,7 @@ function ShelfWorkflowDialog({
             }
             onClick={() => void inspect()}
           >
-            {tr("运行预检", "Run preflight")}
+            {t("pending.run.preflight")}
           </button>
           <button
             className={risky ? "danger" : "primary"}
@@ -406,15 +407,15 @@ function ShelfWorkflowDialog({
             onClick={() => void confirm()}
           >
             {deleting
-              ? tr("确认删除所选搁置版本", "Delete selected shelf revisions")
-              : tr("确认搁置所选文件", "Shelve selected files")}
+              ? t("pending.delete.selected.shelf.revisions")
+              : t("pending.shelve.selected.files")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
         {snapshot.changeId ? `CL ${snapshot.changeId}` : "Default"} ·{" "}
-        {snapshot.paths.length} {tr("个文件", "files")}
+        {snapshot.paths.length} {t("pending.files")}
       </div>
       {demo && (
         <DialogNotice>
@@ -426,7 +427,7 @@ function ShelfWorkflowDialog({
       )}
       <TargetList
         paths={snapshot.paths}
-        label={tr("明确的文件范围", "Explicit file scope")}
+        label={t("pending.explicit.file.scope")}
       />
       {snapshot.changeId <= 0 && (
         <DialogNotice error>
@@ -438,7 +439,7 @@ function ShelfWorkflowDialog({
       )}
       {!deleting && snapshot.hasShelf && (
         <label>
-          {tr("已有搁置内容的处理方式", "Existing shelf handling")}
+          {t("pending.existing.shelf.handling")}
           <select
             value={replace ? "replace" : "preserve"}
             onChange={(event) => {
@@ -448,10 +449,10 @@ function ShelfWorkflowDialog({
             }}
           >
             <option value="preserve">
-              {tr("保留已有内容", "Preserve existing content")}
+              {t("pending.preserve.existing.content")}
             </option>
             <option value="replace">
-              {tr("替换所选文件的搁置版本", "Replace selected shelf revisions")}
+              {t("pending.replace.selected.shelf.revisions")}
             </option>
           </select>
         </label>
@@ -484,9 +485,9 @@ function ShelfWorkflowDialog({
       )}
       {preflight && (
         <div className="workflow-context">
-          {tr("新增", "Create")} {preflight.scope.createPaths.length} ·{" "}
-          {tr("替换", "Replace")} {preflight.scope.replacePaths.length} ·{" "}
-          {tr("删除", "Delete")} {preflight.scope.deletePaths.length}
+          {t("pending.create.2")} {preflight.scope.createPaths.length} ·{" "}
+          {t("pending.replace")} {preflight.scope.replacePaths.length} ·{" "}
+          {t("pending.delete")} {preflight.scope.deletePaths.length}
         </div>
       )}
       {!result && <PreflightStatus state={status} zh={zh} />}
@@ -519,7 +520,7 @@ function ShelfWorkflowDialog({
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
         <DialogNotice error>
-          {tr("结果：", "Outcome: ")}
+          {t("pending.outcome")}
           {lifecycle.outcome}
           {result?.failure ? ` · ${result.failure}` : ""} ·{" "}
           {result?.refresh.reason}
@@ -545,7 +546,7 @@ function ShelfWorkflowDialog({
       ))}
       {lifecycle?.state !== "legacy" && !!lifecycle?.files.length && (
         <p className="workflow-context">
-          {tr("逐文件权威事实", "Per-file facts")} {lifecycle.files.length}
+          {t("pending.per.file.facts")} {lifecycle.files.length}
         </p>
       )}
       {lifecycle && result?.message && (
@@ -563,10 +564,10 @@ function ShelfWorkflowDialog({
       )}
       {(lifecycle?.operationId || result?.operationIds.length) && (
         <p className="workflow-context">
-          {tr("操作记录", "Operations")}{" "}
+          {t("pending.operations")}{" "}
           {lifecycle?.operationId ?? result?.operationIds.join(", ")}
           {result?.logReference
-            ? ` · ${tr("日志", "Log")} ${result.logReference}`
+            ? ` · ${t("pending.log")} ${result.logReference}`
             : ""}
         </p>
       )}

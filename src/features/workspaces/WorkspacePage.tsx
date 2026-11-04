@@ -1,3 +1,4 @@
+import { t as translate } from "../../shared/i18n";
 import { isZh } from "../../shared/locale";
 import { ConnectionSpecCreateDialog } from "../settings/ConnectionSpecCreateDialog";
 import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
@@ -199,9 +200,9 @@ export function WorkspacePage({
         <label className="search-field">
           <Search size={15} />
           <input
-            aria-label={zh ? "搜索工作区" : "Search workspaces"}
+            aria-label={translate("workspaces.search.workspaces")}
             placeholder={
-              zh ? "搜索工作区、主机、路径…" : "Search workspace, host, path…"
+              translate("workspaces.search.workspace.host.path")
             }
             value={search}
             disabled={!ready}
@@ -231,7 +232,7 @@ export function WorkspacePage({
           </button>
         )}
         <span className="owner-scope">
-          {zh ? "归属：当前用户" : "Owner: current user"}
+          {translate("workspaces.owner.current.user")}
         </span>
         <span className="filter-count">
           {runtime.mode === "mock" ? t.mock : runtime.context.server}
@@ -246,7 +247,7 @@ export function WorkspacePage({
       )}
       <section
         className="workspace-runtime-summary"
-        aria-label={zh ? "当前 Workspace" : "Current workspace"}
+        aria-label={translate("workspaces.current.workspace")}
       >
         <div>
           <span>CLIENT</span>
@@ -283,13 +284,13 @@ export function WorkspacePage({
       </section>
       {vfsStatus?.mode === "virtual" && !vfsStatus.ready && (
         <p className="workspace-vfs-note" role="status">
-          {zh ? "P4VFS 尚未就绪：" : "P4VFS is not ready: "}
+          {translate("workspaces.p4vfs.is.not.ready")}
           {vfsStatus.reason}
         </p>
       )}
       {vfsError && (
         <p className="workspace-vfs-note" role="status">
-          {zh ? "无法检查 P4VFS 状态：" : "P4VFS status unavailable: "}
+          {translate("workspaces.p4vfs.status.unavailable")}
           {vfsError}
         </p>
       )}
@@ -343,8 +344,8 @@ export function WorkspacePage({
                 { id: "name", label: "Workspace" },
                 { id: "owner", label: "Owner" },
                 { id: "host", label: "Host" },
-                { id: "root", label: zh ? "根目录" : "Root" },
-                { id: "updated", label: zh ? "更新时间" : "Updated" },
+                { id: "root", label: translate("workspaces.root") },
+                { id: "updated", label: translate("workspaces.updated") },
               ]}
             />
             <div
@@ -389,7 +390,7 @@ export function WorkspacePage({
                           ),
                         },
                         "新建工作区…": {
-                          label: zh ? "新建工作区…" : "New Workspace...",
+                          label: translate("workspaces.new.workspace"),
                           ...action(
                             () => setCreateOpen(true),
                             !ready
@@ -449,12 +450,12 @@ export function WorkspacePage({
                       <Monitor size={16} />
                       <strong>{item.name}</strong>
                       {item.name === runtime.context.client && (
-                        <em>{zh ? "当前" : "Current"}</em>
+                        <em>{translate("workspaces.current")}</em>
                       )}
                     </span>
                     <span title={item.owner}>{item.owner || "—"}</span>
                     <span title={item.host}>
-                      {item.host || (zh ? "不限主机" : "Any host")}
+                      {item.host || (translate("workspaces.any.host"))}
                     </span>
                     <span title={item.root}>{item.root}</span>
                     <time title={date(item.updated)}>{date(item.updated)}</time>
@@ -485,7 +486,7 @@ export function WorkspacePage({
           <footer className="list-footer">
             {filtered.length} / {items.length} Workspace{" "}
             <span className="virtual-proof">
-              {zh ? "仅显示当前用户所有" : "Owned by current user"}
+              {translate("workspaces.owned.by.current.user")}
             </span>
           </footer>
         </section>

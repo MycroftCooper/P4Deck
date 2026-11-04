@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, RefreshCw, Search } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
@@ -78,7 +79,7 @@ export function WorkspaceSwitcher({
     } catch (cause) {
       if (!live.current) return;
       setError(
-        `${tr("切换失败，当前 Workspace 保持不变。", "Switch failed; the current workspace remains active.")} ${switchFailure(cause, zh)}`,
+        `${t("workspaces.switch.failed.the.current.workspace")} ${switchFailure(cause, zh)}`,
       );
       searchInput.current?.focus();
     } finally {
@@ -135,8 +136,8 @@ export function WorkspaceSwitcher({
         className="connection"
         aria-label={
           configured
-            ? `${tr("切换 Workspace", "Switch workspace")}: ${runtime.context.client}`
-            : tr("连接设置：未连接", "Connection settings: Not connected")
+            ? `${t("workspaces.switch.workspace")}: ${runtime.context.client}`
+            : t("workspaces.connection.settings.not.connected")
         }
         aria-haspopup={configured ? "dialog" : undefined}
         aria-expanded={open}
@@ -150,13 +151,13 @@ export function WorkspaceSwitcher({
           setSearch("");
           setOpen((value) => !value);
         }}
-        title={`${runtime.context.user}@${runtime.context.client} · ${runtime.context.server}\n${runtime.mode === "mock" ? "Demo / 演示连接" : runtime.connection.message}\n${tr("切换 Workspace", "Switch workspace")}`}
+        title={`${runtime.context.user}@${runtime.context.client} · ${runtime.context.server}\n${runtime.mode === "mock" ? "Demo / 演示连接" : runtime.connection.message}\n${t("workspaces.switch.workspace")}`}
       >
         <span
           className={`status-dot connection-${runtime.mode === "mock" && configured ? "demo" : runtime.connection.state}`}
         />
         <span className="connection-client">
-          {configured ? runtime.context.client : tr("未连接", "Not connected")}
+          {configured ? runtime.context.client : t("workspaces.not.connected")}
         </span>
         <ChevronDown size={13} />
       </button>
@@ -165,13 +166,13 @@ export function WorkspaceSwitcher({
           id={id}
           className="workspace-switcher-menu"
           role="dialog"
-          aria-label={tr("切换 Workspace", "Switch workspace")}
+          aria-label={t("workspaces.switch.workspace")}
         >
           <div className="workspace-switcher-heading">
-            <strong>{tr("切换 Workspace", "Switch workspace")}</strong>
+            <strong>{t("workspaces.switch.workspace")}</strong>
             <button
               className="icon-button"
-              aria-label={tr("刷新 Workspace", "Refresh workspaces")}
+              aria-label={t("workspaces.refresh.workspaces")}
               disabled={busy || !!switching}
               onClick={() => {
                 searchInput.current?.focus();
@@ -192,7 +193,7 @@ export function WorkspaceSwitcher({
               ref={searchInput}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              aria-label={tr("搜索 Workspace", "Search workspaces")}
+              aria-label={t("workspaces.search.workspaces.2")}
               placeholder={tr(
                 "搜索名称、路径或 Stream…",
                 "Search name, path or stream…",
@@ -223,7 +224,7 @@ export function WorkspaceSwitcher({
                       {item.host ? ` · ${item.host}` : ""}
                     </small>
                     {current && (
-                      <small>{tr("当前 Workspace", "Current workspace")}</small>
+                      <small>{t("workspaces.current.workspace")}</small>
                     )}
                   </span>
                 </button>
@@ -231,13 +232,13 @@ export function WorkspaceSwitcher({
             })}
             {loading && (
               <p role="status">
-                {tr("正在加载 Workspace…", "Loading workspaces…")}
+                {t("workspaces.loading.workspaces")}
               </p>
             )}
             {!loading && !error && !filtered.length && (
               <p role="status">
                 {search
-                  ? tr("没有匹配的 Workspace", "No matching workspaces")
+                  ? t("workspaces.no.matching.workspaces")
                   : tr(
                       "当前用户尚无 Workspace",
                       "No workspaces owned by the current user",
@@ -247,7 +248,7 @@ export function WorkspaceSwitcher({
           </div>
           {switching && (
             <p role="status">
-              {tr("正在验证并切换到", "Verifying and switching to")} {switching}
+              {t("workspaces.verifying.and.switching.to")} {switching}
               …
             </p>
           )}
@@ -264,7 +265,7 @@ export function WorkspaceSwitcher({
               onSettings();
             }}
           >
-            {tr("连接设置…", "Connection settings…")}
+            {t("workspaces.connection.settings")}
           </button>
         </div>
       )}

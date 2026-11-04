@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -71,7 +72,7 @@ export function SubmittedReportDialog({
       return;
     }
     if (runtime.mode !== "mock" && runtime.connection.state !== "connected") {
-      setMessage(tr("连接不可用", "Connection unavailable"));
+      setMessage(t("pending.connection.unavailable"));
       return;
     }
     const run: { id: string; cancelled: boolean; partial?: CollectedReport } = {
@@ -91,7 +92,7 @@ export function SubmittedReportDialog({
           run.partial = value;
           if (active.current === run)
             setMessage(
-              `${tr("已读取", "Read")}: ${value.rows.length} CL / ${value.pages} ${tr("页", "pages")}`,
+              `${t("pending.read")}: ${value.rows.length} CL / ${value.pages} ${t("pending.pages.2")}`,
             );
         },
       },
@@ -104,7 +105,7 @@ export function SubmittedReportDialog({
   }
   return (
     <Dialog
-      title={tr("生成周报提示词", "Generate weekly report prompt")}
+      title={t("pending.generate.weekly.report.prompt")}
       source={source}
       zh={zh}
       onRequestClose={onClose}
@@ -126,32 +127,32 @@ export function SubmittedReportDialog({
                 });
               }}
             >
-              {tr("停止读取", "Stop reading")}
+              {t("pending.stop.reading")}
             </button>
           ) : (
             <button onClick={() => void generate()}>
-              {tr("读取并生成", "Read and generate")}
+              {t("pending.read.and.generate")}
             </button>
           )}
           <button
             disabled={!prompt || busy}
             onClick={() =>
               void writeClipboardText(prompt)
-                .then(() => setMessage(tr("已复制", "Copied")))
+                .then(() => setMessage(t("pending.copied")))
                 .catch((e) => setMessage(String(e)))
             }
           >
-            {tr("复制提示词", "Copy prompt")}
+            {t("pending.copy.prompt")}
           </button>
         </>
       }
     >
       {runtime.mode === "mock" && (
-        <DialogNotice>{tr("模拟数据", "Simulated data")}</DialogNotice>
+        <DialogNotice>{t("pending.simulated.data")}</DialogNotice>
       )}
       <div className="submitted-report-fields">
         <label>
-          {tr("用户", "User")}
+          {t("pending.user.2")}
           <input
             data-dialog-autofocus
             value={scope.user}
@@ -159,7 +160,7 @@ export function SubmittedReportDialog({
           />
         </label>
         <label>
-          {tr("起始时间（包含）", "Start (inclusive)")}
+          {t("pending.start.inclusive")}
           <input
             type="datetime-local"
             value={scope.from}
@@ -167,7 +168,7 @@ export function SubmittedReportDialog({
           />
         </label>
         <label>
-          {tr("结束时间（不包含）", "End (exclusive)")}
+          {t("pending.end.exclusive")}
           <input
             type="datetime-local"
             value={scope.to}
@@ -218,13 +219,13 @@ export function SubmittedReportDialog({
       {message && <DialogNotice>{message}</DialogNotice>}
       {result && !result.complete && (
         <DialogNotice error>
-          {tr("不完整：", "Incomplete: ")}
+          {t("pending.incomplete.2")}
           {result.reason}
         </DialogNotice>
       )}
       <textarea
         className="submitted-report-prompt"
-        aria-label={tr("周报提示词", "Weekly report prompt")}
+        aria-label={t("pending.weekly.report.prompt")}
         readOnly
         value={prompt}
       />

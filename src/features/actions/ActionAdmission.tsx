@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { backend } from "../../infrastructure/backend";
 import { admissionPort } from "./admissionPort";
@@ -46,7 +47,7 @@ function FenceRow({
             disabled={!ack || busy}
             onClick={() => void controller.release(fence, ack)}
           >
-            {zh ? "解除本次写入阻塞" : "Release this write block"}
+            {t("actions.release.this.write.block")}
           </button>
         </div>
       )}
@@ -66,7 +67,7 @@ export function AdmissionList({
   );
   if (!state.fences.length) return null;
   return (
-    <section aria-label={zh ? "待核写入阻塞" : "Unresolved write blocks"}>
+    <section aria-label={t("actions.unresolved.write.blocks")}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {state.fences.map((f) => (
           <FenceRow

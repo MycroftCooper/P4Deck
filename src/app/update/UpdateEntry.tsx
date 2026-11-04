@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { Download } from "lucide-react";
 import { openUpdatePanel } from "./updatePanelStore";
 import {
@@ -24,7 +25,7 @@ function entryCopy(
       };
     case "downloading":
       return {
-        text: zh ? "正在下载更新" : "Downloading update",
+        text: t("update.downloading.update"),
         label: zh
           ? percent === undefined
             ? "正在下载更新，点击查看进度"
@@ -35,7 +36,7 @@ function entryCopy(
       };
     case "installing":
       return {
-        text: zh ? "正在安装更新…" : "Installing update…",
+        text: t("update.installing.update"),
         label: zh
           ? "正在安装更新，点击查看进度"
           : "Installing the update. Open the update panel for progress.",
@@ -50,13 +51,13 @@ function entryCopy(
     default:
       return snapshot.applied
         ? {
-            text: zh ? "更新待重启" : "Restart pending",
+            text: t("update.restart.pending"),
             label: zh
               ? "更新已安装，请手动重启应用完成更新"
               : "The update is installed; restart the app manually to finish.",
           }
         : {
-            text: zh ? "更新失败" : "Update failed",
+            text: t("update.update.failed"),
             label: zh
               ? "更新失败，点击查看原因"
               : "The update failed. Open the panel for details.",

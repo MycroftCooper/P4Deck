@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { it, expect } from "vitest";
+import {it, expect, beforeEach} from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   passiveStatusPresentation,
@@ -9,6 +9,7 @@ import {
   PassiveServerStatusIcon,
   PassiveServerStatusDetails,
 } from "./PassiveServerStatus";
+import { setLocale } from "../../shared/i18n";
 const healthy: PassiveStatusView = {
   connection: "reachable",
   access: "ok",
@@ -37,6 +38,11 @@ it.each([
     passiveStatusPresentation({ ...healthy, ...override }, false).icon,
   ).toBe(icon),
 );
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
+
 it("initial state and stale failures are entirely unknown", () => {
   expect(passiveStatusPresentation(undefined, false).icon).toBe("unknown");
   const old = passiveStatusPresentation(

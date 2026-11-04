@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useRef, useState } from "react";
 import { ArrowRight, Hash } from "lucide-react";
 import { parseChangeNumber } from "../submittedFilters";
@@ -8,7 +9,7 @@ export function SubmittedGoTo({ zh }: { zh: boolean }) {
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const label = zh ? "转到 CL" : "Go to CL";
+  const label = t("pending.go.to.cl");
   return (
     <form
       className="submitted-go-to diff-path-field"

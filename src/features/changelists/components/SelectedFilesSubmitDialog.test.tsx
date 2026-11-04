@@ -7,6 +7,7 @@ import type {
   SelectedSubmitReceipt,
   SelectedSubmitRequest,
 } from "../selectedSubmit";
+import { setLocale } from "../../../shared/i18n";
 const port = vi.hoisted(() => ({
   selectedSubmitPrepare: vi.fn(),
   selectedSubmitStatus: vi.fn(),
@@ -51,6 +52,8 @@ function receipt(
   };
 }
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.clearAllMocks();
   port.selectedSubmitPrepare.mockImplementation(async (r) => {
     request = r;

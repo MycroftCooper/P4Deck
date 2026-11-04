@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import {
   Circle,
   CircleCheck,
@@ -53,7 +54,7 @@ export function PassiveServerStatusDetails({
   return (
     <dl
       className="passive-server-details"
-      aria-label={zh ? "P4 被动连接状态" : "P4 passive connection status"}
+      aria-label={t("shell.p4.passive.connection.status")}
       title={view.note}
     >
       {view.rows.map((row) => (
@@ -111,13 +112,13 @@ export function PassiveStatusPanel({
       id={id}
       className="passive-server-panel"
       role="dialog"
-      aria-label={zh ? "P4 连接状态" : "P4 connection status"}
+      aria-label={t("shell.p4.connection.status")}
     >
       <header role="presentation">
-        <span>{zh ? "P4 连接状态" : "P4 connection status"}</span>
+        <span>{t("shell.p4.connection.status")}</span>
         <button
           onClick={onClose}
-          aria-label={zh ? "关闭连接状态" : "Close connection status"}
+          aria-label={t("shell.close.connection.status")}
         >
           ×
         </button>

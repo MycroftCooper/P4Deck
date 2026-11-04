@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import type {
   JournalState,
   LogLevel,
@@ -21,7 +22,7 @@ export function logLevelLabel(level: LogLevel, zh: boolean): string {
     case "error":
       return "Error";
     case "cancelled":
-      return zh ? "已取消" : "Cancelled";
+      return tFor(zh ? "zh-CN" : "en-US", "tools.cancelled");
     default: {
       // Exhaustiveness guard: a future LogLevel must be handled here.
       const _exhaustive: never = level;

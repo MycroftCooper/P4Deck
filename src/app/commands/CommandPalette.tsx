@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   appCommandReason,
@@ -84,7 +85,7 @@ export function CommandPalette({
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label={zh ? "命令面板" : "Command palette"}
+        aria-label={t("commands.command.palette")}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
@@ -140,8 +141,8 @@ export function CommandPalette({
               ? `${listboxId}-${commands[activeIndex].id}`
               : undefined
           }
-          aria-label={zh ? "筛选命令" : "Filter commands"}
-          placeholder={zh ? "输入命令名称或 ID" : "Type a command or ID"}
+          aria-label={t("commands.filter.commands")}
+          placeholder={t("commands.type.a.command.or.id")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />

@@ -8,6 +8,7 @@ import type {
   FilePreviewTable,
   RuntimeInfo,
 } from "../../../shared/contracts";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({ getFilePreview: vi.fn() }));
 vi.mock("../../../infrastructure/backend", () => ({ backend }));
@@ -20,6 +21,8 @@ vi.mock("../../../app/docking/chrome", async () => ({
 let host: HTMLDivElement, root: Root;
 const runtime = { mode: "mock", p4Version: "mock", context: {} } as RuntimeInfo;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   // jsdom has no layout: supply a visible viewport, retain the real virtualizer.

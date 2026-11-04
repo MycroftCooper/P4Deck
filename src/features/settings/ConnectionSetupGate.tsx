@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -112,7 +113,7 @@ export function ConnectionSetupGate({
         data-tauri-drag-region={mainWindowDrag}
       >
         <h1 data-tauri-drag-region={mainWindowDrag}>
-          P4Deck · {zh ? "连接设置" : "Connection setup"}
+          P4Deck · {t("settings.connection.setup")}
         </h1>
         <div
           className="connection-setup-actions"
@@ -125,7 +126,7 @@ export function ConnectionSetupGate({
                 void requestGuardedClose("application").catch(console.error)
               }
             >
-              {zh ? "退出应用" : "Exit application"}
+              {t("settings.exit.application")}
             </button>
           )}
         </div>
@@ -135,13 +136,13 @@ export function ConnectionSetupGate({
         <div role="alert">
           {displayError}
           <button onClick={() => setRetry((n) => n + 1)}>
-            {zh ? "重新加载配置" : "Reload profiles"}
+            {t("settings.reload.profiles")}
           </button>
         </div>
       )}
       {loading ? (
         <p role="status">
-          {zh ? "正在加载连接配置…" : "Loading connection profiles…"}
+          {t("settings.loading.connection.profiles")}
         </p>
       ) : editing ? (
         <>
@@ -189,7 +190,7 @@ function SetupPrompt({
     >
       <header className="workflow-dialog-heading">
         <h2 id="connection-setup-title">
-          {zh ? "请先配置 P4" : "Set up P4 to get started"}
+          {t("settings.set.up.p4.to.get")}
         </h2>
       </header>
       <div className="workflow-dialog-body">
@@ -206,11 +207,11 @@ function SetupPrompt({
               void requestGuardedClose("application").catch(console.error)
             }
           >
-            {zh ? "退出应用" : "Exit application"}
+            {t("settings.exit.application")}
           </button>
         )}
         <button ref={configureRef} autoFocus onClick={onConfigure}>
-          {zh ? "去配置 P4" : "Configure P4"}
+          {t("settings.configure.p4")}
         </button>
       </footer>
     </dialog>

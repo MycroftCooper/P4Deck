@@ -10,6 +10,7 @@ import {
 } from "../update/updatePanelStore";
 import { updateStore } from "../update/updateStore";
 import { TopBar } from "./TopBar";
+import { setLocale } from "../../shared/i18n";
 
 const d = vi.hoisted(() => ({
   native: true,
@@ -41,6 +42,8 @@ const h = dialogHarness();
 const listeners: Array<[string, EventListener]> = [];
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.clearAllMocks();
   d.native = true;
   d.label = "main";

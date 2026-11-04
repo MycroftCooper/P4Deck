@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import {
   useCallback,
   useDeferredValue,
@@ -472,7 +473,7 @@ export function DiffView({
       const targetSide = current?.side ?? "right";
       const reference = targetSide === "left" ? diff?.left : diff?.right;
       const label =
-        targetSide === "left" ? (zh ? "左侧" : "Left") : zh ? "右侧" : "Right";
+        targetSide === "left" ? (t("browse.left")) : t("browse.right");
       return {
         复制所选文本: copy(selectionText() || current?.text || ""),
         全选当前侧: {
@@ -490,7 +491,7 @@ export function DiffView({
         }),
       };
     },
-    { title: zh ? "Diff 某一侧文本内容" : "Diff side text" },
+    { title: t("browse.diff.side.text") },
   );
 
   const surfaceMenu = menu("V08", () => ({
@@ -550,7 +551,7 @@ export function DiffView({
     const number = Number(lineNumber);
     if (!validateLine(side, number)) {
       setLineError(
-        zh ? "行号不在当前内容中" : "Line is not in the current content",
+        t("browse.line.is.not.in.the"),
       );
       return;
     }
@@ -629,23 +630,23 @@ export function DiffView({
         <div
           className="diff-toolbar"
           role="group"
-          aria-label={zh ? "差异工具栏" : "Diff tools"}
+          aria-label={t("browse.diff.tools")}
         >
           <div className="diff-tool-group diff-hunk-tools">
             <span className="diff-hunk-count" aria-live="polite">
-              {activeHunk + 1}/{hunkTotal} {zh ? "区块" : "hunks"}
+              {activeHunk + 1}/{hunkTotal} {t("browse.hunks")}
             </span>
             <button
-              aria-label={zh ? "上一个区块" : "Previous hunk"}
-              title={zh ? "上一个区块 (Alt+↑)" : "Previous hunk (Alt+↑)"}
+              aria-label={t("browse.previous.hunk")}
+              title={t("browse.previous.hunk.alt")}
               disabled={!hunks.length}
               onClick={() => jumpHunk(-1)}
             >
               <ArrowUp size={14} />
             </button>
             <button
-              aria-label={zh ? "下一个区块" : "Next hunk"}
-              title={zh ? "下一个区块 (Alt+↓)" : "Next hunk (Alt+↓)"}
+              aria-label={t("browse.next.hunk")}
+              title={t("browse.next.hunk.alt")}
               disabled={!hunks.length}
               onClick={() => jumpHunk(1)}
             >
@@ -657,10 +658,10 @@ export function DiffView({
               <Search size={14} aria-hidden="true" />
               <input
                 ref={searchInput}
-                aria-label={zh ? "查找文本" : "Find text"}
-                placeholder={zh ? "在两侧查找…" : "Find in both sides…"}
+                aria-label={t("browse.find.text")}
+                placeholder={t("browse.find.in.both.sides")}
                 title={
-                  zh ? "在两侧查找 (Ctrl+F)" : "Find in both sides (Ctrl+F)"
+                  t("browse.find.in.both.sides.ctrl")
                 }
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -678,9 +679,9 @@ export function DiffView({
                 : ""}
             </span>
             <button
-              aria-label={zh ? "上一个匹配" : "Previous match"}
+              aria-label={t("browse.previous.match")}
               title={
-                zh ? "上一个匹配 (Shift+Enter)" : "Previous match (Shift+Enter)"
+                t("browse.previous.match.shift.enter")
               }
               disabled={!found.matches.length}
               onClick={() => jumpMatch(-1)}
@@ -688,16 +689,16 @@ export function DiffView({
               <ArrowUp size={14} />
             </button>
             <button
-              aria-label={zh ? "下一个匹配" : "Next match"}
-              title={zh ? "下一个匹配 (Enter)" : "Next match (Enter)"}
+              aria-label={t("browse.next.match")}
+              title={t("browse.next.match.enter")}
               disabled={!found.matches.length}
               onClick={() => jumpMatch(1)}
             >
               <ArrowDown size={14} />
             </button>
             <button
-              aria-label={zh ? "清空查找" : "Clear search"}
-              title={zh ? "清空查找 (Esc)" : "Clear search (Esc)"}
+              aria-label={t("browse.clear.search")}
+              title={t("browse.clear.search.esc")}
               disabled={!query}
               onClick={() => {
                 setQuery("");
@@ -715,23 +716,23 @@ export function DiffView({
             }}
           >
             <select
-              aria-label={zh ? "跳转目标侧" : "Jump side"}
+              aria-label={t("browse.jump.side")}
               value={side}
               onChange={(event) => {
                 setSide(event.target.value as DiffSideName);
                 setLineError("");
               }}
             >
-              <option value="left">{zh ? "左侧" : "Left"}</option>
-              <option value="right">{zh ? "右侧" : "Right"}</option>
+              <option value="left">{t("browse.left")}</option>
+              <option value="right">{t("browse.right")}</option>
             </select>
             <input
               className="diff-line-input"
               ref={lineInput}
-              aria-label={zh ? "跳转行号" : "Go to line"}
+              aria-label={t("browse.go.to.line")}
               aria-invalid={!!lineError}
               aria-describedby={lineError ? lineErrorId : undefined}
-              placeholder={zh ? "行号" : "Line"}
+              placeholder={t("browse.line")}
               title="Ctrl+G"
               inputMode="numeric"
               value={lineNumber}
@@ -742,8 +743,8 @@ export function DiffView({
             />
             <button
               type="submit"
-              aria-label={zh ? "跳转到目标行" : "Jump to line"}
-              title={zh ? "跳转到目标行" : "Jump to line"}
+              aria-label={t("browse.jump.to.line")}
+              title={t("browse.jump.to.line")}
               disabled={!lineNumber.trim() || !renderable}
             >
               <CornerDownLeft size={14} />
@@ -765,13 +766,13 @@ export function DiffView({
             </span>
             {(diff?.partial || diff?.truncated) && (
               <span className="diff-partial" title={diff.reason}>
-                {zh ? "部分内容" : "Partial"}
+                {t("browse.partial.2")}
               </span>
             )}
             {displayText && (
               <button
                 className="diff-expand-all-toggle"
-                aria-label={zh ? "展开全部" : "Expand all"}
+                aria-label={t("browse.expand.all")}
                 title={
                   zh
                     ? "展开全部未改动内容"
@@ -823,11 +824,11 @@ export function DiffView({
             <div
               className="diff-view-toggle"
               role="group"
-              aria-label={zh ? "差异视图切换" : "Diff view"}
+              aria-label={t("browse.diff.view")}
             >
               <button
-                aria-label={zh ? "并排视图" : "Side-by-side view"}
-                title={zh ? "并排视图" : "Side-by-side view"}
+                aria-label={t("browse.side.by.side.view")}
+                title={t("browse.side.by.side.view")}
                 aria-pressed={view === "split"}
                 disabled={!renderable}
                 onClick={() => setView("split")}
@@ -835,8 +836,8 @@ export function DiffView({
                 <Columns2 size={14} />
               </button>
               <button
-                aria-label={zh ? "统一视图" : "Unified view"}
-                title={zh ? "统一视图" : "Unified view"}
+                aria-label={t("browse.unified.view")}
+                title={t("browse.unified.view")}
                 aria-pressed={view === "unified"}
                 disabled={!renderable}
                 onClick={() => setView("unified")}
@@ -848,14 +849,14 @@ export function DiffView({
         </div>
         <div className="diff-reference-headers">
           <ReferenceSelector
-            label={zh ? "左侧" : "Left"}
+            label={t("browse.left")}
             value={left}
             resolved={diff?.left.label}
             filePath={diff?.left.depotPath}
             onChange={onLeftChange}
           />
           <ReferenceSelector
-            label={zh ? "右侧" : "Right"}
+            label={t("browse.right")}
             value={right}
             resolved={diff?.right.label}
             filePath={diff?.right.depotPath}
@@ -866,7 +867,7 @@ export function DiffView({
           <div className="workspace-empty">
             <strong>
               {diff.reason ??
-                (zh ? "无法显示文本差异" : "Text diff unavailable")}
+                (t("browse.text.diff.unavailable"))}
             </strong>
             <div>
               {diff.left.label}: {diff.left.fileType ?? "unknown"} ·{" "}
@@ -881,7 +882,7 @@ export function DiffView({
           <div
             className="diff-body"
             role="region"
-            aria-label={zh ? "差异内容" : "Diff output"}
+            aria-label={t("browse.diff.output")}
             {...v04Menu}
           >
             {fileDiff ? (

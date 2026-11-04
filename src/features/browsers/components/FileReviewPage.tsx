@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { GraphInvestigationDialog } from "./GraphInvestigationDialog";
 import { GraphFocusPanel } from "./GraphFocusPanel";
 import {
@@ -566,8 +567,8 @@ export function FileReviewPage({
     createPortal(
       <button
         type="button"
-        title={zh ? "刷新" : "Refresh"}
-        aria-label={zh ? "刷新" : "Refresh"}
+        title={t("browse.refresh")}
+        aria-label={t("browse.refresh")}
         aria-busy={loading}
         disabled={loading || !queryPath || !remoteReady}
         onClick={reload}
@@ -684,14 +685,14 @@ export function FileReviewPage({
               setLoadingOwner("");
             }}
           >
-            {zh ? "取消读取" : "Cancel read"}
+            {t("browse.cancel.read")}
           </button>
         )}
         <div className="review-toolbar">
           <>
             <span>
               {graph
-                ? `${graph.nodes.length} ${zh ? "个版本（已加载）" : "revisions loaded"}`
+                ? `${graph.nodes.length} ${t("browse.revisions.loaded")}`
                 : error
                   ? zh
                     ? "版本数量未知（读取失败）"
@@ -717,7 +718,7 @@ export function FileReviewPage({
               </span>
             )}
             <button
-              aria-label={zh ? "缩小" : "Zoom out"}
+              aria-label={t("browse.zoom.out.2")}
               onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
             >
               <Minus size={14} />
@@ -726,7 +727,7 @@ export function FileReviewPage({
               {Math.round(zoom * 100)}%
             </button>
             <button
-              aria-label={zh ? "放大" : "Zoom in"}
+              aria-label={t("browse.zoom.in.2")}
               onClick={() => setZoom((v) => Math.min(3, v + 0.25))}
             >
               <Plus size={14} />
@@ -740,7 +741,7 @@ export function FileReviewPage({
                   : "Compare selected revisions in a new tab"
               }
             >
-              {zh ? "比较所选版本" : "Compare selected revisions"}
+              {t("browse.compare.selected.revisions")}
             </button>
           </>
         </div>
@@ -752,7 +753,7 @@ export function FileReviewPage({
           </div>
         ) : loading && !data ? (
           <div className="workspace-empty" role="status">
-            {zh ? "正在加载…" : "Loading…"}
+            {t("browse.loading.2")}
           </div>
         ) : !graph?.nodes.length ? (
           <div className="workspace-empty">
@@ -807,7 +808,7 @@ export function FileReviewPage({
                   key={node.id}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? (zh ? "，先选（左侧）" : ", first selected (left)") : candidates[1]?.id === node.id ? (zh ? "，后选（右侧）" : ", last selected (right)") : ""}`}
+                  aria-label={`${node.label}, CL ${node.changelistId}${candidates[0]?.id === node.id ? (t("browse.first.selected.left")) : candidates[1]?.id === node.id ? (t("browse.last.selected.right")) : ""}`}
                   aria-pressed={selection.isSelected(node)}
                   className={`${candidates[0]?.id === node.id ? "compare-first" : candidates[1]?.id === node.id ? "compare-last" : ""} ${node.id === sourceId ? "selected" : ""} graph-lane-${graph.lanes.indexOf(node.depotPath) % 4}`}
                   transform={`translate(${node.x},${node.y})`}
@@ -886,7 +887,7 @@ export function FileReviewPage({
                   }
                   onClick={() => expandGraphNode()}
                 >
-                  {zh ? "展开所选引用节点" : "Expand selected reference"}
+                  {t("browse.expand.selected.reference")}
                 </button>
               )}
               {graph.hasMore && graphCursor && (
@@ -896,7 +897,7 @@ export function FileReviewPage({
                   }
                   onClick={loadMoreGraph}
                 >
-                  {zh ? "展开更多版本" : "Expand more revisions"}
+                  {t("browse.expand.more.revisions")}
                 </button>
               )}
             </div>

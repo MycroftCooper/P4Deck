@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import {
@@ -268,7 +269,7 @@ function localizedError(
   return {
     code: parsed.code,
     message: detail
-      ? base + (zh ? "（详情：" : " (detail: ") + detail + (zh ? "）" : ")")
+      ? base + (t("settings.detail")) + detail + (zh ? "）" : ")")
       : base,
   };
 }
@@ -708,7 +709,7 @@ export function ConnectionProfilesCard({
           "相同参数的已保存连接已存在。",
           "A saved connection with the same settings already exists.",
         )
-      : tr("连接名称已存在。", "That connection name already exists.");
+      : t("settings.that.connection.name.already.exists");
   }
 
   function controlSnapshot() {
@@ -1076,7 +1077,7 @@ export function ConnectionProfilesCard({
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
-        setError(tr("退出登录未完成。", "Logout did not complete."));
+        setError(t("settings.logout.did.not.complete"));
       }
     } finally {
       finish(token);
@@ -1085,7 +1086,7 @@ export function ConnectionProfilesCard({
 
   function selectProfile(profile: ConnectionProfile) {
     if (dirty) {
-      setError(tr("请先保存当前修改。", "Save the current changes first."));
+      setError(t("settings.save.the.current.changes.first"));
       return;
     }
     setSelectedId(profile.id);
@@ -1099,7 +1100,7 @@ export function ConnectionProfilesCard({
 
   function createProfile() {
     if (dirty) {
-      setError(tr("请先保存当前修改。", "Save the current changes first."));
+      setError(t("settings.save.the.current.changes.first"));
       return;
     }
     setSelectedId("new");
@@ -1211,7 +1212,7 @@ export function ConnectionProfilesCard({
       setProfiles(document);
       setDeleteId("");
       chooseDocumentProfile(document);
-      setNotice(tr("已保存连接已删除。", "Saved connection deleted."));
+      setNotice(t("settings.saved.connection.deleted"));
       requestAnimationFrame(() => newButtonRef.current?.focus());
     } catch (cause) {
       if (!isCurrent(token)) return;
@@ -1249,7 +1250,7 @@ export function ConnectionProfilesCard({
       onRuntime(next);
       setProfiles(document);
       setConnection(next.connection);
-      setNotice(tr("连接已启用。", "Connection is now active."));
+      setNotice(t("settings.connection.is.now.active"));
     } catch (cause) {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
@@ -1278,17 +1279,17 @@ export function ConnectionProfilesCard({
 
   const operationMessage = operation
     ? {
-        save: tr("正在保存连接…", "Saving connection…"),
-        test: tr("正在验证 Server 与 User…", "Verifying Server and User…"),
-        trust: tr("正在写入已确认的 Trust…", "Writing confirmed Trust…"),
-        login: tr("正在验证登录…", "Checking login…"),
-        logout: tr("正在退出登录…", "Logging out…"),
-        delete: tr("正在删除已保存连接…", "Deleting saved connection…"),
-        connect: tr("正在连接…", "Connecting…"),
+        save: t("settings.saving.connection"),
+        test: t("settings.verifying.server.and.user"),
+        trust: t("settings.writing.confirmed.trust"),
+        login: t("settings.checking.login"),
+        logout: t("settings.logging.out"),
+        delete: t("settings.deleting.saved.connection"),
+        connect: t("settings.connecting"),
       }[operation]
     : "";
   const sharedDisabledReason = loading
-    ? tr("正在加载已保存连接。", "Saved connections are loading.")
+    ? t("settings.saved.connections.are.loading")
     : busy
       ? tr(
           "请等待当前连接操作完成。",
@@ -1298,7 +1299,7 @@ export function ConnectionProfilesCard({
   const saveDisabledReason = sharedDisabledReason
     ? sharedDisabledReason
     : !dirty
-      ? tr("没有需要保存的修改。", "There are no changes to save.")
+      ? t("settings.there.are.no.changes.to")
       : !valid
         ? tr(
             "保存需要有效的 Server、User、Workspace 与自动解析的 Workspace Root。",
@@ -1308,9 +1309,9 @@ export function ConnectionProfilesCard({
   const verifyDisabledReason = sharedDisabledReason
     ? sharedDisabledReason
     : !current.server
-      ? tr("请先填写 Server。", "Enter Server first.")
+      ? t("settings.enter.server.first")
       : !current.user
-        ? tr("请先填写 User。", "Enter User first.")
+        ? t("settings.enter.user.first")
         : "";
   const connectionFailureNearActions = !["connected", "notTested"].includes(
     connection.state,
@@ -1320,7 +1321,7 @@ export function ConnectionProfilesCard({
     <section className="settings-card connection-profiles-card">
       <h2>
         <Cable size={18} />
-        {tr("已保存连接", "Saved connections")}
+        {t("settings.saved.connections")}
       </h2>
       <p>
         {tr(
@@ -1339,13 +1340,13 @@ export function ConnectionProfilesCard({
       <div className="profile-manager">
         <aside
           className="profile-list-panel"
-          aria-label={tr("已保存连接列表", "Saved connections list")}
+          aria-label={t("settings.saved.connections.list")}
         >
           <div className="profile-list-tools">
             <label className="profile-search">
               <Search size={14} aria-hidden="true" />
               <input
-                aria-label={tr("搜索已保存连接", "Search saved connections")}
+                aria-label={t("settings.search.saved.connections")}
                 value={profileSearch}
                 placeholder={tr(
                   "搜索名称、服务器、用户或工作区…",
@@ -1361,7 +1362,7 @@ export function ConnectionProfilesCard({
               disabled={busy}
               onClick={createProfile}
             >
-              <Plus size={14} /> {tr("新建", "New")}
+              <Plus size={14} /> {t("settings.new")}
             </button>
           </div>
           <div className="profile-list" role="list" aria-busy={loading}>
@@ -1383,7 +1384,7 @@ export function ConnectionProfilesCard({
                       <strong>
                         {profile.context.client} · {profile.context.user}
                       </strong>
-                      {active && <em>{tr("当前", "Current")}</em>}
+                      {active && <em>{t("settings.current")}</em>}
                     </span>
                     <small>
                       {profile.name} · {profile.context.server}
@@ -1396,7 +1397,7 @@ export function ConnectionProfilesCard({
                       `删除 ${profile.name}`,
                       `Delete ${profile.name}`,
                     )}
-                    title={tr("删除已保存连接", "Delete saved connection")}
+                    title={t("settings.delete.saved.connection")}
                     disabled={busy}
                     onClick={(event) => {
                       deleteSource.current = event.currentTarget;
@@ -1436,12 +1437,12 @@ export function ConnectionProfilesCard({
             <div>
               <strong>
                 {draft.id
-                  ? tr("编辑已保存连接", "Edit saved connection")
-                  : tr("新建连接", "New connection")}
+                  ? t("settings.edit.saved.connection")
+                  : t("settings.new.connection")}
               </strong>
               <span>
                 {isActive
-                  ? tr("当前正在使用", "Currently in use")
+                  ? t("settings.currently.in.use")
                   : tr(
                       "修改尚未应用；验证不会切换当前连接",
                       "Changes are not applied; validation does not switch the current connection",
@@ -1457,7 +1458,7 @@ export function ConnectionProfilesCard({
           >
             <fieldset disabled={busy || loading}>
               <label className="profile-name-field profile-connection-name">
-                {tr("连接名称（可选）", "Connection name (optional)")}
+                {t("settings.connection.name.optional")}
                 <input
                   aria-label={tr(
                     "连接名称（可选）",
@@ -1467,7 +1468,7 @@ export function ConnectionProfilesCard({
                   maxLength={128}
                   placeholder={
                     suggestedConnectionName(current) ||
-                    tr("保存时自动生成", "Generated when saved")
+                    t("settings.generated.when.saved")
                   }
                   onChange={(event) => {
                     generation.current += 1;
@@ -1491,7 +1492,7 @@ export function ConnectionProfilesCard({
                 aria-labelledby="connection-settings-heading"
               >
                 <h3 id="connection-settings-heading">
-                  {tr("连接设置", "Connection settings")}
+                  {t("settings.connection.settings")}
                 </h3>
                 <p>
                   {tr(
@@ -1530,7 +1531,7 @@ export function ConnectionProfilesCard({
                                 )
                               }
                             >
-                              <Search size={13} /> {tr("浏览", "Browse")}
+                              <Search size={13} /> {t("settings.browse")}
                             </button>
                           </div>
                         )}
@@ -1580,7 +1581,7 @@ export function ConnectionProfilesCard({
                           setRootRequestRevision((revision) => revision + 1);
                         }}
                       >
-                        {tr("重试解析", "Retry Root")}
+                        {t("settings.retry.root")}
                       </button>
                     </>
                   ) : (
@@ -1609,7 +1610,7 @@ export function ConnectionProfilesCard({
                 className="profile-field-group profile-p4-settings"
                 aria-labelledby="p4-settings-heading"
               >
-                <h3 id="p4-settings-heading">{tr("P4 设置", "P4 settings")}</h3>
+                <h3 id="p4-settings-heading">{t("settings.p4.settings")}</h3>
                 <p>
                   {tr(
                     "这些高级值随当前已保存连接保存。Workspace Root 始终由上方所选 Workspace 自动解析。",
@@ -1645,7 +1646,7 @@ export function ConnectionProfilesCard({
                               )}
                               onClick={() => void chooseExecutableFile(key)}
                             >
-                              <FolderOpen size={13} /> {tr("浏览", "Browse")}
+                              <FolderOpen size={13} /> {t("settings.browse")}
                             </button>
                           </div>
                         )}
@@ -1673,7 +1674,7 @@ export function ConnectionProfilesCard({
                     disabled={dirty || busy || loading}
                     onClick={() => void connectSavedProfile()}
                   >
-                    {tr("使用此连接", "Use this connection")}
+                    {t("settings.use.this.connection")}
                   </button>
                 )}
                 <button
@@ -1687,8 +1688,8 @@ export function ConnectionProfilesCard({
                 >
                   <Save size={14} />
                   {operation === "save"
-                    ? tr("正在保存…", "Saving…")
-                    : tr("保存连接", "Save connection")}
+                    ? t("settings.saving")
+                    : t("settings.save.connection")}
                 </button>
                 <button
                   type="button"
@@ -1707,8 +1708,8 @@ export function ConnectionProfilesCard({
                     className={operation === "test" ? "spin" : ""}
                   />
                   {operation === "test"
-                    ? tr("正在验证…", "Checking…")
-                    : tr("验证这些设置", "Verify these settings")}
+                    ? t("settings.checking")
+                    : t("settings.verify.these.settings")}
                 </button>
               </div>
             </fieldset>
@@ -1804,22 +1805,22 @@ export function ConnectionProfilesCard({
                   disabled={busy}
                   onClick={() => void rediscoverCli()}
                 >
-                  {tr("重新检测 CLI", "Detect CLI again")}
+                  {t("settings.detect.cli.again")}
                 </button>
               </div>
             )}
             <dl className="connection-facts">
               <div>
-                <dt>{tr("服务器", "Server")}</dt>
+                <dt>{t("settings.server")}</dt>
                 <dd>{connection.server || current.server || "—"}</dd>
               </div>
               <div>
                 <dt>P4 CLI</dt>
-                <dd>{cliVersion || tr("未知", "Unknown")}</dd>
+                <dd>{cliVersion || t("settings.unknown")}</dd>
               </div>
             </dl>
             <p className="connection-recovery">
-              <strong>{tr("下一步：", "Next: ")}</strong>
+              <strong>{t("settings.next")}</strong>
               {presentation.recovery}
             </p>
 
@@ -1828,7 +1829,7 @@ export function ConnectionProfilesCard({
                 {connection.fingerprint ? (
                   <>
                     <div className="connection-fingerprint">
-                      <span>{tr("服务器指纹", "Server fingerprint")}</span>
+                      <span>{t("settings.server.fingerprint")}</span>
                       <code>{connection.fingerprint}</code>
                     </div>
                     <label className="connection-confirmation">
@@ -1855,8 +1856,8 @@ export function ConnectionProfilesCard({
                     >
                       <ShieldCheck size={14} />{" "}
                       {operation === "trust"
-                        ? tr("正在写入 Trust…", "Trusting…")
-                        : tr("信任此精确指纹", "Trust this exact fingerprint")}
+                        ? t("settings.trusting")
+                        : t("settings.trust.this.exact.fingerprint")}
                     </button>
                   </>
                 ) : (
@@ -1889,7 +1890,7 @@ export function ConnectionProfilesCard({
                     <KeyRound size={15} aria-hidden="true" />
                     <input
                       type="password"
-                      aria-label={tr("P4 密码", "P4 password")}
+                      aria-label={t("settings.p4.password")}
                       value={password}
                       autoComplete="off"
                       disabled={busy}
@@ -1910,10 +1911,10 @@ export function ConnectionProfilesCard({
                 >
                   <LogIn size={14} />{" "}
                   {operation === "login"
-                    ? tr("正在登录…", "Logging in…")
+                    ? t("settings.logging.in")
                     : connection.state === "ticketExpired"
-                      ? tr("重新登录", "Log in again")
-                      : tr("登录", "Log in")}
+                      ? t("settings.log.in.again")
+                      : t("settings.log.in")}
                 </button>
               </form>
             )}
@@ -1950,8 +1951,8 @@ export function ConnectionProfilesCard({
               >
                 <LogOut size={14} />{" "}
                 {operation === "logout"
-                  ? tr("正在退出…", "Logging out…")
-                  : tr("退出登录", "Log out")}
+                  ? t("settings.logging.out.2")
+                  : t("settings.log.out")}
               </button>
             )}
           </section>
@@ -1960,14 +1961,14 @@ export function ConnectionProfilesCard({
 
       {deleteId && profiles && (
         <Dialog
-          title={tr("确认删除已保存连接？", "Delete this saved connection?")}
+          title={t("settings.delete.this.saved.connection")}
           description={
             profiles.activeProfileId === deleteId
               ? tr(
                   "删除当前连接后会断开连接并清空相关视图。",
                   "Deleting the current connection will disconnect it and clear related views.",
                 )
-              : tr("删除这条已保存连接？", "Delete this saved connection?")
+              : t("settings.delete.this.saved.connection.2")
           }
           source={deleteSource.current}
           zh={zh}
@@ -1983,7 +1984,7 @@ export function ConnectionProfilesCard({
                 data-dialog-autofocus
                 onClick={() => setDeleteId("")}
               >
-                {tr("取消", "Cancel")}
+                {t("settings.cancel")}
               </button>
               <button
                 type="button"
@@ -1991,7 +1992,7 @@ export function ConnectionProfilesCard({
                 disabled={busy}
                 onClick={(event) => void deleteProfile(event.currentTarget)}
               >
-                {tr("确认删除", "Delete connection")}
+                {t("settings.delete.connection")}
               </button>
             </>
           }

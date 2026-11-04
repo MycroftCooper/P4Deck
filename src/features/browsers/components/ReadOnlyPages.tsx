@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import {
   SyncDialog,
@@ -477,7 +478,7 @@ export function ReadOnlyPage({
                 ],
                 revisionMode: "choose",
                 fixedRevision: newest.revision,
-                scopeLabel: `${zh ? "后选版本" : "Most recently selected"}: ${newest.depotPath}#${newest.revision}`,
+                scopeLabel: `${t("browse.most.recently.selected")}: ${newest.depotPath}#${newest.revision}`,
                 source: source ?? null,
               }),
             remoteReady && valid
@@ -511,7 +512,7 @@ export function ReadOnlyPage({
         };
       },
       {
-        title: `${item.depotPath}#${item.revision} · ${zh ? "获取目标：后选" : "Get target: latest selection"} #${historyMenuQueue(selectedHistory, item).at(-1)!.revision}`,
+        title: `${item.depotPath}#${item.revision} · ${t("browse.get.target.latest.selection")} #${historyMenuQueue(selectedHistory, item).at(-1)!.revision}`,
         onOpen: () => selection.context(item),
       },
     );
@@ -554,8 +555,8 @@ export function ReadOnlyPage({
   const refreshButton = (
     <button
       type="button"
-      title={zh ? "刷新" : "Refresh"}
-      aria-label={zh ? "刷新" : "Refresh"}
+      title={t("browse.refresh")}
+      aria-label={t("browse.refresh")}
       aria-busy={loading}
       disabled={loading || !remoteReady || (kind === "history" && !queryPath)}
       onClick={() => void reload()}
@@ -566,7 +567,7 @@ export function ReadOnlyPage({
         aria-hidden="true"
       />
       {kind === "streams" || !refreshSlot ? (
-        <span>{zh ? "刷新" : "Refresh"}</span>
+        <span>{t("browse.refresh")}</span>
       ) : null}
     </button>
   );
@@ -609,13 +610,13 @@ export function ReadOnlyPage({
           <div className="section-title-actions">
             <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
               <Network size={15} />
-              {zh ? "打开 Stream 图" : "Open Stream Graph"}
+              {t("browse.open.stream.graph")}
             </button>
             <button
               disabled={!onOpenBranchMappings}
               onClick={onOpenBranchMappings}
             >
-              {zh ? "打开 Branch Mappings" : "Open Branch Mappings"}
+              {t("browse.open.branch.mappings")}
             </button>
           </div>
           {refreshButton}
@@ -625,8 +626,8 @@ export function ReadOnlyPage({
         <label className="search-field">
           <Search size={15} />
           <input
-            aria-label={zh ? "搜索当前列表" : "Search list"}
-            placeholder={zh ? "搜索当前列表…" : "Search list…"}
+            aria-label={t("browse.search.list")}
+            placeholder={t("browse.search.list.2")}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -635,7 +636,7 @@ export function ReadOnlyPage({
           />
         </label>
         <span className="filter-count">
-          {filtered.length} {zh ? "条记录" : "records"}
+          {filtered.length} {t("browse.records")}
         </span>
       </div>
       {kind === "history" && historyHasMore && (
@@ -722,7 +723,7 @@ export function ReadOnlyPage({
               });
           }}
         >
-          {zh ? "加载更多历史" : "Load more history"}
+          {t("browse.load.more.history")}
         </button>
       )}
       {error && (
@@ -801,7 +802,7 @@ export function ReadOnlyPage({
                   columns={[
                     { id: "stream", label: "Stream" },
                     { id: "parent", label: "Type / Parent" },
-                    { id: "description", label: zh ? "描述" : "Description" },
+                    { id: "description", label: t("browse.description") },
                   ]}
                 />
                 <div

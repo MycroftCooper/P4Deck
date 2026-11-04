@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useState } from "react";
 import { accentPresets, accentTokens, normalizeAccent } from "./accent";
 
@@ -19,7 +20,7 @@ export function AccentSettings({
   return (
     <div className="accent-settings">
       <label>
-        {zh ? "主题强调色" : "Accent color"}
+        {t("settings.accent.color")}
         <select
           value={preset}
           onChange={(event) => {
@@ -32,12 +33,12 @@ export function AccentSettings({
             </option>
           ))}
           <option value="custom" disabled>
-            {zh ? "自定义" : "Custom"}
+            {t("settings.custom")}
           </option>
         </select>
       </label>
       <label>
-        {zh ? "自定义颜色" : "Custom color"}
+        {t("settings.custom.color")}
         <input
           type="color"
           value={value}
@@ -45,7 +46,7 @@ export function AccentSettings({
         />
       </label>
       <label>
-        {zh ? "颜色值（#RRGGBB）" : "Color value (#RRGGBB)"}
+        {t("settings.color.value.rrggbb")}
         <input
           value={draft}
           aria-invalid={!valid}
@@ -67,7 +68,7 @@ export function AccentSettings({
       </label>
       <div
         className="accent-previews"
-        aria-label={zh ? "浅深色即时预览" : "Live light and dark previews"}
+        aria-label={t("settings.live.light.and.dark.previews")}
       >
         {[false, true].map((dark) => {
           const tokens = accentTokens(value, dark);
@@ -82,10 +83,10 @@ export function AccentSettings({
               }}
             >
               <span>
-                {dark ? (zh ? "深色" : "Dark") : zh ? "浅色" : "Light"}
+                {dark ? (t("settings.dark")) : t("settings.light")}
               </span>{" "}
               <span style={{ color: tokens["--accent"] }}>
-                {zh ? "强调文字" : "Accent text"}
+                {t("settings.accent.text")}
               </span>{" "}
               <span
                 style={{
@@ -95,7 +96,7 @@ export function AccentSettings({
                   borderRadius: 4,
                 }}
               >
-                {zh ? "按钮" : "Button"}
+                {t("settings.button")}
               </span>
             </div>
           );

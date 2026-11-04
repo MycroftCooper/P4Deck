@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
@@ -31,7 +32,7 @@ export function RevisionDialog({
   const recursive = snapshot.nodes.some((node) => node.kind === "directory");
   return (
     <Dialog
-      title={tr("获取指定版本", "Get revision")}
+      title={t("files.get.revision")}
       description={tr(
         "将更新工作区中的对应文件；不会强制覆盖已打开的本地修改。",
         "Updates the corresponding workspace files without forcing overwrites of opened local changes.",
@@ -41,20 +42,20 @@ export function RevisionDialog({
       onRequestClose={() => onClose(null)}
       footer={
         <>
-          <button onClick={() => onClose(null)}>{tr("取消", "Cancel")}</button>
+          <button onClick={() => onClose(null)}>{t("files.cancel")}</button>
           <button
             className="primary"
             disabled={!selector || !snapshot.nodes.length}
             onClick={() => selector && onClose(selector)}
           >
-            {tr("确认获取", "Get revision")}
+            {t("files.get.revision.2")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
         {snapshot.scopeLabel ? `${snapshot.scopeLabel} · ` : ""}
-        {snapshot.nodes.length} {tr("个目标", "targets")}
+        {snapshot.nodes.length} {t("files.targets")}
       </div>
       {snapshot.count > snapshot.nodes.length && (
         <DialogNotice>
@@ -77,10 +78,10 @@ export function RevisionDialog({
           (node) =>
             `${node.absolutePath || node.depotPath}${node.kind === "directory" ? " /…" : ""}`,
         )}
-        label={tr("获取范围", "Sync scope")}
+        label={t("files.sync.scope")}
       />
       <label>
-        {tr("版本类型", "Revision type")}
+        {t("files.revision.type")}
         <select
           data-dialog-autofocus
           value={mode}
@@ -90,24 +91,24 @@ export function RevisionDialog({
           }}
         >
           <option value="head">
-            {tr("最新版本（head）", "Latest (head)")}
+            {t("files.latest.head")}
           </option>
           <option value="revision">
-            {tr("文件修订号（#）", "File revision (#)")}
+            {t("files.file.revision")}
           </option>
           <option value="change">
-            {tr("截至 CL 编号（@）", "As of changelist (@)")}
+            {t("files.as.of.changelist")}
           </option>
-          <option value="date">{tr("截至日期（@）", "As of date (@)")}</option>
+          <option value="date">{t("files.as.of.date")}</option>
         </select>
       </label>
       {mode !== "head" && (
         <label>
           {mode === "date"
-            ? tr("日期", "Date")
+            ? t("files.date")
             : mode === "revision"
-              ? tr("文件修订号", "File revision number")
-              : tr("CL 编号", "Changelist number")}
+              ? t("files.file.revision.number")
+              : t("files.changelist.number")}
           <input
             type={mode === "date" ? "date" : "text"}
             inputMode={mode === "date" ? undefined : "numeric"}
@@ -151,7 +152,7 @@ export function RevisionDialog({
       )}
       {selector && (
         <p className="workflow-context">
-          {tr("版本选择器", "Revision selector")} <code>{selector}</code>
+          {t("files.revision.selector")} <code>{selector}</code>
         </p>
       )}
     </Dialog>

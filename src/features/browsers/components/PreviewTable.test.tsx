@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PreviewTable } from "./PreviewTable";
 import type { FilePreviewTable } from "../../../shared/contracts";
+import { setLocale } from "../../../shared/i18n";
 
 const table = (patch: Partial<FilePreviewTable> = {}): FilePreviewTable => ({
   format: "csv",
@@ -38,6 +39,8 @@ function manyRows(count: number, columns = 3): string[][] {
 
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   // jsdom has no layout: supply a visible viewport, retain the real virtualizer.
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(240);
