@@ -496,6 +496,143 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.delete.profile": "删除 {name}",
+  "settings.showing.connections": "显示 {shown} / {total} 个连接",
+  "settings.resolving.root.for": "正在解析 {client} 的 Root…",
+  "settings.verified.fingerprint.through.trusted":
+    "我已通过可信渠道核对 {server} 的上述完整指纹。",
+  "settings.field.charset": "字符集 / P4CHARSET",
+  "settings.field.server": "服务器",
+  "settings.field.user": "用户",
+  "settings.field.client": "工作区",
+  "settings.field.trustPath": "Trust 文件路径",
+  "settings.field.ticketsPath": "Tickets 文件路径",
+  "settings.field.swarmBaseUrl": "Swarm 基础 URL（可选）",
+  "settings.field.executable": "P4 可执行文件",
+  "settings.field.customSubmitExecutablePath": "自定义提交工具（可选）",
+  "settings.the.workspace.root.returned.by.the":
+    "服务器返回的 Workspace Root 在本机不可用。",
+  "settings.the.server.returned.no.exact.workspace":
+    "服务器未返回完全匹配的 Workspace。",
+  "settings.swarm.url.must.be.an.http":
+    "Swarm URL 必须是无凭据、query、fragment、控制字符的 http/https 基础地址。",
+  "settings.connection.name.must.contain.1.128":
+    "连接名称需为 1–128 个非控制字符；Server、User、Workspace 为必填。名称留空时会自动生成。",
+  "settings.a.saved.connection.with.the.same": "相同参数的已保存连接已存在。",
+  "settings.profile.saved.p4.connection.settings.are":
+    "连接配置已保存；实际连接参数未变，验证状态已保留。",
+  "settings.connection.saved.it.remains.not.tested":
+    "连接已保存；状态仍为“尚未验证”，保存不会冒充已连接。",
+  "settings.saved.connections.changed.concurrently.and.reload":
+    "已保存连接被并发修改，且重新加载失败；请稍后重试。",
+  "settings.p4.cli.found.use.verify.these":
+    "已找到 P4 CLI。可点击“验证这些设置”验证连接；尚未访问服务器。",
+  "settings.cli.detection.did.not.complete.retry": "CLI 检测未完成，请重试。",
+  "settings.verifying.a.connection.requires.server.and":
+    "验证连接需要 Server 和 User；可在选择 Workspace 之前验证并完成 Trust 或登录恢复。",
+  "settings.browser.mock.validation.was.simulated.with":
+    "浏览器 Mock：仅模拟验证，未发起真实网络连接；此操作不会切换当前连接。",
+  "settings.the.active.connection.and.login.are":
+    "当前连接与登录已验证，文件树已可加载。",
+  "settings.the.current.unsaved.settings.are.connected":
+    "当前未保存设置的连接与登录已验证；验证不会保存或切换当前连接。",
+  "settings.the.connection.check.did.not.complete":
+    "连接验证请求未完成；未将该结果视为成功。",
+  "settings.the.trust.result.was.not.proven":
+    "Trust 结果未被权威状态证实；卡片刻意保持不确定，请刷新后再试。",
+  "settings.the.trust.request.did.not.complete":
+    "Trust 请求未完成；未信任其他指纹。",
+  "settings.browser.mock.login.was.simulated.without":
+    "浏览器 Mock：模拟登录完成，未访问真实服务器。",
+  "settings.the.current.settings.are.authenticated.the":
+    "当前设置登录成功；密码已清空。",
+  "settings.login.was.not.proven.by.the":
+    "登录结果未被权威连接状态证实；密码已清空，请刷新后再试。",
+  "settings.login.did.not.complete.the.password": "登录未完成；密码已清空。",
+  "settings.browser.mock.logout.was.simulated.without":
+    "浏览器 Mock：模拟退出，未访问真实服务器。",
+  "settings.the.user.for.the.current.settings": "当前设置对应用户已退出。",
+  "settings.logout.was.not.proven.by.the":
+    "退出结果未被权威状态证实；卡片刻意保持不确定。",
+  "settings.this.workspace.root.is.not.usable":
+    "该 Workspace 的 Root 在当前机器上不可用，不能填入连接设置。",
+  "settings.wait.for.the.current.connection.operation":
+    "请等待当前连接操作完成。",
+  "settings.saving.requires.valid.server.user.workspace":
+    "保存需要有效的 Server、User、Workspace 与自动解析的 Workspace Root。",
+  "settings.saved.connections.contain.only.allowlisted.non":
+    "已保存连接只包含后端允许的非敏感设置和凭证文件路径；密码、ticket 内容与服务器指纹不会进入已保存连接、Storage、URL 或日志。",
+  "settings.browser.mock.is.explicitly.simulated.saving":
+    "浏览器 Mock 明确为 simulated：保存、验证和切换只改变模拟状态，不访问真实网络。",
+  "settings.search.name.server.user.or.workspace":
+    "搜索名称、服务器、用户或工作区…",
+  "settings.no.matching.saved.connections": "没有匹配的已保存连接。",
+  "settings.no.saved.connections.yet.create.one": "尚无已保存连接，请新建。",
+  "settings.changes.are.not.applied.validation.does":
+    "修改尚未应用；验证不会切换当前连接",
+  "settings.used.only.to.distinguish.saved.connections":
+    "仅用于区分已保存连接；留空会根据 Server、User 和 Workspace 自动生成。",
+  "settings.choose.the.server.user.and.workspace":
+    "选择要连接的服务器、用户和工作区。保存或验证前不会切换当前连接。",
+  "settings.choose.or.enter.a.workspace.to":
+    "选择或填写 Workspace 后自动从服务器解析；无需手填本地路径。",
+  "settings.workspace.root.resolution.failed": "Workspace Root 解析失败。",
+  "settings.saved.root.the.backend.rechecks.it":
+    "已保存的 Root；保存或激活时后端会再次向服务器核对。",
+  "settings.resolved.exactly.from.the.current.draft":
+    "已按当前草稿从服务器精确解析；保存时仍会再次核对。",
+  "settings.these.advanced.values.are.saved.with":
+    "这些高级值随当前已保存连接保存。Workspace Root 始终由上方所选 Workspace 自动解析。",
+  "settings.choose.an.exe.file.desktop.only": "选择 .exe 文件（仅桌面版）",
+  "settings.leave.the.custom.submit.tool.empty":
+    "自定义提交工具留空时使用普通提交；配置后，原“提交 CL”按钮启动工具，失败不会回退。保存不会试运行。工作目录使用 exe 所在目录，继承应用环境；首版仅支持一次工具会话，退出不等于提交成功，也不会自动解除占用。",
+  "settings.the.swarm.url.only.builds.read":
+    "Swarm URL 仅用于生成只读网页链接；不会保存 Swarm token、密码或登录信息。",
+  "settings.see.the.connection.status.card.below":
+    "详细恢复操作见下方连接状态卡片。",
+  "settings.there.are.unsaved.profile.changes.the":
+    "有未保存的配置修改；当前使用的连接参数未变，验证状态仍有效。",
+  "settings.there.are.unsaved.changes.validation.and":
+    "有未保存修改。验证和认证只针对这些设置；保存后状态仍为“尚未验证”。",
+  "settings.first.check.for.an.existing.p4":
+    "先重新检测已有的 P4 CLI。若未安装，请从 Perforce 官方页面选择 P4 CLI，自行确认适用条款并完成安装，再重新检测。打开下载页不会自动安装。",
+  "settings.official.perforce.downloads.p4.cli": "Perforce 官方下载（P4 CLI）",
+  "settings.the.server.returned.no.verifiable.fingerprint":
+    "服务器未返回可核对指纹，不能执行 Trust。",
+  "settings.p4.password.this.request.only": "P4 密码（仅用于本次请求）",
+  "settings.the.password.is.never.written.to":
+    "密码不写入未保存设置、已保存连接、Storage、URL、历史或日志；提交后立即清空。",
+  "settings.p4deck.will.not.pretend.a.normal":
+    "P4Deck 不会用普通密码框伪装完成外部认证。请完成组织的 SSO/MFA 后，再验证这些设置。",
+  "settings.i.completed.external.authentication.check.status":
+    "我已完成外部认证，检查状态",
+  "settings.deleting.the.current.connection.will.disconnect":
+    "删除当前连接后会断开连接并清空相关视图。",
+  "settings.this.removes.the.saved.connection.settings":
+    "只删除本机保存的连接配置，不删除服务器上的 Workspace 或文件。",
+  "settings.p4charset": "字符集",
+  "settings.connectionError.invalidInput": "字段为空、过长或包含非法字符。",
+  "settings.connectionError.duplicateName": "连接名称已存在，请使用唯一名称。",
+  "settings.connectionError.duplicateContext": "相同参数的已保存连接已存在。",
+  "settings.connectionError.notFound":
+    "该已保存连接或 Workspace 已不存在，请刷新后重试。",
+  "settings.connectionError.revisionConflict":
+    "已保存连接在其他位置被修改；列表已重新加载，请核对未保存修改后重试。",
+  "settings.connectionError.activeProfileDelete":
+    "当前连接不能删除；请先连接到另一个已保存连接。",
+  "settings.connectionError.lastProfileDelete": "最后一个已保存连接不能删除。",
+  "settings.connectionError.corruptStore":
+    "连接存储已损坏且未被覆盖；请修复或恢复 connection.json。",
+  "settings.connectionError.unsupportedSchema":
+    "连接存储版本不受支持，文件未被覆盖。",
+  "settings.connectionError.persistenceFailed":
+    "连接存储写入失败；原数据保持不变，请检查磁盘与权限。",
+  "settings.connectionError.connectionFailed":
+    "验证失败，仍保留原连接和页面数据。",
+  "settings.connectionError.authenticationRequired":
+    "目标连接尚未登录；当前连接保持不变。",
+  "settings.connectionError.contextChanged":
+    "当前连接在操作期间已变化；已保留最新连接。",
   "pending.submit.entire": "提交整个 {label}",
   "pending.submit.label": "提交 {label}",
   "pending.revert.all.opened.in": "还原 {label} 的全部已打开文件",
@@ -511,17 +648,21 @@ export const zh = {
   "pending.delete.all.shelved.in": "删除 CL {id} 的全部搁置内容",
   "pending.showing.local.cache": "当前显示本地缓存。",
   "pending.no.local.cache": "还没有本地缓存。",
-  "pending.partial.results.counts": "结果为部分数据：扫描 {scanned}，匹配 {matched}。",
+  "pending.partial.results.counts":
+    "结果为部分数据：扫描 {scanned}，匹配 {matched}。",
   "pending.empty.cl.cannot.submit": "空 CL 不可提交",
   "pending.mark.moved": "已移动",
   "pending.mark.not.moved": "未移动",
   "pending.mark.unverified": "待核实",
   "pending.mark.already.in.target": "已在目标",
   "pending.operation.in.progress": "操作进行中",
-  "pending.shelf.scope.is.incomplete.refresh.before": "搁置范围尚未完整读取，请刷新后重试",
+  "pending.shelf.scope.is.incomplete.refresh.before":
+    "搁置范围尚未完整读取，请刷新后重试",
   "pending.no.shelved.files.available": "没有可操作的搁置文件",
-  "pending.browser.mock.no.real.p4.server": " · 浏览器 Mock，未访问真实 P4 Server",
-  "pending.outcome.unconfirmed.existing.rows.kept.and": "结果未确认；现有行已保留并按权威状态刷新，请勿换新操作重试。",
+  "pending.browser.mock.no.real.p4.server":
+    " · 浏览器 Mock，未访问真实 P4 Server",
+  "pending.outcome.unconfirmed.existing.rows.kept.and":
+    "结果未确认；现有行已保留并按权威状态刷新，请勿换新操作重试。",
   "pending.delete.refresh.incomplete": "删除后的刷新不完整",
   "pending.changelist.delete.confirmed": "CL 删除已由服务器确认",
   "pending.checking.connection.and.login": "正在检查连接与登录状态",
@@ -529,16 +670,19 @@ export const zh = {
   "pending.save.refresh.incomplete": "保存后的刷新不完整",
   "pending.changelist.edit.confirmed": "CL 编辑已由服务器确认",
   "pending.changelist.creation.confirmed": "CL 创建已由服务器确认",
-  "pending.filter.cached.cl.description.or.file": "筛选已缓存的 CL、描述或文件路径",
+  "pending.filter.cached.cl.description.or.file":
+    "筛选已缓存的 CL、描述或文件路径",
   "pending.filter.pending.changelists": "筛选 Pending CL",
   "pending.toggle.ascending.descending.cl.number": "切换 CL 编号正序/倒序",
   "pending.cl.ascending": "CL ↑ 正序",
   "pending.cl.descending": "CL ↓ 倒序",
-  "pending.your.login.has.expired.or.is": "登录已过期或尚未登录，无法读取 Pending 列表。请在连接设置中重新登录后刷新。",
+  "pending.your.login.has.expired.or.is":
+    "登录已过期或尚未登录，无法读取 Pending 列表。请在连接设置中重新登录后刷新。",
   "pending.connection.settings": "前往连接设置",
   "pending.retry.connection": "重试连接",
   "pending.connection.settings.2": "连接设置",
-  "pending.local.grouping.preview.unconfirmed.files.need": "本地归属预览，未确认文件需核实",
+  "pending.local.grouping.preview.unconfirmed.files.need":
+    "本地归属预览，未确认文件需核实",
   "pending.file.status": "逐文件状态",
   "pending.new.cl.number.not.confirmed": "新 CL，编号待确认",
   "pending.delete.an.empty.numbered.cl": "删除空的编号 CL",
@@ -546,7 +690,8 @@ export const zh = {
   "pending.move.selection.changed.select.again": "移动范围已变化，请重新选择",
   "pending.files.have.an.unresolved.move": "文件已有未确认移动",
   "pending.default.cannot.be.deleted": "Default CL 不可删除",
-  "pending.changelist.contains.files.shelves.or.jobs": "CL 包含文件、Shelf 或 Jobs",
+  "pending.changelist.contains.files.shelves.or.jobs":
+    "CL 包含文件、Shelf 或 Jobs",
   "pending.default.has.no.numbered.spec": "Default CL 没有可编辑的编号 spec",
   "pending.no.files.to.move": "没有可移动的文件",
 

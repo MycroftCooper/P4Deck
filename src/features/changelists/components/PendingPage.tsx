@@ -536,9 +536,7 @@ export function PendingPage({
                 ?.files.some((v) => v.depotPath === f.depotPath),
           )
         )
-          throw Error(
-            translate("pending.move.selection.changed.select.again"),
-          );
+          throw Error(translate("pending.move.selection.changed.select.again"));
         const { profileId, generation, server, user, client } = connection;
         if (
           !startOptimisticMove(
@@ -830,7 +828,7 @@ export function PendingPage({
         const authoritative = authoritativeChangeId(effective);
         setError("");
         setNotice(
-          `${successMessage}${authoritative ? ` · CL ${authoritative}` : ""} · ${translate("pending.operation")} ${id}${demo ? (translate("pending.browser.mock.no.real.p4.server")) : ""}`,
+          `${successMessage}${authoritative ? ` · CL ${authoritative}` : ""} · ${translate("pending.operation")} ${id}${demo ? translate("pending.browser.mock.no.real.p4.server") : ""}`,
         );
         // No p4deck:pending-* events on the wired path: host result + readback are the authority.
       } else {
@@ -854,7 +852,7 @@ export function PendingPage({
     setNotice(
       legacy.refreshError
         ? ""
-        : `${successMessage} · ${translate("pending.operation")} ${legacy.operation.operationId}${demo ? (translate("pending.browser.mock.no.real.p4.server")) : ""}`,
+        : `${successMessage} · ${translate("pending.operation")} ${legacy.operation.operationId}${demo ? translate("pending.browser.mock.no.real.p4.server") : ""}`,
     );
     if (legacy.refreshError)
       window.dispatchEvent(new Event("p4deck:pending-refresh"));
@@ -1145,7 +1143,9 @@ export function PendingPage({
               source,
             ),
           connectionReason ??
-            (change.files.length ? undefined : translate("pending.empty.cl.cannot.submit")),
+            (change.files.length
+              ? undefined
+              : translate("pending.empty.cl.cannot.submit")),
         ),
       }),
       {
@@ -1319,9 +1319,9 @@ export function PendingPage({
           className="search-field"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder={
-            translate("pending.filter.cached.cl.description.or.file")
-          }
+          placeholder={translate(
+            "pending.filter.cached.cl.description.or.file",
+          )}
           aria-label={translate("pending.filter.pending.changelists")}
         />
         <button
@@ -1330,9 +1330,9 @@ export function PendingPage({
           onClick={() =>
             setSort((value) => (value === "newest" ? "oldest" : "newest"))
           }
-          aria-label={
-            translate("pending.toggle.ascending.descending.cl.number")
-          }
+          aria-label={translate(
+            "pending.toggle.ascending.descending.cl.number",
+          )}
           aria-pressed={sort === "oldest"}
         >
           {sort === "oldest"
@@ -1347,9 +1347,7 @@ export function PendingPage({
         >
           {authenticationRequired ? (
             <>
-              <p>
-                {translate("pending.your.login.has.expired.or.is")}
-              </p>
+              <p>{translate("pending.your.login.has.expired.or.is")}</p>
               <button
                 className="secondary"
                 onClick={() => menuEnvironment.openPage("settings")}
@@ -1363,7 +1361,9 @@ export function PendingPage({
                 {connectionPresentation(connection, isZh()).title}
                 {" · "}
                 {translate(
-                  loaded ? "pending.showing.local.cache" : "pending.no.local.cache",
+                  loaded
+                    ? "pending.showing.local.cache"
+                    : "pending.no.local.cache",
                 )}
               </p>
               {connection.recovery === "retry" && (
@@ -1402,7 +1402,9 @@ export function PendingPage({
             .map((a) => (
               <div key={a.request.operationId}>
                 <span>
-                  {translate("pending.local.grouping.preview.unconfirmed.files.need")}{" "}
+                  {translate(
+                    "pending.local.grouping.preview.unconfirmed.files.need",
+                  )}{" "}
                   · {a.request.files.length}
                 </span>
                 <details>
@@ -1456,14 +1458,10 @@ export function PendingPage({
         <section
           className="pending-move-temporary"
           key={group.operationId}
-          aria-label={
-            translate("pending.new.cl.number.not.confirmed")
-          }
+          aria-label={translate("pending.new.cl.number.not.confirmed")}
         >
-          <strong>
-            {translate("pending.new.cl.number.not.confirmed")}
-          </strong>{" "}
-          · {group.description}
+          <strong>{translate("pending.new.cl.number.not.confirmed")}</strong> ·{" "}
+          {group.description}
           <ul>
             {group.files.map((file) => (
               <li key={file.depotPath}>{file.depotPath}</li>
@@ -1644,7 +1642,9 @@ export function PendingPage({
                           numberedReason ??
                           translate("pending.submit.entire", { label })
                         }
-                        aria-label={translate("pending.submit.label", { label })}
+                        aria-label={translate("pending.submit.label", {
+                          label,
+                        })}
                         onClick={(event) => {
                           event.stopPropagation();
                           run(
@@ -1667,11 +1667,11 @@ export function PendingPage({
                         disabled={!!unavailable}
                         title={
                           unavailable ??
-                          (translate("pending.revert.all.opened.in", { label }))
+                          translate("pending.revert.all.opened.in", { label })
                         }
-                        aria-label={
-                          translate("pending.revert.all.label", { label })
-                        }
+                        aria-label={translate("pending.revert.all.label", {
+                          label,
+                        })}
                         onClick={(event) => {
                           event.stopPropagation();
                           const target = revertTarget();
@@ -1688,11 +1688,14 @@ export function PendingPage({
                         disabled={!!unavailable}
                         title={
                           unavailable ??
-                          (translate("pending.revert.only.unchanged.in", { label }))
+                          translate("pending.revert.only.unchanged.in", {
+                            label,
+                          })
                         }
-                        aria-label={
-                          translate("pending.revert.unchanged.label", { label })
-                        }
+                        aria-label={translate(
+                          "pending.revert.unchanged.label",
+                          { label },
+                        )}
                         onClick={(event) => {
                           event.stopPropagation();
                           const target = revertTarget();
@@ -1709,11 +1712,11 @@ export function PendingPage({
                         disabled={!!numberedReason}
                         title={
                           numberedReason ??
-                          (translate("pending.shelve.all.opened.in", { label }))
+                          translate("pending.shelve.all.opened.in", { label })
                         }
-                        aria-label={
-                          translate("pending.shelve.all.label", { label })
-                        }
+                        aria-label={translate("pending.shelve.all.label", {
+                          label,
+                        })}
                         onClick={(event) => {
                           event.stopPropagation();
                           openShelf(
@@ -1731,9 +1734,7 @@ export function PendingPage({
                     </div>
                     {change.id ? (
                       <button
-                        title={
-                          translate("pending.delete.an.empty.numbered.cl")
-                        }
+                        title={translate("pending.delete.an.empty.numbered.cl")}
                         aria-label={t.delete}
                         disabled={!!deleteReason(change)}
                         aria-busy={deleting === change.id}
@@ -1813,14 +1814,12 @@ export function PendingPage({
                             <button
                               type="button"
                               className="pending-shelf-toggle"
-                              aria-label={
-                                translate(
-                                  collapsedShelves.has(change.id)
-                                    ? "pending.expand.shelved.files"
-                                    : "pending.collapse.shelved.files",
-                                  { id: change.id },
-                                )
-                              }
+                              aria-label={translate(
+                                collapsedShelves.has(change.id)
+                                  ? "pending.expand.shelved.files"
+                                  : "pending.collapse.shelved.files",
+                                { id: change.id },
+                              )}
                               aria-expanded={!collapsedShelves.has(change.id)}
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -1842,9 +1841,10 @@ export function PendingPage({
                             <span
                               className="pending-shelf-actions"
                               role="group"
-                              aria-label={
-                                translate("pending.shelved.files.actions", { id: change.id })
-                              }
+                              aria-label={translate(
+                                "pending.shelved.files.actions",
+                                { id: change.id },
+                              )}
                             >
                               <button
                                 type="button"
@@ -1852,7 +1852,9 @@ export function PendingPage({
                                 disabled={!!allShelfReason(change)}
                                 title={
                                   allShelfReason(change) ??
-                                  (translate("pending.move.all.shelved.from", { id: change.id }))
+                                  translate("pending.move.all.shelved.from", {
+                                    id: change.id,
+                                  })
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -1873,7 +1875,9 @@ export function PendingPage({
                                 disabled={!!allShelfReason(change)}
                                 title={
                                   allShelfReason(change) ??
-                                  (translate("pending.delete.all.shelved.in", { id: change.id }))
+                                  translate("pending.delete.all.shelved.in", {
+                                    id: change.id,
+                                  })
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation();

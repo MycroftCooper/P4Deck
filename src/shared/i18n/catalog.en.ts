@@ -534,6 +534,155 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.delete.profile": "Delete {name}",
+  "settings.showing.connections": "Showing {shown} of {total} connections",
+  "settings.resolving.root.for": "Resolving Root for {client}…",
+  "settings.verified.fingerprint.through.trusted":
+    "I verified the full fingerprint above for {server} through a trusted channel.",
+  "settings.field.charset": "Charset / P4CHARSET",
+  "settings.field.server": "Server",
+  "settings.field.user": "User",
+  "settings.field.client": "Workspace",
+  "settings.field.trustPath": "Trust file path",
+  "settings.field.ticketsPath": "Tickets file path",
+  "settings.field.swarmBaseUrl": "Swarm base URL (optional)",
+  "settings.field.executable": "P4 executable",
+  "settings.field.customSubmitExecutablePath": "Custom submit tool (optional)",
+  "settings.the.workspace.root.returned.by.the":
+    "The Workspace Root returned by the server is not usable on this machine.",
+  "settings.the.server.returned.no.exact.workspace":
+    "The server returned no exact Workspace match.",
+  "settings.swarm.url.must.be.an.http":
+    "Swarm URL must be an http(s) base URL without credentials, query, fragment, or control characters.",
+  "settings.connection.name.must.contain.1.128":
+    "Connection name must contain 1–128 non-control characters. Server, User, and Workspace are required; a blank name is generated automatically.",
+  "settings.a.saved.connection.with.the.same":
+    "A saved connection with the same settings already exists.",
+  "settings.profile.saved.p4.connection.settings.are":
+    "Profile saved. P4 connection settings are unchanged; verification is preserved.",
+  "settings.connection.saved.it.remains.not.tested":
+    "Connection saved. It remains Not tested; saving never pretends the connection is active.",
+  "settings.saved.connections.changed.concurrently.and.reload":
+    "Saved connections changed concurrently and reload failed. Retry later.",
+  "settings.p4.cli.found.use.verify.these":
+    "P4 CLI found. Use Verify these settings to check the connection; no server has been contacted.",
+  "settings.cli.detection.did.not.complete.retry":
+    "CLI detection did not complete. Retry.",
+  "settings.verifying.a.connection.requires.server.and":
+    "Verifying a connection requires Server and User. You can verify and complete Trust or login recovery before choosing a Workspace.",
+  "settings.browser.mock.validation.was.simulated.with":
+    "Browser Mock: validation was simulated with no real network connection. This does not activate the saved connection.",
+  "settings.the.active.connection.and.login.are":
+    "The active connection and login are verified. The file tree is ready.",
+  "settings.the.current.unsaved.settings.are.connected":
+    "The current unsaved settings are connected and authenticated. Validation does not save or switch the current connection.",
+  "settings.the.connection.check.did.not.complete":
+    "The connection check did not complete and was not treated as success.",
+  "settings.the.trust.result.was.not.proven":
+    "The trust result was not proven by the authoritative status. The card stays uncertain; refresh before retrying.",
+  "settings.the.trust.request.did.not.complete":
+    "The trust request did not complete. No other fingerprint was trusted.",
+  "settings.browser.mock.login.was.simulated.without":
+    "Browser Mock: login was simulated without contacting a real server.",
+  "settings.the.current.settings.are.authenticated.the":
+    "The current settings are authenticated; the password was cleared.",
+  "settings.login.was.not.proven.by.the":
+    "Login was not proven by the authoritative connection status; the password was cleared. Refresh before retrying.",
+  "settings.login.did.not.complete.the.password":
+    "Login did not complete; the password was cleared.",
+  "settings.browser.mock.logout.was.simulated.without":
+    "Browser Mock: logout was simulated without contacting a real server.",
+  "settings.the.user.for.the.current.settings":
+    "The user for the current settings was logged out.",
+  "settings.logout.was.not.proven.by.the":
+    "Logout was not proven by the authoritative status; the card stays uncertain.",
+  "settings.this.workspace.root.is.not.usable":
+    "This Workspace Root is not usable on this machine and cannot be selected.",
+  "settings.wait.for.the.current.connection.operation":
+    "Wait for the current connection operation.",
+  "settings.saving.requires.valid.server.user.workspace":
+    "Saving requires valid Server, User, Workspace, and an automatically resolved Workspace Root.",
+  "settings.saved.connections.contain.only.allowlisted.non":
+    "Saved connections contain only allowlisted, non-secret settings and credential-file paths. Passwords, ticket contents, and server fingerprints never enter saved connections, storage, URLs, or logs.",
+  "settings.browser.mock.is.explicitly.simulated.saving":
+    "Browser Mock is explicitly simulated: saving, validation, and switching only change mock state and never access a real network.",
+  "settings.search.name.server.user.or.workspace":
+    "Search name, server, user, or workspace…",
+  "settings.no.matching.saved.connections": "No matching saved connections.",
+  "settings.no.saved.connections.yet.create.one":
+    "No saved connections yet. Create one.",
+  "settings.changes.are.not.applied.validation.does":
+    "Changes are not applied; validation does not switch the current connection",
+  "settings.used.only.to.distinguish.saved.connections":
+    "Used only to distinguish saved connections. Leave blank to generate it from Server, User, and Workspace.",
+  "settings.choose.the.server.user.and.workspace":
+    "Choose the server, user, and workspace. The current connection is not switched until you save and explicitly connect.",
+  "settings.choose.or.enter.a.workspace.to":
+    "Choose or enter a Workspace to resolve its Root from the server automatically; no local path entry is needed.",
+  "settings.workspace.root.resolution.failed":
+    "Workspace Root resolution failed.",
+  "settings.saved.root.the.backend.rechecks.it":
+    "Saved Root; the backend rechecks it with the server on save or activation.",
+  "settings.resolved.exactly.from.the.current.draft":
+    "Resolved exactly from the current draft; saving rechecks it again.",
+  "settings.these.advanced.values.are.saved.with":
+    "These advanced values are saved with this connection. Workspace Root is always resolved automatically from the selected Workspace above.",
+  "settings.choose.an.exe.file.desktop.only":
+    "Choose an .exe file (desktop only)",
+  "settings.leave.the.custom.submit.tool.empty":
+    "Leave the custom submit tool empty for native submission. When configured, Submit CL starts the tool without fallback on failure. Saving never runs it. Working directory is the exe folder; environment is inherited. This version supports one tool session; exit does not confirm submission or release occupancy.",
+  "settings.the.swarm.url.only.builds.read":
+    "The Swarm URL only builds read-only web links. Swarm tokens, passwords, and login data are never stored.",
+  "settings.see.the.connection.status.card.below":
+    "See the connection status card below for recovery steps.",
+  "settings.there.are.unsaved.profile.changes.the":
+    "There are unsaved profile changes. The active P4 connection settings are unchanged and its verification remains valid.",
+  "settings.there.are.unsaved.changes.validation.and":
+    "There are unsaved changes. Validation and authentication target only these settings; after saving they still remain Not tested.",
+  "settings.first.check.for.an.existing.p4":
+    "First check for an existing P4 CLI. If missing, select P4 CLI on the official Perforce page, review the applicable terms and complete installation, then check again. Opening the page does not install it.",
+  "settings.official.perforce.downloads.p4.cli":
+    "Official Perforce downloads (P4 CLI)",
+  "settings.the.server.returned.no.verifiable.fingerprint":
+    "The server returned no verifiable fingerprint, so trust is blocked.",
+  "settings.p4.password.this.request.only": "P4 password (this request only)",
+  "settings.the.password.is.never.written.to":
+    "The password is never written to unsaved settings, saved connections, storage, URLs, history, or logs and is cleared immediately on submit.",
+  "settings.p4deck.will.not.pretend.a.normal":
+    "P4Deck will not pretend a normal password form can complete external authentication. Finish your organization's SSO/MFA flow, then verify these settings again.",
+  "settings.i.completed.external.authentication.check.status":
+    "I completed external authentication; check status",
+  "settings.deleting.the.current.connection.will.disconnect":
+    "Deleting the current connection will disconnect it and clear related views.",
+  "settings.this.removes.the.saved.connection.settings":
+    "This removes the saved connection settings only. Server workspaces and files are kept.",
+  "settings.p4charset": "P4CHARSET",
+  "settings.connectionError.invalidInput":
+    "A field is empty, too long, or contains invalid characters.",
+  "settings.connectionError.duplicateName":
+    "That connection name already exists. Use a unique name.",
+  "settings.connectionError.duplicateContext":
+    "A saved connection with the same settings already exists.",
+  "settings.connectionError.notFound":
+    "That saved connection or workspace no longer exists. Refresh and retry.",
+  "settings.connectionError.revisionConflict":
+    "Saved connections changed elsewhere. The list was reloaded; review your unsaved changes and retry.",
+  "settings.connectionError.activeProfileDelete":
+    "The current connection cannot be deleted. Connect to another saved connection first.",
+  "settings.connectionError.lastProfileDelete":
+    "The last saved connection cannot be deleted.",
+  "settings.connectionError.corruptStore":
+    "The connection store is corrupt and was left unchanged. Repair or restore connection.json.",
+  "settings.connectionError.unsupportedSchema":
+    "The connection store schema is unsupported and the file was left unchanged.",
+  "settings.connectionError.persistenceFailed":
+    "The connection store could not be written. Existing data is unchanged; check disk and permissions.",
+  "settings.connectionError.connectionFailed":
+    "Verification failed. The previous connection and page data were preserved.",
+  "settings.connectionError.authenticationRequired":
+    "The target connection is not authenticated. The current connection remains active.",
+  "settings.connectionError.contextChanged":
+    "The current connection changed during the operation. The latest connection was preserved.",
   "pending.submit.entire": "Submit entire {label}",
   "pending.submit.label": "Submit {label}",
   "pending.revert.all.opened.in": "Revert all opened files in {label}",
@@ -545,21 +694,26 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.expand.shelved.files": "Expand shelved files in CL {id}",
   "pending.collapse.shelved.files": "Collapse shelved files in CL {id}",
   "pending.shelved.files.actions": "All shelved file actions for CL {id}",
-  "pending.move.all.shelved.from": "Move all shelved files from CL {id} to a changelist",
+  "pending.move.all.shelved.from":
+    "Move all shelved files from CL {id} to a changelist",
   "pending.delete.all.shelved.in": "Delete all shelved content in CL {id}",
   "pending.showing.local.cache": "Showing the local cache.",
   "pending.no.local.cache": "No local cache is available yet.",
-  "pending.partial.results.counts": "Partial results: scanned {scanned}, matched {matched}.",
+  "pending.partial.results.counts":
+    "Partial results: scanned {scanned}, matched {matched}.",
   "pending.empty.cl.cannot.submit": "An empty CL cannot be submitted",
   "pending.mark.moved": "Moved",
   "pending.mark.not.moved": "Not moved",
   "pending.mark.unverified": "Unverified",
   "pending.mark.already.in.target": "Already in target",
   "pending.operation.in.progress": "Operation in progress",
-  "pending.shelf.scope.is.incomplete.refresh.before": "Shelf scope is incomplete; refresh before continuing",
+  "pending.shelf.scope.is.incomplete.refresh.before":
+    "Shelf scope is incomplete; refresh before continuing",
   "pending.no.shelved.files.available": "No shelved files available",
-  "pending.browser.mock.no.real.p4.server": " · Browser Mock; no real P4 server was accessed",
-  "pending.outcome.unconfirmed.existing.rows.kept.and": "Outcome unconfirmed; existing rows kept and refreshed from authority. Do not retry with a new id.",
+  "pending.browser.mock.no.real.p4.server":
+    " · Browser Mock; no real P4 server was accessed",
+  "pending.outcome.unconfirmed.existing.rows.kept.and":
+    "Outcome unconfirmed; existing rows kept and refreshed from authority. Do not retry with a new id.",
   "pending.delete.refresh.incomplete": "Delete refresh incomplete",
   "pending.changelist.delete.confirmed": "Changelist delete confirmed",
   "pending.checking.connection.and.login": "Checking connection and login",
@@ -567,24 +721,30 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.save.refresh.incomplete": "Save refresh incomplete",
   "pending.changelist.edit.confirmed": "Changelist edit confirmed",
   "pending.changelist.creation.confirmed": "Changelist creation confirmed",
-  "pending.filter.cached.cl.description.or.file": "Filter cached CL, description, or file path",
+  "pending.filter.cached.cl.description.or.file":
+    "Filter cached CL, description, or file path",
   "pending.filter.pending.changelists": "Filter pending changelists",
-  "pending.toggle.ascending.descending.cl.number": "Toggle ascending/descending CL number",
+  "pending.toggle.ascending.descending.cl.number":
+    "Toggle ascending/descending CL number",
   "pending.cl.ascending": "CL ↑ Ascending",
   "pending.cl.descending": "CL ↓ Descending",
-  "pending.your.login.has.expired.or.is": "Your login has expired or is required. Sign in again in connection settings, then refresh Pending.",
+  "pending.your.login.has.expired.or.is":
+    "Your login has expired or is required. Sign in again in connection settings, then refresh Pending.",
   "pending.connection.settings": "Connection settings",
   "pending.retry.connection": "Retry connection",
   "pending.connection.settings.2": "Connection settings",
-  "pending.local.grouping.preview.unconfirmed.files.need": "Local grouping preview; unconfirmed files need checking",
+  "pending.local.grouping.preview.unconfirmed.files.need":
+    "Local grouping preview; unconfirmed files need checking",
   "pending.file.status": "File status",
   "pending.new.cl.number.not.confirmed": "New CL, number not confirmed",
   "pending.delete.an.empty.numbered.cl": "Delete an empty numbered CL",
   "pending.open.cl.menu": "Open CL menu",
-  "pending.move.selection.changed.select.again": "Move selection changed; select again",
+  "pending.move.selection.changed.select.again":
+    "Move selection changed; select again",
   "pending.files.have.an.unresolved.move": "Files have an unresolved move",
   "pending.default.cannot.be.deleted": "Default cannot be deleted",
-  "pending.changelist.contains.files.shelves.or.jobs": "Changelist contains files, shelves or Jobs",
+  "pending.changelist.contains.files.shelves.or.jobs":
+    "Changelist contains files, shelves or Jobs",
   "pending.default.has.no.numbered.spec": "Default has no numbered spec",
   "pending.no.files.to.move": "No files to move",
 

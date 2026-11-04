@@ -10,7 +10,9 @@ export type MigrationStage =
 export interface ActionRegistration {
   adapters: readonly (keyof Backend)[];
   external: readonly string[];
+  /** Developer migration note. Never rendered; not user copy. */
   resource: string;
+  /** Developer migration note. Never rendered; not user copy. */
   confirmation: string;
   projection: "membership" | "versionedRemovalPending" | "intentOnly" | "none";
   stage: MigrationStage;

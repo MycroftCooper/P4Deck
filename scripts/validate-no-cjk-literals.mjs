@@ -40,6 +40,10 @@ const EXEMPT_FILES = [
   "src/shared/i18n/catalog.zh.ts",
   "src/shared/i18n/catalog.en.ts",
   "src/shared/i18n/i18n.test.ts",
+  // Developer-facing migration inventory (adapters/stage/state per action).
+  // Its resource/confirmation fields are notes for maintainers; nothing here
+  // is rendered, and the module is only read by tests.
+  "src/features/actions/registry.ts",
 ];
 
 /**

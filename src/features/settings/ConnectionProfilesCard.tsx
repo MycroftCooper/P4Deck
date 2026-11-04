@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import {
@@ -206,61 +206,61 @@ function localizedError(
   const parsed = profileError(cause);
   const copy: Partial<Record<ConnectionProfileErrorCode, [string, string]>> = {
     invalidInput: [
-      "字段为空、过长或包含非法字符。",
-      "A field is empty, too long, or contains invalid characters.",
+      "settings.connectionError.invalidInput",
+      "settings.connectionError.invalidInput",
     ],
     duplicateName: [
-      "连接名称已存在，请使用唯一名称。",
-      "That connection name already exists. Use a unique name.",
+      "settings.connectionError.duplicateName",
+      "settings.connectionError.duplicateName",
     ],
     duplicateContext: [
-      "相同参数的已保存连接已存在。",
-      "A saved connection with the same settings already exists.",
+      "settings.connectionError.duplicateContext",
+      "settings.connectionError.duplicateContext",
     ],
     notFound: [
-      "该已保存连接或 Workspace 已不存在，请刷新后重试。",
-      "That saved connection or workspace no longer exists. Refresh and retry.",
+      "settings.connectionError.notFound",
+      "settings.connectionError.notFound",
     ],
     revisionConflict: [
-      "已保存连接在其他位置被修改；列表已重新加载，请核对未保存修改后重试。",
-      "Saved connections changed elsewhere. The list was reloaded; review your unsaved changes and retry.",
+      "settings.connectionError.revisionConflict",
+      "settings.connectionError.revisionConflict",
     ],
     activeProfileDelete: [
-      "当前连接不能删除；请先连接到另一个已保存连接。",
-      "The current connection cannot be deleted. Connect to another saved connection first.",
+      "settings.connectionError.activeProfileDelete",
+      "settings.connectionError.activeProfileDelete",
     ],
     lastProfileDelete: [
-      "最后一个已保存连接不能删除。",
-      "The last saved connection cannot be deleted.",
+      "settings.connectionError.lastProfileDelete",
+      "settings.connectionError.lastProfileDelete",
     ],
     corruptStore: [
-      "连接存储已损坏且未被覆盖；请修复或恢复 connection.json。",
-      "The connection store is corrupt and was left unchanged. Repair or restore connection.json.",
+      "settings.connectionError.corruptStore",
+      "settings.connectionError.corruptStore",
     ],
     unsupportedSchema: [
-      "连接存储版本不受支持，文件未被覆盖。",
-      "The connection store schema is unsupported and the file was left unchanged.",
+      "settings.connectionError.unsupportedSchema",
+      "settings.connectionError.unsupportedSchema",
     ],
     persistenceFailed: [
-      "连接存储写入失败；原数据保持不变，请检查磁盘与权限。",
-      "The connection store could not be written. Existing data is unchanged; check disk and permissions.",
+      "settings.connectionError.persistenceFailed",
+      "settings.connectionError.persistenceFailed",
     ],
     connectionFailed: [
-      "验证失败，仍保留原连接和页面数据。",
-      "Verification failed. The previous connection and page data were preserved.",
+      "settings.connectionError.connectionFailed",
+      "settings.connectionError.connectionFailed",
     ],
     authenticationRequired: [
-      "目标连接尚未登录；当前连接保持不变。",
-      "The target connection is not authenticated. The current connection remains active.",
+      "settings.connectionError.authenticationRequired",
+      "settings.connectionError.authenticationRequired",
     ],
     contextChanged: [
-      "当前连接在操作期间已变化；已保留最新连接。",
-      "The current connection changed during the operation. The latest connection was preserved.",
+      "settings.connectionError.contextChanged",
+      "settings.connectionError.contextChanged",
     ],
   };
   const selected = parsed.code ? copy[parsed.code] : undefined;
   const base =
-    (selected && (zh ? selected[0] : selected[1])) ||
+    (selected && tFor(zh ? "zh-CN" : "en-US", selected[0] as MsgKey)) ||
     t("settings.the.operation.did.not.complete");
   // Surface the backend OS error (path/errno) for support; the localized text alone hides it.
   const detail = parsed.detail.trim().slice(0, 300);
@@ -374,25 +374,50 @@ export function ConnectionProfilesCard({
   const connectionValid = !!(current.server && current.user);
   const presentation = connectionPresentation(connection, zh);
   const connectionFields: ContextField[] = [
-    ["server", "服务器", "Server", "ssl:perforce:1666"],
-    ["user", "用户", "User", "username"],
-    ["client", "工作区", "Workspace", "workspace-name"],
+    [
+      "server",
+      "settings.field.server",
+      "settings.field.server",
+      "ssl:perforce:1666",
+    ],
+    ["user", "settings.field.user", "settings.field.user", "username"],
+    [
+      "client",
+      "settings.field.client",
+      "settings.field.client",
+      "workspace-name",
+    ],
   ];
   const p4Fields: ContextField[] = [
-    ["charset", "字符集 / P4CHARSET", "Charset / P4CHARSET", "utf8"],
-    ["trustPath", "Trust 文件路径", "Trust file path", "P4TRUST"],
-    ["ticketsPath", "Tickets 文件路径", "Tickets file path", "P4TICKETS"],
+    ["charset", "settings.field.charset", "settings.field.charset", "utf8"],
+    [
+      "trustPath",
+      "settings.field.trustPath",
+      "settings.field.trustPath",
+      "P4TRUST",
+    ],
+    [
+      "ticketsPath",
+      "settings.field.ticketsPath",
+      "settings.field.ticketsPath",
+      "P4TICKETS",
+    ],
     [
       "swarmBaseUrl",
-      "Swarm 基础 URL（可选）",
-      "Swarm base URL (optional)",
+      "settings.field.swarmBaseUrl",
+      "settings.field.swarmBaseUrl",
       "https://swarm.example/",
     ],
-    ["executable", "P4 可执行文件", "P4 executable", "p4 / p4.exe"],
+    [
+      "executable",
+      "settings.field.executable",
+      "settings.field.executable",
+      "p4 / p4.exe",
+    ],
     [
       "customSubmitExecutablePath",
-      "自定义提交工具（可选）",
-      "Custom submit tool (optional)",
+      "settings.field.customSubmitExecutablePath",
+      "settings.field.customSubmitExecutablePath",
       "C:\\Tools\\submit.exe",
     ],
   ];
@@ -573,14 +598,8 @@ export function ConnectionProfilesCard({
               identity,
               phase: "error",
               message: candidate
-                ? tr(
-                    "服务器返回的 Workspace Root 在本机不可用。",
-                    "The Workspace Root returned by the server is not usable on this machine.",
-                  )
-                : tr(
-                    "服务器未返回完全匹配的 Workspace。",
-                    "The server returned no exact Workspace match.",
-                  ),
+                ? t("settings.the.workspace.root.returned.by.the")
+                : t("settings.the.server.returned.no.exact.workspace"),
               simulated: result.simulated,
             });
             return;
@@ -684,16 +703,8 @@ export function ConnectionProfilesCard({
   }
 
   function clientValidation() {
-    if (!swarmUrlValid)
-      return tr(
-        "Swarm URL 必须是无凭据、query、fragment、控制字符的 http/https 基础地址。",
-        "Swarm URL must be an http(s) base URL without credentials, query, fragment, or control characters.",
-      );
-    if (!valid)
-      return tr(
-        "连接名称需为 1–128 个非控制字符；Server、User、Workspace 为必填。名称留空时会自动生成。",
-        "Connection name must contain 1–128 non-control characters. Server, User, and Workspace are required; a blank name is generated automatically.",
-      );
+    if (!swarmUrlValid) return t("settings.swarm.url.must.be.an.http");
+    if (!valid) return t("settings.connection.name.must.contain.1.128");
     const duplicate = profiles?.profiles.find(
       (profile) =>
         profile.id !== draft.id &&
@@ -703,10 +714,7 @@ export function ConnectionProfilesCard({
     );
     if (!duplicate) return "";
     return contextIdentity(duplicate.context) === contextIdentity(current)
-      ? tr(
-          "相同参数的已保存连接已存在。",
-          "A saved connection with the same settings already exists.",
-        )
+      ? t("settings.a.saved.connection.with.the.same")
       : t("settings.that.connection.name.already.exists");
   }
 
@@ -792,14 +800,8 @@ export function ConnectionProfilesCard({
       setTrustConfirmed(false);
       setNotice(
         status.state === "connected"
-          ? tr(
-              "连接配置已保存；实际连接参数未变，验证状态已保留。",
-              "Profile saved. P4 connection settings are unchanged; verification is preserved.",
-            )
-          : tr(
-              "连接已保存；状态仍为“尚未验证”，保存不会冒充已连接。",
-              "Connection saved. It remains Not tested; saving never pretends the connection is active.",
-            ),
+          ? t("settings.profile.saved.p4.connection.settings.are")
+          : t("settings.connection.saved.it.remains.not.tested"),
       );
       if (wasActive || document.activeProfileId === saved.id) {
         const nextRuntime = await backend.runtimeInfo();
@@ -817,10 +819,7 @@ export function ConnectionProfilesCard({
           await reloadProfiles(true);
         } catch {
           setError(
-            tr(
-              "已保存连接被并发修改，且重新加载失败；请稍后重试。",
-              "Saved connections changed concurrently and reload failed. Retry later.",
-            ),
+            t("settings.saved.connections.changed.concurrently.and.reload"),
           );
         }
       }
@@ -842,21 +841,10 @@ export function ConnectionProfilesCard({
         unavailable ?? notTestedStatus(current.server),
         result.version ?? cliVersion,
       );
-      if (!unavailable)
-        setNotice(
-          tr(
-            "已找到 P4 CLI。可点击“验证这些设置”验证连接；尚未访问服务器。",
-            "P4 CLI found. Use Verify these settings to check the connection; no server has been contacted.",
-          ),
-        );
+      if (!unavailable) setNotice(t("settings.p4.cli.found.use.verify.these"));
     } catch {
       if (isCurrent(token))
-        setError(
-          tr(
-            "CLI 检测未完成，请重试。",
-            "CLI detection did not complete. Retry.",
-          ),
-        );
+        setError(t("settings.cli.detection.did.not.complete.retry"));
     } finally {
       finish(token);
     }
@@ -864,12 +852,7 @@ export function ConnectionProfilesCard({
 
   async function testConnection() {
     if (!connectionValid) {
-      setError(
-        tr(
-          "验证连接需要 Server 和 User；可在选择 Workspace 之前验证并完成 Trust 或登录恢复。",
-          "Verifying a connection requires Server and User. You can verify and complete Trust or login recovery before choosing a Workspace.",
-        ),
-      );
+      setError(t("settings.verifying.a.connection.requires.server.and"));
       return;
     }
     const token = begin("test");
@@ -890,28 +873,14 @@ export function ConnectionProfilesCard({
       if (result.status.state === "connected")
         setNotice(
           runtime.mode === "mock"
-            ? tr(
-                "浏览器 Mock：仅模拟验证，未发起真实网络连接；此操作不会切换当前连接。",
-                "Browser Mock: validation was simulated with no real network connection. This does not activate the saved connection.",
-              )
+            ? t("settings.browser.mock.validation.was.simulated.with")
             : activeContextMatches
-              ? tr(
-                  "当前连接与登录已验证，文件树已可加载。",
-                  "The active connection and login are verified. The file tree is ready.",
-                )
-              : tr(
-                  "当前未保存设置的连接与登录已验证；验证不会保存或切换当前连接。",
-                  "The current unsaved settings are connected and authenticated. Validation does not save or switch the current connection.",
-                ),
+              ? t("settings.the.active.connection.and.login.are")
+              : t("settings.the.current.unsaved.settings.are.connected"),
         );
     } catch {
       if (isCurrent(token))
-        setError(
-          tr(
-            "连接验证请求未完成；未将该结果视为成功。",
-            "The connection check did not complete and was not treated as success.",
-          ),
-        );
+        setError(t("settings.the.connection.check.did.not.complete"));
     } finally {
       finish(token);
     }
@@ -942,12 +911,7 @@ export function ConnectionProfilesCard({
       if (!isCurrent(token)) return;
       settleConnectionControlIntent(operationId);
       if (connectionStatusVerdict("authTrust", trusted) !== "success") {
-        setError(
-          tr(
-            "Trust 结果未被权威状态证实；卡片刻意保持不确定，请刷新后再试。",
-            "The trust result was not proven by the authoritative status. The card stays uncertain; refresh before retrying.",
-          ),
-        );
+        setError(t("settings.the.trust.result.was.not.proven"));
         return;
       }
       if (trusted.state === "notTested") {
@@ -960,12 +924,7 @@ export function ConnectionProfilesCard({
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
-        setError(
-          tr(
-            "Trust 请求未完成；未信任其他指纹。",
-            "The trust request did not complete. No other fingerprint was trusted.",
-          ),
-        );
+        setError(t("settings.the.trust.request.did.not.complete"));
       }
     } finally {
       finish(token);
@@ -1004,31 +963,14 @@ export function ConnectionProfilesCard({
       if (connectionStatusVerdict("authLogin", status) === "success")
         setNotice(
           runtime.mode === "mock"
-            ? tr(
-                "浏览器 Mock：模拟登录完成，未访问真实服务器。",
-                "Browser Mock: login was simulated without contacting a real server.",
-              )
-            : tr(
-                "当前设置登录成功；密码已清空。",
-                "The current settings are authenticated; the password was cleared.",
-              ),
+            ? t("settings.browser.mock.login.was.simulated.without")
+            : t("settings.the.current.settings.are.authenticated.the"),
         );
-      else
-        setError(
-          tr(
-            "登录结果未被权威连接状态证实；密码已清空，请刷新后再试。",
-            "Login was not proven by the authoritative connection status; the password was cleared. Refresh before retrying.",
-          ),
-        );
+      else setError(t("settings.login.was.not.proven.by.the"));
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
-        setError(
-          tr(
-            "登录未完成；密码已清空。",
-            "Login did not complete; the password was cleared.",
-          ),
-        );
+        setError(t("settings.login.did.not.complete.the.password"));
       }
     } finally {
       finish(token);
@@ -1056,22 +998,10 @@ export function ConnectionProfilesCard({
       if (connectionStatusVerdict("authLogout", status) === "success")
         setNotice(
           runtime.mode === "mock"
-            ? tr(
-                "浏览器 Mock：模拟退出，未访问真实服务器。",
-                "Browser Mock: logout was simulated without contacting a real server.",
-              )
-            : tr(
-                "当前设置对应用户已退出。",
-                "The user for the current settings was logged out.",
-              ),
+            ? t("settings.browser.mock.logout.was.simulated.without")
+            : t("settings.the.user.for.the.current.settings"),
         );
-      else
-        setError(
-          tr(
-            "退出结果未被权威状态证实；卡片刻意保持不确定。",
-            "Logout was not proven by the authoritative status; the card stays uncertain.",
-          ),
-        );
+      else setError(t("settings.logout.was.not.proven.by.the"));
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
@@ -1143,12 +1073,7 @@ export function ConnectionProfilesCard({
       candidate.rootStatus !== "usable" ||
       !candidate.root.trim()
     ) {
-      setError(
-        tr(
-          "该 Workspace 的 Root 在当前机器上不可用，不能填入连接设置。",
-          "This Workspace Root is not usable on this machine and cannot be selected.",
-        ),
-      );
+      setError(t("settings.this.workspace.root.is.not.usable"));
       return;
     }
     generation.current += 1;
@@ -1289,20 +1214,14 @@ export function ConnectionProfilesCard({
   const sharedDisabledReason = loading
     ? t("settings.saved.connections.are.loading")
     : busy
-      ? tr(
-          "请等待当前连接操作完成。",
-          "Wait for the current connection operation.",
-        )
+      ? t("settings.wait.for.the.current.connection.operation")
       : "";
   const saveDisabledReason = sharedDisabledReason
     ? sharedDisabledReason
     : !dirty
       ? t("settings.there.are.no.changes.to")
       : !valid
-        ? tr(
-            "保存需要有效的 Server、User、Workspace 与自动解析的 Workspace Root。",
-            "Saving requires valid Server, User, Workspace, and an automatically resolved Workspace Root.",
-          )
+        ? t("settings.saving.requires.valid.server.user.workspace")
         : "";
   const verifyDisabledReason = sharedDisabledReason
     ? sharedDisabledReason
@@ -1321,18 +1240,10 @@ export function ConnectionProfilesCard({
         <Cable size={18} />
         {t("settings.saved.connections")}
       </h2>
-      <p>
-        {tr(
-          "已保存连接只包含后端允许的非敏感设置和凭证文件路径；密码、ticket 内容与服务器指纹不会进入已保存连接、Storage、URL 或日志。",
-          "Saved connections contain only allowlisted, non-secret settings and credential-file paths. Passwords, ticket contents, and server fingerprints never enter saved connections, storage, URLs, or logs.",
-        )}
-      </p>
+      <p>{t("settings.saved.connections.contain.only.allowlisted.non")}</p>
       {runtime.mode === "mock" && (
         <p className="settings-note settings-mock-disclosure">
-          {tr(
-            "浏览器 Mock 明确为 simulated：保存、验证和切换只改变模拟状态，不访问真实网络。",
-            "Browser Mock is explicitly simulated: saving, validation, and switching only change mock state and never access a real network.",
-          )}
+          {t("settings.browser.mock.is.explicitly.simulated.saving")}
         </p>
       )}
       <div className="profile-manager">
@@ -1346,10 +1257,7 @@ export function ConnectionProfilesCard({
               <input
                 aria-label={t("settings.search.saved.connections")}
                 value={profileSearch}
-                placeholder={tr(
-                  "搜索名称、服务器、用户或工作区…",
-                  "Search name, server, user, or workspace…",
-                )}
+                placeholder={t("settings.search.name.server.user.or.workspace")}
                 onChange={(event) => setProfileSearch(event.target.value)}
               />
             </label>
@@ -1391,9 +1299,12 @@ export function ConnectionProfilesCard({
                   <button
                     type="button"
                     className="profile-delete"
-                    aria-label={tr(
-                      `删除 ${profile.name}`,
-                      `Delete ${profile.name}`,
+                    aria-label={tFor(
+                      zh ? "zh-CN" : "en-US",
+                      "settings.delete.profile",
+                      {
+                        name: profile.name,
+                      },
                     )}
                     title={t("settings.delete.saved.connection")}
                     disabled={busy}
@@ -1411,22 +1322,16 @@ export function ConnectionProfilesCard({
             {!loading && !filteredProfiles.length && (
               <p role="status" className="profile-list-empty">
                 {profileSearch
-                  ? tr(
-                      "没有匹配的已保存连接。",
-                      "No matching saved connections.",
-                    )
-                  : tr(
-                      "尚无已保存连接，请新建。",
-                      "No saved connections yet. Create one.",
-                    )}
+                  ? t("settings.no.matching.saved.connections")
+                  : t("settings.no.saved.connections.yet.create.one")}
               </p>
             )}
           </div>
           <small className="profile-list-count">
-            {tr(
-              `显示 ${filteredProfiles.length} / ${profiles?.profiles.length ?? 0} 个连接`,
-              `Showing ${filteredProfiles.length} of ${profiles?.profiles.length ?? 0} connections`,
-            )}
+            {tFor(zh ? "zh-CN" : "en-US", "settings.showing.connections", {
+              shown: filteredProfiles.length,
+              total: profiles?.profiles.length ?? 0,
+            })}
           </small>
         </aside>
 
@@ -1441,10 +1346,7 @@ export function ConnectionProfilesCard({
               <span>
                 {isActive
                   ? t("settings.currently.in.use")
-                  : tr(
-                      "修改尚未应用；验证不会切换当前连接",
-                      "Changes are not applied; validation does not switch the current connection",
-                    )}
+                  : t("settings.changes.are.not.applied.validation.does")}
               </span>
             </div>
           </div>
@@ -1458,10 +1360,7 @@ export function ConnectionProfilesCard({
               <label className="profile-name-field profile-connection-name">
                 {t("settings.connection.name.optional")}
                 <input
-                  aria-label={tr(
-                    "连接名称（可选）",
-                    "Connection name (optional)",
-                  )}
+                  aria-label={t("settings.connection.name.optional")}
                   value={draft.name}
                   maxLength={128}
                   placeholder={
@@ -1478,10 +1377,7 @@ export function ConnectionProfilesCard({
                   }}
                 />
                 <small>
-                  {tr(
-                    "仅用于区分已保存连接；留空会根据 Server、User 和 Workspace 自动生成。",
-                    "Used only to distinguish saved connections. Leave blank to generate it from Server, User, and Workspace.",
-                  )}
+                  {t("settings.used.only.to.distinguish.saved.connections")}
                 </small>
               </label>
 
@@ -1492,20 +1388,18 @@ export function ConnectionProfilesCard({
                 <h3 id="connection-settings-heading">
                   {t("settings.connection.settings")}
                 </h3>
-                <p>
-                  {tr(
-                    "选择要连接的服务器、用户和工作区。保存或验证前不会切换当前连接。",
-                    "Choose the server, user, and workspace. The current connection is not switched until you save and explicitly connect.",
-                  )}
-                </p>
+                <p>{t("settings.choose.the.server.user.and.workspace")}</p>
                 <div className="settings-grid profile-fields">
                   {connectionFields.map(
-                    ([key, zhLabel, enLabel, placeholder]) => (
+                    ([key, zhLabel, _enLabel, placeholder]) => (
                       <div className="connection-field" key={key}>
                         <label>
-                          {zh ? zhLabel : enLabel}
+                          {tFor(zh ? "zh-CN" : "en-US", zhLabel as MsgKey)}
                           <input
-                            aria-label={zh ? zhLabel : enLabel}
+                            aria-label={tFor(
+                              zh ? "zh-CN" : "en-US",
+                              zhLabel as MsgKey,
+                            )}
                             value={draft.context[key] ?? ""}
                             placeholder={placeholder}
                             required
@@ -1544,29 +1438,24 @@ export function ConnectionProfilesCard({
                 >
                   <strong>Workspace Root</strong>
                   {!current.client ? (
-                    <span>
-                      {tr(
-                        "选择或填写 Workspace 后自动从服务器解析；无需手填本地路径。",
-                        "Choose or enter a Workspace to resolve its Root from the server automatically; no local path entry is needed.",
-                      )}
-                    </span>
+                    <span>{t("settings.choose.or.enter.a.workspace.to")}</span>
                   ) : rootResolution.phase === "resolving" ||
                     rootResolution.phase === "hint" ||
                     rootResolution.phase === "idle" ? (
                     <span>
-                      {tr(
-                        `正在解析 ${current.client} 的 Root…`,
-                        `Resolving Root for ${current.client}…`,
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.resolving.root.for",
+                        {
+                          client: current.client,
+                        },
                       )}
                     </span>
                   ) : rootResolution.phase === "error" ? (
                     <>
                       <span>
                         {rootResolution.message ||
-                          tr(
-                            "Workspace Root 解析失败。",
-                            "Workspace Root resolution failed.",
-                          )}
+                          t("settings.workspace.root.resolution.failed")}
                       </span>
                       <button
                         type="button"
@@ -1587,13 +1476,9 @@ export function ConnectionProfilesCard({
                       <code>{rootResolution.root || current.cwd}</code>
                       <span>
                         {rootResolution.phase === "saved"
-                          ? tr(
-                              "已保存的 Root；保存或激活时后端会再次向服务器核对。",
-                              "Saved Root; the backend rechecks it with the server on save or activation.",
-                            )
-                          : tr(
-                              "已按当前草稿从服务器精确解析；保存时仍会再次核对。",
-                              "Resolved exactly from the current draft; saving rechecks it again.",
+                          ? t("settings.saved.root.the.backend.rechecks.it")
+                          : t(
+                              "settings.resolved.exactly.from.the.current.draft",
                             )}
                         {rootResolution.simulated
                           ? " · Browser Mock simulated"
@@ -1609,19 +1494,17 @@ export function ConnectionProfilesCard({
                 aria-labelledby="p4-settings-heading"
               >
                 <h3 id="p4-settings-heading">{t("settings.p4.settings")}</h3>
-                <p>
-                  {tr(
-                    "这些高级值随当前已保存连接保存。Workspace Root 始终由上方所选 Workspace 自动解析。",
-                    "These advanced values are saved with this connection. Workspace Root is always resolved automatically from the selected Workspace above.",
-                  )}
-                </p>
+                <p>{t("settings.these.advanced.values.are.saved.with")}</p>
                 <div className="settings-grid profile-fields">
-                  {p4Fields.map(([key, zhLabel, enLabel, placeholder]) => (
+                  {p4Fields.map(([key, zhLabel, _enLabel, placeholder]) => (
                     <div className="connection-field" key={key}>
                       <label>
-                        {zh ? zhLabel : enLabel}
+                        {tFor(zh ? "zh-CN" : "en-US", zhLabel as MsgKey)}
                         <input
-                          aria-label={zh ? zhLabel : enLabel}
+                          aria-label={tFor(
+                            zh ? "zh-CN" : "en-US",
+                            zhLabel as MsgKey,
+                          )}
                           value={draft.context[key] ?? ""}
                           placeholder={placeholder}
                           spellCheck={false}
@@ -1638,9 +1521,8 @@ export function ConnectionProfilesCard({
                               type="button"
                               className="secondary"
                               disabled={busy || loading}
-                              title={tr(
-                                "选择 .exe 文件（仅桌面版）",
-                                "Choose an .exe file (desktop only)",
+                              title={t(
+                                "settings.choose.an.exe.file.desktop.only",
                               )}
                               onClick={() => void chooseExecutableFile(key)}
                             >
@@ -1652,16 +1534,10 @@ export function ConnectionProfilesCard({
                   ))}
                 </div>
                 <p className="settings-field-note">
-                  {tr(
-                    "自定义提交工具留空时使用普通提交；配置后，原“提交 CL”按钮启动工具，失败不会回退。保存不会试运行。工作目录使用 exe 所在目录，继承应用环境；首版仅支持一次工具会话，退出不等于提交成功，也不会自动解除占用。",
-                    "Leave the custom submit tool empty for native submission. When configured, Submit CL starts the tool without fallback on failure. Saving never runs it. Working directory is the exe folder; environment is inherited. This version supports one tool session; exit does not confirm submission or release occupancy.",
-                  )}
+                  {t("settings.leave.the.custom.submit.tool.empty")}
                 </p>
                 <p className="settings-field-note">
-                  {tr(
-                    "Swarm URL 仅用于生成只读网页链接；不会保存 Swarm token、密码或登录信息。",
-                    "The Swarm URL only builds read-only web links. Swarm tokens, passwords, and login data are never stored.",
-                  )}
+                  {t("settings.the.swarm.url.only.builds.read")}
                 </p>
               </section>
               <div className="settings-actions">
@@ -1733,10 +1609,7 @@ export function ConnectionProfilesCard({
               <p role="alert" className="connection-action-failure">
                 <strong>{presentation.title}</strong> — {presentation.detail}{" "}
                 <span>
-                  {tr(
-                    "详细恢复操作见下方连接状态卡片。",
-                    "See the connection status card below for recovery steps.",
-                  )}
+                  {t("settings.see.the.connection.status.card.below")}
                 </span>
               </p>
             )}
@@ -1751,14 +1624,8 @@ export function ConnectionProfilesCard({
           {dirty && (
             <p role="status" className="settings-unsaved-note">
               {activeContextMatches
-                ? tr(
-                    "有未保存的配置修改；当前使用的连接参数未变，验证状态仍有效。",
-                    "There are unsaved profile changes. The active P4 connection settings are unchanged and its verification remains valid.",
-                  )
-                : tr(
-                    "有未保存修改。验证和认证只针对这些设置；保存后状态仍为“尚未验证”。",
-                    "There are unsaved changes. Validation and authentication target only these settings; after saving they still remain Not tested.",
-                  )}
+                ? t("settings.there.are.unsaved.profile.changes.the")
+                : t("settings.there.are.unsaved.changes.validation.and")}
             </p>
           )}
 
@@ -1781,21 +1648,13 @@ export function ConnectionProfilesCard({
             <p>{presentation.detail}</p>
             {connection.state === "cliMissing" && (
               <div className="connection-recovery-panel">
-                <p>
-                  {tr(
-                    "先重新检测已有的 P4 CLI。若未安装，请从 Perforce 官方页面选择 P4 CLI，自行确认适用条款并完成安装，再重新检测。打开下载页不会自动安装。",
-                    "First check for an existing P4 CLI. If missing, select P4 CLI on the official Perforce page, review the applicable terms and complete installation, then check again. Opening the page does not install it.",
-                  )}
-                </p>
+                <p>{t("settings.first.check.for.an.existing.p4")}</p>
                 <a
                   href="https://www.perforce.com/downloads"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {tr(
-                    "Perforce 官方下载（P4 CLI）",
-                    "Official Perforce downloads (P4 CLI)",
-                  )}
+                  {t("settings.official.perforce.downloads.p4.cli")}
                 </a>
                 <button
                   type="button"
@@ -1840,9 +1699,12 @@ export function ConnectionProfilesCard({
                         }
                       />
                       <span>
-                        {tr(
-                          `我已通过可信渠道核对 ${connection.server} 的上述完整指纹。`,
-                          `I verified the full fingerprint above for ${connection.server} through a trusted channel.`,
+                        {tFor(
+                          zh ? "zh-CN" : "en-US",
+                          "settings.verified.fingerprint.through.trusted",
+                          {
+                            server: connection.server,
+                          },
                         )}
                       </span>
                     </label>
@@ -1860,9 +1722,8 @@ export function ConnectionProfilesCard({
                   </>
                 ) : (
                   <p role="alert">
-                    {tr(
-                      "服务器未返回可核对指纹，不能执行 Trust。",
-                      "The server returned no verifiable fingerprint, so trust is blocked.",
+                    {t(
+                      "settings.the.server.returned.no.verifiable.fingerprint",
                     )}
                   </p>
                 )}
@@ -1878,12 +1739,7 @@ export function ConnectionProfilesCard({
                 }}
               >
                 <label>
-                  <span>
-                    {tr(
-                      "P4 密码（仅用于本次请求）",
-                      "P4 password (this request only)",
-                    )}
-                  </span>
+                  <span>{t("settings.p4.password.this.request.only")}</span>
                   <span className="connection-password-field">
                     <KeyRound size={15} aria-hidden="true" />
                     <input
@@ -1896,12 +1752,7 @@ export function ConnectionProfilesCard({
                     />
                   </span>
                 </label>
-                <p>
-                  {tr(
-                    "密码不写入未保存设置、已保存连接、Storage、URL、历史或日志；提交后立即清空。",
-                    "The password is never written to unsaved settings, saved connections, storage, URLs, history, or logs and is cleared immediately on submit.",
-                  )}
-                </p>
+                <p>{t("settings.the.password.is.never.written.to")}</p>
                 <button
                   type="submit"
                   className="primary"
@@ -1919,12 +1770,7 @@ export function ConnectionProfilesCard({
 
             {connection.state === "externalAuthRequired" && (
               <div className="connection-recovery-panel">
-                <p>
-                  {tr(
-                    "P4Deck 不会用普通密码框伪装完成外部认证。请完成组织的 SSO/MFA 后，再验证这些设置。",
-                    "P4Deck will not pretend a normal password form can complete external authentication. Finish your organization's SSO/MFA flow, then verify these settings again.",
-                  )}
-                </p>
+                <p>{t("settings.p4deck.will.not.pretend.a.normal")}</p>
                 <button
                   type="button"
                   className="secondary"
@@ -1932,9 +1778,8 @@ export function ConnectionProfilesCard({
                   onClick={() => void testConnection()}
                 >
                   <RefreshCw size={14} />
-                  {tr(
-                    "我已完成外部认证，检查状态",
-                    "I completed external authentication; check status",
+                  {t(
+                    "settings.i.completed.external.authentication.check.status",
                   )}
                 </button>
               </div>
@@ -1962,10 +1807,7 @@ export function ConnectionProfilesCard({
           title={t("settings.delete.this.saved.connection")}
           description={
             profiles.activeProfileId === deleteId
-              ? tr(
-                  "删除当前连接后会断开连接并清空相关视图。",
-                  "Deleting the current connection will disconnect it and clear related views.",
-                )
+              ? t("settings.deleting.the.current.connection.will.disconnect")
               : t("settings.delete.this.saved.connection.2")
           }
           source={deleteSource.current}
@@ -1998,12 +1840,7 @@ export function ConnectionProfilesCard({
           <strong>
             {profiles.profiles.find((profile) => profile.id === deleteId)?.name}
           </strong>
-          <p>
-            {tr(
-              "只删除本机保存的连接配置，不删除服务器上的 Workspace 或文件。",
-              "This removes the saved connection settings only. Server workspaces and files are kept.",
-            )}
-          </p>
+          <p>{t("settings.this.removes.the.saved.connection.settings")}</p>
           {error && <DialogNotice error>{error}</DialogNotice>}
         </Dialog>
       )}
