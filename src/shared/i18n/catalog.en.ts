@@ -534,6 +534,36 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "browse.unsupported.mapping.rule": "Unsupported mapping rule",
+  "browse.unsupported.wildcard.mapping": "Unsupported wildcard mapping",
+  "browse.file.excluded.by.mapping": "File excluded by mapping",
+  "browse.mapping.is.not.a.single.file": "Mapping is not a single file",
+  "browse.ambiguous.target": "Ambiguous target",
+  "browse.no.matching.mapping": "No matching mapping",
+  "browse.invalid.roots.or.file.outside.source":
+    "Invalid roots or file outside source",
+  "browse.not.a.single.file.path": "Not a single file path",
+  "browse.cancelled": "Cancelled",
+  "browse.query.budget.reached": "Query budget reached",
+  "browse.insufficient.evidence": "Insufficient evidence",
+  "browse.not.queried.budget.or.100.file":
+    "Not queried: budget or 100-file limit",
+  "browse.missing.exact.revision": "Missing exact revision",
+  "browse.source.equals.target": "Source equals target",
+  "browse.integration.records.content.inclusion.remains.unknown":
+    "Integration records; content inclusion remains unknown",
+  "browse.no.path.in.inspected.range.absence":
+    "No path in inspected range; absence is not proven",
+  "contextMenu.selected": "selected",
+  "contextMenu.folders": "folders",
+  "contextMenu.entire.configured.workspace": "Entire configured workspace",
+  "contextMenu.workspace.mapping.scope.not.verified":
+    "Workspace mapping scope not verified",
+  "contextMenu.some.targets.have.no.such.path":
+    "Some targets have no such path",
+  "contextMenu.target.path.is.unknown": "Target path is unknown",
+  "contextMenu.no.workspace.mapping": "No workspace mapping",
+  "contextMenu.no.depot.path": "No depot path",
   "files.conflict.inspection.timed.out.after.30":
     "Conflict inspection timed out after 30 seconds. Retry or check the connection.",
   "files.connection.or.resolve.scope.changed.inspect":

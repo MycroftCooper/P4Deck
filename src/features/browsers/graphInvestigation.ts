@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type {
   BranchViewLine,
   RevisionGraph,
@@ -29,13 +30,13 @@ export function mapBranchFile(
       !to ||
       !["map", "exclude"].includes(line.modifier)
     )
-      return { reason: "复杂或未知映射规则 / Unsupported mapping rule" };
+      return { reason: t("browse.unsupported.mapping.rule") };
     const prefix = from.endsWith("/...") && to.endsWith("/...");
     if (
       (!prefix && (from.includes("...") || to.includes("..."))) ||
       /[*%@#]/.test(from + to)
     )
-      return { reason: "不支持的通配映射 / Unsupported wildcard mapping" };
+      return { reason: t("browse.unsupported.wildcard.mapping") };
     const suffix =
       prefix && path.startsWith(from.slice(0, -3))
         ? path.slice(from.length - 3)
@@ -44,18 +45,18 @@ export function mapBranchFile(
           : undefined;
     if (suffix === undefined) continue;
     if (line.modifier === "exclude")
-      return { reason: "文件被映射排除 / File excluded by mapping" };
+      return { reason: t("browse.file.excluded.by.mapping") };
     const target = prefix ? to.slice(0, -3) + suffix : to;
     if (!validGraphPath(target))
-      return { reason: "映射结果不是单文件 / Mapping is not a single file" };
+      return { reason: t("browse.mapping.is.not.a.single.file") };
     candidates.add(target);
   }
   return candidates.size === 1
     ? { target: [...candidates][0] }
     : {
         reason: candidates.size
-          ? "映射目标不唯一 / Ambiguous target"
-          : "未匹配映射 / No matching mapping",
+          ? t("browse.ambiguous.target")
+          : t("browse.no.matching.mapping"),
       };
 }
 export function mapBranchRoots(
@@ -72,13 +73,12 @@ export function mapBranchRoots(
     !path.startsWith(source + "/")
   )
     return {
-      reason:
-        "源/目标根目录无效或文件不在源下 / Invalid roots or file outside source",
+      reason: t("browse.invalid.roots.or.file.outside.source"),
     };
   const mapped = target + path.slice(source.length);
   return validGraphPath(mapped)
     ? { target: mapped }
-    : { reason: "不是单个文件路径 / Not a single file path" };
+    : { reason: t("browse.not.a.single.file.path") };
 }
 export interface InvestigationRow {
   file: SubmittedChangeFile;
@@ -110,9 +110,9 @@ export function takeInvestigationRead(
   budget: InvestigationBudget,
   signal: AbortSignal,
 ) {
-  if (signal.aborted) throw new Error("已取消 / Cancelled");
+  if (signal.aborted) throw new Error(t("browse.cancelled"));
   if (budget.used >= budget.limit)
-    throw new Error("达到查询预算 / Query budget reached");
+    throw new Error(t("browse.query.budget.reached"));
   budget.used++;
 }
 const blank = (): RevisionGraph => ({
@@ -160,7 +160,7 @@ export async function investigateFiles(
     const row: InvestigationRow = {
       file,
       status: "unknown",
-      reason: "当前证据不足 / Insufficient evidence",
+      reason: t("browse.insufficient.evidence"),
     };
     report.rows.push(row);
     if (
@@ -169,8 +169,8 @@ export async function investigateFiles(
       report.rows.length > 100
     ) {
       row.reason = options.signal.aborted
-        ? "已取消 / Cancelled"
-        : "未查询：达到预算或100文件上限 / Not queried: budget or 100-file limit";
+        ? t("browse.cancelled")
+        : t("browse.not.queried.budget.or.100.file");
       report.interrupted ||= options.signal.aborted;
       report.limited ||= !options.signal.aborted;
       continue;
@@ -183,11 +183,11 @@ export async function investigateFiles(
       file.revision! < 1 ||
       !validGraphPath(file.depotPath)
     ) {
-      row.reason = mapping.reason ?? "缺少精确版本 / Missing exact revision";
+      row.reason = mapping.reason ?? t("browse.missing.exact.revision");
       continue;
     }
     if (mapping.target === file.depotPath) {
-      row.reason = "来源与目标相同 / Source equals target";
+      row.reason = t("browse.source.equals.target");
       continue;
     }
     // Seed is actual describe/filelog metadata, not an inferred server revision.
@@ -214,7 +214,7 @@ export async function investigateFiles(
       for (let page = 0; page < maxPages; page++) {
         takeInvestigationRead(options.budget, options.signal);
         const result = await read(path, cursor);
-        if (options.signal.aborted) throw new Error("已取消 / Cancelled");
+        if (options.signal.aborted) throw new Error(t("browse.cancelled"));
         row.updatedAt =
           row.updatedAt === undefined
             ? result.updatedAt
@@ -280,8 +280,8 @@ export async function investigateFiles(
           : "records"
         : "unknown";
       row.reason = result.edges.length
-        ? "存在集成记录；内容包含性仍未知 / Integration records; content inclusion remains unknown"
-        : "已查范围未发现路径，不代表未合入 / No path in inspected range; absence is not proven";
+        ? t("browse.integration.records.content.inclusion.remains.unknown")
+        : t("browse.no.path.in.inspected.range.absence");
       row.evidence = result;
       row.graph = graph;
       row.sourceId = seed.id;

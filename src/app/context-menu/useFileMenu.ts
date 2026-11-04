@@ -1,3 +1,4 @@
+import { t as translate } from "../../shared/i18n";
 import { copyFieldFor, isCopyMenu } from "./copyMenu";
 import { fileMenuCommands } from "./fileMenuCommands";
 import { useContext } from "react";
@@ -68,7 +69,7 @@ export function useFileMenu() {
         nodes: resolved,
         scopeLabel:
           object === "F05"
-            ? "整个工作区（配置根目录） / Entire configured workspace"
+            ? translate("contextMenu.entire.configured.workspace")
             : undefined,
         ...(options.wholeChangelistId !== undefined
           ? { wholeChangelistId: options.wholeChangelistId }
@@ -99,15 +100,18 @@ export function useFileMenu() {
           )
         )
           bindings[item.label] = {
-            reason:
-              "尚未确认此 Depot 在当前工作区的映射范围 / Workspace mapping scope not verified",
+            reason: translate(
+              "contextMenu.workspace.mapping.scope.not.verified",
+            ),
           };
         if (isCopyMenu(item.label)) {
           const field = copyFieldFor(item.label);
           const values = resolved.map((n) => n[field]);
           bindings[item.label] = values.every(Boolean)
             ? copy(values.join("\n"))
-            : { reason: "部分目标没有此路径 / Some targets have no such path" };
+            : {
+                reason: translate("contextMenu.some.targets.have.no.such.path"),
+              };
         }
       }
       for (const label of ["刷新状态", "刷新目录", "刷新"])
@@ -134,11 +138,13 @@ export function useFileMenu() {
           () => env.navigate(node),
           node.absolutePath || node.depotPath
             ? undefined
-            : "目标路径尚未确定 / Target path is unknown",
+            : translate("contextMenu.target.path.is.unknown"),
         );
       bindings["在工作区中定位"] = action(
         () => env.navigate(node),
-        node.absolutePath ? undefined : "尚无工作区映射 / No workspace mapping",
+        node.absolutePath
+          ? undefined
+          : translate("contextMenu.no.workspace.mapping"),
       );
       bindings["在 Depot 中定位"] = action(
         () =>
@@ -147,7 +153,7 @@ export function useFileMenu() {
             absolutePath: "",
             relativePath: node.depotPath!,
           }),
-        node.depotPath ? undefined : "没有 Depot 路径 / No depot path",
+        node.depotPath ? undefined : translate("contextMenu.no.depot.path"),
       );
       for (const label of ["在此目录搜索", "在工作区中搜索", "在此 Depot 搜索"])
         bindings[label] = action(
@@ -176,7 +182,7 @@ export function useFileMenu() {
       {
         title:
           nodes.length > 1
-            ? `${nodes.length} ${env.preferences.zh ? "项已选择" : "selected"} · ${nodes.filter((n) => n.kind === "file").length} ${env.preferences.zh ? "文件" : "files"} / ${nodes.filter((n) => n.kind === "directory").length} ${env.preferences.zh ? "目录" : "folders"}`
+            ? `${nodes.length} ${translate("contextMenu.selected")} · ${nodes.filter((n) => n.kind === "file").length} ${translate("contextMenu.files")} / ${nodes.filter((n) => n.kind === "directory").length} ${translate("contextMenu.folders")}`
             : primary.name,
         onOpen: options.onOpen,
         resolve: async () => {

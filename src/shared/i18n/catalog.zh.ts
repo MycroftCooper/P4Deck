@@ -496,6 +496,34 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "browse.unsupported.mapping.rule": "复杂或未知映射规则",
+  "browse.unsupported.wildcard.mapping": "不支持的通配映射",
+  "browse.file.excluded.by.mapping": "文件被映射排除",
+  "browse.mapping.is.not.a.single.file": "映射结果不是单文件",
+  "browse.ambiguous.target": "映射目标不唯一",
+  "browse.no.matching.mapping": "未匹配映射",
+  "browse.invalid.roots.or.file.outside.source":
+    "源/目标根目录无效或文件不在源下",
+  "browse.not.a.single.file.path": "不是单个文件路径",
+  "browse.cancelled": "已取消",
+  "browse.query.budget.reached": "达到查询预算",
+  "browse.insufficient.evidence": "当前证据不足",
+  "browse.not.queried.budget.or.100.file": "未查询：达到预算或100文件上限",
+  "browse.missing.exact.revision": "缺少精确版本",
+  "browse.source.equals.target": "来源与目标相同",
+  "browse.integration.records.content.inclusion.remains.unknown":
+    "存在集成记录；内容包含性仍未知",
+  "browse.no.path.in.inspected.range.absence":
+    "已查范围未发现路径，不代表未合入",
+  "contextMenu.selected": "项已选择",
+  "contextMenu.folders": "目录",
+  "contextMenu.entire.configured.workspace": "整个工作区（配置根目录）",
+  "contextMenu.workspace.mapping.scope.not.verified":
+    "尚未确认此 Depot 在当前工作区的映射范围",
+  "contextMenu.some.targets.have.no.such.path": "部分目标没有此路径",
+  "contextMenu.target.path.is.unknown": "目标路径尚未确定",
+  "contextMenu.no.workspace.mapping": "尚无工作区映射",
+  "contextMenu.no.depot.path": "没有 Depot 路径",
   "files.conflict.inspection.timed.out.after.30":
     "读取冲突超时（30 秒）。请重试或检查连接。",
   "files.connection.or.resolve.scope.changed.inspect":
