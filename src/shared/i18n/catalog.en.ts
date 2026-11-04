@@ -534,6 +534,23 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.title": "Submitted filters",
+  "pending.mock":
+    "Mock data · this query does not access a real P4 Server or network",
+  "pending.keyword": "Keyword",
+  "pending.users": "User",
+  "pending.depotPath": "Depot Path",
+  "pending.from": "Start time",
+  "pending.to": "End time",
+  "pending.reset": "Reset to default filter",
+  "pending.saved": "Saved filters",
+  "pending.none": "None selected",
+  "pending.name": "Filter name",
+  "pending.remove": "Delete",
+  "pending.confirmOverwrite": "A filter with this name exists. Overwrite it?",
+  "pending.confirmDelete": "Delete this saved filter?",
+  "pending.confirm": "Confirm",
+  "pending.required": "Enter a name between 1 and 80 characters.",
   "files.add.2": "Open for add",
   "files.edit": "Open for edit",
   "files.delete.2": "Open for delete",

@@ -1,3 +1,4 @@
+import { tFor, type MsgKey } from "../../../shared/i18n";
 import { useState, type ReactNode } from "react";
 import { Bookmark, ChevronDown, RotateCcw, Save, Trash2 } from "lucide-react";
 import type {
@@ -33,49 +34,28 @@ export function SubmittedFilterPanel(props: Props) {
   const [confirmation, setConfirmation] = useState<
     { type: "overwrite" | "delete"; id: string } | undefined
   >();
-  const text = props.zh
-    ? {
-        title: "已提交组合筛选",
-        mock: "模拟数据 · 查询不会访问真实 P4 Server 或网络",
-
-        keyword: "关键词",
-        users: "用户",
-        depotPath: "Depot Path",
-        from: "起始时间",
-        to: "结束时间",
-        reset: "重置为默认过滤器",
-        saved: "保存的过滤器",
-        none: "未选择",
-        name: "过滤器名称",
-        save: "保存",
-        remove: "删除",
-        confirmOverwrite: "同名过滤器已存在。确认覆盖？",
-        confirmDelete: "确认删除此过滤器？",
-        confirm: "确认",
-        cancel: "取消",
-        required: "请输入 1–80 字符的名称。",
-      }
-    : {
-        title: "Submitted filters",
-        mock: "Mock data · this query does not access a real P4 Server or network",
-
-        keyword: "Keyword",
-        users: "User",
-        depotPath: "Depot Path",
-        from: "Start time",
-        to: "End time",
-        reset: "Reset to default filter",
-        saved: "Saved filters",
-        none: "None selected",
-        name: "Filter name",
-        save: "Save",
-        remove: "Delete",
-        confirmOverwrite: "A filter with this name exists. Overwrite it?",
-        confirmDelete: "Delete this saved filter?",
-        confirm: "Confirm",
-        cancel: "Cancel",
-        required: "Enter a name between 1 and 80 characters.",
-      };
+  // Every entry is a catalog key; resolve with tr() before rendering.
+  const text = {
+    title: "pending.title",
+    mock: "pending.mock",
+    keyword: "pending.keyword",
+    users: "pending.users",
+    depotPath: "pending.depotPath",
+    from: "pending.from",
+    to: "pending.to",
+    reset: "pending.reset",
+    saved: "pending.saved",
+    none: "pending.none",
+    name: "pending.name",
+    save: "pending.save",
+    remove: "pending.remove",
+    confirmOverwrite: "pending.confirmOverwrite",
+    confirmDelete: "pending.confirmDelete",
+    confirm: "pending.confirm",
+    cancel: "pending.cancel",
+    required: "pending.required",
+  };
+  const tr = (key: string) => tFor(props.zh ? "zh-CN" : "en-US", key as MsgKey);
 
   const update = <K extends keyof SubmittedFilterDraft>(
     key: K,
@@ -86,7 +66,7 @@ export function SubmittedFilterPanel(props: Props) {
   function persistFilter(existingId?: string) {
     const normalized = name.trim();
     if (!normalized || normalized.length > 80) {
-      setNameError(text.required);
+      setNameError(tr(text.required));
       return;
     }
     const id = existingId ?? crypto.randomUUID();
@@ -110,7 +90,7 @@ export function SubmittedFilterPanel(props: Props) {
   function requestSave() {
     const normalized = name.trim();
     if (!normalized || normalized.length > 80) {
-      setNameError(text.required);
+      setNameError(tr(text.required));
       return;
     }
     const existing = props.savedFilters.find(
@@ -166,16 +146,16 @@ export function SubmittedFilterPanel(props: Props) {
 
   return (
     <details className="submitted-filters" open>
-      <summary>{text.title}</summary>
+      <summary>{tr(text.title)}</summary>
       <div className="submitted-filter-body">
         {props.mock ? (
           <p className="submitted-mock-notice" role="note">
-            {text.mock}
+            {tr(text.mock)}
           </p>
         ) : null}
         <div className="submitted-filter-grid">
           {props.typeControl}
-          {field("keyword", text.keyword)}
+          {field("keyword", tr(text.keyword))}
           <div className="submitted-filter-field">
             <span>{props.zh ? "标签" : "Tags"}</span>
             <details className="submitted-stream-picker">
@@ -245,9 +225,9 @@ export function SubmittedFilterPanel(props: Props) {
               </div>
             </details>
           </div>
-          {field("users", text.users)}
+          {field("users", tr(text.users))}
           <div className="submitted-scope-row">
-            {field("depotPath", text.depotPath, "//depot/main/...")}
+            {field("depotPath", tr(text.depotPath), "//depot/main/...")}
             <div className="submitted-filter-field">
               <span>Stream</span>
               <details
@@ -361,7 +341,7 @@ export function SubmittedFilterPanel(props: Props) {
           </div>
           <div className="submitted-date-range">
             <label className="submitted-filter-field">
-              <span>{text.from}</span>
+              <span>{tr(text.from)}</span>
               <input
                 type="datetime-local"
                 value={props.draft.from}
@@ -378,7 +358,7 @@ export function SubmittedFilterPanel(props: Props) {
               ) : null}
             </label>
             <label className="submitted-filter-field">
-              <span>{text.to}</span>
+              <span>{tr(text.to)}</span>
               <input
                 type="datetime-local"
                 value={props.draft.to}
@@ -396,11 +376,11 @@ export function SubmittedFilterPanel(props: Props) {
             </label>
           </div>
         </div>
-        <div className="submitted-saved-filters" aria-label={text.saved}>
+        <div className="submitted-saved-filters" aria-label={tr(text.saved)}>
           <div className="submitted-preset-group">
             <Bookmark size={16} aria-hidden="true" />
             <select
-              aria-label={text.saved}
+              aria-label={tr(text.saved)}
               value={
                 props.defaultSelected
                   ? "builtin:mine"
@@ -429,7 +409,7 @@ export function SubmittedFilterPanel(props: Props) {
                 }
               }}
             >
-              <option value="">{text.none}</option>
+              <option value="">{tr(text.none)}</option>
               <option value="builtin:mine">
                 {props.zh ? "我的提交（默认）" : "My submissions (default)"}
               </option>
@@ -445,8 +425,8 @@ export function SubmittedFilterPanel(props: Props) {
               className="submitted-filter-name"
               value={name}
               maxLength={80}
-              placeholder={text.name}
-              aria-label={text.name}
+              placeholder={tr(text.name)}
+              aria-label={tr(text.name)}
               aria-invalid={Boolean(nameError)}
               onChange={(event) => {
                 setName(event.target.value);
@@ -456,7 +436,7 @@ export function SubmittedFilterPanel(props: Props) {
             />
             <button className="secondary" onClick={requestSave}>
               <Save size={14} aria-hidden="true" />
-              {text.save}
+              {tr(text.save)}
             </button>
             <button
               className="secondary"
@@ -466,12 +446,12 @@ export function SubmittedFilterPanel(props: Props) {
               }
             >
               <Trash2 size={14} aria-hidden="true" />
-              {text.remove}
+              {tr(text.remove)}
             </button>
           </div>
           <button className="secondary" onClick={props.onReset}>
             <RotateCcw size={14} aria-hidden="true" />
-            {text.reset}
+            {tr(text.reset)}
           </button>
         </div>
         {selected?.migrated && (
@@ -492,24 +472,24 @@ export function SubmittedFilterPanel(props: Props) {
             role="alertdialog"
             aria-label={
               confirmation.type === "overwrite"
-                ? text.confirmOverwrite
-                : text.confirmDelete
+                ? tr(text.confirmOverwrite)
+                : tr(text.confirmDelete)
             }
             aria-live="assertive"
           >
             <span>
               {confirmation.type === "overwrite"
-                ? text.confirmOverwrite
-                : text.confirmDelete}
+                ? tr(text.confirmOverwrite)
+                : tr(text.confirmDelete)}
             </span>
             <button className="secondary" onClick={confirmPending} autoFocus>
-              {text.confirm}
+              {tr(text.confirm)}
             </button>
             <button
               className="secondary"
               onClick={() => setConfirmation(undefined)}
             >
-              {text.cancel}
+              {tr(text.cancel)}
             </button>
           </div>
         ) : null}
