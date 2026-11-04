@@ -1,3 +1,4 @@
+import { isZh } from "../../shared/locale";
 import { ConnectionSpecCreateDialog } from "../settings/ConnectionSpecCreateDialog";
 import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
 import type { WorkspaceMutationRequest } from "../../shared/contracts";
@@ -28,7 +29,7 @@ export function WorkspacePage({
   runtime: RuntimeInfo;
   onRuntime(runtime: RuntimeInfo): void;
 }) {
-  const zh = t.files === "文件";
+  const zh = isZh();
   const columns = useColumnWidths(
     [260, 110, 140, 300, 190],
     [140, 80, 90, 140, 150],

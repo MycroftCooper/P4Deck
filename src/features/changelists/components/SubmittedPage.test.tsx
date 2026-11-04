@@ -1,4 +1,4 @@
-﻿import { appCache } from "../../../shared/cache/appCache";
+import { appCache } from "../../../shared/cache/appCache";
 import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 import { ChangeDetailsContext } from "./ChangeDetailsDialog";
 // @vitest-environment jsdom
@@ -12,6 +12,7 @@ import {
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
 import { messages } from "../../../shared/i18n";
+import { activateLocale } from "../../../shared/i18n";
 import type {
   ChangelistSummary,
   RuntimeInfo,
@@ -196,6 +197,9 @@ async function render(
   headerTarget: HTMLElement | null = null,
 ) {
   const value = { ...runtime, mode, ...overrides };
+  // The i18n resolver is a module singleton; keep it aligned with the locale
+  // this render is made in.
+  activateLocale(locale);
   await act(async () =>
     root.render(
       <ContextMenuProvider scope={`${mode}:fixture`} zh={locale === "zh-CN"}>

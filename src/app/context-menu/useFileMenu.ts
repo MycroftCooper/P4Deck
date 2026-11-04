@@ -1,3 +1,4 @@
+import { copyFieldFor, isCopyMenu } from "./copyMenu";
 import { fileMenuCommands } from "./fileMenuCommands";
 import { useContext } from "react";
 import { CommandExecutionContext } from "../shell/CommandContext";
@@ -101,14 +102,8 @@ export function useFileMenu() {
             reason:
               "尚未确认此 Depot 在当前工作区的映射范围 / Workspace mapping scope not verified",
           };
-        if (item.label.startsWith("复制 › ")) {
-          const field = /文件名|目录名|名称/.test(item.label)
-            ? "name"
-            : /Depot/.test(item.label)
-              ? "depotPath"
-              : /相对/.test(item.label)
-                ? "relativePath"
-                : "absolutePath";
+        if (isCopyMenu(item.label)) {
+          const field = copyFieldFor(item.label);
           const values = resolved.map((n) => n[field]);
           bindings[item.label] = values.every(Boolean)
             ? copy(values.join("\n"))

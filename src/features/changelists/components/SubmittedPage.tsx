@@ -1,3 +1,4 @@
+import { isZh } from "../../../shared/locale";
 import { submittedTags, matchesSubmittedTags } from "../submittedTags";
 import { isStreamList } from "../../browsers/components/ReadOnlyPages";
 import { useSnapshotQuery } from "../../../shared/cache/useSnapshotQuery";
@@ -305,7 +306,7 @@ export function SubmittedPage({
   >(undefined);
   const handledNavigation = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
-  const zh = t.language === "Switch to English";
+  const zh = isZh();
 
   const cancelQuery = useCallback(() => {
     generation.current++;

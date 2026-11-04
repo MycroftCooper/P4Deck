@@ -1,3 +1,4 @@
+import { isZh } from "../../../shared/locale";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useObjectSelection } from "../SelectionContext";
@@ -86,7 +87,7 @@ export function FileWorkbench({
   const fileMenu = useFileMenu();
   const { select } = useContext(SelectionContext);
   const error = operationError || (listing.error ? String(listing.error) : "");
-  const zh = t.files === "文件";
+  const zh = isZh();
   const labels: Record<string, string> = {
     loading: zh ? "状态待检查" : "Status pending",
     controlled: zh ? "受版本控制" : "Controlled",

@@ -1,3 +1,4 @@
+import { isZh } from "../../../shared/locale";
 import {
   useRemovalActions,
   projectShelfChanges,
@@ -180,7 +181,7 @@ export function PendingPage({
   const connectionProblem = !checking && connection.state !== "connected";
   const connectionReason = ready
     ? undefined
-    : t.files === "文件"
+    : isZh()
       ? "连接尚未就绪"
       : "Connection is not ready";
   const retryConnection = () =>
@@ -334,9 +335,9 @@ export function PendingPage({
       const blockedText = formatBlockedPaths(
         files.map((file) => file.depotPath),
         blockedDetails,
-        t.files === "文件",
+        isZh(),
       );
-      const zh = t.files === "文件";
+      const zh = isZh();
       setError(
         blockedText
           ? withAdmissionHint(blockedText, zh)
@@ -570,17 +571,17 @@ export function PendingPage({
     !ready
       ? connectionReason
       : menuEnvironment.commandBusy
-        ? t.files === "文件"
+        ? isZh()
           ? "操作进行中"
           : "Operation in progress"
         : loading || partial || truncated || pending.error
-          ? t.files === "文件"
+          ? isZh()
             ? "搁置范围尚未完整读取，请刷新后重试"
             : "Shelf scope is incomplete; refresh before continuing"
           : !Number.isSafeInteger(change.id) ||
               change.id <= 0 ||
               !change.shelvedFiles.length
-            ? t.files === "文件"
+            ? isZh()
               ? "没有可操作的搁置文件"
               : "No shelved files available"
             : undefined;
@@ -617,7 +618,7 @@ export function PendingPage({
       if (!detail || detail.connectionKey !== connectionKey) return;
       const operation = detail.result.operationIds.join(", ");
       setNotice(
-        `${detail.result.message}${operation ? ` · ${t.files === "文件" ? "操作记录" : "Operations"} ${operation}` : ""}${detail.result.logReference ? ` · ${t.files === "文件" ? "日志" : "Log"} ${detail.result.logReference}` : ""}`,
+        `${detail.result.message}${operation ? ` · ${isZh() ? "操作记录" : "Operations"} ${operation}` : ""}${detail.result.logReference ? ` · ${isZh() ? "日志" : "Log"} ${detail.result.logReference}` : ""}`,
       );
     };
     window.addEventListener("p4deck:workflow-result", mergeWorkflow);
@@ -842,13 +843,13 @@ export function PendingPage({
         const authoritative = authoritativeChangeId(effective);
         setError("");
         setNotice(
-          `${successMessage}${authoritative ? ` · CL ${authoritative}` : ""} · ${t.files === "文件" ? "操作记录" : "Operation"} ${id}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
+          `${successMessage}${authoritative ? ` · CL ${authoritative}` : ""} · ${isZh() ? "操作记录" : "Operation"} ${id}${demo ? (isZh() ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
         );
         // No p4deck:pending-* events on the wired path: host result + readback are the authority.
       } else {
         setNotice("");
         setError(
-          t.files === "文件"
+          isZh()
             ? "结果未确认；现有行已保留并按权威状态刷新，请勿换新操作重试。"
             : "Outcome unconfirmed; existing rows kept and refreshed from authority. Do not retry with a new id.",
         );
@@ -868,7 +869,7 @@ export function PendingPage({
     setNotice(
       legacy.refreshError
         ? ""
-        : `${successMessage} · ${t.files === "文件" ? "操作记录" : "Operation"} ${legacy.operation.operationId}${demo ? (t.files === "文件" ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
+        : `${successMessage} · ${isZh() ? "操作记录" : "Operation"} ${legacy.operation.operationId}${demo ? (isZh() ? " · 浏览器 Mock，未访问真实 P4 Server" : " · Browser Mock; no real P4 server was accessed") : ""}`,
     );
     if (legacy.refreshError)
       window.dispatchEvent(new Event("p4deck:pending-refresh"));
@@ -935,8 +936,8 @@ export function PendingPage({
       }
       await applyMutation(
         raw,
-        t.files === "文件" ? "删除后的刷新不完整" : "Delete refresh incomplete",
-        t.files === "文件"
+        isZh() ? "删除后的刷新不完整" : "Delete refresh incomplete",
+        isZh()
           ? "CL 删除已由服务器确认"
           : "Changelist delete confirmed",
       );
@@ -965,10 +966,10 @@ export function PendingPage({
       if (recovered.result && pendingClCommitted(recovered.result)) {
         await applyMutation(
           recovered.result,
-          t.files === "文件"
+          isZh()
             ? "删除后的刷新不完整"
             : "Delete refresh incomplete",
-          t.files === "文件"
+          isZh()
             ? "CL 删除已由服务器确认"
             : "Changelist delete confirmed",
         );
@@ -1183,10 +1184,10 @@ export function PendingPage({
             <LoaderCircle size={16} className="spin" />
             <span className="sr-only">
               {checking
-                ? t.files === "文件"
+                ? isZh()
                   ? "正在检查连接与登录状态"
                   : "Checking connection and login"
-                : t.files === "文件"
+                : isZh()
                   ? "正在操作"
                   : "Operation in progress"}
             </span>
@@ -1211,7 +1212,7 @@ export function PendingPage({
           files={selectedSubmit.files}
           expected={selectedSubmit.expected}
           active={selectedSubmit.scope === connectionKey}
-          zh={t.files === "文件"}
+          zh={isZh()}
           onDismiss={() => {
             setSelectedSubmit(undefined);
             void reload();
@@ -1241,7 +1242,7 @@ export function PendingPage({
             request={shelfRequest.request}
             connectionKey={connectionKey}
             demo={demo}
-            zh={t.files === "文件"}
+            zh={isZh()}
             onDismiss={() => setShelfRequest(undefined)}
           />
         ))}
@@ -1251,7 +1252,7 @@ export function PendingPage({
           changes={cachedChanges}
           client={clientName}
           connectionKey={connectionKey}
-          zh={t.files === "文件"}
+          zh={isZh()}
           onDismiss={() => setMove(undefined)}
           onStart={(request) => {
             if (!startOptimisticMove(connectionKey, request, cachedChanges))
@@ -1277,7 +1278,7 @@ export function PendingPage({
               : undefined
           }
           client={clientName}
-          zh={t.files === "文件"}
+          zh={isZh()}
           source={form.source}
           onDismiss={() => setForm(undefined)}
           onSubmit={async (draft) => {
@@ -1306,14 +1307,14 @@ export function PendingPage({
               );
               await applyMutation(
                 raw,
-                t.files === "文件"
+                isZh()
                   ? "保存后的刷新不完整"
                   : "Save refresh incomplete",
                 form.change
-                  ? t.files === "文件"
+                  ? isZh()
                     ? "CL 编辑已由服务器确认"
                     : "Changelist edit confirmed"
-                  : t.files === "文件"
+                  : isZh()
                     ? "CL 创建已由服务器确认"
                     : "Changelist creation confirmed",
               );
@@ -1327,14 +1328,14 @@ export function PendingPage({
               if (recovered.result && pendingClCommitted(recovered.result)) {
                 await applyMutation(
                   recovered.result,
-                  t.files === "文件"
+                  isZh()
                     ? "保存后的刷新不完整"
                     : "Save refresh incomplete",
                   form.change
-                    ? t.files === "文件"
+                    ? isZh()
                       ? "CL 编辑已由服务器确认"
                       : "Changelist edit confirmed"
-                    : t.files === "文件"
+                    : isZh()
                       ? "CL 创建已由服务器确认"
                       : "Changelist creation confirmed",
                 );
@@ -1356,12 +1357,12 @@ export function PendingPage({
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           placeholder={
-            t.files === "文件"
+            isZh()
               ? "筛选已缓存的 CL、描述或文件路径"
               : "Filter cached CL, description, or file path"
           }
           aria-label={
-            t.files === "文件"
+            isZh()
               ? "筛选 Pending CL"
               : "Filter pending changelists"
           }
@@ -1373,17 +1374,17 @@ export function PendingPage({
             setSort((value) => (value === "newest" ? "oldest" : "newest"))
           }
           aria-label={
-            t.files === "文件"
+            isZh()
               ? "切换 CL 编号正序/倒序"
               : "Toggle ascending/descending CL number"
           }
           aria-pressed={sort === "oldest"}
         >
           {sort === "oldest"
-            ? t.files === "文件"
+            ? isZh()
               ? "CL ↑ 正序"
               : "CL ↑ Ascending"
-            : t.files === "文件"
+            : isZh()
               ? "CL ↓ 倒序"
               : "CL ↓ Descending"}
         </button>
@@ -1396,7 +1397,7 @@ export function PendingPage({
           {authenticationRequired ? (
             <>
               <p>
-                {t.files === "文件"
+                {isZh()
                   ? "登录已过期或尚未登录，无法读取 Pending 列表。请在连接设置中重新登录后刷新。"
                   : "Your login has expired or is required. Sign in again in connection settings, then refresh Pending."}
               </p>
@@ -1404,15 +1405,15 @@ export function PendingPage({
                 className="secondary"
                 onClick={() => menuEnvironment.openPage("settings")}
               >
-                {t.files === "文件" ? "前往连接设置" : "Connection settings"}
+                {isZh() ? "前往连接设置" : "Connection settings"}
               </button>
             </>
           ) : connectionProblem ? (
             <>
               <p>
-                {connectionPresentation(connection, t.files === "文件").title}
+                {connectionPresentation(connection, isZh()).title}
                 {" · "}
-                {t.files === "文件"
+                {isZh()
                   ? loaded
                     ? "当前显示本地缓存。"
                     : "还没有本地缓存。"
@@ -1422,14 +1423,14 @@ export function PendingPage({
               </p>
               {connection.recovery === "retry" && (
                 <button className="secondary" onClick={retryConnection}>
-                  {t.files === "文件" ? "重试连接" : "Retry connection"}
+                  {isZh() ? "重试连接" : "Retry connection"}
                 </button>
               )}
               <button
                 className="secondary"
                 onClick={() => menuEnvironment.openPage("settings")}
               >
-                {t.files === "文件" ? "连接设置" : "Connection settings"}
+                {isZh() ? "连接设置" : "Connection settings"}
               </button>
             </>
           ) : (
@@ -1439,7 +1440,7 @@ export function PendingPage({
       )}
       {(partial || truncated) && (
         <div role="status" className="workspace-notice">
-          {t.files === "文件"
+          {isZh()
             ? `结果为部分数据：扫描 ${stats.scannedCount}，匹配 ${stats.matchedCount}。`
             : `Partial results: scanned ${stats.scannedCount}, matched ${stats.matchedCount}.`}
         </div>
@@ -1455,14 +1456,14 @@ export function PendingPage({
             .map((a) => (
               <div key={a.request.operationId}>
                 <span>
-                  {t.files === "文件"
+                  {isZh()
                     ? "本地归属预览，未确认文件需核实"
                     : "Local grouping preview; unconfirmed files need checking"}{" "}
                   · {a.request.files.length}
                 </span>
                 <details>
                   <summary>
-                    {t.files === "文件" ? "逐文件状态" : "File status"}
+                    {isZh() ? "逐文件状态" : "File status"}
                   </summary>
                   {a.request.files.map((file) => (
                     <div key={file.depotPath}>
@@ -1472,7 +1473,7 @@ export function PendingPage({
                           a.receipt?.files.find(
                             (f) => f.depotPath === file.depotPath,
                           )?.state ?? "unknown";
-                        return t.files === "文件"
+                        return isZh()
                           ? {
                               moved: "已移动",
                               notMoved: "未移动",
@@ -1493,7 +1494,7 @@ export function PendingPage({
                         .catch((cause) => setError(String(cause)))
                     }
                   >
-                    {t.files === "文件"
+                    {isZh()
                       ? "停止后续操作"
                       : "Stop remaining operations"}
                   </button>
@@ -1502,7 +1503,7 @@ export function PendingPage({
                     className="secondary"
                     onClick={() => checkOptimisticMove(a.request.operationId)}
                   >
-                    {t.files === "文件" ? "检查本次状态" : "Check this attempt"}
+                    {isZh() ? "检查本次状态" : "Check this attempt"}
                   </button>
                 )}
               </div>
@@ -1514,13 +1515,13 @@ export function PendingPage({
           className="pending-move-temporary"
           key={group.operationId}
           aria-label={
-            t.files === "文件"
+            isZh()
               ? "新 CL，编号待确认"
               : "New CL, number not confirmed"
           }
         >
           <strong>
-            {t.files === "文件"
+            {isZh()
               ? "新 CL，编号待确认"
               : "New CL, number not confirmed"}
           </strong>{" "}
@@ -1550,7 +1551,7 @@ export function PendingPage({
         >
           {virtualRows.map((virtualRow: VirtualItem) => {
             const change = changes[virtualRow.index];
-            const zh = t.files === "文件";
+            const zh = isZh();
             const label = change.id ? `CL ${change.id}` : "Default";
             const unavailable =
               (() => {
@@ -1811,7 +1812,7 @@ export function PendingPage({
                     {change.id ? (
                       <button
                         title={
-                          t.files === "文件"
+                          isZh()
                             ? "删除空的编号 CL"
                             : "Delete an empty numbered CL"
                         }
@@ -1831,7 +1832,7 @@ export function PendingPage({
                       </button>
                     ) : null}
                     <button
-                      aria-label={`${t.files === "文件" ? "打开 CL 菜单" : "Open CL menu"} ${change.id || "Default"}`}
+                      aria-label={`${isZh() ? "打开 CL 菜单" : "Open CL menu"} ${change.id || "Default"}`}
                       onClick={(event) =>
                         changeMenu(change).onContextMenu(event)
                       }
@@ -1998,7 +1999,7 @@ export function PendingPage({
           })}
         </div>
         {loading && !loaded && !changes.length ? (
-          <div role="status">{t.files === "文件" ? "加载中…" : "Loading…"}</div>
+          <div role="status">{isZh() ? "加载中…" : "Loading…"}</div>
         ) : null}
         {(loaded || !loading) &&
         !changes.length &&
