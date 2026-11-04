@@ -496,6 +496,65 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.refresh": "刷新",
+  "shell.checkout": "签出",
+  "shell.add": "添加",
+  "shell.mark.delete": "标记删除",
+  "shell.revert": "还原",
+  "shell.lock": "锁定",
+  "shell.unlock": "解锁",
+  "shell.diff": "差异",
+  "shell.history": "历史",
+  "shell.revgraph": "修订图",
+  "shell.preview": "文件预览",
+  "shell.reveal": "系统中定位",
+  "shell.open.with": "其他软件打开",
+  "shell.revert.unchanged": "还原未更改",
+  "shell.get.revision": "获取指定版本",
+  "pending.loading.submitted.changes": "正在查询 Submitted…",
+  "pending.expand.collapse.changed.files": "展开/收起改动文件",
+  "pending.the.5.000.item.scan.limit":
+    "达到 5,000 条扫描上限，结果可能被截断。",
+  "pending.partial.results": "当前为部分结果",
+  "pending.retry.load.more": "重试加载更多",
+  "files.outcome.is.unconfirmed.rows.were.corrected":
+    "结果不确定；已按服务器真实状态刷新，请核对后再操作（不会自动重试）。",
+  "files.safe.single.file.flow.preview.mapping":
+    "单文件安全流程：先预检映射、打开状态、目标与 CL，再使用一次性令牌确认。",
+  "files.target.changelist.0.default": "目标 Changelist（0 = Default）",
+  "files.this.release.supports.one.local.file":
+    "本批只支持当前 workspace 内的单个本地文件；目录递归和 Depot-only 对象已阻止。",
+  "files.preflight.passed.the.token.is.one":
+    "预检通过。令牌只能使用一次；确认时会在 mutation lane 内重新校验全部状态。",
+  "files.revalidating.and.executing.closing.the.view":
+    "正在重新校验并执行。关闭界面不能撤销服务器已接受的操作。",
+  "files.closing.discards.the.current.preview.and":
+    "关闭将丢弃当前预检与一次性令牌。",
+  "files.use.an.absolute.path.of.the": "请输入与源路径同类型的绝对路径。",
+  "files.control.characters.and.p4.filespec.metacharacters":
+    "路径不能包含控制字符或 P4 filespec 元字符。",
+  "files.a.root.path.empty.segments.and":
+    "路径不能是根目录，或包含空段、.、..。",
+  "files.a.folder.cannot.move.into.its": "不能把目录移动到它自己的子目录中。",
+  "pending.changelist.summary.unavailable.refresh.and.retry":
+    "找不到此 CL 的文件摘要，请刷新后重试。",
+  "pending.preflight.result.does.not.match.the": "预检结果与目标不匹配。",
+  "pending.connection.identity.changed.nothing.was.submitted":
+    "连接身份与提交预检目标不一致，未执行提交。",
+  "pending.submission.always.covers.every.file.in":
+    "提交范围始终是这个 CL 的全部文件，不会只提交当前选择的文件。",
+  "pending.ui.preview.preflight.execution.is.not":
+    "界面预览：提交预检/执行尚未接通。文件摘要不代表已通过权限、冲突或最新状态检查，不能提交。",
+  "pending.connection.changed.close.and.reopen.previous":
+    "连接已改变，请关闭后重新打开。旧预检已失效。",
+  "pending.submitting.closing.this.view.cannot.undo":
+    "正在提交；关闭此界面不能撤销服务器已接收的操作。",
+  "pending.legacy.result.no.command.envelope":
+    " · 旧版结果（无命令级 envelope）",
+  "pending.outcome.uncertain.the.submit.may.have":
+    "结果不确定：提交可能已到达服务器。已用同一操作号查询持久回执，并以真实结果/刷新纠正；请先核对 Pending/Submitted，不要用新操作号直接重试。",
+  "pending.confirm.the.entire.cl.and.acknowledge":
+    "确认提交整个 CL，并已阅读上述警告。",
   "notify.operation.incomplete": "操作未完成：{text}",
   "notify.hostReason.overlap.local.modifications":
     "搁置内容会与本地修改冲突，当前未启用强制覆盖。",

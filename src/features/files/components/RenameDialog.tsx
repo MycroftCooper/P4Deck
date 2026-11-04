@@ -22,21 +22,21 @@ import {
 const reasons: Record<RenamePathError, [string, string]> = {
   empty: ["请填写目标路径。", "Enter a destination path."],
   absolute: [
-    "请输入与源路径同类型的绝对路径。",
-    "Use an absolute path of the same type as the source.",
+    t("files.use.an.absolute.path.of.the"),
+    t("files.use.an.absolute.path.of.the"),
   ],
   characters: [
-    "路径不能包含控制字符或 P4 filespec 元字符。",
-    "Control characters and P4 filespec metacharacters are not allowed.",
+    t("files.control.characters.and.p4.filespec.metacharacters"),
+    t("files.control.characters.and.p4.filespec.metacharacters"),
   ],
   segments: [
-    "路径不能是根目录，或包含空段、.、..。",
-    "A root path, empty segments, . and .. are not allowed.",
+    t("files.a.root.path.empty.segments.and"),
+    t("files.a.root.path.empty.segments.and"),
   ],
   same: ["目标与源路径相同。", "Source and destination are the same."],
   descendant: [
-    "不能把目录移动到它自己的子目录中。",
-    "A folder cannot move into its own descendant.",
+    t("files.a.folder.cannot.move.into.its"),
+    t("files.a.folder.cannot.move.into.its"),
   ],
 };
 
@@ -61,7 +61,6 @@ export function RenameDialog({
     confirmation: RenameMoveConfirmation,
   ): Promise<RenameMoveResult | unknown>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({ ...node }));
   const from = snapshot.absolutePath || snapshot.depotPath || "";
   const [target, setTarget] = useState(from);
@@ -174,12 +173,7 @@ export function RenameDialog({
       const lifecycle = lifecycleOf(value);
       if (lifecycle && lifecycle.state === "unknown") {
         withdrawLocalIoProjection(operationId);
-        setFailure(
-          tr(
-            "结果不确定；已按服务器真实状态刷新，请核对后再操作（不会自动重试）。",
-            "Outcome is unconfirmed; rows were corrected from the server. Verify before retrying (no automatic retry).",
-          ),
-        );
+        setFailure(t("files.outcome.is.unconfirmed.rows.were.corrected"));
         setPhase("result");
         void Promise.resolve(onRefresh?.()).catch(() => undefined);
         return;
@@ -264,10 +258,7 @@ export function RenameDialog({
   return (
     <Dialog
       title={t("files.rename.move")}
-      description={tr(
-        "单文件安全流程：先预检映射、打开状态、目标与 CL，再使用一次性令牌确认。",
-        "Safe single-file flow: preview mapping, opened state, target and changelist, then confirm with a one-use token.",
-      )}
+      description={t("files.safe.single.file.flow.preview.mapping")}
       zh={zh}
       source={source}
       onRequestClose={dismiss}
@@ -294,10 +285,7 @@ export function RenameDialog({
         />
       </label>
       <label>
-        {tr(
-          "目标 Changelist（0 = Default）",
-          "Target changelist (0 = Default)",
-        )}
+        {t("files.target.changelist.0.default")}
         <input
           type="number"
           min={0}
@@ -311,10 +299,7 @@ export function RenameDialog({
       </label>
       {blockedInput && (
         <DialogNotice error>
-          {tr(
-            "本批只支持当前 workspace 内的单个本地文件；目录递归和 Depot-only 对象已阻止。",
-            "This release supports one local file in the current workspace only; recursive folders and Depot-only objects are blocked.",
-          )}
+          {t("files.this.release.supports.one.local.file")}
         </DialogNotice>
       )}
       {target !== from && error && (
@@ -370,20 +355,14 @@ export function RenameDialog({
           ))}
           {preflight.ready && (
             <DialogNotice>
-              {tr(
-                "预检通过。令牌只能使用一次；确认时会在 mutation lane 内重新校验全部状态。",
-                "Preflight passed. The token is one-use; confirmation revalidates all state inside the mutation lane.",
-              )}
+              {t("files.preflight.passed.the.token.is.one")}
             </DialogNotice>
           )}
         </section>
       )}
       {phase === "confirming" && (
         <DialogNotice>
-          {tr(
-            "正在重新校验并执行。关闭界面不能撤销服务器已接受的操作。",
-            "Revalidating and executing. Closing the view cannot undo work accepted by the server.",
-          )}
+          {t("files.revalidating.and.executing.closing.the.view")}
         </DialogNotice>
       )}
       {result && (
@@ -402,12 +381,7 @@ export function RenameDialog({
       {failure && <DialogNotice error>{failure}</DialogNotice>}
       {discard && (
         <section className="workflow-discard" role="alert">
-          <p>
-            {tr(
-              "关闭将丢弃当前预检与一次性令牌。",
-              "Closing discards the current preview and one-use token.",
-            )}
-          </p>
+          <p>{t("files.closing.discards.the.current.preview.and")}</p>
           <button onClick={() => setDiscard(false)}>
             {t("files.keep.editing")}
           </button>

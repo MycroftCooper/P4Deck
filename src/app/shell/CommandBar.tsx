@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { startGenericFileAction } from "../../features/actions/genericFileTask";
 import { discardGenericFileProjectionsForTarget } from "../../features/actions/genericFileProjection";
 import { revertTargets, startRevert } from "../../features/actions/revertTask";
@@ -90,26 +90,61 @@ const groups: {
   en: string;
 }[][] = [
   [
-    { id: "refresh", icon: RefreshCw, zh: "刷新", en: "Refresh" },
-    { id: "getLatest", icon: CloudDownload, zh: "获取最新", en: "Get latest" },
+    {
+      id: "refresh",
+      icon: RefreshCw,
+      zh: "shell.refresh",
+      en: "shell.refresh",
+    },
+    {
+      id: "getLatest",
+      icon: CloudDownload,
+      zh: "shell.get.latest",
+      en: "shell.get.latest",
+    },
   ],
   [
-    { id: "checkout", icon: SquarePen, zh: "签出", en: "Checkout" },
-    { id: "add", icon: FilePlus2, zh: "添加", en: "Add" },
-    { id: "delete", icon: FileX2, zh: "标记删除", en: "Mark delete" },
-    { id: "revert", icon: RotateCcw, zh: "还原", en: "Revert" },
-    { id: "lock", icon: LockKeyhole, zh: "锁定", en: "Lock" },
-    { id: "unlock", icon: LockKeyholeOpen, zh: "解锁", en: "Unlock" },
+    {
+      id: "checkout",
+      icon: SquarePen,
+      zh: "shell.checkout",
+      en: "shell.checkout",
+    },
+    { id: "add", icon: FilePlus2, zh: "shell.add", en: "shell.add" },
+    {
+      id: "delete",
+      icon: FileX2,
+      zh: "shell.mark.delete",
+      en: "shell.mark.delete",
+    },
+    { id: "revert", icon: RotateCcw, zh: "shell.revert", en: "shell.revert" },
+    { id: "lock", icon: LockKeyhole, zh: "shell.lock", en: "shell.lock" },
+    {
+      id: "unlock",
+      icon: LockKeyholeOpen,
+      zh: "shell.unlock",
+      en: "shell.unlock",
+    },
   ],
   [
-    { id: "diff", icon: Columns2, zh: "差异", en: "Diff" },
-    { id: "history", icon: History, zh: "历史", en: "History" },
-    { id: "revgraph", icon: GitBranch, zh: "修订图", en: "Revgraph" },
-    { id: "preview", icon: Eye, zh: "文件预览", en: "Preview" },
+    { id: "diff", icon: Columns2, zh: "shell.diff", en: "shell.diff" },
+    { id: "history", icon: History, zh: "shell.history", en: "shell.history" },
+    {
+      id: "revgraph",
+      icon: GitBranch,
+      zh: "shell.revgraph",
+      en: "shell.revgraph",
+    },
+    { id: "preview", icon: Eye, zh: "shell.preview", en: "shell.preview" },
   ],
   [
-    { id: "reveal", icon: FolderOpen, zh: "系统中定位", en: "Reveal" },
-    { id: "openWith", icon: AppWindow, zh: "其他软件打开", en: "Open with…" },
+    { id: "reveal", icon: FolderOpen, zh: "shell.reveal", en: "shell.reveal" },
+    {
+      id: "openWith",
+      icon: AppWindow,
+      zh: "shell.open.with",
+      en: "shell.open.with",
+    },
   ],
 ];
 interface Props {
@@ -766,19 +801,23 @@ export function CommandBar({
       groups.flat().find((item) => item.id === id) ??
       (id === "revertUnchanged"
         ? {
-            zh: "还原未更改",
-            en: "Revert unchanged",
+            zh: "shell.revert.unchanged",
+            en: "shell.revert.unchanged",
           }
         : {
-            zh: "获取指定版本",
-            en: "Get revision",
+            zh: "shell.get.revision",
+            en: "shell.get.revision",
           });
     setOperation(
-      startOperation(operationId, zh ? entry.zh : entry.en, {
-        kind: id === "refresh" ? "refresh" : "sync",
-        cancellable: id !== "refresh",
-        targetCount: nodes.length,
-      }),
+      startOperation(
+        operationId,
+        tFor(zh ? "zh-CN" : "en-US", entry.zh as MsgKey),
+        {
+          kind: id === "refresh" ? "refresh" : "sync",
+          cancellable: id !== "refresh",
+          targetCount: nodes.length,
+        },
+      ),
     );
     let affectedPaths: readonly string[] | undefined;
     let feedbackCompleted = false;
@@ -959,7 +998,8 @@ export function CommandBar({
         >
           {groups.map((group, index) => (
             <div className="command-group" key={index}>
-              {group.map(({ id, icon: Icon, zh: cn, en }) => {
+              {group.map(({ id, icon: Icon, zh: cnKey }) => {
+                const cn = tFor(zh ? "zh-CN" : "en-US", cnKey as MsgKey);
                 const reason = !ready
                   ? t("shell.connecting")
                   : commandReason(
@@ -977,13 +1017,11 @@ export function CommandBar({
                       reason ||
                       (id === "refresh"
                         ? t("shell.refresh.files.and.pending.lists")
-                        : zh
-                          ? cn
-                          : en)
+                        : cn)
                     }
                   >
                     <button
-                      aria-label={zh ? cn : en}
+                      aria-label={cn}
                       aria-description={reason}
                       disabled={!!reason}
                       className={
@@ -994,7 +1032,7 @@ export function CommandBar({
                       onClick={() => attempt(() => execute(id))}
                     >
                       <Icon size={17} />
-                      <span>{zh ? cn : en}</span>
+                      <span>{cn}</span>
                     </button>
                   </span>
                 );

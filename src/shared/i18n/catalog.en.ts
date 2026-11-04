@@ -534,6 +534,68 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.refresh": "Refresh",
+  "shell.checkout": "Checkout",
+  "shell.add": "Add",
+  "shell.mark.delete": "Mark delete",
+  "shell.revert": "Revert",
+  "shell.lock": "Lock",
+  "shell.unlock": "Unlock",
+  "shell.diff": "Diff",
+  "shell.history": "History",
+  "shell.revgraph": "Revgraph",
+  "shell.preview": "Preview",
+  "shell.reveal": "Reveal",
+  "shell.open.with": "Open with…",
+  "shell.revert.unchanged": "Revert unchanged",
+  "shell.get.revision": "Get revision",
+  "pending.loading.submitted.changes": "Loading submitted changes…",
+  "pending.expand.collapse.changed.files": "Expand/collapse changed files",
+  "pending.the.5.000.item.scan.limit":
+    "The 5,000-item scan limit was reached; results may be truncated.",
+  "pending.partial.results": "Partial results",
+  "pending.retry.load.more": "Retry load more",
+  "files.outcome.is.unconfirmed.rows.were.corrected":
+    "Outcome is unconfirmed; rows were corrected from the server. Verify before retrying (no automatic retry).",
+  "files.safe.single.file.flow.preview.mapping":
+    "Safe single-file flow: preview mapping, opened state, target and changelist, then confirm with a one-use token.",
+  "files.target.changelist.0.default": "Target changelist (0 = Default)",
+  "files.this.release.supports.one.local.file":
+    "This release supports one local file in the current workspace only; recursive folders and Depot-only objects are blocked.",
+  "files.preflight.passed.the.token.is.one":
+    "Preflight passed. The token is one-use; confirmation revalidates all state inside the mutation lane.",
+  "files.revalidating.and.executing.closing.the.view":
+    "Revalidating and executing. Closing the view cannot undo work accepted by the server.",
+  "files.closing.discards.the.current.preview.and":
+    "Closing discards the current preview and one-use token.",
+  "files.use.an.absolute.path.of.the":
+    "Use an absolute path of the same type as the source.",
+  "files.control.characters.and.p4.filespec.metacharacters":
+    "Control characters and P4 filespec metacharacters are not allowed.",
+  "files.a.root.path.empty.segments.and":
+    "A root path, empty segments, . and .. are not allowed.",
+  "files.a.folder.cannot.move.into.its":
+    "A folder cannot move into its own descendant.",
+  "pending.changelist.summary.unavailable.refresh.and.retry":
+    "Changelist summary unavailable. Refresh and retry.",
+  "pending.preflight.result.does.not.match.the":
+    "Preflight result does not match the target.",
+  "pending.connection.identity.changed.nothing.was.submitted":
+    "Connection identity changed; nothing was submitted.",
+  "pending.submission.always.covers.every.file.in":
+    "Submission always covers every file in this CL, not just selected files.",
+  "pending.ui.preview.preflight.execution.is.not":
+    "UI preview: preflight/execution is not connected. A file summary does not validate permissions, conflicts or current state. Submission is unavailable.",
+  "pending.connection.changed.close.and.reopen.previous":
+    "Connection changed. Close and reopen; previous checks are invalid.",
+  "pending.submitting.closing.this.view.cannot.undo":
+    "Submitting. Closing this view cannot undo operations accepted by the server.",
+  "pending.legacy.result.no.command.envelope":
+    " · legacy result (no command envelope)",
+  "pending.outcome.uncertain.the.submit.may.have":
+    "Outcome uncertain: the submit may have reached the server. The durable receipt was queried with the same operation id and corrected from real data; inspect Pending/Submitted before any retry with a new operation id.",
+  "pending.confirm.the.entire.cl.and.acknowledge":
+    "Confirm the entire CL and acknowledge the warnings above.",
   "notify.operation.incomplete": "Operation did not complete: {text}",
   "notify.hostReason.overlap.local.modifications":
     "Shelved content would overlap local modifications; force overwrite is not enabled.",

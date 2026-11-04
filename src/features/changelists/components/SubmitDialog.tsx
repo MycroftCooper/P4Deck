@@ -90,10 +90,7 @@ export function SubmitDialog(props: Props) {
         if (epoch !== generation.current) return;
         if (change?.id !== origin.id)
           throw new Error(
-            tr(
-              "找不到此 CL 的文件摘要，请刷新后重试。",
-              "Changelist summary unavailable. Refresh and retry.",
-            ),
+            t("pending.changelist.summary.unavailable.refresh.and.retry"),
           );
         setSummary(change);
         setPhase("unchecked");
@@ -150,12 +147,7 @@ export function SubmitDialog(props: Props) {
         (result.ready && (!result.change || !result.token)) ||
         !Number.isFinite(result.expiresAt)
       )
-        throw new Error(
-          tr(
-            "预检结果与目标不匹配。",
-            "Preflight result does not match the target.",
-          ),
-        );
+        throw new Error(t("pending.preflight.result.does.not.match.the"));
       setCheck(result);
       setSummary(result.change);
       requestDesktopAttention({
@@ -228,10 +220,7 @@ export function SubmitDialog(props: Props) {
         return;
       if (!submitConnectionMatchesTarget(check.target, dispatching))
         throw new Error(
-          tr(
-            "连接身份与提交预检目标不一致，未执行提交。",
-            "Connection identity changed; nothing was submitted.",
-          ),
+          t("pending.connection.identity.changed.nothing.was.submitted"),
         );
       const result = await props.submit(
         { token: check.token!, target: check.target, operationId: id },
@@ -284,10 +273,7 @@ export function SubmitDialog(props: Props) {
   return (
     <Dialog
       title={tr(`提交整个 CL ${origin.id}`, `Submit entire CL ${origin.id}`)}
-      description={tr(
-        "提交范围始终是这个 CL 的全部文件，不会只提交当前选择的文件。",
-        "Submission always covers every file in this CL, not just selected files.",
-      )}
+      description={t("pending.submission.always.covers.every.file.in")}
       zh={zh}
       source={props.source}
       busy={busy}
@@ -336,18 +322,12 @@ export function SubmitDialog(props: Props) {
       </div>
       {(!props.check || !props.submit) && (
         <DialogNotice>
-          {tr(
-            "界面预览：提交预检/执行尚未接通。文件摘要不代表已通过权限、冲突或最新状态检查，不能提交。",
-            "UI preview: preflight/execution is not connected. A file summary does not validate permissions, conflicts or current state. Submission is unavailable.",
-          )}
+          {t("pending.ui.preview.preflight.execution.is.not")}
         </DialogNotice>
       )}
       {staleConnection && (
         <DialogNotice error>
-          {tr(
-            "连接已改变，请关闭后重新打开。旧预检已失效。",
-            "Connection changed. Close and reopen; previous checks are invalid.",
-          )}
+          {t("pending.connection.changed.close.and.reopen.previous")}
         </DialogNotice>
       )}
       {phase === "summary" && (
@@ -377,10 +357,7 @@ export function SubmitDialog(props: Props) {
       )}
       {phase === "submitting" && (
         <DialogNotice>
-          {tr(
-            "正在提交；关闭此界面不能撤销服务器已接收的操作。",
-            "Submitting. Closing this view cannot undo operations accepted by the server.",
-          )}
+          {t("pending.submitting.closing.this.view.cannot.undo")}
         </DialogNotice>
       )}
       {phase === "blocked" && (
@@ -422,19 +399,13 @@ export function SubmitDialog(props: Props) {
             ? ""
             : ` ${t("pending.same.change.id")}`}
           {!lifecycle.envelope
-            ? tr(
-                " · 旧版结果（无命令级 envelope）",
-                " · legacy result (no command envelope)",
-              )
+            ? t("pending.legacy.result.no.command.envelope")
             : ""}
         </DialogNotice>
       )}
       {phase === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "结果不确定：提交可能已到达服务器。已用同一操作号查询持久回执，并以真实结果/刷新纠正；请先核对 Pending/Submitted，不要用新操作号直接重试。",
-            "Outcome uncertain: the submit may have reached the server. The durable receipt was queried with the same operation id and corrected from real data; inspect Pending/Submitted before any retry with a new operation id.",
-          )}
+          {t("pending.outcome.uncertain.the.submit.may.have")}
         </DialogNotice>
       )}
       {submitResult &&
@@ -463,10 +434,7 @@ export function SubmitDialog(props: Props) {
             checked={acknowledged}
             onChange={(event) => setAcknowledged(event.target.checked)}
           />
-          {tr(
-            "确认提交整个 CL，并已阅读上述警告。",
-            "Confirm the entire CL and acknowledge the warnings above.",
-          )}
+          {t("pending.confirm.the.entire.cl.and.acknowledge")}
         </label>
       )}
     </Dialog>
