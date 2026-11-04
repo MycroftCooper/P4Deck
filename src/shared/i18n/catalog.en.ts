@@ -534,6 +534,118 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.conflict.inspection.timed.out.after.30":
+    "Conflict inspection timed out after 30 seconds. Retry or check the connection.",
+  "files.connection.or.resolve.scope.changed.inspect":
+    "Connection or Resolve scope changed; inspect again.",
+  "files.p4merge.is.not.installed": "P4Merge is not installed.",
+  "files.the.p4merge.result.still.has.unresolved":
+    "The P4Merge result still has unresolved content.",
+  "files.browser.mock.returns.unknown.conflicts.and":
+    "Browser Mock returns unknown conflicts and keeps execution blocked; it does not access a real P4 server.",
+  "files.re.resolve.resolves.again.on.top":
+    "Re-resolve: resolves again on top of the previous resolution (p4 resolve -f). Revert first if you need the original workspace content.",
+  "files.conflict.blocks.were.auto.resolved.accept":
+    "Conflict blocks were auto-resolved; accept the merged result.",
+  "files.choose.one.side.or.open.the":
+    "Choose one side, or open the merge tool.",
+  "files.accept.the.auto.merged.result": "Accept the auto-merged result.",
+  "files.auto.merge.is.not.offered.by":
+    "Auto-merge is not offered by the backend.",
+  "files.measuring.conflict.blocks.please.wait":
+    "Measuring conflict blocks; please wait.",
+  "files.conflict.blocks.remain.auto.merge.cannot":
+    "Conflict blocks remain; auto-merge cannot be accepted.",
+  "files.replace.local.with.source.discard.local":
+    "Replace local with source; discard local-only changes.",
+  "files.keep.local.content.discard.source.only":
+    "Keep local content; discard source-only changes.",
+  "files.inspect.and.merge.each.location.with":
+    "Inspect and merge each location with the merge tool.",
+  "files.no.unresolved.conflicts.in.the.selected":
+    "No unresolved conflicts in the selected files.",
+  "files.resolving.the.current.selection.the.full":
+    "Resolving the current selection; the full scope will be read again.",
+  "shell.no.toolbar.operation.running": "No toolbar operation running",
+  "shell.wait.for.or.cancel.the.current":
+    "Wait for or cancel the current operation",
+  "shell.select.two.historical.revisions.maximum.two":
+    "Select two historical revisions (maximum two)",
+  "shell.this.action.is.unavailable.for.historical":
+    "This action is unavailable for historical revisions",
+  "shell.select.a.nonempty.numbered.pending.cl":
+    "Select a nonempty numbered pending CL (submits the whole CL)",
+  "shell.select.a.file.or.folder.first": "Select a file or folder first",
+  "shell.select.a.single.target.for.this":
+    "Select a single target for this operation",
+  "shell.target.path.is.unknown": "Target path is unknown",
+  "shell.lock.operations.require.explicit.files.and":
+    "Lock operations require explicit files and never recurse folders",
+  "shell.current.lock.state.does.not.allow":
+    "Current lock state does not allow this operation",
+  "shell.the.file.must.be.opened.in":
+    "The file must be opened in the current workspace first",
+  "shell.system.actions.require.the.desktop.app":
+    "System actions require the desktop app, not the browser demo",
+  "shell.open.with.requires.a.file.use":
+    "Open with requires a file; use Reveal for folders",
+  "shell.checking.local.path": "Checking local path",
+  "shell.target.is.outside.the.workspace.or":
+    "Target is outside the workspace or missing locally; get the file first",
+  "shell.folder.path.is.not.known.yet": "Folder path is not known yet",
+  "shell.adding.a.folder.requires.a.local":
+    "Adding a folder requires a local directory",
+  "shell.this.viewer.requires.a.file.folder":
+    "This viewer requires a file; folder operations affect descendants",
+  "shell.preview.needs.a.local.file.get":
+    "Preview needs a local file; get latest first",
+  "shell.local.un.checked.out.edits.exist":
+    "Local un-checked-out edits exist; checkout/revert/reconcile before getting latest",
+  "shell.file.status.unknown.refresh.to.re":
+    "File status unknown; refresh to re-check",
+  "shell.unavailable.for.the.current.file.state":
+    "Unavailable for the current file state",
+  "settings.connectionState.cliMissing.title": "P4 CLI not found",
+  "settings.connectionState.cliMissing.detail":
+    "Check for an existing installation or obtain P4 CLI from the official page.",
+  "settings.connectionState.notTested.title": "Not tested",
+  "settings.connectionState.notTested.detail":
+    "The connection is configured but has not contacted the server.",
+  "settings.connectionState.disconnected.title": "Server disconnected",
+  "settings.connectionState.disconnected.detail":
+    "The server ended the connection. Check its status and retry.",
+  "settings.connectionState.sslUntrusted.title": "SSL server is not trusted",
+  "settings.connectionState.sslUntrusted.detail":
+    "Verify the server and fingerprint below. Trust is written only after explicit confirmation.",
+  "settings.connectionState.authRequired.title": "Login required",
+  "settings.connectionState.authRequired.detail":
+    "The server is reachable, but this user has no valid login ticket.",
+  "settings.connectionState.connected.title": "Connected and authenticated",
+  "settings.connectionState.connected.detail":
+    "Server connectivity and the current login ticket are verified.",
+  "settings.connectionState.ticketExpired.title": "Login ticket expired",
+  "settings.connectionState.ticketExpired.detail":
+    "Log in again. The password is cleared from UI memory immediately after submission.",
+  "settings.connectionState.networkError.title": "Server unreachable",
+  "settings.connectionState.networkError.detail":
+    "Check the server address, network, VPN, proxy, or broker, then retry.",
+  "settings.connectionState.permissionDenied.title": "Permission denied",
+  "settings.connectionState.permissionDenied.detail":
+    "The server rejected this identity. Ask an administrator to check protections and policy.",
+  "settings.connectionState.invalidConfig.title":
+    "Invalid connection configuration",
+  "settings.connectionState.invalidConfig.detail":
+    "Check required fields, charset, CLI path, and credential-file paths, then save and test again.",
+  "settings.connectionState.externalAuthRequired.title":
+    "External authentication required",
+  "settings.connectionState.externalAuthRequired.detail":
+    "Complete your organization's SSO/MFA flow in its browser or authentication tool, then return to check login status. A password form cannot complete this flow.",
+  "settings.connectionState.unsupported.title": "Configuration not supported",
+  "settings.connectionState.unsupported.detail":
+    "Check the P4 CLI and server policy, or contact an administrator.",
+  "settings.connectionState.unknown.title": "Connection state unknown",
+  "settings.connectionState.unknown.detail":
+    "The connection check failed without a recognized cause. Retry or check the operation log.",
   "pending.title": "Submitted filters",
   "pending.mock":
     "Mock data · this query does not access a real P4 Server or network",

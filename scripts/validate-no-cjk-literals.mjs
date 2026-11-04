@@ -40,6 +40,9 @@ const EXEMPT_FILES = [
   "src/shared/i18n/catalog.zh.ts",
   "src/shared/i18n/catalog.en.ts",
   "src/shared/i18n/i18n.test.ts",
+  // Browser-demo fixtures: Chinese sheet names and cell values ARE the data
+  // being previewed (CSV/XLSX rendering), not UI copy.
+  "src/infrastructure/backend/mockBackend.ts",
   // Developer-facing migration inventory (adapters/stage/state per action).
   // Its resource/confirmation fields are notes for maintainers; nothing here
   // is rendered, and the module is only read by tests.

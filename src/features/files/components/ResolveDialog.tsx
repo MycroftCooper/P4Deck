@@ -309,10 +309,7 @@ export function ResolveDialog({
       const value = await withTimeout(
         check({ depotPaths: paths, force }),
         RESOLVE_CHECK_TIMEOUT_MS,
-        tr(
-          "读取冲突超时（30 秒）。请重试或检查连接。",
-          "Conflict inspection timed out after 30 seconds. Retry or check the connection.",
-        ),
+        t("files.conflict.inspection.timed.out.after.30"),
       );
       if (epoch !== generation.current) return false;
       const next = validatePreflight(value);
@@ -491,10 +488,7 @@ export function ResolveDialog({
       // Legacy payload (mock / pre-S4c host).
       if (!legacy || !Array.isArray(legacy.files)) {
         await fail(
-          tr(
-            "Resolve 返回了无法识别的结果。",
-            "Resolve returned an unknown result.",
-          ),
+          t("files.resolve.returned.an.unknown.result"),
           t("files.resolve.returned.an.unknown.result"),
         );
         return;
@@ -537,12 +531,7 @@ export function ResolveDialog({
     running.current = false;
     setPreflight(undefined);
 
-    setMessage(
-      tr(
-        "连接或 Resolve 范围已改变，请刷新。",
-        "Connection or Resolve scope changed; inspect again.",
-      ),
-    );
+    setMessage(t("files.connection.or.resolve.scope.changed.inspect"));
     setPhase("stale");
   }, [invalidated]);
   useEffect(() => {
@@ -688,13 +677,7 @@ export function ResolveDialog({
         operationId: crypto.randomUUID(),
       });
       if (external.status === "notInstalled")
-        throw new Error(
-          external.reason ??
-            tr(
-              "未检测到 P4Merge，请先安装/配置。",
-              "P4Merge is not installed.",
-            ),
-        );
+        throw new Error(external.reason ?? t("files.p4merge.is.not.installed"));
       if (external.status === "cancelled" || external.status === "timeout")
         throw new Error(
           external.reason ?? t("files.p4merge.was.cancelled.or.timed"),
@@ -714,10 +697,7 @@ export function ResolveDialog({
       if (!validation?.valid || !validation.token)
         throw new Error(
           validation?.message ??
-            tr(
-              "P4Merge 合并结果仍有未解决内容。",
-              "The P4Merge result still has unresolved content.",
-            ),
+            t("files.the.p4merge.result.still.has.unresolved"),
         );
       const savedRaw = await backend.confirmManualMergeSave({
         token: validation.token,
@@ -834,18 +814,12 @@ export function ResolveDialog({
       <div className="resolve-p4v">
         {demo && (
           <DialogNotice>
-            {tr(
-              "浏览器 Mock 只返回未知冲突并保持阻塞，不访问真实 P4 Server。",
-              "Browser Mock returns unknown conflicts and keeps execution blocked; it does not access a real P4 server.",
-            )}
+            {t("files.browser.mock.returns.unknown.conflicts.and")}
           </DialogNotice>
         )}
         {force && (
           <DialogNotice>
-            {tr(
-              "重新解决：基于上次解决结果再次解决（p4 resolve -f）；如需保留原始工作区内容，请先 revert 该文件。",
-              "Re-resolve: resolves again on top of the previous resolution (p4 resolve -f). Revert first if you need the original workspace content.",
-            )}
+            {t("files.re.resolve.resolves.again.on.top")}
           </DialogNotice>
         )}
         <div className="resolve-merge">
@@ -999,44 +973,26 @@ export function ResolveDialog({
                   </div>
                   <p>
                     {autoMergeable
-                      ? tr(
-                          "已自动处理冲突块，可接受自动合并结果。",
-                          "Conflict blocks were auto-resolved; accept the merged result.",
-                        )
-                      : tr(
-                          "需要选择保留一侧，或打开合并工具处理。",
-                          "Choose one side, or open the merge tool.",
-                        )}
+                      ? t("files.conflict.blocks.were.auto.resolved.accept")
+                      : t("files.choose.one.side.or.open.the")}
                   </p>
                 </div>
                 <div className="resolve-action-row">
                   <div>
                     <strong>{t("files.keep.both.changes")}</strong>
-                    <p>
-                      {tr(
-                        "接受自动合并生成的结果。",
-                        "Accept the auto-merged result.",
-                      )}
-                    </p>
+                    <p>{t("files.accept.the.auto.merged.result")}</p>
                   </div>
                   <button
                     className="primary"
                     disabled={!autoMergeable}
                     title={
                       !safeAvailable
-                        ? tr(
-                            "后端未提供自动合并策略。",
-                            "Auto-merge is not offered by the backend.",
-                          )
+                        ? t("files.auto.merge.is.not.offered.by")
                         : conflictBlocks === undefined
-                          ? tr(
-                              "正在统计冲突块，请稍候。",
-                              "Measuring conflict blocks; please wait.",
-                            )
+                          ? t("files.measuring.conflict.blocks.please.wait")
                           : conflictBlocks > 0
-                            ? tr(
-                                "仍有冲突块，不能直接接受自动合并。",
-                                "Conflict blocks remain; auto-merge cannot be accepted.",
+                            ? t(
+                                "files.conflict.blocks.remain.auto.merge.cannot",
                               )
                             : undefined
                     }
@@ -1048,12 +1004,7 @@ export function ResolveDialog({
                 <div className="resolve-action-row">
                   <div>
                     <strong>{t("files.keep.source.only")}</strong>
-                    <p>
-                      {tr(
-                        "用来源替换本地，舍弃本地独有修改。",
-                        "Replace local with source; discard local-only changes.",
-                      )}
-                    </p>
+                    <p>{t("files.replace.local.with.source.discard.local")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1067,12 +1018,7 @@ export function ResolveDialog({
                 <div className="resolve-action-row">
                   <div>
                     <strong>{t("files.keep.local.only")}</strong>
-                    <p>
-                      {tr(
-                        "保留本地内容，舍弃来源独有修改。",
-                        "Keep local content; discard source-only changes.",
-                      )}
-                    </p>
+                    <p>{t("files.keep.local.content.discard.source.only")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1086,12 +1032,7 @@ export function ResolveDialog({
                 <div className="resolve-action-row">
                   <div>
                     <strong>{t("files.manual.merge")}</strong>
-                    <p>
-                      {tr(
-                        "使用合并工具逐处检查并处理。",
-                        "Inspect and merge each location with the merge tool.",
-                      )}
-                    </p>
+                    <p>{t("files.inspect.and.merge.each.location.with")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1112,10 +1053,7 @@ export function ResolveDialog({
                   <>
                     <strong>{t("files.no.conflicts")}</strong>
                     <small>
-                      {tr(
-                        "所选文件没有待解决的冲突。",
-                        "No unresolved conflicts in the selected files.",
-                      )}
+                      {t("files.no.unresolved.conflicts.in.the.selected")}
                     </small>
                   </>
                 )}
@@ -1153,10 +1091,7 @@ export function ResolveDialog({
         )}
         {phase === "running" && (
           <DialogNotice>
-            {tr(
-              "正在对当前选择执行 Resolve，并会重新读取全部文件。",
-              "Resolving the current selection; the full scope will be read again.",
-            )}
+            {t("files.resolving.the.current.selection.the.full")}
           </DialogNotice>
         )}
         {message && phase !== "running" && (phase === "failed" || !result) && (

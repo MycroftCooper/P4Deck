@@ -2,6 +2,7 @@ import type {
   LocalPathCapabilities,
   WorkspaceNode,
 } from "../../shared/contracts";
+import { tFor } from "../../shared/i18n";
 import { compactTargets } from "../../features/files/selectionCommands";
 import { nodeNeedsSync } from "../../features/files/fileActions";
 import { nodeKey } from "../../features/files/selection";
@@ -83,41 +84,37 @@ export function commandReason(
   zh: boolean,
   localCapabilities?: LocalPathCapabilities | null,
 ): string | undefined {
-  const msg = (a: string, b: string) => (zh ? a : b);
   if (id === "cancel")
     return busy
       ? undefined
-      : msg("没有正在执行的工具栏任务", "No toolbar operation running");
+      : tFor(zh ? "zh-CN" : "en-US", "shell.no.toolbar.operation.running");
   // Refresh is read-only bookkeeping; keep it usable during a mutation so a
   // long-running or stuck operation never locks the user out of refreshing.
   if (id === "refresh") return undefined;
   if (busy)
-    return msg(
-      "请等待当前任务完成，或取消任务",
-      "Wait for or cancel the current operation",
-    );
+    return tFor(zh ? "zh-CN" : "en-US", "shell.wait.for.or.cancel.the.current");
   if (target.type === "history") {
     if (id === "diff")
       return historyDiffTarget(target)
         ? undefined
-        : msg(
-            "请选择两个历史版本（最多两条）",
-            "Select two historical revisions (maximum two)",
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "shell.select.two.historical.revisions.maximum.two",
           );
-    return msg(
-      "此操作不适用于历史版本",
-      "This action is unavailable for historical revisions",
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.this.action.is.unavailable.for.historical",
     );
   }
   if (id === "submit")
     return target.type === "pending" && target.id > 0 && target.count > 0
       ? undefined
-      : msg(
-          "请选择非空、已编号的待提交 CL（提交整个 CL）",
-          "Select a nonempty numbered pending CL (submits the whole CL)",
+      : tFor(
+          zh ? "zh-CN" : "en-US",
+          "shell.select.a.nonempty.numbered.pending.cl",
         );
   if (target.type !== "file")
-    return msg("请先选择文件或目录", "Select a file or folder first");
+    return tFor(zh ? "zh-CN" : "en-US", "shell.select.a.file.or.folder.first");
   const { node } = target;
   const nodes = target.nodes ?? [node];
   if (nodes.length > 1) {
@@ -132,9 +129,9 @@ export function commandReason(
         "rename",
       ].includes(id)
     )
-      return msg(
-        "此操作需要仅选择一个目标",
-        "Select a single target for this operation",
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.select.a.single.target.for.this",
       );
     for (const item of compactTargets(nodes)) {
       const reason = commandReason(
@@ -153,24 +150,21 @@ export function commandReason(
   if (id === "rename")
     return node.absolutePath || node.depotPath
       ? undefined
-      : msg("目标路径尚未确定", "Target path is unknown");
+      : tFor(zh ? "zh-CN" : "en-US", "shell.target.path.is.unknown");
   if (id === "lock" || id === "unlock") {
     if (node.kind !== "file")
-      return msg(
-        "锁操作仅支持显式文件，不递归目录",
-        "Lock operations require explicit files and never recurse folders",
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.lock.operations.require.explicit.files.and",
       );
     if (!node.absolutePath && !node.depotPath)
-      return msg("目标路径尚未确定", "Target path is unknown");
+      return tFor(zh ? "zh-CN" : "en-US", "shell.target.path.is.unknown");
     const capability =
       id === "lock" ? node.status?.canLock : node.status?.canUnlock;
     if (capability === false)
       return (
         node.status?.lockReason ??
-        msg(
-          "当前锁状态不支持此操作",
-          "Current lock state does not allow this operation",
-        )
+        tFor(zh ? "zh-CN" : "en-US", "shell.current.lock.state.does.not.allow")
       );
     return [
       "openedEdit",
@@ -181,35 +175,32 @@ export function commandReason(
       "conflicted",
     ].includes(node.state)
       ? undefined
-      : msg(
-          "文件必须先在当前工作区打开",
-          "The file must be opened in the current workspace first",
-        );
+      : tFor(zh ? "zh-CN" : "en-US", "shell.the.file.must.be.opened.in");
   }
   if (id === "reveal" || id === "openWith") {
     if (!native)
-      return msg(
-        "浏览器演示不支持系统操作，请在桌面应用中使用",
-        "System actions require the desktop app, not the browser demo",
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.system.actions.require.the.desktop.app",
       );
     if (id === "openWith" && node.kind === "directory")
-      return msg(
-        "其他软件打开仅支持文件；目录请使用系统中定位",
-        "Open with requires a file; use Reveal for folders",
+      return tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.open.with.requires.a.file.use",
       );
     if (localCapabilities === null)
-      return msg("正在检查本地路径", "Checking local path");
+      return tFor(zh ? "zh-CN" : "en-US", "shell.checking.local.path");
     const available = localCapabilities ? localCapabilities[id] : local;
     return available
       ? undefined
-      : msg(
-          "目标不在当前工作区内或本地不存在，请先获取文件",
-          "Target is outside the workspace or missing locally; get the file first",
+      : tFor(
+          zh ? "zh-CN" : "en-US",
+          "shell.target.is.outside.the.workspace.or",
         );
   }
   if (node.kind === "directory") {
     if (!node.absolutePath && !node.depotPath)
-      return msg("目录路径尚未确定", "Folder path is not known yet");
+      return tFor(zh ? "zh-CN" : "en-US", "shell.folder.path.is.not.known.yet");
     if (
       ["getLatest", "getRevision", "checkout", "delete", "revert"].includes(id)
     )
@@ -217,22 +208,19 @@ export function commandReason(
     if (id === "add")
       return local
         ? undefined
-        : msg(
-            "添加目录需要本地目录",
-            "Adding a folder requires a local directory",
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "shell.adding.a.folder.requires.a.local",
           );
-    return msg(
-      "此查看工具仅支持单文件；目录操作作用于子文件",
-      "This viewer requires a file; folder operations affect descendants",
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.this.viewer.requires.a.file.folder",
     );
   }
   if (id === "preview")
     return local
       ? undefined
-      : msg(
-          "预览需要本地文件，请先获取最新版本",
-          "Preview needs a local file; get latest first",
-        );
+      : tFor(zh ? "zh-CN" : "en-US", "shell.preview.needs.a.local.file.get");
   const allowed: Record<string, string[]> = {
     moveFiles: ["openedEdit", "openedAdd", "openedDelete", "conflicted"],
     shelve: ["openedEdit", "openedAdd", "openedDelete", "conflicted"],
@@ -289,9 +277,9 @@ export function commandReason(
     ],
   };
   if ((id === "getLatest" || id === "getRevision") && node.state === "modified")
-    return msg(
-      "本地有未签出修改，请先签出/还原/对账后再获取最新",
-      "Local un-checked-out edits exist; checkout/revert/reconcile before getting latest",
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.local.un.checked.out.edits.exist",
     );
   if (
     (id === "getLatest" || id === "getRevision") &&
@@ -305,12 +293,12 @@ export function commandReason(
   )
     return undefined;
   if (node.state === "unknown" || node.state === "loading")
-    return msg(
-      "文件状态未知，请点击刷新重新检查",
-      "File status unknown; refresh to re-check",
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "shell.file.status.unknown.refresh.to.re",
     );
-  return msg(
-    "当前文件状态不支持此操作",
-    "Unavailable for the current file state",
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    "shell.unavailable.for.the.current.file.state",
   );
 }

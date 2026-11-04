@@ -496,6 +496,102 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.conflict.inspection.timed.out.after.30":
+    "读取冲突超时（30 秒）。请重试或检查连接。",
+  "files.connection.or.resolve.scope.changed.inspect":
+    "连接或 Resolve 范围已改变，请刷新。",
+  "files.p4merge.is.not.installed": "未检测到 P4Merge，请先安装/配置。",
+  "files.the.p4merge.result.still.has.unresolved":
+    "P4Merge 合并结果仍有未解决内容。",
+  "files.browser.mock.returns.unknown.conflicts.and":
+    "浏览器 Mock 只返回未知冲突并保持阻塞，不访问真实 P4 Server。",
+  "files.re.resolve.resolves.again.on.top":
+    "重新解决：基于上次解决结果再次解决（p4 resolve -f）；如需保留原始工作区内容，请先 revert 该文件。",
+  "files.conflict.blocks.were.auto.resolved.accept":
+    "已自动处理冲突块，可接受自动合并结果。",
+  "files.choose.one.side.or.open.the": "需要选择保留一侧，或打开合并工具处理。",
+  "files.accept.the.auto.merged.result": "接受自动合并生成的结果。",
+  "files.auto.merge.is.not.offered.by": "后端未提供自动合并策略。",
+  "files.measuring.conflict.blocks.please.wait": "正在统计冲突块，请稍候。",
+  "files.conflict.blocks.remain.auto.merge.cannot":
+    "仍有冲突块，不能直接接受自动合并。",
+  "files.replace.local.with.source.discard.local":
+    "用来源替换本地，舍弃本地独有修改。",
+  "files.keep.local.content.discard.source.only":
+    "保留本地内容，舍弃来源独有修改。",
+  "files.inspect.and.merge.each.location.with": "使用合并工具逐处检查并处理。",
+  "files.no.unresolved.conflicts.in.the.selected": "所选文件没有待解决的冲突。",
+  "files.resolving.the.current.selection.the.full":
+    "正在对当前选择执行 Resolve，并会重新读取全部文件。",
+  "shell.no.toolbar.operation.running": "没有正在执行的工具栏任务",
+  "shell.wait.for.or.cancel.the.current": "请等待当前任务完成，或取消任务",
+  "shell.select.two.historical.revisions.maximum.two":
+    "请选择两个历史版本（最多两条）",
+  "shell.this.action.is.unavailable.for.historical": "此操作不适用于历史版本",
+  "shell.select.a.nonempty.numbered.pending.cl":
+    "请选择非空、已编号的待提交 CL（提交整个 CL）",
+  "shell.select.a.file.or.folder.first": "请先选择文件或目录",
+  "shell.select.a.single.target.for.this": "此操作需要仅选择一个目标",
+  "shell.target.path.is.unknown": "目标路径尚未确定",
+  "shell.lock.operations.require.explicit.files.and":
+    "锁操作仅支持显式文件，不递归目录",
+  "shell.current.lock.state.does.not.allow": "当前锁状态不支持此操作",
+  "shell.the.file.must.be.opened.in": "文件必须先在当前工作区打开",
+  "shell.system.actions.require.the.desktop.app":
+    "浏览器演示不支持系统操作，请在桌面应用中使用",
+  "shell.open.with.requires.a.file.use":
+    "其他软件打开仅支持文件；目录请使用系统中定位",
+  "shell.checking.local.path": "正在检查本地路径",
+  "shell.target.is.outside.the.workspace.or":
+    "目标不在当前工作区内或本地不存在，请先获取文件",
+  "shell.folder.path.is.not.known.yet": "目录路径尚未确定",
+  "shell.adding.a.folder.requires.a.local": "添加目录需要本地目录",
+  "shell.this.viewer.requires.a.file.folder":
+    "此查看工具仅支持单文件；目录操作作用于子文件",
+  "shell.preview.needs.a.local.file.get": "预览需要本地文件，请先获取最新版本",
+  "shell.local.un.checked.out.edits.exist":
+    "本地有未签出修改，请先签出/还原/对账后再获取最新",
+  "shell.file.status.unknown.refresh.to.re": "文件状态未知，请点击刷新重新检查",
+  "shell.unavailable.for.the.current.file.state": "当前文件状态不支持此操作",
+  "settings.connectionState.cliMissing.title": "找不到 P4 CLI",
+  "settings.connectionState.cliMissing.detail":
+    "可重新检测已有安装，或从官方页面获取 P4 CLI。",
+  "settings.connectionState.notTested.title": "尚未验证",
+  "settings.connectionState.notTested.detail":
+    "连接参数已就绪，但尚未访问服务器。",
+  "settings.connectionState.disconnected.title": "服务器无响应",
+  "settings.connectionState.disconnected.detail":
+    "服务器中断了连接；确认服务状态后重试。",
+  "settings.connectionState.sslUntrusted.title": "SSL 服务器尚未信任",
+  "settings.connectionState.sslUntrusted.detail":
+    "核对下方服务器与指纹；只有明确确认后才会写入 Trust。",
+  "settings.connectionState.authRequired.title": "需要登录",
+  "settings.connectionState.authRequired.detail":
+    "连接可达，但当前用户没有有效登录票据。",
+  "settings.connectionState.connected.title": "已连接并登录",
+  "settings.connectionState.connected.detail":
+    "服务器连接和当前登录票据均已验证。",
+  "settings.connectionState.ticketExpired.title": "登录票据已过期",
+  "settings.connectionState.ticketExpired.detail":
+    "请重新登录；提交后密码会立即从界面内存中清除。",
+  "settings.connectionState.networkError.title": "无法访问服务器",
+  "settings.connectionState.networkError.detail":
+    "检查服务器地址、网络、VPN、Proxy 或 Broker 后重试。",
+  "settings.connectionState.permissionDenied.title": "权限不足",
+  "settings.connectionState.permissionDenied.detail":
+    "服务器拒绝当前身份；请联系管理员检查 protections 或相关策略。",
+  "settings.connectionState.invalidConfig.title": "连接配置无效",
+  "settings.connectionState.invalidConfig.detail":
+    "检查必填项、字符集、CLI 路径和凭证文件路径，然后保存并重新验证。",
+  "settings.connectionState.externalAuthRequired.title": "需要外部认证",
+  "settings.connectionState.externalAuthRequired.detail":
+    "请按组织流程在浏览器或认证工具中完成 SSO/MFA，然后返回此处检查登录状态。普通密码框不能完成此流程。",
+  "settings.connectionState.unsupported.title": "当前配置不受支持",
+  "settings.connectionState.unsupported.detail":
+    "请检查 P4 CLI 与服务器策略，或联系管理员。",
+  "settings.connectionState.unknown.title": "无法确定连接状态",
+  "settings.connectionState.unknown.detail":
+    "连接检查失败，暂时无法识别具体原因。请重试或查看操作日志。",
   "pending.title": "已提交组合筛选",
   "pending.mock": "模拟数据 · 查询不会访问真实 P4 Server 或网络",
   "pending.keyword": "关键词",
