@@ -1,3 +1,4 @@
+import { t } from "../shared/i18n";
 import { Component, type PropsWithChildren } from "react";
 
 export class StartupBoundary extends Component<
@@ -28,7 +29,7 @@ export function StartupShell() {
         <aside />
         <main>
           <div className="startup-progress" role="status">
-            正在启动 P4Deck…
+            {t("shell.startup.starting")}
           </div>
         </main>
       </div>

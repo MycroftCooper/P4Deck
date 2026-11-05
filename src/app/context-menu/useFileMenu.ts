@@ -158,7 +158,9 @@ export function useFileMenu() {
       for (const label of ["在此目录搜索", "在工作区中搜索", "在此 Depot 搜索"])
         bindings[label] = action(
           () => env.searchInDirectory(node.depotPath || node.absolutePath),
-          node.depotPath || node.absolutePath ? undefined : "没有目录路径",
+          node.depotPath || node.absolutePath
+            ? undefined
+            : translate("contextMenu.noDirectoryPath"),
         );
       const merged = { ...bindings, ...options.bindings };
       // Unresolved files resolve normally; already resolved (not yet submitted)

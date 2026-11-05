@@ -534,6 +534,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "contextMenu.localFileMissing":
+    "The local file is missing or outside the workspace",
+  "contextMenu.noLocalFile": "No local file available",
+  "contextMenu.noCurrentDirectory": "No current directory",
+  "contextMenu.localDirectoryMissing":
+    "The local directory is missing or outside the workspace",
+  "contextMenu.noDirectoryPath": "No directory path",
+  "shell.dock.popupBlocked":
+    "The browser could not open the window; allow pop-ups for this app and try again.",
+  "shell.startup.starting": "Starting P4Deck…",
   "browse.located.stream": "Located stream: {p1}",
   "browse.searching.streams.for.the.current.list":
     "Searching Streams for {p1}; the current list has no exact match.",
@@ -615,8 +625,8 @@ export const en: Catalog & Record<MsgKey, string> = {
     "The system refused to install the update (administrator rights may be required). Install it manually.",
   "update.writeFailed":
     "Writing the update failed (disk space or insufficient permissions).",
-  "update.alreadyLatestVersion": "Already up to date at v{version}.",
-  "update.alreadyLatest": "Already up to date.",
+  "update.alreadyLatestVersion": "You are up to date (v{version}).",
+  "update.alreadyLatest": "You are up to date.",
   "files.address.enterOnePath": "Enter one file or folder path",
   "files.address.encodeUrl": "Encode # and ? in file URLs",
   "files.address.filePathsOnly": "File paths only",

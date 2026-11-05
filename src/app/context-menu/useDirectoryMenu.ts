@@ -24,7 +24,7 @@ export function useDirectoryMenu(
       复制当前目录路径: copy(directory),
       在当前目录搜索: action(
         () => env.searchInDirectory(directory),
-        directory ? undefined : "没有当前目录",
+        directory ? undefined : t("contextMenu.noCurrentDirectory"),
       ),
       系统中定位当前目录: {
         reason:
@@ -57,7 +57,7 @@ export function useDirectoryMenu(
                 path: node.absolutePath,
                 mode: "reveal",
               }),
-            caps.reveal ? undefined : "本地目录不存在或不在工作区内",
+            caps.reveal ? undefined : t("contextMenu.localDirectoryMissing"),
           ),
         };
       },

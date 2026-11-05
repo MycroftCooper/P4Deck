@@ -47,7 +47,7 @@ export function TabMenu(props: IDockviewPanelHeaderProps) {
               ),
               移到下方分屏: action(
                 () => panel.api.moveTo({ group, position: "bottom" }),
-                others.length ? undefined : "本组至少需要两个页签",
+                others.length ? undefined : t("shell.tab.needsTwoTabs"),
               ),
               "移到其他组 › 目标组": {
                 children: props.containerApi.groups

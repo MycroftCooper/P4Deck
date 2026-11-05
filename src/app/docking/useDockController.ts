@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import type { DockviewApi, IDockviewPanel } from "dockview-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -267,8 +268,7 @@ export function useDockController(props: DockProps) {
           root.dataset.theme = document.documentElement.dataset.theme;
           root.lang = document.documentElement.lang;
         }
-        if (!opened)
-          setError("浏览器未能打开独立窗口，请允许本站弹出窗口后重试。");
+        if (!opened) setError(t("shell.dock.popupBlocked"));
       }
     } catch (cause) {
       setError(String(cause));

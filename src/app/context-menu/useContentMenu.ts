@@ -52,7 +52,7 @@ export function useContentMenu() {
                   path: node.absolutePath,
                   mode: "reveal",
                 }),
-              caps.reveal ? undefined : "本地文件不存在或不在工作区内",
+              caps.reveal ? undefined : t("contextMenu.localFileMissing"),
             ),
             "其他软件打开…": action(
               () =>
@@ -60,7 +60,7 @@ export function useContentMenu() {
                   path: node.absolutePath,
                   mode: "openWith",
                 }),
-              caps.openWith ? undefined : "没有可用的本地文件",
+              caps.openWith ? undefined : t("contextMenu.noLocalFile"),
             ),
           };
         },

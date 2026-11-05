@@ -496,6 +496,14 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "contextMenu.localFileMissing": "本地文件不存在或不在工作区内",
+  "contextMenu.noLocalFile": "没有可用的本地文件",
+  "contextMenu.noCurrentDirectory": "没有当前目录",
+  "contextMenu.localDirectoryMissing": "本地目录不存在或不在工作区内",
+  "contextMenu.noDirectoryPath": "没有目录路径",
+  "shell.dock.popupBlocked":
+    "浏览器未能打开独立窗口，请允许本站弹出窗口后重试。",
+  "shell.startup.starting": "正在启动 P4Deck…",
   "browse.located.stream": "已定位 Stream：{p1}",
   "browse.searching.streams.for.the.current.list":
     "已在 Streams 中搜索 {p1}，当前列表没有精确匹配。",

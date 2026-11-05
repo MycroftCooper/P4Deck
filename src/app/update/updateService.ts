@@ -191,13 +191,11 @@ export async function checkForUpdates(
     if (manual) {
       const current = updateStore.getSnapshot().currentVersion;
       notifyUser(
-        zh
-          ? current
-            ? `已是最新版本 v${current}。`
-            : "已是最新版本。"
-          : current
-            ? `You are up to date (v${current}).`
-            : "You are up to date.",
+        current
+          ? tFor(zh ? "zh-CN" : "en-US", "update.alreadyLatestVersion", {
+              version: current,
+            })
+          : tFor(zh ? "zh-CN" : "en-US", "update.alreadyLatest"),
       );
     }
     return;
