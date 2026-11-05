@@ -130,7 +130,7 @@ export function validateSubmittedFilter(
       byteLength(depotPath) > 4096 ||
       /[\r\n\0@#]/.test(depotPath))
   )
-    errors.depotPath = t("pending.depot.path.without.or");
+    errors.depotPath = t("pending.depot.path.without");
   if (
     depotPath &&
     streams.length &&

@@ -287,7 +287,7 @@ export function GraphInvestigationDialog({
               setReport(undefined);
             }}
           />
-          {t("browse.inspect.shared.intermediate.references.up.to")}
+          {t("browse.inspect.references.up")}
         </label>
       </fieldset>
       <p>{t("browse.at.most.20.api.read.attempts")}</p>
@@ -308,9 +308,7 @@ export function GraphInvestigationDialog({
             report.interrupted ||
             report.limited) && (
             <DialogNotice error>
-              {t(
-                "browse.investigation.incomplete.file.visibility.cancellation.or",
-              )}
+              {t("browse.investigation.visibility.cancellation")}
             </DialogNotice>
           )}
           {!report.total && (

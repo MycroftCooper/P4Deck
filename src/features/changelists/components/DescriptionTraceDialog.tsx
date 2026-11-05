@@ -301,9 +301,7 @@ function DescriptionTraceContent({
         for (const row of page.items) {
           const time = Date.parse(row.time);
           if (!Number.isFinite(time))
-            throw new Error(
-              t("pending.invalid.candidate.submission.time.refresh.to"),
-            );
+            throw new Error(t("pending.invalid.time.refresh"));
           if (
             time >= Date.parse(previous.from) &&
             time <= Date.parse(previous.to)
@@ -388,7 +386,7 @@ function DescriptionTraceContent({
           <div className="description-trace-toolbar">
             <div
               className="description-trace-summary"
-              title={t("pending.direct.and.indirect.submissions.linked.by")}
+              title={t("pending.direct.submissions.linked")}
             >
               {t("pending.cl.reference.chain")}
             </div>
@@ -412,7 +410,7 @@ function DescriptionTraceContent({
             )}
           </div>
           {!snapshot.rows.length && (
-            <p>{t("pending.no.cl.reference.candidates.in.the")}</p>
+            <p>{t("pending.no.reference.candidates")}</p>
           )}
           <div
             ref={scroll}

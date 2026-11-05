@@ -200,8 +200,8 @@ const recoveryCopy: Record<RecoveryAction, { zh: string; en: string }> = {
     en: "settings.verify.and.confirm.the.current.ssl",
   },
   login: {
-    zh: "settings.log.in.or.re.authenticate.the",
-    en: "settings.log.in.or.re.authenticate.the",
+    zh: "settings.log.re.authenticate",
+    en: "settings.log.re.authenticate",
   },
   retry: {
     zh: "settings.check.the.environment.and.retry",

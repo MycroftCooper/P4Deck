@@ -91,10 +91,7 @@ export function UndoDialog({
           if (mounted.current) {
             setFinished(true);
             setMessage(
-              tFor(
-                zh ? "zh-CN" : "en-US",
-                "files.undo.executed.legacy.result.inspect.the",
-              ),
+              tFor(zh ? "zh-CN" : "en-US", "files.undo.result.inspect"),
             );
           }
           return;
@@ -157,7 +154,7 @@ export function UndoDialog({
       onRequestClose={onDismiss}
       description={tFor(
         zh ? "zh-CN" : "en-US",
-        "files.undo.only.the.changes.introduced.by",
+        "files.undo.changes.introduced",
       )}
       footer={
         <>

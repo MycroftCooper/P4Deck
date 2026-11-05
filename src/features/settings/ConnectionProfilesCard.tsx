@@ -601,7 +601,7 @@ export function ConnectionProfilesCard({
               identity,
               phase: "error",
               message: candidate
-                ? t("settings.the.workspace.root.returned.by.the")
+                ? t("settings.the.root.returned")
                 : t("settings.the.server.returned.no.exact.workspace"),
               simulated: result.simulated,
             });
@@ -855,7 +855,7 @@ export function ConnectionProfilesCard({
 
   async function testConnection() {
     if (!connectionValid) {
-      setError(t("settings.verifying.a.connection.requires.server.and"));
+      setError(t("settings.verifying.requires.server"));
       return;
     }
     const token = begin("test");
@@ -876,7 +876,7 @@ export function ConnectionProfilesCard({
       if (result.status.state === "connected")
         setNotice(
           runtime.mode === "mock"
-            ? t("settings.browser.mock.validation.was.simulated.with")
+            ? t("settings.browser.was.simulated")
             : activeContextMatches
               ? t("settings.the.active.connection.and.login.are")
               : t("settings.the.current.unsaved.settings.are.connected"),
@@ -967,9 +967,9 @@ export function ConnectionProfilesCard({
         setNotice(
           runtime.mode === "mock"
             ? t("settings.browser.mock.login.was.simulated.without")
-            : t("settings.the.current.settings.are.authenticated.the"),
+            : t("settings.the.are.authenticated"),
         );
-      else setError(t("settings.login.was.not.proven.by.the"));
+      else setError(t("settings.login.not.proven"));
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
@@ -1004,7 +1004,7 @@ export function ConnectionProfilesCard({
             ? t("settings.browser.mock.logout.was.simulated.without")
             : t("settings.the.user.for.the.current.settings"),
         );
-      else setError(t("settings.logout.was.not.proven.by.the"));
+      else setError(t("settings.logout.not.proven"));
     } catch {
       if (isCurrent(token)) {
         await recoverControlOnce(operationId);
@@ -1222,7 +1222,7 @@ export function ConnectionProfilesCard({
   const saveDisabledReason = sharedDisabledReason
     ? sharedDisabledReason
     : !dirty
-      ? t("settings.there.are.no.changes.to")
+      ? t("settings.there.no.changes")
       : !valid
         ? t("settings.saving.requires.valid.server.user.workspace")
         : "";
@@ -1441,18 +1441,14 @@ export function ConnectionProfilesCard({
                 >
                   <strong>Workspace Root</strong>
                   {!current.client ? (
-                    <span>{t("settings.choose.or.enter.a.workspace.to")}</span>
+                    <span>{t("settings.choose.a.workspace")}</span>
                   ) : rootResolution.phase === "resolving" ||
                     rootResolution.phase === "hint" ||
                     rootResolution.phase === "idle" ? (
                     <span>
-                      {tFor(
-                        zh ? "zh-CN" : "en-US",
-                        "settings.resolving.root.for",
-                        {
-                          client: current.client,
-                        },
-                      )}
+                      {tFor(zh ? "zh-CN" : "en-US", "settings.resolving.root", {
+                        client: current.client,
+                      })}
                     </span>
                   ) : rootResolution.phase === "error" ? (
                     <>
@@ -1497,7 +1493,7 @@ export function ConnectionProfilesCard({
                 aria-labelledby="p4-settings-heading"
               >
                 <h3 id="p4-settings-heading">{t("settings.p4.settings")}</h3>
-                <p>{t("settings.these.advanced.values.are.saved.with")}</p>
+                <p>{t("settings.these.are.saved")}</p>
                 <div className="settings-grid profile-fields">
                   {p4Fields.map(([key, zhLabel, _enLabel, placeholder]) => (
                     <div className="connection-field" key={key}>
@@ -1627,8 +1623,8 @@ export function ConnectionProfilesCard({
           {dirty && (
             <p role="status" className="settings-unsaved-note">
               {activeContextMatches
-                ? t("settings.there.are.unsaved.profile.changes.the")
-                : t("settings.there.are.unsaved.changes.validation.and")}
+                ? t("settings.there.profile.changes")
+                : t("settings.there.changes.validation")}
             </p>
           )}
 
@@ -1755,7 +1751,7 @@ export function ConnectionProfilesCard({
                     />
                   </span>
                 </label>
-                <p>{t("settings.the.password.is.never.written.to")}</p>
+                <p>{t("settings.the.never.written")}</p>
                 <button
                   type="submit"
                   className="primary"
@@ -1763,10 +1759,10 @@ export function ConnectionProfilesCard({
                 >
                   <LogIn size={14} />{" "}
                   {operation === "login"
-                    ? t("settings.logging.in")
+                    ? t("settings.loggingIn")
                     : connection.state === "ticketExpired"
                       ? t("settings.log.in.again")
-                      : t("settings.log.in")}
+                      : t("settings.logIn")}
                 </button>
               </form>
             )}

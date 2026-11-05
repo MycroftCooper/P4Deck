@@ -108,7 +108,7 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
   const PageIcon = kind ? pageIcons[kind] : undefined;
   const lockLabel = params.locked
     ? tFor(zh ? "zh-CN" : "en-US", "docking.target.locked.click.to.follow")
-    : tFor(zh ? "zh-CN" : "en-US", "docking.following.file.selection.click.to");
+    : tFor(zh ? "zh-CN" : "en-US", "docking.following.selection.click");
   const newTabLabel = tFor(zh ? "zh-CN" : "en-US", "docking.new.tab");
   // Global pages with a compact title bar; their actions portal into it.
   const titled = !!kind && !isMultiPage(kind);

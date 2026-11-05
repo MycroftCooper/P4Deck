@@ -386,10 +386,7 @@ export function SyncDialog({
           </label>
           {force && (
             <DialogNotice error>
-              {tFor(
-                zh ? "zh-CN" : "en-US",
-                "files.force.re.transfers.current.files.and",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "files.force.current.files")}
             </DialogNotice>
           )}
           <PreflightStatus state={previewState} zh={zh} />
@@ -433,10 +430,7 @@ export function SyncDialog({
           {(plan.partial || plan.truncated) && (
             <DialogNotice error={plan.partial}>
               {plan.partial
-                ? tFor(
-                    zh ? "zh-CN" : "en-US",
-                    "files.preview.is.partial.inspect.blockers.and",
-                  )
+                ? tFor(zh ? "zh-CN" : "en-US", "files.preview.inspect.blockers")
                 : tr(
                     `代表性列表已截断：显示 ${plan.entries.length}/${plan.totalEntries}。`,
                     `Representative list truncated: ${plan.entries.length}/${plan.totalEntries} shown.`,
@@ -457,10 +451,7 @@ export function SyncDialog({
                 checked={forceAck}
                 onChange={(event) => setForceAck(event.target.checked)}
               />
-              {tFor(
-                zh ? "zh-CN" : "en-US",
-                "files.i.reviewed.the.real.preview.and",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "files.i.real.preview")}
             </label>
           )}
         </>

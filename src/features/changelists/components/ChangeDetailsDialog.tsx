@@ -190,7 +190,7 @@ function ChangeDetailsDialog({
       .then((detail) => {
         if (!live) return;
         if (detail.changeId !== target.changeId)
-          throw new Error(t("pending.returned.changelist.does.not.match.the"));
+          throw new Error(t("pending.returned.not.match"));
         if (detail.inspectionStatus === "unavailable")
           throw new Error(
             detail.message ||

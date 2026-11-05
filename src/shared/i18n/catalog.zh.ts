@@ -151,7 +151,7 @@ export const zh = {
   "contextMenu.refresh": "刷新",
   "contextMenu.preview.file": "文件预览",
   "contextMenu.preview.in.new.tab": "在新页签中预览",
-  "contextMenu.open.with": "其他软件打开",
+  "contextMenu.openWithApp": "其他软件打开",
   "contextMenu.reveal.in.file.manager": "系统中定位",
   "contextMenu.get.latest": "获取最新",
   "contextMenu.get.revision": "获取指定版本",
@@ -165,7 +165,7 @@ export const zh = {
   "contextMenu.show.in.workspace": "在工作区中定位",
   "contextMenu.show.in.depot": "在 Depot 中定位",
   "contextMenu.refresh.status": "刷新状态",
-  "contextMenu.check.out.and.open.with": "签出并用其他软件打开",
+  "contextMenu.checkoutAndOpenWith": "签出并用其他软件打开",
   "contextMenu.move.to.cl": "移到 CL",
   "contextMenu.revert.unchanged.files": "还原未修改文件",
   "contextMenu.resolve.conflicts": "解决冲突",
@@ -177,7 +177,7 @@ export const zh = {
   "contextMenu.reconcile": "对账",
   "contextMenu.compare.with.file.revision": "与其他文件/版本比较",
   "contextMenu.merge.integrate": "合并/集成",
-  "contextMenu.copy.to": "复制到",
+  "contextMenu.copyTo": "复制到",
   "contextMenu.branch": "创建分支",
   "contextMenu.undo.submitted.changes": "撤销已提交变更",
   "contextMenu.tag.with.label": "打标签",
@@ -190,14 +190,13 @@ export const zh = {
   "contextMenu.open.terminal.here": "在此目录打开命令行",
   "contextMenu.rename.move.folder": "重命名/移动目录",
   "contextMenu.merge.integrate.folder": "合并/集成目录",
-  "contextMenu.copy.folder.to": "复制目录到",
+  "contextMenu.copy.folder": "复制目录到",
   "contextMenu.branch.folder": "创建目录分支",
   "contextMenu.tag.files.in.folder": "给目录文件打标签",
   "contextMenu.get.latest.for.entire.workspace": "获取整个工作区最新版本",
   "contextMenu.get.revision.for.entire.workspace": "获取整个工作区指定版本",
   "contextMenu.check.out.eligible.workspace.files": "签出整个工作区适用文件",
-  "contextMenu.mark.controlled.workspace.files.for":
-    "标记删除整个工作区受控文件",
+  "contextMenu.mark.workspace.files": "标记删除整个工作区受控文件",
   "contextMenu.revert.entire.workspace": "还原整个工作区",
   "contextMenu.search.workspace": "在工作区中搜索",
   "contextMenu.open.terminal.at.workspace.root": "在工作区根打开命令行",
@@ -207,7 +206,7 @@ export const zh = {
   "contextMenu.get.latest.in.mapped.scope": "获取映射范围最新版本",
   "contextMenu.get.revision.in.mapped.scope": "获取映射范围指定版本",
   "contextMenu.check.out.eligible.mapped.files": "签出映射范围适用文件",
-  "contextMenu.mark.controlled.mapped.files.for": "标记删除映射范围受控文件",
+  "contextMenu.mark.mapped.files": "标记删除映射范围受控文件",
   "contextMenu.revert.mapped.files": "还原映射范围文件",
   "contextMenu.search.this.depot": "在此 Depot 搜索",
   "contextMenu.copy.branch": "复制/分支",
@@ -406,15 +405,15 @@ export const zh = {
   "contextMenu.remove.from.workspace.recursive": "从工作区移除（递归）…",
   "contextMenu.get.latest.for.the.whole": "获取整个工作区最新版本…",
   "contextMenu.get.revision.for.the.whole": "获取整个工作区指定版本…",
-  "contextMenu.check.out.applicable.files.in": "签出整个工作区适用文件…",
+  "contextMenu.checkoutWorkspaceFiles": "签出整个工作区适用文件…",
   "contextMenu.revert.the.whole.workspace": "还原整个工作区…",
   "contextMenu.copy.workspace.root.path": "复制工作区根路径",
   "contextMenu.reconcile.the.whole.workspace": "对账整个工作区…",
-  "contextMenu.revert.unmodified.files.in.the": "还原整个工作区未修改文件…",
+  "contextMenu.revertUnmodifiedFiles": "还原整个工作区未修改文件…",
   "contextMenu.get.latest.for.the.mapping": "获取映射范围最新版本…",
   "contextMenu.get.revision.for.the.mapping": "获取映射范围指定版本…",
-  "contextMenu.check.out.files.in.the": "签出映射范围适用文件…",
-  "contextMenu.mark.controlled.files.in.the": "标记删除映射范围受控文件…",
+  "contextMenu.checkoutMappedFiles": "签出映射范围适用文件…",
+  "contextMenu.markMappedFilesForDelete": "标记删除映射范围受控文件…",
   "contextMenu.revert.files.in.the.mapping": "还原映射范围文件…",
   "contextMenu.copy.depot.path.2": "复制 Depot 路径",
   "contextMenu.copy.file.names": "复制 › 文件名列表",
@@ -437,7 +436,7 @@ export const zh = {
   "contextMenu.copy.current.folder.path": "复制当前目录路径",
   "contextMenu.copy.identity.default": "复制标识 default",
   "contextMenu.move.files.to.the.numbered": "移动文件到编号 CL…",
-  "contextMenu.create.a.numbered.cl.and": "创建编号 CL 并提交…",
+  "contextMenu.createClAndSubmit": "创建编号 CL 并提交…",
   "contextMenu.create.a.numbered.cl.and.2": "创建编号 CL 并搁置…",
   "contextMenu.revert.the.whole.default.cl": "还原整个 Default CL…",
   "contextMenu.submit.the.whole.cl": "提交整个 CL…",
@@ -455,7 +454,7 @@ export const zh = {
   "contextMenu.copy.exact.revision.identity": "复制精确修订标识",
   "contextMenu.copy.owning.cl.number": "复制所属 CL 编号",
   "contextMenu.copy.exact.revision.identities": "复制精确修订标识列表",
-  "contextMenu.get.these.revisions.for.the": "获取所选文件的这些修订…",
+  "contextMenu.getSelectedRevisions": "获取所选文件的这些修订…",
   "contextMenu.copy.cl.numbers": "复制 CL 编号列表",
   "contextMenu.copy.summaries": "复制摘要列表",
   "contextMenu.copy.selected.revision.identities": "复制所选修订标识",
@@ -467,7 +466,7 @@ export const zh = {
   "contextMenu.copy.current.target.identity": "复制当前目标标识",
   "contextMenu.copy.whole.table.tsv": "复制整表（TSV）",
   "contextMenu.copy.local.path": "复制 › 本地路径",
-  "contextMenu.copy.displayed.file.path.or": "复制展示的文件路径或 CL 编号",
+  "contextMenu.copyFilePathOrCl": "复制展示的文件路径或 CL 编号",
   "contextMenu.copy.current.query": "复制当前查询条件",
   "contextMenu.copy.names.2": "复制名称列表",
   "contextMenu.copy.root.paths": "复制根路径列表",
@@ -475,7 +474,7 @@ export const zh = {
   "contextMenu.copy.name": "复制名称",
   "contextMenu.copy.parent.stream.path": "复制父 Stream 路径",
   "contextMenu.create.a.workspace.for.this": "为此 Stream 创建工作区…",
-  "contextMenu.switch.the.current.workspace.to": "切换当前工作区到此 Stream…",
+  "contextMenu.switchWorkspaceTo": "切换当前工作区到此 Stream…",
   "contextMenu.copy.change": "复制变更…",
   "contextMenu.copy.stream.paths": "复制 Stream 路径列表",
   "contextMenu.move.to.another.group": "移到其他组 › 目标组",
@@ -519,7 +518,7 @@ export const zh = {
     "Classic View 每行必须包含 depot path 和 client path。",
   "pending.integrationTraceIncompatible":
     "Integration trace 响应不兼容；请核对前后端版本。",
-  "settings.queries.only.the.server.in.the":
+  "settings.queries.the.server":
     "只查询当前未保存设置中的服务器 {p1}；选择结果只会填入字段，不会保存或切换连接。",
   "settings.root.unavailable": "Root 不可用：{p1}",
   "settings.collapse": "折叠{p1}",
@@ -587,7 +586,7 @@ export const zh = {
   "search.open": "打开 {p1}",
   "search.search.text.is.limited.to.unicode":
     "搜索内容最多 {p1} 个 Unicode 字符。",
-  "update.new.version.is.available.open.the": "有新版本 {p1}，点击查看更新",
+  "update.new.available.open": "有新版本 {p1}，点击查看更新",
   "browse.showing.the.first.rows.of.about":
     "仅显示前 {p1} 行（工作表共约 {p2} 行）",
   "browse.showing.the.first.rows.total.rows":
@@ -642,17 +641,16 @@ export const zh = {
   "pending.verificationRequired": "需核实",
   "files.ambiguous.folder.path": "目录路径含有不明确的 P4 通配符",
   "files.file.or.folder.not.found": "未找到文件或目录",
-  "files.i.confirm.marking.resolve.with.the": "我确认以已编辑结果标记 Resolve",
+  "files.i.marking.resolve": "我确认以已编辑结果标记 Resolve",
   "files.don.t.ask.again.always.use": "不再询问，始终使用默认 CL",
-  "pending.pending.changelists.are.incomplete.refresh.and":
-    "待提交 CL 列表不完整，请刷新后重试",
+  "pending.pending.incomplete.refresh": "待提交 CL 列表不完整，请刷新后重试",
   "pending.current.user.unavailable": "当前用户不可用",
   "shell.close.task.list": "关闭任务列表",
   "shell.opening.page": "正在打开页面…",
   "shell.saving.appearance.preferences.failed.these.changes":
     "外观设置保存失败；重启后可能不会保留本次更改。",
   "shell.nothing.to.copy": "没有可复制的内容",
-  "shell.saving.shortcuts.failed.local.storage.is":
+  "shell.saving.local.storage":
     "快捷键设置保存失败：本地存储不可用，本次修改仅在当前会话生效。",
   "common.cmd.v":
     "无法读取剪贴板，请在地址栏按 Ctrl/Cmd+V 粘贴 / Paste into the address bar with Ctrl",
@@ -675,11 +673,11 @@ export const zh = {
   "shell.checking.folder": "正在检查目录",
   "shell.select.full.text": "选择完整文本",
   "shell.full.text": "完整文本",
-  "workspaces.unable.to.load.workspaces.retry.or":
+  "workspaces.unable.workspaces.retry":
     "无法加载 Workspace，请刷新重试或在连接设置中检查登录状态。",
   "workspaces.search.name.path.or.stream": "搜索名称、路径或 Stream…",
   "workspaces.no.workspaces.owned.by.the.current": "当前用户尚无 Workspace",
-  "settings.follows.the.theme.by.default.a":
+  "settings.follows.by.default":
     "默认跟随主题；选择或输入颜色后即时预览并保存，深浅主题会自动调整明暗以保持文字可读。",
   "settings.enter.six.hex.digits.the.last":
     "请输入六位十六进制颜色；当前背景保持上次有效值。",
@@ -691,7 +689,7 @@ export const zh = {
     "预检未通过或已过期，未删除",
   "pending.loading.cl.membership.for.opened.files":
     "正在读取已打开文件的 CL 归属…",
-  "pending.unique.cl.membership.is.unknown.for":
+  "pending.unique.is.unknown":
     "以下文件的唯一 CL 归属尚未确认。请刷新状态；不会忽略这些文件后操作其余文件。",
   "pending.selected.files.belong.to.multiple.cls":
     "所选文件分属多个 CL。请选择本次搁置的来源组；其他 CL 文件不在此次范围内。",
@@ -699,7 +697,7 @@ export const zh = {
     "活动连接已变化，请刷新 Workspace 后重试。",
   "workspaces.the.current.profile.requires.login.authenticate":
     "当前 Profile 需要登录，请到设置中完成认证后重试。",
-  "workspaces.target.workspace.verification.failed.check.its":
+  "workspaces.target.failed.check":
     "目标 Workspace 验证失败，请检查 Server、Client 与 Root。",
   "workspaces.the.target.workspace.no.longer.exists":
     "目标 Workspace 已不存在或不再属于当前用户，请刷新列表。",
@@ -713,19 +711,19 @@ export const zh = {
     "将删除当前及历史日志，包括旧版日志数据库。连接设置会保留，后续新日志将继续写入。",
   "companySubmit.a.custom.submit.tool.is.already":
     "该 CL 已有自定义提交工具在运行。",
-  "companySubmit.the.custom.submit.tool.did.not": "自定义提交工具未启动。",
+  "companySubmit.the.tool.did": "自定义提交工具未启动。",
   "companySubmit.custom.submit.failed": "自定义提交失败。",
-  "pending.form.checked.ui.preview.only.no":
+  "pending.form.preview.only":
     "表单检查通过。这是界面预览，尚未创建或保存 CL。",
   "pending.describe.the.changes.creating.a.cl":
     "描述这组变更；新建 CL 不会自动移动文件或提交。",
-  "pending.ui.preview.cl.writing.is.not":
+  "pending.ui.cl.writing":
     "界面预览 · 未连接 CL 写入流程，不会访问 P4 服务器。",
   "pending.closing.discards.this.draft.continue":
     "关闭将丢弃此次输入，是否继续？",
   "pending.pending.changelist.not.found.or.results":
     "未找到此待提交 CL，或结果不完整。",
-  "pending.returned.changelist.does.not.match.the": "返回的 CL 与目标不符",
+  "pending.returned.not.match": "返回的 CL 与目标不符",
   "pending.this.changelist.is.not.submitted.yet":
     "该 CL 尚未提交，仅能查看搁置(shelved)文件。",
   "pending.simulated.data.no.real.p4.server":
@@ -766,11 +764,11 @@ export const zh = {
     "查询对应的连接设置已变化，请关闭后重试。",
   "settings.this.is.the.explicit.p4.user":
     "这是本次查询明确使用的 P4 用户；不会从活动连接或环境中静默回退。如需 Trust 或登录恢复，请关闭窗口并先把该用户名填入主卡 User 字段。",
-  "settings.enter.the.username.to.use.for": "请明确填写本次查询使用的用户名。",
+  "settings.enter.to.use": "请明确填写本次查询使用的用户名。",
   "settings.bounded.result.may.be.incomplete": " · 有界结果，可能不完整",
   "settings.no.matches.the.server.returns.bounded":
     "没有匹配结果。服务器只返回有界的名称前缀搜索结果。",
-  "pending.files.have.an.unresolved.move.or":
+  "pending.files.unresolved.move":
     "文件已有未确认移动或归属已变化，请先核实本次状态。",
   "pending.outcome.unknown.check.this.attempt.without":
     "结果未知；仅检查本次状态，不会重新创建或移动。",
@@ -782,7 +780,7 @@ export const zh = {
     "关闭仅关闭此窗口，不撤销移动，也不会删除已创建的 CL。",
   "pending.connection.changed.select.files.again.this":
     "连接已改变，请重新选择文件；保留本次结果。",
-  "files.undo.executed.legacy.result.inspect.the":
+  "files.undo.result.inspect":
     "Undo 已执行（旧格式结果）；请检查工作区与操作日志。",
   "files.undo.outcome.is.unconfirmed.rows.were":
     "Undo 结果不确定，已按真实状态刷新；不要直接重试。",
@@ -790,7 +788,7 @@ export const zh = {
     "Undo 已保存到默认待提交列表，尚未提交。请检查文件；如有后续修订，提交前需要同步并解决冲突。",
   "files.undo.did.not.complete.cleanly.partial":
     "Undo 未完整完成（partial/unknown）。请检查工作区与操作日志，不要直接重试。",
-  "files.undo.only.the.changes.introduced.by":
+  "files.undo.changes.introduced":
     "仅撤销右键行这个文件修订引入的更改；不扩大到整个 CL 或两条选中记录之间的区间。",
   "files.destination.default.pending.changelist.no.automatic":
     "目标：默认待提交列表。不会自动提交。后续修订可能需要同步及 Resolve 后才能提交。",
@@ -800,13 +798,13 @@ export const zh = {
     "将更新工作区中的对应文件；不会强制覆盖已打开的本地修改。",
   "files.duplicates.and.descendants.covered.by.selected":
     "已合并重复项及父目录覆盖的子项，避免重复操作。",
-  "files.folders.included.all.descendants.are.in":
+  "files.folders.descendants.are":
     "包含目录：操作将递归覆盖所选目录的全部子文件；目标数量不是实际文件数量。",
   "files.the.same.per.file.revision.number":
     "同一个修订号应用于每个文件，不代表某次共同提交；文件可能不存在该修订。",
   "files.syncs.versions.as.of.this.cl":
     "获取截至该 CL 的版本，并非只获取该 CL 提交过的文件。",
-  "files.uses.00.00.00.on.that":
+  "files.serverDayStart":
     "按 P4 服务器时区当天 00:00:00 计算，不是当天结束时间。",
   "files.enter.a.valid.date.or.positive":
     "请输入有效日期或正整数编号，不要带 #、@ 或命令参数。",
@@ -827,21 +825,20 @@ export const zh = {
     "重复项及父目录覆盖的子项已合并。",
   "shell.execution.can.partially.succeed.cancellation.requests":
     "执行后可能部分成功。取消运行只能请求停止剩余工作，不能撤销已完成部分；请检查任务结果与日志。",
-  "shell.i.have.reviewed.the.scope.and": "我已核对以上范围与风险。",
+  "shell.i.the.scope": "我已核对以上范围与风险。",
   "settings.no.recovery.action.is.required": "无需恢复操作。",
   "settings.configure.a.valid.p4.cli.then": "配置有效的 P4 CLI 后重新验证。",
   "settings.correct.and.save.the.connection.settings":
     "修正并保存连接参数后重新验证。",
   "settings.verify.and.confirm.the.current.ssl": "核对并确认当前 SSL 指纹。",
-  "settings.log.in.or.re.authenticate.the": "登录或重新登录当前用户。",
+  "settings.log.re.authenticate": "登录或重新登录当前用户。",
   "settings.check.the.environment.and.retry": "确认环境后重试。",
   "settings.contact.the.helix.core.administrator": "联系 Helix Core 管理员。",
   "settings.complete.sso.mfa.externally.then.check":
     "在外部完成 SSO/MFA 后检查状态。",
   "pending.outcome.unknown.check.status.without.creating":
     "结果未知；请检查状态，不要重复创建。",
-  "pending.no.submission.permission.files.remain.in":
-    "未获得提交许可，文件保留在新 CL。",
+  "pending.no.files.remain": "未获得提交许可，文件保留在新 CL。",
   "pending.select.files.and.confirm.configuration.again":
     "请重新选择文件并确认配置；尚未创建或移动。",
   "pending.connection.changed.further.actions.stopped.keep":
@@ -850,7 +847,7 @@ export const zh = {
     "已打开提交流程；取消时文件留在新 CL。是否提交以提交结果为准。",
   "pending.not.submitted.partial.or.unknown.moves":
     "尚未提交。部分移动或未知结果不会继续；关闭后保留新 CL 和已移动文件。",
-  "pending.the.previous.process.was.interrupted.the":
+  "pending.the.was.interrupted":
     "上一次进程已中断：准备过程不会自动恢复，也不会自动用新操作号重试；请核对已移动文件与新 CL 后再决定是否重新开始。",
   "pending.selected.files.with.unknown.outcome": "结果未知的选中文件",
   "pending.invalid.source.submission.time.cannot.bound":
@@ -859,23 +856,21 @@ export const zh = {
     "查询响应不兼容或连接已变化",
   "pending.invalid.page.cursor.refresh.the.investigation":
     "分页游标无效，请刷新调查",
-  "pending.invalid.candidate.submission.time.refresh.to":
-    "候选提交时间无效，请刷新核对",
+  "pending.invalid.time.refresh": "候选提交时间无效，请刷新核对",
   "pending.cancelled.current.results.may.be.incomplete":
     "已取消；当前结果可能不完整",
-  "pending.direct.and.indirect.submissions.linked.by":
+  "pending.direct.submissions.linked":
     "按 CI 元数据中的来源 CL 引用链查找直接和间接合并提交",
   "pending.query.limit.reached.incomplete": "达到本轮上限 · 未完成",
-  "pending.no.cl.reference.candidates.in.the":
-    "已查询范围内未发现CL引用链候选。",
+  "pending.no.reference.candidates": "已查询范围内未发现CL引用链候选。",
   "browse.explicit.roots.same.relative.path": "指定根目录，保留相对路径",
-  "browse.inspect.shared.intermediate.references.up.to":
+  "browse.inspect.references.up":
     "检查来源/目标共同引用的中转（每文件最多2个）",
   "browse.at.most.20.api.read.attempts":
     "最多20次API读取尝试（含CL/映射），100个文件，每路径最多2页；缓存命中不请求服务器。仅支持直接目录映射或简单Branch Mapping，复杂Stream导入/重映射不会猜测。",
   "browse.whole.cl.content.inclusion.unknown.individual":
     "整个CL的内容包含性：未知。单文件记录路径不代表整个CL已合入；未查到不代表未合入。",
-  "browse.investigation.incomplete.file.visibility.cancellation.or":
+  "browse.investigation.visibility.cancellation":
     "调查不完整：文件列表、取消或预算限制。",
   "browse.no.visible.files.no.cl.conclusion": "没有可见文件，无法得出CL结论。",
   "browse.evidence.not.content.inclusion": "记录证据（不证明内容包含）",
@@ -892,15 +887,14 @@ export const zh = {
     "删除不可撤销。预检会重新读取 Mapping、owner、锁定状态和权限，确认阶段还会执行 TOCTOU 复核。",
   "browse.this.mapping.contains.unknown.fields.comments":
     "该 Mapping 含未知字段、注释或无法往返的 View 行，禁止编辑；详情仍可只读查看。",
-  "browse.i.understand.this.permanently.deletes.the":
-    "我确认永久删除该 Branch Mapping",
-  "browse.the.write.may.have.applied.the":
+  "browse.i.permanently.deletes": "我确认永久删除该 Branch Mapping",
+  "browse.the.have.applied":
     "写入可能已应用；已用同一操作号查询持久回执并刷新一次。请先核对 Branch Mapping 列表/详情，不要用新操作号重试。",
   "browse.the.refreshed.list.detail.remains.authoritative":
     "仍以刷新后的列表/详情为准。",
   "browse.the.backend.returned.a.non.progressing":
     "后端返回了未前进的游标；已保留当前列表并停止分页。",
-  "browse.the.request.was.cancelled.retry.or": "请求已取消；可以重试或刷新。",
+  "browse.the.cancelled.retry": "请求已取消；可以重试或刷新。",
   "browse.inspect.preview.and.maintain.branch.mappings":
     "查看、预览并通过专用安全状态机维护 Branch Mapping。",
   "browse.branch.mapping.name.filter": "Branch Mapping 名称过滤",
@@ -928,7 +922,7 @@ export const zh = {
   "update.version.v.is.downloaded.confirm.install":
     "更新 v{p1} 已下载，确认安装并重启后生效。",
   "update.the.last.update.failed": "上次更新失败：{p1}",
-  "settings.automatic.updates.are.available.in.the": "仅桌面版支持自动更新。",
+  "settings.automatic.are.available": "仅桌面版支持自动更新。",
   "settings.the.desktop.app.checks.at.startup":
     "桌面版启动时及每 6 小时自动检查，有新版本时标题栏会提示。首个包含自动更新的版本需要手动安装一次，之后的版本才能自动升级。",
   "shell.tab.group.actions": "页签组操作",
@@ -951,7 +945,7 @@ export const zh = {
   "files.conflict.block.s.2": "{p1} 个冲突块",
   "files.pending.resolved": "待处理 {p1} · 已解决 {p2}",
   "files.select": "选择 {p1}",
-  "files.workspace.modification.based.on": "工作区修改 · 基于 #{p1}",
+  "files.workspace.modification.based": "工作区修改 · 基于 #{p1}",
   "workspaces.connection.generation.changed.no.workspace.mutation":
     "连接代际与预检目标不一致，未执行工作区变更。",
   "workspaces.outcome.uncertain.the.operation.may.have":
@@ -964,11 +958,10 @@ export const zh = {
     "请确认以上目标。执行前会再次检查。",
   "workspaces.deleting.the.workspace.definition.cannot.be":
     "删除工作区定义不可本地撤销；本机与 Depot 文件不受影响。",
-  "workspaces.i.understand.this.permanently.deletes.the":
-    "我确认永久删除该工作区定义",
+  "workspaces.i.permanently.deletes": "我确认永久删除该工作区定义",
   "workspaces.operation.in.progress.closing.is.protected":
     "正在执行；关闭保护已启用，取消不会回滚已应用的服务器变更。",
-  "workspaces.uncertain.outcomes.are.never.retried.or":
+  "workspaces.uncertain.never.retried":
     "结果不确定时不自动重试、不更换操作号；请先刷新并核对工作区列表。",
   "files.the.preview.expired.request.a.fresh":
     "预览已过期，请重新从服务器获取。",
@@ -978,12 +971,10 @@ export const zh = {
     "先运行真实 p4 sync -n，核对服务器计划后才能执行。",
   "files.force.re.sync.high.risk.requires":
     "强制重新同步（高风险；预览后还需再次确认）",
-  "files.force.re.transfers.current.files.and":
+  "files.force.current.files":
     "Force 会重新传输当前文件，并可能触发 writable/clobber 风险；不会默认启用。",
-  "files.preview.is.partial.inspect.blockers.and":
-    "预览为 partial；请检查阻塞项与日志。",
-  "files.i.reviewed.the.real.preview.and":
-    "我已核对真实预览，并再次确认执行 Force 同步。",
+  "files.preview.inspect.blockers": "预览为 partial；请检查阻塞项与日志。",
+  "files.i.real.preview": "我已核对真实预览，并再次确认执行 Force 同步。",
   "files.executing.the.confirmed.sync.cancellation.does":
     "正在执行已确认的同步。取消不会回滚已传输文件。",
   "pending.sort.switch.descending": "切换为降序",
@@ -1019,7 +1010,7 @@ export const zh = {
   "common.path.is.outside.the.current.client": "路径不在当前客户端视图中。",
   "common.file.is.not.available.locally.sync":
     "文件不在本地，请先获取最新（Sync）后再试。",
-  "common.depot.file.is.not.mapped.to": "该 Depot 文件未映射到当前工作区。",
+  "common.depot.not.mapped": "该 Depot 文件未映射到当前工作区。",
   "common.workspace.root.has.not.been.verified": "工作区根目录尚未校验。",
   "common.workspace.root.must.be.an.absolute": "工作区根目录必须是绝对路径。",
   "common.select.a.regular.file": "请选择一个普通文件。",
@@ -1028,7 +1019,7 @@ export const zh = {
   "pending.maximum.512.characters": "最多 512 字符",
   "pending.current.stream.unavailable": "当前 Stream 不可用",
   "pending.select.valid.streams.maximum.16": "请选择有效 Stream（最多16项）",
-  "pending.depot.path.without.or":
+  "pending.depot.path.without":
     "请输入有效的 //depot 路径（不可含 @ 或 #） / Enter a valid /",
   "pending.depot.path.does.not.intersect.selected":
     "Depot Path 与所选 Stream 无交集",
@@ -1042,7 +1033,7 @@ export const zh = {
   "pending.cancelled.current.results.incomplete": "已取消，当前结果不完整",
   "pending.coverage.of.retrieved.integration.records.only":
     "只验证已读取的集成记录覆盖，不证明已穷尽所有去向，也不保证目标当前内容仍包含修改。未发现记录不等于未合入；目标分支无法可靠映射时显示 depot 路径。",
-  "pending.source.file.set.or.investigation.is":
+  "pending.sourceInvestigationIncomplete":
     "源CL文件集或调查尚不完整，未查询项为未知。",
   "pending.no.matching.records.in.current.results":
     "当前未发现匹配记录，去向未知。",
@@ -1057,8 +1048,7 @@ export const zh = {
     "仅下一跳记录；忽略/撤销/编辑动作和缺失范围需独立核对。",
   "browse.browser.demo.simulated.content.no.local":
     "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png / demo.csv / demo.xlsx 查看示例。",
-  "browse.select.preview.or.double.click.a":
-    "选择文件后点击“预览”，或双击文件。",
+  "browse.select.double.click": "选择文件后点击“预览”，或双击文件。",
   "browse.long.line.truncated": " … [此行过长，已截断显示]",
   "browse.invalid.image.or.unsupported.system.decoder":
     "图片损坏或当前系统不支持此格式。",
@@ -1072,20 +1062,18 @@ export const zh = {
     "先下载更新；下载完成后确认安装并重启，失败会提示原因。",
   "update.the.download.continues.in.the.background":
     "下载在后台继续，可以关闭此面板；安装前一定会再确认。",
-  "update.installing.closes.the.app.and.the":
+  "update.installing.the.app":
     "安装会关闭应用，安装器完成后会自动重启。也可以稍后从标题栏继续。",
   "update.the.app.must.restart.after.installing":
     "安装完成后需要重启应用。也可以稍后从标题栏继续。",
-  "update.installing.the.app.closes.and.the":
+  "update.installing.app.closes":
     "正在安装；应用会关闭，由安装器完成安装并重启。",
   "update.installing.the.update.the.app.restarts":
     "正在安装更新，完成后应用将重启。",
-  "update.the.update.is.installed.but.the":
+  "update.installedPendingRestart":
     "更新已安装，但重启没有完成；请手动重启应用。",
-  "update.the.update.did.not.complete.the":
-    "更新没有完成，应用仍在当前版本上运行。",
-  "update.the.update.is.downloaded.but.not":
-    "更新已下载，但尚未安装；确认后才会安装。",
+  "update.the.not.complete": "更新没有完成，应用仍在当前版本上运行。",
+  "update.the.downloaded.but": "更新已下载，但尚未安装；确认后才会安装。",
   "update.installing.the.update.the.app.will":
     "正在安装更新，应用即将关闭或重启。",
   "pending.tags": "标签",
@@ -1112,7 +1100,7 @@ export const zh = {
   "shell.revgraph": "修订图",
   "shell.preview": "文件预览",
   "shell.reveal": "系统中定位",
-  "shell.open.with": "其他软件打开",
+  "shell.openWithApp": "其他软件打开",
   "shell.revert.unchanged": "还原未更改",
   "shell.get.revision": "获取指定版本",
   "pending.loading.submitted.changes": "正在查询 Submitted…",
@@ -1132,22 +1120,20 @@ export const zh = {
     "预检通过。令牌只能使用一次；确认时会在 mutation lane 内重新校验全部状态。",
   "files.revalidating.and.executing.closing.the.view":
     "正在重新校验并执行。关闭界面不能撤销服务器已接受的操作。",
-  "files.closing.discards.the.current.preview.and":
-    "关闭将丢弃当前预检与一次性令牌。",
-  "files.use.an.absolute.path.of.the": "请输入与源路径同类型的绝对路径。",
+  "files.closing.current.preview": "关闭将丢弃当前预检与一次性令牌。",
+  "files.use.absolute.path": "请输入与源路径同类型的绝对路径。",
   "files.control.characters.and.p4.filespec.metacharacters":
     "路径不能包含控制字符或 P4 filespec 元字符。",
-  "files.a.root.path.empty.segments.and":
-    "路径不能是根目录，或包含空段、.、..。",
-  "files.a.folder.cannot.move.into.its": "不能把目录移动到它自己的子目录中。",
+  "files.a.empty.segments": "路径不能是根目录，或包含空段、.、..。",
+  "files.a.move.into": "不能把目录移动到它自己的子目录中。",
   "pending.changelist.summary.unavailable.refresh.and.retry":
     "找不到此 CL 的文件摘要，请刷新后重试。",
-  "pending.preflight.result.does.not.match.the": "预检结果与目标不匹配。",
+  "pending.preflight.not.match": "预检结果与目标不匹配。",
   "pending.connection.identity.changed.nothing.was.submitted":
     "连接身份与提交预检目标不一致，未执行提交。",
-  "pending.submission.always.covers.every.file.in":
+  "pending.submission.every.file":
     "提交范围始终是这个 CL 的全部文件，不会只提交当前选择的文件。",
-  "pending.ui.preview.preflight.execution.is.not":
+  "pending.ui.preflight.execution":
     "界面预览：提交预检/执行尚未接通。文件摘要不代表已通过权限、冲突或最新状态检查，不能提交。",
   "pending.connection.changed.close.and.reopen.previous":
     "连接已改变，请关闭后重新打开。旧预检已失效。",
@@ -1166,7 +1152,7 @@ export const zh = {
   "notify.hostReason.preflight.is.not.ready.nothing":
     "预检未通过，未写入任何内容。",
   "notify.hostReason.preflight.blocked": "预检未通过，未执行。",
-  "notify.hostReason.existing.operation.is.running.or":
+  "notify.hostReason.is.running":
     "该操作仍在进行或已中断，不会自动重试；请先核对状态。",
   "notify.hostReason.invalidConnection": "当前连接无效。",
   "notify.hostReason.duplicateChange":
@@ -1184,7 +1170,7 @@ export const zh = {
     "自定义提交工具启动失败或结果未知；请核对 P4 中的实际状态，不要重复提交。",
   "notify.hostReason.requestConflict":
     "提交请求被拒绝（请求 ID 冲突或过多）；请重启应用后重试。",
-  "settings.write.action.no.shortcut.use.the":
+  "settings.write.shortcut.use":
     "写操作：不分配快捷键，仍需工具栏/命令面板并确认",
   "settings.requires.a.nonempty.numbered.pending.changelist":
     "需选中非空、已编号的待提交 CL",
@@ -1253,18 +1239,18 @@ export const zh = {
   "pending.changelist.creation.outcome.is.unconfirmed.refresh":
     "创建 CL 的结果未确认；请刷新 Pending 后手动重试（不会自动重放）",
   "pending.preflight.does.not.match.the.source": "预检结果与来源或目标不匹配。",
-  "pending.target.changelist.does.not.match.the":
+  "pending.target.not.match":
     "目标 CL 与新建的 CL 不一致，未执行任何 Unshelve。",
   "pending.source.connection.identity.changed.nothing.was":
     "源连接身份与预检目标不一致，未执行任何 Unshelve。",
   "pending.apply.the.fixed.source.shelf.subset":
     "将固定的来源 Shelf 子集应用到目标工作区与 CL；来源 Shelf 保留，不会强制覆盖本地内容。",
-  "pending.browser.mock.simulates.the.result.and":
+  "pending.browserMockSimulated":
     "浏览器 Mock 会模拟结果，不访问真实 P4 Server。",
   "pending.enter.default.0.or.a.valid": "请输入 Default（0）或有效的编号 CL。",
   "pending.preflight.verifies.mapping.local.overwrite.risk":
     "预检会验证映射、本地覆盖、锁、权限、已有打开状态和 Resolve 风险；执行不会启用强制覆盖。",
-  "pending.i.reviewed.the.target.mappings.and":
+  "pending.i.target.mappings":
     "我已核对目标、映射和风险；仅按普通 Unshelve 执行，不强制覆盖。",
   "pending.unshelve.in.progress.closing.is.disabled":
     "正在 Unshelve；关闭保护已启用。",
@@ -1278,7 +1264,7 @@ export const zh = {
     "预检已过期，请重新检查当前工作区。",
   "browse.connection.identity.changed.no.stream.switch":
     "连接身份与预检目标不一致，未执行 Stream 切换。",
-  "browse.inspect.the.client.stream.permissions.and":
+  "browse.inspect.stream.permissions":
     "检查 Client、Stream、权限和本地文件状态后，使用官方 client view switch；绝不强制切换或自动清理文件。",
   "browse.browser.mock.preflight.and.execution.are":
     "Browser Mock：以下预检和执行均为模拟，不访问服务器或文件系统。",
@@ -1295,14 +1281,13 @@ export const zh = {
     "我已核对全部警告，并确认所选文件处理方式。",
   "browse.revalidating.switching.the.client.stream.syncing":
     "正在重新验证、切换 Client Stream、同步并验证。取消不会回滚已完成步骤。",
-  "browse.revalidating.switching.the.client.stream.and":
+  "browse.revalidating.client.stream":
     "正在重新验证、切换 Client Stream 并确认服务器结果。",
   "browse.the.switch.may.have.partially.applied":
     "切换可能已部分应用（无回滚）；已用同一操作号查询持久回执并刷新一次。请先核对 Client Stream/工作区身份，不要用新操作号重试。",
   "browse.refreshed.workspace.stream.views.remain.authoritative":
     "仍以刷新后的工作区/Stream 视图为准。",
-  "settings.configuration.backup.is.available.in.the":
-    "配置备份只在 P4Deck 桌面版中可用。",
+  "settings.configuration.is.available": "配置备份只在 P4Deck 桌面版中可用。",
   "settings.outcome.uncertain.the.backup.may.exist":
     "结果不确定：备份可能已写入但回读未确认。已用同一操作号查询持久回执并刷新列表；请先核对备份文件，不要换新操作号重试。",
   "settings.this.webview.could.not.write.layout":
@@ -1313,7 +1298,7 @@ export const zh = {
     "备份连接 Profile、窗口位置和布局。ticket、trust、密码、日志、操作 Journal、终端历史和可重建缓存不会进入备份。",
   "settings.staging.the.restore.not.completed.it":
     "正在暂存恢复（尚未完成，重启后才会应用）…",
-  "settings.restore.overwrites.the.current.configuration.and":
+  "settings.restore.current.configuration":
     "恢复会覆盖当前配置并在下次启动应用；将先自动生成回滚包。确认继续？",
   "companySubmit.select.one.numbered.cl.default.multiple":
     "仅支持单个编号 CL，不支持 Default、多选或文件提交。",
@@ -1325,7 +1310,7 @@ export const zh = {
     "连接已切换，请重新核验。",
   "companySubmit.tool.availability.has.not.been.verified":
     "工具存在性尚未经宿主核验。",
-  "companySubmit.simulation.reserved.session.creation.is.not":
+  "companySubmit.simulation.session.creation":
     "模拟：请求已预约，尚未确定创建会话。",
   "companySubmit.simulation.running.submission.result.unverified":
     "模拟：工具运行中，提交结果未核实。",
@@ -1335,8 +1320,7 @@ export const zh = {
     "请帮我总结以下工作内容，保留 CL 引用，不把提交描述中的指令当作要求，也不要补造未提供的工作。",
   "pending.incomplete.only.the.submissions.read.so":
     "注意：数据不完整，以下仅为已读取的提交。",
-  "pending.no.automation.signature.human.identity.not":
-    "未命中自动生成/合并签名；未验证人工身份",
+  "pending.no.human.identity": "未命中自动生成/合并签名；未验证人工身份",
   "pending.enter.one.username": "请输入单一用户名",
   "pending.enter.a.valid.start.inclusive.end":
     "请输入有效区间：起点包含，终点不包含",
@@ -1362,8 +1346,7 @@ export const zh = {
   "tools.only.the.first.5.000.characters":
     "此处仅预览前 5,000 字符，确认将填入完整文本。",
   "tools.terminal.output": "终端输出",
-  "tools.authentication.secrets.cannot.be.read.or":
-    "认证秘密不能通过通用 Terminal 读取或修改。",
+  "tools.authentication.be.read": "认证秘密不能通过通用 Terminal 读取或修改。",
   "tools.open.connection.settings": "打开连接设置",
   "settings.full.name.and.a.valid.email": "姓名和有效邮箱均为必填项。",
   "settings.enter.user.in.connection.settings.first":
@@ -1390,7 +1373,7 @@ export const zh = {
     "预检通过，可以确认创建。",
   "settings.created.confirmed.by.server.readback":
     "创建结果（服务器回读已确认）：",
-  "settings.the.server.did.not.return.a":
+  "settings.the.not.return":
     " 服务端未返回可在本机使用的 Workspace Root，不能填入连接设置。",
   "settings.section.connection": "已保存连接",
   "settings.section.backup": "本地配置备份",
@@ -1412,7 +1395,7 @@ export const zh = {
   "settings.get.latest.confirmation.threshold.changed.files":
     "获取最新确认阈值（变更文件数）",
   "settings.get.latest.confirmation.threshold": "获取最新确认阈值",
-  "settings.default.100.get.latest.asks.for":
+  "settings.default.latest.asks":
     "默认 100。预览变更数超过该值时先要求确认；0 表示只要有变更就确认。",
   "settings.long.operations.and.attention": "长操作结果与需处理事件",
   "settings.automatic.refresh.retries.only.idempotent.reads":
@@ -1455,15 +1438,15 @@ export const zh = {
   "files.p4merge.is.not.installed": "未检测到 P4Merge，请先安装/配置。",
   "files.the.p4merge.result.still.has.unresolved":
     "P4Merge 合并结果仍有未解决内容。",
-  "files.browser.mock.returns.unknown.conflicts.and":
+  "files.browser.unknown.conflicts":
     "浏览器 Mock 只返回未知冲突并保持阻塞，不访问真实 P4 Server。",
   "files.re.resolve.resolves.again.on.top":
     "重新解决：基于上次解决结果再次解决（p4 resolve -f）；如需保留原始工作区内容，请先 revert 该文件。",
   "files.conflict.blocks.were.auto.resolved.accept":
     "已自动处理冲突块，可接受自动合并结果。",
-  "files.choose.one.side.or.open.the": "需要选择保留一侧，或打开合并工具处理。",
+  "files.chooseSideOrMergeTool": "需要选择保留一侧，或打开合并工具处理。",
   "files.accept.the.auto.merged.result": "接受自动合并生成的结果。",
-  "files.auto.merge.is.not.offered.by": "后端未提供自动合并策略。",
+  "files.auto.not.offered": "后端未提供自动合并策略。",
   "files.measuring.conflict.blocks.please.wait": "正在统计冲突块，请稍候。",
   "files.conflict.blocks.remain.auto.merge.cannot":
     "仍有冲突块，不能直接接受自动合并。",
@@ -1471,7 +1454,7 @@ export const zh = {
     "用来源替换本地，舍弃本地独有修改。",
   "files.keep.local.content.discard.source.only":
     "保留本地内容，舍弃来源独有修改。",
-  "files.inspect.and.merge.each.location.with": "使用合并工具逐处检查并处理。",
+  "files.inspect.each.location": "使用合并工具逐处检查并处理。",
   "files.no.unresolved.conflicts.in.the.selected": "所选文件没有待解决的冲突。",
   "files.resolving.the.current.selection.the.full":
     "正在对当前选择执行 Resolve，并会重新读取全部文件。",
@@ -1485,16 +1468,15 @@ export const zh = {
   "shell.select.a.file.or.folder.first": "请先选择文件或目录",
   "shell.select.a.single.target.for.this": "此操作需要仅选择一个目标",
   "shell.target.path.is.unknown": "目标路径尚未确定",
-  "shell.lock.operations.require.explicit.files.and":
-    "锁操作仅支持显式文件，不递归目录",
+  "shell.lock.explicit.files": "锁操作仅支持显式文件，不递归目录",
   "shell.current.lock.state.does.not.allow": "当前锁状态不支持此操作",
-  "shell.the.file.must.be.opened.in": "文件必须先在当前工作区打开",
+  "shell.the.be.opened": "文件必须先在当前工作区打开",
   "shell.system.actions.require.the.desktop.app":
     "浏览器演示不支持系统操作，请在桌面应用中使用",
   "shell.open.with.requires.a.file.use":
     "其他软件打开仅支持文件；目录请使用系统中定位",
   "shell.checking.local.path": "正在检查本地路径",
-  "shell.target.is.outside.the.workspace.or":
+  "shell.target.the.workspace":
     "目标不在当前工作区内或本地不存在，请先获取文件",
   "shell.folder.path.is.not.known.yet": "目录路径尚未确定",
   "shell.adding.a.folder.requires.a.local": "添加目录需要本地目录",
@@ -1550,7 +1532,7 @@ export const zh = {
   "pending.users": "用户",
   "pending.depotPath": "Depot Path",
   "pending.from": "起始时间",
-  "pending.to": "结束时间",
+  "pending.endTime": "结束时间",
   "pending.reset": "重置为默认过滤器",
   "pending.saved": "保存的过滤器",
   "pending.none": "未选择",
@@ -1644,7 +1626,7 @@ export const zh = {
   "commands.panel.dockBack": "停靠回主窗口",
   "settings.delete.profile": "删除 {name}",
   "settings.showing.connections": "显示 {shown} / {total} 个连接",
-  "settings.resolving.root.for": "正在解析 {client} 的 Root…",
+  "settings.resolving.root": "正在解析 {client} 的 Root…",
   "settings.verified.fingerprint.through.trusted":
     "我已通过可信渠道核对 {server} 的上述完整指纹。",
   "settings.field.charset": "字符集 / P4CHARSET",
@@ -1656,8 +1638,7 @@ export const zh = {
   "settings.field.swarmBaseUrl": "Swarm 基础 URL（可选）",
   "settings.field.executable": "P4 可执行文件",
   "settings.field.customSubmitExecutablePath": "自定义提交工具（可选）",
-  "settings.the.workspace.root.returned.by.the":
-    "服务器返回的 Workspace Root 在本机不可用。",
+  "settings.the.root.returned": "服务器返回的 Workspace Root 在本机不可用。",
   "settings.the.server.returned.no.exact.workspace":
     "服务器未返回完全匹配的 Workspace。",
   "settings.swarm.url.must.be.an.http":
@@ -1674,9 +1655,9 @@ export const zh = {
   "settings.p4.cli.found.use.verify.these":
     "已找到 P4 CLI。可点击“验证这些设置”验证连接；尚未访问服务器。",
   "settings.cli.detection.did.not.complete.retry": "CLI 检测未完成，请重试。",
-  "settings.verifying.a.connection.requires.server.and":
+  "settings.verifying.requires.server":
     "验证连接需要 Server 和 User；可在选择 Workspace 之前验证并完成 Trust 或登录恢复。",
-  "settings.browser.mock.validation.was.simulated.with":
+  "settings.browser.was.simulated":
     "浏览器 Mock：仅模拟验证，未发起真实网络连接；此操作不会切换当前连接。",
   "settings.the.active.connection.and.login.are":
     "当前连接与登录已验证，文件树已可加载。",
@@ -1690,15 +1671,14 @@ export const zh = {
     "Trust 请求未完成；未信任其他指纹。",
   "settings.browser.mock.login.was.simulated.without":
     "浏览器 Mock：模拟登录完成，未访问真实服务器。",
-  "settings.the.current.settings.are.authenticated.the":
-    "当前设置登录成功；密码已清空。",
-  "settings.login.was.not.proven.by.the":
+  "settings.the.are.authenticated": "当前设置登录成功；密码已清空。",
+  "settings.login.not.proven":
     "登录结果未被权威连接状态证实；密码已清空，请刷新后再试。",
   "settings.login.did.not.complete.the.password": "登录未完成；密码已清空。",
   "settings.browser.mock.logout.was.simulated.without":
     "浏览器 Mock：模拟退出，未访问真实服务器。",
   "settings.the.user.for.the.current.settings": "当前设置对应用户已退出。",
-  "settings.logout.was.not.proven.by.the":
+  "settings.logout.not.proven":
     "退出结果未被权威状态证实；卡片刻意保持不确定。",
   "settings.this.workspace.root.is.not.usable":
     "该 Workspace 的 Root 在当前机器上不可用，不能填入连接设置。",
@@ -1720,14 +1700,14 @@ export const zh = {
     "仅用于区分已保存连接；留空会根据 Server、User 和 Workspace 自动生成。",
   "settings.choose.the.server.user.and.workspace":
     "选择要连接的服务器、用户和工作区。保存或验证前不会切换当前连接。",
-  "settings.choose.or.enter.a.workspace.to":
+  "settings.choose.a.workspace":
     "选择或填写 Workspace 后自动从服务器解析；无需手填本地路径。",
   "settings.workspace.root.resolution.failed": "Workspace Root 解析失败。",
   "settings.saved.root.the.backend.rechecks.it":
     "已保存的 Root；保存或激活时后端会再次向服务器核对。",
   "settings.resolved.exactly.from.the.current.draft":
     "已按当前草稿从服务器精确解析；保存时仍会再次核对。",
-  "settings.these.advanced.values.are.saved.with":
+  "settings.these.are.saved":
     "这些高级值随当前已保存连接保存。Workspace Root 始终由上方所选 Workspace 自动解析。",
   "settings.choose.an.exe.file.desktop.only": "选择 .exe 文件（仅桌面版）",
   "settings.leave.the.custom.submit.tool.empty":
@@ -1736,9 +1716,9 @@ export const zh = {
     "Swarm URL 仅用于生成只读网页链接；不会保存 Swarm token、密码或登录信息。",
   "settings.see.the.connection.status.card.below":
     "详细恢复操作见下方连接状态卡片。",
-  "settings.there.are.unsaved.profile.changes.the":
+  "settings.there.profile.changes":
     "有未保存的配置修改；当前使用的连接参数未变，验证状态仍有效。",
-  "settings.there.are.unsaved.changes.validation.and":
+  "settings.there.changes.validation":
     "有未保存修改。验证和认证只针对这些设置；保存后状态仍为“尚未验证”。",
   "settings.first.check.for.an.existing.p4":
     "先重新检测已有的 P4 CLI。若未安装，请从 Perforce 官方页面选择 P4 CLI，自行确认适用条款并完成安装，再重新检测。打开下载页不会自动安装。",
@@ -1746,7 +1726,7 @@ export const zh = {
   "settings.the.server.returned.no.verifiable.fingerprint":
     "服务器未返回可核对指纹，不能执行 Trust。",
   "settings.p4.password.this.request.only": "P4 密码（仅用于本次请求）",
-  "settings.the.password.is.never.written.to":
+  "settings.the.never.written":
     "密码不写入未保存设置、已保存连接、Storage、URL、历史或日志；提交后立即清空。",
   "settings.p4deck.will.not.pretend.a.normal":
     "P4Deck 不会用普通密码框伪装完成外部认证。请完成组织的 SSO/MFA 后，再验证这些设置。",
@@ -1781,17 +1761,17 @@ export const zh = {
     "当前连接在操作期间已变化；已保留最新连接。",
   "pending.submit.entire": "提交整个 {label}",
   "pending.submit.label": "提交 {label}",
-  "pending.revert.all.opened.in": "还原 {label} 的全部已打开文件",
+  "pending.revert.all.opened": "还原 {label} 的全部已打开文件",
   "pending.revert.all.label": "还原全部 {label}",
-  "pending.revert.only.unchanged.in": "仅还原 {label} 中内容和类型未更改的文件",
+  "pending.revert.only.unchanged": "仅还原 {label} 中内容和类型未更改的文件",
   "pending.revert.unchanged.label": "还原未更改 {label}",
-  "pending.shelve.all.opened.in": "搁置 {label} 的全部已打开文件",
+  "pending.shelve.all.opened": "搁置 {label} 的全部已打开文件",
   "pending.shelve.all.label": "全部 Shelve {label}",
   "pending.expand.shelved.files": "展开 CL {id} 已搁置文件",
   "pending.collapse.shelved.files": "折叠 CL {id} 已搁置文件",
   "pending.shelved.files.actions": "CL {id} 全部搁置文件操作",
   "pending.move.all.shelved.from": "把 CL {id} 的全部搁置文件移动到 CL",
-  "pending.delete.all.shelved.in": "删除 CL {id} 的全部搁置内容",
+  "pending.delete.all.shelved": "删除 CL {id} 的全部搁置内容",
   "pending.showing.local.cache": "当前显示本地缓存。",
   "pending.no.local.cache": "还没有本地缓存。",
   "pending.partial.results.counts":
@@ -1807,7 +1787,7 @@ export const zh = {
   "pending.no.shelved.files.available": "没有可操作的搁置文件",
   "pending.browser.mock.no.real.p4.server":
     " · 浏览器 Mock，未访问真实 P4 Server",
-  "pending.outcome.unconfirmed.existing.rows.kept.and":
+  "pending.outcome.rows.kept":
     "结果未确认；现有行已保留并按权威状态刷新，请勿换新操作重试。",
   "pending.delete.refresh.incomplete": "删除后的刷新不完整",
   "pending.changelist.delete.confirmed": "CL 删除已由服务器确认",
@@ -1822,7 +1802,7 @@ export const zh = {
   "pending.toggle.ascending.descending.cl.number": "切换 CL 编号正序/倒序",
   "pending.cl.ascending": "CL ↑ 正序",
   "pending.cl.descending": "CL ↓ 倒序",
-  "pending.your.login.has.expired.or.is":
+  "pending.your.has.expired":
     "登录已过期或尚未登录，无法读取 Pending 列表。请在连接设置中重新登录后刷新。",
   "pending.connection.settings": "前往连接设置",
   "pending.retry.connection": "重试连接",
@@ -1846,7 +1826,7 @@ export const zh = {
     "取消请求已发送；它不会回滚服务器上已生效的更改，状态仍以操作记录为准。",
   "actions.cancellation.was.requested.legacy.response":
     "取消请求已发送（旧响应未提供明细）；不代表回滚或未提交。",
-  "actions.i.confirmed.the.operation.or":
+  "actions.i.the.operation":
     "我已确认相关操作或外部工具已停止。解除只允许后续写入，不撤销或重试历史操作，其结果仍待核。",
   "actions.log.already.recorded.duplicate.deduplicated":
     "日志已记录（重复事件已去重）。",
@@ -1858,7 +1838,7 @@ export const zh = {
   "actions.the.cancellation.outcome.is.unknown":
     "取消结果未知；请以操作记录为准，不要据此重试业务操作。",
   "actions.the.log.entry.was.rejected": "日志条目被拒绝；业务结果不受影响。",
-  "actions.the.log.is.unavailable.the":
+  "actions.the.is.unavailable":
     "日志暂不可用；业务结果不受影响，也不会重放业务。",
   "actions.unresolved.write.blocks": "待核写入阻塞",
   "app.select.a.changelist.or.depot": "请先选择 CL 或 Depot 文件",
@@ -1894,13 +1874,13 @@ export const zh = {
   "browse.collecting.bounded.evidence": "正在收集有界证据…",
   "browse.cols": "列",
   "browse.compare.selected.revisions": "比较所选版本",
-  "browse.compare.selected.revisions.in.a": "在新页签比较所选版本",
+  "browse.compareSelectedInNewTab": "在新页签比较所选版本",
   "browse.completed": "完成",
   "browse.confirm.permanent.delete": "确认永久删除",
   "browse.confirm.save": "确认保存",
   "browse.confirm.switch.and.sync": "确认切换并同步",
   "browse.confirm.view.only.switch": "确认仅切换视图",
-  "browse.connection.or.file.revision.is": "连接或文件修订无效",
+  "browse.connection.file.revision": "连接或文件修订无效",
   "browse.connection.unavailable": "连接不可用",
   "browse.content.was.truncated": "内容已截断",
   "browse.could.not.parse.the.structured":
@@ -1932,7 +1912,7 @@ export const zh = {
   "browse.enter.a.valid.cl.number": "请输入有效 CL 号",
   "browse.existing.mapping.name": "已有映射名称",
   "browse.expand.all": "展开全部",
-  "browse.expand.all.unchanged.context.in": "展开全部未改动内容",
+  "browse.expand.unchanged.context": "展开全部未改动内容",
   "browse.expand.description": "展开描述",
   "browse.expand.more.revisions": "展开更多版本",
   "browse.expand.selected.reference": "展开所选引用节点",
@@ -1979,7 +1959,7 @@ export const zh = {
   "browse.last.selected.right": "，后选（右侧）",
   "browse.left": "左侧",
   "browse.line": "行号",
-  "browse.line.is.not.in.the": "行号不在当前内容中",
+  "browse.lineNotInContent": "行号不在当前内容中",
   "browse.lines": "行",
   "browse.load.more": "继续加载",
   "browse.load.more.history": "加载更多历史",
@@ -2042,9 +2022,9 @@ export const zh = {
   "browse.query.prefer.cache": "查询（优先缓存）",
   "browse.raw.patch.view": "原始补丁视图",
   "browse.read.attempts": "读取尝试",
-  "browse.read.limit.reached.showing.the": "达到读取上限，仅显示已读取部分",
+  "browse.read.reached.showing": "达到读取上限，仅显示已读取部分",
   "browse.read.target": "查询目标",
-  "browse.read.timed.out.showing.the": "读取超时，仅显示已读取部分",
+  "browse.read.out.showing": "读取超时，仅显示已读取部分",
   "browse.reading": "正在读取…",
   "browse.recent.snapshot": "近期快照",
   "browse.record.paths": "记录路径",
@@ -2081,7 +2061,7 @@ export const zh = {
   "browse.select.a.revision": "请选择版本",
   "browse.select.a.single.file.refresh":
     "请选择单个文件；读取预算已达上限时请手动刷新。",
-  "browse.select.two.valid.revisions.of": "请选择同一文件的两个有效修订",
+  "browse.select.valid.revisions": "请选择同一文件的两个有效修订",
   "browse.selected.file.revision": "选定文件版本",
   "browse.selected.mapping": "所选 Mapping",
   "browse.selected.node": "所选节点",
@@ -2131,7 +2111,7 @@ export const zh = {
   "browse.unknown.owner": "Owner 未知",
   "browse.unknown.result": "未知结果",
   "browse.unknown.type": "未知类型",
-  "browse.use.scrollbars.to.pan.the": "使用滚动条平移图形",
+  "browse.use.to.pan": "使用滚动条平移图形",
   "browse.verified.by.server.readback": "已由服务器回读验证",
   "browse.verified.server.identity": "服务器回读身份：",
   "browse.verified.stream": "已验证 Stream",
@@ -2140,7 +2120,7 @@ export const zh = {
   "browse.workspace.file.handling": "文件处理方式",
   "browse.yes": "是",
   "browse.zoom": "缩放",
-  "browse.zoom.in": "放大图片",
+  "browse.zoomIn": "放大图片",
   "browse.zoom.in.2": "放大",
   "browse.zoom.in.stream.graph": "放大 Stream Graph",
   "browse.zoom.out": "缩小图片",
@@ -2150,7 +2130,7 @@ export const zh = {
   "commands.filter.commands": "筛选命令",
   "commands.preflight.confirmation.required": " · 需要预检/确认",
   "commands.type.a.command.or.id": "输入命令名称或 ID",
-  "companySubmit.an.earlier.snapshot.has.a":
+  "companySubmit.an.snapshot.has":
     "旧连接快照仍有模拟会话；切换连接不会解锁请求。",
   "companySubmit.awaiting.host.planning.tool.availability":
     "等待宿主规划；工具存在性未核验。",
@@ -2161,8 +2141,7 @@ export const zh = {
   "companySubmit.custom.submit.tool": "自定义提交工具",
   "companySubmit.custom.submit.tool.not.connected": "自定义提交工具（未接入）",
   "companySubmit.custom.submit.tool.plan.preview": "自定义提交工具方案预览",
-  "companySubmit.exit.code.display.only.not":
-    "退出码（仅展示，不构成成功/失败依据）：",
+  "companySubmit.exit.display.only": "退出码（仅展示，不构成成功/失败依据）：",
   "companySubmit.external.tool.started.running.this":
     "外部工具已启动/运行中；这只表示启动意图，不代表提交成功，结果由工具与后续 submitted CL 回读确认。",
   "companySubmit.host.positively.reports.the.tool":
@@ -2185,7 +2164,7 @@ export const zh = {
   "companySubmit.starting": "正在启动…",
   "companySubmit.this.records.that.launch.attempt":
     "这是该次启动尝试的记录，不代表当前已保存配置；检查状态不会重新启动工具。",
-  "companySubmit.tool.process.exited.or.is":
+  "companySubmit.tool.process.exited":
     "工具进程已退出或无法轮询：提交结果未知。退出码仅展示，绝不作为成功/失败依据；请检查工具并等待 submitted CL 回读。",
   "contextMenu.context.menu.layer": "右键菜单层",
   "contextMenu.navigate.enter.run.esc.close":
@@ -2211,8 +2190,7 @@ export const zh = {
   "docking.close.all.tabs": "关闭所有页签",
   "docking.depot.path": "Depot 路径",
   "docking.diff.file.path": "差异文件路径",
-  "docking.following.file.selection.click.to":
-    "正在跟随文件选择；点击锁定当前目标",
+  "docking.following.selection.click": "正在跟随文件选择；点击锁定当前目标",
   "docking.new.tab": "新页签",
   "docking.no.file.selected": "尚未选择文件",
   "docking.preview.file.path": "预览文件路径",
@@ -2410,7 +2388,7 @@ export const zh = {
   "files.source.path": "源路径",
   "files.status.pending": "状态待检查",
   "files.still.unresolved.unproven": "仍有未解决/未证实",
-  "files.strategy.is.not.approved.by": "后端未批准此策略。",
+  "files.strategy.not.approved": "后端未批准此策略。",
   "files.sync.scope": "获取范围",
   "files.sync.scope.2": "同步范围",
   "files.target": "目标",
@@ -2451,11 +2429,9 @@ export const zh = {
   "notify.p4.operation.needs.attention": "P4 操作需要处理",
   "notify.return.to.p4deck.for.details": "请返回 P4Deck 查看详情。",
   "notify.the.operation.completed": "操作已完成。",
-  "PageRenderertsx.checking.connection.and.login.automatically":
-    "正在自动检查连接与登录状态…",
-  "PageRenderertsx.connection.settings": "连接设置",
-  "PageRenderertsx.not.connected.add.or.select":
-    "未连接，请在设置中添加或选择连接。",
+  "page.empty.checkingConnection": "正在自动检查连接与登录状态…",
+  "page.empty.connectionSettings": "连接设置",
+  "page.empty.notConnected": "未连接，请在设置中添加或选择连接。",
   "pending.12.read.budget.reached": "达到12次读取预算",
   "pending.a.numbered.changelist.is.required": "只能编辑已编号的 CL。",
   "pending.action": "动作",
@@ -2501,7 +2477,7 @@ export const zh = {
   "pending.copy.prompt": "复制提示词",
   "pending.create": "新建",
   "pending.create.2": "新增",
-  "pending.create.and.move.continue.to": "创建并移动，继续提交",
+  "pending.create.move.continue": "创建并移动，继续提交",
   "pending.created.cl": "已创建 CL",
   "pending.creating": "正在新建…",
   "pending.current.list.snapshot": "当前列表快照",
@@ -2605,13 +2581,13 @@ export const zh = {
   "pending.not.moved": "未移动",
   "pending.not.read": "尚未读取",
   "pending.number.or.description": "编号或描述",
-  "pending.opened.in": "已打开于",
+  "pending.openedIn": "已打开于",
   "pending.operation": "操作",
   "pending.operation.2": "操作记录",
   "pending.operation.cancelled": "操作已取消。",
   "pending.operations": "操作记录",
   "pending.outcome": "结果：",
-  "pending.p4.could.not.resolve.the":
+  "pending.p4.not.resolve":
     "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。",
   "pending.pages": "页",
   "pending.pages.2": "页",
@@ -2651,7 +2627,7 @@ export const zh = {
   "pending.save": "保存",
   "pending.saving": "正在保存…",
   "pending.scanned": "已扫描",
-  "pending.select.a.shelved.file.to": "选择 Shelf 文件以预览",
+  "pending.select.shelved.file": "选择 Shelf 文件以预览",
   "pending.selected.files.and.original.cl": "仅选中文件及原 CL",
   "pending.selected.files.have.unresolved.items":
     "选中文件有未确认项，请先核实。",
@@ -2692,9 +2668,9 @@ export const zh = {
     "后端返回了不可继续的游标；已保留当前部分结果。",
   "pending.the.shelf.cursor.cannot.advance":
     "Shelf 游标不可继续；请从第一页重新加载。",
-  "pending.the.shelf.page.does.not":
+  "pending.the.page.does":
     "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。",
-  "pending.the.shelf.response.does.not":
+  "pending.the.response.does":
     "Shelf 响应与当前连接或请求代次不匹配；请重新加载。",
   "pending.the.shelf.snapshot.returned.duplicates":
     "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。",
@@ -2833,7 +2809,7 @@ export const zh = {
   "settings.edit.saved.connection": "编辑已保存连接",
   "settings.email": "邮箱",
   "settings.enter.server.first": "请先填写 Server。",
-  "settings.enter.six.hex.digits.the":
+  "settings.enter.hex.digits":
     "请输入六位十六进制颜色；当前主题保持上次有效值。",
   "settings.enter.user.first": "请先填写 User。",
   "settings.exit.application": "退出应用",
@@ -2854,10 +2830,10 @@ export const zh = {
   "settings.loading.connection.profiles": "正在加载连接配置…",
   "settings.local.backups": "本地备份",
   "settings.local.configuration.backup": "本地配置备份",
-  "settings.log.in": "登录",
+  "settings.logIn": "登录",
   "settings.log.in.again": "重新登录",
   "settings.log.out": "退出登录",
-  "settings.logging.in": "正在登录…",
+  "settings.loggingIn": "正在登录…",
   "settings.logging.out": "正在退出登录…",
   "settings.logging.out.2": "正在退出…",
   "settings.logout.did.not.complete": "退出登录未完成。",
@@ -2899,7 +2875,7 @@ export const zh = {
   "settings.reduce.motion": "减少动画",
   "settings.refresh": "刷新",
   "settings.reload.profiles": "重新加载配置",
-  "settings.requires.a.selected.file.or": "需先选择文件或目录",
+  "settings.requires.selected.file": "需先选择文件或目录",
   "settings.requires.an.available.connection": "需连接可用",
   "settings.requires.configured.swarm": "需已配置 Swarm",
   "settings.requires.the.connection.runtime": "需连接运行时加载完成",
@@ -2943,7 +2919,7 @@ export const zh = {
     "操作未完成；当前连接未改动，请重试。",
   "settings.theme": "主题",
   "settings.theme.default": "跟随主题",
-  "settings.there.are.no.changes.to": "没有需要保存的修改。",
+  "settings.there.no.changes": "没有需要保存的修改。",
   "settings.toolbar": "工具栏",
   "settings.trust.this.exact.fingerprint": "信任此精确指纹",
   "settings.trusting": "正在写入 Trust…",
@@ -2966,7 +2942,7 @@ export const zh = {
   "shell.another.operation.is.running.try": "另一个操作正在运行，请稍后重试",
   "shell.auto.refresh": "自动刷新",
   "shell.auto.refresh.paused": "自动刷新已暂停",
-  "shell.auto.refresh.paused.click.to": "自动刷新已暂停；点击恢复",
+  "shell.auto.paused.click": "自动刷新已暂停；点击恢复",
   "shell.auto.refresh.runs.idempotent.reads":
     "自动刷新只运行幂等只读请求；点击暂停",
   "shell.available": "可用",
@@ -3004,10 +2980,8 @@ export const zh = {
   "shell.go": "跳转",
   "shell.last.request.authorized": "最近请求已授权",
   "shell.loading.pending.changelists": "读取待提交 CL",
-  "shell.local.depot.path.enter.or":
-    "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转",
-  "shell.local.disk.capacity.requires.the":
-    "浏览器无法读取本地磁盘容量，请使用桌面版",
+  "shell.local.path.enter": "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转",
+  "shell.local.capacity.requires": "浏览器无法读取本地磁盘容量，请使用桌面版",
   "shell.local.response": "本机响应",
   "shell.login.permissions": "登录 / 权限",
   "shell.manual.check.requires.the.desktop": "手动检查仅桌面版可用。",
@@ -3102,7 +3076,7 @@ export const zh = {
     "诊断导出完成（旧版结果）。",
   "tools.diagnostic.export.verified.by.readback":
     "诊断导出已完成（路径/大小/sha256 由回读确认；未读取导出内容）。",
-  "tools.do.not.immediately.retry.a":
+  "tools.do.immediately.retry":
     "不要直接重试写操作。打开关联日志，刷新 Pending 与 Workspace，再到 P4 Server 侧核对实际结果。应用不会自动重放。",
   "tools.duration": "耗时",
   "tools.error.recovery": "错误 / 恢复",
@@ -3148,7 +3122,7 @@ export const zh = {
   "tools.operation.state": "操作状态",
   "tools.operation.type": "操作类型",
   "tools.p4.log": "P4 日志",
-  "tools.reconnect.and.refresh.after.the":
+  "tools.reconnect.refresh.after":
     "恢复网络或 Server 后重新连接并刷新。只读请求可重试；写操作不会自动重放。",
   "tools.records": "条",
   "tools.refresh": "刷新",
@@ -3203,9 +3177,9 @@ export const zh = {
   "update.install.then.restart": "立即安装后重启",
   "update.installer.size": "安装包大小",
   "update.installing": "正在安装…",
-  "update.installing.the.update.failed.the":
+  "update.installing.update.failed":
     "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。",
-  "update.installing.the.update.open.the": "正在安装更新，点击查看进度",
+  "update.installing.update.open": "正在安装更新，点击查看进度",
   "update.installing.update": "正在安装更新…",
   "update.installing.update.2": "正在安装更新",
   "update.later": "稍后",
@@ -3217,7 +3191,7 @@ export const zh = {
   "update.restarting.2": "正在重启…",
   "update.restarting.the.app": "正在重启应用…",
   "update.the.update.check.failed": "检查更新失败。",
-  "update.the.update.failed.open.the": "更新失败，点击查看原因",
+  "update.the.failed.open": "更新失败，点击查看原因",
   "update.the.update.is.downloaded.confirm":
     "更新已下载，确认安装并重启后生效；点击查看",
   "update.the.update.is.installed.but":
@@ -3249,7 +3223,7 @@ export const zh = {
   "workspaces.new.workspace": "新建工作区…",
   "workspaces.no.longer.exists": "已不存在",
   "workspaces.no.matching.workspaces": "没有匹配的 Workspace",
-  "workspaces.no.workspaces.owned.by.the": "当前用户尚无工作区",
+  "workspaces.no.workspaces.owned": "当前用户尚无工作区",
   "workspaces.not.connected": "未连接",
   "workspaces.old.name.readback": "旧名称回读：",
   "workspaces.operation": "操作记录",
@@ -3279,14 +3253,14 @@ export const zh = {
   "workspaces.switch.to.this.workspace": "切换到此工作区",
   "workspaces.switch.unavailable": "当前不可切换",
   "workspaces.switch.workspace": "切换 Workspace",
-  "workspaces.the.switch.request.did.not": "切换请求未完成，请刷新后重试。",
+  "workspaces.the.request.did": "切换请求未完成，请刷新后重试。",
   "workspaces.updated": "更新时间",
   "workspaces.verified.by.server.readback": "已由服务器回读验证",
   "workspaces.verified.committing.workspace": "验证通过，正在提交 Workspace…",
   "workspaces.verify.and.activate.a.connection":
     "请先在设置中验证并激活连接；连接未验证时不会自动扫描 Workspace。",
   "workspaces.verifying.and.switching": "正在验证并切换…",
-  "workspaces.verifying.and.switching.to": "正在验证并切换到",
+  "workspaces.verifyingSwitch": "正在验证并切换到",
   "workspaces.verifying.target.workspace": "正在验证目标 Workspace…",
   "workspaces.working": "处理中…",
   "workspaces.workspace.readback": "工作区回读：",

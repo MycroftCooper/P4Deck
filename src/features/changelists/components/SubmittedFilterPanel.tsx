@@ -42,7 +42,7 @@ export function SubmittedFilterPanel(props: Props) {
     users: "pending.users",
     depotPath: "pending.depotPath",
     from: "pending.from",
-    to: "pending.to",
+    to: "pending.endTime",
     reset: "pending.reset",
     saved: "pending.saved",
     none: "pending.none",

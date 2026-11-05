@@ -21,11 +21,11 @@ import {
 
 const reasons: Record<RenamePathError, string> = {
   empty: "files.empty",
-  absolute: t("files.use.an.absolute.path.of.the"),
+  absolute: t("files.use.absolute.path"),
   characters: t("files.control.characters.and.p4.filespec.metacharacters"),
-  segments: t("files.a.root.path.empty.segments.and"),
+  segments: t("files.a.empty.segments"),
   same: "files.same",
-  descendant: t("files.a.folder.cannot.move.into.its"),
+  descendant: t("files.a.move.into"),
 };
 
 type Phase = "preview" | "checking" | "review" | "confirming" | "result";
@@ -371,7 +371,7 @@ export function RenameDialog({
       {failure && <DialogNotice error>{failure}</DialogNotice>}
       {discard && (
         <section className="workflow-discard" role="alert">
-          <p>{t("files.closing.discards.the.current.preview.and")}</p>
+          <p>{t("files.closing.current.preview")}</p>
           <button onClick={() => setDiscard(false)}>
             {t("files.keep.editing")}
           </button>

@@ -229,17 +229,13 @@ export function truncationNotes(
       tFor(zh ? "zh-CN" : "en-US", "browse.cell.limit.reached.later.content"),
     );
   } else if (reason === "byteCap") {
-    notes.push(
-      tFor(zh ? "zh-CN" : "en-US", "browse.read.limit.reached.showing.the"),
-    );
+    notes.push(tFor(zh ? "zh-CN" : "en-US", "browse.read.reached.showing"));
   } else if (reason === "budgetCap") {
     notes.push(
       tFor(zh ? "zh-CN" : "en-US", "browse.text.budget.reached.later.rows"),
     );
   } else if (reason === "timeout") {
-    notes.push(
-      tFor(zh ? "zh-CN" : "en-US", "browse.read.timed.out.showing.the"),
-    );
+    notes.push(tFor(zh ? "zh-CN" : "en-US", "browse.read.out.showing"));
   } else if (table.hasMore) {
     notes.push(tFor(zh ? "zh-CN" : "en-US", "browse.more.rows.are.not.shown"));
   } else if (table.truncated) {

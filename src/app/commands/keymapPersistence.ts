@@ -144,8 +144,8 @@ export function saveKeymap(
   }
   if (!ok)
     notify(null, {
-      zh: tFor("zh-CN", "shell.saving.shortcuts.failed.local.storage.is"),
-      en: tFor("en-US", "shell.saving.shortcuts.failed.local.storage.is"),
+      zh: tFor("zh-CN", "shell.saving.local.storage"),
+      en: tFor("en-US", "shell.saving.local.storage"),
     });
   return ok;
 }

@@ -833,9 +833,7 @@ export function PendingPage({
         // No p4deck:pending-* events on the wired path: host result + readback are the authority.
       } else {
         setNotice("");
-        setError(
-          translate("pending.outcome.unconfirmed.existing.rows.kept.and"),
-        );
+        setError(translate("pending.outcome.rows.kept"));
         void reload().catch(() => undefined);
       }
       return;
@@ -1347,7 +1345,7 @@ export function PendingPage({
         >
           {authenticationRequired ? (
             <>
-              <p>{translate("pending.your.login.has.expired.or.is")}</p>
+              <p>{translate("pending.your.has.expired")}</p>
               <button
                 className="secondary"
                 onClick={() => menuEnvironment.openPage("settings")}
@@ -1666,7 +1664,7 @@ export function PendingPage({
                         disabled={!!unavailable}
                         title={
                           unavailable ??
-                          translate("pending.revert.all.opened.in", { label })
+                          translate("pending.revert.all.opened", { label })
                         }
                         aria-label={translate("pending.revert.all.label", {
                           label,
@@ -1687,7 +1685,7 @@ export function PendingPage({
                         disabled={!!unavailable}
                         title={
                           unavailable ??
-                          translate("pending.revert.only.unchanged.in", {
+                          translate("pending.revert.only.unchanged", {
                             label,
                           })
                         }
@@ -1711,7 +1709,7 @@ export function PendingPage({
                         disabled={!!numberedReason}
                         title={
                           numberedReason ??
-                          translate("pending.shelve.all.opened.in", { label })
+                          translate("pending.shelve.all.opened", { label })
                         }
                         aria-label={translate("pending.shelve.all.label", {
                           label,
@@ -1874,7 +1872,7 @@ export function PendingPage({
                                 disabled={!!allShelfReason(change)}
                                 title={
                                   allShelfReason(change) ??
-                                  translate("pending.delete.all.shelved.in", {
+                                  translate("pending.delete.all.shelved", {
                                     id: change.id,
                                   })
                                 }

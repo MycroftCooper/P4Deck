@@ -550,7 +550,7 @@ export function DiffView({
   const goToLine = () => {
     const number = Number(lineNumber);
     if (!validateLine(side, number)) {
-      setLineError(t("browse.line.is.not.in.the"));
+      setLineError(t("browse.lineNotInContent"));
       return;
     }
     setLineError("");
@@ -757,7 +757,7 @@ export function DiffView({
               <button
                 className="diff-expand-all-toggle"
                 aria-label={t("browse.expand.all")}
-                title={t("browse.expand.all.unchanged.context.in")}
+                title={t("browse.expand.unchanged.context")}
                 aria-pressed={expandAll}
                 disabled={!renderable}
                 onClick={() => setExpandAll((value) => !value)}

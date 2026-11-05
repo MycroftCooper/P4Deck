@@ -276,10 +276,7 @@ export function WorkspaceMutationDialog({
                 checked={acknowledged}
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
-              {tFor(
-                zh ? "zh-CN" : "en-US",
-                "workspaces.i.understand.this.permanently.deletes.the",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.i.permanently.deletes")}
             </label>
           )}
         </>
@@ -339,10 +336,7 @@ export function WorkspaceMutationDialog({
       )}
       {(result?.outcome === "unknown" || error) && !resultVerified && (
         <DialogNotice error>
-          {tFor(
-            zh ? "zh-CN" : "en-US",
-            "workspaces.uncertain.outcomes.are.never.retried.or",
-          )}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.uncertain.never.retried")}
         </DialogNotice>
       )}
       {operationId.current && (

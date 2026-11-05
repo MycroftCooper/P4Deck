@@ -118,10 +118,7 @@ export function updateFailureText(
   if (scope === "check")
     return tFor(zh ? "zh-CN" : "en-US", "update.the.update.check.failed");
   if (scope === "install")
-    return tFor(
-      zh ? "zh-CN" : "en-US",
-      "update.installing.the.update.failed.the",
-    );
+    return tFor(zh ? "zh-CN" : "en-US", "update.installing.update.failed");
   return tFor(
     zh ? "zh-CN" : "en-US",
     "update.downloading.or.installing.the.update",

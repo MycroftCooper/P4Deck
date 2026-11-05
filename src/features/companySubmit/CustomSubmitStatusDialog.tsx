@@ -46,7 +46,7 @@ export function CustomSubmitStatusDialog({
                 )
               : tFor(
                   zh ? "zh-CN" : "en-US",
-                  "companySubmit.tool.process.exited.or.is",
+                  "companySubmit.tool.process.exited",
                 );
   return (
     <Dialog
@@ -83,10 +83,7 @@ export function CustomSubmitStatusDialog({
           </p>
           {session.exitCode !== null && (
             <p>
-              {tFor(
-                zh ? "zh-CN" : "en-US",
-                "companySubmit.exit.code.display.only.not",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "companySubmit.exit.display.only")}
               {session.exitCode}
             </p>
           )}

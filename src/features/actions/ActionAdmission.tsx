@@ -34,7 +34,7 @@ function FenceRow({
               disabled={busy}
               onChange={(e) => setAck(e.target.checked)}
             />
-            {t("actions.i.confirmed.the.operation.or")}
+            {t("actions.i.the.operation")}
           </label>
           <button
             className="settings-secondary"

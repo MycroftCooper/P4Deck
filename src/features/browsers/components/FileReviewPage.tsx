@@ -721,7 +721,7 @@ export function FileReviewPage({
             <button
               disabled={!canCompare || !onCompareRevisions}
               onClick={compareGraphNodes}
-              title={t("browse.compare.selected.revisions.in.a")}
+              title={t("browse.compareSelectedInNewTab")}
             >
               {t("browse.compare.selected.revisions")}
             </button>

@@ -403,11 +403,7 @@ function ShelfWorkflowDialog({
         {snapshot.changeId ? `CL ${snapshot.changeId}` : "Default"} ·{" "}
         {snapshot.paths.length} {t("pending.files")}
       </div>
-      {demo && (
-        <DialogNotice>
-          {t("pending.browser.mock.simulates.the.result.and")}
-        </DialogNotice>
-      )}
+      {demo && <DialogNotice>{t("pending.browserMockSimulated")}</DialogNotice>}
       <TargetList
         paths={snapshot.paths}
         label={t("pending.explicit.file.scope")}

@@ -61,7 +61,7 @@ export function operationRecoveryGuidance(
         zh ? "zh-CN" : "en-US",
         "tools.unknown.result.verify.manually",
       ),
-      steps: tFor(zh ? "zh-CN" : "en-US", "tools.do.not.immediately.retry.a"),
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.do.immediately.retry"),
     };
   }
   if (failure === "cancelled") {
@@ -88,10 +88,7 @@ export function operationRecoveryGuidance(
     return {
       tone: "warning",
       title: tFor(zh ? "zh-CN" : "en-US", "tools.connection.interrupted"),
-      steps: tFor(
-        zh ? "zh-CN" : "en-US",
-        "tools.reconnect.and.refresh.after.the",
-      ),
+      steps: tFor(zh ? "zh-CN" : "en-US", "tools.reconnect.refresh.after"),
     };
   }
   return undefined;

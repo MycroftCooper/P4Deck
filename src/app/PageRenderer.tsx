@@ -156,9 +156,9 @@ function Content({
   )
     return (
       <div className="workspace-empty" role="status">
-        <p>{translate("PageRenderertsx.not.connected.add.or.select")}</p>
+        <p>{translate("page.empty.notConnected")}</p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {translate("PageRenderertsx.connection.settings")}
+          {translate("page.empty.connectionSettings")}
         </button>
       </div>
     );
@@ -172,11 +172,7 @@ function Content({
   )
     return (
       <div className="workspace-empty" role="status">
-        <p>
-          {translate(
-            "PageRenderertsx.checking.connection.and.login.automatically",
-          )}
-        </p>
+        <p>{translate("page.empty.checkingConnection")}</p>
       </div>
     );
   if (
@@ -194,7 +190,7 @@ function Content({
           {status.title} · {status.detail}
         </p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {translate("PageRenderertsx.connection.settings")}
+          {translate("page.empty.connectionSettings")}
         </button>
       </div>
     );

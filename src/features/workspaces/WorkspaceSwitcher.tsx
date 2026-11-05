@@ -47,7 +47,7 @@ export function WorkspaceSwitcher({
   const error =
     switchError ||
     (list.error && !items.length
-      ? t("workspaces.unable.to.load.workspaces.retry.or")
+      ? t("workspaces.unable.workspaces.retry")
       : "");
   useEffect(() => {
     if (!open) return;
@@ -236,7 +236,7 @@ export function WorkspaceSwitcher({
           </div>
           {switching && (
             <p role="status">
-              {t("workspaces.verifying.and.switching.to")} {switching}…
+              {t("workspaces.verifyingSwitch")} {switching}…
             </p>
           )}
           {error && (

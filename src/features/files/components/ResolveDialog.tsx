@@ -649,7 +649,7 @@ export function ResolveDialog({
     if (!current) return t("files.no.current.file");
     if (!executeReady) return t("files.execution.is.unavailable");
     if (!executableStrategies(current).includes(strategy))
-      return t("files.strategy.is.not.approved.by");
+      return t("files.strategy.not.approved");
     return undefined;
   };
   const canRun = (strategy: ExecutableStrategy) => !actionReason(strategy);
@@ -823,9 +823,7 @@ export function ResolveDialog({
     >
       <div className="resolve-p4v">
         {demo && (
-          <DialogNotice>
-            {t("files.browser.mock.returns.unknown.conflicts.and")}
-          </DialogNotice>
+          <DialogNotice>{t("files.browser.unknown.conflicts")}</DialogNotice>
         )}
         {force && (
           <DialogNotice>
@@ -955,7 +953,7 @@ export function ResolveDialog({
                     <small>
                       {tFor(
                         zh ? "zh-CN" : "en-US",
-                        "files.workspace.modification.based.on",
+                        "files.workspace.modification.based",
                         { p1: targetBaseRevision ?? "—" },
                       )}
                     </small>
@@ -987,7 +985,7 @@ export function ResolveDialog({
                   <p>
                     {autoMergeable
                       ? t("files.conflict.blocks.were.auto.resolved.accept")
-                      : t("files.choose.one.side.or.open.the")}
+                      : t("files.chooseSideOrMergeTool")}
                   </p>
                 </div>
                 <div className="resolve-action-row">
@@ -1000,7 +998,7 @@ export function ResolveDialog({
                     disabled={!autoMergeable}
                     title={
                       !safeAvailable
-                        ? t("files.auto.merge.is.not.offered.by")
+                        ? t("files.auto.not.offered")
                         : conflictBlocks === undefined
                           ? t("files.measuring.conflict.blocks.please.wait")
                           : conflictBlocks > 0
@@ -1045,7 +1043,7 @@ export function ResolveDialog({
                 <div className="resolve-action-row">
                   <div>
                     <strong>{t("files.manual.merge")}</strong>
-                    <p>{t("files.inspect.and.merge.each.location.with")}</p>
+                    <p>{t("files.inspect.each.location")}</p>
                   </div>
                   <button
                     className="secondary"

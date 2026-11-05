@@ -116,11 +116,9 @@ export function ConnectionDirectoryDialog({
           ? t("settings.browse.server.users")
           : t("settings.browse.server.workspaces")
       }
-      description={tFor(
-        zh ? "zh-CN" : "en-US",
-        "settings.queries.only.the.server.in.the",
-        { p1: snapshot.server || "—" },
-      )}
+      description={tFor(zh ? "zh-CN" : "en-US", "settings.queries.the.server", {
+        p1: snapshot.server || "—",
+      })}
       source={source}
       zh={zh}
       busy={false}
@@ -184,7 +182,7 @@ export function ConnectionDirectoryDialog({
       {!identity && (
         <DialogNotice error>
           {kind === "user"
-            ? t("settings.enter.the.username.to.use.for")
+            ? t("settings.enter.to.use")
             : t("settings.enter.user.in.connection.settings.first")}
         </DialogNotice>
       )}

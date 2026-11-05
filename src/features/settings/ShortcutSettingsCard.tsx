@@ -130,10 +130,7 @@ function isEditableTarget(target: EventTarget | null | undefined): boolean {
 
 function availability(command: AppCommandDefinition, zh: boolean): string {
   if (command.risk === "mutation")
-    return tFor(
-      zh ? "zh-CN" : "en-US",
-      "settings.write.action.no.shortcut.use.the",
-    );
+    return tFor(zh ? "zh-CN" : "en-US", "settings.write.shortcut.use");
   switch (command.requires) {
     case "runtime":
       return tFor(
@@ -146,10 +143,7 @@ function availability(command: AppCommandDefinition, zh: boolean): string {
         "settings.requires.an.available.connection",
       );
     case "file":
-      return tFor(
-        zh ? "zh-CN" : "en-US",
-        "settings.requires.a.selected.file.or",
-      );
+      return tFor(zh ? "zh-CN" : "en-US", "settings.requires.selected.file");
     case "pending":
       return tFor(
         zh ? "zh-CN" : "en-US",

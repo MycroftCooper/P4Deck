@@ -360,7 +360,7 @@ export function UnshelveDialog({
       newChange &&
       preflight.target.targetChangeId !== createdChangeIdRef.current
     ) {
-      setMessage(t("pending.target.changelist.does.not.match.the"));
+      setMessage(t("pending.target.not.match"));
       setPhase("failed");
       setPreflight(undefined);
       setAck(false);
@@ -511,11 +511,7 @@ export function UnshelveDialog({
         {t("pending.source.shelf")} CL {snapshot.changeId} ·{" "}
         {snapshot.paths.length} {t("pending.files")}
       </div>
-      {demo && (
-        <DialogNotice>
-          {t("pending.browser.mock.simulates.the.result.and")}
-        </DialogNotice>
-      )}
+      {demo && <DialogNotice>{t("pending.browserMockSimulated")}</DialogNotice>}
       <TargetList
         paths={snapshot.paths.map((path) => `${path}@=${snapshot.changeId}`)}
         label={t("pending.fixed.source.files")}
@@ -631,7 +627,7 @@ export function UnshelveDialog({
                         t("pending.local.modification"),
                       mapping.locked && t("pending.locked"),
                       mapping.openedChangeId !== undefined &&
-                        `${t("pending.opened.in")} CL ${mapping.openedChangeId}`,
+                        `${t("pending.openedIn")} CL ${mapping.openedChangeId}`,
                       mapping.resolveRisk !== "none" &&
                         `${t("pending.resolve.risk")}: ${mapping.resolveRisk}`,
                     ]
@@ -652,7 +648,7 @@ export function UnshelveDialog({
             checked={ack}
             onChange={(event) => setAck(event.target.checked)}
           />
-          {t("pending.i.reviewed.the.target.mappings.and")}
+          {t("pending.i.target.mappings")}
         </label>
       )}
       {phase === "running" && (

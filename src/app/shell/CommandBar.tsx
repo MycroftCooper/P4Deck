@@ -143,8 +143,8 @@ const groups: {
     {
       id: "openWith",
       icon: AppWindow,
-      zh: "shell.open.with",
-      en: "shell.open.with",
+      zh: "shell.openWithApp",
+      en: "shell.openWithApp",
     },
   ],
 ];
@@ -943,7 +943,7 @@ export function CommandBar({
         <input
           ref={addressInput}
           aria-label={t("shell.address")}
-          placeholder={t("shell.local.depot.path.enter.or")}
+          placeholder={t("shell.local.path.enter")}
           value={address}
           onChange={(e) => {
             navigation.current++;

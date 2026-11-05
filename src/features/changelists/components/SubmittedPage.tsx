@@ -785,7 +785,7 @@ export function SubmittedPage({
                 <div className="submitted-error-message">
                   <span>
                     {error.includes("must refer to client")
-                      ? translate("pending.p4.could.not.resolve.the")
+                      ? translate("pending.p4.not.resolve")
                       : translate("pending.query.failed.see.technical.details")}
                   </span>
                   <details>

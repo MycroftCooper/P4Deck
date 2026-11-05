@@ -26,7 +26,7 @@ export function classifySubmission(description: string): {
     ? { kind: "ciMerge", reason: signature.split(":")[0] + ":" }
     : {
         kind: "ordinary",
-        reason: t("pending.no.automation.signature.human.identity.not"),
+        reason: t("pending.no.human.identity"),
       };
 }
 export function submissionKindLabel(kind: SubmissionKind, zh: boolean): string {

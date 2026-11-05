@@ -30,7 +30,7 @@ export function BackgroundColorSettings({
     <div className="background-settings">
       <div className="background-settings-heading">
         <strong>{t("settings.background.color")}</strong>
-        <small>{t("settings.follows.the.theme.by.default.a")}</small>
+        <small>{t("settings.follows.by.default")}</small>
       </div>
       <div
         className="background-swatches"

@@ -40,8 +40,8 @@ const RULES: Rule[] = [
   },
   {
     match: "Depot file is not mapped to this workspace",
-    zh: "common.depot.file.is.not.mapped.to",
-    en: "common.depot.file.is.not.mapped.to",
+    zh: "common.depot.not.mapped",
+    en: "common.depot.not.mapped",
   },
   {
     match: "Workspace Root has not been verified",

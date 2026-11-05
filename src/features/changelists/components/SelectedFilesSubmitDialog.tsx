@@ -107,9 +107,7 @@ export function SelectedFilesSubmitDialog({
         if (!activeRef.current)
           throw new Error("Connection changed; continuation stopped");
         if (!validSelectedSubmitGrant(frozen, result))
-          throw new Error(
-            t("pending.no.submission.permission.files.remain.in"),
-          );
+          throw new Error(t("pending.no.files.remain"));
         setHandedOff(true);
         onContinue(result.newChangeId!, frozen.files.length, expected);
       }
@@ -201,9 +199,7 @@ export function SelectedFilesSubmitDialog({
           : t("pending.not.submitted.partial.or.unknown.moves")}
       </DialogNotice>
       {receipt?.stage === "stopped" && (
-        <DialogNotice error>
-          {t("pending.the.previous.process.was.interrupted.the")}
-        </DialogNotice>
+        <DialogNotice error>{t("pending.the.was.interrupted")}</DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
       {!receipt && (

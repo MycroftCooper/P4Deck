@@ -85,7 +85,7 @@ const reasons: readonly [RegExp, string][] = [
   [/preflight blocked/i, "notify.hostReason.preflight.blocked"],
   [
     /existing operation is running or interrupted/i,
-    "notify.hostReason.existing.operation.is.running.or",
+    "notify.hostReason.is.running",
   ],
 ];
 

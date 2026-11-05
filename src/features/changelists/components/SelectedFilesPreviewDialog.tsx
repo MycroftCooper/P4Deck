@@ -59,7 +59,7 @@ export function SelectedFilesPreviewDialog({
             className="primary"
             disabled={busy || confirmed || !files.length}
           >
-            {t("pending.create.and.move.continue.to")}
+            {t("pending.create.move.continue")}
           </button>
         </>
       }

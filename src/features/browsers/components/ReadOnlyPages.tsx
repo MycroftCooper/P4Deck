@@ -479,7 +479,7 @@ export function ReadOnlyPage({
               }),
             remoteReady && valid
               ? undefined
-              : t("browse.connection.or.file.revision.is"),
+              : t("browse.connection.file.revision"),
           ),
           Undo: action(
             (source) =>
@@ -495,7 +495,7 @@ export function ReadOnlyPage({
             () => compareHistory(queue),
             historyDiffPair(queue)
               ? undefined
-              : t("browse.select.two.valid.revisions.of"),
+              : t("browse.select.valid.revisions"),
           ),
         };
       },

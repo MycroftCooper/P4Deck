@@ -221,7 +221,7 @@ export function StatusBar({
             ? `${disk.data.path}\n${t("shell.available")}: ${size(disk.data.available)} / ${size(disk.data.total)}`
             : native
               ? String(disk.error ?? t("shell.reading.disk.capacity"))
-              : t("shell.local.disk.capacity.requires.the")
+              : t("shell.local.capacity.requires")
         }
       >
         <HardDrive size={13} />
@@ -327,7 +327,7 @@ export function StatusBar({
         title={
           autoRefresh.error ||
           (autoRefreshPaused
-            ? t("shell.auto.refresh.paused.click.to")
+            ? t("shell.auto.paused.click")
             : t("shell.auto.refresh.runs.idempotent.reads"))
         }
       >

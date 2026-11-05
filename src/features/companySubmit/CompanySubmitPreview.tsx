@@ -26,7 +26,7 @@ const errors: Record<PlanError, string> = {
   realStartDisabled: "companySubmit.realStartDisabled",
 };
 const phases = {
-  reserved: "companySubmit.simulation.reserved.session.creation.is.not",
+  reserved: "companySubmit.simulation.session.creation",
   running: "companySubmit.simulation.running.submission.result.unverified",
   notStarted: "companySubmit.notStarted",
   outcomeUnknown:
@@ -105,10 +105,7 @@ export function CompanySubmitPreview({
       )}
       {simulation && !state && (
         <p role="status">
-          {tFor(
-            zh ? "zh-CN" : "en-US",
-            "companySubmit.an.earlier.snapshot.has.a",
-          )}
+          {tFor(zh ? "zh-CN" : "en-US", "companySubmit.an.snapshot.has")}
         </p>
       )}
       <button type="button" disabled>

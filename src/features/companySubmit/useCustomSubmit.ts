@@ -148,8 +148,8 @@ export function useCustomSubmit(scope: string, port: Port) {
       // A notStarted result is positive not-launched evidence; tell the user why nothing opened.
       if (result.state === "notStarted") {
         notifyFailure(result.reason ?? undefined, {
-          zh: "companySubmit.the.custom.submit.tool.did.not",
-          en: "companySubmit.the.custom.submit.tool.did.not",
+          zh: "companySubmit.the.tool.did",
+          en: "companySubmit.the.tool.did",
         });
       }
       setView({ phase: "session", session: result, intent });
@@ -221,8 +221,8 @@ export function useCustomSubmit(scope: string, port: Port) {
       // A notStarted result is positive not-launched evidence; tell the user why nothing opened.
       if (result.state === "notStarted") {
         notifyFailure(result.reason ?? undefined, {
-          zh: "companySubmit.the.custom.submit.tool.did.not",
-          en: "companySubmit.the.custom.submit.tool.did.not",
+          zh: "companySubmit.the.tool.did",
+          en: "companySubmit.the.tool.did",
         });
       }
       setView({ phase: "session", session: result, intent });

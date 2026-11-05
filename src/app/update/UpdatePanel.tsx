@@ -69,18 +69,18 @@ function UpdateDialog({
         ? t("update.the.download.continues.in.the.background")
         : snapshot.phase === "ready"
           ? windows
-            ? t("update.installing.closes.the.app.and.the")
+            ? t("update.installing.the.app")
             : t("update.the.app.must.restart.after.installing")
           : snapshot.phase === "installing"
             ? windows
-              ? t("update.installing.the.app.closes.and.the")
+              ? t("update.installing.app.closes")
               : t("update.installing.the.update.the.app.restarts")
             : snapshot.phase === "restarting"
               ? t("update.restarting.the.app")
               : snapshot.phase === "error"
                 ? snapshot.applied
-                  ? t("update.the.update.is.installed.but.the")
-                  : t("update.the.update.did.not.complete.the")
+                  ? t("update.installedPendingRestart")
+                  : t("update.the.not.complete")
                 : undefined;
   const footer = (() => {
     switch (snapshot.phase) {
@@ -237,9 +237,7 @@ function UpdateDialog({
         </div>
       )}
       {snapshot.phase === "ready" && (
-        <DialogNotice>
-          {t("update.the.update.is.downloaded.but.not")}
-        </DialogNotice>
+        <DialogNotice>{t("update.the.downloaded.but")}</DialogNotice>
       )}
       {snapshot.phase === "installing" && (
         <DialogNotice>

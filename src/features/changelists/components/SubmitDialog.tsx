@@ -158,7 +158,7 @@ export function SubmitDialog(props: Props) {
         (result.ready && (!result.change || !result.token)) ||
         !Number.isFinite(result.expiresAt)
       )
-        throw new Error(t("pending.preflight.result.does.not.match.the"));
+        throw new Error(t("pending.preflight.not.match"));
       setCheck(result);
       setSummary(result.change);
       requestDesktopAttention({
@@ -304,7 +304,7 @@ export function SubmitDialog(props: Props) {
       title={tFor(zh ? "zh-CN" : "en-US", "pending.submit.entire.cl", {
         p1: origin.id,
       })}
-      description={t("pending.submission.always.covers.every.file.in")}
+      description={t("pending.submission.every.file")}
       zh={zh}
       source={props.source}
       busy={busy}
@@ -353,9 +353,7 @@ export function SubmitDialog(props: Props) {
         {summary?.files.length ?? origin.count} {t("pending.files.entire.cl")}
       </div>
       {(!props.check || !props.submit) && (
-        <DialogNotice>
-          {t("pending.ui.preview.preflight.execution.is.not")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.ui.preflight.execution")}</DialogNotice>
       )}
       {staleConnection && (
         <DialogNotice error>

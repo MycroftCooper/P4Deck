@@ -93,9 +93,7 @@ export async function queryAllPendingChanges(
       page.stats.truncatedBySafetyLimit ||
       (page.hasMore && (!page.nextCursor || cursors.has(page.nextCursor)))
     )
-      throw new Error(
-        t("pending.pending.changelists.are.incomplete.refresh.and"),
-      );
+      throw new Error(t("pending.pending.incomplete.refresh"));
     if (!page.hasMore || !page.nextCursor) break;
     cursors.add(page.nextCursor);
     page = await backend.queryPendingChanges(

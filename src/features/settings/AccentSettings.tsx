@@ -59,7 +59,7 @@ export function AccentSettings({
           }}
         />
         {!valid && (
-          <small role="status">{t("settings.enter.six.hex.digits.the")}</small>
+          <small role="status">{t("settings.enter.hex.digits")}</small>
         )}
       </label>
       <div

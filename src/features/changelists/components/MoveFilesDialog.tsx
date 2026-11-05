@@ -158,7 +158,7 @@ export function MoveFilesDialog({
         onDismiss();
       } else {
         operation.current = undefined;
-        setError(t("pending.files.have.an.unresolved.move.or"));
+        setError(t("pending.files.unresolved.move"));
       }
       return;
     }

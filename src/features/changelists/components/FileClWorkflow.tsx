@@ -120,9 +120,7 @@ export function FileClWorkflow({
       {error && <DialogNotice error>{error}</DialogNotice>}
       {scope?.unknown.length ? (
         <>
-          <DialogNotice error>
-            {t("pending.unique.cl.membership.is.unknown.for")}
-          </DialogNotice>
+          <DialogNotice error>{t("pending.unique.is.unknown")}</DialogNotice>
           <TargetList
             paths={scope.unknown}
             label={t("pending.files.with.unknown.membership")}

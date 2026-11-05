@@ -452,7 +452,7 @@ export function ToolDrawer(props: Props) {
               <span>
                 {tFor(
                   props.zh ? "zh-CN" : "en-US",
-                  "tools.authentication.secrets.cannot.be.read.or",
+                  "tools.authentication.be.read",
                 )}
               </span>
               <button onClick={props.onOpenSettings}>

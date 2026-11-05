@@ -72,7 +72,7 @@ export function ChangelistFormDialog({
       jobs: mode === "edit" ? [...(initial?.jobs ?? [])] : [],
     };
     if (!onSubmit) {
-      setNotice(t("pending.form.checked.ui.preview.only.no"));
+      setNotice(t("pending.form.preview.only"));
       return;
     }
     running.current = true;
@@ -130,9 +130,7 @@ export function ChangelistFormDialog({
       <div className="workflow-context">
         {t("pending.workspace")} <strong>{client || "—"}</strong>
       </div>
-      {!onSubmit && (
-        <DialogNotice>{t("pending.ui.preview.cl.writing.is.not")}</DialogNotice>
-      )}
+      {!onSubmit && <DialogNotice>{t("pending.ui.cl.writing")}</DialogNotice>}
       <form
         id={formId}
         onSubmit={(event) => {

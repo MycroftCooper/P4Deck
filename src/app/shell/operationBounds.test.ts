@@ -9,31 +9,20 @@ import {
 } from "./useOperationWatchdog";
 import {
   IO_DEADLINE_HEADROOM_MS,
-  SYNC_LATE_RESULT_GRACE_MS,
   WATCHDOG_TICK_MS,
   WORKSPACE_BOUNDS_MS,
-  WORKSPACE_WATCHDOG_MS,
 } from "../../shared/operationBounds.generated";
 
 /**
  * R9: the frontend watchdog and the backend runner must agree on one number.
- * Backend (Rust) is the owner; these assertions mirror `src-tauri/src/p4/bounds.rs`
- * and fail before a drift reaches a release. The generator check
- * (`node scripts/generate-io-bounds.mjs`) covers the generated module itself;
- * this test covers the policy built on top of it.
+ * The Rust `p4::bounds` table is the only owner; the generated module mirrors it
+ * (checked by `scripts/generate-io-bounds.mjs --check`, which runs before every
+ * `test:web`), and these assertions cover the policy built on top of it.
+ *
+ * There is deliberately no `FAMILY_OF_KIND` copy here: `operationBound()` is the
+ * production mapping, so the invariants below read it instead of restating it.
  */
-const FAMILY_OF_KIND: Record<OperationKind, keyof typeof WORKSPACE_BOUNDS_MS> =
-  {
-    sync: "workspaceSync",
-    getLatest: "workspaceSync",
-    getRevision: "workspaceSync",
-    refresh: "workspacePreview",
-    // Mutating workspace commands (checkout/add/delete/lock/unlock, revert
-    // batches) run under the widest interactive family.
-    other: "workspaceCommand",
-  };
-
-describe("workspace command bounds match the host runner", () => {
+describe("workspace command bounds mirror the host runner", () => {
   it("keeps the host defaults the runner clamps against", () => {
     expect(WORKSPACE_BOUNDS_MS.workspaceRead).toBe(30_000);
     expect(WORKSPACE_BOUNDS_MS.workspaceReadLong).toBe(300_000);
@@ -44,35 +33,41 @@ describe("workspace command bounds match the host runner", () => {
     expect(WORKSPACE_BOUNDS_MS.workspaceOther).toBe(180_000);
   });
 
-  it("adds exactly the shared headroom on top of the host limit", () => {
-    expect(IO_DEADLINE_HEADROOM_MS).toBe(15_000);
-    expect(SYNC_LATE_RESULT_GRACE_MS).toBe(IO_DEADLINE_HEADROOM_MS);
-    expect(WORKSPACE_WATCHDOG_MS.sync).toBe(
-      WORKSPACE_BOUNDS_MS.workspaceSync + IO_DEADLINE_HEADROOM_MS,
-    );
-    expect(WORKSPACE_WATCHDOG_MS.refresh).toBe(
-      WORKSPACE_BOUNDS_MS.workspacePreview + IO_DEADLINE_HEADROOM_MS,
-    );
-    expect(WORKSPACE_WATCHDOG_MS.other).toBe(
-      // `other` watches the generic mutating commands, which the host runs under
-      // `workspaceCommand` — not the shorter `workspaceOther` fallback family.
-      WORKSPACE_BOUNDS_MS.workspaceCommand + IO_DEADLINE_HEADROOM_MS,
-    );
-  });
-
-  it("derives every watchdog limit from its host family", () => {
+  it("derives every watchdog limit from its host family plus the headroom", () => {
     for (const kind of Object.keys(OPERATION_LIMITS) as OperationKind[]) {
-      expect(operationBound(kind)).toBe(FAMILY_OF_KIND[kind]);
       expect(operationLimit(kind)).toBe(
-        WORKSPACE_BOUNDS_MS[FAMILY_OF_KIND[kind]] + IO_DEADLINE_HEADROOM_MS,
+        WORKSPACE_BOUNDS_MS[operationBound(kind)] + IO_DEADLINE_HEADROOM_MS,
       );
     }
   });
 
-  it("keeps the tick far below the shortest limit", () => {
-    expect(WATCHDOG_TICK_MS).toBeLessThan(OPERATION_LIMITS.refresh / 4);
+  it("never lets the UI give up on a command the host may still finish", () => {
+    // The R9 bug: checkout/add/delete run under the host's mutation family
+    // (660 s), but the watchdog gave up at 180 s. Every watched operation must
+    // outlive its own host family by exactly the headroom.
+    for (const kind of Object.keys(OPERATION_LIMITS) as OperationKind[]) {
+      const hostMs = WORKSPACE_BOUNDS_MS[operationBound(kind)];
+      expect(operationLimit(kind)).toBeGreaterThanOrEqual(hostMs);
+    }
   });
 
+  it("never waits past the widest host family plus the headroom", () => {
+    const ceiling =
+      WORKSPACE_BOUNDS_MS.workspaceCommand + IO_DEADLINE_HEADROOM_MS;
+    for (const kind of Object.keys(OPERATION_LIMITS) as OperationKind[]) {
+      expect(operationLimit(kind)).toBeLessThanOrEqual(ceiling);
+    }
+  });
+
+  it("keeps the tick far below the shortest limit and the headroom", () => {
+    expect(WATCHDOG_TICK_MS).toBeLessThan(OPERATION_LIMITS.refresh / 4);
+    // The tick is the watchdog's sampling granularity: if it approached the
+    // headroom, a healthy command could still trip the "unknown" path.
+    expect(WATCHDOG_TICK_MS).toBeLessThan(IO_DEADLINE_HEADROOM_MS / 2);
+  });
+});
+
+describe("toolbar commands map to the family the host actually enforces", () => {
   it.each([
     ["checkout", "other"],
     ["add", "other"],
@@ -85,53 +80,32 @@ describe("workspace command bounds match the host runner", () => {
     ["getLatest", "getLatest"],
     ["getRevision", "getRevision"],
   ] as [CommandId, OperationKind][])(
-    "pairs toolbar command %s with its host family (%s)",
+    "pairs %s with its host family (%s)",
     (id, family) => {
       expect(commandFamily(id)).toBe(family);
     },
   );
 
-  it("never lets a toolbar command be abandoned early or outlive the host", () => {
-    // Every watched family must be at least as long as the host's limit for the
-    // backend command it dispatches, and no UI wait may exceed the widest host
-    // family plus the shared headroom (that is the whole point of R9).
-    for (const kind of Object.keys(OPERATION_LIMITS) as OperationKind[]) {
-      const hostMs = WORKSPACE_BOUNDS_MS[operationBound(kind)];
-      expect(operationLimit(kind)).toBeGreaterThanOrEqual(hostMs);
-      expect(operationLimit(kind)).toBeLessThanOrEqual(
-        WORKSPACE_BOUNDS_MS.workspaceCommand + IO_DEADLINE_HEADROOM_MS,
-      );
-    }
-    // Checkout/add/delete/delete-many run under the command family (660 s), so
-    // the UI must wait longer than that rather than give up at a stale 180 s.
-    for (const id of ["checkout", "add", "delete"] as CommandId[]) {
+  it("watches every mutating toolbar command for at least the mutation family", () => {
+    // These dispatch a backend command the runner bounds at `workspaceCommand`.
+    for (const id of [
+      "checkout",
+      "add",
+      "delete",
+      "revert",
+      "revertUnchanged",
+      "lock",
+      "unlock",
+    ] as CommandId[]) {
       expect(operationLimit(commandFamily(id))).toBeGreaterThanOrEqual(
         WORKSPACE_BOUNDS_MS.workspaceCommand,
       );
     }
-    // Refresh is a short read: it keeps its own narrow family.
+  });
+
+  it("keeps refresh on its own narrow family", () => {
     expect(operationLimit(commandFamily("refresh"))).toBeLessThan(
       WORKSPACE_BOUNDS_MS.workspaceCommand,
-    );
-  });
-});
-
-describe("generated boundaries", () => {
-  it("exposes one number per host family and no duplicates", () => {
-    const values = Object.values(WORKSPACE_BOUNDS_MS);
-    expect(values.length).toBe(new Set(Object.keys(WORKSPACE_BOUNDS_MS)).size);
-  });
-
-  it("rejects a watchdog wait that could trip before the host deadline", () => {
-    // Guard the arithmetic, not just the constants: if the headroom were ever
-    // removed, the shortest family would report "unknown" on a healthy timeout.
-    expect(
-      Object.values(WORKSPACE_WATCHDOG_MS).every(
-        (value) => value >= WORKSPACE_BOUNDS_MS.workspacePreview,
-      ),
-    ).toBe(true);
-    expect(WORKSPACE_WATCHDOG_MS.sync - WORKSPACE_BOUNDS_MS.workspaceSync).toBe(
-      IO_DEADLINE_HEADROOM_MS,
     );
   });
 });

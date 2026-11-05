@@ -286,7 +286,7 @@ function IntegrationTraceDialogInner({
         (detail.inspectionStatus !== "complete" ||
           incomplete ||
           next < uniqueFiles) && (
-          <p>{t("pending.source.file.set.or.investigation.is")}</p>
+          <p>{t("pending.sourceInvestigationIncomplete")}</p>
         )}
       {warnings.map((warning, index) => (
         <p role="alert" key={index}>

@@ -247,7 +247,7 @@ export function FilePreviewPage({
               {zoom === null ? t("browse.fit") : `${Math.round(zoom * 100)}%`}
             </button>
             <button
-              aria-label={t("browse.zoom.in")}
+              aria-label={t("browse.zoomIn")}
               onClick={() => setZoom((n) => Math.min(4, (n ?? 1) * 1.25))}
             >
               <Plus size={14} />
@@ -316,9 +316,7 @@ export function FilePreviewPage({
             <p>{error}</p>
           </div>
         ) : !target ? (
-          <div className="preview-empty">
-            {t("browse.select.preview.or.double.click.a")}
-          </div>
+          <div className="preview-empty">{t("browse.select.double.click")}</div>
         ) : loading && !data ? (
           <div role="status" className="preview-empty">
             {t("browse.reading")}

@@ -42,7 +42,7 @@ export function UpdateSettingsCard({
   const percent = updateProgress(snapshot);
   const running = version ?? snapshot.currentVersion;
   const status = !native
-    ? t("settings.automatic.updates.are.available.in.the")
+    ? t("settings.automatic.are.available")
     : snapshot.phase === "checking"
       ? t("settings.checking.for.updates")
       : snapshot.phase === "available"
@@ -77,7 +77,7 @@ export function UpdateSettingsCard({
                   ? snapshot.applied
                     ? tFor(
                         zh ? "zh-CN" : "en-US",
-                        "update.the.update.is.installed.but.the",
+                        "update.installedPendingRestart",
                         {
                           p1: updateFailureText(
                             snapshot.error,

@@ -136,7 +136,7 @@ export function BackupSettingsCard({
           <Archive size={18} />
           {t("settings.local.configuration.backup")}
         </h2>
-        <p>{t("settings.configuration.backup.is.available.in.the")}</p>
+        <p>{t("settings.configuration.is.available")}</p>
       </section>
     );
   }
@@ -414,9 +414,7 @@ export function BackupSettingsCard({
               </div>
               {confirmRestore === backup.fileName ? (
                 <span className="backup-restore-confirm">
-                  {t(
-                    "settings.restore.overwrites.the.current.configuration.and",
-                  )}{" "}
+                  {t("settings.restore.current.configuration")}{" "}
                   <button
                     className="danger"
                     disabled={Boolean(busy)}

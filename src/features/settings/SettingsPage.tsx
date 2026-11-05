@@ -384,7 +384,7 @@ export function SettingsPage({
                   <small id="get-latest-threshold-help">
                     {tFor(
                       zh ? "zh-CN" : "en-US",
-                      "settings.default.100.get.latest.asks.for",
+                      "settings.default.latest.asks",
                     )}
                   </small>
                 </label>

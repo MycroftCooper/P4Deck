@@ -59,9 +59,7 @@ export function RevisionDialog({
         </DialogNotice>
       )}
       {recursive && (
-        <DialogNotice>
-          {t("files.folders.included.all.descendants.are.in")}
-        </DialogNotice>
+        <DialogNotice>{t("files.folders.descendants.are")}</DialogNotice>
       )}
       <TargetList
         paths={snapshot.nodes.map(
@@ -111,7 +109,7 @@ export function RevisionDialog({
         <DialogNotice>{t("files.syncs.versions.as.of.this.cl")}</DialogNotice>
       )}
       {mode === "date" && (
-        <DialogNotice>{t("files.uses.00.00.00.on.that")}</DialogNotice>
+        <DialogNotice>{t("files.serverDayStart")}</DialogNotice>
       )}
       {!!value && !selector && (
         <DialogNotice error>

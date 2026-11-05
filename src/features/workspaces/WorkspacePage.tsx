@@ -451,7 +451,7 @@ export function WorkspacePage({
                     ? translate("workspaces.loading.failed.refresh.to.retry")
                     : search
                       ? translate("workspaces.no.matching.workspaces")
-                      : translate("workspaces.no.workspaces.owned.by.the")}
+                      : translate("workspaces.no.workspaces.owned")}
               </div>
             )}
           </div>

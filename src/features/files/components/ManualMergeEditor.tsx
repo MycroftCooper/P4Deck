@@ -708,7 +708,7 @@ export function ManualMergeEditor({
                 checked={acknowledge}
                 onChange={(event) => setAcknowledge(event.target.checked)}
               />
-              {t("files.i.confirm.marking.resolve.with.the")}
+              {t("files.i.marking.resolve")}
             </label>
             <button
               className="primary"

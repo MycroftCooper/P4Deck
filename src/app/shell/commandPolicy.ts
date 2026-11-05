@@ -153,10 +153,7 @@ export function commandReason(
       : tFor(zh ? "zh-CN" : "en-US", "shell.target.path.is.unknown");
   if (id === "lock" || id === "unlock") {
     if (node.kind !== "file")
-      return tFor(
-        zh ? "zh-CN" : "en-US",
-        "shell.lock.operations.require.explicit.files.and",
-      );
+      return tFor(zh ? "zh-CN" : "en-US", "shell.lock.explicit.files");
     if (!node.absolutePath && !node.depotPath)
       return tFor(zh ? "zh-CN" : "en-US", "shell.target.path.is.unknown");
     const capability =
@@ -175,7 +172,7 @@ export function commandReason(
       "conflicted",
     ].includes(node.state)
       ? undefined
-      : tFor(zh ? "zh-CN" : "en-US", "shell.the.file.must.be.opened.in");
+      : tFor(zh ? "zh-CN" : "en-US", "shell.the.be.opened");
   }
   if (id === "reveal" || id === "openWith") {
     if (!native)
@@ -193,10 +190,7 @@ export function commandReason(
     const available = localCapabilities ? localCapabilities[id] : local;
     return available
       ? undefined
-      : tFor(
-          zh ? "zh-CN" : "en-US",
-          "shell.target.is.outside.the.workspace.or",
-        );
+      : tFor(zh ? "zh-CN" : "en-US", "shell.target.the.workspace");
   }
   if (node.kind === "directory") {
     if (!node.absolutePath && !node.depotPath)

@@ -169,7 +169,7 @@ export function ShelfDetailPage({
         if (!active || generation !== requestGeneration.current) return;
         if (!ownsShelfResult(value, runtime, changeId, generation)) {
           setRestartRequired(true);
-          setError(t("pending.the.shelf.response.does.not"));
+          setError(t("pending.the.response.does"));
           return;
         }
         setDetail(value);
@@ -262,7 +262,7 @@ export function ShelfDetailPage({
         if (generation !== requestGeneration.current) return;
         if (!ownsShelfResult(page, runtime, changeId, generation)) {
           setRestartRequired(true);
-          setError(t("pending.the.shelf.page.does.not"));
+          setError(t("pending.the.page.does"));
           return;
         }
         setDetail((current) => {
@@ -591,7 +591,7 @@ export function ShelfDetailPage({
             </div>
             {!selected ? (
               <div className="workspace-empty">
-                {t("pending.select.a.shelved.file.to")}
+                {t("pending.select.shelved.file")}
               </div>
             ) : contentLoading && !preview && !diff ? (
               <div className="workspace-empty" role="status">

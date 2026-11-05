@@ -105,7 +105,7 @@ export function OperationConfirmDialog({
             checked={ack}
             onChange={(event) => setAck(event.target.checked)}
           />
-          {t("shell.i.have.reviewed.the.scope.and")}
+          {t("shell.i.the.scope")}
         </label>
       )}
     </Dialog>

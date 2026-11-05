@@ -21,11 +21,9 @@ function entryCopy(
         text: tFor(zh ? "zh-CN" : "en-US", "update.status.available", {
           version,
         }),
-        label: tFor(
-          zh ? "zh-CN" : "en-US",
-          "update.new.version.is.available.open.the",
-          { p1: zh ? version : version },
-        ),
+        label: tFor(zh ? "zh-CN" : "en-US", "update.new.available.open", {
+          p1: zh ? version : version,
+        }),
       };
     case "downloading":
       return {
@@ -40,7 +38,7 @@ function entryCopy(
     case "installing":
       return {
         text: translate("update.installing.update"),
-        label: translate("update.installing.the.update.open.the"),
+        label: translate("update.installing.update.open"),
       };
     case "ready":
       return {
@@ -57,7 +55,7 @@ function entryCopy(
           }
         : {
             text: translate("update.update.failed"),
-            label: translate("update.the.update.failed.open.the"),
+            label: translate("update.the.failed.open"),
           };
   }
 }

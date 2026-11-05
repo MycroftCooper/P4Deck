@@ -10,13 +10,12 @@ export function switchFailure(cause: unknown, zh: boolean) {
       "workspaces.the.active.connection.changed.refresh.workspaces",
     authenticationRequired:
       "workspaces.the.current.profile.requires.login.authenticate",
-    connectionFailed:
-      "workspaces.target.workspace.verification.failed.check.its",
+    connectionFailed: "workspaces.target.failed.check",
     notFound: "workspaces.the.target.workspace.no.longer.exists",
   };
   const key = code ? recovery[code] : undefined;
   return tFor(
     zh ? "zh-CN" : "en-US",
-    (key ?? "workspaces.the.switch.request.did.not") as never,
+    (key ?? "workspaces.the.request.did") as never,
   );
 }

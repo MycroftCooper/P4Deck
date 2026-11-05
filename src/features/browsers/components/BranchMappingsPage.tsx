@@ -505,7 +505,7 @@ export function BranchMappingsPage({
     detailSequence.current += 1;
     previewSequence.current += 1;
     cancelAll();
-    const cancelled = t("browse.the.request.was.cancelled.retry.or");
+    const cancelled = t("browse.the.cancelled.retry");
     setListPhase(page ? "ready" : "error");
     setListError(page ? "" : cancelled);
     if (page?.hasMore)

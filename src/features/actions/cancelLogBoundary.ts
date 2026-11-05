@@ -96,5 +96,5 @@ export function bestEffortLogNote(
     );
   if (receipt.status === "rejected")
     return tFor(zh ? "zh-CN" : "en-US", "actions.the.log.entry.was.rejected");
-  return tFor(zh ? "zh-CN" : "en-US", "actions.the.log.is.unavailable.the");
+  return tFor(zh ? "zh-CN" : "en-US", "actions.the.is.unavailable");
 }

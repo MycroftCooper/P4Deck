@@ -644,7 +644,7 @@ export function StreamGraphPage({
               <RotateCcw size={14} /> {t("browse.reset")}
             </button>
             <span className="stream-graph-scroll-hint">
-              {t("browse.use.scrollbars.to.pan.the")}
+              {t("browse.use.to.pan")}
             </span>
           </div>
           <div

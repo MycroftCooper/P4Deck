@@ -629,7 +629,7 @@ export function ConnectionSpecCreateDialog({
                 t("settings.created.confirmed.by.server.readback")}
               {result.message}
               {created && !createdWorkspaceUsable
-                ? t("settings.the.server.did.not.return.a")
+                ? t("settings.the.not.return")
                 : ""}
             </DialogNotice>
           )}

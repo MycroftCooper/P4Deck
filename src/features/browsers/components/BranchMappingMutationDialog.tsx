@@ -669,7 +669,7 @@ export function BranchMappingMutationDialog({
                 checked={acknowledgeDelete}
                 onChange={(event) => setAcknowledgeDelete(event.target.checked)}
               />
-              {t("browse.i.understand.this.permanently.deletes.the")}
+              {t("browse.i.permanently.deletes")}
             </label>
           )}
         </div>
@@ -700,9 +700,7 @@ export function BranchMappingMutationDialog({
         </DialogNotice>
       )}
       {phase === "result" && result?.outcome === "unknown" && (
-        <DialogNotice error>
-          {t("browse.the.write.may.have.applied.the")}
-        </DialogNotice>
+        <DialogNotice error>{t("browse.the.have.applied")}</DialogNotice>
       )}
       {phase === "result" && result?.outcome === "succeeded" && observed && (
         <DialogNotice>

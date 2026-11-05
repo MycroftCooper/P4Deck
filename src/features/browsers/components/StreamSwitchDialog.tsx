@@ -280,7 +280,7 @@ export function StreamSwitchDialog({
   return (
     <Dialog
       title={t("browse.safe.stream.switch")}
-      description={t("browse.inspect.the.client.stream.permissions.and")}
+      description={t("browse.inspect.stream.permissions")}
       source={source}
       zh={zh}
       danger={mode === "sync"}
@@ -455,7 +455,7 @@ export function StreamSwitchDialog({
           <DialogNotice>
             {mode === "sync"
               ? t("browse.revalidating.switching.the.client.stream.syncing")
-              : t("browse.revalidating.switching.the.client.stream.and")}
+              : t("browse.revalidating.client.stream")}
           </DialogNotice>
         </section>
       )}
