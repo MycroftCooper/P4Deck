@@ -496,6 +496,15 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "preflight.unavailable": "预检尚未接通，不能执行。",
+  "preflight.idle": "尚未预检。",
+  "preflight.checking": "正在预检，请稍候…",
+  "preflight.empty": "预检范围内没有文件。",
+  "preflight.stale": "预检已过期或目标已改变，请重新检查。",
+  "preflight.offline": "连接不可用，无法验证当前服务器状态。",
+  "preflight.failed": "预检失败。",
+  "preflight.blocked": "存在阻塞项，不能执行。",
+  "preflight.ready": "预检结果已就绪，请核对文件范围和警告。",
   "update.version.v.is.available.current.v": "有新版本 v{p1}（当前 v{p2}）。",
   "update.downloading.the.update": "正在下载更新 {p1}%。",
   "update.version.v.is.installed.and.waiting":

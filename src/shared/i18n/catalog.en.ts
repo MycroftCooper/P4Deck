@@ -534,6 +534,15 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "preflight.unavailable": "Preflight is not connected. Execution unavailable.",
+  "preflight.idle": "Not checked yet.",
+  "preflight.checking": "Preflight in progress…",
+  "preflight.empty": "No files in the preflight scope.",
+  "preflight.stale": "Preflight expired or target changed. Check again.",
+  "preflight.offline": "Connection unavailable; current server state cannot be verified.",
+  "preflight.failed": "Preflight failed.",
+  "preflight.blocked": "Blockers prevent execution.",
+  "preflight.ready": "Preflight results ready. Review scope and warnings.",
   "update.version.v.is.available.current.v":
     "Version v{p1} is available (current: v{p2}).",
   "update.downloading.the.update": "Downloading the update ({p1}%).",
