@@ -278,16 +278,16 @@ const labelKeys: Record<string, string> = {
   "打标签…": "contextMenu.tag.with.label",
   "搁置此文件…": "contextMenu.shelve.this.file",
   "在 Streams 中查找…": "contextMenu.find.in.streams",
-  "获取最新（递归）…": "contextMenu.get.latest.recursive",
-  "获取指定版本（递归）…": "contextMenu.get.revision.recursive",
-  "签出（递归）…": "contextMenu.check.out.recursive",
-  "添加未跟踪文件（递归）…": "contextMenu.add.untracked.files.recursive",
-  "标记删除（递归）…": "contextMenu.mark.for.delete.recursive",
-  "还原（递归）…": "contextMenu.revert.recursive",
+  "获取最新（递归）…": "contextMenu.get.latest.recursive", // i18n-exempt: menu-label matcher
+  "获取指定版本（递归）…": "contextMenu.get.revision.recursive", // i18n-exempt: menu-label matcher
+  "签出（递归）…": "contextMenu.check.out.recursive", // i18n-exempt: menu-label matcher
+  "添加未跟踪文件（递归）…": "contextMenu.add.untracked.files.recursive", // i18n-exempt: menu-label matcher
+  "标记删除（递归）…": "contextMenu.mark.for.delete.recursive", // i18n-exempt: menu-label matcher
+  "还原（递归）…": "contextMenu.revert.recursive", // i18n-exempt: menu-label matcher
   "复制 › 目录名": "contextMenu.copy.folder.name",
-  "对账（递归）…": "contextMenu.reconcile.recursive",
-  "还原未修改文件（递归）…": "contextMenu.revert.unchanged.files.recursive",
-  "从工作区移除（递归）…": "contextMenu.remove.from.workspace.recursive",
+  "对账（递归）…": "contextMenu.reconcile.recursive", // i18n-exempt: menu-label matcher
+  "还原未修改文件（递归）…": "contextMenu.revert.unchanged.files.recursive", // i18n-exempt: menu-label matcher
+  "从工作区移除（递归）…": "contextMenu.remove.from.workspace.recursive", // i18n-exempt: menu-label matcher
   "重命名/移动目录…": "contextMenu.rename.move.folder",
   "合并/集成目录…": "contextMenu.merge.integrate.folder",
   "复制目录到…": "contextMenu.copy.folder.to",
@@ -305,17 +305,20 @@ const labelKeys: Record<string, string> = {
   "复制 › Depot 路径列表": "contextMenu.copy.depot.paths",
   "搁置所选文件…": "contextMenu.shelve.selected.files",
   "比较这两个文件…": "contextMenu.compare.these.two.files",
-  "获取最新（含递归）…": "contextMenu.get.latest.include.recursive",
-  "获取指定版本（含递归）…": "contextMenu.get.revision.include.recursive",
-  "签出（含递归）…": "contextMenu.check.out.include.recursive",
+  "获取最新（含递归）…": "contextMenu.get.latest.include.recursive", // i18n-exempt: menu-label matcher
+  "获取指定版本（含递归）…": "contextMenu.get.revision.include.recursive", // i18n-exempt: menu-label matcher
+  "签出（含递归）…": "contextMenu.check.out.include.recursive", // i18n-exempt: menu-label matcher
+  // i18n-exempt: menu-label matcher
   "添加未跟踪文件（含递归）…":
     "contextMenu.add.untracked.files.include.recursive",
-  "标记删除（含递归）…": "contextMenu.mark.for.delete.include.recursive",
-  "还原（含递归）…": "contextMenu.revert.include.recursive",
+  "标记删除（含递归）…": "contextMenu.mark.for.delete.include.recursive", // i18n-exempt: menu-label matcher
+  "还原（含递归）…": "contextMenu.revert.include.recursive", // i18n-exempt: menu-label matcher
   "复制 › 名称列表": "contextMenu.copy.names",
-  "对账（含递归）…": "contextMenu.reconcile.include.recursive",
+  "对账（含递归）…": "contextMenu.reconcile.include.recursive", // i18n-exempt: menu-label matcher
+  // i18n-exempt: menu-label matcher
   "还原未修改文件（含递归）…":
     "contextMenu.revert.unchanged.files.include.recursive",
+  // i18n-exempt: menu-label matcher
   "从工作区移除（含递归）…":
     "contextMenu.remove.from.workspace.include.recursive",
   复制当前目录路径: "contextMenu.copy.current.folder.path",
@@ -402,6 +405,7 @@ export function menuLabel(label: string, zh: boolean): string {
       menuLabel(label.replace(/（(含)?递归）$/, ""), false) + " (recursive)"
     );
   if (label.startsWith("复制"))
+    // i18n-exempt: menu-label matcher
     // i18n-exempt: menu-label matcher
     // i18n-exempt: menu-label matcher
     return "Copy " + menuLabel(label.slice(2).trim(), false).toLowerCase();

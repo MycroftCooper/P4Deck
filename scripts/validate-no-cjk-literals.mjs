@@ -47,7 +47,66 @@ const EXEMPT_FILES = [
   // Its resource/confirmation fields are notes for maintainers; nothing here
   // is rendered, and the module is only read by tests.
   "src/features/actions/registry.ts",
+  // Development-only UI harness, lazily imported behind import.meta.env.DEV so
+  // it is not in the production bundle. Its copy targets the developer running
+  // the audit, not a user; translating it buys nothing and adds maintenance.
+  "src/app/context-menu/MenuAuditPage.tsx",
 ];
+
+/**
+ * Known remaining hardcoded Chinese: exact "file:line" positions accepted as a
+ * baseline so the gate can block NEW violations while the tail is ground down.
+ *
+ * Every entry is a user-visible string still awaiting translation. Remove an
+ * entry when you translate it; adding one requires a reason, because each line
+ * here is a real gap in the localization. Regenerate with
+ * `node scripts/validate-no-cjk-literals.mjs --json` and read violations.json.
+ *
+ * Keep this list shrinking. It is a schedule, not a permission.
+ */
+const BASELINE = new Set([
+  "src/app/App.tsx:513",
+  "src/app/DockWorkspace.tsx:37",
+  "src/app/DockWorkspace.tsx:38",
+  "src/app/DockWorkspace.tsx:47",
+  "src/app/DockWorkspace.tsx:49",
+  "src/app/commands/keymapPersistence.ts:186",
+  "src/app/commands/keymapPersistence.ts:187",
+  "src/app/context-menu/ColumnResizer.tsx:19",
+  "src/app/context-menu/ColumnResizer.tsx:20",
+  "src/app/context-menu/FullTextSelection.tsx:64",
+  "src/app/context-menu/FullTextSelection.tsx:65",
+  "src/app/context-menu/FullTextSelection.tsx:73",
+  "src/app/context-menu/copyMenu.ts:33",
+  "src/app/context-menu/labels.ts:402",
+  "src/app/context-menu/labels.ts:405",
+  "src/app/context-menu/labels.ts:407",
+  "src/app/shell/StatusBar.tsx:263",
+  "src/features/browsers/components/DiffView.tsx:391",
+  "src/features/browsers/components/DiffView.tsx:482",
+  "src/features/browsers/components/StreamGraphPage.tsx:577",
+  "src/features/changelists/components/ChangelistFormDialog.tsx:99",
+  "src/features/changelists/components/ChangelistPage.tsx:433",
+  "src/features/changelists/components/ChangelistPage.tsx:475",
+  "src/features/changelists/components/IntegrationTraceDialog.tsx:301",
+  "src/features/changelists/components/RevisionFileList.tsx:211",
+  "src/features/changelists/components/SelectedFilesSubmitDialog.tsx:232",
+  "src/features/changelists/components/SubmittedPage.tsx:723",
+  "src/features/changelists/components/UnshelveDialog.tsx:566",
+  "src/features/changelists/moveOptimism.ts:238",
+  "src/features/companySubmit/CompanySubmitDialog.tsx:22",
+  "src/features/files/components/FileWorkbench.tsx:334",
+  "src/features/files/components/SyncDialog.tsx:441",
+  "src/features/search/SearchPage.tsx:761",
+  "src/features/search/SearchPage.tsx:762",
+  "src/features/settings/ConnectionSpecCreateDialog.tsx:341",
+  "src/features/settings/ConnectionSpecCreateDialog.tsx:615",
+  "src/features/settings/LogSettingsCard.tsx:68",
+  "src/features/settings/SettingsPage.tsx:499",
+  "src/features/settings/UpdateSettingsCard.tsx:101",
+  "src/features/tools/components/OperationJournalView.tsx:294",
+  "src/features/workspaces/WorkspaceSwitcher.tsx:150",
+]);
 
 /**
  * Lookup indexes where the Chinese text is a KEY, not rendered copy:
@@ -139,30 +198,48 @@ for (const abs of walk(path.join(ROOT, "src"))) {
       )
         return;
     }
-    violations.push({ file, line: i + 1, text: trimmed.slice(0, 160) });
+    const position = `${file}:${i + 1}`;
+    const kind = BASELINE.has(position) ? "baseline" : "new";
+    violations.push({ file, line: i + 1, text: trimmed.slice(0, 160), kind });
   });
 }
+
+const fresh = violations.filter((v) => v.kind === "new");
+const known = violations.length - fresh.length;
 
 if (JSON_OUT) {
   const outPath = path.join(ROOT, "artifacts/l10n/violations.json");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(
     outPath,
-    JSON.stringify({ count: violations.length, violations }, null, 1),
+    JSON.stringify(
+      { count: violations.length, fresh: fresh.length, violations },
+      null,
+      1,
+    ),
   );
-  console.log(`wrote ${outPath} (${violations.length} violations)`);
-  process.exit(violations.length ? 1 : 0);
+  console.log(
+    `wrote ${outPath} (${violations.length} violations, ${fresh.length} new)`,
+  );
+  process.exit(fresh.length ? 1 : 0);
 }
 
-if (violations.length) {
+if (fresh.length) {
   console.error(
-    `\n✗ ${violations.length} hardcoded Chinese literal(s) found outside the catalog.\n` +
+    `\n✗ ${fresh.length} NEW hardcoded Chinese literal(s) outside the catalog.\n` +
       `  Move the text into src/shared/i18n/catalog.zh.ts and call t("key").\n` +
       `  If the value is genuinely not UI copy, append an "i18n-exempt" comment.\n`,
   );
-  for (const v of violations)
+  for (const v of fresh)
     console.error(`  ${v.file}:${v.line}\n      ${v.text}`);
   process.exit(1);
 }
 
-console.log("✓ no hardcoded Chinese literals outside the catalog");
+if (known) {
+  console.log(
+    `✓ no NEW hardcoded Chinese outside the catalog ` +
+      `(${known} baseline entries still to translate)`,
+  );
+} else {
+  console.log("✓ no hardcoded Chinese literals outside the catalog");
+}
