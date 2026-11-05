@@ -1,42 +1,29 @@
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{
+            ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest, ConfirmationTicket,
+            IssuedConfirmation, RecheckVerdict, ReviewSpec, DEFAULT_CONFIRMATION_TTL_MS,
+        },
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
     p4::{
         context::ContextStore,
         locks::{LockInspection, LockRepository},
-        runner::MutationGuard,
+        runner::{MutationGuard, OperationGroup},
     },
 };
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tauri::AppHandle;
-use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
-
-const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
-
-#[derive(Clone)]
-struct TokenRecord {
-    target: FileLockTargetSnapshot,
-    state_digest: String,
-    expires_at: i64,
-}
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
-}
 
 pub struct FileLockService {
     repository: LockRepository,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    /// preflight → one-time token → recheck → lane → execute (shared skeleton).
+    tickets: ConfirmationTicket<FileLockTargetSnapshot, String>,
 }
 
 impl FileLockService {
@@ -45,7 +32,12 @@ impl FileLockService {
         contexts: Arc<ContextStore>,
         status_cache: Arc<StatusCache>,
     ) -> Self {
-        Self::with_ttl(repository, contexts, status_cache, DEFAULT_TOKEN_TTL_MS)
+        Self::with_ttl(
+            repository,
+            contexts,
+            status_cache,
+            DEFAULT_CONFIRMATION_TTL_MS,
+        )
     }
 
     pub(crate) fn with_ttl(
@@ -58,14 +50,14 @@ impl FileLockService {
             repository,
             contexts,
             status_cache,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            tickets: ConfirmationTicket::new(ttl_ms),
         }
     }
 
     pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+        // Blocking clear: await it so a context switch serialises against
+        // any in-flight confirmation of this family.
+        tauri::async_runtime::block_on(self.tickets.clear());
     }
 
     pub async fn preflight(
@@ -142,21 +134,14 @@ impl FileLockService {
         });
         let state_digest = digest(target.as_ref());
         let ready = blockers.is_empty() && target.is_some() && applicable > 0;
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let token = if ready {
-            target.clone().map(|target| {
-                self.tokens.issue(
-                    TokenRecord {
-                        target,
-                        state_digest: state_digest.clone(),
-                        expires_at,
-                    },
-                    now_ms(),
-                )
-            })
-        } else {
-            None
-        };
+        // `ready` already implies a target; a blocked review issues no token.
+        let (expires_at, token) = target
+            .clone()
+            .and_then(|target| self.tickets.issue(ready, target, state_digest.clone()))
+            .map_or_else(
+                || (self.tickets.planned_expires_at(), None),
+                |(expires_at, token)| (expires_at, Some(token)),
+            );
         let counts = FileLockCounts {
             requested: request.paths.len(),
             applicable,
@@ -175,7 +160,7 @@ impl FileLockService {
             state_digest,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.tickets.ttl_ms(),
             log_reference: operation_ids.first().cloned(),
             operation_ids,
         }
@@ -213,223 +198,39 @@ impl FileLockService {
         guard: &MutationGuard,
         app: Option<&AppHandle>,
     ) -> FileLockResult {
-        let _gate = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
-            return rejected(
-                FileLockFailureCode::TokenUnknown,
-                "The lock confirmation token is unknown or was already used.",
-                Some(&confirmation.target),
-            );
+        let mut review = LockReview {
+            service: self,
+            reviewed_echo: confirmation.target.clone(),
+            current_operation_id: confirmation
+                .operation_id
+                .clone()
+                .filter(|value| valid_operation_id(value)),
+            operation_id: None,
+            held_group: None,
+            guard,
+            app,
         };
-        if record.expires_at <= now_ms() {
-            return rejected(
-                FileLockFailureCode::TokenExpired,
-                "The lock preflight expired. Check the files again.",
-                Some(&record.target),
-            );
-        }
-        if record.target != confirmation.target || record.state_digest != confirmation.state_digest
-        {
-            return rejected(
-                FileLockFailureCode::TargetMismatch,
-                "The confirmation does not match the reviewed file set and state.",
-                Some(&record.target),
-            );
-        }
-        let (context, generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected(FileLockFailureCode::ContextChanged, "The connection, profile, workspace, or runtime generation changed after preflight.", Some(&record.target));
-        }
-
-        let operation_id = confirmation
-            .operation_id
-            .filter(|value| valid_operation_id(value))
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let group = self.repository.begin_group(operation_id.clone());
-        if group.ensure_active().is_err() {
-            return rejected_with_operation(
-                FileLockFailureCode::Cancelled,
-                "The lock operation was cancelled before execution.",
-                &record.target,
-                operation_id,
-            );
-        }
-        let paths = record
-            .target
-            .files
-            .iter()
-            .map(|file| file.input_path.clone())
-            .collect::<Vec<_>>();
-        let reinspection = self
-            .repository
-            .inspect(
-                &context,
-                record.target.operation,
-                &paths,
-                &format!("{operation_id}:recheck"),
-                app,
-            )
-            .await;
-        let Ok(reinspection) = reinspection else {
-            return rejected_with_operation(
-                FileLockFailureCode::PreflightBlocked,
-                "The selected files could not be revalidated safely.",
-                &record.target,
-                operation_id,
-            );
-        };
-        let (reblockers, _) = issues(record.target.operation, &reinspection.files);
-        let rechecked = FileLockTargetSnapshot {
-            files: reinspection.files,
-            ..record.target.clone()
-        };
-        if !reblockers.is_empty()
-            || rechecked != record.target
-            || digest(Some(&rechecked)) != record.state_digest
-        {
-            return rejected_with_operation(FileLockFailureCode::StateChanged, "File mapping, opened action, changelist, filetype, permission, or lock ownership changed after review.", &record.target, operation_id);
-        }
-        let (latest_context, latest_generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &latest_context,
-            latest_generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected_with_operation(
-                FileLockFailureCode::ContextChanged,
-                "The runtime context changed while confirmation was waiting.",
-                &record.target,
-                operation_id,
-            );
-        }
-        if record.expires_at <= now_ms() {
-            return rejected_with_operation(
-                FileLockFailureCode::TokenExpired,
-                "The lock preflight expired while confirmation was waiting.",
-                &record.target,
-                operation_id,
-            );
-        }
-
-        let mut results = record
-            .target
-            .files
-            .iter()
-            .filter(|file| already_satisfied(record.target.operation, file))
-            .map(|file| FileLockFileResult {
-                depot_path: file.depot_path.clone(),
-                outcome: FileLockFileOutcome::AlreadySatisfied,
-                message: file
-                    .reason
-                    .clone()
-                    .unwrap_or_else(|| "The requested state was already satisfied.".into()),
-                ownership: file.ownership,
-                lock_owner: file.lock_owner.clone(),
-                operation_id: None,
-            })
-            .collect::<Vec<_>>();
-        for (index, file) in record
-            .target
-            .files
-            .iter()
-            .filter(|file| file.applicable)
-            .enumerate()
-        {
-            if group.ensure_active().is_err() {
-                results.push(file_result(
-                    file,
-                    FileLockFileOutcome::Cancelled,
-                    "Cancelled before this file was sent to the server.",
-                    None,
-                ));
-                continue;
-            }
-            let child_id = format!("{operation_id}:file-{index}");
-            match self
-                .repository
-                .mutate(
-                    &context,
-                    record.target.operation,
-                    &file.depot_path,
-                    child_id.clone(),
-                    guard,
-                    app,
+        // The ticket takes the token, re-checks the server, re-verifies context
+        // and expiry, then executes — all under the confirmation gate, while
+        // the caller's write lane stays held.
+        let request = ConfirmationRequest::new(&confirmation.token, &confirmation.target)
+            .with_digest(&confirmation.state_digest);
+        match self.tickets.confirm(request, &mut review).await {
+            Ok(result) => result,
+            Err(refusal) => {
+                let code = refusal.code().unwrap_or(FileLockFailureCode::Cancelled);
+                let message = refusal
+                    .message()
+                    .unwrap_or("The lock operation was cancelled before execution.");
+                lock_refusal(
+                    code,
+                    message,
+                    refusal.after_recheck(),
+                    &review.reviewed_echo,
+                    review.operation_id.as_deref(),
                 )
-                .await
-            {
-                Ok(operation) if operation.exit_code == 0 => results.push(file_result(
-                    file,
-                    FileLockFileOutcome::Succeeded,
-                    "Server accepted the requested lock state change; verification follows.",
-                    Some(child_id),
-                )),
-                Ok(operation)
-                    if operation
-                        .events
-                        .iter()
-                        .any(|event| matches!(event.kind, EventKind::Cancelled)) =>
-                {
-                    results.push(file_result(
-                        file,
-                        FileLockFileOutcome::Cancelled,
-                        "The file operation was cancelled; no rollback was attempted.",
-                        Some(child_id),
-                    ))
-                }
-                Ok(_) => results.push(file_result(
-                    file,
-                    FileLockFileOutcome::Failed,
-                    "The server rejected this file; other successful files were not rolled back.",
-                    Some(child_id),
-                )),
-                Err(message) if message.to_ascii_lowercase().contains("cancel") => {
-                    results.push(file_result(
-                        file,
-                        FileLockFileOutcome::Cancelled,
-                        "The file operation was cancelled; no rollback was attempted.",
-                        Some(child_id),
-                    ))
-                }
-                Err(message) if message.to_ascii_lowercase().contains("timed out") => {
-                    results.push(file_result(
-                        file,
-                        FileLockFileOutcome::Unknown,
-                        "The command outcome is uncertain; refresh before retrying.",
-                        Some(child_id),
-                    ))
-                }
-                Err(_) => results.push(file_result(
-                    file,
-                    FileLockFileOutcome::Failed,
-                    "The file command failed before a reliable result was returned.",
-                    Some(child_id),
-                )),
             }
         }
-
-        let verification = if group.ensure_active().is_ok() {
-            self.repository
-                .inspect(
-                    &context,
-                    record.target.operation,
-                    &paths,
-                    &format!("{operation_id}:verify"),
-                    app,
-                )
-                .await
-                .ok()
-        } else {
-            None
-        };
-        verify_results(record.target.operation, &mut results, verification.as_ref());
-        self.invalidate(&context, &record.target);
-        result_from_files(operation_id, &record.target, results)
     }
 
     fn invalidate(&self, context: &P4Context, target: &FileLockTargetSnapshot) {
@@ -448,6 +249,16 @@ impl FileLockService {
             InvalidationReason::FileMutation,
         );
     }
+}
+
+/// Whether the requested lock state is already in place for this file, so the
+/// review reports it as satisfied instead of mutating it.
+fn already_satisfied(operation: FileLockOperation, file: &FileLockFileSnapshot) -> bool {
+    matches!(
+        (operation, file.ownership),
+        (FileLockOperation::Lock, FileLockOwnership::Ours)
+            | (FileLockOperation::Unlock, FileLockOwnership::Unlocked)
+    )
 }
 
 fn issues(
@@ -540,12 +351,339 @@ fn issues(
     (blockers, warnings)
 }
 
-fn already_satisfied(operation: FileLockOperation, file: &FileLockFileSnapshot) -> bool {
-    matches!(
-        (operation, file.ownership),
-        (FileLockOperation::Lock, FileLockOwnership::Ours)
-            | (FileLockOperation::Unlock, FileLockOwnership::Unlocked)
-    )
+/// Turn a ticket refusal into the lock result. Refusals decided after the
+/// re-check keep the operation id of the opened group, exactly like the
+/// hand-written flow reported it.
+fn lock_refusal(
+    code: FileLockFailureCode,
+    message: &str,
+    after_recheck: bool,
+    target: &FileLockTargetSnapshot,
+    operation_id: Option<&str>,
+) -> FileLockResult {
+    if after_recheck && code != FileLockFailureCode::TokenExpired {
+        let operation_id = operation_id
+            .map(str::to_owned)
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        return rejected_with_operation(code, message, target, operation_id);
+    }
+    rejected(code, message, Some(target))
+}
+
+/// One lock confirmation as the shared ticket sees it.
+///
+/// The ticket owns the decision order; this type supplies only the decisions
+/// that are lock-specific: the fresh server snapshot, the lock issues that only
+/// the re-check can produce, and the per-file mutation loop. The write lane
+/// arrives already acquired (production IPC) or is taken by
+/// [`FileLockService::confirm`], and stays held from the re-check through the
+/// last server call.
+struct LockReview<'a> {
+    service: &'a FileLockService,
+    /// Snapshot echoed by the caller; the refresh advice of a token refusal is
+    /// built from it.
+    reviewed_echo: FileLockTargetSnapshot,
+    /// Caller-supplied operation id, used as the journal group root.
+    current_operation_id: Option<String>,
+    /// Group root chosen by the ticket.
+    operation_id: Option<String>,
+    /// Operation group opened by the re-check; the mutation loop reuses it so a
+    /// cancelled group refuses at the first post-review step.
+    held_group: Option<OperationGroup>,
+    guard: &'a MutationGuard,
+    app: Option<&'a AppHandle>,
+}
+
+impl LockReview<'_> {
+    /// Run the mutation for an already re-checked snapshot.
+    async fn run_lane(
+        &mut self,
+        target: FileLockTargetSnapshot,
+        operation_id: String,
+        group: OperationGroup,
+    ) -> FileLockResult {
+        let (context, _) = self.service.contexts.snapshot();
+        let mut results = target
+            .files
+            .iter()
+            .filter(|file| already_satisfied(target.operation, file))
+            .map(|file| FileLockFileResult {
+                depot_path: file.depot_path.clone(),
+                outcome: FileLockFileOutcome::AlreadySatisfied,
+                message: file
+                    .reason
+                    .clone()
+                    .unwrap_or_else(|| "The requested state was already satisfied.".into()),
+                ownership: file.ownership,
+                lock_owner: file.lock_owner.clone(),
+                operation_id: None,
+            })
+            .collect::<Vec<_>>();
+        for (index, file) in target
+            .files
+            .iter()
+            .filter(|file| file.applicable)
+            .enumerate()
+        {
+            if group.ensure_active().is_err() {
+                results.push(file_result(
+                    file,
+                    FileLockFileOutcome::Cancelled,
+                    "Cancelled before this file was sent to the server.",
+                    None,
+                ));
+                continue;
+            }
+            let child_id = format!("{operation_id}:file-{index}");
+            match self
+                .service
+                .repository
+                .mutate(
+                    &context,
+                    target.operation,
+                    &file.depot_path,
+                    child_id.clone(),
+                    self.guard,
+                    self.app,
+                )
+                .await
+            {
+                Ok(operation) if operation.exit_code == 0 => results.push(file_result(
+                    file,
+                    FileLockFileOutcome::Succeeded,
+                    "Server accepted the requested lock state change; verification follows.",
+                    Some(child_id),
+                )),
+                Ok(operation)
+                    if operation
+                        .events
+                        .iter()
+                        .any(|event| matches!(event.kind, EventKind::Cancelled)) =>
+                {
+                    results.push(file_result(
+                        file,
+                        FileLockFileOutcome::Cancelled,
+                        "The file operation was cancelled; no rollback was attempted.",
+                        Some(child_id),
+                    ))
+                }
+                Ok(_) => results.push(file_result(
+                    file,
+                    FileLockFileOutcome::Failed,
+                    "The server rejected this file; other successful files were not rolled back.",
+                    Some(child_id),
+                )),
+                Err(message) if message.to_ascii_lowercase().contains("cancel") => {
+                    results.push(file_result(
+                        file,
+                        FileLockFileOutcome::Cancelled,
+                        "The file operation was cancelled; no rollback was attempted.",
+                        Some(child_id),
+                    ))
+                }
+                Err(message) if message.to_ascii_lowercase().contains("timed out") => {
+                    results.push(file_result(
+                        file,
+                        FileLockFileOutcome::Unknown,
+                        "The command outcome is uncertain; refresh before retrying.",
+                        Some(child_id),
+                    ))
+                }
+                Err(_) => results.push(file_result(
+                    file,
+                    FileLockFileOutcome::Failed,
+                    "The file command failed before a reliable result was returned.",
+                    Some(child_id),
+                )),
+            }
+        }
+
+        let paths = target
+            .files
+            .iter()
+            .map(|file| file.input_path.clone())
+            .collect::<Vec<_>>();
+        let verification = if group.ensure_active().is_ok() {
+            self.service
+                .repository
+                .inspect(
+                    &context,
+                    target.operation,
+                    &paths,
+                    &format!("{operation_id}:verify"),
+                    self.app,
+                )
+                .await
+                .ok()
+        } else {
+            None
+        };
+        verify_results(target.operation, &mut results, verification.as_ref());
+        self.service.invalidate(&context, &target);
+        result_from_files(operation_id, &target, results)
+    }
+}
+
+impl ReviewSpec for LockReview<'_> {
+    type Target = FileLockTargetSnapshot;
+    type Digest = String;
+    type Recheck = FileLockTargetSnapshot;
+    type Output = FileLockResult;
+    type RefusalCode = FileLockFailureCode;
+    type Error = ConfirmRefusal<FileLockFailureCode>;
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> FileLockFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => FileLockFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => FileLockFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => FileLockFailureCode::TargetMismatch,
+            // Lock reviews never require an acknowledgement.
+            ConfirmationRefusalCode::AcknowledgementRequired => FileLockFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::ContextChanged => FileLockFailureCode::ContextChanged,
+            // This domain has no separate "now blocked" outcome; it keeps reporting
+            // a blocked re-check as a changed one.
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                FileLockFailureCode::StateChanged
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => FileLockFailureCode::PreflightBlocked,
+            ConfirmationRefusalCode::Cancelled => FileLockFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The lock confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => {
+                "The lock preflight expired. Check the files again."
+            }
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation does not match the reviewed file set and state."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "The lock confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The connection, profile, workspace, or runtime generation changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckBlocked            | ConfirmationRefusalCode::RecheckChanged => {
+                "File mapping, opened action, changelist, filetype, permission, or lock ownership changed after review."
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The selected files could not be revalidated safely."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "The lock operation was cancelled before execution."
+            }
+        }
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        context_matches(
+            &self.reviewed_echo,
+            &context,
+            generation,
+            self.service.contexts.active_profile_id(),
+        )
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed_echo = reviewed.target.clone();
+    }
+
+    /// The ticket passes the token-derived operation id; a caller-supplied one
+    /// that parses takes precedence, as before the refactor.
+    fn lane(
+        &mut self,
+        operation_id: &str,
+    ) -> crate::app::confirmation::BoxFuture<'_, Option<crate::app::confirmation::MutationLane>>
+    {
+        self.operation_id = Some(
+            self.current_operation_id
+                .clone()
+                .unwrap_or_else(|| operation_id.to_string()),
+        );
+        Box::pin(async { None })
+    }
+
+    /// Open the operation group and re-inspect the reviewed paths. A cancelled
+    /// group or an unavailable server surfaces here, before any write.
+    fn recheck(
+        &mut self,
+    ) -> crate::app::confirmation::BoxFuture<'_, Result<Self::Recheck, String>> {
+        Box::pin(async move {
+            let operation_id = self
+                .operation_id
+                .clone()
+                .unwrap_or_else(|| self.service.tickets.operation_id("unplanned"));
+            let group = self.service.repository.begin_group(operation_id.clone());
+            let active = group.ensure_active().is_ok();
+            self.held_group = Some(group);
+            if !active {
+                return Err("the lock operation group is no longer active".into());
+            }
+            let target = self.reviewed_echo.clone();
+            let (context, _) = self.service.contexts.snapshot();
+            let paths = target
+                .files
+                .iter()
+                .map(|file| file.input_path.clone())
+                .collect::<Vec<_>>();
+            let reinspection = self
+                .service
+                .repository
+                .inspect(
+                    &context,
+                    target.operation,
+                    &paths,
+                    &format!("{operation_id}:recheck"),
+                    self.app,
+                )
+                .await?;
+            Ok(FileLockTargetSnapshot {
+                files: reinspection.files,
+                ..target
+            })
+        })
+    }
+
+    fn recheck_verdict(&self, recheck: &Self::Recheck) -> RecheckVerdict {
+        let (reblockers, _) = issues(self.reviewed_echo.operation, &recheck.files);
+        if !reblockers.is_empty()
+            || *recheck != self.reviewed_echo
+            || digest(Some(recheck)) != digest(Some(&self.reviewed_echo))
+        {
+            RecheckVerdict::Changed
+        } else {
+            RecheckVerdict::Unchanged
+        }
+    }
+
+    /// The ticket's own mutex: this service keeps no separate confirmation
+    /// gate, and `clear_confirmations` goes through the ticket too, so both
+    /// sides serialise on the same lock.
+    fn gate(&self) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+        self.service.tickets.gate()
+    }
+    fn execute<'a>(
+        &'a mut self,
+        recheck: Self::Recheck,
+        operation_id: String,
+    ) -> crate::app::confirmation::BoxFuture<'a, Result<Self::Output, Self::Error>> {
+        Box::pin(async move {
+            let group = self
+                .held_group
+                .take()
+                .unwrap_or_else(|| self.service.repository.begin_group(operation_id.clone()));
+            Ok(self.run_lane(recheck, operation_id, group).await)
+        })
+    }
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<FileLockFailureCode> {
+        error
+    }
 }
 
 fn verify_results(
@@ -678,12 +816,6 @@ fn digest(target: Option<&FileLockTargetSnapshot>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     format!("{:x}", hasher.finalize())
-}
-fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
 }
 fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
     value

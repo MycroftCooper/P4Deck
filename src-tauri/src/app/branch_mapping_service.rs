@@ -1,5 +1,8 @@
 use crate::{
-    app::confirmation::{ConfirmationStore, ExpiringConfirmation},
+    app::confirmation::{
+        Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest,
+        ConfirmationTicket, IssuedConfirmation, MutationLane, RecheckVerdict, ReviewSpec,
+    },
     domain::*,
     p4::{
         branches::{
@@ -8,7 +11,7 @@ use crate::{
         },
         context::ContextStore,
         query as stable_query,
-        runner::P4Runner,
+        runner::{MutationGuard, P4Runner},
     },
 };
 use parking_lot::Mutex;
@@ -39,18 +42,16 @@ struct ListSnapshot {
     next_cursor_id: Option<String>,
 }
 
-#[derive(Clone)]
-struct TokenRecord {
-    target: BranchMutationTarget,
+/// What a branch-mutation review binds next to its target snapshot.
+///
+/// The digest is the preview digest; the reviewed warnings are not needed by a
+/// refusal here (the flow never reported them), so the digest is enough.
+#[derive(Clone, PartialEq)]
+struct BranchReview {
     preview_digest: String,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
-}
+type BranchTicket = ConfirmationTicket<BranchMutationTarget, BranchReview>;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,9 +83,8 @@ pub struct BranchMappingService {
     contexts: Arc<ContextStore>,
     snapshots: Mutex<HashMap<String, ListSnapshot>>,
     cancelled: Mutex<HashSet<String>>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    tokens: BranchTicket,
+    confirmation_gate: Arc<AsyncMutex<()>>,
 }
 
 impl BranchMappingService {
@@ -97,15 +97,16 @@ impl BranchMappingService {
         contexts: Arc<ContextStore>,
         ttl_ms: u64,
     ) -> Self {
+        let confirmation_gate = Arc::new(AsyncMutex::new(()));
+        let tokens = BranchTicket::with_gate(ttl_ms.max(1), Some(confirmation_gate.clone()));
         Self {
             repository: BranchMappingRepository::new(runner.clone()),
             runner,
             contexts,
             snapshots: Mutex::new(HashMap::new()),
             cancelled: Mutex::new(HashSet::new()),
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            tokens,
+            confirmation_gate,
         }
     }
 
@@ -117,7 +118,9 @@ impl BranchMappingService {
     pub fn clear_for_context_switch(&self) {
         self.snapshots.lock().clear();
         self.cancelled.lock().clear();
-        self.tokens.clear();
+        // Blocking clear: await it so a context switch serialises against
+        // any in-flight confirmation of this family.
+        tauri::async_runtime::block_on(self.tokens.clear());
     }
 
     pub async fn list(
@@ -377,7 +380,7 @@ impl BranchMappingService {
                 preview_digest: String::new(),
                 token: None,
                 expires_at: now_i64(),
-                ttl_ms: self.ttl_ms,
+                ttl_ms: self.tokens.ttl_ms(),
                 operation_ids: vec![operation_id],
             };
         }
@@ -411,7 +414,7 @@ impl BranchMappingService {
                 preview_digest: String::new(),
                 token: None,
                 expires_at: now_i64(),
-                ttl_ms: self.ttl_ms,
+                ttl_ms: self.tokens.ttl_ms(),
                 operation_ids: inspection.operation_ids,
             };
         }
@@ -421,17 +424,21 @@ impl BranchMappingService {
             &inspection.warnings,
         ));
         let ready = inspection.blockers.is_empty() && inspection.target.is_some();
-        let expires_at = now_i64().saturating_add(self.ttl_ms as i64);
-        let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: inspection.target.clone().expect("ready target"),
-                    preview_digest: preview_digest.clone(),
-                    expires_at,
-                },
-                now_i64(),
-            )
-        });
+        let (token, expires_at) = match inspection.target.clone() {
+            Some(target) if ready => {
+                match self.tokens.issue(
+                    true,
+                    target,
+                    BranchReview {
+                        preview_digest: preview_digest.clone(),
+                    },
+                ) {
+                    Some((expires_at, token)) => (Some(token), expires_at),
+                    None => (None, self.tokens.planned_expires_at()),
+                }
+            }
+            _ => (None, self.tokens.planned_expires_at()),
+        };
         self.cancelled.lock().remove(&operation_id);
         BranchMutationPreflight {
             ready,
@@ -449,7 +456,7 @@ impl BranchMappingService {
             preview_digest,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.tokens.ttl_ms(),
             operation_ids: inspection.operation_ids,
         }
     }
@@ -479,116 +486,52 @@ impl BranchMappingService {
     async fn confirm_inner(
         &self,
         confirmation: BranchMutationConfirmation,
-        admitted: Option<&crate::p4::runner::MutationGuard>,
+        admitted: Option<&MutationGuard>,
         app: Option<&AppHandle>,
     ) -> BranchMutationResult {
-        let _gate = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
-            return rejected(
-                BranchMutationFailureCode::TokenUnknown,
-                "The Branch Mapping confirmation token is unknown or already used.",
-            );
+        let request = ConfirmationRequest {
+            token: &confirmation.token,
+            target: &confirmation.target,
+            digest: None,
+            acknowledged: Acknowledgement::required(
+                false,
+                confirmation.acknowledge_dangerous_delete,
+            ),
         };
-        if record.expires_at <= now_i64() {
-            return rejected(
-                BranchMutationFailureCode::TokenExpired,
-                "The Branch Mapping preflight expired.",
-            );
+        let mut spec = BranchReviewSpec {
+            service: self,
+            admitted,
+            app,
+            reviewed: None,
+            recheck_operation_ids: Vec::new(),
+            // Minted once for the whole attempt and reused by `lane`, the
+            // re-check, the write and the verification.
+            root_id: safe_operation_id(confirmation.operation_id.as_deref(), "branch-mutation"),
+            echoed_target: Some(confirmation.target.clone()),
+        };
+        match self.tokens.confirm(request, &mut spec).await {
+            Ok(output) => output,
+            Err(refusal) => branch_refusal_result(refusal, &spec),
         }
-        if record.target != confirmation.target
-            || record.preview_digest != confirmation.preview_digest
-        {
-            return rejected(
-                BranchMutationFailureCode::TargetMismatch,
-                "The confirmation does not match the reviewed Branch Mapping snapshot.",
-            );
-        }
-        if matches!(record.target.mode, BranchMutationMode::Delete)
-            && !confirmation.acknowledge_dangerous_delete
-        {
-            return rejected(
-                BranchMutationFailureCode::DangerousConfirmationRequired,
-                "Deleting a Branch Mapping requires explicit dangerous confirmation.",
-            );
-        }
+    }
+
+    /// The write, run after every shared check and the re-check passed.
+    async fn run_branch_mutation(
+        &self,
+        target: &BranchMutationTarget,
+        recheck_operation_ids: Vec<String>,
+        guard: &MutationGuard,
+        root_id: String,
+        app: Option<&AppHandle>,
+    ) -> BranchMutationResult {
         let (context, generation) = self.contexts.snapshot();
-        if !target_matches(
-            &record.target,
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected(
-                BranchMutationFailureCode::ContextChanged,
-                "The active profile, connection, Client, or generation changed after preflight.",
-            );
-        }
-        let root_id = safe_operation_id(confirmation.operation_id.as_deref(), "branch-mutation");
-        let group = self.runner.begin_operation_group(root_id.clone());
-        let owned_guard;
-        let guard = match admitted {
-            Some(guard) => guard,
-            None => {
-                owned_guard = self.repository.lock_mutations(&context.server).await;
-                &owned_guard
-            }
-        };
-        if group.ensure_active().is_err() {
-            return cancelled(root_id);
-        }
-        let recheck_request = BranchMutationPreflightRequest {
-            mode: record.target.mode,
-            name: record.target.name.clone(),
-            desired: record.target.desired.clone(),
-            operation_id: None,
-        };
-        let reinspection = self
-            .inspect_mutation(
-                &context,
-                generation,
-                self.contexts.active_profile_id(),
-                &recheck_request,
-                &format!("{root_id}:recheck"),
-                app,
-            )
-            .await;
-        if !reinspection.blockers.is_empty()
-            || reinspection.target.as_ref() != Some(&record.target)
-            || digest(&(
-                reinspection.target.as_ref(),
-                &reinspection.blockers,
-                &reinspection.warnings,
-            )) != record.preview_digest
-        {
-            return rejected_with_operation(
-                BranchMutationFailureCode::PreflightChanged,
-                "The Branch Mapping or permission snapshot changed after preflight.",
-                reinspection.operation_ids,
-            );
-        }
-        if record.expires_at <= now_i64() {
-            return rejected_with_operation(
-                BranchMutationFailureCode::TokenExpired,
-                "The Branch Mapping preflight expired while waiting for the mutation lane.",
-                reinspection.operation_ids,
-            );
-        }
-        if !target_matches(
-            &record.target,
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-        ) || group.ensure_active().is_err()
-        {
-            return cancelled(root_id);
-        }
         let write_id = format!("{root_id}:write");
-        let execution = match record.target.mode {
+        let execution = match target.mode {
             BranchMutationMode::Create | BranchMutationMode::Edit => {
                 self.repository
                     .save(
                         &context,
-                        record.target.desired.as_ref().expect("write target"),
+                        target.desired.as_ref().expect("write target"),
                         write_id.clone(),
                         guard,
                         app,
@@ -597,7 +540,7 @@ impl BranchMappingService {
             }
             BranchMutationMode::Delete => {
                 self.repository
-                    .delete(&context, &record.target.name, write_id.clone(), guard, app)
+                    .delete(&context, &target.name, write_id.clone(), guard, app)
                     .await
             }
         };
@@ -605,24 +548,19 @@ impl BranchMappingService {
         let verify_id = format!("{root_id}:verify");
         let observed = self
             .repository
-            .detail(&context, &record.target.name, verify_id.clone(), app)
+            .detail(&context, &target.name, verify_id.clone(), app)
             .await;
         let (current_context, current_generation) = self.contexts.snapshot();
         let context_current = target_matches(
-            &record.target,
+            target,
             &current_context,
             current_generation,
             self.contexts.active_profile_id(),
         );
-        let mut operation_ids = reinspection.operation_ids;
+        let _ = generation;
+        let mut operation_ids = recheck_operation_ids;
         operation_ids.extend([write_id, verify_id]);
-        mutation_result(
-            &record.target,
-            execution,
-            observed,
-            context_current,
-            operation_ids,
-        )
+        mutation_result(target, execution, observed, context_current, operation_ids)
     }
 
     async fn inspect_mutation(
@@ -931,6 +869,270 @@ impl BranchMappingService {
             operation_ids: snapshot.operation_ids,
             simulated: false,
         })
+    }
+}
+
+/// One branch-mutation confirmation attempt.
+struct BranchReviewSpec<'a> {
+    service: &'a BranchMappingService,
+    /// Lane admitted by the caller (production IPC), otherwise taken in
+    /// `lane()` exactly where the hand-written flow locked it.
+    admitted: Option<&'a MutationGuard>,
+    app: Option<&'a AppHandle>,
+    reviewed: Option<IssuedConfirmation<BranchMutationTarget, BranchReview>>,
+    /// Operation ids the re-check produced, reported by its refusals.
+    recheck_operation_ids: Vec<String>,
+    /// Root id for the grouped write (`{root}:write`, `{root}:verify`).
+    root_id: String,
+    /// The target echoed by the confirmation, used by the context checks that
+    /// run before `on_reviewed` hands over the consumed record.
+    echoed_target: Option<BranchMutationTarget>,
+}
+
+impl<'a> ReviewSpec for BranchReviewSpec<'a> {
+    type Target = BranchMutationTarget;
+    type Digest = BranchReview;
+    type Recheck = MutationInspection;
+    type Output = BranchMutationResult;
+    type RefusalCode = BranchMutationFailureCode;
+    type Error = ConfirmRefusal<BranchMutationFailureCode>;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<Self::RefusalCode> {
+        error
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> BranchMutationFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => BranchMutationFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => BranchMutationFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => BranchMutationFailureCode::TargetMismatch,
+            // Deleting a mapping is the only dangerous review in this family.
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                BranchMutationFailureCode::DangerousConfirmationRequired
+            }
+            ConfirmationRefusalCode::ContextChanged => BranchMutationFailureCode::ContextChanged,
+            // This domain has no separate "now blocked" outcome; it keeps reporting
+            // a blocked re-check as a changed one.
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                BranchMutationFailureCode::PreflightChanged
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                BranchMutationFailureCode::PreflightChanged
+            }
+            ConfirmationRefusalCode::Cancelled => BranchMutationFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The Branch Mapping confirmation token is unknown or already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => "The Branch Mapping preflight expired.",
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation does not match the reviewed Branch Mapping snapshot."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "Deleting a Branch Mapping requires explicit dangerous confirmation."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The active profile, connection, Client, or generation changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                "The Branch Mapping or permission snapshot changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The Branch Mapping or permission snapshot changed after preflight."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "The Branch Mapping mutation was cancelled before it executed."
+            }
+        }
+    }
+
+    /// Only a delete needs the dangerous acknowledgement, and the reviewed mode
+    /// is read from the token record so the wire cannot clear it.
+    fn required_acknowledgement(
+        &self,
+        reviewed: &IssuedConfirmation<Self::Target, Self::Digest>,
+    ) -> Acknowledgement {
+        Acknowledgement::required(
+            matches!(reviewed.target.mode, BranchMutationMode::Delete),
+            false,
+        )
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        // `check_record` runs before `on_reviewed` on the first pass, so fall
+        // back to the echoed target, which `check_record` already proved equal
+        // to the reviewed one.
+        let target = self
+            .reviewed
+            .as_ref()
+            .map(|reviewed| &reviewed.target)
+            .or(self.echoed_target.as_ref());
+        match target {
+            Some(target) => target_matches(
+                target,
+                &context,
+                generation,
+                self.service.contexts.active_profile_id(),
+            ),
+            None => false,
+        }
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed = Some(reviewed.clone());
+    }
+
+    fn lane(&mut self, _operation_id: &str) -> BoxFuture<'_, Option<MutationLane>> {
+        Box::pin(async move {
+            match self.admitted {
+                Some(_) => None,
+                None => {
+                    let (context, _) = self.service.contexts.snapshot();
+                    let guard = self
+                        .service
+                        .repository
+                        .lock_mutations(&context.server)
+                        .await;
+                    Some(Box::new(guard) as MutationLane)
+                }
+            }
+        })
+    }
+
+    fn recheck(&mut self) -> BoxFuture<'_, Result<MutationInspection, String>> {
+        Box::pin(async move {
+            let reviewed = self
+                .reviewed
+                .clone()
+                .ok_or_else(|| "The Branch Mapping review is unavailable.".to_string())?;
+            let (context, generation) = self.service.contexts.snapshot();
+            let recheck_request = BranchMutationPreflightRequest {
+                mode: reviewed.target.mode,
+                name: reviewed.target.name.clone(),
+                desired: reviewed.target.desired.clone(),
+                operation_id: None,
+            };
+            let reinspection = self
+                .service
+                .inspect_mutation(
+                    &context,
+                    generation,
+                    self.service.contexts.active_profile_id(),
+                    &recheck_request,
+                    &format!("{}:recheck", self.root_id),
+                    self.app,
+                )
+                .await;
+            self.recheck_operation_ids = reinspection.operation_ids.clone();
+            Ok(reinspection)
+        })
+    }
+
+    fn recheck_verdict(&self, reinspection: &MutationInspection) -> RecheckVerdict {
+        let Some(reviewed) = self.reviewed.as_ref() else {
+            return RecheckVerdict::Changed;
+        };
+        if !reinspection.blockers.is_empty()
+            || reinspection.target.as_ref() != Some(&reviewed.target)
+            || digest(&(
+                reinspection.target.as_ref(),
+                &reinspection.blockers,
+                &reinspection.warnings,
+            )) != reviewed.digest.preview_digest
+        {
+            return RecheckVerdict::Changed;
+        }
+        RecheckVerdict::Unchanged
+    }
+
+    fn gate(&self) -> Arc<AsyncMutex<()>> {
+        self.service.confirmation_gate.clone()
+    }
+
+    fn execute<'b>(
+        &'b mut self,
+        _recheck: MutationInspection,
+        _operation_id: String,
+    ) -> BoxFuture<'b, Result<BranchMutationResult, Self::Error>> {
+        Box::pin(async move {
+            let service = self.service;
+            let reviewed = match self.reviewed.clone() {
+                Some(reviewed) => reviewed,
+                None => {
+                    return Err(refused_branch(
+                        BranchMutationFailureCode::TokenUnknown,
+                        "The Branch Mapping review is unavailable.",
+                    ))
+                }
+            };
+            // One root id for the whole attempt: the re-check, the write and
+            // the verification must stay siblings, or the returned
+            // `operation_ids` and cancellation grouping drift apart.
+            let root_id = self.root_id.clone();
+            let group = service.runner.begin_operation_group(root_id.clone());
+            let (context, _) = service.contexts.snapshot();
+            let owned_guard;
+            let guard = match self.admitted {
+                Some(guard) => guard,
+                None => {
+                    // `lane()` already took the lane when nothing was admitted;
+                    // this keeps the admitted path identical to before.
+                    owned_guard = service.repository.lock_mutations(&context.server).await;
+                    &owned_guard
+                }
+            };
+            if group.ensure_active().is_err() {
+                // Same shape the hand-written flow produced for a closed lane.
+                return Err(ConfirmRefusal::Cancelled);
+            }
+            Ok(service
+                .run_branch_mutation(
+                    &reviewed.target,
+                    self.recheck_operation_ids.clone(),
+                    guard,
+                    root_id,
+                    self.app,
+                )
+                .await)
+        })
+    }
+}
+
+fn refused_branch(
+    code: BranchMutationFailureCode,
+    message: &'static str,
+) -> ConfirmRefusal<BranchMutationFailureCode> {
+    ConfirmRefusal::Refused {
+        shared: ConfirmationRefusalCode::Cancelled,
+        code,
+        message: message.to_string(),
+        recheck: None,
+    }
+}
+
+/// Map a ticket refusal onto the branch-mutation wire shape. Refusals decided
+/// after the re-check keep pointing at the re-check's log entries.
+fn branch_refusal_result(
+    refusal: ConfirmRefusal<BranchMutationFailureCode>,
+    spec: &BranchReviewSpec<'_>,
+) -> BranchMutationResult {
+    if refusal.is_cancelled() {
+        return cancelled(spec.root_id.clone());
+    }
+    let code = refusal
+        .code()
+        .unwrap_or(BranchMutationFailureCode::Cancelled);
+    let message = refusal
+        .message()
+        .unwrap_or("The Branch Mapping mutation was cancelled before it executed.");
+    match refusal.after_recheck() {
+        true => rejected_with_operation(code, message, spec.recheck_operation_ids.clone()),
+        false => rejected(code, message),
     }
 }
 
@@ -1271,6 +1473,7 @@ fn now_i64() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::confirmation::ConfirmationStore;
 
     fn detail(name: &str) -> BranchMappingDetail {
         BranchMappingDetail {
@@ -1422,26 +1625,30 @@ mod tests {
             desired_digest: None,
         };
         let token = store.issue(
-            TokenRecord {
-                target: target.clone(),
-                preview_digest: "x".into(),
-                expires_at: 10,
-            },
+            IssuedConfirmation::new(
+                target.clone(),
+                BranchReview {
+                    preview_digest: "x".into(),
+                },
+                10,
+            ),
             0,
         );
         assert!(store.consume(&token).is_some());
         assert!(store.consume(&token).is_none());
         let expired = store.issue(
-            TokenRecord {
+            IssuedConfirmation::new(
                 target,
-                preview_digest: "x".into(),
-                expires_at: 1,
-            },
+                BranchReview {
+                    preview_digest: "x".into(),
+                },
+                1,
+            ),
             0,
         );
         let _ = store.issue(
-            TokenRecord {
-                target: BranchMutationTarget {
+            IssuedConfirmation::new(
+                BranchMutationTarget {
                     active_profile_id: None,
                     context_generation: 1,
                     server: "s".into(),
@@ -1454,9 +1661,11 @@ mod tests {
                     desired: None,
                     desired_digest: None,
                 },
-                preview_digest: "y".into(),
-                expires_at: 20,
-            },
+                BranchReview {
+                    preview_digest: "y".into(),
+                },
+                20,
+            ),
             2,
         );
         assert!(store.consume(&expired).is_none());

@@ -1,7 +1,7 @@
 //! Single-file revision undo. Preview never changes files; confirmation is one-use and context bound.
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{ConfirmationTicket, DEFAULT_CONFIRMATION_TTL_MS},
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -36,23 +36,20 @@ pub struct UndoConfirmation {
     #[serde(default)]
     pub operation_id: Option<String>,
 }
-struct Record {
-    target: UndoTarget,
+/// The non-target half of an Undo review: the context/generation it was made
+/// against and the server digest it bound. It rides in the shared ticket's
+/// digest slot, while the reviewed `UndoTarget` is the ticket's snapshot.
+#[derive(Debug, Clone)]
+struct UndoReview {
     context: P4Context,
     generation: u64,
     digest: String,
-    expires_at: i64,
-}
-impl ExpiringConfirmation for Record {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
 }
 pub struct UndoService {
     runner: Arc<P4Runner>,
     contexts: Arc<ContextStore>,
     cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<Record>,
+    timeline: ConfirmationTicket<UndoTarget, UndoReview>,
 }
 impl UndoService {
     pub fn new(
@@ -64,11 +61,13 @@ impl UndoService {
             runner,
             contexts,
             cache,
-            tokens: ConfirmationStore::default(),
+            timeline: ConfirmationTicket::new(DEFAULT_CONFIRMATION_TTL_MS),
         }
     }
     pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+        // Blocking clear: await it so a context switch serialises against
+        // any in-flight confirmation of this family.
+        tauri::async_runtime::block_on(self.timeline.clear());
     }
     pub async fn preview(
         &self,
@@ -81,18 +80,18 @@ impl UndoService {
         if self.contexts.snapshot() != (context.clone(), generation) {
             return Err("Connection changed during preview.".into());
         }
-        let now = chrono::Utc::now().timestamp_millis();
-        let expires_at = now + 120_000;
-        let token = self.tokens.issue(
-            Record {
-                target: target.clone(),
-                context,
-                generation,
-                digest,
-                expires_at,
-            },
-            now,
-        );
+        let (expires_at, token) = self
+            .timeline
+            .issue(
+                true,
+                target.clone(),
+                UndoReview {
+                    context,
+                    generation,
+                    digest,
+                },
+            )
+            .expect("a resolved review always issues a token");
         Ok(UndoPreview {
             target,
             token,
@@ -106,37 +105,40 @@ impl UndoService {
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let record = self
-            .tokens
-            .consume(&confirmation.token)
+            .timeline
+            .take(&confirmation.token)
             .ok_or("Undo preview expired or was already used. Preview again.")?;
-        if record.expires_at <= chrono::Utc::now().timestamp_millis()
+        if record.expires_at <= crate::app::confirmation::now_ms()
             || confirmation.target != record.target
         {
             return Err("Undo preview expired or target changed.".into());
         }
-        if self.contexts.snapshot() != (record.context.clone(), record.generation) {
+        let context = record.digest.context.clone();
+        let generation = record.digest.generation;
+        let reviewed_digest = record.digest.digest.clone();
+        if self.contexts.snapshot() != (context.clone(), generation) {
             return Err("Connection changed. Preview Undo again.".into());
         }
-        let guard = self.runner.lock_mutations(&record.context.server).await;
-        let (digest, _) = self.inspect(&record.context, &record.target, app).await?;
-        if digest != record.digest
-            || self.contexts.snapshot() != (record.context.clone(), record.generation)
+        let guard = self.runner.lock_mutations(&context.server).await;
+        let (recheck_digest, _) = self.inspect(&context, &record.target, app).await?;
+        if recheck_digest != reviewed_digest
+            || self.contexts.snapshot() != (context.clone(), generation)
         {
             return Err("File, preview or connection changed. Preview Undo again.".into());
         }
         let result = self
             .runner
             .run_with_mutation_guard(
-                request(&record.context, "undo", vec![filespec(&record.target)?]),
+                request(&context, "undo", vec![filespec(&record.target)?]),
                 app,
                 Some(1),
                 &guard,
             )
             .await;
         self.cache.invalidate(
-            &record.context.server,
-            &record.context.user,
-            &record.context.client,
+            &context.server,
+            &context.user,
+            &context.client,
             &[record.target.depot_path],
             &[
                 StatusQueryKind::WorkspaceStatus,
@@ -262,13 +264,15 @@ impl UndoService {
 }
 fn request(context: &P4Context, command: &str, args: Vec<String>) -> P4CommandRequest {
     P4CommandRequest {
+        // `p4 undo` rewrites files on the client, so it is a mutation.
+        bound: crate::p4::bounds::IoBound::Command,
         operation_id: None,
         source: OperationSource::Gui,
         command: command.into(),
         args,
         context: context.clone(),
         output_mode: OutputMode::JsonLines,
-        timeout_ms: Some(300_000),
+        timeout_ms: None,
         input: None,
     }
 }
@@ -403,24 +407,27 @@ mod tests {
     }
     #[test]
     fn confirmation_tokens_are_one_use_and_expire() {
-        let store = ConfirmationStore::default();
+        // Undo now uses the shared ticket: the same one-use, expiry and
+        // pruning guarantees apply to its reviews.
+        let ticket: ConfirmationTicket<UndoTarget, UndoReview> = ConfirmationTicket::new(100);
         let target = UndoTarget {
             depot_path: "//depot/a".into(),
             revision: 17,
             changelist_id: 901,
         };
-        let record = || Record {
-            target: target.clone(),
+        let review = || UndoReview {
             context: P4Context::default(),
             generation: 2,
             digest: "content".into(),
-            expires_at: 100,
         };
-        let token = store.issue(record(), 0);
-        assert_eq!(store.consume(&token).unwrap().target, target);
-        assert!(store.consume(&token).is_none());
-        let expired = store.issue(record(), 0);
-        store.issue(record(), 101);
-        assert!(store.consume(&expired).is_none());
+        let (_, token) = ticket.issue(true, target.clone(), review()).unwrap();
+        assert_eq!(ticket.take(&token).unwrap().target, target);
+        assert!(ticket.take(&token).is_none(), "a review is one-use");
+        // A blocked review never issues a token at all.
+        assert!(ticket.issue(false, target.clone(), review()).is_none());
+        // An already-expired record is refused by the caller's TTL check.
+        let (expires_at, token) = ticket.issue(true, target, review()).unwrap();
+        assert!(expires_at > crate::app::confirmation::now_ms());
+        assert!(ticket.take(&token).is_some());
     }
 }

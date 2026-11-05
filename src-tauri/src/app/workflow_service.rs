@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{ConfirmationStore, ConfirmationTicket, IssuedConfirmation},
         external_merge, manual_merge,
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
@@ -41,19 +41,18 @@ enum TokenPayload {
     Move(MoveFilesPreflightRequest),
 }
 
+/// What a workflow confirmation binds on top of its target snapshot.
+///
+/// It rides in the shared [`IssuedConfirmation`] digest slot: same one-time
+/// token, same TTL pruning, but the workflow still needs to know which family
+/// and which validated request produced the token.
 #[derive(Clone)]
-struct TokenRecord {
-    target: WorkflowTargetSnapshot,
+struct ReviewPayload {
     content_digest: String,
-    expires_at: i64,
     payload: TokenPayload,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
-}
+type TokenRecord = IssuedConfirmation<WorkflowTargetSnapshot, ReviewPayload>;
 
 struct ShelfEvaluation {
     change: Option<PendingChange>,
@@ -89,33 +88,34 @@ struct ManualMergeSessionRecord {
     active_profile_id: Option<String>,
 }
 
-#[derive(Clone)]
-struct ManualMergeSaveRecord {
+/// A saved manual-merge result waiting for its CAS-protected write.
+type ManualMergeSaveRecord = IssuedConfirmation<ManualMergeSaveTarget, ManualMergeSavePayload>;
+
+#[derive(Clone, PartialEq, Eq)]
+struct ManualMergeSaveTarget {
     session_id: String,
+}
+
+#[derive(Clone)]
+struct ManualMergeSavePayload {
     result_digest: String,
     bytes: Vec<u8>,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for ManualMergeSaveRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
+/// A saved manual-merge result waiting to be marked resolved.
+type ManualMergeResolveRecord =
+    IssuedConfirmation<ManualMergeResolveTarget, ManualMergeResolvePayload>;
+
+#[derive(Clone, PartialEq, Eq)]
+struct ManualMergeResolveTarget {
+    session_id: String,
+    result_digest: String,
 }
 
 #[derive(Clone)]
-struct ManualMergeResolveRecord {
-    session_id: String,
-    result_digest: String,
+struct ManualMergeResolvePayload {
     file_snapshot: ManualMergeFileSnapshot,
     resolve_digest: String,
-    expires_at: i64,
-}
-
-impl ExpiringConfirmation for ManualMergeResolveRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
 }
 
 #[derive(Clone)]
@@ -139,7 +139,7 @@ pub struct WorkflowService {
     repository: WorkflowRepository,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<TokenRecord>,
+    tickets: ConfirmationTicket<WorkflowTargetSnapshot, ReviewPayload>,
     confirmation_gate: AsyncMutex<()>,
     ttl_ms: u64,
     shelf_details: parking_lot::Mutex<ShelfDetailSnapshotState>,
@@ -168,7 +168,7 @@ impl WorkflowService {
             repository,
             contexts,
             status_cache,
-            tokens: ConfirmationStore::default(),
+            tickets: ConfirmationTicket::new(ttl_ms),
             confirmation_gate: AsyncMutex::new(()),
             ttl_ms: ttl_ms.max(1),
             shelf_details: parking_lot::Mutex::new(ShelfDetailSnapshotState {
@@ -183,7 +183,9 @@ impl WorkflowService {
     }
 
     pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+        // Blocking clear: await it so a context switch serialises against
+        // any in-flight confirmation of this family.
+        tauri::async_runtime::block_on(self.tickets.clear());
         self.manual_merge_sessions.lock().clear();
         self.manual_merge_saves.clear();
         self.manual_merge_resolves.clear();
@@ -574,15 +576,14 @@ impl WorkflowService {
             blockers.is_empty() && !files.is_empty() && files.iter().all(|file| file.movable);
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: snapshot.clone(),
+            self.tickets.issue_review(IssuedConfirmation::new(
+                snapshot.clone(),
+                ReviewPayload {
                     content_digest: digest.clone(),
-                    expires_at,
                     payload: TokenPayload::Move(request),
                 },
-                now_ms(),
-            )
+                expires_at,
+            ))
         });
         MoveFilesPreflight {
             ready,
@@ -609,7 +610,7 @@ impl WorkflowService {
             Ok(record) => record,
             Err(result) => return rejected_move(*result),
         };
-        let TokenPayload::Move(request) = record.payload else {
+        let TokenPayload::Move(request) = record.digest.payload else {
             return rejected_move(rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TargetMismatch,
@@ -647,12 +648,12 @@ impl WorkflowService {
         let (candidates, blockers, _, digest, mut operation_ids) =
             evaluate_move(&request, inspected);
         if !blockers.is_empty()
-            || digest != record.content_digest
+            || digest != record.digest.content_digest
             || !same_active_context(&self.contexts, &record.target)
         {
             return rejected_move(rejected(
                 &record.target,
-                if digest != record.content_digest {
+                if digest != record.digest.content_digest {
                     WorkflowFailureCode::ContentChanged
                 } else {
                     WorkflowFailureCode::PreflightBlocked
@@ -800,15 +801,14 @@ impl WorkflowService {
         let ready = evaluation.blockers.is_empty();
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
+            self.tickets.issue_review(IssuedConfirmation::new(
+                target.clone(),
+                ReviewPayload {
                     content_digest: evaluation.digest.clone(),
-                    expires_at,
                     payload: TokenPayload::Shelf(request),
                 },
-                now_ms(),
-            )
+                expires_at,
+            ))
         });
         ShelfPreflight {
             ready,
@@ -855,7 +855,7 @@ impl WorkflowService {
             Ok(record) => record,
             Err(result) => return *result,
         };
-        let TokenPayload::Shelf(request) = record.payload else {
+        let TokenPayload::Shelf(request) = record.digest.payload else {
             return rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TargetMismatch,
@@ -912,7 +912,7 @@ impl WorkflowService {
                 "Shelf preflight no longer passes.",
             );
         }
-        if evaluation.digest != record.content_digest {
+        if evaluation.digest != record.digest.content_digest {
             return rejected(
                 &record.target,
                 WorkflowFailureCode::ContentChanged,
@@ -938,7 +938,7 @@ impl WorkflowService {
             InvalidationReason::ChangelistMutation,
         );
         let revalidated = self
-            .revalidate_shelf_after_write(&context, &request, &record.content_digest, app)
+            .revalidate_shelf_after_write(&context, &request, &record.digest.content_digest, app)
             .await;
         shelf_unshelve_result(
             &record.target,
@@ -1007,15 +1007,14 @@ impl WorkflowService {
         let ready = evaluation.blockers.is_empty();
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
+            self.tickets.issue_review(IssuedConfirmation::new(
+                target.clone(),
+                ReviewPayload {
                     content_digest: evaluation.digest.clone(),
-                    expires_at,
                     payload: TokenPayload::Unshelve(request),
                 },
-                now_ms(),
-            )
+                expires_at,
+            ))
         });
         UnshelvePreflight {
             ready,
@@ -1066,7 +1065,7 @@ impl WorkflowService {
             Ok(record) => record,
             Err(result) => return *result,
         };
-        let TokenPayload::Unshelve(request) = record.payload else {
+        let TokenPayload::Unshelve(request) = record.digest.payload else {
             return rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TargetMismatch,
@@ -1131,7 +1130,7 @@ impl WorkflowService {
                 "Unshelve preflight no longer passes.",
             );
         }
-        if evaluation.digest != record.content_digest {
+        if evaluation.digest != record.digest.content_digest {
             return rejected(
                 &record.target,
                 WorkflowFailureCode::ContentChanged,
@@ -1162,7 +1161,7 @@ impl WorkflowService {
             InvalidationReason::ChangelistMutation,
         );
         let revalidated = self
-            .revalidate_unshelve_after_write(&context, &request, &record.content_digest, app)
+            .revalidate_unshelve_after_write(&context, &request, &record.digest.content_digest, app)
             .await;
         shelf_unshelve_result(
             &record.target,
@@ -1230,18 +1229,17 @@ impl WorkflowService {
         let ready = evaluation.blockers.is_empty();
         let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
+            self.tickets.issue_review(IssuedConfirmation::new(
+                target.clone(),
+                ReviewPayload {
                     content_digest: evaluation.digest.clone(),
-                    expires_at,
                     payload: TokenPayload::Resolve(ResolveTokenPayload {
                         paths: request.depot_paths,
                         force,
                     }),
                 },
-                now_ms(),
-            )
+                expires_at,
+            ))
         });
         ResolvePreflight {
             ready,
@@ -1603,12 +1601,16 @@ impl WorkflowService {
         let valid = unresolved_blocks == 0 && !manual_merge::has_conflict_marker(&request.result);
         let token = valid.then(|| {
             self.manual_merge_saves.issue(
-                ManualMergeSaveRecord {
-                    session_id: request.session_id,
-                    result_digest: result_digest.clone(),
-                    bytes,
+                IssuedConfirmation::new(
+                    ManualMergeSaveTarget {
+                        session_id: request.session_id,
+                    },
+                    ManualMergeSavePayload {
+                        result_digest: result_digest.clone(),
+                        bytes,
+                    },
                     expires_at,
-                },
+                ),
                 now_ms(),
             )
         });
@@ -1641,12 +1643,12 @@ impl WorkflowService {
         if record.expires_at <= now_ms() {
             return Err("The manual merge save token expired".into());
         }
-        if record.session_id != confirmation.session_id
-            || record.result_digest != confirmation.result_digest
+        if record.target.session_id != confirmation.session_id
+            || record.digest.result_digest != confirmation.result_digest
         {
             return Err("The manual merge save token is bound to another result".into());
         }
-        let mut session_record = self.manual_session(&record.session_id)?;
+        let mut session_record = self.manual_session(&record.target.session_id)?;
         self.ensure_manual_target_current(&session_record)?;
         let operation_id = valid_operation_id(confirmation.operation_id);
         let operation = self.repository.begin_operation_group(operation_id.clone());
@@ -1692,28 +1694,32 @@ impl WorkflowService {
         operation.ensure_active()?;
         self.repository
             .start_local_file_operation(&operation_id, &context)?;
-        let saved = manual_merge::atomic_replace_with_backup(&path, &record.bytes);
+        let saved = manual_merge::atomic_replace_with_backup(&path, &record.digest.bytes);
         let _ = self
             .repository
             .finish_local_file_operation(&operation_id, saved.is_ok());
         let saved = saved?;
         let (saved_snapshot, _) = manual_merge::snapshot(&path)?;
-        if saved_snapshot.content_digest != record.result_digest {
+        if saved_snapshot.content_digest != record.digest.result_digest {
             return Err("Atomic save completed but the result digest could not be verified".into());
         }
         session_record.session.file_snapshot = saved_snapshot.clone();
         self.manual_merge_sessions
             .lock()
-            .insert(record.session_id.clone(), session_record.clone());
+            .insert(record.target.session_id.clone(), session_record.clone());
         let resolve_expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let resolve_token = self.manual_merge_resolves.issue(
-            ManualMergeResolveRecord {
-                session_id: record.session_id,
-                result_digest: record.result_digest.clone(),
-                file_snapshot: saved_snapshot,
-                resolve_digest: session_record.session.resolve_digest.clone(),
-                expires_at: resolve_expires_at,
-            },
+            IssuedConfirmation::new(
+                ManualMergeResolveTarget {
+                    session_id: record.target.session_id,
+                    result_digest: record.digest.result_digest.clone(),
+                },
+                ManualMergeResolvePayload {
+                    file_snapshot: saved_snapshot,
+                    resolve_digest: session_record.session.resolve_digest.clone(),
+                },
+                resolve_expires_at,
+            ),
             now_ms(),
         );
         self.invalidate(
@@ -1735,7 +1741,7 @@ impl WorkflowService {
                 "Edited merge result and backup were verified, but directory durability could not be confirmed. Review the backup before explicitly marking resolved."
                     .into()
             },
-            result_digest: record.result_digest,
+            result_digest: record.digest.result_digest,
             backup_path: Some(saved.backup_path.to_string_lossy().into_owned()),
             resolve_token: Some(resolve_token),
             resolve_expires_at,
@@ -1771,15 +1777,15 @@ impl WorkflowService {
                 "The manual resolve confirmation expired.",
             );
         }
-        if record.session_id != confirmation.session_id
-            || record.result_digest != confirmation.result_digest
+        if record.target.session_id != confirmation.session_id
+            || record.target.result_digest != confirmation.result_digest
         {
             return rejected_manual(
                 WorkflowFailureCode::TargetMismatch,
                 "The manual resolve confirmation is bound to another result.",
             );
         }
-        let Ok(session) = self.manual_session(&record.session_id) else {
+        let Ok(session) = self.manual_session(&record.target.session_id) else {
             return rejected_manual(
                 WorkflowFailureCode::TokenExpired,
                 "The manual merge session expired.",
@@ -1827,7 +1833,9 @@ impl WorkflowService {
                 "The saved result can no longer be verified.",
             );
         };
-        if snapshot != record.file_snapshot || snapshot.content_digest != record.result_digest {
+        if snapshot != record.digest.file_snapshot
+            || snapshot.content_digest != record.target.result_digest
+        {
             return rejected(
                 &session.session.target,
                 WorkflowFailureCode::ContentChanged,
@@ -1862,7 +1870,8 @@ impl WorkflowService {
             recheck,
             false,
         );
-        if !evaluation.blockers.is_empty() || resolve_record_digest != record.resolve_digest {
+        if !evaluation.blockers.is_empty() || resolve_record_digest != record.digest.resolve_digest
+        {
             return rejected(
                 &session.session.target,
                 WorkflowFailureCode::ContentChanged,
@@ -2001,7 +2010,8 @@ impl WorkflowService {
             Ok(record) => record,
             Err(result) => return *result,
         };
-        let TokenPayload::Resolve(ResolveTokenPayload { paths, force }) = record.payload else {
+        let TokenPayload::Resolve(ResolveTokenPayload { paths, force }) = record.digest.payload
+        else {
             return rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TargetMismatch,
@@ -2064,7 +2074,7 @@ impl WorkflowService {
                 "Resolve preflight no longer passes.",
             );
         }
-        if evaluation.digest != record.content_digest {
+        if evaluation.digest != record.digest.content_digest {
             return rejected(
                 &record.target,
                 WorkflowFailureCode::ContentChanged,
@@ -2318,12 +2328,26 @@ impl WorkflowService {
         (stats, read_resolve_stats_text(&output.to_string_lossy()))
     }
 
+    /// Take the reviewed confirmation for `kind` out of the shared store.
+    ///
+    /// Identical decision order to [`ConfirmationTicket::confirm`]'s first four
+    /// steps (unknown → expired → target/digest → wrong family), kept here
+    /// because each workflow family finishes with its own re-check and result
+    /// mapping; the token store, TTL and one-time semantics are the shared ones.
+    /// Take a workflow confirmation out of the shared ticket's store.
+    ///
+    /// The four families keep their own re-check and result mapping (one shared
+    /// decision maps to two different workflow codes for Shelf/Unshelve/Move),
+    /// but the token itself is the shared one: same one-time store, same TTL
+    /// pruning, same clock, and the same refusal order as
+    /// `ConfirmationTicket::confirm` — unknown, then expired, then target, then
+    /// the family the token was issued for.
     fn consume(
         &self,
         confirmation: &WorkflowConfirmation,
         kind: &str,
     ) -> Result<TokenRecord, Box<WorkflowResult>> {
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
+        let Some(record) = self.tickets.take(&confirmation.token) else {
             return Err(Box::new(rejected(
                 &confirmation.target,
                 WorkflowFailureCode::TokenUnknown,
@@ -3185,7 +3209,9 @@ fn normalized_paths(mut paths: Vec<String>) -> Vec<String> {
     paths
 }
 fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    // One clock for every confirmation family (and every service that shares
+    // the confirmation skeleton); the local copy used to be a second one.
+    crate::app::confirmation::now_ms()
 }
 fn valid_operation_id(value: Option<String>) -> String {
     value

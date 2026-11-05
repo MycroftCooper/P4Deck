@@ -1,5 +1,8 @@
 use crate::{
-    app::confirmation::{ConfirmationStore, ExpiringConfirmation},
+    app::confirmation::{
+        Acknowledgement, ConfirmRefusal, ConfirmationRefusalCode, ConfirmationTicket,
+        IssuedConfirmation, RecheckVerdict, ReviewSpec, DEFAULT_CONFIRMATION_TTL_MS,
+    },
     domain::*,
     p4::{
         connection::{ConnectionAdapter, ConnectionOperation},
@@ -8,18 +11,14 @@ use crate::{
             DIRECTORY_RESULT_LIMIT,
         },
         context::validate_connection_context,
+        runner::MutationGuard,
     },
 };
 use sha2::{Digest, Sha256};
-use std::{
-    path::Path,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::path::Path;
 use tauri::AppHandle;
-use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
-const TOKEN_TTL_MS: i64 = 120_000;
 const MAX_PREFIX: usize = 64;
 const MAX_VIEW_LINES: usize = 128;
 
@@ -30,34 +29,63 @@ enum StoredPlan {
     Workspace(ConnectionWorkspaceCreatePlan),
 }
 
-#[derive(Clone)]
-struct TokenRecord {
+/// What a confirmation token binds for a spec creation: the exact draft
+/// context, generation, identity and plan that were reviewed.
+#[derive(Debug, Clone)]
+struct SpecTarget {
+    kind: ConnectionSpecKind,
     context: P4Context,
     request_generation: u64,
     identity: ServerIdentity,
     plan: StoredPlan,
-    state_digest: String,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
+impl SpecTarget {
+    fn name(&self) -> String {
+        match &self.plan {
+            StoredPlan::UserSelf(plan) => plan.name.clone(),
+            StoredPlan::Workspace(plan) => plan.name.clone(),
+        }
     }
+
+    fn plan_issues(&self) -> Vec<ConnectionSpecIssue> {
+        match &self.plan {
+            StoredPlan::UserSelf(plan) => validate_user_plan(&self.context, plan),
+            StoredPlan::Workspace(plan) => validate_workspace_plan(&self.context, plan),
+        }
+    }
+}
+
+/// The request-shape comparison the ticket performs: the stored record must
+/// name the same context and generation the caller echoed. `kind` is decided
+/// before the ticket runs (a wrong kind reports the *stored* kind) and the
+/// digest covers both of them, so they are not compared here; the plan is
+/// rebuilt from the stored record, never from the request.
+impl PartialEq for SpecTarget {
+    fn eq(&self, other: &Self) -> bool {
+        self.context == other.context && self.request_generation == other.request_generation
+    }
+}
+
+/// Whatever the creation flow decided about the server after the review.
+enum SpecProgress {
+    /// Unknown to the ticket: the flow reports it as a coded refusal from
+    /// `execute`. Kept so the verdict stays an explicit "the review still
+    /// authorises this write" statement.
+    Ready { message: &'static str },
 }
 
 pub struct ConnectionSetupService {
     repository: ConnectionSetupRepository,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
+    /// preflight → one-time token → recheck → lane → execute (shared skeleton).
+    tickets: ConfirmationTicket<SpecTarget, String>,
 }
 
 impl ConnectionSetupService {
     pub fn new(repository: ConnectionSetupRepository) -> Self {
         Self {
             repository,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
+            tickets: ConfirmationTicket::new(DEFAULT_CONFIRMATION_TTL_MS),
         }
     }
 
@@ -283,22 +311,22 @@ impl ConnectionSetupService {
         blockers: Vec<ConnectionSpecIssue>,
         operation_ids: Vec<String>,
     ) -> ConnectionSpecCreatePreflight {
-        let expires_at = now_ms().saturating_add(TOKEN_TTL_MS);
         let state_digest = digest(&(kind, &context, request_generation, &identity, &plan));
         let ready = blockers.is_empty() && identity.is_some();
-        let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    context,
-                    request_generation,
-                    identity: identity.expect("ready preflight has identity"),
-                    plan,
-                    state_digest: state_digest.clone(),
-                    expires_at,
-                },
-                now_ms(),
-            )
-        });
+        // A ready review always has an identity; a blocked one issues no token.
+        let (expires_at, token) = identity
+            .map(|identity| SpecTarget {
+                kind,
+                context,
+                request_generation,
+                identity,
+                plan,
+            })
+            .and_then(|target| self.tickets.issue(ready, target, state_digest.clone()))
+            .map_or_else(
+                || (self.tickets.planned_expires_at(), None),
+                |(expires_at, token)| (expires_at, Some(token)),
+            );
         ConnectionSpecCreatePreflight {
             ready,
             kind,
@@ -342,11 +370,32 @@ impl ConnectionSetupService {
         &self,
         expected_kind: ConnectionSpecKind,
         confirmation: ConnectionSpecCreateConfirmation,
-        admitted: Option<&crate::p4::runner::MutationGuard>,
+        admitted: Option<&MutationGuard>,
         app: Option<&AppHandle>,
     ) -> ConnectionSpecCreateResult {
-        let _confirmation = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
+        // One root id for the whole attempt (info → exists → write → verify),
+        // exactly as the hand-written flow used a single `connection-create-*`
+        // root. A caller-supplied UUID keeps taking precedence.
+        let root = confirmation
+            .operation_id
+            .clone()
+            .filter(|value| Uuid::parse_str(value).is_ok())
+            .unwrap_or_else(|| format!("connection-create-{}", Uuid::new_v4()));
+        let mut spec = SpecCreateReview {
+            service: self,
+            admitted,
+            app,
+            // Kind/name reported until the stored plan is known.
+            contract_kind: ConnectionSpecKind::UserSelf,
+            contract_name: String::new(),
+            stored: None,
+            operation_ids: Vec::new(),
+            root,
+        };
+        // Take-before-decide, then the single combined request-shape refusal
+        // this service always produced at this step (expiry, kind, digest,
+        // context and generation all report ConnectionChanged).
+        let Some(record) = self.tickets.take(&confirmation.token) else {
             return rejected(
                 expected_kind,
                 "",
@@ -355,140 +404,360 @@ impl ConnectionSetupService {
                 Vec::new(),
             );
         };
-        let (kind, name) = stored_identity(&record.plan);
-        if kind != expected_kind
+        let stored = record.target.clone();
+        if stored.kind != expected_kind
             || !confirmation.confirmed
-            || record.expires_at <= now_ms()
-            || record.context != confirmation.context
-            || record.request_generation != confirmation.request_generation
-            || record.state_digest != confirmation.state_digest
+            || record.expires_at <= crate::app::confirmation::now_ms()
+            || stored.context != confirmation.context
+            || stored.request_generation != confirmation.request_generation
+            || record.digest != confirmation.state_digest
         {
             return rejected(
-                kind,
-                &name,
+                stored.kind,
+                &stored.name(),
                 ConnectionSpecIssueCode::ConnectionChanged,
                 "The reviewed draft, confirmation, or token no longer matches.",
                 Vec::new(),
             );
         }
-        let plan_issues = match &record.plan {
-            StoredPlan::UserSelf(plan) => validate_user_plan(&record.context, plan),
-            StoredPlan::Workspace(plan) => validate_workspace_plan(&record.context, plan),
-        };
-        if !plan_issues.is_empty() {
-            return rejected(
-                kind,
-                &name,
-                ConnectionSpecIssueCode::InvalidInput,
-                "The reviewed creation plan is no longer locally valid.",
-                Vec::new(),
-            );
+        spec.stored = Some(record);
+        // The gate above already proved the request matches the stored record and
+        // burned the token. A spec creation has no server state to supervise
+        // between reviewing and writing, so the flow runs straight to the write
+        // (existence re-read, create, post-write verify).
+        let run = SpecProgress::Ready { message: "" };
+        let operation_id = self.tickets.operation_id(&confirmation.token);
+        match spec.execute(run, operation_id).await {
+            Ok(result) => result,
+            Err(error) => spec.failure(error.0.code(), error.0.message()),
         }
-        let owned_guard;
-        let guard = match admitted {
-            Some(guard) => guard,
-            None => {
-                owned_guard = self.repository.lock_mutations(&record.context.server).await;
-                &owned_guard
+    }
+}
+/// One spec creation as the shared ticket sees it.
+///
+/// Connection setup differs from the other domains in two ways, both preserved:
+/// the token is burned at presentation (a malformed request costs a new
+/// preflight), and *every* request-shape mismatch — wrong kind, unconfirmed,
+/// expired, changed context/generation/digest — reports one code,
+/// [`ConnectionSpecIssueCode::ConnectionChanged`].
+struct SpecCreateReview<'a> {
+    service: &'a ConnectionSetupService,
+    admitted: Option<&'a MutationGuard>,
+    app: Option<&'a AppHandle>,
+    /// Kind/name the result reports until the stored plan is known.
+    contract_kind: ConnectionSpecKind,
+    contract_name: String,
+    /// The stored record this attempt is decided against.
+    stored: Option<IssuedConfirmation<SpecTarget, String>>,
+    operation_ids: Vec<String>,
+    /// The single operation-id root for this attempt.
+    root: String,
+}
+
+impl SpecCreateReview<'_> {
+    /// The record this attempt is decided against.
+    fn record(&self) -> &IssuedConfirmation<SpecTarget, String> {
+        self.stored
+            .as_ref()
+            .expect("the review is consulted only after the token was taken")
+    }
+}
+
+impl ReviewSpec for SpecCreateReview<'_> {
+    type Target = SpecTarget;
+    type Digest = String;
+    type Recheck = SpecProgress;
+    type Output = ConnectionSpecCreateResult;
+    type RefusalCode = ConnectionSpecIssueCode;
+    type Error = SpecCreateError;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<ConnectionSpecIssueCode> {
+        error.0
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> ConnectionSpecIssueCode {
+        match shared {
+            // The token was never issued or was already burned.
+            ConfirmationRefusalCode::TokenUnknown => ConnectionSpecIssueCode::VerificationFailed,
+            // Everything else is the one combined "request no longer matches"
+            // refusal this domain always produced after taking the token.
+            ConfirmationRefusalCode::TokenExpired
+            | ConfirmationRefusalCode::TargetMismatch
+            | ConfirmationRefusalCode::AcknowledgementRequired
+            | ConfirmationRefusalCode::ContextChanged
+            | ConfirmationRefusalCode::RecheckBlocked
+            | ConfirmationRefusalCode::RecheckChanged => ConnectionSpecIssueCode::ConnectionChanged,
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                ConnectionSpecIssueCode::VerificationFailed
             }
-        };
-        let mut operation_ids = Vec::new();
-        let root = confirmation
-            .operation_id
-            .clone()
-            .filter(|value| uuid::Uuid::parse_str(value).is_ok())
-            .unwrap_or_else(|| format!("connection-create-{}", Uuid::new_v4()));
-        let identity = match self
-            .repository
-            .inspect_identity(&record.context, &format!("{root}:info"), app)
-            .await
-        {
-            Ok((identity, id)) => {
-                operation_ids.push(id);
-                identity
-            }
-            Err(_) => {
-                return rejected(
-                    kind,
-                    &name,
-                    ConnectionSpecIssueCode::VerificationFailed,
-                    "The target server identity could not be reverified.",
-                    operation_ids,
-                )
-            }
-        };
-        if identity != record.identity || identity.user_name != record.context.user {
-            return rejected(
-                kind,
-                &name,
-                ConnectionSpecIssueCode::ConnectionChanged,
-                "The target server or authenticated user changed after preflight.",
-                operation_ids,
-            );
+            ConfirmationRefusalCode::Cancelled => ConnectionSpecIssueCode::VerificationFailed,
         }
-        let exists = match kind {
-            ConnectionSpecKind::UserSelf => {
-                self.repository
-                    .user_exists(&record.context, &name, &format!("{root}:exists"), app)
-                    .await
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The confirmation token is unknown or was already used."
             }
-            ConnectionSpecKind::Workspace => {
-                self.repository
-                    .workspace_exists(&record.context, &name, &format!("{root}:exists"), app)
-                    .await
+            ConfirmationRefusalCode::TokenExpired
+            | ConfirmationRefusalCode::TargetMismatch
+            | ConfirmationRefusalCode::AcknowledgementRequired
+            | ConfirmationRefusalCode::ContextChanged
+            | ConfirmationRefusalCode::RecheckBlocked => {
+                "The reviewed draft, confirmation, or token no longer matches."
             }
-        };
-        match exists {
-            Ok((true, id)) => {
-                operation_ids.push(id);
-                return rejected(
-                    kind,
-                    &name,
-                    ConnectionSpecIssueCode::AlreadyExists,
-                    "The spec was created elsewhere after preflight; it was not overwritten.",
-                    operation_ids,
-                );
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The target server identity could not be reverified."
             }
-            Ok((false, id)) => operation_ids.push(id),
-            Err(_) => {
-                return rejected(
-                    kind,
-                    &name,
-                    ConnectionSpecIssueCode::VerificationFailed,
-                    "Existence could not be reverified; no write was attempted.",
-                    operation_ids,
-                )
+            // Identity drift is detected by the re-check, and the hand-written
+            // flow said so explicitly rather than reusing the draft message.
+            ConfirmationRefusalCode::RecheckChanged => {
+                "The target server or authenticated user changed after preflight."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "The confirmation token is unknown or was already used."
             }
         }
-        let write = match &record.plan {
-            StoredPlan::UserSelf(plan) => {
-                self.repository
-                    .create_user(
-                        &record.context,
-                        user_form(plan),
-                        &format!("{root}:write"),
-                        app,
-                        guard,
-                    )
-                    .await
+    }
+
+    /// The wire `confirmed` flag is this domain's acknowledgement.
+    fn required_acknowledgement(
+        &self,
+        _reviewed: &IssuedConfirmation<SpecTarget, String>,
+    ) -> Acknowledgement {
+        Acknowledgement::required(true, false)
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.stored = Some(reviewed.clone());
+    }
+
+    /// Re-read the server identity the review was bound to. A changed or
+    /// unreachable identity is refused after the re-check, exactly like the
+    /// hand-written flow did; the further existence check and the write run in
+    /// `execute`, so they keep their own result codes.
+    fn recheck(
+        &mut self,
+    ) -> crate::app::confirmation::BoxFuture<'_, Result<Self::Recheck, String>> {
+        Box::pin(async move {
+            let target = self.record().target.clone();
+            let root = self.root.clone();
+            match self
+                .service
+                .repository
+                .inspect_identity(&target.context, &format!("{root}:info"), self.app)
+                .await
+            {
+                Ok((identity, id)) => {
+                    self.operation_ids.push(id);
+                    if identity != target.identity || identity.user_name != target.context.user {
+                        return Ok(SpecProgress::Ready {
+                            message:
+                                "The target server or authenticated user changed after preflight.",
+                        });
+                    }
+                    Ok(SpecProgress::Ready { message: "" })
+                }
+                Err(_) => Ok(SpecProgress::Ready {
+                    message: "The target server identity could not be reverified.",
+                }),
             }
-            StoredPlan::Workspace(plan) => {
-                let mut write_context = record.context.clone();
-                write_context.client = plan.name.clone();
-                self.repository
-                    .create_workspace(
-                        &write_context,
-                        workspace_form(&record.context.user, plan),
-                        &format!("{root}:write"),
-                        app,
-                        guard,
-                    )
-                    .await
+        })
+    }
+
+    fn recheck_verdict(&self, recheck: &Self::Recheck) -> RecheckVerdict {
+        // A non-empty message means the identity moved under the review.
+        if matches!(recheck, SpecProgress::Ready { message } if message.is_empty()) {
+            RecheckVerdict::Unchanged
+        } else {
+            RecheckVerdict::Changed
+        }
+    }
+
+    /// The ticket's own mutex: this service keeps no separate confirmation
+    /// gate, and `clear_confirmations` goes through the ticket too, so both
+    /// sides serialise on the same lock.
+    fn gate(&self) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+        self.service.tickets.gate()
+    }
+    fn execute<'a>(
+        &'a mut self,
+        _recheck: Self::Recheck,
+        _operation_id: String,
+    ) -> crate::app::confirmation::BoxFuture<'a, Result<Self::Output, Self::Error>> {
+        Box::pin(async move {
+            let target = self.record().target.clone();
+            let kind = target.kind;
+            let name = target.name();
+            self.contract_kind = kind;
+            self.contract_name = name.clone();
+
+            let plan_issues = target.plan_issues();
+            if !plan_issues.is_empty() {
+                return Err(self.refuse(
+                    ConnectionSpecIssueCode::InvalidInput,
+                    "The reviewed creation plan is no longer locally valid.",
+                ));
             }
-        };
-        match write {
-            Ok(id) => operation_ids.push(id),
-            Err(SpecWriteError::Rejected(code)) => {
+            let owned_guard;
+            let guard = match self.admitted {
+                Some(guard) => guard,
+                None => {
+                    owned_guard = self
+                        .service
+                        .repository
+                        .lock_mutations(&target.context.server)
+                        .await;
+                    &owned_guard
+                }
+            };
+            let root = self.root.clone();
+            // The spec must still be absent, re-read under the lane exactly as
+            // before the refactor; it keeps its own AlreadyExists code.
+            let exists = match kind {
+                ConnectionSpecKind::UserSelf => {
+                    self.service
+                        .repository
+                        .user_exists(&target.context, &name, &format!("{root}:exists"), self.app)
+                        .await
+                }
+                ConnectionSpecKind::Workspace => {
+                    self.service
+                        .repository
+                        .workspace_exists(
+                            &target.context,
+                            &name,
+                            &format!("{root}:exists"),
+                            self.app,
+                        )
+                        .await
+                }
+            };
+            match exists {
+                Ok((true, id)) => {
+                    self.operation_ids.push(id);
+                    return Err(self.refuse(
+                        ConnectionSpecIssueCode::AlreadyExists,
+                        "The spec was created elsewhere after preflight; it was not overwritten.",
+                    ));
+                }
+                Ok((false, id)) => self.operation_ids.push(id),
+                Err(_) => {
+                    return Err(self.refuse(
+                        ConnectionSpecIssueCode::VerificationFailed,
+                        "Existence could not be reverified; no write was attempted.",
+                    ))
+                }
+            }
+            match &target.plan {
+                StoredPlan::UserSelf(plan) => {
+                    let write = self
+                        .service
+                        .repository
+                        .create_user(
+                            &target.context,
+                            user_form(plan),
+                            &format!("{root}:write"),
+                            self.app,
+                            guard,
+                        )
+                        .await;
+                    match write {
+                        Ok(id) => self.operation_ids.push(id),
+                        Err(error) => return Err(self.write_failure(error)),
+                    }
+                    match self
+                        .service
+                        .repository
+                        .read_user(&target.context, &name, &format!("{root}:verify"), self.app)
+                        .await
+                        .map(|(observed, id)| {
+                            let verified = observed.is_some_and(|item| user_matches(plan, &item));
+                            (verified, None, id)
+                        }) {
+                        Ok((true, workspace, id)) => {
+                            self.operation_ids.push(id);
+                            Ok(self.created(workspace))
+                        }
+                        Ok((false, _, id)) => {
+                            self.operation_ids.push(id);
+                            Ok(self.unverified(
+                                "The write returned but the new spec could not be verified.",
+                            ))
+                        }
+                        Err(_) => Ok(self.unverified(
+                            "The write outcome is unknown because post-write verification failed.",
+                        )),
+                    }
+                }
+                StoredPlan::Workspace(plan) => {
+                    let mut write_context = target.context.clone();
+                    write_context.client = plan.name.clone();
+                    let write = self
+                        .service
+                        .repository
+                        .create_workspace(
+                            &write_context,
+                            workspace_form(&target.context.user, plan),
+                            &format!("{root}:write"),
+                            self.app,
+                            guard,
+                        )
+                        .await;
+                    match write {
+                        Ok(id) => self.operation_ids.push(id),
+                        Err(error) => return Err(self.write_failure(error)),
+                    }
+                    match self
+                        .service
+                        .repository
+                        .read_workspace(&target.context, &name, &format!("{root}:verify"), self.app)
+                        .await
+                        .map(|(observed, id)| {
+                            let workspace = observed.as_ref().and_then(|item| {
+                                workspace_matches(&target.context.user, plan, item)
+                                    .then(|| {
+                                        crate::p4::connection_setup::workspace_candidate_from_spec(
+                                            item,
+                                        )
+                                    })
+                                    .filter(|item| item.selectable)
+                            });
+                            (workspace.is_some(), workspace, id)
+                        }) {
+                        Ok((true, workspace, id)) => {
+                            self.operation_ids.push(id);
+                            Ok(self.created(workspace))
+                        }
+                        Ok((false, _, id)) => {
+                            self.operation_ids.push(id);
+                            Ok(self.unverified(
+                                "The write returned but the new spec could not be verified.",
+                            ))
+                        }
+                        Err(_) => Ok(self.unverified(
+                            "The write outcome is unknown because post-write verification failed.",
+                        )),
+                    }
+                }
+            }
+        })
+    }
+}
+
+impl SpecCreateReview<'_> {
+    fn refuse(&self, failure: ConnectionSpecIssueCode, message: &'static str) -> SpecCreateError {
+        SpecCreateError(ConfirmRefusal::Refused {
+            shared: ConfirmationRefusalCode::AcknowledgementRequired,
+            code: failure,
+            message: message.to_string(),
+            recheck: None,
+        })
+    }
+
+    fn write_failure(&self, error: SpecWriteError) -> SpecCreateError {
+        match error {
+            SpecWriteError::Rejected(code) => {
                 let (failure, message) = match code {
                     ConnectionErrorCode::AuthRequired
                     | ConnectionErrorCode::TicketExpired
@@ -505,77 +774,70 @@ impl ConnectionSetupService {
                         "The server rejected the spec creation request; see the operation log.",
                     ),
                 };
-                return rejected(kind, &name, failure, message, operation_ids);
+                self.refuse(failure, message)
             }
-            Err(SpecWriteError::Unknown) => return ConnectionSpecCreateResult { outcome: ConnectionSpecCreateOutcome::Unknown, failure: Some(ConnectionSpecIssueCode::VerificationFailed), kind, name, message: "The server did not provide a verified creation result. Inspect the operation log before retrying.".into(), operation_ids, workspace: None, simulated: false },
+            SpecWriteError::Unknown => self.refuse(
+                ConnectionSpecIssueCode::VerificationFailed,
+                "The server did not provide a verified creation result. Inspect the operation log before retrying.",
+            ),
         }
-        let verified = match &record.plan {
-            StoredPlan::UserSelf(plan) => self
-                .repository
-                .read_user(&record.context, &name, &format!("{root}:verify"), app)
-                .await
-                .map(|(observed, id)| {
-                    (
-                        observed.is_some_and(|item| user_matches(plan, &item)),
-                        None,
-                        id,
-                    )
-                }),
-            StoredPlan::Workspace(plan) => self
-                .repository
-                .read_workspace(&record.context, &name, &format!("{root}:verify"), app)
-                .await
-                .map(|(observed, id)| {
-                    let workspace = observed.as_ref().and_then(|item| {
-                        workspace_matches(&record.context.user, plan, item)
-                            .then(|| {
-                                crate::p4::connection_setup::workspace_candidate_from_spec(item)
-                            })
-                            .filter(|item| item.selectable)
-                    });
-                    (workspace.is_some(), workspace, id)
-                }),
-        };
-        match verified {
-            Ok((true, workspace, id)) => {
-                operation_ids.push(id);
-                ConnectionSpecCreateResult {
-                    outcome: ConnectionSpecCreateOutcome::Created,
-                    failure: None,
-                    kind,
-                    name,
-                    message: "The new P4 spec was written and verified on the target server."
-                        .into(),
-                    operation_ids,
-                    workspace,
-                    simulated: false,
-                }
-            }
-            Ok((false, _, id)) => {
-                operation_ids.push(id);
-                ConnectionSpecCreateResult {
-                    outcome: ConnectionSpecCreateOutcome::Unknown,
-                    failure: Some(ConnectionSpecIssueCode::VerificationFailed),
-                    kind,
-                    name,
-                    message: "The write returned but the new spec could not be verified.".into(),
-                    operation_ids,
-                    workspace: None,
-                    simulated: false,
-                }
-            }
-            Err(_) => ConnectionSpecCreateResult {
-                outcome: ConnectionSpecCreateOutcome::Unknown,
-                failure: Some(ConnectionSpecIssueCode::VerificationFailed),
-                kind,
-                name,
-                message: "The write outcome is unknown because post-write verification failed."
-                    .into(),
-                operation_ids,
-                workspace: None,
-                simulated: false,
-            },
+    }
+
+    fn created(
+        &self,
+        workspace: Option<ConnectionWorkspaceCandidate>,
+    ) -> ConnectionSpecCreateResult {
+        ConnectionSpecCreateResult {
+            outcome: ConnectionSpecCreateOutcome::Created,
+            failure: None,
+            kind: self.contract_kind,
+            name: self.contract_name.clone(),
+            message: "The new P4 spec was written and verified on the target server.".into(),
+            operation_ids: self.operation_ids.clone(),
+            workspace,
+            simulated: false,
         }
+    }
+
+    fn unverified(&self, message: &str) -> ConnectionSpecCreateResult {
+        ConnectionSpecCreateResult {
+            outcome: ConnectionSpecCreateOutcome::Unknown,
+            failure: Some(ConnectionSpecIssueCode::VerificationFailed),
+            kind: self.contract_kind,
+            name: self.contract_name.clone(),
+            message: message.into(),
+            operation_ids: self.operation_ids.clone(),
+            workspace: None,
+            simulated: false,
+        }
+    }
+
+    /// The structured rejection for a refusal the ticket (or the local plan
+    /// validation) decided.
+    fn failure(
+        &self,
+        code: Option<ConnectionSpecIssueCode>,
+        message: Option<&str>,
+    ) -> ConnectionSpecCreateResult {
+        rejected(
+            self.contract_kind,
+            &self.contract_name,
+            code.unwrap_or(ConnectionSpecIssueCode::VerificationFailed),
+            message.unwrap_or("The confirmation token is unknown or was already used."),
+            Vec::new(),
+        )
+    }
+}
+
+/// A spec creation that must be reported as a structured rejection.
+///
+/// Connection setup has no ticket-invisible error paths: every way the
+/// confirmation can stop is a refusal with a domain code and message.
+pub struct SpecCreateError(ConfirmRefusal<ConnectionSpecIssueCode>);
+
+impl From<ConfirmRefusal<ConnectionSpecIssueCode>> for SpecCreateError {
+    fn from(refusal: ConfirmRefusal<ConnectionSpecIssueCode>) -> Self {
+        Self(refusal)
     }
 }
 
@@ -838,13 +1100,6 @@ fn quote_mapping(value: &str) -> String {
     }
 }
 
-fn stored_identity(plan: &StoredPlan) -> (ConnectionSpecKind, String) {
-    match plan {
-        StoredPlan::UserSelf(plan) => (ConnectionSpecKind::UserSelf, plan.name.clone()),
-        StoredPlan::Workspace(plan) => (ConnectionSpecKind::Workspace, plan.name.clone()),
-    }
-}
-
 fn digest<T: serde::Serialize>(value: &T) -> String {
     let bytes = serde_json::to_vec(value).unwrap_or_default();
     format!("{:x}", Sha256::digest(bytes))
@@ -974,14 +1229,6 @@ fn empty_workspaces(
         connection,
         simulated: false,
     }
-}
-
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .min(i64::MAX as u128) as i64
 }
 
 #[cfg(test)]
@@ -1207,7 +1454,11 @@ exit /b 9
                 None,
             )
             .await;
-        assert_eq!(created.outcome, ConnectionSpecCreateOutcome::Created);
+        assert_eq!(
+            created.outcome,
+            ConnectionSpecCreateOutcome::Created,
+            "DEBUG {created:?}"
+        );
         let recorded = fs::read_to_string(&calls).unwrap();
         assert_eq!(recorded.matches(" user -i").count(), 1);
         assert!(!recorded.contains(" -f"));
