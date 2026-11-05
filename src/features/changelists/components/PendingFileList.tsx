@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import type { OpenedFileSelection, SelectedOpenedFile } from "../selectedFiles";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -330,18 +330,16 @@ export function PendingFileList({
       ...(wholeChangelistId !== undefined ? { wholeChangelistId } : {}),
     });
   };
-  const statusLabels: Record<string, string> = zh
-    ? {
-        add: "新增",
-        edit: "编辑",
-        delete: "删除",
-        branch: "分支",
-        integrate: "集成",
-        "move/add": "移动 / 新增",
-        "move/delete": "移动 / 删除",
-        unknown: "未知",
-      }
-    : {};
+  const statusLabels: Record<string, string> = {
+    add: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.add"),
+    edit: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.edit"),
+    delete: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.delete"),
+    branch: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.branch"),
+    integrate: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.integrate"),
+    "move/add": tFor(zh ? "zh-CN" : "en-US", "pending.fileState.moveAdd"),
+    "move/delete": tFor(zh ? "zh-CN" : "en-US", "pending.fileState.moveDelete"),
+    unknown: tFor(zh ? "zh-CN" : "en-US", "pending.fileState.unknown"),
+  };
   const statusLabel = (value: string) => statusLabels[value] || value;
   const filtered = !!statusFilter || !!typeFilter;
   return (
@@ -402,11 +400,12 @@ export function PendingFileList({
               <button
                 type="button"
                 aria-label={t("pending.sort.by.path")}
-                title={
-                  zh
-                    ? `切换为${pathOrder === "asc" ? "降序" : "升序"}`
-                    : `Sort ${pathOrder === "asc" ? "descending" : "ascending"}`
-                }
+                title={tFor(
+                  zh ? "zh-CN" : "en-US",
+                  pathOrder === "asc"
+                    ? "pending.sort.switch.descending"
+                    : "pending.sort.switch.ascending",
+                )}
                 onClick={() =>
                   setPathOrder((value) => (value === "asc" ? "desc" : "asc"))
                 }

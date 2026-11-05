@@ -534,6 +534,16 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.sort.switch.descending": "Sort descending",
+  "pending.sort.switch.ascending": "Sort ascending",
+  "pending.fileState.add": "Add",
+  "pending.fileState.edit": "Edit",
+  "pending.fileState.delete": "Delete",
+  "pending.fileState.branch": "Branch",
+  "pending.fileState.integrate": "Integrate",
+  "pending.fileState.moveAdd": "Move / Add",
+  "pending.fileState.moveDelete": "Move / Delete",
+  "pending.fileState.unknown": "Unknown",
   "commands.content.is.already.docked": "Content is already docked",
   "commands.already.in.a.separate.window": "Already in a separate window",
   "commands.connection.runtime.is.loading": "Connection runtime is loading",

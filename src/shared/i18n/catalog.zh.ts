@@ -496,6 +496,16 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.sort.switch.descending": "切换为降序",
+  "pending.sort.switch.ascending": "切换为升序",
+  "pending.fileState.add": "新增",
+  "pending.fileState.edit": "编辑",
+  "pending.fileState.delete": "删除",
+  "pending.fileState.branch": "分支",
+  "pending.fileState.integrate": "集成",
+  "pending.fileState.moveAdd": "移动 / 新增",
+  "pending.fileState.moveDelete": "移动 / 删除",
+  "pending.fileState.unknown": "未知",
   "commands.content.is.already.docked": "当前内容已在主窗口",
   "commands.already.in.a.separate.window": "当前已在独立窗口",
   "commands.connection.runtime.is.loading": "正在加载连接运行时",
