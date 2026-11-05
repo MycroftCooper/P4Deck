@@ -496,6 +496,23 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "commands.content.is.already.docked": "当前内容已在主窗口",
+  "commands.already.in.a.separate.window": "当前已在独立窗口",
+  "commands.connection.runtime.is.loading": "正在加载连接运行时",
+  "commands.the.current.connection.is.unavailable": "当前连接不可用",
+  "commands.another.operation.is.running": "另一项操作正在执行",
+  "commands.select.a.file.or.folder.first": "请先选择文件或目录",
+  "commands.select.a.nonempty.numbered.pending.cl":
+    "请选择非空、已编号的待提交 CL",
+  "commands.connection.or.authentication.is.unavailable": "连接或认证不可用",
+  "commands.file.rename": "重命名 / 移动",
+  "commands.file.lock": "锁定",
+  "commands.file.unlock": "解锁",
+  "commands.file.resolve": "解决冲突",
+  "commands.file.checkout": "签出",
+  "commands.file.add": "添加",
+  "commands.file.delete": "标记删除",
+  "commands.file.revert": "还原",
   "common.preview.is.restricted.to.the.current":
     "仅可预览当前工作区目录内的文件。",
   "common.path.is.outside.the.current.workspace": "路径不在当前工作区内。",

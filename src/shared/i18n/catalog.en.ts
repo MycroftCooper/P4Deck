@@ -534,6 +534,25 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "commands.content.is.already.docked": "Content is already docked",
+  "commands.already.in.a.separate.window": "Already in a separate window",
+  "commands.connection.runtime.is.loading": "Connection runtime is loading",
+  "commands.the.current.connection.is.unavailable":
+    "The current connection is unavailable",
+  "commands.another.operation.is.running": "Another operation is running",
+  "commands.select.a.file.or.folder.first": "Select a file or folder first",
+  "commands.select.a.nonempty.numbered.pending.cl":
+    "Select a nonempty numbered pending CL",
+  "commands.connection.or.authentication.is.unavailable":
+    "Connection or authentication is unavailable",
+  "commands.file.rename": "Rename / Move",
+  "commands.file.lock": "Lock",
+  "commands.file.unlock": "Unlock",
+  "commands.file.resolve": "Resolve",
+  "commands.file.checkout": "Checkout",
+  "commands.file.add": "Add",
+  "commands.file.delete": "Mark for Delete",
+  "commands.file.revert": "Revert",
   "common.preview.is.restricted.to.the.current":
     "Preview is restricted to the current workspace directory.",
   "common.path.is.outside.the.current.workspace":

@@ -1,3 +1,4 @@
+import { tFor, type MsgKey } from "../../shared/i18n";
 import type { PageId } from "../panels";
 import type { CommandId } from "../shell/commandPolicy";
 import { getShortcutOverrides, type ShortcutOverrides } from "./keymap";
@@ -314,14 +315,24 @@ export const appCommands: readonly AppCommandDefinition[] = [
   ),
   ...(
     [
-      ["file.rename", "重命名 / 移动", "Rename / Move", "rename"],
-      ["file.lock", "锁定", "Lock", "lock"],
-      ["file.unlock", "解锁", "Unlock", "unlock"],
-      ["file.resolve", "解决冲突", "Resolve", "resolve"],
-      ["file.checkout", "签出", "Checkout", "checkout"],
-      ["file.add", "添加", "Add", "add"],
-      ["file.delete", "标记删除", "Mark for Delete", "delete"],
-      ["file.revert", "还原", "Revert", "revert"],
+      ["file.rename", "commands.file.rename", "commands.file.rename", "rename"],
+      ["file.lock", "commands.file.lock", "commands.file.lock", "lock"],
+      ["file.unlock", "commands.file.unlock", "commands.file.unlock", "unlock"],
+      [
+        "file.resolve",
+        "commands.file.resolve",
+        "commands.file.resolve",
+        "resolve",
+      ],
+      [
+        "file.checkout",
+        "commands.file.checkout",
+        "commands.file.checkout",
+        "checkout",
+      ],
+      ["file.add", "commands.file.add", "commands.file.add", "add"],
+      ["file.delete", "commands.file.delete", "commands.file.delete", "delete"],
+      ["file.revert", "commands.file.revert", "commands.file.revert", "revert"],
     ] as const
   ).map(([id, zh, en, shellCommand]) =>
     command(id, "changes", zh, en, {
@@ -467,24 +478,24 @@ export function appCommandReason(
   environment: AppCommandEnvironment,
   zh: boolean,
 ): string | undefined {
-  const message = (cn: string, en: string) => (zh ? cn : en);
+  const message = (key: string) => tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
   const definition = appCommands.find((item) => item.id === id)!;
   if (id === "panel.dockBack")
     return environment.detached
       ? undefined
-      : message("当前内容已在主窗口", "Content is already docked");
+      : message("commands.content.is.already.docked");
   if (environment.detached && definition.requires === "mainWindow")
-    return message("当前已在独立窗口", "Already in a separate window");
+    return message("commands.already.in.a.separate.window");
   if (!environment.runtimeReady && definition.requires === "runtime")
-    return message("正在加载连接运行时", "Connection runtime is loading");
+    return message("commands.connection.runtime.is.loading");
   if (!environment.runtimeReady && definition.risk === "mutation")
-    return message("正在加载连接运行时", "Connection runtime is loading");
+    return message("commands.connection.runtime.is.loading");
   if (definition.requires === "connected" && !environment.connected)
-    return message("当前连接不可用", "The current connection is unavailable");
+    return message("commands.the.current.connection.is.unavailable");
   if (environment.busy && definition.risk === "mutation")
-    return message("另一项操作正在执行", "Another operation is running");
+    return message("commands.another.operation.is.running");
   if (definition.requires === "file" && environment.target !== "file")
-    return message("请先选择文件或目录", "Select a file or folder first");
+    return message("commands.select.a.file.or.folder.first");
   if (definition.requires === "swarm" && environment.swarmReason)
     return environment.swarmReason;
   if (
@@ -493,15 +504,9 @@ export function appCommandReason(
       !(environment.pendingId && environment.pendingId > 0) ||
       !(environment.pendingCount && environment.pendingCount > 0))
   )
-    return message(
-      "请选择非空、已编号的待提交 CL",
-      "Select a nonempty numbered pending CL",
-    );
+    return message("commands.select.a.nonempty.numbered.pending.cl");
   if (definition.risk === "mutation" && environment.connected === false)
-    return message(
-      "连接或认证不可用",
-      "Connection or authentication is unavailable",
-    );
+    return message("commands.connection.or.authentication.is.unavailable");
   if (definition.execution?.kind === "shell")
     return environment.shellReasons?.[definition.execution.command];
   return undefined;
