@@ -496,6 +496,20 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.backup.omittedKeys": "；已排除 {count} 个临时/敏感键",
+  "settings.backup.verified":
+    "备份文件已回读验证：{file} · {size}{sha}{omitted}",
+  "settings.backup.created": "已创建 {file}{omitted}",
+  "settings.backup.restoreStaged":
+    "已暂存恢复（重启后应用，而非已完成）：{file}；回滚包 {rollback}。{layout}",
+  "settings.backup.layoutWritten": "布局已写入，请完全退出并重新打开 P4Deck。",
+  "settings.backup.layoutNotWritten":
+    "当前 WebView 无法写入布局；请保留回滚包，完全退出并重新打开后核对。",
+  "settings.backup.legacyRestoreStaged":
+    "已暂存 {file} 的恢复；回滚包：{rollback}。若布局未恢复请使用回滚包。",
+  "settings.backup.restorePending":
+    "待应用恢复：{file}。完全退出并重新打开 P4Deck 后生效；回滚包已生成。",
+  "settings.backup.rollbackAvailable": " · 可回滚到 {file}",
   "shell.tab.noTabs": "没有页签",
   "pending.submissionKind.ordinary": "普通提交",
   "pending.submissionKind.ciMerge": "CI 合并",

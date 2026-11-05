@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor } from "../../shared/i18n";
 import { Archive, FolderOpen, History, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { backend } from "../../infrastructure/backend";
@@ -20,6 +20,52 @@ import {
   controlPlaneRestorePending,
   runControlPlaneAction,
 } from "./controlPlaneLifecycle";
+/**
+ * Composition helpers for the backup status lines.
+ *
+ * These lines concatenate optional fragments (an omitted-key suffix, a sha256
+ * tail, a layout outcome), so each fragment is its own message and the join
+ * stays here rather than inside the catalog.
+ */
+const settings = {
+  omittedKeys(count: number, zh: boolean): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.omittedKeys", {
+      count,
+    });
+  },
+  backupVerified(
+    v: { file: string; size: string; sha: string; omitted: string },
+    zh: boolean,
+  ): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.verified", v);
+  },
+  backupCreated(v: { file: string; omitted: string }, zh: boolean): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.created", v);
+  },
+  restoreStaged(
+    v: { file: string; rollback: string; layout: string },
+    zh: boolean,
+  ): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.restoreStaged", v);
+  },
+  legacyRestoreStaged(
+    v: { file: string; rollback: string },
+    zh: boolean,
+  ): string {
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "settings.backup.legacyRestoreStaged",
+      v,
+    );
+  },
+  restorePending(v: { file: string }, zh: boolean): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.restorePending", v);
+  },
+  rollbackAvailable(v: { file: string }, zh: boolean): string {
+    return tFor(zh ? "zh-CN" : "en-US", "settings.backup.rollbackAvailable", v);
+  },
+};
+
 import {
   applyBackupLocalStorage,
   collectBackupLocalStorage,
@@ -65,7 +111,6 @@ export function BackupSettingsCard({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmRestore, setConfirmRestore] = useState<string>();
-  const tr = (a: string, b: string) => (zh ? a : b);
 
   const refresh = useCallback(async () => {
     if (!native) return;
@@ -108,28 +153,29 @@ export function BackupSettingsCard({
       const legacyPayload = result.legacy as ConfigBackupCreateResult | null;
       const omittedCount = legacyPayload?.omittedLocalStorageKeys?.length ?? 0;
       const omitted = omittedCount
-        ? tr(
-            `；已排除 ${omittedCount} 个临时/敏感键`,
-            `; ${omittedCount} transient or sensitive keys omitted`,
-          )
+        ? settings.omittedKeys(omittedCount, zh)
         : "";
-      return tr(
-        `备份文件已回读验证：${artifact.fileName ?? "—"} · ${size(artifact.sizeBytes)}${artifact.sha256 ? ` · sha256 ${artifact.sha256.slice(0, 12)}…` : ""}${omitted}`,
-        `Backup artifact verified by readback: ${artifact.fileName ?? "—"} · ${size(artifact.sizeBytes)}${artifact.sha256 ? ` · sha256 ${artifact.sha256.slice(0, 12)}…` : ""}${omitted}`,
+      return settings.backupVerified(
+        {
+          file: artifact.fileName ?? "—",
+          size: size(artifact.sizeBytes),
+          sha: artifact.sha256
+            ? ` · sha256 ${artifact.sha256.slice(0, 12)}…`
+            : "",
+          omitted,
+        },
+        zh,
       );
     }
     if (result.state === "legacy") {
       const legacy = controlPlaneLegacy<ConfigBackupCreateResult>(result);
       if (!legacy) return result.message;
       const omitted = legacy.omittedLocalStorageKeys.length
-        ? tr(
-            `；已排除 ${legacy.omittedLocalStorageKeys.length} 个临时/敏感键`,
-            `; ${legacy.omittedLocalStorageKeys.length} transient or sensitive keys omitted`,
-          )
+        ? settings.omittedKeys(legacy.omittedLocalStorageKeys.length, zh)
         : "";
-      return tr(
-        `已创建 ${legacy.backup.fileName}${omitted}`,
-        `Created ${legacy.backup.fileName}${omitted}`,
+      return settings.backupCreated(
+        { file: legacy.backup.fileName, omitted },
+        zh,
       );
     }
     return t("settings.outcome.uncertain.the.backup.may.exist");
@@ -194,9 +240,18 @@ export function BackupSettingsCard({
           ? applyBackupLocalStorage(legacyPayload.localStorage)
           : false;
         setMessage(
-          tr(
-            `已暂存恢复（重启后应用，而非已完成）：${details?.sourceFileName ?? fileName}；回滚包 ${details?.rollbackFileName ?? "—"}。${layoutApplied ? "布局已写入，请完全退出并重新打开 P4Deck。" : "当前 WebView 无法写入布局；请保留回滚包，完全退出并重新打开后核对。"}`,
-            `Restore staged (applies on next start, not completed): ${details?.sourceFileName ?? fileName}; rollback ${details?.rollbackFileName ?? "—"}. ${layoutApplied ? "Layout was written; fully quit and reopen P4Deck." : "This WebView could not write layout state; keep the rollback bundle, fully quit and reopen, then verify."}`,
+          settings.restoreStaged(
+            {
+              file: details?.sourceFileName ?? fileName,
+              rollback: details?.rollbackFileName ?? "—",
+              layout: layoutApplied
+                ? tFor(zh ? "zh-CN" : "en-US", "settings.backup.layoutWritten")
+                : tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "settings.backup.layoutNotWritten",
+                  ),
+            },
+            zh,
           ),
         );
       } else if (result.state === "legacy") {
@@ -206,9 +261,12 @@ export function BackupSettingsCard({
           : false;
         setMessage(
           legacyPayload
-            ? tr(
-                `已暂存 ${legacyPayload.sourceFileName} 的恢复；回滚包：${legacyPayload.rollbackFileName}。若布局未恢复请使用回滚包。`,
-                `Restore of ${legacyPayload.sourceFileName} is staged; rollback: ${legacyPayload.rollbackFileName}. Use the rollback if layout is not restored.`,
+            ? settings.legacyRestoreStaged(
+                {
+                  file: legacyPayload.sourceFileName,
+                  rollback: legacyPayload.rollbackFileName,
+                },
+                zh,
               )
             : result.message,
         );
@@ -277,10 +335,7 @@ export function BackupSettingsCard({
         <div className="settings-notice backup-pending" role="status">
           <History size={16} />
           <span>
-            {tr(
-              `待应用恢复：${pending.sourceFileName}。完全退出并重新打开 P4Deck 后生效；回滚包已生成。`,
-              `Restore pending: ${pending.sourceFileName}. Fully quit and reopen P4Deck to apply it; a rollback backup already exists.`,
-            )}
+            {settings.restorePending({ file: pending.sourceFileName }, zh)}
           </span>
         </div>
       )}
@@ -302,9 +357,9 @@ export function BackupSettingsCard({
                 ? ` · ${time(lastRestore.completedAt, zh)}`
                 : ""}
             {lastRestore.rollbackFileName
-              ? tr(
-                  ` · 可回滚到 ${lastRestore.rollbackFileName}`,
-                  ` · Roll back with ${lastRestore.rollbackFileName}`,
+              ? settings.rollbackAvailable(
+                  { file: lastRestore.rollbackFileName },
+                  zh,
                 )
               : ""}
           </span>

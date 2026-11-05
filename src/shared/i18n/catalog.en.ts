@@ -534,6 +534,22 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.backup.omittedKeys":
+    "; {count} transient or sensitive keys omitted",
+  "settings.backup.verified":
+    "Backup artifact verified by readback: {file} · {size}{sha}{omitted}",
+  "settings.backup.created": "Created {file}{omitted}",
+  "settings.backup.restoreStaged":
+    "Restore staged (applies on next start, not completed): {file}; rollback {rollback}. {layout}",
+  "settings.backup.layoutWritten":
+    "Layout was written; fully quit and reopen P4Deck.",
+  "settings.backup.layoutNotWritten":
+    "This WebView could not write layout state; keep the rollback bundle, fully quit and reopen, then verify.",
+  "settings.backup.legacyRestoreStaged":
+    "Restore of {file} is staged; rollback: {rollback}. Use the rollback if layout is not restored.",
+  "settings.backup.restorePending":
+    "Restore pending: {file}. Fully quit and reopen P4Deck to apply it; a rollback backup already exists.",
+  "settings.backup.rollbackAvailable": " · Roll back with {file}",
   "shell.tab.noTabs": "No tabs",
   "pending.submissionKind.ordinary": "Ordinary",
   "pending.submissionKind.ciMerge": "CI merge",
