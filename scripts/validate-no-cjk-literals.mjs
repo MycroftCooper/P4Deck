@@ -239,7 +239,7 @@ if (fresh.length) {
 if (known) {
   console.log(
     `✓ no NEW hardcoded Chinese outside the catalog ` +
-      `(${known} baseline entries still to translate)`,
+      `(${known} known literals recorded in the baseline)`,
   );
 } else {
   console.log("✓ no hardcoded Chinese literals outside the catalog");
