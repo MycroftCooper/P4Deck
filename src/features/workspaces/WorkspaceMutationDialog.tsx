@@ -45,7 +45,6 @@ export function WorkspaceMutationDialog({
     connection: ConnectionSnapshot;
   }): Promise<WorkspaceMutationActionLookup>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [name, setName] = useState(request.workspace);
   const clearUnsaved = useUnsavedEditor(
     name !== request.workspace ? "dirty" : "clean",
@@ -136,9 +135,9 @@ export function WorkspaceMutationDialog({
       if (!alive.current) return;
       if (String(preview.request.expectedGeneration) !== dispatching.generation)
         throw new Error(
-          tr(
-            "连接代际与预检目标不一致，未执行工作区变更。",
-            "Connection generation changed; no workspace mutation was dispatched.",
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "workspaces.connection.generation.changed.no.workspace.mutation",
           ),
         );
       let value = await backend.confirmWorkspaceMutation(preview.token, id);
@@ -164,9 +163,9 @@ export function WorkspaceMutationDialog({
       apply({
         outcome: "unknown",
         failure: message,
-        message: tr(
-          "结果不确定：操作可能已应用。已用同一操作号查询持久回执并刷新；请核对工作区列表，不要用新操作号重试。",
-          "Outcome uncertain: the operation may have applied. The durable receipt was queried with the same operation id and the list was refreshed; inspect the workspace list before any retry with a new id.",
+        message: tFor(
+          zh ? "zh-CN" : "en-US",
+          "workspaces.outcome.uncertain.the.operation.may.have",
         ),
         workspace: preview.request.workspace,
         action: preview.request.action,
@@ -225,13 +224,13 @@ export function WorkspaceMutationDialog({
     >
       <p>
         {request.action === "delete"
-          ? tr(
-              "仅删除服务器上的工作区定义，不删除本机或 Depot 文件。存在待提交/搁置记录或打开文件时不能删除。",
-              "Delete only the workspace definition; local and depot files remain. Pending/shelved changes or open files block deletion.",
+          ? tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.delete.only.the.workspace.definition.local",
             )
-          : tr(
-              "使用服务器原生重命名，保留工作进度；不采用复制后删除。要求服务器 2022.2+ 且允许此操作。",
-              "Use native server rename preserving work in progress; no copy/delete fallback. Requires Server 2022.2+ and permission.",
+          : tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.use.native.server.rename.preserving.work",
             )}
       </p>
       {request.action === "rename" && !result && (
@@ -257,16 +256,16 @@ export function WorkspaceMutationDialog({
             <br />
             Stream: {preview.stream || "—"}
             <br />
-            {tr(
-              "请确认以上目标。执行前会再次检查。",
-              "Confirm this target. It will be revalidated before execution.",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.confirm.this.target.it.will.be",
             )}
           </DialogNotice>
           {request.action === "delete" && (
             <DialogNotice error>
-              {tr(
-                "删除工作区定义不可本地撤销；本机与 Depot 文件不受影响。",
-                "Deleting the workspace definition cannot be undone locally; local and depot files are untouched.",
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "workspaces.deleting.the.workspace.definition.cannot.be",
               )}
             </DialogNotice>
           )}
@@ -277,9 +276,9 @@ export function WorkspaceMutationDialog({
                 checked={acknowledged}
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
-              {tr(
-                "我确认永久删除该工作区定义",
-                "I understand this permanently deletes the workspace definition",
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "workspaces.i.understand.this.permanently.deletes.the",
               )}
             </label>
           )}
@@ -287,9 +286,9 @@ export function WorkspaceMutationDialog({
       )}
       {busy && !result && (
         <DialogNotice>
-          {tr(
-            "正在执行；关闭保护已启用，取消不会回滚已应用的服务器变更。",
-            "Operation in progress; closing is protected and cancelling does not roll back changes already applied on the server.",
+          {tFor(
+            zh ? "zh-CN" : "en-US",
+            "workspaces.operation.in.progress.closing.is.protected",
           )}
         </DialogNotice>
       )}
@@ -340,9 +339,9 @@ export function WorkspaceMutationDialog({
       )}
       {(result?.outcome === "unknown" || error) && !resultVerified && (
         <DialogNotice error>
-          {tr(
-            "结果不确定时不自动重试、不更换操作号；请先刷新并核对工作区列表。",
-            "Uncertain outcomes are never retried or re-dispatched with a new operation id; refresh and inspect the workspace list first.",
+          {tFor(
+            zh ? "zh-CN" : "en-US",
+            "workspaces.uncertain.outcomes.are.never.retried.or",
           )}
         </DialogNotice>
       )}

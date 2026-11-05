@@ -496,6 +496,40 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "workspaces.connection.generation.changed.no.workspace.mutation":
+    "连接代际与预检目标不一致，未执行工作区变更。",
+  "workspaces.outcome.uncertain.the.operation.may.have":
+    "结果不确定：操作可能已应用。已用同一操作号查询持久回执并刷新；请核对工作区列表，不要用新操作号重试。",
+  "workspaces.delete.only.the.workspace.definition.local":
+    "仅删除服务器上的工作区定义，不删除本机或 Depot 文件。存在待提交/搁置记录或打开文件时不能删除。",
+  "workspaces.use.native.server.rename.preserving.work":
+    "使用服务器原生重命名，保留工作进度；不采用复制后删除。要求服务器 2022.2+ 且允许此操作。",
+  "workspaces.confirm.this.target.it.will.be":
+    "请确认以上目标。执行前会再次检查。",
+  "workspaces.deleting.the.workspace.definition.cannot.be":
+    "删除工作区定义不可本地撤销；本机与 Depot 文件不受影响。",
+  "workspaces.i.understand.this.permanently.deletes.the":
+    "我确认永久删除该工作区定义",
+  "workspaces.operation.in.progress.closing.is.protected":
+    "正在执行；关闭保护已启用，取消不会回滚已应用的服务器变更。",
+  "workspaces.uncertain.outcomes.are.never.retried.or":
+    "结果不确定时不自动重试、不更换操作号；请先刷新并核对工作区列表。",
+  "files.the.preview.expired.request.a.fresh":
+    "预览已过期，请重新从服务器获取。",
+  "files.browser.mock.preview.and.result.are":
+    "浏览器 Mock：以下预览和结果均为模拟，不访问服务器或文件。",
+  "files.a.real.p4.sync.n.preview":
+    "先运行真实 p4 sync -n，核对服务器计划后才能执行。",
+  "files.force.re.sync.high.risk.requires":
+    "强制重新同步（高风险；预览后还需再次确认）",
+  "files.force.re.transfers.current.files.and":
+    "Force 会重新传输当前文件，并可能触发 writable/clobber 风险；不会默认启用。",
+  "files.preview.is.partial.inspect.blockers.and":
+    "预览为 partial；请检查阻塞项与日志。",
+  "files.i.reviewed.the.real.preview.and":
+    "我已核对真实预览，并再次确认执行 Force 同步。",
+  "files.executing.the.confirmed.sync.cancellation.does":
+    "正在执行已确认的同步。取消不会回滚已传输文件。",
   "pending.sort.switch.descending": "切换为降序",
   "pending.sort.switch.ascending": "切换为升序",
   "pending.fileState.add": "新增",

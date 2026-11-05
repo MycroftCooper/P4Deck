@@ -534,6 +534,40 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "workspaces.connection.generation.changed.no.workspace.mutation":
+    "Connection generation changed; no workspace mutation was dispatched.",
+  "workspaces.outcome.uncertain.the.operation.may.have":
+    "Outcome uncertain: the operation may have applied. The durable receipt was queried with the same operation id and the list was refreshed; inspect the workspace list before any retry with a new id.",
+  "workspaces.delete.only.the.workspace.definition.local":
+    "Delete only the workspace definition; local and depot files remain. Pending/shelved changes or open files block deletion.",
+  "workspaces.use.native.server.rename.preserving.work":
+    "Use native server rename preserving work in progress; no copy/delete fallback. Requires Server 2022.2+ and permission.",
+  "workspaces.confirm.this.target.it.will.be":
+    "Confirm this target. It will be revalidated before execution.",
+  "workspaces.deleting.the.workspace.definition.cannot.be":
+    "Deleting the workspace definition cannot be undone locally; local and depot files are untouched.",
+  "workspaces.i.understand.this.permanently.deletes.the":
+    "I understand this permanently deletes the workspace definition",
+  "workspaces.operation.in.progress.closing.is.protected":
+    "Operation in progress; closing is protected and cancelling does not roll back changes already applied on the server.",
+  "workspaces.uncertain.outcomes.are.never.retried.or":
+    "Uncertain outcomes are never retried or re-dispatched with a new operation id; refresh and inspect the workspace list first.",
+  "files.the.preview.expired.request.a.fresh":
+    "The preview expired; request a fresh server preview.",
+  "files.browser.mock.preview.and.result.are":
+    "Browser Mock: preview and result are simulated; no server or files are accessed.",
+  "files.a.real.p4.sync.n.preview":
+    "A real p4 sync -n preview must be reviewed before execution.",
+  "files.force.re.sync.high.risk.requires":
+    "Force re-sync (high risk; requires a second acknowledgement after preview)",
+  "files.force.re.transfers.current.files.and":
+    "Force re-transfers current files and may expose writable/clobber risks. It is never enabled by default.",
+  "files.preview.is.partial.inspect.blockers.and":
+    "Preview is partial; inspect blockers and logs.",
+  "files.i.reviewed.the.real.preview.and":
+    "I reviewed the real preview and explicitly confirm forced sync again.",
+  "files.executing.the.confirmed.sync.cancellation.does":
+    "Executing the confirmed sync. Cancellation does not roll back transferred files.",
   "pending.sort.switch.descending": "Sort descending",
   "pending.sort.switch.ascending": "Sort ascending",
   "pending.fileState.add": "Add",

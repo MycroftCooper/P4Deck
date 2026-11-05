@@ -96,9 +96,9 @@ export function SyncDialog({
       setPlan(undefined);
       setForceAck(false);
       setError(
-        tr(
-          "预览已过期，请重新从服务器获取。",
-          "The preview expired; request a fresh server preview.",
+        tFor(
+          zh ? "zh-CN" : "en-US",
+          "files.the.preview.expired.request.a.fresh",
         ),
       );
       setPhase("preview");
@@ -244,18 +244,15 @@ export function SyncDialog({
               warnings: plan.warnings.map((item) => item.message),
             } as const);
   const simulated = demo
-    ? tr(
-        "浏览器 Mock：以下预览和结果均为模拟，不访问服务器或文件。",
-        "Browser Mock: preview and result are simulated; no server or files are accessed.",
-      )
+    ? tFor(zh ? "zh-CN" : "en-US", "files.browser.mock.preview.and.result.are")
     : undefined;
 
   return (
     <Dialog
       title={tFor(zh ? "zh-CN" : "en-US", "files.safe.sync")}
-      description={tr(
-        "先运行真实 p4 sync -n，核对服务器计划后才能执行。",
-        "A real p4 sync -n preview must be reviewed before execution.",
+      description={tFor(
+        zh ? "zh-CN" : "en-US",
+        "files.a.real.p4.sync.n.preview",
       )}
       source={snapshot.source}
       zh={zh}
@@ -382,16 +379,16 @@ export function SyncDialog({
               checked={force}
               onChange={(event) => setForce(event.target.checked)}
             />
-            {tr(
-              "强制重新同步（高风险；预览后还需再次确认）",
-              "Force re-sync (high risk; requires a second acknowledgement after preview)",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "files.force.re.sync.high.risk.requires",
             )}
           </label>
           {force && (
             <DialogNotice error>
-              {tr(
-                "Force 会重新传输当前文件，并可能触发 writable/clobber 风险；不会默认启用。",
-                "Force re-transfers current files and may expose writable/clobber risks. It is never enabled by default.",
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.force.re.transfers.current.files.and",
               )}
             </DialogNotice>
           )}
@@ -436,9 +433,9 @@ export function SyncDialog({
           {(plan.partial || plan.truncated) && (
             <DialogNotice error={plan.partial}>
               {plan.partial
-                ? tr(
-                    "预览为 partial；请检查阻塞项与日志。",
-                    "Preview is partial; inspect blockers and logs.",
+                ? tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "files.preview.is.partial.inspect.blockers.and",
                   )
                 : tr(
                     `代表性列表已截断：显示 ${plan.entries.length}/${plan.totalEntries}。`,
@@ -460,9 +457,9 @@ export function SyncDialog({
                 checked={forceAck}
                 onChange={(event) => setForceAck(event.target.checked)}
               />
-              {tr(
-                "我已核对真实预览，并再次确认执行 Force 同步。",
-                "I reviewed the real preview and explicitly confirm forced sync again.",
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.i.reviewed.the.real.preview.and",
               )}
             </label>
           )}
@@ -471,9 +468,9 @@ export function SyncDialog({
       {phase === "confirming" && (
         <section aria-live="polite" aria-busy="true">
           <DialogNotice>
-            {tr(
-              "正在执行已确认的同步。取消不会回滚已传输文件。",
-              "Executing the confirmed sync. Cancellation does not roll back transferred files.",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "files.executing.the.confirmed.sync.cancellation.does",
             )}
           </DialogNotice>
         </section>
