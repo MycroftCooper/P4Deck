@@ -1,3 +1,4 @@
+import type { MsgKey } from "../../shared/i18n/catalog.zh";
 import { tFor } from "../../shared/i18n";
 import { notifyFailure, notifyUser } from "../../shared/notice";
 import {
@@ -69,22 +70,16 @@ function errorText(error: unknown): string {
 }
 
 /** Host failure categories; unknown details keep the generic fallback. */
-const failureReasons: readonly [RegExp, string, string][] = [
+const failureReasons: readonly [RegExp, string][] = [
   [
     /network|connect|timed? ?out|timeout|dns|offline|send request|econn|tls|certificate/i,
-    "无法连接更新服务器；请检查网络后重试。",
-    "Could not reach the update server. Check your network and retry.",
+    "update.cannotReachServer",
   ],
   [
     /permission|denied|access is denied|elevat|privilege|not allowed/i,
-    "系统拒绝安装更新（可能需要管理员权限）；请手动安装。",
-    "The system refused to install the update (administrator rights may be required). Install it manually.",
+    "update.installDenied",
   ],
-  [
-    /no space|disk|write failed|read-only/i,
-    "写入更新文件失败（磁盘空间或权限不足）。",
-    "Writing the update failed (disk space or insufficient permissions).",
-  ],
+  [/no space|disk|write failed|read-only/i, "update.writeFailed"],
 ];
 
 /**
@@ -117,8 +112,9 @@ export function updateFailureText(
           zh ? "zh-CN" : "en-US",
           "update.the.update.package.failed.verification.2",
         );
-  for (const [pattern, cn, en] of failureReasons)
-    if (pattern.test(error ?? "")) return zh ? cn : en;
+  for (const [pattern, key] of failureReasons)
+    if (pattern.test(error ?? ""))
+      return tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
   if (scope === "check")
     return tFor(zh ? "zh-CN" : "en-US", "update.the.update.check.failed");
   if (scope === "install")

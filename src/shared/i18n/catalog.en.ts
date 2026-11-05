@@ -534,6 +534,26 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.tab.noOtherTabs": "No other tabs",
+  "shell.tab.noTabsToTheRight": "No tabs to the right",
+  "shell.tab.needsTwoTabs": "This group needs at least two tabs",
+  "shell.tab.groupFallback": "Split {id}",
+  "shell.tab.noOtherGroups": "No other split groups",
+  "shell.tab.alreadyDetached": "Already in a separate window",
+  "update.cannotReachServer":
+    "Could not reach the update server. Check your network and retry.",
+  "update.installDenied":
+    "The system refused to install the update (administrator rights may be required). Install it manually.",
+  "update.writeFailed":
+    "Writing the update failed (disk space or insufficient permissions).",
+  "update.alreadyLatestVersion": "Already up to date at v{version}.",
+  "update.alreadyLatest": "Already up to date.",
+  "files.address.enterOnePath": "Enter one file or folder path",
+  "files.address.encodeUrl": "Encode # and ? in file URLs",
+  "files.address.filePathsOnly": "File paths only",
+  "files.address.controlCharacter": "Invalid control character",
+  "files.address.exactDepotPath": "Use an exact depot path",
+  "files.address.configureWorkspaceRoot": "Configure the workspace root first",
   "pending.moveBlockedOutcomeUnknown": "unknown",
   "companySubmit.invalidChangeId": "Invalid CL number.",
   "companySubmit.toolMissing": "Tool is missing.",

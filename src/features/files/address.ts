@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type { P4Context } from "../../shared/contracts";
 
 /** Clipboard input is data, never a shell command or a P4 filespec. */
@@ -13,26 +14,21 @@ export function cleanAddress(text: string): string {
     if (value.endsWith(pairs[value[0]])) value = value.slice(1, -1);
   }
   if (!value || /[\r\n\x00-\x1f]/.test(value))
-    throw new Error("请输入单个文件或目录地址 / Enter one file or folder path");
+    throw new Error(t("files.address.enterOnePath"));
   if (/^file:\/\//i.test(value)) {
     const url = new URL(value);
-    if (url.search || url.hash)
-      throw new Error(
-        "file URL 中的 # 和 ? 必须转义 / Encode # and ? in file URLs",
-      );
+    if (url.search || url.hash) throw new Error(t("files.address.encodeUrl"));
     value = decodeURIComponent(url.pathname);
     if (url.hostname && url.hostname !== "localhost")
       value = `\\\\${url.hostname}${value.replaceAll("/", "\\")}`;
     else if (/^\/[A-Za-z]:\//.test(value)) value = value.slice(1);
   } else if (/^[a-z][a-z\d+.-]*:\/\//i.test(value)) {
-    throw new Error("只支持文件地址，不支持网页或命令 / File paths only");
+    throw new Error(t("files.address.filePathsOnly"));
   }
   if (/[\x00-\x1f]/.test(value))
-    throw new Error("地址包含控制字符 / Invalid control character");
+    throw new Error(t("files.address.controlCharacter"));
   if (value.startsWith("//") && /[#@*]|\.\.\./.test(value))
-    throw new Error(
-      "请输入具体 depot 路径，不要附带修订号或通配符 / Use an exact depot path",
-    );
+    throw new Error(t("files.address.exactDepotPath"));
   return value;
 }
 
@@ -111,9 +107,7 @@ export function completeFileAddress(
       (cleaned.startsWith("\\") && !path.startsWith("//")))
   ) {
     if (!context.cwd)
-      throw new Error(
-        "请先配置工作区根目录 / Configure the workspace root first",
-      );
+      throw new Error(t("files.address.configureWorkspaceRoot"));
     path = `${context.cwd.replace(/[\\/]+$/, "")}/${path.replace(/^\/+/, "")}`;
     unc = path.startsWith("\\\\");
     path = path.replaceAll("\\", "/");

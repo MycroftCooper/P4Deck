@@ -496,6 +496,30 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.tab.noOtherTabs": "没有其他页签",
+  "shell.tab.noTabsToTheRight": "右侧没有页签",
+  "shell.tab.needsTwoTabs": "本组至少需要两个页签",
+  "shell.tab.groupFallback": "分屏 {id}",
+  "shell.tab.noOtherGroups": "没有其他分屏组",
+  "shell.tab.alreadyDetached": "当前已在独立窗口",
+  "update.cannotReachServer": "无法连接更新服务器；请检查网络后重试。",
+  "update.installDenied":
+    "系统拒绝安装更新（可能需要管理员权限）；请手动安装。",
+  "update.writeFailed": "写入更新文件失败（磁盘空间或权限不足）。",
+  "update.alreadyLatestVersion": "已是最新版本 v{version}。",
+  "update.alreadyLatest": "已是最新版本。",
+  "files.address.enterOnePath":
+    "请输入单个文件或目录地址 / Enter one file or folder path",
+  "files.address.encodeUrl":
+    "file URL 中的 # 和 ? 必须转义 / Encode # and ? in file URLs",
+  "files.address.filePathsOnly":
+    "只支持文件地址，不支持网页或命令 / File paths only",
+  "files.address.controlCharacter":
+    "地址包含控制字符 / Invalid control character",
+  "files.address.exactDepotPath":
+    "请输入具体 depot 路径，不要附带修订号或通配符 / Use an exact depot path",
+  "files.address.configureWorkspaceRoot":
+    "请先配置工作区根目录 / Configure the workspace root first",
   "pending.moveBlockedOutcomeUnknown": "结果未知",
   "companySubmit.invalidChangeId": "CL 编号无效。",
   "companySubmit.toolMissing": "工具不存在。",
