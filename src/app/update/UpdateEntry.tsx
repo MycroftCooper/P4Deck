@@ -1,4 +1,4 @@
-import { t as translate } from "../../shared/i18n";
+import { t as translate, tFor } from "../../shared/i18n";
 import { Download } from "lucide-react";
 import { openUpdatePanel } from "./updatePanelStore";
 import {
@@ -19,9 +19,11 @@ function entryCopy(
     case "available":
       return {
         text: zh ? `有新版本 ${version}` : `New version ${version}`,
-        label: zh
-          ? `有新版本 ${version}，点击查看更新`
-          : `New version ${version} is available. Open the update panel.`,
+        label: tFor(
+          zh ? "zh-CN" : "en-US",
+          "update.new.version.is.available.open.the",
+          { p1: zh ? version : version },
+        ),
       };
     case "downloading":
       return {

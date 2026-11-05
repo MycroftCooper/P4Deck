@@ -1,4 +1,4 @@
-import { t as translate } from "../../shared/i18n";
+import { t as translate, tFor } from "../../shared/i18n";
 import { isZh } from "../../shared/locale";
 import { ConnectionSpecCreateDialog } from "../settings/ConnectionSpecCreateDialog";
 import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
@@ -172,9 +172,14 @@ export function WorkspacePage({
       switchTarget.current = "";
       setSwitchPhase("error");
       setError(
-        zh
-          ? `Workspace 切换失败；仍保留 ${runtime.context.client} 与现有页面数据。${switchFailure(cause, true)}`
-          : `Workspace switch failed. ${runtime.context.client} and existing page data were preserved. ${switchFailure(cause, false)}`,
+        tFor(
+          zh ? "zh-CN" : "en-US",
+          "workspaces.workspace.switch.failed.and.existing.page",
+          {
+            p1: zh ? runtime.context.client : runtime.context.client,
+            p2: zh ? switchFailure(cause, true) : switchFailure(cause, false),
+          },
+        ),
       );
       restoreSwitchFocus.current = true;
     } finally {
@@ -285,9 +290,11 @@ export function WorkspacePage({
           : switchPhase === "committing"
             ? translate("workspaces.verified.committing.workspace")
             : switchPhase === "success"
-              ? zh
-                ? `已切换到 ${runtime.context.client}，依赖页面已刷新。`
-                : `Switched to ${runtime.context.client}; dependent pages were refreshed.`
+              ? tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "workspaces.switched.to.dependent.pages.were.refreshed",
+                  { p1: zh ? runtime.context.client : runtime.context.client },
+                )
               : switchPhase === "error"
                 ? translate("workspaces.switch.failed.the.previous.workspace")
                 : ""}
@@ -347,9 +354,11 @@ export function WorkspacePage({
                       "W01",
                       () => ({
                         "切换到此工作区…": {
-                          label: zh
-                            ? `切换到工作区 '${item.name}'`
-                            : `Switch to Workspace '${item.name}'`,
+                          label: tFor(
+                            zh ? "zh-CN" : "en-US",
+                            "workspaces.switch.to.workspace",
+                            { p1: zh ? item.name : item.name },
+                          ),
                           ...action(
                             () => switchToSelected(item.name),
                             !ready ||
@@ -369,9 +378,11 @@ export function WorkspacePage({
                           ),
                         },
                         "重命名工作区…": {
-                          label: zh
-                            ? `重命名工作区 '${item.name}'`
-                            : `Rename Workspace '${item.name}'`,
+                          label: tFor(
+                            zh ? "zh-CN" : "en-US",
+                            "workspaces.rename.workspace",
+                            { p1: zh ? item.name : item.name },
+                          ),
                           ...action(
                             () =>
                               setMutation({
@@ -387,9 +398,11 @@ export function WorkspacePage({
                           ),
                         },
                         "删除工作区…": {
-                          label: zh
-                            ? `删除工作区 '${item.name}'`
-                            : `Delete Workspace '${item.name}'`,
+                          label: tFor(
+                            zh ? "zh-CN" : "en-US",
+                            "workspaces.delete.workspace",
+                            { p1: zh ? item.name : item.name },
+                          ),
                           ...action(
                             () =>
                               setMutation({

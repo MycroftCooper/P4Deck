@@ -36,6 +36,26 @@ describe("i18n catalogs", () => {
       expect(names(enValue), key).toEqual(names(zhValue));
     }
   });
+
+  it("keeps every placeholder referenced by a message present in both locales", () => {
+    // A message can lose a placeholder in BOTH locales at once (e.g. a workspace
+    // name dropped from "Rename workspace '{p1}'"), which the parity check above
+    // cannot see. Reject a numbered placeholder only one locale carries, or a
+    // gap in the numbering the call sites rely on.
+    const placeholders = (value: string) =>
+      [...value.matchAll(/\{(\w+)[,}:]/g)]
+        .map((m) => m[1])
+        .filter((name) => /^p\d+$/.test(name))
+        .map((name) => Number(name.slice(1)))
+        .sort((a, b) => a - b);
+
+    for (const key of Object.keys(catalogZh) as MsgKey[]) {
+      const zhNums = placeholders(catalogZh[key]);
+      if (!zhNums.length) continue;
+      // Numbering must be dense from 1 so call sites cannot silently skip one.
+      expect(zhNums, key).toEqual(zhNums.map((_, i) => i + 1));
+    }
+  });
 });
 
 describe("t", () => {

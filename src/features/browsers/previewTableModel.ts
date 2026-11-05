@@ -193,22 +193,36 @@ export function truncationNotes(
   if (reason === "rowCap") {
     notes.push(
       table.rowCount != null
-        ? zh
-          ? `仅显示前 ${TABLE_ROW_LIMIT} 行（工作表共约 ${new Intl.NumberFormat("zh-CN").format(table.rowCount)} 行）`
-          : `Showing the first ${TABLE_ROW_LIMIT} rows of about ${new Intl.NumberFormat("en-US").format(table.rowCount)}`
-        : zh
-          ? `仅显示前 ${TABLE_ROW_LIMIT} 行（总行数未统计）`
-          : `Showing the first ${TABLE_ROW_LIMIT} rows (total rows not counted)`,
+        ? tFor(
+            zh ? "zh-CN" : "en-US",
+            "browse.showing.the.first.rows.of.about",
+            {
+              p1: zh ? TABLE_ROW_LIMIT : TABLE_ROW_LIMIT,
+              p2: zh
+                ? new Intl.NumberFormat("zh-CN").format(table.rowCount)
+                : new Intl.NumberFormat("en-US").format(table.rowCount),
+            },
+          )
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "browse.showing.the.first.rows.total.rows",
+            { p1: zh ? TABLE_ROW_LIMIT : TABLE_ROW_LIMIT },
+          ),
     );
   } else if (reason === "colCap") {
     notes.push(
       table.totalColumns != null
-        ? zh
-          ? `仅显示前 ${TABLE_COLUMN_LIMIT} 列（工作表共约 ${table.totalColumns} 列）`
-          : `Showing the first ${TABLE_COLUMN_LIMIT} columns of about ${table.totalColumns}`
-        : zh
-          ? `仅显示前 ${TABLE_COLUMN_LIMIT} 列`
-          : `Showing the first ${TABLE_COLUMN_LIMIT} columns`,
+        ? tFor(
+            zh ? "zh-CN" : "en-US",
+            "browse.showing.the.first.columns.of.about",
+            {
+              p1: zh ? TABLE_COLUMN_LIMIT : TABLE_COLUMN_LIMIT,
+              p2: zh ? table.totalColumns : table.totalColumns,
+            },
+          )
+        : tFor(zh ? "zh-CN" : "en-US", "browse.showing.the.first.columns", {
+            p1: zh ? TABLE_COLUMN_LIMIT : TABLE_COLUMN_LIMIT,
+          }),
     );
   } else if (reason === "cellCap") {
     notes.push(

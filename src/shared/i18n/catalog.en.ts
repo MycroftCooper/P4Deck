@@ -534,6 +534,23 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.open": "Open {p1}",
+  "search.search.text.is.limited.to.unicode":
+    "Search text is limited to {p1} Unicode characters.",
+  "update.new.version.is.available.open.the":
+    "New version {p1} is available. Open the update panel.",
+  "browse.showing.the.first.rows.of.about":
+    "Showing the first {p1} rows of about {p2}",
+  "browse.showing.the.first.rows.total.rows":
+    "Showing the first {p1} rows (total rows not counted)",
+  "browse.showing.the.first.columns.of.about":
+    "Showing the first {p1} columns of about {p2}",
+  "browse.showing.the.first.columns": "Showing the first {p1} columns",
+  "workspaces.workspace.switch.failed.and.existing.page":
+    "Workspace switch failed. {p1} and existing page data were preserved. {p2}",
+  "workspaces.switched.to.dependent.pages.were.refreshed":
+    "Switched to {p1}; dependent pages were refreshed.",
+  "workspaces.switch.to.workspace": "Switch to Workspace '{p1}'",
   "shell.tab.noOtherTabs": "No other tabs",
   "shell.tab.noTabsToTheRight": "No tabs to the right",
   "shell.tab.needsTwoTabs": "This group needs at least two tabs",
@@ -3314,7 +3331,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "workspaces.connection.unavailable": "Connection unavailable",
   "workspaces.current": "Current",
   "workspaces.current.workspace": "Current workspace",
-  "workspaces.delete.workspace": "Delete Workspace",
+  "workspaces.delete.workspace": "Delete workspace '{p1}'",
   "workspaces.loading.failed.refresh.to.retry":
     "Loading failed. Refresh to retry.",
   "workspaces.loading.workspaces": "Loading workspaces…",
@@ -3335,7 +3352,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "workspaces.p4vfs.setup.needed": "P4VFS · setup needed",
   "workspaces.p4vfs.status.unavailable": "P4VFS status unavailable: ",
   "workspaces.refresh.workspaces": "Refresh workspaces",
-  "workspaces.rename.workspace": "Rename Workspace",
+  "workspaces.rename.workspace": "Rename workspace '{p1}'",
   "workspaces.review": "Review",
   "workspaces.root": "Root",
   "workspaces.search.workspace.host.path": "Search workspace, host, path…",

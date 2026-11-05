@@ -238,9 +238,9 @@ function VirtualSearchResults({
                 title={
                   disabled
                     ? t("search.no.job.details.page.exists")
-                    : zh
-                      ? `打开 ${item.title}`
-                      : `Open ${item.title}`
+                    : tFor(zh ? "zh-CN" : "en-US", "search.open", {
+                        p1: zh ? item.title : item.title,
+                      })
                 }
                 onClick={() => void onOpen(item)}
               >
@@ -294,9 +294,11 @@ function validationMessage(
   if (reason === "control")
     return t("search.search.text.cannot.contain.control");
   if (reason === "tooLong")
-    return zh
-      ? `搜索内容最多 ${GLOBAL_SEARCH_MAX_CHARACTERS} 个 Unicode 字符。`
-      : `Search text is limited to ${GLOBAL_SEARCH_MAX_CHARACTERS} Unicode characters.`;
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "search.search.text.is.limited.to.unicode",
+      { p1: zh ? GLOBAL_SEARCH_MAX_CHARACTERS : GLOBAL_SEARCH_MAX_CHARACTERS },
+    );
   return t("search.enter.a.search.query");
 }
 

@@ -496,6 +496,22 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.open": "打开 {p1}",
+  "search.search.text.is.limited.to.unicode":
+    "搜索内容最多 {p1} 个 Unicode 字符。",
+  "update.new.version.is.available.open.the": "有新版本 {p1}，点击查看更新",
+  "browse.showing.the.first.rows.of.about":
+    "仅显示前 {p1} 行（工作表共约 {p2} 行）",
+  "browse.showing.the.first.rows.total.rows":
+    "仅显示前 {p1} 行（总行数未统计）",
+  "browse.showing.the.first.columns.of.about":
+    "仅显示前 {p1} 列（工作表共约 {p2} 列）",
+  "browse.showing.the.first.columns": "仅显示前 {p1} 列",
+  "workspaces.workspace.switch.failed.and.existing.page":
+    "Workspace 切换失败；仍保留 {p1} 与现有页面数据。{p2}",
+  "workspaces.switched.to.dependent.pages.were.refreshed":
+    "已切换到 {p1}，依赖页面已刷新。",
+  "workspaces.switch.to.workspace": "切换到工作区 '{p1}'",
   "shell.tab.noOtherTabs": "没有其他页签",
   "shell.tab.noTabsToTheRight": "右侧没有页签",
   "shell.tab.needsTwoTabs": "本组至少需要两个页签",
@@ -3135,7 +3151,7 @@ export const zh = {
   "workspaces.connection.unavailable": "连接不可用",
   "workspaces.current": "当前",
   "workspaces.current.workspace": "当前 Workspace",
-  "workspaces.delete.workspace": "删除工作区",
+  "workspaces.delete.workspace": "删除工作区 '{p1}'",
   "workspaces.loading.failed.refresh.to.retry": "加载失败，请刷新重试。",
   "workspaces.loading.workspaces": "正在加载 Workspace…",
   "workspaces.new.name": "新名称",
@@ -3154,7 +3170,7 @@ export const zh = {
   "workspaces.p4vfs.setup.needed": "P4VFS · 待配置",
   "workspaces.p4vfs.status.unavailable": "无法检查 P4VFS 状态：",
   "workspaces.refresh.workspaces": "刷新 Workspace",
-  "workspaces.rename.workspace": "重命名工作区",
+  "workspaces.rename.workspace": "重命名工作区 '{p1}'",
   "workspaces.review": "检查并预览",
   "workspaces.root": "根目录",
   "workspaces.search.workspace.host.path": "搜索工作区、主机、路径…",
