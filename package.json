@@ -39,6 +39,7 @@
     "validate:bundle": "node scripts/verify-desktop-bundle.mjs",
     "validate:frontend-contracts": "node scripts/validate-frontend-contracts.mjs",
     "validate:i18n-literals": "node scripts/validate-no-cjk-literals.mjs",
+    "validate:i18n-key-quality": "node scripts/validate-i18n-key-quality.mjs",
     "i18n:audit": "node scripts/i18n-audit-logic.mjs",
     "i18n:converge": "node scripts/i18n-converge.mjs",
     "ci:quick": "node scripts/ci-runner.mjs quick",
