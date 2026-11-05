@@ -1,3 +1,4 @@
+import { t } from "../shared/i18n";
 import { forwardRef, useImperativeHandle } from "react";
 import { DockviewReact } from "dockview-react";
 import {
@@ -54,11 +55,11 @@ export const DockWorkspace = forwardRef<DockHandle, DockProps>(
         }
         bindings["关闭本组页签"] = action(
           () => panels.forEach((p) => p.api.close()),
-          panels.length ? undefined : "没有页签",
+          panels.length ? undefined : t("shell.tab.noTabs"),
         );
         bindings["关闭所有页签"] = action(
           controller.closeAll,
-          dock?.panels.length ? undefined : "没有页签",
+          dock?.panels.length ? undefined : t("shell.tab.noTabs"),
         );
         return bindings;
       });
