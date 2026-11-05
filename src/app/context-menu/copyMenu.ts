@@ -32,8 +32,6 @@ export function copyFieldFor(
 ): "name" | "depotPath" | "relativePath" | "absolutePath" {
   if (/文件名|目录名|名称|file name|folder name|name/i.test(label))
     // i18n-exempt: menu-label matcher
-    // i18n-exempt: menu-label matcher
-    // i18n-exempt: menu-label matcher
     return "name";
   if (/Depot|depot/i.test(label)) return "depotPath";
   if (/相对|relative/i.test(label)) return "relativePath"; // i18n-exempt: menu-label matcher

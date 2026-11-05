@@ -79,8 +79,6 @@ const BASELINE = new Set([
   "src/app/context-menu/FullTextSelection.tsx:73",
   "src/app/context-menu/copyMenu.ts:33",
   "src/app/context-menu/labels.ts:402",
-  "src/app/context-menu/labels.ts:405",
-  "src/app/context-menu/labels.ts:407",
   "src/app/shell/StatusBar.tsx:263",
   "src/features/browsers/components/DiffView.tsx:391",
   "src/features/browsers/components/DiffView.tsx:482",
@@ -162,8 +160,11 @@ for (const abs of walk(path.join(ROOT, "src"))) {
     const trimmed = line.trim();
     // Comments are not UI copy.
     if (/^(\/\/|\*)/.test(trimmed)) return;
-    // Explicitly accepted exceptions.
+    // Explicitly accepted exceptions. A statement can be split over lines and
+    // the formatter decides where the literal lands, so a marker on the line
+    // immediately above this one also counts.
     if (/i18n-exempt/.test(line)) return;
+    if (i > 0 && /i18n-exempt/.test(lines[i - 1])) return;
     // Ignore a trailing line comment only; keep the code part checked.
     const code = line.split("//")[0];
     if (!CJK.test(code)) return;
