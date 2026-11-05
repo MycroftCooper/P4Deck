@@ -496,6 +496,15 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.expandResourcePanel": "展开资源侧栏",
+  "files.collapseResourcePanel": "折叠资源侧栏",
+  "settings.classicViewNeedsPaths":
+    "Classic View 每行必须包含 depot path 和 client path。",
+  "pending.integrationTraceIncompatible":
+    "Integration trace 响应不兼容；请核对前后端版本。",
+  "settings.queries.only.the.server.in.the":
+    "只查询当前未保存设置中的服务器 {p1}；选择结果只会填入字段，不会保存或切换连接。",
+  "settings.root.unavailable": "Root 不可用：{p1}",
   "settings.collapse": "折叠{p1}",
   "settings.expand": "展开{p1}",
   "pending.files.loaded.total.unknown": "已加载 {p1} 个文件 · 总数未知",

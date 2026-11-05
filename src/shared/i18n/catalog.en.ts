@@ -534,6 +534,15 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.expandResourcePanel": "Expand resource panel",
+  "files.collapseResourcePanel": "Collapse resource panel",
+  "settings.classicViewNeedsPaths":
+    "Each Classic View line needs a depot path and a client path.",
+  "pending.integrationTraceIncompatible":
+    "Integration trace response is incompatible; verify the frontend and backend versions.",
+  "settings.queries.only.the.server.in.the":
+    "Queries only the server in the current unsaved settings ({p1}). Selecting a result only fills the field; it does not save or switch connections.",
+  "settings.root.unavailable": "Root unavailable: {p1}",
   "settings.collapse": "Collapse {p1}",
   "settings.expand": "Expand {p1}",
   "pending.files.loaded.total.unknown": "{p1} files loaded · total unknown",

@@ -399,9 +399,10 @@ export function menuLabel(label: string, zh: boolean): string {
   if (/（(含)?递归）$/.test(label))
     // i18n-exempt: menu-label matcher
     return (
-      menuLabel(label.replace(/（(含)?递归）$/, ""), false) + " (recursive)" // i18n-exempt: menu-label matcher
+      menuLabel(label.replace(/（(含)?递归）$/, ""), false) + " (recursive)"
     );
   if (label.startsWith("复制"))
+    // i18n-exempt: menu-label matcher
     // i18n-exempt: menu-label matcher
     return "Copy " + menuLabel(label.slice(2).trim(), false).toLowerCase();
   return label;

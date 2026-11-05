@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor } from "../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
@@ -153,7 +153,7 @@ export function ConnectionSpecCreateDialog({
     } catch (cause) {
       setError(
         zh
-          ? "Classic View 每行必须包含 depot path 和 client path。"
+          ? tFor(zh ? "zh-CN" : "en-US", "settings.classicViewNeedsPaths")
           : cause instanceof Error
             ? cause.message
             : String(cause),

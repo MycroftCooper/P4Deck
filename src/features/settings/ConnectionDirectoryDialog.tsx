@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor } from "../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
@@ -34,7 +34,6 @@ export function ConnectionDirectoryDialog({
   onDismiss(): void;
   onSelect(value: ConnectionUserCandidate | ConnectionWorkspaceCandidate): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const snapshot = useMemo(() => ({ ...context }), []);
   const [prefix, setPrefix] = useState("");
   const [queryUser, setQueryUser] = useState(
@@ -117,9 +116,10 @@ export function ConnectionDirectoryDialog({
           ? t("settings.browse.server.users")
           : t("settings.browse.server.workspaces")
       }
-      description={tr(
-        `只查询当前未保存设置中的服务器 ${snapshot.server || "—"}；选择结果只会填入字段，不会保存或切换连接。`,
-        `Queries only the server in the current unsaved settings (${snapshot.server || "—"}). Selecting a result only fills the field; it does not save or switch connections.`,
+      description={tFor(
+        zh ? "zh-CN" : "en-US",
+        "settings.queries.only.the.server.in.the",
+        { p1: snapshot.server || "—" },
       )}
       source={source}
       zh={zh}
@@ -236,9 +236,10 @@ export function ConnectionDirectoryDialog({
                           "root" in item ? item.root : undefined,
                           "stream" in item ? item.stream : undefined,
                           "rootStatus" in item && item.rootStatus !== "usable"
-                            ? tr(
-                                `Root 不可用：${item.rootStatus}`,
-                                `Root unavailable: ${item.rootStatus}`,
+                            ? tFor(
+                                zh ? "zh-CN" : "en-US",
+                                "settings.root.unavailable",
+                                { p1: item.rootStatus },
                               )
                             : undefined,
                         ]

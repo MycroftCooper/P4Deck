@@ -312,8 +312,8 @@ export function ResourceExplorer({
   };
   const title = zh
     ? collapsed
-      ? "展开资源侧栏"
-      : "折叠资源侧栏"
+      ? translate("files.expandResourcePanel")
+      : translate("files.collapseResourcePanel")
     : collapsed
       ? "Expand resource sidebar"
       : "Collapse resource sidebar";

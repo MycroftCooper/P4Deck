@@ -1,3 +1,5 @@
+import { tFor } from "../../shared/i18n";
+import { getLocale } from "../../shared/i18n/t";
 import type {
   IntegrationTraceBatch,
   IntegrationTraceRecord,
@@ -38,7 +40,8 @@ export function checkedTraceBatch(
     )
   )
     throw new Error(
-      "Integration trace response is incompatible; verify the frontend and backend versions / 追踪响应不兼容，请核对前后端版本",
+      // The host protocol is English-only; resolve for the caller's locale.
+      tFor(getLocale(), "pending.integrationTraceIncompatible"),
     );
   return value;
 }
