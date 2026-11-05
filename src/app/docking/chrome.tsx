@@ -224,16 +224,17 @@ export const dockTheme = {
   className: "dockview-theme-light dockview-theme-p4deck",
 };
 export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
+  const zh = useContext(LanguageContext);
   const popout = useContext(PopoutContext);
   const closeAll = useContext(CloseAllContext);
   return (
     <div
       className="dock-actions"
       tabIndex={0}
-      aria-label="页签组操作 / Tab group actions"
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.tab.group.actions")}
     >
       <button
-        title="左右分屏 / Split right"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.split.right")}
         aria-label="左右分屏"
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "right" })}
@@ -241,7 +242,7 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
         <Columns2 size={14} />
       </button>
       <button
-        title="上下分屏 / Split below"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.split.below")}
         aria-label="上下分屏"
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "bottom" })}
@@ -249,7 +250,7 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
         <Rows2 size={14} />
       </button>
       <button
-        title="弹出独立窗口 / Pop out"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.pop.out")}
         aria-label="弹出独立窗口"
         disabled={!activePanel || !!detachedPage}
         onClick={() => activePanel && popout(activePanel)}

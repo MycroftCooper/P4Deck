@@ -496,6 +496,20 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "update.version.v.is.available.current.v": "有新版本 v{p1}（当前 v{p2}）。",
+  "update.downloading.the.update": "正在下载更新 {p1}%。",
+  "update.version.v.is.installed.and.waiting":
+    "更新 v{p1} 已安装，正在等待重启。",
+  "update.version.v.is.downloaded.confirm.install":
+    "更新 v{p1} 已下载，确认安装并重启后生效。",
+  "update.the.last.update.failed": "上次更新失败：{p1}",
+  "settings.automatic.updates.are.available.in.the": "仅桌面版支持自动更新。",
+  "settings.the.desktop.app.checks.at.startup":
+    "桌面版启动时及每 6 小时自动检查，有新版本时标题栏会提示。首个包含自动更新的版本需要手动安装一次，之后的版本才能自动升级。",
+  "shell.tab.group.actions": "页签组操作",
+  "shell.split.right": "左右分屏",
+  "shell.split.below": "上下分屏",
+  "shell.pop.out": "弹出独立窗口",
   "search.retry.restored.the.first.items.retry":
     "{p1}重试只恢复了前 {p2} 条；请整体重试以继续分页。",
   "search.loaded.matched": "已加载 {p1} 条，共匹配 {p2} 条。",

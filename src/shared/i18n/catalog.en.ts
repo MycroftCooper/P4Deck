@@ -534,6 +534,22 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "update.version.v.is.available.current.v":
+    "Version v{p1} is available (current: v{p2}).",
+  "update.downloading.the.update": "Downloading the update ({p1}%).",
+  "update.version.v.is.installed.and.waiting":
+    "Version v{p1} is installed and waiting for a restart.",
+  "update.version.v.is.downloaded.confirm.install":
+    "Version v{p1} is downloaded. Confirm install and restart to apply it.",
+  "update.the.last.update.failed": "The last update failed: {p1}",
+  "settings.automatic.updates.are.available.in.the":
+    "Automatic updates are available in the desktop app only.",
+  "settings.the.desktop.app.checks.at.startup":
+    "The desktop app checks at startup and every six hours; the titlebar announces new versions. The first build that includes automatic updates must be installed manually once; later versions update themselves.",
+  "shell.tab.group.actions": "Tab group actions",
+  "shell.split.right": "Split right",
+  "shell.split.below": "Split below",
+  "shell.pop.out": "Pop out",
   "search.retry.restored.the.first.items.retry":
     "{p1} retry restored the first {p2} items; retry all to continue paging.",
   "search.loaded.matched": "{p1} loaded, {p2} matched.",
