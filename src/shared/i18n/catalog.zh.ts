@@ -496,6 +496,21 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "tools.new.unviewed.errors": "{p1} 个未查看的新错误",
+  "tools.new.unviewed.errors.2": "{p1} 个未查看的新错误",
+  "update.status.available": "有新版本 {version}",
+  "update.status.ready": "待重启 {version}",
+  "update.status.downloading": "正在下载更新，点击查看进度",
+  "update.status.downloadingPercent": "正在下载更新 {percent}%，点击查看进度",
+  "shell.dock.splitLeftRight": "左右分屏",
+  "shell.dock.splitUpDown": "上下分屏",
+  "shell.dock.noOpenTabs": "没有打开的页签",
+  "shell.dock.emptyHint": "点击左侧活动栏图标打开页面。拖动页签到边缘可分屏。",
+  "tools.terminal.lockBlocked":
+    "Lock/Unlock 不能从 Terminal 执行；请使用文件工具栏或右键菜单的预检工作流。",
+  "tools.securityPolicy.blocked":
+    "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。",
+  "tools.unreadErrors": "{count} 个未查看的新错误",
   "contextMenu.workflowNotConnected": "后续功能：操作流程尚未接通",
   "contextMenu.unavailableForTarget": "当前对象或页面尚不支持此操作",
   "contextMenu.moreActionsPending": "更多操作（待接入）",

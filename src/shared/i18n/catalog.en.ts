@@ -534,6 +534,24 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "tools.new.unviewed.errors": "{p1} new unviewed errors",
+  "tools.new.unviewed.errors.2": "{p1} new unviewed errors",
+  "update.status.available": "New version {version}",
+  "update.status.ready": "Restart to update {version}",
+  "update.status.downloading":
+    "Downloading the update. Open the update panel for progress.",
+  "update.status.downloadingPercent":
+    "Downloading the update ({percent}%). Open the update panel for progress.",
+  "shell.dock.splitLeftRight": "Split left/right",
+  "shell.dock.splitUpDown": "Split top/bottom",
+  "shell.dock.noOpenTabs": "No open tabs",
+  "shell.dock.emptyHint":
+    "Click an icon in the activity bar to open a page. Drag a tab to an edge to split the view.",
+  "tools.terminal.lockBlocked":
+    "Lock/Unlock cannot run from Terminal; use the file toolbar or context-menu preflight workflow.",
+  "tools.securityPolicy.blocked":
+    "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
+  "tools.unreadErrors": "{count} new unread errors",
   "contextMenu.workflowNotConnected": "Workflow not connected yet",
   "contextMenu.unavailableForTarget": "Unavailable for this target",
   "contextMenu.moreActionsPending": "More actions (pending)",

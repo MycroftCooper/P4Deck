@@ -235,7 +235,7 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
     >
       <button
         title={tFor(zh ? "zh-CN" : "en-US", "shell.split.right")}
-        aria-label="左右分屏"
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.dock.splitLeftRight")}
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "right" })}
       >
@@ -243,7 +243,7 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
       </button>
       <button
         title={tFor(zh ? "zh-CN" : "en-US", "shell.split.below")}
-        aria-label="上下分屏"
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.dock.splitUpDown")}
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "bottom" })}
       >
@@ -272,8 +272,8 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
 export function Empty() {
   return (
     <div className="closed-pages" tabIndex={0}>
-      <h2>没有打开的页签</h2>
-      <p>点击左侧活动栏图标打开页面。拖动页签到边缘可分屏。</p>
+      <h2>{t("shell.dock.noOpenTabs")}</h2>
+      <p>{t("shell.dock.emptyHint")}</p>
     </div>
   );
 }

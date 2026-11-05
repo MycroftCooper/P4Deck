@@ -149,13 +149,12 @@ export function ToolDrawer(props: Props) {
       setCredentialBlocked(decision.reason === "credential");
       setLines((value) => [
         ...value,
-        props.zh
-          ? decision.reason === "lockWorkflow"
-            ? "Lock/Unlock 不能从 Terminal 执行；请使用文件工具栏或右键菜单的预检工作流。"
-            : "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。"
-          : decision.reason === "lockWorkflow"
-            ? "Lock/Unlock cannot run from Terminal; use the file toolbar or context-menu preflight workflow."
-            : "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
+        tFor(
+          props.zh ? "zh-CN" : "en-US",
+          decision.reason === "lockWorkflow"
+            ? "tools.terminal.lockBlocked"
+            : "tools.securityPolicy.blocked",
+        ),
       ]);
       return;
     }
@@ -278,16 +277,16 @@ export function ToolDrawer(props: Props) {
               {tab.id === "logs" && props.unread ? (
                 <span
                   className="tool-unread-dot"
-                  title={
-                    props.zh
-                      ? `${props.unread} 个未查看的新错误`
-                      : `${props.unread} new unviewed errors`
-                  }
+                  title={tFor(
+                    props.zh ? "zh-CN" : "en-US",
+                    "tools.unreadErrors",
+                    { count: props.unread },
+                  )}
                 >
                   <span className="sr-only">
-                    {props.zh
-                      ? `${props.unread} 个未查看的新错误`
-                      : `${props.unread} new unviewed errors`}
+                    {tFor(props.zh ? "zh-CN" : "en-US", "tools.unreadErrors", {
+                      count: props.unread,
+                    })}
                   </span>
                 </span>
               ) : null}

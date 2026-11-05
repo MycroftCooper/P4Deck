@@ -18,7 +18,9 @@ function entryCopy(
   switch (snapshot.phase) {
     case "available":
       return {
-        text: zh ? `有新版本 ${version}` : `New version ${version}`,
+        text: tFor(zh ? "zh-CN" : "en-US", "update.status.available", {
+          version,
+        }),
         label: tFor(
           zh ? "zh-CN" : "en-US",
           "update.new.version.is.available.open.the",
@@ -28,13 +30,12 @@ function entryCopy(
     case "downloading":
       return {
         text: translate("update.downloading.update"),
-        label: zh
-          ? percent === undefined
-            ? "正在下载更新，点击查看进度"
-            : `正在下载更新 ${percent}%，点击查看进度`
-          : percent === undefined
-            ? "Downloading the update. Open the update panel for progress."
-            : `Downloading the update (${percent}%). Open the update panel for progress.`,
+        label:
+          percent === undefined
+            ? tFor(zh ? "zh-CN" : "en-US", "update.status.downloading")
+            : tFor(zh ? "zh-CN" : "en-US", "update.status.downloadingPercent", {
+                percent,
+              }),
       };
     case "installing":
       return {
@@ -43,7 +44,9 @@ function entryCopy(
       };
     case "ready":
       return {
-        text: zh ? `待重启 ${version}` : `Restart to update ${version}`,
+        text: tFor(zh ? "zh-CN" : "en-US", "update.status.ready", {
+          version,
+        }),
         label: translate("update.the.update.is.downloaded.confirm"),
       };
     default:
