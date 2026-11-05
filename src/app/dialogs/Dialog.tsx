@@ -1,4 +1,5 @@
-import { t } from "../../shared/i18n";
+import { localizeBackendError } from "../../shared/localizeError";
+import { t, useIsZh } from "../../shared/i18n";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -131,12 +132,20 @@ export function DialogNotice({
   children: ReactNode;
   error?: boolean;
 }) {
+  const zh = useIsZh();
+  // Backend errors arrive as English text from Rust, which has no locale. Route
+  // a plain string through the known-message table so Chinese users see Chinese;
+  // anything unrecognised passes through unchanged.
+  const body =
+    error && typeof children === "string"
+      ? localizeBackendError(children, zh)
+      : children;
   return (
     <p
       className={`workflow-notice ${error ? "is-error" : ""}`}
       role={error ? "alert" : "status"}
     >
-      {children}
+      {body}
     </p>
   );
 }

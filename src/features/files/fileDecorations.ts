@@ -1,4 +1,4 @@
-import { t, tFor, type MsgKey } from "../../shared/i18n";
+import { tFor, type MsgKey } from "../../shared/i18n";
 import type { FileState, WorkspaceFileStatus } from "../../shared/contracts";
 
 export type FileBadgeId =
@@ -259,9 +259,9 @@ function priority(b: FileBadge) {
 export function fileBadgeLabel(badge: FileBadge, zh: boolean): string {
   const owner =
     badge.owner === "self"
-      ? t("files.you")
+      ? tFor(zh ? "zh-CN" : "en-US", "files.you")
       : badge.owner === "other"
-        ? t("files.other.workspace.user")
+        ? tFor(zh ? "zh-CN" : "en-US", "files.other.workspace.user")
         : "";
   return (
     owner +

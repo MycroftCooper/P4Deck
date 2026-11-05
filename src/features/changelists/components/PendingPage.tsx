@@ -1,5 +1,4 @@
-import { t as translate } from "../../../shared/i18n";
-import { isZh } from "../../../shared/locale";
+import { t as translate, useIsZh } from "../../../shared/i18n";
 import {
   useRemovalActions,
   projectShelfChanges,
@@ -173,6 +172,8 @@ export function PendingPage({
 }) {
   const menuEnvironment = useMenuEnvironment();
   const connection = menuEnvironment.runtime.connection;
+  // Subscribed locale so switching language re-renders this page.
+  const zh = useIsZh();
   const ready = cliReady && connection.state === "connected";
   const checking = checkingConnection || connection.state === "notTested";
   const connectionProblem = !checking && connection.state !== "connected";
@@ -330,9 +331,8 @@ export function PendingPage({
       const blockedText = formatBlockedPaths(
         files.map((file) => file.depotPath),
         blockedDetails,
-        isZh(),
+        zh,
       );
-      const zh = isZh();
       setError(
         blockedText
           ? withAdmissionHint(blockedText, zh)
@@ -1187,7 +1187,7 @@ export function PendingPage({
           files={selectedSubmit.files}
           expected={selectedSubmit.expected}
           active={selectedSubmit.scope === connectionKey}
-          zh={isZh()}
+          zh={zh}
           onDismiss={() => {
             setSelectedSubmit(undefined);
             void reload();
@@ -1217,7 +1217,7 @@ export function PendingPage({
             request={shelfRequest.request}
             connectionKey={connectionKey}
             demo={demo}
-            zh={isZh()}
+            zh={zh}
             onDismiss={() => setShelfRequest(undefined)}
           />
         ))}
@@ -1227,7 +1227,7 @@ export function PendingPage({
           changes={cachedChanges}
           client={clientName}
           connectionKey={connectionKey}
-          zh={isZh()}
+          zh={zh}
           onDismiss={() => setMove(undefined)}
           onStart={(request) => {
             if (!startOptimisticMove(connectionKey, request, cachedChanges))
@@ -1253,7 +1253,7 @@ export function PendingPage({
               : undefined
           }
           client={clientName}
-          zh={isZh()}
+          zh={zh}
           source={form.source}
           onDismiss={() => setForm(undefined)}
           onSubmit={async (draft) => {
@@ -1358,7 +1358,7 @@ export function PendingPage({
           ) : connectionProblem ? (
             <>
               <p>
-                {connectionPresentation(connection, isZh()).title}
+                {connectionPresentation(connection, zh).title}
                 {" · "}
                 {translate(
                   loaded
@@ -1417,7 +1417,7 @@ export function PendingPage({
                           a.receipt?.files.find(
                             (f) => f.depotPath === file.depotPath,
                           )?.state ?? "unknown";
-                        return isZh()
+                        return zh
                           ? {
                               moved: translate("pending.mark.moved"),
                               notMoved: translate("pending.mark.not.moved"),
@@ -1487,7 +1487,6 @@ export function PendingPage({
         >
           {virtualRows.map((virtualRow: VirtualItem) => {
             const change = changes[virtualRow.index];
-            const zh = isZh();
             const label = change.id ? `CL ${change.id}` : "Default";
             const unavailable =
               (() => {

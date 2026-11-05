@@ -1,3 +1,4 @@
+import { getLocale } from "../../shared/i18n/t";
 import { t, tFor } from "../../shared/i18n";
 import type {
   ChangelistSummary,
@@ -95,8 +96,11 @@ export async function collectReport(
     progress?(value: CollectedReport): void;
     maxPages?: number;
     maxRows?: number;
+    /** Render reasons in this language; defaults to the active locale. */
+    zh?: boolean;
   },
 ): Promise<CollectedReport> {
+  const zh = options.zh ?? getLocale() === "zh-CN";
   const bounds = reportBounds(scope);
   const result: CollectedReport = {
     rows: [],
@@ -126,22 +130,27 @@ export async function collectReport(
   try {
     for (let index = 0; index < (options.maxPages ?? 100); index++) {
       if (options.cancelled()) {
-        result.reason = t("pending.cancelled");
+        result.reason = tFor(zh ? "zh-CN" : "en-US", "pending.cancelled");
         return result;
       }
       const page = await request({ ...query, cursor });
       if (options.cancelled()) {
-        result.reason = t("pending.cancelled");
+        result.reason = tFor(zh ? "zh-CN" : "en-US", "pending.cancelled");
         return result;
       }
       if (page.requestGeneration !== options.generation)
-        throw new Error(t("pending.query.generation.mismatch"));
+        throw new Error(
+          tFor(zh ? "zh-CN" : "en-US", "pending.query.generation.mismatch"),
+        );
       result.pages++;
       result.scanned += page.stats.scannedCount;
       for (const row of page.items) {
         if (ids.has(row.id)) continue;
         if (ids.size >= (options.maxRows ?? 5000)) {
-          result.reason = t("pending.record.limit.reached");
+          result.reason = tFor(
+            zh ? "zh-CN" : "en-US",
+            "pending.record.limit.reached",
+          );
           return result;
         }
         ids.add(row.id);
@@ -159,7 +168,10 @@ export async function collectReport(
       }
       options.progress?.({ ...result, rows: [...result.rows] });
       if (page.stats.truncatedBySafetyLimit) {
-        result.reason = t("pending.backend.scan.limit.reached");
+        result.reason = tFor(
+          zh ? "zh-CN" : "en-US",
+          "pending.backend.scan.limit.reached",
+        );
         return result;
       }
       if (!page.hasMore) {
@@ -167,11 +179,16 @@ export async function collectReport(
         return result;
       }
       if (!page.nextCursor || cursors.has(page.nextCursor))
-        throw new Error(t("pending.pagination.cursor.did.not.progress"));
+        throw new Error(
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "pending.pagination.cursor.did.not.progress",
+          ),
+        );
       cursor = page.nextCursor;
       cursors.add(cursor);
     }
-    result.reason = t("pending.page.limit.reached");
+    result.reason = tFor(zh ? "zh-CN" : "en-US", "pending.page.limit.reached");
   } catch (cause) {
     result.reason = String(cause);
   }

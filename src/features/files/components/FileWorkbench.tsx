@@ -1,6 +1,5 @@
-import { t as translate } from "../../../shared/i18n";
+import { t as translate, useIsZh } from "../../../shared/i18n";
 import { formatLocalTime } from "../../../shared/lib/localTime";
-import { isZh } from "../../../shared/locale";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useObjectSelection } from "../SelectionContext";
@@ -89,7 +88,7 @@ export function FileWorkbench({
   const fileMenu = useFileMenu();
   const { select } = useContext(SelectionContext);
   const error = operationError || (listing.error ? String(listing.error) : "");
-  const zh = isZh();
+  const zh = useIsZh(); // subscribed: re-renders on language switch
   const labels: Record<string, string> = {
     loading: translate("files.status.pending"),
     controlled: translate("files.controlled"),

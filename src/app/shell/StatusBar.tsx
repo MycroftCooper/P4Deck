@@ -1,5 +1,4 @@
-import { t } from "../../shared/i18n";
-import { isZh } from "../../shared/locale";
+import { t, useLocale } from "../../shared/i18n";
 import { formatLocalTime } from "../../shared/lib/localTime";
 import { useServerStatus } from "./useServerStatus";
 import type { ServerStatusHint } from "./serverStatus";
@@ -59,6 +58,8 @@ export function StatusBar({
   autoRefreshPaused: boolean;
   onToggleAutoRefresh(): void;
 }) {
+  // Subscribed locale: the footer re-renders when the user switches language.
+  const activeLocale = useLocale();
   const observed = useServerStatus(native, connectionKey, serverScopeHint);
   const serverStatus = suppliedStatus ?? observed.view;
   const onCheckServer =
@@ -344,7 +345,7 @@ export function StatusBar({
             : autoRefreshPaused
               ? t("shell.auto.refresh.paused")
               : autoRefresh.lastUpdated
-                ? `${t("shell.updated")} ${formatLocalTime(autoRefresh.lastUpdated, isZh() ? "zh-CN" : "en-US")}`
+                ? `${t("shell.updated")} ${formatLocalTime(autoRefresh.lastUpdated, activeLocale)}`
                 : t("shell.auto.refresh")}
         </span>
       </button>

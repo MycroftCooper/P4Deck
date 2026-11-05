@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
-import { tFor } from "./i18n/t";
+import { getLocale, tFor } from "./i18n/t";
 import type { MsgKey } from "./i18n/catalog.zh";
+import { fallbackLocale } from "./i18n/types";
 
 export type UserNotice = {
   id: number;
@@ -38,87 +39,53 @@ export const useUserNotices = () =>
     () => [],
   );
 
-const prefersChinese = () => {
-  try {
-    const saved = localStorage.getItem("p4deck.locale");
-    if (saved) return saved === "zh-CN";
-  } catch {
-    /* storage unavailable: fall back to the OS locale */
-  }
-  return navigator.language.toLowerCase().startsWith("zh");
-};
+/**
+ * The active UI locale. Reading storage or navigator here would duplicate the
+ * locale store and could disagree with it after an in-session switch.
+ */
+const prefersChinese = () => getLocale() === fallbackLocale;
 
 /** Host preflight reasons are English strings; map the known ones for the active UI locale. */
-const reasons: readonly [RegExp, string, string][] = [
+const reasons: readonly [RegExp, string][] = [
+  // Exact enum codes the backend serialises (serde camelCase).
+  [/^invalidconnection$/i, "notify.hostReason.invalidConnection"],
+  [/^duplicatechange$/i, "notify.hostReason.duplicateChange"],
+  [/^busy$/i, "notify.hostReason.busy"],
+  [/^notconfigured$/i, "notify.hostReason.notConfigured"],
+  [/^toolmissing$/i, "notify.hostReason.toolMissing"],
+  [/^toolnotfile$|^invalidexecutablepath$/i, "notify.hostReason.toolNotFile"],
+  [/^toolunverified$/i, "notify.hostReason.toolUnverified"],
+  [/^toolchanged$/i, "notify.hostReason.toolChanged"],
+  [/^stalesession$/i, "notify.hostReason.staleSession"],
+  [/^invalidtransition$/i, "notify.hostReason.invalidTransition"],
+  [/^realstartdisabled$/i, "notify.hostReason.realStartDisabled"],
+  [
+    /^singlenumberedchangerequired$|^invalidchangeid$/i,
+    "notify.hostReason.invalidChangeId",
+  ],
+  [/^connectionchanged$/i, "notify.hostReason.connectionChanged"],
+  [/^launchfailed$|^launchoutcomeunknown$/i, "notify.hostReason.launchFailed"],
+  [
+    /^requestidconflict$|^requestlimitreached$/i,
+    "notify.hostReason.requestConflict",
+  ],
+  // Free-text preflight sentences from the host.
   [
     /overlap local modifications/i,
-    "notify.hostReason.overlap.local.modifications",
     "notify.hostReason.overlap.local.modifications",
   ],
   [
     /force overwrite is not enabled/i,
     "notify.hostReason.force.overwrite.is.not.enabled",
-    "notify.hostReason.force.overwrite.is.not.enabled",
   ],
   [
     /preflight is not ready; nothing was written/i,
     "notify.hostReason.preflight.is.not.ready.nothing",
-    "notify.hostReason.preflight.is.not.ready.nothing",
   ],
-  [
-    /preflight blocked/i,
-    "notify.hostReason.preflight.blocked",
-    "notify.hostReason.preflight.blocked",
-  ],
+  [/preflight blocked/i, "notify.hostReason.preflight.blocked"],
   [
     /existing operation is running or interrupted/i,
     "notify.hostReason.existing.operation.is.running.or",
-    "notify.hostReason.existing.operation.is.running.or",
-  ],
-  [
-    /invalidconnection/i,
-    "notify.hostReason.invalidconnection",
-    "notify.hostReason.invalidconnection",
-  ],
-  [
-    /duplicateChange/i,
-    "notify.hostReason.duplicatechange",
-    "notify.hostReason.duplicatechange",
-  ],
-  [
-    /(?:^|\b)busy(?:\b|$)/i,
-    "notify.hostReason.bbusy.b",
-    "notify.hostReason.bbusy.b",
-  ],
-  [
-    /notconfigured/i,
-    "notify.hostReason.notconfigured",
-    "notify.hostReason.notconfigured",
-  ],
-  [
-    /toolnotfile|invalidExecutablePath/i,
-    "notify.hostReason.toolnotfileinvalidexecutablepath",
-    "notify.hostReason.toolnotfileinvalidexecutablepath",
-  ],
-  [
-    /singleNumberedChangeRequired|invalidChangeId/i,
-    "notify.hostReason.singlenumberedchangerequiredinvalidchangeid",
-    "notify.hostReason.singlenumberedchangerequiredinvalidchangeid",
-  ],
-  [
-    /connectionchanged/i,
-    "notify.hostReason.connectionchanged",
-    "notify.hostReason.connectionchanged",
-  ],
-  [
-    /launchfailed|launchOutcomeUnknown/i,
-    "notify.hostReason.launchfailedlaunchoutcomeunknown",
-    "notify.hostReason.launchfailedlaunchoutcomeunknown",
-  ],
-  [
-    /requestIdConflict|requestLimitReached/i,
-    "notify.hostReason.requestidconflictrequestlimitreached",
-    "notify.hostReason.requestidconflictrequestlimitreached",
   ],
 ];
 

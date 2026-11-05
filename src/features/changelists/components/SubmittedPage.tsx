@@ -1,5 +1,4 @@
-import { t as translate } from "../../../shared/i18n";
-import { isZh } from "../../../shared/locale";
+import { t as translate, useIsZh } from "../../../shared/i18n";
 import { submittedTags, matchesSubmittedTags } from "../submittedTags";
 import { isStreamList } from "../../browsers/components/ReadOnlyPages";
 import { useSnapshotQuery } from "../../../shared/cache/useSnapshotQuery";
@@ -307,7 +306,7 @@ export function SubmittedPage({
   >(undefined);
   const handledNavigation = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
-  const zh = isZh();
+  const zh = useIsZh(); // subscribed: re-renders on language switch
 
   const cancelQuery = useCallback(() => {
     generation.current++;

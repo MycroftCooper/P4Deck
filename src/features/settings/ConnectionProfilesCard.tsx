@@ -261,13 +261,16 @@ function localizedError(
   const selected = parsed.code ? copy[parsed.code] : undefined;
   const base =
     (selected && tFor(zh ? "zh-CN" : "en-US", selected[0] as MsgKey)) ||
-    t("settings.the.operation.did.not.complete");
+    tFor(zh ? "zh-CN" : "en-US", "settings.the.operation.did.not.complete");
   // Surface the backend OS error (path/errno) for support; the localized text alone hides it.
   const detail = parsed.detail.trim().slice(0, 300);
   return {
     code: parsed.code,
     message: detail
-      ? base + t("settings.detail") + detail + (zh ? "）" : ")")
+      ? base +
+        tFor(zh ? "zh-CN" : "en-US", "settings.detail") +
+        detail +
+        (zh ? "）" : ")")
       : base,
   };
 }

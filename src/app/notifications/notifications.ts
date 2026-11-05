@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { tFor } from "../../shared/i18n";
 import { useEffect, useMemo } from "react";
 import { backend } from "../../infrastructure/backend";
 import type { RuntimeInfo } from "../../shared/contracts";
@@ -111,8 +111,16 @@ export function useDesktopNotifications(
           if (event.type === "error")
             void center.notify({
               key: `${event.operationId}:failure`,
-              title: t("notify.p4.operation.needs.attention"),
-              body: event.message || t("notify.return.to.p4deck.for.details"),
+              title: tFor(
+                zh ? "zh-CN" : "en-US",
+                "notify.p4.operation.needs.attention",
+              ),
+              body:
+                event.message ||
+                tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "notify.return.to.p4deck.for.details",
+                ),
               kind: "failure",
             });
           if (event.type === "completed") {
@@ -122,8 +130,16 @@ export function useDesktopNotifications(
             if (elapsed >= 15_000)
               void center.notify({
                 key: `${event.operationId}:completed`,
-                title: t("notify.long.p4.operation.completed"),
-                body: event.message || t("notify.the.operation.completed"),
+                title: tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "notify.long.p4.operation.completed",
+                ),
+                body:
+                  event.message ||
+                  tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "notify.the.operation.completed",
+                  ),
                 kind: "success",
               });
           }
@@ -148,7 +164,10 @@ export function useDesktopNotifications(
     )
       void center.notify({
         key: `auth:${runtime.activeProfileId ?? "environment"}:${runtime.contextGeneration}`,
-        title: t("notify.p4.authentication.needs.attention"),
+        title: tFor(
+          zh ? "zh-CN" : "en-US",
+          "notify.p4.authentication.needs.attention",
+        ),
         body: runtime.connection.message,
         kind: "attention",
       });

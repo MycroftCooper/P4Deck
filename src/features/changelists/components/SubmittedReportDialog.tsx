@@ -86,6 +86,7 @@ export function SubmittedReportDialog({
       {
         operationId: run.id,
         generation: runtime.contextGeneration,
+        zh,
         cancelled: () => run.cancelled,
         progress: (value) => {
           run.partial = value;

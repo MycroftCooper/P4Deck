@@ -51,23 +51,41 @@ function pluralBranch(
   return category === "one" ? one : other;
 }
 
-/** Expand inline plural forms, then `{name}` placeholders. */
+/**
+ * Expand inline plural forms, then `{name}` placeholders.
+ *
+ * Returns `null` when a plural has no usable count: leaving the raw ICU
+ * template on screen ("{count, one: # change, ...}") is worse than showing the
+ * key, so the caller falls back to the key instead.
+ */
 function interpolate(
   locale: Locale,
   template: string,
   params: MsgParams,
-): string {
+): string | null {
+  let failed = false;
   const withPlurals = template.replace(
     pluralPattern,
     (whole, name: string, one: string, other: string) => {
-      const count = params[name];
-      if (typeof count !== "number") return whole;
+      const raw = params[name];
+      // A digit string is a legitimate count (params are string | number).
+      const count =
+        typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && raw.trim() !== ""
+            ? Number(raw)
+            : Number.NaN;
+      if (!Number.isFinite(count)) {
+        failed = true;
+        return whole;
+      }
       // `#` is the ICU count placeholder inside a plural branch.
       const format = (branch: string) =>
         branch.trim().replaceAll("#", String(count));
       return pluralBranch(locale, count, format(one), format(other));
     },
   );
+  if (failed) return null;
   return withPlurals.replace(placeholderPattern, (whole, name: string) => {
     const value = params[name];
     return value === undefined ? whole : String(value);
@@ -103,7 +121,9 @@ export function t(key: MsgKey, params: MsgParams = {}): string {
     reportMissing(locale, key);
     return key;
   }
-  return interpolate(locale, template, params);
+  // A plural without a usable count falls back to the key: a raw ICU template
+  // on screen tells the user nothing and looks like a crash.
+  return interpolate(locale, template, params) ?? key;
 }
 
 /** Translate explicitly for a locale — for module-level, locale-aware helpers. */
@@ -113,7 +133,8 @@ export function tFor(
   params: MsgParams = {},
 ): string {
   const template = lookup(locale, key) ?? lookup(fallbackLocale, key);
-  return template === undefined ? key : interpolate(locale, template, params);
+  if (template === undefined) return key;
+  return interpolate(locale, template, params) ?? key;
 }
 
 /** Test seam: clear the reported-missing set. */

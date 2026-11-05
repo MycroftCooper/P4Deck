@@ -292,14 +292,17 @@ function validationMessage(
   zh: boolean,
 ): string {
   if (reason === "control")
-    return t("search.search.text.cannot.contain.control");
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "search.search.text.cannot.contain.control",
+    );
   if (reason === "tooLong")
     return tFor(
       zh ? "zh-CN" : "en-US",
       "search.search.text.is.limited.to.unicode",
       { p1: zh ? GLOBAL_SEARCH_MAX_CHARACTERS : GLOBAL_SEARCH_MAX_CHARACTERS },
     );
-  return t("search.enter.a.search.query");
+  return tFor(zh ? "zh-CN" : "en-US", "search.enter.a.search.query");
 }
 
 export function SearchPage({

@@ -534,6 +534,18 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "notify.hostReason.toolMissing":
+    "The custom submit tool is missing; check the tool path setting.",
+  "notify.hostReason.toolUnverified":
+    "The custom submit tool has not been verified; confirm its identity in settings first.",
+  "notify.hostReason.toolChanged":
+    "The custom submit tool changed; verify it again before submitting.",
+  "notify.hostReason.staleSession":
+    "The custom submit session expired; start it again.",
+  "notify.hostReason.invalidTransition":
+    "That action is not valid in the current state; refresh and retry.",
+  "notify.hostReason.realStartDisabled":
+    "Real launch is disabled; this tool is simulation-only.",
   "pending.reportPreset.today": "Today",
   "pending.reportPreset.thisWeek": "This week",
   "pending.reportPreset.lastWeek": "Last week",
@@ -1243,22 +1255,22 @@ export const en: Catalog & Record<MsgKey, string> = {
     "Preflight blocked; nothing was executed.",
   "notify.hostReason.existing.operation.is.running.or":
     "The operation is running or was interrupted; it is never auto-retried. Check its state first.",
-  "notify.hostReason.invalidconnection": "The current connection is invalid.",
-  "notify.hostReason.duplicatechange":
+  "notify.hostReason.invalidConnection": "The current connection is invalid.",
+  "notify.hostReason.duplicateChange":
     "A custom submit tool is already running for this CL; only one per changelist.",
-  "notify.hostReason.bbusy.b":
+  "notify.hostReason.busy":
     "Another custom submit tool is already running; wait for it to finish.",
-  "notify.hostReason.notconfigured":
+  "notify.hostReason.notConfigured":
     "This connection has no custom submit tool path configured.",
-  "notify.hostReason.toolnotfileinvalidexecutablepath":
+  "notify.hostReason.toolNotFile":
     "The custom submit tool path is invalid (must be an absolute existing file).",
-  "notify.hostReason.singlenumberedchangerequiredinvalidchangeid":
+  "notify.hostReason.invalidChangeId":
     "Custom submit supports exactly one numbered changelist; use normal submit for Default or multi-select.",
-  "notify.hostReason.connectionchanged":
+  "notify.hostReason.connectionChanged":
     "The connection changed during the operation; confirm again.",
-  "notify.hostReason.launchfailedlaunchoutcomeunknown":
+  "notify.hostReason.launchFailed":
     "The custom submit tool failed to start or its outcome is unknown; check P4 before retrying.",
-  "notify.hostReason.requestidconflictrequestlimitreached":
+  "notify.hostReason.requestConflict":
     "The submit request was rejected (id conflict or too many requests); restart the app and retry.",
   "settings.write.action.no.shortcut.use.the":
     "Write action: no shortcut; use the toolbar or palette with confirmation",

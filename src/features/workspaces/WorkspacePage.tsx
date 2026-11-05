@@ -1,5 +1,4 @@
-import { t as translate, tFor } from "../../shared/i18n";
-import { isZh } from "../../shared/locale";
+import { t as translate, tFor, useIsZh } from "../../shared/i18n";
 import { ConnectionSpecCreateDialog } from "../settings/ConnectionSpecCreateDialog";
 import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
 import type { WorkspaceMutationRequest } from "../../shared/contracts";
@@ -30,7 +29,7 @@ export function WorkspacePage({
   runtime: RuntimeInfo;
   onRuntime(runtime: RuntimeInfo): void;
 }) {
-  const zh = isZh();
+  const zh = useIsZh(); // subscribed: re-renders on language switch
   const columns = useColumnWidths(
     [260, 110, 140, 300, 190],
     [140, 80, 90, 140, 150],
