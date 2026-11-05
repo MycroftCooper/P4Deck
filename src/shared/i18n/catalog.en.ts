@@ -534,6 +534,13 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.reportPreset.today": "Today",
+  "pending.reportPreset.thisWeek": "This week",
+  "pending.reportPreset.lastWeek": "Last week",
+  "browse.history.revisionCl": "Revision / CL",
+  "browse.history.time": "Time",
+  "browse.history.user": "User",
+  "browse.history.description": "Description",
   "files.expandResourcePanel": "Expand resource panel",
   "files.collapseResourcePanel": "Collapse resource panel",
   "settings.classicViewNeedsPaths":

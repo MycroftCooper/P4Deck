@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -182,11 +182,14 @@ export function SubmittedReportDialog({
             className="secondary"
             onClick={() => update({ ...scope, ...reportRange(value) })}
           >
-            {
-              (zh
-                ? ["今天", "本周", "上周"]
-                : ["Today", "This week", "Last week"])[index]
-            }
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              [
+                "pending.reportPreset.today",
+                "pending.reportPreset.thisWeek",
+                "pending.reportPreset.lastWeek",
+              ][index] as MsgKey,
+            )}
           </button>
         ))}
       </div>

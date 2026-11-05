@@ -496,6 +496,13 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.reportPreset.today": "今天",
+  "pending.reportPreset.thisWeek": "本周",
+  "pending.reportPreset.lastWeek": "上周",
+  "browse.history.revisionCl": "版本号 / CL号",
+  "browse.history.time": "时间",
+  "browse.history.user": "提交人",
+  "browse.history.description": "描述",
   "files.expandResourcePanel": "展开资源侧栏",
   "files.collapseResourcePanel": "折叠资源侧栏",
   "settings.classicViewNeedsPaths":

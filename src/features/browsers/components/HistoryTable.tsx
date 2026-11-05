@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../../shared/i18n";
 import { formatLocalTime as historyTime } from "../../../shared/lib/localTime";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -126,9 +126,12 @@ export function HistoryTable({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const identity = (row: FileRevision) => `${row.depotPath}#${row.revision}`;
   const instance = useId();
-  const labels = zh
-    ? ["版本号 / CL号", "时间", "提交人", "描述"]
-    : ["Revision / CL", "Time", "User", "Description"];
+  const labels = [
+    "browse.history.revisionCl",
+    "browse.history.time",
+    "browse.history.user",
+    "browse.history.description",
+  ];
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroll.current,
@@ -164,12 +167,15 @@ export function HistoryTable({
         role="row"
         style={style}
       >
-        {labels.map((label, index) => (
-          <div role="columnheader" key={label}>
-            {label}
-            <ColumnResizer resize={columns} index={index} label={label} />
-          </div>
-        ))}
+        {labels.map((key, index) => {
+          const label = tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
+          return (
+            <div role="columnheader" key={key}>
+              {label}
+              <ColumnResizer resize={columns} index={index} label={label} />
+            </div>
+          );
+        })}
       </div>
       <div
         className="virtual-spacer"
