@@ -16,7 +16,7 @@ export function tableMenuBindings(
   column?: MenuColumn,
 ): MenuBindings {
   const sortReason = column
-    ? `${column.label}：排序尚未接通 / Sorting not connected`
+    ? t("contextMenu.sortingNotConnected", { column: column.label })
     : t("shell.choose.a.column.sorting.not.connected");
   return {
     按此列升序: { reason: sortReason },
@@ -55,7 +55,7 @@ export function TableHeader({
       tabIndex={0}
       {...menu("T08", () => ({
         ...tableMenuBindings(columns),
-        ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+        ...(resize ? { 重置列宽: { run: resize.reset } } : {}), // i18n-exempt: inventory label
       }))}
     >
       {columns.map((column, index) => (
@@ -66,7 +66,7 @@ export function TableHeader({
             "T08",
             () => ({
               ...tableMenuBindings(columns, column),
-              ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+              ...(resize ? { 重置列宽: { run: resize.reset } } : {}), // i18n-exempt: inventory label
             }),
             {
               title: column.label,

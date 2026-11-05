@@ -496,6 +496,10 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "contextMenu.workflowNotConnected": "后续功能：操作流程尚未接通",
+  "contextMenu.unavailableForTarget": "当前对象或页面尚不支持此操作",
+  "contextMenu.moreActionsPending": "更多操作（待接入）",
+  "contextMenu.sortingNotConnected": "{column}：排序尚未接通",
   "settings.backup.omittedKeys": "；已排除 {count} 个临时/敏感键",
   "settings.backup.verified":
     "备份文件已回读验证：{file} · {size}{sha}{omitted}",

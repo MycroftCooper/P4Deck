@@ -534,6 +534,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "contextMenu.workflowNotConnected": "Workflow not connected yet",
+  "contextMenu.unavailableForTarget": "Unavailable for this target",
+  "contextMenu.moreActionsPending": "More actions (pending)",
+  "contextMenu.sortingNotConnected": "{column}: sorting not connected",
   "settings.backup.omittedKeys":
     "; {count} transient or sensitive keys omitted",
   "settings.backup.verified":
