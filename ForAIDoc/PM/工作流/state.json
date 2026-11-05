@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-03T12:45:53.585Z",
+  "updatedAt": "2026-11-04T13:01:48.263Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -96,8 +96,8 @@
     ]
   },
   "counts": {
-    "main": 56,
-    "archived": 7,
+    "main": 51,
+    "archived": 12,
     "total": 63,
     "subitems": 32,
     "slices": 7
@@ -634,7 +634,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "文件与版本",
       "scope": "文件与版本：Sync/Get Revision/Edit/Add/Delete/Revert/Reconcile、普通 Lock/Unlock",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -652,11 +652,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:41.602Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:41）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -785,7 +786,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "History",
       "scope": "History：右键 CL 预览/Get/Undo/Diff 与全局差异入口",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -804,11 +805,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:57:39.775Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 12:57:39）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -967,85 +969,6 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T11:14:18.235Z"
-    },
-    {
-      "id": "DIFF-01",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "FE",
-      "module": "文件与版本",
-      "scope": "文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0）",
-      "stage": "done",
-      "statusRaw": "已实现待验收",
-      "priority": "P1",
-      "evidence": [
-        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
-        "src/features/browsers/components/DiffView.tsx"
-      ],
-      "note": "用户 2026-10-31 选定整套替换 @pierre/diffs 1.6.2；保留现有工具栏/搜索/hunk 跳转/引用选择/复制/右键/Swarm 与 partial/truncated 语义，渲染改为库的 split/unified + 词级 + 折叠 + Shiki；不引入 WASM/CDN，CSP 默认不变；删自研行渲染与硬配对；补 jsdom mock 与 Playwright 渲染断言；定向 vitest + `pnpm check:web` + build 通过后交用户视觉验收；不改变后端口径（DiffResult/unified+leftText/rightText）",
-      "depsRaw": "QA-01；SAFE-02",
-      "deps": [
-        "QA-01",
-        "SAFE-02"
-      ],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-31T09:46:16.013Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:16）；无 QA/Apply 回执，按一键补登",
-        "humanAcceptedEvidence": null,
-        "humanAcceptedForced": true
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-31T08:22:55.113Z"
-    },
-    {
-      "id": "DIFF-02",
-      "type": "refactor",
-      "typeRaw": "重构与代码优化",
-      "owner": "FE",
-      "module": "文件与版本",
-      "scope": "文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff）",
-      "stage": "done",
-      "statusRaw": "已实现待验收",
-      "priority": "P1",
-      "evidence": [
-        "src/features/browsers/components/DiffView.tsx",
-        "src/features/browsers/diffNavigation.ts"
-      ],
-      "note": "用户 2026-10-31 指定优先；前端已删除 MultiFileDiff/parseDiffFromFile/PatchDiff 生产用法，改为 parsePatchFiles(Rust unified) → FileDiff + loadDiffFiles；100k 行基准 parse 0.15ms vs 旧 diff 90.32ms（≈602×）、heap 81KB vs 14.59MB，hunk 数一致；全量 1550 tests/check:web/build/prettier 绿；真实窗口视觉待验收；证据 `artifacts/evidence/2026-10-31-DIFF-02/验证摘要.md`",
-      "depsRaw": "QA-01；SAFE-02；DIFF-01",
-      "deps": [
-        "QA-01",
-        "SAFE-02",
-        "DIFF-01"
-      ],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-31T09:46:01.443Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:01）；无 QA/Apply 回执，按一键补登",
-        "humanAcceptedEvidence": null,
-        "humanAcceptedForced": true
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-31T09:36:30.567Z"
     },
     {
       "id": "MERGE-01",
@@ -1359,7 +1282,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "搜索与分支",
       "scope": "搜索与分支：七类全局搜索、Stream/Shelf 深度搜索",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1377,11 +1300,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:48.263Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:48）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1469,7 +1393,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "工具与可靠性",
       "scope": "工具与可靠性：Terminal/P4 Log/Journal/诊断脱敏",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1488,11 +1412,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:44.539Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:44）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1698,7 +1623,7 @@
       "note": "静态数到190个phase:later；不是190项已承诺任务。选择实际需要的场景再立项，Force Unlock已明确退役不可恢复",
       "depsRaw": "用户范围决定",
       "deps": [],
-      "archived": false,
+      "archived": true,
       "migrated": true,
       "verification": {
         "qaPassed": null,
@@ -1707,12 +1632,16 @@
         "humanAcceptedAt": null,
         "humanAcceptedBy": null,
         "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAcceptedEvidence": null,
+        "canceled": true,
+        "canceledAt": "2026-11-04T12:56:24.083Z",
+        "canceledBy": "用户",
+        "canceledNote": "用户在看板点击取消（不要求验收）"
       },
       "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
+      "archivedAt": "2026-11-04T12:56:24.083Z",
+      "archivedBy": "用户",
+      "archiveReason": "用户在看板点击取消（不要求验收）",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
@@ -1928,78 +1857,6 @@
         "humanAcceptedBy": "用户",
         "humanAcceptedNote": "滚动条清晰人工通过（TODO UI-06 状态列）；回执缺失，force 补登",
         "humanAcceptedEvidence": "ForAIDoc/PM/Windows本机私用TODO.md"
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-29T12:07:10.537Z"
-    },
-    {
-      "id": "CL-06",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "BE调研；后续FE/BE由PM分阶段派单",
-      "module": "CL 工作流",
-      "scope": "CL 工作流：自定义提交工具配置与原提交入口分流",
-      "stage": "done",
-      "statusRaw": "已验收（用户 2026-10-30：公司自定义提交工具验证通过）",
-      "priority": "P1（先调研）",
-      "evidence": [
-        "ForAIDoc/PM/并行交接.md"
-      ],
-      "note": "用户要求研究旧P4V待提交CL右键公司入口并接入；BE静态确证customtools.xml调用DevGuardSubmitTool.exe 3.36.1.0、签名Valid，菜单为Custom Tools而非Jobs；工具内部Jobs/退出码/工作目录/认证/default CL仍未知。先只读本机P4V自定义工具配置/相关已安装脚本及官方Custom Tools/Jobs文档，识别customtool/job/其他机制、CL参数/路径/依赖与缺配置降级，再定方案安全边界，最后实现验收。根已核实目标为菜单底部“提交当前CL”，另有查看提交详情/提交选中文件；标准Submit及Remove All Jobs独立存在，不证明Jobs机制。PM直接派发曾遇AbsolutePathBuf错误；根已按PM任务单转交空闲BE，工具确认started，仅只读调研已启动，实施未开始。用户后要求独立研究Agent，独立线程01a1814f-5e59-7699-b5be-f55db37820e5“调研公司提交入口”已创建，BE已自然完成交接，研究员只读续查已完成，PM已读最终报告；S审核通过最小单编号pending CL的mock边界，真实cwd/认证优先级/后台生命周期仍未知。用户明确无文档，PM已给独立研究员R2完成且PM直接审核，未新增运行契约；I1固定参数/路径/连接快照/防重纯mock排既有队列后，真实启动禁用；动态下一步仅询问可回滚独立Windows VM是否可用，不再等待用户提供文档作为唯一前置；不得执行工具或生产验证。仅阶段完成，I未派；mock切片排现有六项后，实际公司工具不执行。禁止启动P4V自动连接、点击入口、执行公司脚本或生产P4查询（包括jobs/info）；配置命令仅作数据，敏感信息脱敏",
-      "depsRaw": "CL-06-R调查→CL-06-S方案→CL-06-I实现验收；FE原队列不打断；公司入口执行需独立安全边界",
-      "deps": [],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-30T14:36:15.046Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "2026-10-30 用户人工验收批次：公司自定义提交工具验证通过（当前批次决议第 1 条）；深度调研/真实工具执行不在本次范围，QA/Apply 回执缺失，force 补登",
-        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md"
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-29T12:07:10.537Z"
-    },
-    {
-      "id": "CL-07",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "FE＋BE；QA独立",
-      "module": "CL 工作流",
-      "scope": "CL 工作流：跨多个Pending CL提交选中文件",
-      "stage": "implemented",
-      "statusRaw": "已实现待验收（已合入，待用户本地假P4人工验收）",
-      "priority": "P1高优先，当前项自然收尾后",
-      "evidence": [
-        "ForAIDoc/PM/并行交接.md"
-      ],
-      "note": "跨Default/编号CL选文件，预览并填写描述后新建CL，仅移动选中、核成员后走既有custom/native提交路线；部分失败不提交，取消保留新CL，不自动回退/回移；mock覆盖幂等、身份变化和逐文件恢复事实",
-      "depsRaw": "CL-01；CL-02；CL-06；UI07；用户dev安全写入边界",
-      "deps": [
-        "CL-01",
-        "CL-02",
-        "CL-06"
-      ],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -2434,6 +2291,153 @@
       "archiveReason": "0.1.7/0.1.8/0.1.9 均已发布；0.1.7→0.1.8、0.1.8→0.1.9 两次真机自动升级均通过，5 个子项随 0.1.9 交付",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T12:46:42.375Z"
+    },
+    {
+      "id": "DIFF-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：真实窗口人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
+        "src/features/browsers/components/DiffView.tsx"
+      ],
+      "note": "2026-11-04 用户确认真实窗口视觉验收通过并按人工验收登记归档；关闭范围限本项 UI/渲染替换，不改变后端口径（DiffResult/unified+leftText/rightText），双平台原生矩阵仍不在本项范围",
+      "depsRaw": "—",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.685Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 DIFF-01）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.141Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 DIFF-01 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.981Z"
+    },
+    {
+      "id": "DIFF-02",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：真实窗口人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "src/features/browsers/components/DiffView.tsx",
+        "src/features/browsers/diffNavigation.ts"
+      ],
+      "note": "与 DIFF-01 同批人工验收通过；关闭范围限前端计算层（parsePatchFiles→FileDiff+loadDiffFiles），旧基准数据不外推其他规模或设备",
+      "depsRaw": "DIFF-01",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.792Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 DIFF-02）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.247Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 DIFF-02 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
+    },
+    {
+      "id": "CL-06",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "BE调研；FE/BE由PM分阶段派单",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：自定义提交工具配置与原提交入口分流",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：人工验收收尾通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/并行交接.md",
+        "src-tauri/src/app/custom_submit.rs"
+      ],
+      "note": "2026-11-04 用户确认人工验收收尾通过，按既有 Mock 切片关闭；真实公司工具执行、cwd/认证优先级/后台生命周期仍未验证，仍受安全红线约束",
+      "depsRaw": "—",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.895Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 CL-06）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.346Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 CL-06 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
+    },
+    {
+      "id": "CL-07",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE＋BE；QA独立",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：跨多个Pending CL提交选中文件",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：本机假 P4 人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/并行交接.md",
+        "src-tauri/src/app/selected_submit.rs"
+      ],
+      "note": "2026-11-04 用户在本机假 P4 上完成跨 CL 选文件→新建 CL→自定义/原生提交的真实链路人工验收；关闭范围限本项流程，部分失败不回退/不回移语义保持不变",
+      "depsRaw": "CL-01；CL-02；CL-06",
+      "deps": [
+        "CL-01",
+        "CL-02"
+      ],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.994Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 CL-07）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.454Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 CL-07 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
     }
   ],
   "subitems": [
