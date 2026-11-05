@@ -496,6 +496,15 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "browse.located.stream": "已定位 Stream：{p1}",
+  "browse.searching.streams.for.the.current.list":
+    "已在 Streams 中搜索 {p1}，当前列表没有精确匹配。",
+  "browse.about.rows.from.the.worksheet.dimension":
+    "工作表共约 {p1} 行（声明值，可能包含空行）",
+  "pending.cl.has.blocker.s": "CL {p1} 有 {p2} 个阻断项。",
+  "pending.review.and.confirm.cl": "请确认提交 CL {p1}。",
+  "pending.submit.entire.cl": "提交整个 CL {p1}",
+  "update.new.version.v": "发现新版本 v{p1}",
   "tools.new.unviewed.errors": "{p1} 个未查看的新错误",
   "tools.new.unviewed.errors.2": "{p1} 个未查看的新错误",
   "update.status.available": "有新版本 {version}",
@@ -1905,6 +1914,8 @@ export const zh = {
   "browse.force.fresh.reads": "强制重新读取",
   "browse.fresh": "新鲜",
   "browse.frozen.header.rows": "冻结表头行数",
+  "browse.frozenHeaderRows": "冻结表头 {count} 行",
+  "browse.worksheetIndex": "工作表 {index}",
   "browse.full.file.path.in.target": "目标分支中的完整文件路径",
   "browse.get.target.latest.selection": "获取目标：后选",
   "browse.go.to.line": "跳转行号",

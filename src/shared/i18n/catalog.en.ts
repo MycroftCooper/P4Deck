@@ -534,6 +534,15 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "browse.located.stream": "Located stream: {p1}",
+  "browse.searching.streams.for.the.current.list":
+    "Searching Streams for {p1}; the current list has no exact match.",
+  "browse.about.rows.from.the.worksheet.dimension":
+    "About {p1} rows from the worksheet dimension; may include empty rows",
+  "pending.cl.has.blocker.s": "CL {p1} has {p2} blocker(s).",
+  "pending.review.and.confirm.cl": "Review and confirm CL {p1}.",
+  "pending.submit.entire.cl": "Submit entire CL {p1}",
+  "update.new.version.v": "New version v{p1}",
   "tools.new.unviewed.errors": "{p1} new unviewed errors",
   "tools.new.unviewed.errors.2": "{p1} new unviewed errors",
   "update.status.available": "New version {version}",
@@ -2042,6 +2051,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "browse.force.fresh.reads": "Force fresh reads",
   "browse.fresh": "Fresh",
   "browse.frozen.header.rows": "Frozen header rows",
+  "browse.frozenHeaderRows": "Frozen header rows: {count}",
+  "browse.worksheetIndex": "Worksheet {index}",
   "browse.full.file.path.in.target": "Full file path in target branch",
   "browse.get.target.latest.selection": "Get target: latest selection",
   "browse.go.to.line": "Go to line",

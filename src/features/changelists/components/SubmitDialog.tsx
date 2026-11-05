@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { TargetList } from "../../../app/dialogs/TargetList";
@@ -53,7 +53,6 @@ type Phase =
 
 export function SubmitDialog(props: Props) {
   const { zh, onDismiss } = props;
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [origin] = useState(() => ({
     id: props.changeId,
     count: props.count,
@@ -154,14 +153,13 @@ export function SubmitDialog(props: Props) {
         key: `submit-preflight:${origin.id}:${result.fileSummary.contentDigest}`,
         title: t("pending.submit.awaits.confirmation"),
         body: result.blockers.length
-          ? tr(
-              `CL ${origin.id} 有 ${result.blockers.length} 个阻断项。`,
-              `CL ${origin.id} has ${result.blockers.length} blocker(s).`,
-            )
-          : tr(
-              `请确认提交 CL ${origin.id}。`,
-              `Review and confirm CL ${origin.id}.`,
-            ),
+          ? tFor(zh ? "zh-CN" : "en-US", "pending.cl.has.blocker.s", {
+              p1: origin.id,
+              p2: result.blockers.length,
+            })
+          : tFor(zh ? "zh-CN" : "en-US", "pending.review.and.confirm.cl", {
+              p1: origin.id,
+            }),
         kind: "attention",
       });
       const checkedChange = result.change;
@@ -272,7 +270,9 @@ export function SubmitDialog(props: Props) {
   const busy = phase === "checking" || phase === "submitting";
   return (
     <Dialog
-      title={tr(`提交整个 CL ${origin.id}`, `Submit entire CL ${origin.id}`)}
+      title={tFor(zh ? "zh-CN" : "en-US", "pending.submit.entire.cl", {
+        p1: origin.id,
+      })}
       description={t("pending.submission.always.covers.every.file.in")}
       zh={zh}
       source={props.source}

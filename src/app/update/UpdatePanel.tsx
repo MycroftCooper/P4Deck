@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor } from "../../shared/i18n";
 import { Dialog, DialogNotice } from "../dialogs/Dialog";
 import { formatBytes } from "./format";
 import { isWindowsPlatform } from "./updaterClient";
@@ -36,7 +36,6 @@ function UpdateDialog({
   snapshot: UpdateSnapshot;
   zh: boolean;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const windows = isWindowsPlatform();
   const percent = updateProgress(snapshot);
   const totalSize = formatBytes(snapshot.totalBytes);
@@ -59,10 +58,9 @@ function UpdateDialog({
           : snapshot.phase === "error"
             ? t("update.update.failed")
             : snapshot.version
-              ? tr(
-                  `发现新版本 v${snapshot.version}`,
-                  `New version v${snapshot.version}`,
-                )
+              ? tFor(zh ? "zh-CN" : "en-US", "update.new.version.v", {
+                  p1: snapshot.version,
+                })
               : t("update.check.for.updates");
   const description =
     snapshot.phase === "available"
@@ -108,7 +106,9 @@ function UpdateDialog({
             <button className="primary" disabled>
               {percent === undefined
                 ? t("update.downloading")
-                : tr(`正在下载 ${percent}%`, `Downloading ${percent}%`)}
+                : tFor(zh ? "zh-CN" : "en-US", "update.downloading", {
+                    p1: percent,
+                  })}
             </button>
           </>
         );

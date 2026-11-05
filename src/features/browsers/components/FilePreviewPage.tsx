@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
@@ -39,7 +39,6 @@ export function FilePreviewPage({
 }) {
   const menu = useContentMenu();
   const textSelection = useFullTextSelection();
-  const tr = (a: string, b: string) => (zh ? a : b);
   const refreshSlot = useContext(PageRefreshSlotContext);
   const [zoom, setZoom] = useState<number | null>(null),
     [imageError, setImageError] = useState(false);
@@ -119,9 +118,10 @@ export function FilePreviewPage({
   const notes = table ? truncationNotes(table, zh, hardTruncation(table)) : [];
   const rowCountTitle =
     shownTable?.rowCountSource === "dimension" && shownTable.rowCount != null
-      ? tr(
-          `工作表共约 ${shownTable.rowCount} 行（声明值，可能包含空行）`,
-          `About ${shownTable.rowCount} rows from the worksheet dimension; may include empty rows`,
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "browse.about.rows.from.the.worksheet.dimension",
+          { p1: shownTable.rowCount },
         )
       : undefined;
   const refreshButton = (
@@ -188,7 +188,9 @@ export function FilePreviewPage({
                 {shownTable.sheetNames.map((name, index) => (
                   <option key={index} value={index}>
                     {name ||
-                      tr(`工作表 ${index + 1}`, `Worksheet ${index + 1}`)}
+                      tFor(zh ? "zh-CN" : "en-US", "browse.worksheet", {
+                        p1: index + 1,
+                      })}
                   </option>
                 ))}
               </select>
@@ -211,10 +213,9 @@ export function FilePreviewPage({
                 <Minus size={14} aria-hidden="true" />
               </button>
               <span className="preview-table-steps-label">
-                {tr(
-                  `冻结表头 ${headerRows} 行`,
-                  `Frozen header rows: ${headerRows}`,
-                )}
+                {tFor(zh ? "zh-CN" : "en-US", "browse.frozenHeaderRows", {
+                  count: headerRows,
+                })}
               </span>
               <button
                 type="button"

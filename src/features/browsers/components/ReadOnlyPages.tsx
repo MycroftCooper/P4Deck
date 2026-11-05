@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import {
   SyncDialog,
@@ -357,12 +357,14 @@ export function ReadOnlyPage({
   const streamNavigationNotice =
     kind === "streams" && navigation && search === navigation.stream && !loading
       ? rows.some((row) => "stream" in row && row.stream === navigation.stream)
-        ? zh
-          ? `已定位 Stream：${navigation.stream}`
-          : `Located stream: ${navigation.stream}`
-        : zh
-          ? `已在 Streams 中搜索 ${navigation.stream}，当前列表没有精确匹配。`
-          : `Searching Streams for ${navigation.stream}; the current list has no exact match.`
+        ? tFor(zh ? "zh-CN" : "en-US", "browse.located.stream", {
+            p1: zh ? navigation.stream : navigation.stream,
+          })
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "browse.searching.streams.for.the.current.list",
+            { p1: zh ? navigation.stream : navigation.stream },
+          )
       : "";
   const menu = useContextMenu();
   const openChangeDetails = useChangeDetails();
