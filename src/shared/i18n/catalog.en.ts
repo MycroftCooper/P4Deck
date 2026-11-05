@@ -534,6 +534,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.last.ms": "Last {p1} ms",
+  "shell.insufficient.samples.5": "Insufficient samples ({p1}/5)",
+  "files.empty": "Enter a destination path.",
+  "files.same": "Source and destination are the same.",
   "contextMenu.localFileMissing":
     "The local file is missing or outside the workspace",
   "contextMenu.noLocalFile": "No local file available",

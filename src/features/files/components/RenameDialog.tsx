@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
@@ -19,25 +19,13 @@ import {
   withdrawLocalIoProjection,
 } from "../../actions/localIoLifecycle";
 
-const reasons: Record<RenamePathError, [string, string]> = {
-  empty: ["请填写目标路径。", "Enter a destination path."],
-  absolute: [
-    t("files.use.an.absolute.path.of.the"),
-    t("files.use.an.absolute.path.of.the"),
-  ],
-  characters: [
-    t("files.control.characters.and.p4.filespec.metacharacters"),
-    t("files.control.characters.and.p4.filespec.metacharacters"),
-  ],
-  segments: [
-    t("files.a.root.path.empty.segments.and"),
-    t("files.a.root.path.empty.segments.and"),
-  ],
-  same: ["目标与源路径相同。", "Source and destination are the same."],
-  descendant: [
-    t("files.a.folder.cannot.move.into.its"),
-    t("files.a.folder.cannot.move.into.its"),
-  ],
+const reasons: Record<RenamePathError, string> = {
+  empty: "files.empty",
+  absolute: t("files.use.an.absolute.path.of.the"),
+  characters: t("files.control.characters.and.p4.filespec.metacharacters"),
+  segments: t("files.a.root.path.empty.segments.and"),
+  same: "files.same",
+  descendant: t("files.a.folder.cannot.move.into.its"),
 };
 
 type Phase = "preview" | "checking" | "review" | "confirming" | "result";
@@ -303,7 +291,9 @@ export function RenameDialog({
         </DialogNotice>
       )}
       {target !== from && error && (
-        <DialogNotice error>{reasons[error][zh ? 0 : 1]}</DialogNotice>
+        <DialogNotice error>
+          {tFor(zh ? "zh-CN" : "en-US", reasons[error] as MsgKey)}
+        </DialogNotice>
       )}
       {phase === "checking" && (
         <DialogNotice>{t("files.reading.the.p4.snapshot")}</DialogNotice>

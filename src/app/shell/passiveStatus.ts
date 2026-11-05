@@ -64,9 +64,9 @@ export function passiveStatusPresentation(
     permissionDenied: tFor(zh ? "zh-CN" : "en-US", "shell.permission.denied"),
   }[s.access];
   // "本机响应" shows the latest request duration directly; bucketed quality refines the wording.
-  const lastMs = zh
-    ? `最近 ${s.lastElapsedMs} ms`
-    : `Last ${s.lastElapsedMs} ms`;
+  const lastMs = tFor(zh ? "zh-CN" : "en-US", "shell.last.ms", {
+    p1: s.lastElapsedMs ?? 0,
+  });
   const baseQuality = {
     smooth: tFor(zh ? "zh-CN" : "en-US", "shell.smooth"),
     slow: tFor(zh ? "zh-CN" : "en-US", "shell.slower"),
@@ -82,9 +82,9 @@ export function passiveStatusPresentation(
         (s.lastElapsedMs != null
           ? lastMs
           : s.samples && s.samples > 0
-            ? zh
-              ? `样本不足（${s.samples}/5）`
-              : `Insufficient samples (${s.samples}/5)`
+            ? tFor(zh ? "zh-CN" : "en-US", "shell.insufficient.samples.5", {
+                p1: s.samples ?? 0,
+              })
             : s.observedAt
               ? tFor(
                   zh ? "zh-CN" : "en-US",

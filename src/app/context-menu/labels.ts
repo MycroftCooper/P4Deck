@@ -397,10 +397,12 @@ export function menuLabel(label: string, zh: boolean): string {
       .join(" › ");
   if (label.endsWith("…")) return menuLabel(label.slice(0, -1), false) + "…";
   if (/（(含)?递归）$/.test(label))
+    // i18n-exempt: menu-label matcher
     return (
-      menuLabel(label.replace(/（(含)?递归）$/, ""), false) + " (recursive)"
+      menuLabel(label.replace(/（(含)?递归）$/, ""), false) + " (recursive)" // i18n-exempt: menu-label matcher
     );
   if (label.startsWith("复制"))
+    // i18n-exempt: menu-label matcher
     return "Copy " + menuLabel(label.slice(2).trim(), false).toLowerCase();
   return label;
 }

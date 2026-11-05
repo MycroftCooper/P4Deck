@@ -496,6 +496,10 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "shell.last.ms": "最近 {p1} ms",
+  "shell.insufficient.samples.5": "样本不足（{p1}/5）",
+  "files.empty": "请填写目标路径。",
+  "files.same": "目标与源路径相同。",
   "contextMenu.localFileMissing": "本地文件不存在或不在工作区内",
   "contextMenu.noLocalFile": "没有可用的本地文件",
   "contextMenu.noCurrentDirectory": "没有当前目录",

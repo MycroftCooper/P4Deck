@@ -46,7 +46,7 @@ export function buildMenu(
             ? t("contextMenu.workflowNotConnected")
             : t("contextMenu.unavailableForTarget")),
       // i18n-exempt: classifies labels across both locales.
-      danger: /删除|还原|撤销|移除/.test(entry.label),
+      danger: /删除|还原|撤销|移除/.test(entry.label), // i18n-exempt: label classifier
     };
     if (
       entry.phase === "later" &&
