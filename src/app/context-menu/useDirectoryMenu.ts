@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContextMenu } from "./ContextMenu";
 import { useMenuEnvironment } from "./environment";
 import { action, copy } from "./bindings";
@@ -28,8 +29,8 @@ export function useDirectoryMenu(
       系统中定位当前目录: {
         reason:
           env.runtime.mode === "tauri"
-            ? "正在检查目录 / Checking folder"
-            : "请在桌面应用中使用 / Desktop app required",
+            ? t("shell.checking.folder")
+            : t("shell.desktop.app.required"),
       },
     }),
     {

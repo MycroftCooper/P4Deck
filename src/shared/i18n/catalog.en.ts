@@ -534,12 +534,306 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.ambiguous.folder.path": "Ambiguous folder path",
+  "files.file.or.folder.not.found": "File or folder not found",
+  "files.i.confirm.marking.resolve.with.the":
+    "I confirm marking Resolve with the edited result",
+  "files.don.t.ask.again.always.use": "Don't ask again; always use Default CL",
+  "pending.pending.changelists.are.incomplete.refresh.and":
+    "Pending changelists are incomplete; refresh and retry",
+  "pending.current.user.unavailable": "Current user unavailable",
+  "shell.close.task.list": "Close task list",
+  "shell.opening.page": "Opening page…",
+  "shell.saving.appearance.preferences.failed.these.changes":
+    "Saving appearance preferences failed; these changes may not persist after a restart.",
+  "shell.nothing.to.copy": "Nothing to copy",
+  "shell.saving.shortcuts.failed.local.storage.is":
+    "Saving shortcuts failed: local storage is unavailable; changes apply only to this session.",
+  "common.cmd.v": "Cmd+V",
+  "common.select.the.address.and.copy.it":
+    "Select the address and copy it manually",
+  "files.target.is.not.in.the.workspace":
+    "Target is not in the workspace listing",
+  "files.directory.path.cycle": "Directory path cycle",
+  "files.the.complete.file.set.and.connection":
+    "The complete file set and connection generation are bound to a one-use token. Batch results are per-file and partial success is not rolled back.",
+  "files.revalidating.executing.and.verifying.in.one":
+    "Revalidating, executing and verifying in one mutation lane",
+  "pending.unshelve.failed": "Unshelve failed.",
+  "pending.shelve.failed": "Shelve failed.",
+  "pending.export.categories.ordinary.by.default":
+    "Export categories (ordinary by default)",
+  "pending.target.a.new.numbered.cl.cancelling":
+    "Target: a new numbered CL. Cancelling submission leaves files in the new CL. Incomplete or unknown moves do not continue to submission.",
+  "pending.discard.the.description.no.files.have":
+    "Discard the description? No files have been created or moved.",
+  "shell.this.tab.could.not.be.displayed": "This tab could not be displayed",
+  "shell.reload.app": "Reload app",
+  "shell.checking.folder": "Checking folder",
+  "shell.select.full.text": "Select full text",
+  "shell.full.text": "Full text",
+  "workspaces.unable.to.load.workspaces.retry.or":
+    "Unable to load workspaces. Retry or check your login in Connection settings.",
+  "workspaces.search.name.path.or.stream": "Search name, path or stream…",
+  "workspaces.no.workspaces.owned.by.the.current":
+    "No workspaces owned by the current user",
+  "settings.follows.the.theme.by.default.a":
+    "Follows the theme by default. A chosen tone previews instantly and is saved; lightness adapts per theme so text stays readable.",
+  "settings.enter.six.hex.digits.the.last":
+    "Enter six hex digits; the last valid background stays applied.",
+  "settings.light.and.dark.background.previews":
+    "Light and dark background previews",
+  "pending.connection.changed.nothing.deleted":
+    "Connection changed; nothing deleted",
+  "pending.preflight.identity.or.scope.changed.nothing":
+    "Preflight identity or scope changed; nothing deleted",
+  "pending.preflight.blocked.or.expired.nothing.deleted":
+    "Preflight blocked or expired; nothing deleted",
+  "pending.loading.cl.membership.for.opened.files":
+    "Loading CL membership for opened files…",
+  "pending.unique.cl.membership.is.unknown.for":
+    "Unique CL membership is unknown for these files. Refresh their state; they will not be silently omitted from the operation.",
+  "pending.selected.files.belong.to.multiple.cls":
+    "Selected files belong to multiple CLs. Choose the source group for this shelf operation; other groups are out of scope.",
+  "workspaces.the.active.connection.changed.refresh.workspaces":
+    "The active connection changed. Refresh workspaces and retry.",
+  "workspaces.the.current.profile.requires.login.authenticate":
+    "The current profile requires login. Authenticate in Settings, then retry.",
+  "workspaces.target.workspace.verification.failed.check.its":
+    "Target workspace verification failed. Check its server, client, and root.",
+  "workspaces.the.target.workspace.no.longer.exists":
+    "The target workspace no longer exists or is not owned by this user. Refresh the list.",
+  "settings.clear.outcome.uncertain.the.readback.still":
+    "Clear outcome uncertain: the readback still has entries or failed. The durable receipt was queried with the same operation id; inspect the log page before any retry with a new id.",
+  "settings.each.launch.creates.a.new.log":
+    "Each launch creates a new log file. The log panel shows only this session; previous files remain on disk and are never loaded at startup.",
+  "settings.browser.demo.clears.simulated.logs.only":
+    "Browser demo clears simulated logs only. Opening the log folder requires the desktop app.",
+  "settings.deletes.current.and.historical.logs.including":
+    "Deletes current and historical logs, including the legacy log database. Connection settings are preserved, and new logs will continue to be recorded.",
+  "companySubmit.a.custom.submit.tool.is.already":
+    "A custom submit tool is already running for this CL.",
+  "companySubmit.the.custom.submit.tool.did.not":
+    "The custom submit tool did not start.",
+  "companySubmit.custom.submit.failed": "Custom submit failed.",
+  "pending.form.checked.ui.preview.only.no":
+    "Form checked. UI preview only: no changelist was created or saved.",
+  "pending.describe.the.changes.creating.a.cl":
+    "Describe the changes. Creating a CL does not move or submit files.",
+  "pending.ui.preview.cl.writing.is.not":
+    "UI preview · CL writing is not connected. No P4 server requests.",
+  "pending.closing.discards.this.draft.continue":
+    "Closing discards this draft. Continue?",
+  "pending.pending.changelist.not.found.or.results":
+    "Pending changelist not found, or results are incomplete.",
+  "pending.returned.changelist.does.not.match.the":
+    "Returned changelist does not match the target",
+  "pending.this.changelist.is.not.submitted.yet":
+    "This changelist is not submitted yet; only shelved files are available.",
+  "pending.simulated.data.no.real.p4.server":
+    "Simulated data · no real P4 server or network",
+  "browse.integration.records.found.current.content.inclusion":
+    "Integration records found; current content inclusion: unknown",
+  "browse.unknown.no.path.in.loaded.records":
+    "Unknown: no path in loaded records; this does not prove absence",
+  "browse.this.file.only.not.the.whole":
+    "This file only, not the whole CL; ignored integrations, undo and partial resolves can change final content.",
+  "browse.incomplete.evidence.or.actions.requiring.review":
+    "Incomplete evidence or actions requiring review; expand on demand and inspect ranges.",
+  "actions.lock.preflight.blocked.nothing.was.written":
+    "Lock preflight blocked; nothing was written.",
+  "actions.only.part.of.the.operation.completed":
+    "Only part of the operation completed; some files were not affected.",
+  "actions.lock.request.failed": "Lock request failed.",
+  "settings.pine": "Pine",
+  "settings.slate.blue": "Slate blue",
+  "settings.plum.grey": "Plum grey",
+  "settings.warm.sand": "Warm sand",
+  "settings.mist.teal": "Mist teal",
+  "settings.green": "Green",
+  "settings.blue": "Blue",
+  "settings.purple": "Purple",
+  "settings.rose": "Rose",
+  "settings.amber": "Amber",
+  "shell.desktop.app.required": "Desktop app required",
+  "shell.content": "Content",
+  "shell.choose.a.column.sorting.not.connected":
+    "Choose a column; sorting not connected",
+  "shell.sorting.not.enabled": "Sorting not enabled",
+  "shell.currently.visible.column.configuration.not.connected":
+    "Currently visible; column configuration not connected",
+  "shell.fixed.column.widths": "Fixed column widths",
+  "shell.default.layout.already.in.use": "Default layout already in use",
+  "settings.the.connection.settings.for.this.query":
+    "The connection settings for this query changed. Close and retry.",
+  "settings.this.is.the.explicit.p4.user":
+    "This is the explicit P4 user for this query; there is no silent fallback to the active connection or environment. For Trust or login recovery, close this dialog and first enter this username in the main User field.",
+  "settings.enter.the.username.to.use.for":
+    "Enter the username to use for this query.",
+  "settings.bounded.result.may.be.incomplete":
+    " · bounded result; may be incomplete",
+  "settings.no.matches.the.server.returns.bounded":
+    "No matches. The server returns bounded name-prefix results only.",
+  "pending.files.have.an.unresolved.move.or":
+    "Files have an unresolved move or changed ownership. Check that attempt first.",
+  "pending.outcome.unknown.check.this.attempt.without":
+    "Outcome unknown; check this attempt without creating or moving again.",
+  "pending.move.selected.files.only.never.submit":
+    "Move selected files only; never submit. Choose a target and confirm the scope.",
+  "pending.move.not.confirmed.complete.completed.moves":
+    "Move not confirmed complete; completed moves are not rolled back.",
+  "pending.closing.this.dialog.does.not.undo":
+    "Closing this dialog does not undo moves or delete a created changelist.",
+  "pending.connection.changed.select.files.again.this":
+    "Connection changed; select files again. This attempt remains recorded.",
+  "files.undo.executed.legacy.result.inspect.the":
+    "Undo executed (legacy result); inspect the workspace and operation log.",
+  "files.undo.outcome.is.unconfirmed.rows.were":
+    "Undo outcome is unconfirmed; rows were corrected from the server. Do not retry blindly.",
+  "files.undo.saved.to.the.default.pending":
+    "Undo saved to the default pending changelist, not submitted. Review the file; later revisions may require sync and resolve before submission.",
+  "files.undo.did.not.complete.cleanly.partial":
+    "Undo did not complete cleanly (partial/unknown). Inspect the workspace and operation log before retrying.",
+  "files.undo.only.the.changes.introduced.by":
+    "Undo only the changes introduced by the right-clicked file revision, not the entire CL or selected range.",
+  "files.destination.default.pending.changelist.no.automatic":
+    "Destination: default pending changelist. No automatic submit. Later revisions may require sync and resolve before submission.",
+  "files.single.file.preview.verified.confirmation.rechecks":
+    "Single-file preview verified; confirmation rechecks the file.",
+  "files.updates.the.corresponding.workspace.files.without":
+    "Updates the corresponding workspace files without forcing overwrites of opened local changes.",
+  "files.duplicates.and.descendants.covered.by.selected":
+    "Duplicates and descendants covered by selected folders were consolidated.",
+  "files.folders.included.all.descendants.are.in":
+    "Folders included: all descendants are in scope. The target count is not the number of affected files.",
+  "files.the.same.per.file.revision.number":
+    "The same per-file revision number applies to each file, not a shared submission. Some files may not have that revision.",
+  "files.syncs.versions.as.of.this.cl":
+    "Syncs versions as of this CL, not only the files submitted in it.",
+  "files.uses.00.00.00.on.that":
+    "Uses 00:00:00 on that date in the P4 server time zone, not the end of the day.",
+  "files.enter.a.valid.date.or.positive":
+    "Enter a valid date or positive integer without #, @ or command arguments.",
+  "shell.search": "Search",
+  "shell.stream.graph": "Stream Graph",
+  "shell.branch.mappings": "Branch Mappings",
+  "shell.p4.log": "P4 Log",
+  "shell.shelf.detail": "Shelf Detail",
+  "shell.this.scope.is.frozen.and.does":
+    "This scope is frozen and does not follow selection changes.",
+  "shell.revert.may.discard.unsubmitted.changes.this":
+    "Revert may discard unsubmitted changes. This view cannot restore them.",
+  "shell.marks.applicable.controlled.files.in.scope":
+    "Marks applicable controlled files in scope for deletion, not untracked files.",
+  "shell.folder.operations.include.all.descendants.recursively":
+    "Folder operations include all descendants recursively. The actual matching file count has not been calculated.",
+  "shell.duplicates.and.descendants.covered.by.selected":
+    "Duplicates and descendants covered by selected folders were consolidated.",
+  "shell.execution.can.partially.succeed.cancellation.requests":
+    "Execution can partially succeed. Cancellation requests stopping remaining work; it does not undo completed changes. Check task results and logs.",
+  "shell.i.have.reviewed.the.scope.and": "I have reviewed the scope and risks.",
+  "settings.no.recovery.action.is.required": "No recovery action is required.",
+  "settings.configure.a.valid.p4.cli.then":
+    "Configure a valid P4 CLI, then test again.",
+  "settings.correct.and.save.the.connection.settings":
+    "Correct and save the connection settings, then test again.",
+  "settings.verify.and.confirm.the.current.ssl":
+    "Verify and confirm the current SSL fingerprint.",
+  "settings.log.in.or.re.authenticate.the":
+    "Log in or re-authenticate the current user.",
+  "settings.check.the.environment.and.retry":
+    "Check the environment and retry.",
+  "settings.contact.the.helix.core.administrator":
+    "Contact the Helix Core administrator.",
+  "settings.complete.sso.mfa.externally.then.check":
+    "Complete SSO/MFA externally, then check status.",
+  "pending.outcome.unknown.check.status.without.creating":
+    "Outcome unknown; check status without creating again.",
+  "pending.no.submission.permission.files.remain.in":
+    "No submission permission; files remain in the new CL.",
+  "pending.select.files.and.confirm.configuration.again":
+    "Select files and confirm configuration again; nothing was created or moved.",
+  "pending.connection.changed.further.actions.stopped.keep":
+    "Connection changed; further actions stopped. Keep this file list.",
+  "pending.submission.flow.opened.cancelling.leaves.files":
+    "Submission flow opened. Cancelling leaves files in the new CL; consult its result for submission status.",
+  "pending.not.submitted.partial.or.unknown.moves":
+    "Not submitted. Partial or unknown moves stop here. Closing preserves the new CL and moved files.",
+  "pending.the.previous.process.was.interrupted.the":
+    "The previous process was interrupted: the preparation is not resumed and is not retried with a new operation id. Inspect moved files and the new CL before starting again.",
+  "pending.selected.files.with.unknown.outcome":
+    "Selected files with unknown outcome",
+  "pending.invalid.source.submission.time.cannot.bound":
+    "Invalid source submission time; cannot bound the investigation",
+  "pending.incompatible.response.or.changed.connection":
+    "Incompatible response or changed connection",
+  "pending.invalid.page.cursor.refresh.the.investigation":
+    "Invalid page cursor; refresh the investigation",
+  "pending.invalid.candidate.submission.time.refresh.to":
+    "Invalid candidate submission time; refresh to recheck",
+  "pending.cancelled.current.results.may.be.incomplete":
+    "Cancelled; current results may be incomplete",
+  "pending.direct.and.indirect.submissions.linked.by":
+    "Direct and indirect submissions linked by CI source CL metadata",
+  "pending.query.limit.reached.incomplete": "Query limit reached · Incomplete",
+  "pending.no.cl.reference.candidates.in.the":
+    "No CL-reference candidates in the queried range.",
+  "browse.explicit.roots.same.relative.path":
+    "Explicit roots, same relative path",
+  "browse.inspect.shared.intermediate.references.up.to":
+    "Inspect shared intermediate references (up to 2 per file)",
+  "browse.at.most.20.api.read.attempts":
+    "At most 20 API read attempts including CL/mapping, 100 files, 2 pages per path. Cache hits make no server request. Complex Stream imports/remaps are not inferred.",
+  "browse.whole.cl.content.inclusion.unknown.individual":
+    "Whole-CL content inclusion: unknown. Individual record paths do not prove the whole CL was integrated; no path does not prove absence.",
+  "browse.investigation.incomplete.file.visibility.cancellation.or":
+    "Investigation incomplete: file visibility, cancellation or budget limit.",
+  "browse.no.visible.files.no.cl.conclusion":
+    "No visible files; no CL conclusion can be drawn.",
+  "browse.evidence.not.content.inclusion": "Evidence (not content inclusion)",
+  "browse.pages.reference.evidence.incomplete":
+    "Pages / reference evidence incomplete",
+  "browse.the.preflight.expired.inspect.the.branch":
+    "The preflight expired; inspect the Branch Mapping again.",
+  "browse.connection.identity.changed.no.branch.mapping":
+    "Connection identity changed; no branch mapping change was dispatched.",
+  "browse.every.write.uses.the.dedicated.preflight":
+    "Every write uses the dedicated preflight and one-use confirmation token. P4Deck never forces the change or runs integrate here.",
+  "browse.browser.mock.preflight.and.save.are":
+    "Browser Mock: preflight and save are simulated; no real server is accessed.",
+  "browse.deletion.is.irreversible.preflight.re.reads":
+    "Deletion is irreversible. Preflight re-reads the mapping, owner, lock state, and permissions; confirmation repeats the TOCTOU checks.",
+  "browse.this.mapping.contains.unknown.fields.comments":
+    "This mapping contains unknown fields, comments, or non-round-trippable View lines. Editing is blocked; details remain read-only.",
+  "browse.i.understand.this.permanently.deletes.the":
+    "I understand this permanently deletes the Branch Mapping",
+  "browse.the.write.may.have.applied.the":
+    "The write may have applied. The durable receipt was queried once with the same operation id and views were refreshed; inspect the Branch Mappings list/detail before any retry with a new operation id.",
+  "browse.the.refreshed.list.detail.remains.authoritative":
+    "The refreshed list/detail remains authoritative.",
+  "browse.the.backend.returned.a.non.progressing":
+    "The backend returned a non-progressing cursor; the current list was preserved and paging stopped.",
+  "browse.the.request.was.cancelled.retry.or":
+    "The request was cancelled; retry or refresh to continue.",
+  "browse.inspect.preview.and.maintain.branch.mappings":
+    "Inspect, preview, and maintain Branch Mappings through dedicated safety workflows.",
+  "browse.branch.mapping.name.filter": "Branch Mapping name filter",
+  "browse.no.matching.branch.mappings": "No matching Branch Mappings.",
+  "browse.close.branch.mapping.details": "Close Branch Mapping details",
+  "browse.unknown.or.non.round.trippable.fields":
+    "Unknown or non-round-trippable fields/View lines are present; editing is disabled.",
+  "browse.unknown.fields.block.safe.editing":
+    "Unknown fields block safe editing",
+  "browse.runs.integrate.n.only.it.never":
+    "Runs integrate -n only; it never modifies the workspace or opens files.",
+  "browse.preview.is.partial.or.truncated": "Preview is partial or truncated",
   "preflight.unavailable": "Preflight is not connected. Execution unavailable.",
   "preflight.idle": "Not checked yet.",
   "preflight.checking": "Preflight in progress…",
   "preflight.empty": "No files in the preflight scope.",
   "preflight.stale": "Preflight expired or target changed. Check again.",
-  "preflight.offline": "Connection unavailable; current server state cannot be verified.",
+  "preflight.offline":
+    "Connection unavailable; current server state cannot be verified.",
   "preflight.failed": "Preflight failed.",
   "preflight.blocked": "Blockers prevent execution.",
   "preflight.ready": "Preflight results ready. Review scope and warnings.",

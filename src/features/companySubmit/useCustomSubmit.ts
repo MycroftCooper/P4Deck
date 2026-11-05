@@ -113,8 +113,8 @@ export function useCustomSubmit(scope: string, port: Port) {
       }
       if (isCustomSubmitChangeActive(scope, route.changeId)) {
         notifyFailure("duplicateChange", {
-          zh: "该 CL 已有自定义提交工具在运行。",
-          en: "A custom submit tool is already running for this CL.",
+          zh: "companySubmit.a.custom.submit.tool.is.already",
+          en: "companySubmit.a.custom.submit.tool.is.already",
         });
         return true;
       }
@@ -148,8 +148,8 @@ export function useCustomSubmit(scope: string, port: Port) {
       // A notStarted result is positive not-launched evidence; tell the user why nothing opened.
       if (result.state === "notStarted") {
         notifyFailure(result.reason ?? undefined, {
-          zh: "自定义提交工具未启动。",
-          en: "The custom submit tool did not start.",
+          zh: "companySubmit.the.custom.submit.tool.did.not",
+          en: "companySubmit.the.custom.submit.tool.did.not",
         });
       }
       setView({ phase: "session", session: result, intent });
@@ -190,8 +190,8 @@ export function useCustomSubmit(scope: string, port: Port) {
         releaseCustomSubmitChange(scope, dispatchChangeId, requestedId.current);
       report(invoked ? "unknown" : "failed");
       notifyFailure(error instanceof Error ? error.message : String(error), {
-        zh: "自定义提交失败。",
-        en: "Custom submit failed.",
+        zh: "companySubmit.custom.submit.failed",
+        en: "companySubmit.custom.submit.failed",
       });
       setVisible(true);
       setView({
@@ -221,8 +221,8 @@ export function useCustomSubmit(scope: string, port: Port) {
       // A notStarted result is positive not-launched evidence; tell the user why nothing opened.
       if (result.state === "notStarted") {
         notifyFailure(result.reason ?? undefined, {
-          zh: "自定义提交工具未启动。",
-          en: "The custom submit tool did not start.",
+          zh: "companySubmit.the.custom.submit.tool.did.not",
+          en: "companySubmit.the.custom.submit.tool.did.not",
         });
       }
       setView({ phase: "session", session: result, intent });

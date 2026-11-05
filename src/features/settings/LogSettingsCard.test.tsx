@@ -33,7 +33,7 @@ const originals = ["showModal", "close"].map((key) =>
 );
 beforeEach(() => {
   // Components translate through the module-level locale.
-  setLocale("zh-CN");
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

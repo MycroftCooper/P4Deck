@@ -1,4 +1,4 @@
-import { tFor } from "../../shared/i18n";
+import { tFor, t } from "../../shared/i18n";
 import { useState } from "react";
 import { Square } from "lucide-react";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -39,7 +39,7 @@ export function TaskList({
     >
       <header role="presentation">
         {tFor(zh ? "zh-CN" : "en-US", "shell.p4.tasks")}
-        <button onClick={onClose} aria-label="关闭任务列表 / Close task list">
+        <button onClick={onClose} aria-label={t("shell.close.task.list")}>
           ×
         </button>
       </header>

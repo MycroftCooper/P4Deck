@@ -183,31 +183,37 @@ const stateCopy: Record<
 };
 
 const recoveryCopy: Record<RecoveryAction, { zh: string; en: string }> = {
-  none: { zh: "无需恢复操作。", en: "No recovery action is required." },
+  none: {
+    zh: "settings.no.recovery.action.is.required",
+    en: "settings.no.recovery.action.is.required",
+  },
   configureCli: {
-    zh: "配置有效的 P4 CLI 后重新验证。",
-    en: "Configure a valid P4 CLI, then test again.",
+    zh: "settings.configure.a.valid.p4.cli.then",
+    en: "settings.configure.a.valid.p4.cli.then",
   },
   editConfig: {
-    zh: "修正并保存连接参数后重新验证。",
-    en: "Correct and save the connection settings, then test again.",
+    zh: "settings.correct.and.save.the.connection.settings",
+    en: "settings.correct.and.save.the.connection.settings",
   },
   trustServer: {
-    zh: "核对并确认当前 SSL 指纹。",
-    en: "Verify and confirm the current SSL fingerprint.",
+    zh: "settings.verify.and.confirm.the.current.ssl",
+    en: "settings.verify.and.confirm.the.current.ssl",
   },
   login: {
-    zh: "登录或重新登录当前用户。",
-    en: "Log in or re-authenticate the current user.",
+    zh: "settings.log.in.or.re.authenticate.the",
+    en: "settings.log.in.or.re.authenticate.the",
   },
-  retry: { zh: "确认环境后重试。", en: "Check the environment and retry." },
+  retry: {
+    zh: "settings.check.the.environment.and.retry",
+    en: "settings.check.the.environment.and.retry",
+  },
   contactAdmin: {
-    zh: "联系 Helix Core 管理员。",
-    en: "Contact the Helix Core administrator.",
+    zh: "settings.contact.the.helix.core.administrator",
+    en: "settings.contact.the.helix.core.administrator",
   },
   completeExternalAuth: {
-    zh: "在外部完成 SSO/MFA 后检查状态。",
-    en: "Complete SSO/MFA externally, then check status.",
+    zh: "settings.complete.sso.mfa.externally.then.check",
+    en: "settings.complete.sso.mfa.externally.then.check",
   },
 };
 

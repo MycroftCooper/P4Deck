@@ -27,7 +27,6 @@ export function WorkspaceSwitcher({
   const live = useRef(true);
   const pending = useRef(false);
   const id = useId();
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const configured =
     !!runtime.context.server.trim() && !!runtime.context.user.trim();
   const close = () => {
@@ -48,10 +47,7 @@ export function WorkspaceSwitcher({
   const error =
     switchError ||
     (list.error && !items.length
-      ? tr(
-          "无法加载 Workspace，请刷新重试或在连接设置中检查登录状态。",
-          "Unable to load workspaces. Retry or check your login in Connection settings.",
-        )
+      ? t("workspaces.unable.to.load.workspaces.retry.or")
       : "");
   useEffect(() => {
     if (!open) return;
@@ -194,10 +190,7 @@ export function WorkspaceSwitcher({
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label={t("workspaces.search.workspaces.2")}
-              placeholder={tr(
-                "搜索名称、路径或 Stream…",
-                "Search name, path or stream…",
-              )}
+              placeholder={t("workspaces.search.name.path.or.stream")}
             />
           </label>
           <div
@@ -237,10 +230,7 @@ export function WorkspaceSwitcher({
               <p role="status">
                 {search
                   ? t("workspaces.no.matching.workspaces")
-                  : tr(
-                      "当前用户尚无 Workspace",
-                      "No workspaces owned by the current user",
-                    )}
+                  : t("workspaces.no.workspaces.owned.by.the.current")}
               </p>
             )}
           </div>

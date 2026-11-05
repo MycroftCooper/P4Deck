@@ -250,7 +250,7 @@ export function SubmittedPage({
     () =>
       defaultPreset && !draft.users.trim()
         ? {
-            errors: { users: "当前用户不可用 / Current user unavailable" },
+            errors: { users: translate("pending.current.user.unavailable") },
             query: undefined,
           }
         : validateSubmittedFilter(draft, {

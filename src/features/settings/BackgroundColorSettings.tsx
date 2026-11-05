@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { useEffect, useState } from "react";
 import {
   backgroundPresets,
@@ -21,7 +21,6 @@ export function BackgroundColorSettings({
   onChange(value: string): void;
   zh: boolean;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const active = normalizeBackgroundTone(value);
@@ -31,12 +30,7 @@ export function BackgroundColorSettings({
     <div className="background-settings">
       <div className="background-settings-heading">
         <strong>{t("settings.background.color")}</strong>
-        <small>
-          {tr(
-            "默认跟随主题；选择或输入颜色后即时预览并保存，深浅主题会自动调整明暗以保持文字可读。",
-            "Follows the theme by default. A chosen tone previews instantly and is saved; lightness adapts per theme so text stays readable.",
-          )}
-        </small>
+        <small>{t("settings.follows.the.theme.by.default.a")}</small>
       </div>
       <div
         className="background-swatches"
@@ -61,7 +55,7 @@ export function BackgroundColorSettings({
             type="button"
             className="background-swatch"
             aria-pressed={active === preset.tone}
-            title={zh ? preset.zh : preset.en}
+            title={tFor(zh ? "zh-CN" : "en-US", preset.zh as MsgKey)}
             onClick={() => onChange(preset.tone)}
           >
             <span
@@ -69,7 +63,7 @@ export function BackgroundColorSettings({
               style={{ background: preset.tone }}
               aria-hidden="true"
             />
-            {zh ? preset.zh : preset.en}
+            {tFor(zh ? "zh-CN" : "en-US", preset.zh as MsgKey)}
           </button>
         ))}
       </div>
@@ -103,10 +97,7 @@ export function BackgroundColorSettings({
           />
           {!validDraft && (
             <small role="status">
-              {tr(
-                "请输入六位十六进制颜色；当前背景保持上次有效值。",
-                "Enter six hex digits; the last valid background stays applied.",
-              )}
+              {t("settings.enter.six.hex.digits.the.last")}
             </small>
           )}
         </label>
@@ -122,10 +113,7 @@ export function BackgroundColorSettings({
       {active && (
         <div
           className="background-previews"
-          aria-label={tr(
-            "浅深色背景预览",
-            "Light and dark background previews",
-          )}
+          aria-label={t("settings.light.and.dark.background.previews")}
         >
           {[false, true].map((dark) => {
             const tokens = backgroundTokens(active, dark)!;

@@ -1,4 +1,4 @@
-import { t } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { useEffect, useState } from "react";
 import { accentPresets, accentTokens, normalizeAccent } from "./accent";
 
@@ -29,7 +29,7 @@ export function AccentSettings({
         >
           {accentPresets.map((item) => (
             <option key={item.color} value={item.color}>
-              {zh ? item.zh : item.en}
+              {tFor(zh ? "zh-CN" : "en-US", item.zh as MsgKey)}
             </option>
           ))}
           <option value="custom" disabled>

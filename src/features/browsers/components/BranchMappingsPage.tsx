@@ -370,12 +370,7 @@ export function BranchMappingsPage({
       setPage(value);
       setListPhase("ready");
       if (nonProgressing)
-        setNotice(
-          tr(
-            "后端返回了未前进的游标；已保留当前列表并停止分页。",
-            "The backend returned a non-progressing cursor; the current list was preserved and paging stopped.",
-          ),
-        );
+        setNotice(t("browse.the.backend.returned.a.non.progressing"));
     } catch (cause) {
       if (session.sequence !== listSequence.current) return;
       const failure = branchMappingError(cause);
@@ -510,10 +505,7 @@ export function BranchMappingsPage({
     detailSequence.current += 1;
     previewSequence.current += 1;
     cancelAll();
-    const cancelled = tr(
-      "请求已取消；可以重试或刷新。",
-      "The request was cancelled; retry or refresh to continue.",
-    );
+    const cancelled = t("browse.the.request.was.cancelled.retry.or");
     setListPhase(page ? "ready" : "error");
     setListError(page ? "" : cancelled);
     if (page?.hasMore)
@@ -609,10 +601,7 @@ export function BranchMappingsPage({
   return (
     <section className="branch-mappings-page">
       <FixedPageHeader
-        description={tr(
-          "查看、预览并通过专用安全状态机维护 Branch Mapping。",
-          "Inspect, preview, and maintain Branch Mappings through dedicated safety workflows.",
-        )}
+        description={t("browse.inspect.preview.and.maintain.branch.mappings")}
       >
         <button
           onClick={(event) => {
@@ -658,10 +647,7 @@ export function BranchMappingsPage({
           <span className="search-field">
             <Search size={15} />
             <input
-              aria-label={tr(
-                "Branch Mapping 名称过滤",
-                "Branch Mapping name filter",
-              )}
+              aria-label={t("browse.branch.mapping.name.filter")}
               value={nameInput}
               maxLength={128}
               onChange={(event) => setNameInput(event.target.value)}
@@ -771,10 +757,7 @@ export function BranchMappingsPage({
           >
             {!items.length && listPhase !== "loading" ? (
               <div className="workspace-empty" role="status">
-                {tr(
-                  "没有匹配的 Branch Mapping。",
-                  "No matching Branch Mappings.",
-                )}
+                {t("browse.no.matching.branch.mappings")}
               </div>
             ) : (
               <div
@@ -849,10 +832,7 @@ export function BranchMappingsPage({
                 <h2>{selectedName}</h2>
               </div>
               <button
-                aria-label={tr(
-                  "关闭 Branch Mapping 详情",
-                  "Close Branch Mapping details",
-                )}
+                aria-label={t("browse.close.branch.mapping.details")}
                 onClick={() => {
                   closeDetail();
                 }}
@@ -917,10 +897,7 @@ export function BranchMappingsPage({
                 {!detail.editable && (
                   <div className="branch-mapping-notice" role="note">
                     <AlertTriangle size={14} />{" "}
-                    {tr(
-                      "含未知或无法往返的字段/View 行，编辑已禁用。",
-                      "Unknown or non-round-trippable fields/View lines are present; editing is disabled.",
-                    )}
+                    {t("browse.unknown.or.non.round.trippable.fields")}
                   </div>
                 )}
                 <div className="branch-detail-actions">
@@ -928,10 +905,7 @@ export function BranchMappingsPage({
                     disabled={!detail.editable}
                     title={
                       !detail.editable
-                        ? tr(
-                            "未知字段阻止安全编辑",
-                            "Unknown fields block safe editing",
-                          )
+                        ? t("browse.unknown.fields.block.safe.editing")
                         : undefined
                     }
                     onClick={(event) => {
@@ -1008,12 +982,7 @@ export function BranchMappingsPage({
                   <header>
                     <div>
                       <h3>{t("browse.impact.preview")}</h3>
-                      <p>
-                        {tr(
-                          "只运行 integrate -n；不会修改 workspace，也不会打开文件。",
-                          "Runs integrate -n only; it never modifies the workspace or opens files.",
-                        )}
-                      </p>
+                      <p>{t("browse.runs.integrate.n.only.it.never")}</p>
                     </div>
                     <div
                       className="branch-direction"
@@ -1071,11 +1040,8 @@ export function BranchMappingsPage({
                       )}
                       {(preview.partial || preview.truncated) && (
                         <div className="branch-mapping-notice" role="status">
-                          {tr(
-                            "预览为部分或截断结果",
-                            "Preview is partial or truncated",
-                          )}{" "}
-                          · {preview.scannedCount} / {preview.safetyLimit}
+                          {t("browse.preview.is.partial.or.truncated")} ·{" "}
+                          {preview.scannedCount} / {preview.safetyLimit}
                         </div>
                       )}
                       {!!preview.blockers.length && (

@@ -20,7 +20,6 @@ export function OperationConfirmDialog({
   zh: boolean;
   onClose(confirmed: boolean | null): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     ...request,
     nodes: compactTargets(request.nodes).map((node) => ({ ...node })),
@@ -45,10 +44,7 @@ export function OperationConfirmDialog({
       description={
         snapshot.operation === "revert"
           ? t("dialogs.revert.the.following.files")
-          : tr(
-              "下面是固定的操作范围，不会跟随外部选择变化。",
-              "This scope is frozen and does not follow selection changes.",
-            )
+          : t("shell.this.scope.is.frozen.and.does")
       }
       zh={zh}
       source={snapshot.source}
@@ -76,30 +72,18 @@ export function OperationConfirmDialog({
       {danger && (
         <DialogNotice error>
           {snapshot.operation === "revert"
-            ? tr(
-                "还原可能丢失尚未保存到版本库的修改，不能依赖本界面恢复。",
-                "Revert may discard unsubmitted changes. This view cannot restore them.",
-              )
-            : tr(
-                "将范围内适用的受控文件标记为删除，不删除未跟踪文件。",
-                "Marks applicable controlled files in scope for deletion, not untracked files.",
-              )}
+            ? t("shell.revert.may.discard.unsubmitted.changes.this")
+            : t("shell.marks.applicable.controlled.files.in.scope")}
         </DialogNotice>
       )}
       {!!folders && (
         <DialogNotice>
-          {tr(
-            "目录操作包含全部子文件（递归）。实际匹配文件数量尚未统计。",
-            "Folder operations include all descendants recursively. The actual matching file count has not been calculated.",
-          )}
+          {t("shell.folder.operations.include.all.descendants.recursively")}
         </DialogNotice>
       )}
       {snapshot.count > snapshot.nodes.length && (
         <DialogNotice>
-          {tr(
-            "重复项及父目录覆盖的子项已合并。",
-            "Duplicates and descendants covered by selected folders were consolidated.",
-          )}
+          {t("shell.duplicates.and.descendants.covered.by.selected")}
         </DialogNotice>
       )}
       <TargetList
@@ -111,10 +95,7 @@ export function OperationConfirmDialog({
       />
       {needsAcknowledgement && (
         <DialogNotice>
-          {tr(
-            "执行后可能部分成功。取消运行只能请求停止剩余工作，不能撤销已完成部分；请检查任务结果与日志。",
-            "Execution can partially succeed. Cancellation requests stopping remaining work; it does not undo completed changes. Check task results and logs.",
-          )}
+          {t("shell.execution.can.partially.succeed.cancellation.requests")}
         </DialogNotice>
       )}
       {needsAcknowledgement && (
@@ -124,10 +105,7 @@ export function OperationConfirmDialog({
             checked={ack}
             onChange={(event) => setAck(event.target.checked)}
           />
-          {tr(
-            "我已核对以上范围与风险。",
-            "I have reviewed the scope and risks.",
-          )}
+          {t("shell.i.have.reviewed.the.scope.and")}
         </label>
       )}
     </Dialog>

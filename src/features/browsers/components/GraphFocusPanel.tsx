@@ -49,7 +49,6 @@ export function GraphFocusPanel({
   stale: boolean;
   zh: boolean;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const index = new Map(graph.nodes.map((n) => [n.id, n]));
   return (
     <div className="graph-focus-panel">
@@ -114,21 +113,12 @@ export function GraphFocusPanel({
             : mode === "target" && !target
               ? t("browse.enter.a.target.file")
               : evidence.edges.length
-                ? tr(
-                    "发现集成记录路径；内容是否仍包含：未知",
-                    "Integration records found; current content inclusion: unknown",
+                ? t(
+                    "browse.integration.records.found.current.content.inclusion",
                   )
-                : tr(
-                    "未知：当前记录中未找到路径，不代表未合入",
-                    "Unknown: no path in loaded records; this does not prove absence",
-                  )}
+                : t("browse.unknown.no.path.in.loaded.records")}
         </strong>
-        <span>
-          {tr(
-            "仅此文件，不代表整个 CL；忽略、回退和部分解决可能改变最终内容。",
-            "This file only, not the whole CL; ignored integrations, undo and partial resolves can change final content.",
-          )}
-        </span>
+        <span>{t("browse.this.file.only.not.the.whole")}</span>
         <span>
           {stale
             ? t("browse.stale.cache.freshness.unverified")
@@ -142,10 +132,7 @@ export function GraphFocusPanel({
         </span>
         {(evidence.incomplete || evidence.caution) && (
           <span>
-            {tr(
-              "证据不完整或含需复核动作；请按需展开并检查范围。",
-              "Incomplete evidence or actions requiring review; expand on demand and inspect ranges.",
-            )}
+            {t("browse.incomplete.evidence.or.actions.requiring.review")}
           </span>
         )}
         <details>

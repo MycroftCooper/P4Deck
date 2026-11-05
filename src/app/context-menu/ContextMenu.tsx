@@ -157,7 +157,7 @@ export function ContextMenuProvider({
               {error}
               <button
                 onClick={() => setError("")}
-                aria-label="关闭错误 / Dismiss error"
+                aria-label={t("shell.dismiss.error")}
               >
                 ×
               </button>

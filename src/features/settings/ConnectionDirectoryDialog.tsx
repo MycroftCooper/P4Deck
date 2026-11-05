@@ -90,12 +90,7 @@ export function ConnectionDirectoryDialog({
             });
       if (seq !== sequence.current) return;
       if (next.requestGeneration !== requestGeneration) {
-        setError(
-          tr(
-            "查询对应的连接设置已变化，请关闭后重试。",
-            "The connection settings for this query changed. Close and retry.",
-          ),
-        );
+        setError(t("settings.the.connection.settings.for.this.query"));
         return;
       }
       setResult(next);
@@ -160,12 +155,7 @@ export function ConnectionDirectoryDialog({
               setError("");
             }}
           />
-          <small>
-            {tr(
-              "这是本次查询明确使用的 P4 用户；不会从活动连接或环境中静默回退。如需 Trust 或登录恢复，请关闭窗口并先把该用户名填入主卡 User 字段。",
-              "This is the explicit P4 user for this query; there is no silent fallback to the active connection or environment. For Trust or login recovery, close this dialog and first enter this username in the main User field.",
-            )}
-          </small>
+          <small>{t("settings.this.is.the.explicit.p4.user")}</small>
         </label>
       )}
       <label>
@@ -194,14 +184,8 @@ export function ConnectionDirectoryDialog({
       {!identity && (
         <DialogNotice error>
           {kind === "user"
-            ? tr(
-                "请明确填写本次查询使用的用户名。",
-                "Enter the username to use for this query.",
-              )
-            : tr(
-                "请先在连接设置中填写 User。",
-                "Enter User in Connection settings first.",
-              )}
+            ? t("settings.enter.the.username.to.use.for")
+            : t("settings.enter.user.in.connection.settings.first")}
         </DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
@@ -213,10 +197,7 @@ export function ConnectionDirectoryDialog({
               ? `${t("settings.query.succeeded")} · ${result.stats.matchedCount} / ${result.stats.scannedCount}`
               : `${status?.title} · ${status?.detail} ${t("settings.complete.the.corresponding.cli.trust")} ${status?.recovery}`}
             {connectionReady && (result.partial || result.truncated)
-              ? tr(
-                  " · 有界结果，可能不完整",
-                  " · bounded result; may be incomplete",
-                )
+              ? t("settings.bounded.result.may.be.incomplete")
               : ""}
           </DialogNotice>
           {connectionReady && (
@@ -268,10 +249,7 @@ export function ConnectionDirectoryDialog({
               ))}
               {!items.length && (
                 <p role="status">
-                  {tr(
-                    "没有匹配结果。服务器只返回有界的名称前缀搜索结果。",
-                    "No matches. The server returns bounded name-prefix results only.",
-                  )}
+                  {t("settings.no.matches.the.server.returns.bounded")}
                 </p>
               )}
             </div>

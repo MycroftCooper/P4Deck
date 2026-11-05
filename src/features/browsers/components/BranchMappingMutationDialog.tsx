@@ -93,7 +93,6 @@ export function BranchMappingMutationDialog({
     [30, 80, 150, 150, 90],
     { id: "branch-view-editor", gutter: 48 },
   );
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [draft, setDraft] = useState(() =>
     initialDraft(mode, detail, runtime.context.user),
   );
@@ -158,12 +157,7 @@ export function BranchMappingMutationDialog({
       () => {
         setPreflight(undefined);
         setAcknowledgeDelete(false);
-        setError(
-          tr(
-            "预检已过期，请重新检查 Branch Mapping。",
-            "The preflight expired; inspect the Branch Mapping again.",
-          ),
-        );
+        setError(t("browse.the.preflight.expired.inspect.the.branch"));
         setPhase("edit");
       },
       Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
@@ -304,10 +298,7 @@ export function BranchMappingMutationDialog({
         return;
       if (!branchConnectionMatchesTarget(preflight.target, dispatching))
         throw new Error(
-          tr(
-            "连接身份与预检目标不一致，未执行 Branch Mapping 变更。",
-            "Connection identity changed; no branch mapping change was dispatched.",
-          ),
+          t("browse.connection.identity.changed.no.branch.mapping"),
         );
       let value = await backend.confirmBranchMappingMutation({
         token: preflight.token,
@@ -384,10 +375,7 @@ export function BranchMappingMutationDialog({
   return (
     <Dialog
       title={title}
-      description={tr(
-        "所有写入只经专用预检和一次性确认令牌；不会使用 force，也不会执行 integrate。",
-        "Every write uses the dedicated preflight and one-use confirmation token. P4Deck never forces the change or runs integrate here.",
-      )}
+      description={t("browse.every.write.uses.the.dedicated.preflight")}
       source={source}
       zh={zh}
       danger={mode === "delete"}
@@ -472,10 +460,7 @@ export function BranchMappingMutationDialog({
     >
       {runtime.mode === "mock" && (
         <DialogNotice>
-          {tr(
-            "Browser Mock：预检与保存均为模拟，不访问真实服务器。",
-            "Browser Mock: preflight and save are simulated; no real server is accessed.",
-          )}
+          {t("browse.browser.mock.preflight.and.save.are")}
         </DialogNotice>
       )}
       <div className="workflow-context">
@@ -487,18 +472,12 @@ export function BranchMappingMutationDialog({
 
       {phase === "edit" && mode === "delete" && (
         <DialogNotice error>
-          {tr(
-            "删除不可撤销。预检会重新读取 Mapping、owner、锁定状态和权限，确认阶段还会执行 TOCTOU 复核。",
-            "Deletion is irreversible. Preflight re-reads the mapping, owner, lock state, and permissions; confirmation repeats the TOCTOU checks.",
-          )}
+          {t("browse.deletion.is.irreversible.preflight.re.reads")}
         </DialogNotice>
       )}
       {editingBlocked && (
         <DialogNotice error>
-          {tr(
-            "该 Mapping 含未知字段、注释或无法往返的 View 行，禁止编辑；详情仍可只读查看。",
-            "This mapping contains unknown fields, comments, or non-round-trippable View lines. Editing is blocked; details remain read-only.",
-          )}
+          {t("browse.this.mapping.contains.unknown.fields.comments")}
         </DialogNotice>
       )}
 
@@ -690,10 +669,7 @@ export function BranchMappingMutationDialog({
                 checked={acknowledgeDelete}
                 onChange={(event) => setAcknowledgeDelete(event.target.checked)}
               />
-              {tr(
-                "我确认永久删除该 Branch Mapping",
-                "I understand this permanently deletes the Branch Mapping",
-              )}
+              {t("browse.i.understand.this.permanently.deletes.the")}
             </label>
           )}
         </div>
@@ -725,10 +701,7 @@ export function BranchMappingMutationDialog({
       )}
       {phase === "result" && result?.outcome === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "写入可能已应用；已用同一操作号查询持久回执并刷新一次。请先核对 Branch Mapping 列表/详情，不要用新操作号重试。",
-            "The write may have applied. The durable receipt was queried once with the same operation id and views were refreshed; inspect the Branch Mappings list/detail before any retry with a new operation id.",
-          )}
+          {t("browse.the.write.may.have.applied.the")}
         </DialogNotice>
       )}
       {phase === "result" && result?.outcome === "succeeded" && observed && (
@@ -738,10 +711,7 @@ export function BranchMappingMutationDialog({
           {observed.owner}
           {observed.locked ? t("browse.locked") : ""}
           {" · "}
-          {tr(
-            "仍以刷新后的列表/详情为准。",
-            "The refreshed list/detail remains authoritative.",
-          )}
+          {t("browse.the.refreshed.list.detail.remains.authoritative")}
         </DialogNotice>
       )}
       {phase === "result" && result && (

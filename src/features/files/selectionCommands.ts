@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import type { FileActionRequest, WorkspaceNode } from "../../shared/contracts";
 import { pathKey } from "./address";
 import { nodeKey } from "./selection";
@@ -64,8 +65,7 @@ function filespec(node: WorkspaceNode, localOnly = false) {
           .replaceAll("*", "%2A");
   if (!base) throw new Error("Target has no usable path");
   if (node.kind === "directory") {
-    if (base.includes("..."))
-      throw new Error("目录路径含有不明确的 P4 通配符 / Ambiguous folder path");
+    if (base.includes("...")) throw new Error(t("files.ambiguous.folder.path"));
     return base.replace(/[\\/]$/, "") + "/...";
   }
   return base;

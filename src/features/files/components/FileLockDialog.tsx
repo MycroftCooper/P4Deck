@@ -41,7 +41,6 @@ export function FileLockDialog({
   check?(request: FileLockPreflightRequest): Promise<FileLockPreflight>;
   execute?(confirmation: FileLockConfirmation): Promise<FileLockResult>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => nodes.map((node) => ({ ...node })));
   const paths = useMemo(
     () =>
@@ -226,10 +225,7 @@ export function FileLockDialog({
   return (
     <Dialog
       title={title}
-      description={tr(
-        "完整文件集与连接代次会绑定到一次性令牌；批量结果逐文件报告，部分成功不会回滚。",
-        "The complete file set and connection generation are bound to a one-use token. Batch results are per-file and partial success is not rolled back.",
-      )}
+      description={t("files.the.complete.file.set.and.connection")}
       zh={zh}
       source={source}
       busy={phase === "running"}
@@ -317,11 +313,8 @@ export function FileLockDialog({
       )}
       {phase === "running" && (
         <DialogNotice>
-          {tr(
-            "同一 mutation lane 内重验、执行并验证",
-            "Revalidating, executing and verifying in one mutation lane",
-          )}{" "}
-          · {Math.round(progress ?? 0)}%
+          {t("files.revalidating.executing.and.verifying.in.one")} ·{" "}
+          {Math.round(progress ?? 0)}%
         </DialogNotice>
       )}
       {result && (

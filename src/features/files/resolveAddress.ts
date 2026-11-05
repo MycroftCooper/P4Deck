@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { backend } from "../../infrastructure/backend";
 import type { WorkspaceNode } from "../../shared/contracts";
 import { cleanAddress, parentPath, pathKey } from "./address";
@@ -68,7 +69,5 @@ export async function resolveAddress(
         state: "missing",
       };
   }
-  throw new Error(
-    resolved.reason || "未找到文件或目录 / File or folder not found",
-  );
+  throw new Error(resolved.reason || t("files.file.or.folder.not.found"));
 }

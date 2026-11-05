@@ -29,7 +29,6 @@ export function SubmittedReportDialog({
   initialUser: string;
   onClose(): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [scope, setScope] = useState<ReportScope>(() => ({
     user: initialUser,
     ...reportRange("thisWeek"),
@@ -123,7 +122,7 @@ export function SubmittedReportDialog({
                   pages: partial?.pages ?? 0,
                   scanned: partial?.scanned ?? 0,
                   complete: false,
-                  reason: "已取消 / Cancelled",
+                  reason: t("pending.cancelled"),
                 });
               }}
             >
@@ -192,12 +191,7 @@ export function SubmittedReportDialog({
         ))}
       </div>
       <fieldset className="submitted-report-options">
-        <legend>
-          {tr(
-            "导出类别（默认仅普通提交）",
-            "Export categories (ordinary by default)",
-          )}
-        </legend>
+        <legend>{t("pending.export.categories.ordinary.by.default")}</legend>
         {submissionKinds.map((kind) => (
           <label key={kind}>
             <input

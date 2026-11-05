@@ -130,7 +130,7 @@ export function RevisionFileList({
     <section
       className="revision-file-list"
       style={{ overflowX: "auto" }}
-      aria-label="已提交文件 / Submitted files"
+      aria-label={t("pending.submitted.files")}
     >
       {demo && (
         <p className="preview-note">

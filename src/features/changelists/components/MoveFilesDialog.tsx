@@ -37,7 +37,6 @@ export function MoveFilesDialog({
   onDismiss(): void;
   onResult?(receipt: SelectedMoveReceipt): Promise<void> | void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     ...request,
     paths: [...new Set(request.paths)],
@@ -159,12 +158,7 @@ export function MoveFilesDialog({
         onDismiss();
       } else {
         operation.current = undefined;
-        setError(
-          tr(
-            "文件已有未确认移动或归属已变化，请先核实本次状态。",
-            "Files have an unresolved move or changed ownership. Check that attempt first.",
-          ),
-        );
+        setError(t("pending.files.have.an.unresolved.move.or"));
       }
       return;
     }
@@ -181,12 +175,7 @@ export function MoveFilesDialog({
         : await backend.selectedMoveExecute(frozen);
       if (!alive.current) return;
       if (!result || !validMoveReceipt(frozen, result))
-        throw Error(
-          tr(
-            "结果未知；仅检查本次状态，不会重新创建或移动。",
-            "Outcome unknown; check this attempt without creating or moving again.",
-          ),
-        );
+        throw Error(t("pending.outcome.unknown.check.this.attempt.without"));
       setReceipt(result);
       if (result.targetChangeId !== null) clearDraft();
       if (binding.current === snapshot.connectionKey)
@@ -217,10 +206,7 @@ export function MoveFilesDialog({
   return (
     <Dialog
       title={t("pending.move.to.changelist")}
-      description={tr(
-        "仅移动选中文件，不提交。选择目标并确认范围。",
-        "Move selected files only; never submit. Choose a target and confirm the scope.",
-      )}
+      description={t("pending.move.selected.files.only.never.submit")}
       source={snapshot.source}
       zh={zh}
       busy={busy}
@@ -339,10 +325,7 @@ export function MoveFilesDialog({
             <DialogNotice>
               {receipt?.stage === "completed"
                 ? t("pending.selected.files.move.completed")
-                : tr(
-                    "移动未确认完整；已发生的移动不会回滚。",
-                    "Move not confirmed complete; completed moves are not rolled back.",
-                  )}
+                : t("pending.move.not.confirmed.complete.completed.moves")}
             </DialogNotice>
             {receipt?.message && <p>{receipt.message}</p>}
             <ul className="move-file-preview">
@@ -363,12 +346,7 @@ export function MoveFilesDialog({
             >
               {t("pending.check.this.attempt")}
             </button>
-            <p>
-              {tr(
-                "关闭仅关闭此窗口，不撤销移动，也不会删除已创建的 CL。",
-                "Closing this dialog does not undo moves or delete a created changelist.",
-              )}
-            </p>
+            <p>{t("pending.closing.this.dialog.does.not.undo")}</p>
           </>
         )}
         {busy && (
@@ -389,10 +367,7 @@ export function MoveFilesDialog({
         )}
         {stale && (
           <DialogNotice error>
-            {tr(
-              "连接已改变，请重新选择文件；保留本次结果。",
-              "Connection changed; select files again. This attempt remains recorded.",
-            )}
+            {t("pending.connection.changed.select.files.again.this")}
           </DialogNotice>
         )}
         {error && <DialogNotice error>{error}</DialogNotice>}

@@ -1,4 +1,4 @@
-import { tFor } from "../../shared/i18n";
+import { tFor, t } from "../../shared/i18n";
 import { useRef, useState } from "react";
 import { FolderOpen, ScrollText, Trash2 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
@@ -71,12 +71,7 @@ export function LogSettingsCard({
               : tFor(zh ? "zh-CN" : "en-US", "settings.simulated.logs.cleared"),
           );
         } else {
-          setError(
-            tr(
-              "清理结果不确定：回读仍有条目或读取失败。已用同一操作号查询持久回执；请先核对日志页，不要换新操作号重试。",
-              "Clear outcome uncertain: the readback still has entries or failed. The durable receipt was queried with the same operation id; inspect the log page before any retry with a new id.",
-            ),
-          );
+          setError(t("settings.clear.outcome.uncertain.the.readback.still"));
         }
       }
     } catch (cause) {
@@ -91,12 +86,7 @@ export function LogSettingsCard({
         <ScrollText size={18} />
         {tFor(zh ? "zh-CN" : "en-US", "settings.logs")}
       </h2>
-      <p>
-        {tr(
-          "每次启动创建新日志文件，日志面板只显示本次运行的记录。历史日志保留在磁盘上，启动时不会读取。",
-          "Each launch creates a new log file. The log panel shows only this session; previous files remain on disk and are never loaded at startup.",
-        )}
-      </p>
+      <p>{t("settings.each.launch.creates.a.new.log")}</p>
       <div className="settings-actions">
         <button
           className="secondary"
@@ -122,10 +112,7 @@ export function LogSettingsCard({
       </div>
       {!native && (
         <p className="muted">
-          {tr(
-            "浏览器演示仅清理模拟日志；打开日志文件夹需使用桌面端。",
-            "Browser demo clears simulated logs only. Opening the log folder requires the desktop app.",
-          )}
+          {t("settings.browser.demo.clears.simulated.logs.only")}
         </p>
       )}
       {message && <p role="status">{message}</p>}
@@ -162,12 +149,7 @@ export function LogSettingsCard({
             </>
           }
         >
-          <p>
-            {tr(
-              "将删除当前及历史日志，包括旧版日志数据库。连接设置会保留，后续新日志将继续写入。",
-              "Deletes current and historical logs, including the legacy log database. Connection settings are preserved, and new logs will continue to be recorded.",
-            )}
-          </p>
+          <p>{t("settings.deletes.current.and.historical.logs.including")}</p>
           {error && <p role="alert">{error}</p>}
         </Dialog>
       )}

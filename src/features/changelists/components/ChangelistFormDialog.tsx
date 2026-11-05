@@ -72,12 +72,7 @@ export function ChangelistFormDialog({
       jobs: mode === "edit" ? [...(initial?.jobs ?? [])] : [],
     };
     if (!onSubmit) {
-      setNotice(
-        tr(
-          "表单检查通过。这是界面预览，尚未创建或保存 CL。",
-          "Form checked. UI preview only: no changelist was created or saved.",
-        ),
-      );
+      setNotice(t("pending.form.checked.ui.preview.only.no"));
       return;
     }
     running.current = true;
@@ -103,10 +98,7 @@ export function ChangelistFormDialog({
           ? t("pending.new.changelist.2")
           : tr(`编辑 CL ${changeId ?? ""}`, `Edit CL ${changeId ?? ""}`)
       }
-      description={tr(
-        "描述这组变更；新建 CL 不会自动移动文件或提交。",
-        "Describe the changes. Creating a CL does not move or submit files.",
-      )}
+      description={t("pending.describe.the.changes.creating.a.cl")}
       source={source}
       busy={busy}
       zh={zh}
@@ -139,12 +131,7 @@ export function ChangelistFormDialog({
         {t("pending.workspace")} <strong>{client || "—"}</strong>
       </div>
       {!onSubmit && (
-        <DialogNotice>
-          {tr(
-            "界面预览 · 未连接 CL 写入流程，不会访问 P4 服务器。",
-            "UI preview · CL writing is not connected. No P4 server requests.",
-          )}
-        </DialogNotice>
+        <DialogNotice>{t("pending.ui.preview.cl.writing.is.not")}</DialogNotice>
       )}
       <form
         id={formId}
@@ -184,12 +171,7 @@ export function ChangelistFormDialog({
           role="alert"
           aria-label={t("pending.unsaved.changes")}
         >
-          <p>
-            {tr(
-              "关闭将丢弃此次输入，是否继续？",
-              "Closing discards this draft. Continue?",
-            )}
-          </p>
+          <p>{t("pending.closing.discards.this.draft.continue")}</p>
           <button type="button" onClick={() => setDiscard(false)}>
             {t("pending.keep.editing")}
           </button>

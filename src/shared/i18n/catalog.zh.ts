@@ -496,6 +496,278 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "files.ambiguous.folder.path": "目录路径含有不明确的 P4 通配符",
+  "files.file.or.folder.not.found": "未找到文件或目录",
+  "files.i.confirm.marking.resolve.with.the": "我确认以已编辑结果标记 Resolve",
+  "files.don.t.ask.again.always.use": "不再询问，始终使用默认 CL",
+  "pending.pending.changelists.are.incomplete.refresh.and":
+    "待提交 CL 列表不完整，请刷新后重试",
+  "pending.current.user.unavailable": "当前用户不可用",
+  "shell.close.task.list": "关闭任务列表",
+  "shell.opening.page": "正在打开页面…",
+  "shell.saving.appearance.preferences.failed.these.changes":
+    "外观设置保存失败；重启后可能不会保留本次更改。",
+  "shell.nothing.to.copy": "没有可复制的内容",
+  "shell.saving.shortcuts.failed.local.storage.is":
+    "快捷键设置保存失败：本地存储不可用，本次修改仅在当前会话生效。",
+  "common.cmd.v":
+    "无法读取剪贴板，请在地址栏按 Ctrl/Cmd+V 粘贴 / Paste into the address bar with Ctrl",
+  "common.select.the.address.and.copy.it": "无法写入剪贴板，请选中地址后复制",
+  "files.target.is.not.in.the.workspace": "目标不在已加载的工作区目录中",
+  "files.directory.path.cycle": "目录路径循环，无法定位",
+  "files.the.complete.file.set.and.connection":
+    "完整文件集与连接代次会绑定到一次性令牌；批量结果逐文件报告，部分成功不会回滚。",
+  "files.revalidating.executing.and.verifying.in.one":
+    "同一 mutation lane 内重验、执行并验证",
+  "pending.unshelve.failed": "移动全部到CL失败。",
+  "pending.shelve.failed": "搁置失败。",
+  "pending.export.categories.ordinary.by.default": "导出类别（默认仅普通提交）",
+  "pending.target.a.new.numbered.cl.cancelling":
+    "目标：新建编号 CL。取消后续提交时，文件保留在新 CL；移动不完整或结果未知时不会继续提交。",
+  "pending.discard.the.description.no.files.have":
+    "放弃描述并取消？尚未创建或移动文件。",
+  "shell.this.tab.could.not.be.displayed": "此页签暂时无法显示",
+  "shell.reload.app": "重新加载应用",
+  "shell.checking.folder": "正在检查目录",
+  "shell.select.full.text": "选择完整文本",
+  "shell.full.text": "完整文本",
+  "workspaces.unable.to.load.workspaces.retry.or":
+    "无法加载 Workspace，请刷新重试或在连接设置中检查登录状态。",
+  "workspaces.search.name.path.or.stream": "搜索名称、路径或 Stream…",
+  "workspaces.no.workspaces.owned.by.the.current": "当前用户尚无 Workspace",
+  "settings.follows.the.theme.by.default.a":
+    "默认跟随主题；选择或输入颜色后即时预览并保存，深浅主题会自动调整明暗以保持文字可读。",
+  "settings.enter.six.hex.digits.the.last":
+    "请输入六位十六进制颜色；当前背景保持上次有效值。",
+  "settings.light.and.dark.background.previews": "浅深色背景预览",
+  "pending.connection.changed.nothing.deleted": "连接已变化，未删除",
+  "pending.preflight.identity.or.scope.changed.nothing":
+    "预检身份或范围已变化，未删除",
+  "pending.preflight.blocked.or.expired.nothing.deleted":
+    "预检未通过或已过期，未删除",
+  "pending.loading.cl.membership.for.opened.files":
+    "正在读取已打开文件的 CL 归属…",
+  "pending.unique.cl.membership.is.unknown.for":
+    "以下文件的唯一 CL 归属尚未确认。请刷新状态；不会忽略这些文件后操作其余文件。",
+  "pending.selected.files.belong.to.multiple.cls":
+    "所选文件分属多个 CL。请选择本次搁置的来源组；其他 CL 文件不在此次范围内。",
+  "workspaces.the.active.connection.changed.refresh.workspaces":
+    "活动连接已变化，请刷新 Workspace 后重试。",
+  "workspaces.the.current.profile.requires.login.authenticate":
+    "当前 Profile 需要登录，请到设置中完成认证后重试。",
+  "workspaces.target.workspace.verification.failed.check.its":
+    "目标 Workspace 验证失败，请检查 Server、Client 与 Root。",
+  "workspaces.the.target.workspace.no.longer.exists":
+    "目标 Workspace 已不存在或不再属于当前用户，请刷新列表。",
+  "settings.clear.outcome.uncertain.the.readback.still":
+    "清理结果不确定：回读仍有条目或读取失败。已用同一操作号查询持久回执；请先核对日志页，不要换新操作号重试。",
+  "settings.each.launch.creates.a.new.log":
+    "每次启动创建新日志文件，日志面板只显示本次运行的记录。历史日志保留在磁盘上，启动时不会读取。",
+  "settings.browser.demo.clears.simulated.logs.only":
+    "浏览器演示仅清理模拟日志；打开日志文件夹需使用桌面端。",
+  "settings.deletes.current.and.historical.logs.including":
+    "将删除当前及历史日志，包括旧版日志数据库。连接设置会保留，后续新日志将继续写入。",
+  "companySubmit.a.custom.submit.tool.is.already":
+    "该 CL 已有自定义提交工具在运行。",
+  "companySubmit.the.custom.submit.tool.did.not": "自定义提交工具未启动。",
+  "companySubmit.custom.submit.failed": "自定义提交失败。",
+  "pending.form.checked.ui.preview.only.no":
+    "表单检查通过。这是界面预览，尚未创建或保存 CL。",
+  "pending.describe.the.changes.creating.a.cl":
+    "描述这组变更；新建 CL 不会自动移动文件或提交。",
+  "pending.ui.preview.cl.writing.is.not":
+    "界面预览 · 未连接 CL 写入流程，不会访问 P4 服务器。",
+  "pending.closing.discards.this.draft.continue":
+    "关闭将丢弃此次输入，是否继续？",
+  "pending.pending.changelist.not.found.or.results":
+    "未找到此待提交 CL，或结果不完整。",
+  "pending.returned.changelist.does.not.match.the": "返回的 CL 与目标不符",
+  "pending.this.changelist.is.not.submitted.yet":
+    "该 CL 尚未提交，仅能查看搁置(shelved)文件。",
+  "pending.simulated.data.no.real.p4.server":
+    "模拟数据 · 未访问真实 P4 Server 或网络",
+  "browse.integration.records.found.current.content.inclusion":
+    "发现集成记录路径；内容是否仍包含：未知",
+  "browse.unknown.no.path.in.loaded.records":
+    "未知：当前记录中未找到路径，不代表未合入",
+  "browse.this.file.only.not.the.whole":
+    "仅此文件，不代表整个 CL；忽略、回退和部分解决可能改变最终内容。",
+  "browse.incomplete.evidence.or.actions.requiring.review":
+    "证据不完整或含需复核动作；请按需展开并检查范围。",
+  "actions.lock.preflight.blocked.nothing.was.written":
+    "锁定预检未通过，未写入。",
+  "actions.only.part.of.the.operation.completed":
+    "部分文件未完成，本次操作只部分生效。",
+  "actions.lock.request.failed": "锁定失败。",
+  "settings.pine": "松绿",
+  "settings.slate.blue": "石板蓝",
+  "settings.plum.grey": "梅灰",
+  "settings.warm.sand": "暖沙",
+  "settings.mist.teal": "雾青",
+  "settings.green": "绿色",
+  "settings.blue": "蓝色",
+  "settings.purple": "紫色",
+  "settings.rose": "玫红",
+  "settings.amber": "琥珀",
+  "shell.desktop.app.required": "请在桌面应用中使用",
+  "shell.content": "内容",
+  "shell.choose.a.column.sorting.not.connected":
+    "请在具体列标题上打开；排序尚未接通",
+  "shell.sorting.not.enabled": "当前表格尚未启用排序",
+  "shell.currently.visible.column.configuration.not.connected":
+    "当前固定显示；列配置尚未接通",
+  "shell.fixed.column.widths": "当前使用固定列宽",
+  "shell.default.layout.already.in.use": "当前使用默认布局",
+  "settings.the.connection.settings.for.this.query":
+    "查询对应的连接设置已变化，请关闭后重试。",
+  "settings.this.is.the.explicit.p4.user":
+    "这是本次查询明确使用的 P4 用户；不会从活动连接或环境中静默回退。如需 Trust 或登录恢复，请关闭窗口并先把该用户名填入主卡 User 字段。",
+  "settings.enter.the.username.to.use.for": "请明确填写本次查询使用的用户名。",
+  "settings.bounded.result.may.be.incomplete": " · 有界结果，可能不完整",
+  "settings.no.matches.the.server.returns.bounded":
+    "没有匹配结果。服务器只返回有界的名称前缀搜索结果。",
+  "pending.files.have.an.unresolved.move.or":
+    "文件已有未确认移动或归属已变化，请先核实本次状态。",
+  "pending.outcome.unknown.check.this.attempt.without":
+    "结果未知；仅检查本次状态，不会重新创建或移动。",
+  "pending.move.selected.files.only.never.submit":
+    "仅移动选中文件，不提交。选择目标并确认范围。",
+  "pending.move.not.confirmed.complete.completed.moves":
+    "移动未确认完整；已发生的移动不会回滚。",
+  "pending.closing.this.dialog.does.not.undo":
+    "关闭仅关闭此窗口，不撤销移动，也不会删除已创建的 CL。",
+  "pending.connection.changed.select.files.again.this":
+    "连接已改变，请重新选择文件；保留本次结果。",
+  "files.undo.executed.legacy.result.inspect.the":
+    "Undo 已执行（旧格式结果）；请检查工作区与操作日志。",
+  "files.undo.outcome.is.unconfirmed.rows.were":
+    "Undo 结果不确定，已按真实状态刷新；不要直接重试。",
+  "files.undo.saved.to.the.default.pending":
+    "Undo 已保存到默认待提交列表，尚未提交。请检查文件；如有后续修订，提交前需要同步并解决冲突。",
+  "files.undo.did.not.complete.cleanly.partial":
+    "Undo 未完整完成（partial/unknown）。请检查工作区与操作日志，不要直接重试。",
+  "files.undo.only.the.changes.introduced.by":
+    "仅撤销右键行这个文件修订引入的更改；不扩大到整个 CL 或两条选中记录之间的区间。",
+  "files.destination.default.pending.changelist.no.automatic":
+    "目标：默认待提交列表。不会自动提交。后续修订可能需要同步及 Resolve 后才能提交。",
+  "files.single.file.preview.verified.confirmation.rechecks":
+    "已核对单文件预览；确认时会重新检查。",
+  "files.updates.the.corresponding.workspace.files.without":
+    "将更新工作区中的对应文件；不会强制覆盖已打开的本地修改。",
+  "files.duplicates.and.descendants.covered.by.selected":
+    "已合并重复项及父目录覆盖的子项，避免重复操作。",
+  "files.folders.included.all.descendants.are.in":
+    "包含目录：操作将递归覆盖所选目录的全部子文件；目标数量不是实际文件数量。",
+  "files.the.same.per.file.revision.number":
+    "同一个修订号应用于每个文件，不代表某次共同提交；文件可能不存在该修订。",
+  "files.syncs.versions.as.of.this.cl":
+    "获取截至该 CL 的版本，并非只获取该 CL 提交过的文件。",
+  "files.uses.00.00.00.on.that":
+    "按 P4 服务器时区当天 00:00:00 计算，不是当天结束时间。",
+  "files.enter.a.valid.date.or.positive":
+    "请输入有效日期或正整数编号，不要带 #、@ 或命令参数。",
+  "shell.search": "搜索",
+  "shell.stream.graph": "分支流图",
+  "shell.branch.mappings": "分支映射",
+  "shell.p4.log": "P4 日志",
+  "shell.shelf.detail": "搁置详情",
+  "shell.this.scope.is.frozen.and.does":
+    "下面是固定的操作范围，不会跟随外部选择变化。",
+  "shell.revert.may.discard.unsubmitted.changes.this":
+    "还原可能丢失尚未保存到版本库的修改，不能依赖本界面恢复。",
+  "shell.marks.applicable.controlled.files.in.scope":
+    "将范围内适用的受控文件标记为删除，不删除未跟踪文件。",
+  "shell.folder.operations.include.all.descendants.recursively":
+    "目录操作包含全部子文件（递归）。实际匹配文件数量尚未统计。",
+  "shell.duplicates.and.descendants.covered.by.selected":
+    "重复项及父目录覆盖的子项已合并。",
+  "shell.execution.can.partially.succeed.cancellation.requests":
+    "执行后可能部分成功。取消运行只能请求停止剩余工作，不能撤销已完成部分；请检查任务结果与日志。",
+  "shell.i.have.reviewed.the.scope.and": "我已核对以上范围与风险。",
+  "settings.no.recovery.action.is.required": "无需恢复操作。",
+  "settings.configure.a.valid.p4.cli.then": "配置有效的 P4 CLI 后重新验证。",
+  "settings.correct.and.save.the.connection.settings":
+    "修正并保存连接参数后重新验证。",
+  "settings.verify.and.confirm.the.current.ssl": "核对并确认当前 SSL 指纹。",
+  "settings.log.in.or.re.authenticate.the": "登录或重新登录当前用户。",
+  "settings.check.the.environment.and.retry": "确认环境后重试。",
+  "settings.contact.the.helix.core.administrator": "联系 Helix Core 管理员。",
+  "settings.complete.sso.mfa.externally.then.check":
+    "在外部完成 SSO/MFA 后检查状态。",
+  "pending.outcome.unknown.check.status.without.creating":
+    "结果未知；请检查状态，不要重复创建。",
+  "pending.no.submission.permission.files.remain.in":
+    "未获得提交许可，文件保留在新 CL。",
+  "pending.select.files.and.confirm.configuration.again":
+    "请重新选择文件并确认配置；尚未创建或移动。",
+  "pending.connection.changed.further.actions.stopped.keep":
+    "连接已改变，已停止后继操作。请保留此清单。",
+  "pending.submission.flow.opened.cancelling.leaves.files":
+    "已打开提交流程；取消时文件留在新 CL。是否提交以提交结果为准。",
+  "pending.not.submitted.partial.or.unknown.moves":
+    "尚未提交。部分移动或未知结果不会继续；关闭后保留新 CL 和已移动文件。",
+  "pending.the.previous.process.was.interrupted.the":
+    "上一次进程已中断：准备过程不会自动恢复，也不会自动用新操作号重试；请核对已移动文件与新 CL 后再决定是否重新开始。",
+  "pending.selected.files.with.unknown.outcome": "结果未知的选中文件",
+  "pending.invalid.source.submission.time.cannot.bound":
+    "源CL提交时间无效，无法限定后续查询",
+  "pending.incompatible.response.or.changed.connection":
+    "查询响应不兼容或连接已变化",
+  "pending.invalid.page.cursor.refresh.the.investigation":
+    "分页游标无效，请刷新调查",
+  "pending.invalid.candidate.submission.time.refresh.to":
+    "候选提交时间无效，请刷新核对",
+  "pending.cancelled.current.results.may.be.incomplete":
+    "已取消；当前结果可能不完整",
+  "pending.direct.and.indirect.submissions.linked.by":
+    "按 CI 元数据中的来源 CL 引用链查找直接和间接合并提交",
+  "pending.query.limit.reached.incomplete": "达到本轮上限 · 未完成",
+  "pending.no.cl.reference.candidates.in.the":
+    "已查询范围内未发现CL引用链候选。",
+  "browse.explicit.roots.same.relative.path": "指定根目录，保留相对路径",
+  "browse.inspect.shared.intermediate.references.up.to":
+    "检查来源/目标共同引用的中转（每文件最多2个）",
+  "browse.at.most.20.api.read.attempts":
+    "最多20次API读取尝试（含CL/映射），100个文件，每路径最多2页；缓存命中不请求服务器。仅支持直接目录映射或简单Branch Mapping，复杂Stream导入/重映射不会猜测。",
+  "browse.whole.cl.content.inclusion.unknown.individual":
+    "整个CL的内容包含性：未知。单文件记录路径不代表整个CL已合入；未查到不代表未合入。",
+  "browse.investigation.incomplete.file.visibility.cancellation.or":
+    "调查不完整：文件列表、取消或预算限制。",
+  "browse.no.visible.files.no.cl.conclusion": "没有可见文件，无法得出CL结论。",
+  "browse.evidence.not.content.inclusion": "记录证据（不证明内容包含）",
+  "browse.pages.reference.evidence.incomplete": "分页/引用证据不完整",
+  "browse.the.preflight.expired.inspect.the.branch":
+    "预检已过期，请重新检查 Branch Mapping。",
+  "browse.connection.identity.changed.no.branch.mapping":
+    "连接身份与预检目标不一致，未执行 Branch Mapping 变更。",
+  "browse.every.write.uses.the.dedicated.preflight":
+    "所有写入只经专用预检和一次性确认令牌；不会使用 force，也不会执行 integrate。",
+  "browse.browser.mock.preflight.and.save.are":
+    "Browser Mock：预检与保存均为模拟，不访问真实服务器。",
+  "browse.deletion.is.irreversible.preflight.re.reads":
+    "删除不可撤销。预检会重新读取 Mapping、owner、锁定状态和权限，确认阶段还会执行 TOCTOU 复核。",
+  "browse.this.mapping.contains.unknown.fields.comments":
+    "该 Mapping 含未知字段、注释或无法往返的 View 行，禁止编辑；详情仍可只读查看。",
+  "browse.i.understand.this.permanently.deletes.the":
+    "我确认永久删除该 Branch Mapping",
+  "browse.the.write.may.have.applied.the":
+    "写入可能已应用；已用同一操作号查询持久回执并刷新一次。请先核对 Branch Mapping 列表/详情，不要用新操作号重试。",
+  "browse.the.refreshed.list.detail.remains.authoritative":
+    "仍以刷新后的列表/详情为准。",
+  "browse.the.backend.returned.a.non.progressing":
+    "后端返回了未前进的游标；已保留当前列表并停止分页。",
+  "browse.the.request.was.cancelled.retry.or": "请求已取消；可以重试或刷新。",
+  "browse.inspect.preview.and.maintain.branch.mappings":
+    "查看、预览并通过专用安全状态机维护 Branch Mapping。",
+  "browse.branch.mapping.name.filter": "Branch Mapping 名称过滤",
+  "browse.no.matching.branch.mappings": "没有匹配的 Branch Mapping。",
+  "browse.close.branch.mapping.details": "关闭 Branch Mapping 详情",
+  "browse.unknown.or.non.round.trippable.fields":
+    "含未知或无法往返的字段/View 行，编辑已禁用。",
+  "browse.unknown.fields.block.safe.editing": "未知字段阻止安全编辑",
+  "browse.runs.integrate.n.only.it.never":
+    "只运行 integrate -n；不会修改 workspace，也不会打开文件。",
+  "browse.preview.is.partial.or.truncated": "预览为部分或截断结果",
   "preflight.unavailable": "预检尚未接通，不能执行。",
   "preflight.idle": "尚未预检。",
   "preflight.checking": "正在预检，请稍候…",

@@ -1,4 +1,4 @@
-import {  t , tFor, type MsgKey } from "../../shared/i18n";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { DialogNotice } from "./Dialog";
 export type PreflightState =
   | {

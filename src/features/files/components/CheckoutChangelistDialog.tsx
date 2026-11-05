@@ -25,7 +25,6 @@ export function CheckoutChangelistDialog({
   zh: boolean;
   onClose(value: CheckoutDestination | null): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() =>
     changes
       .filter((change) => change.id > 0)
@@ -88,10 +87,7 @@ export function CheckoutChangelistDialog({
           checked={alwaysUseDefault}
           onChange={(event) => setAlwaysUseDefault(event.target.checked)}
         />
-        {tr(
-          "不再询问，始终使用默认 CL",
-          "Don't ask again; always use Default CL",
-        )}
+        {t("files.don.t.ask.again.always.use")}
       </label>
     </Dialog>
   );

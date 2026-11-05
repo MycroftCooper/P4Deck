@@ -27,7 +27,6 @@ export function SelectedFilesPreviewDialog({
   onDismiss,
   onConfirm,
 }: Props) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [description, setDescription] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -69,12 +68,7 @@ export function SelectedFilesPreviewDialog({
         {t("pending.workspace")}: {workspace} · {files.length}{" "}
         {t("pending.files")} · {routeLabel}
       </div>
-      <p>
-        {tr(
-          "目标：新建编号 CL。取消后续提交时，文件保留在新 CL；移动不完整或结果未知时不会继续提交。",
-          "Target: a new numbered CL. Cancelling submission leaves files in the new CL. Incomplete or unknown moves do not continue to submission.",
-        )}
-      </p>
+      <p>{t("pending.target.a.new.numbered.cl.cancelling")}</p>
       <ul
         style={{ maxHeight: "30vh", overflow: "auto" }}
         aria-label={t("pending.selected.files.and.original.cl")}
@@ -130,12 +124,7 @@ export function SelectedFilesPreviewDialog({
       {error && <DialogNotice error>{error}</DialogNotice>}
       {discard && (
         <DialogNotice>
-          <span>
-            {tr(
-              "放弃描述并取消？尚未创建或移动文件。",
-              "Discard the description? No files have been created or moved.",
-            )}
-          </span>
+          <span>{t("pending.discard.the.description.no.files.have")}</span>
           <button
             type="button"
             onClick={() => {

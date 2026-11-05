@@ -100,10 +100,7 @@ export function SelectedFilesSubmitDialog({
       if (!alive.current) return;
       if (!result || result.operationId !== frozen.operationId)
         throw new Error(
-          tr(
-            "结果未知；请检查状态，不要重复创建。",
-            "Outcome unknown; check status without creating again.",
-          ),
+          t("pending.outcome.unknown.check.status.without.creating"),
         );
       setReceipt(result);
       if (action === "claim") {
@@ -111,10 +108,7 @@ export function SelectedFilesSubmitDialog({
           throw new Error("Connection changed; continuation stopped");
         if (!validSelectedSubmitGrant(frozen, result))
           throw new Error(
-            tr(
-              "未获得提交许可，文件保留在新 CL。",
-              "No submission permission; files remain in the new CL.",
-            ),
+            t("pending.no.submission.permission.files.remain.in"),
           );
         setHandedOff(true);
         onContinue(result.newChangeId!, frozen.files.length, expected);
@@ -135,10 +129,7 @@ export function SelectedFilesSubmitDialog({
         footer={<button onClick={dismiss}>{t("pending.close")}</button>}
       >
         <DialogNotice>
-          {tr(
-            "请重新选择文件并确认配置；尚未创建或移动。",
-            "Select files and confirm configuration again; nothing was created or moved.",
-          )}
+          {t("pending.select.files.and.confirm.configuration.again")}
         </DialogNotice>
       </Dialog>
     );
@@ -196,10 +187,7 @@ export function SelectedFilesSubmitDialog({
       </small>
       {!active && (
         <DialogNotice error>
-          {tr(
-            "连接已改变，已停止后继操作。请保留此清单。",
-            "Connection changed; further actions stopped. Keep this file list.",
-          )}
+          {t("pending.connection.changed.further.actions.stopped.keep")}
         </DialogNotice>
       )}
       <p>
@@ -209,31 +197,17 @@ export function SelectedFilesSubmitDialog({
       </p>
       <DialogNotice>
         {handedOff
-          ? tr(
-              "已打开提交流程；取消时文件留在新 CL。是否提交以提交结果为准。",
-              "Submission flow opened. Cancelling leaves files in the new CL; consult its result for submission status.",
-            )
-          : tr(
-              "尚未提交。部分移动或未知结果不会继续；关闭后保留新 CL 和已移动文件。",
-              "Not submitted. Partial or unknown moves stop here. Closing preserves the new CL and moved files.",
-            )}
+          ? t("pending.submission.flow.opened.cancelling.leaves.files")
+          : t("pending.not.submitted.partial.or.unknown.moves")}
       </DialogNotice>
       {receipt?.stage === "stopped" && (
         <DialogNotice error>
-          {tr(
-            "上一次进程已中断：准备过程不会自动恢复，也不会自动用新操作号重试；请核对已移动文件与新 CL 后再决定是否重新开始。",
-            "The previous process was interrupted: the preparation is not resumed and is not retried with a new operation id. Inspect moved files and the new CL before starting again.",
-          )}
+          {t("pending.the.previous.process.was.interrupted.the")}
         </DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
       {!receipt && (
-        <ul
-          aria-label={tr(
-            "结果未知的选中文件",
-            "Selected files with unknown outcome",
-          )}
-        >
+        <ul aria-label={t("pending.selected.files.with.unknown.outcome")}>
           {files.map((file) => (
             <li key={file.depotPath} style={{ overflowWrap: "anywhere" }}>
               {file.originalChangeId === 0

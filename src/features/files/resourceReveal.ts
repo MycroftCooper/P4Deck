@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { pathKey } from "./address";
 import { resourceNodePath, type ResourceFolder } from "./resourceTree";
 export interface ResourceReveal {
@@ -37,15 +38,13 @@ export function nextRevealStep(
     if (!ancestor)
       return {
         kind: "error",
-        message:
-          folder.warning ||
-          "目标不在已加载的工作区目录中 / Target is not in the workspace listing",
+        message: folder.warning || t("files.target.is.not.in.the.workspace"),
       };
     parent = resourceNodePath(ancestor, "workspace");
     if (!expanded.has(parent)) return { kind: "expand", path: parent };
   }
   return {
     kind: "error",
-    message: "目录路径循环，无法定位 / Directory path cycle",
+    message: t("files.directory.path.cycle"),
   };
 }

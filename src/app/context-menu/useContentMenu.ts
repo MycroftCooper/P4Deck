@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContextMenu } from "./ContextMenu";
 import { action, copy } from "./bindings";
 import { useMenuEnvironment } from "./environment";
@@ -24,18 +25,18 @@ export function useContentMenu() {
         系统中定位: {
           reason:
             env.runtime.mode === "mock"
-              ? "请在桌面应用中使用 / Desktop app required"
-              : "正在检查本地路径 / Checking local path",
+              ? t("shell.desktop.app.required")
+              : t("shell.checking.local.path"),
         },
         "其他软件打开…": {
           reason:
             env.runtime.mode === "mock"
-              ? "请在桌面应用中使用 / Desktop app required"
-              : "正在检查本地路径 / Checking local path",
+              ? t("shell.desktop.app.required")
+              : t("shell.checking.local.path"),
         },
       }),
       {
-        title: path.split(/[\\/]/).pop() || "内容 / Content",
+        title: path.split(/[\\/]/).pop() || t("shell.content"),
         resolve: async () => {
           if (!path || env.runtime.mode !== "tauri") return {};
           const node = await resolveAddress(

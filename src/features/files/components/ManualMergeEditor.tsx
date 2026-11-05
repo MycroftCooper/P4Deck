@@ -81,7 +81,6 @@ export function ManualMergeEditor({
   ): Promise<ManualMergeSession | unknown>;
   cancelOperation?(operationId: string): Promise<unknown>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const copy = messages[zh ? "zh-CN" : "en-US"];
   const [session, setSession] = useState<ManualMergeSession>();
   const [history, setHistory] = useState<string[]>([]);
@@ -709,10 +708,7 @@ export function ManualMergeEditor({
                 checked={acknowledge}
                 onChange={(event) => setAcknowledge(event.target.checked)}
               />
-              {tr(
-                "我确认以已编辑结果标记 Resolve",
-                "I confirm marking Resolve with the edited result",
-              )}
+              {t("files.i.confirm.marking.resolve.with.the")}
             </label>
             <button
               className="primary"

@@ -72,8 +72,8 @@ export function startUnshelveDirect(
         );
         notifyUser(
           writeFailureText(result.message, {
-            zh: "移动全部到CL失败。",
-            en: "Unshelve failed.",
+            zh: "pending.unshelve.failed",
+            en: "pending.unshelve.failed",
           }),
           "error",
         );
@@ -89,8 +89,8 @@ export function startUnshelveDirect(
       withdrawUnshelveProjection(operationId);
       notifyUser(
         writeFailureText(String(error), {
-          zh: "移动全部到CL失败。",
-          en: "Unshelve failed.",
+          zh: "pending.unshelve.failed",
+          en: "pending.unshelve.failed",
         }),
         "error",
       );

@@ -36,7 +36,6 @@ export function GraphInvestigationDialog({
   zh: boolean;
   onClose(): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [subject, setSubject] = useState("file");
   const [change, setChange] = useState(
     seed.changelistId > 0 ? String(seed.changelistId) : "",
@@ -224,10 +223,7 @@ export function GraphInvestigationDialog({
             }}
           >
             <option value="roots">
-              {tr(
-                "指定根目录，保留相对路径",
-                "Explicit roots, same relative path",
-              )}
+              {t("browse.explicit.roots.same.relative.path")}
             </option>
             <option value="branch">Branch Mapping</option>
           </select>
@@ -291,18 +287,10 @@ export function GraphInvestigationDialog({
               setReport(undefined);
             }}
           />
-          {tr(
-            "检查来源/目标共同引用的中转（每文件最多2个）",
-            "Inspect shared intermediate references (up to 2 per file)",
-          )}
+          {t("browse.inspect.shared.intermediate.references.up.to")}
         </label>
       </fieldset>
-      <p>
-        {tr(
-          "最多20次API读取尝试（含CL/映射），100个文件，每路径最多2页；缓存命中不请求服务器。仅支持直接目录映射或简单Branch Mapping，复杂Stream导入/重映射不会猜测。",
-          "At most 20 API read attempts including CL/mapping, 100 files, 2 pages per path. Cache hits make no server request. Complex Stream imports/remaps are not inferred.",
-        )}
-      </p>
+      <p>{t("browse.at.most.20.api.read.attempts")}</p>
       {error && <DialogNotice error>{error}</DialogNotice>}
       {busy && (
         <DialogNotice>{t("browse.collecting.bounded.evidence")}</DialogNotice>
@@ -315,29 +303,18 @@ export function GraphInvestigationDialog({
             {report.total - known - review} / {report.total} ·{" "}
             {t("browse.read.attempts")} {report.reads}/20
           </DialogNotice>
-          <p>
-            {tr(
-              "整个CL的内容包含性：未知。单文件记录路径不代表整个CL已合入；未查到不代表未合入。",
-              "Whole-CL content inclusion: unknown. Individual record paths do not prove the whole CL was integrated; no path does not prove absence.",
-            )}
-          </p>
+          <p>{t("browse.whole.cl.content.inclusion.unknown.individual")}</p>
           {(!report.fileListComplete ||
             report.interrupted ||
             report.limited) && (
             <DialogNotice error>
-              {tr(
-                "调查不完整：文件列表、取消或预算限制。",
-                "Investigation incomplete: file visibility, cancellation or budget limit.",
+              {t(
+                "browse.investigation.incomplete.file.visibility.cancellation.or",
               )}
             </DialogNotice>
           )}
           {!report.total && (
-            <p>
-              {tr(
-                "没有可见文件，无法得出CL结论。",
-                "No visible files; no CL conclusion can be drawn.",
-              )}
-            </p>
+            <p>{t("browse.no.visible.files.no.cl.conclusion")}</p>
           )}
           <div className="graph-investigation-results">
             <ResizableTable
@@ -348,12 +325,7 @@ export function GraphInvestigationDialog({
               <thead>
                 <tr>
                   <th>{t("browse.source.revision.target.file")}</th>
-                  <th>
-                    {tr(
-                      "记录证据（不证明内容包含）",
-                      "Evidence (not content inclusion)",
-                    )}
-                  </th>
+                  <th>{t("browse.evidence.not.content.inclusion")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -379,10 +351,7 @@ export function GraphInvestigationDialog({
                       )}
                       {row.evidence?.incomplete && (
                         <small>
-                          {tr(
-                            "分页/引用证据不完整",
-                            "Pages / reference evidence incomplete",
-                          )}
+                          {t("browse.pages.reference.evidence.incomplete")}
                         </small>
                       )}
                       {!!row.evidence?.edges.length && (

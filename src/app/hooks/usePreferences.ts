@@ -25,8 +25,8 @@ export function usePreferences() {
   useEffect(() => {
     if (!saveUiPreferences(ui))
       notifyFailure(undefined, {
-        zh: "外观设置保存失败；重启后可能不会保留本次更改。",
-        en: "Saving appearance preferences failed; these changes may not persist after a restart.",
+        zh: "shell.saving.appearance.preferences.failed.these.changes",
+        en: "shell.saving.appearance.preferences.failed.these.changes",
       });
     document.documentElement.style.setProperty(
       "--list-font-size",

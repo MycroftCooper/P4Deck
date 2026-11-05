@@ -1,4 +1,4 @@
-import { tFor } from "../../../shared/i18n";
+import { tFor, t } from "../../../shared/i18n";
 import {
   createContext,
   useCallback,
@@ -142,7 +142,6 @@ function ChangeDetailsDialog({
   /** Only offered for a non-submitted CL whose shelved files are listed. */
   onUnshelveIntoNewChange?(detail: SubmittedChangeDetail): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [value, setValue] = useState<SubmittedChangeDetail>();
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -185,23 +184,13 @@ function ChangeDetailsDialog({
         cursor = page.nextCursor;
         seen.add(cursor);
       }
-      throw new Error(
-        tr(
-          "未找到此待提交 CL，或结果不完整。",
-          "Pending changelist not found, or results are incomplete.",
-        ),
-      );
+      throw new Error(t("pending.pending.changelist.not.found.or.results"));
     };
     void load()
       .then((detail) => {
         if (!live) return;
         if (detail.changeId !== target.changeId)
-          throw new Error(
-            tr(
-              "返回的 CL 与目标不符",
-              "Returned changelist does not match the target",
-            ),
-          );
+          throw new Error(t("pending.returned.changelist.does.not.match.the"));
         if (detail.inspectionStatus === "unavailable")
           throw new Error(
             detail.message ||
@@ -259,10 +248,7 @@ function ChangeDetailsDialog({
   const notice =
     value?.message ||
     (shelvedFiles
-      ? tr(
-          "该 CL 尚未提交，仅能查看搁置(shelved)文件。",
-          "This changelist is not submitted yet; only shelved files are available.",
-        )
+      ? t("pending.this.changelist.is.not.submitted.yet")
       : value?.inspectionStatus === "partial"
         ? tFor(zh ? "zh-CN" : "en-US", "pending.file.list.may.be.incomplete")
         : undefined);
@@ -298,10 +284,7 @@ function ChangeDetailsDialog({
       <div className="change-details-dialog">
         {runtime.mode === "mock" && (
           <DialogNotice>
-            {tr(
-              "模拟数据 · 未访问真实 P4 Server 或网络",
-              "Simulated data · no real P4 server or network",
-            )}
+            {t("pending.simulated.data.no.real.p4.server")}
           </DialogNotice>
         )}
         {!value && !error && (

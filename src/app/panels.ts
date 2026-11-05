@@ -8,7 +8,12 @@ export const pageDefinitions = {
     scope: "global",
     target: "depot",
   },
-  search: { zh: "搜索", en: "Search", scope: "global", target: "depot" },
+  search: {
+    zh: "shell.search",
+    en: "shell.search",
+    scope: "global",
+    target: "depot",
+  },
   pending: {
     zh: messages["zh-CN"].pending,
     en: messages["en-US"].pending,
@@ -40,14 +45,14 @@ export const pageDefinitions = {
     target: "depot",
   },
   streamgraph: {
-    zh: "分支流图",
-    en: "Stream Graph",
+    zh: "shell.stream.graph",
+    en: "shell.stream.graph",
     scope: "global",
     target: "depot",
   },
   branchmappings: {
-    zh: "分支映射",
-    en: "Branch Mappings",
+    zh: "shell.branch.mappings",
+    en: "shell.branch.mappings",
     scope: "global",
     target: "depot",
   },
@@ -57,7 +62,12 @@ export const pageDefinitions = {
     scope: "global",
     target: "depot",
   },
-  p4log: { zh: "P4 日志", en: "P4 Log", scope: "global", target: "depot" },
+  p4log: {
+    zh: "shell.p4.log",
+    en: "shell.p4.log",
+    scope: "global",
+    target: "depot",
+  },
   diff: {
     zh: messages["zh-CN"].diff,
     en: messages["en-US"].diff,
@@ -65,8 +75,8 @@ export const pageDefinitions = {
     target: "depot",
   },
   shelf: {
-    zh: "搁置详情",
-    en: "Shelf Detail",
+    zh: "shell.shelf.detail",
+    en: "shell.shelf.detail",
     scope: "file",
     target: "depot",
   },
@@ -76,8 +86,18 @@ export const pageDefinitions = {
     scope: "file",
     target: "depot",
   },
-  settings: { zh: "设置", en: "Settings", scope: "global", target: "depot" },
-  preview: { zh: "文件预览", en: "Preview", scope: "file", target: "local" },
+  settings: {
+    zh: "shell.settings",
+    en: "shell.settings",
+    scope: "global",
+    target: "depot",
+  },
+  preview: {
+    zh: "shell.preview",
+    en: "shell.preview",
+    scope: "file",
+    target: "local",
+  },
 } as const;
 export type PageId = keyof typeof pageDefinitions;
 export type FilePageId = {

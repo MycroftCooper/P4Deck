@@ -381,7 +381,7 @@ export function PageRenderer(props: Props) {
       <Suspense
         fallback={
           <div className="workspace-empty" role="status">
-            {props.preferences.zh ? "正在打开页面…" : "Opening page…"}
+            {translate("shell.opening.page")}
           </div>
         }
       >
