@@ -439,9 +439,13 @@ export function SearchPage({
           );
           if (result.hasMore)
             setPageError(
-              tr(
-                `${kindLabel(retriedKind, true)}重试只恢复了前 ${GLOBAL_SEARCH_PAGE_SIZE} 条；请整体重试以继续分页。`,
-                `${kindLabel(retriedKind, false)} retry restored the first ${GLOBAL_SEARCH_PAGE_SIZE} items; retry all to continue paging.`,
+              tFor(
+                zh ? "zh-CN" : "en-US",
+                "search.retry.restored.the.first.items.retry",
+                {
+                  p1: kindLabel(retriedKind, true),
+                  p2: GLOBAL_SEARCH_PAGE_SIZE,
+                },
               ),
             );
         } else {
@@ -581,10 +585,10 @@ export function SearchPage({
         : phase === "error"
           ? t("search.search.failed")
           : phase === "ready"
-            ? tr(
-                `已加载 ${items.length} 条，共匹配 ${totalMatched} 条。`,
-                `${items.length} loaded, ${totalMatched} matched.`,
-              )
+            ? tFor(zh ? "zh-CN" : "en-US", "search.loaded.matched", {
+                p1: items.length,
+                p2: totalMatched,
+              })
             : t("search.ready.to.search");
 
   const openItem = async (item: GlobalSearchItem) => {
@@ -594,14 +598,14 @@ export function SearchPage({
     try {
       await onNavigate(item.target);
       setNavigationNotice(
-        tr(`已打开 ${item.title}。`, `Opened ${item.title}.`),
+        tFor(zh ? "zh-CN" : "en-US", "search.opened", { p1: item.title }),
       );
     } catch (cause) {
       setNavigationNotice(
-        tr(
-          `无法打开 ${item.title}：${errorMessage(cause)}`,
-          `Could not open ${item.title}: ${errorMessage(cause)}`,
-        ),
+        tFor(zh ? "zh-CN" : "en-US", "search.could.not.open", {
+          p1: item.title,
+          p2: errorMessage(cause),
+        }),
       );
     } finally {
       setNavigationBusy(undefined);
@@ -731,10 +735,11 @@ export function SearchPage({
             <h2>{t("search.results")}</h2>
             {phase === "ready" ? (
               <p>
-                {tr(
-                  `已载入 ${items.length} · 匹配 ${totalMatched} · 扫描 ${totalScanned}`,
-                  `${items.length} loaded · ${totalMatched} matched · ${totalScanned} scanned`,
-                )}
+                {tFor(zh ? "zh-CN" : "en-US", "search.loaded.matched.scanned", {
+                  p1: items.length,
+                  p2: totalMatched,
+                  p3: totalScanned,
+                })}
               </p>
             ) : null}
           </div>

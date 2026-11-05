@@ -496,6 +496,23 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.retry.restored.the.first.items.retry":
+    "{p1}重试只恢复了前 {p2} 条；请整体重试以继续分页。",
+  "search.loaded.matched": "已加载 {p1} 条，共匹配 {p2} 条。",
+  "search.opened": "已打开 {p1}。",
+  "search.could.not.open": "无法打开 {p1}：{p2}",
+  "search.loaded.matched.scanned": "已载入 {p1} · 匹配 {p2} · 扫描 {p3}",
+  "files.invalid.resolve.preflight.payload": "Resolve 数据无效：{p1}",
+  "files.duplicate.conflict": "重复的冲突文件 {p1}",
+  "files.conflict.outside.scope": "冲突不在目标范围内 {p1}",
+  "files.resolve.blocker.s.need.review": "{p1} 个 Resolve 阻断项需要处理。",
+  "files.conflict.s.await.a.strategy": "{p1} 个冲突等待选择策略。",
+  "files.diff.blocks.vs.base": "与 base 差异块：{p1}",
+  "files.conflict.block.s": "{p1} 个冲突块",
+  "files.conflict.block.s.2": "{p1} 个冲突块",
+  "files.pending.resolved": "待处理 {p1} · 已解决 {p2}",
+  "files.select": "选择 {p1}",
+  "files.workspace.modification.based.on": "工作区修改 · 基于 #{p1}",
   "workspaces.connection.generation.changed.no.workspace.mutation":
     "连接代际与预检目标不一致，未执行工作区变更。",
   "workspaces.outcome.uncertain.the.operation.may.have":

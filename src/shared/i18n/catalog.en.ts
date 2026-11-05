@@ -534,6 +534,25 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "search.retry.restored.the.first.items.retry":
+    "{p1} retry restored the first {p2} items; retry all to continue paging.",
+  "search.loaded.matched": "{p1} loaded, {p2} matched.",
+  "search.opened": "Opened {p1}.",
+  "search.could.not.open": "Could not open {p1}: {p2}",
+  "search.loaded.matched.scanned": "{p1} loaded · {p2} matched · {p3} scanned",
+  "files.invalid.resolve.preflight.payload":
+    "Invalid resolve preflight payload: {p1}",
+  "files.duplicate.conflict": "duplicate conflict {p1}",
+  "files.conflict.outside.scope": "conflict outside scope {p1}",
+  "files.resolve.blocker.s.need.review": "{p1} Resolve blocker(s) need review.",
+  "files.conflict.s.await.a.strategy": "{p1} conflict(s) await a strategy.",
+  "files.diff.blocks.vs.base": "Diff blocks vs base: {p1}",
+  "files.conflict.block.s": "{p1} conflict block(s)",
+  "files.conflict.block.s.2": "{p1} conflict block(s)",
+  "files.pending.resolved": "{p1} pending · {p2} resolved",
+  "files.select": "Select {p1}",
+  "files.workspace.modification.based.on":
+    "Workspace modification · based on #{p1}",
   "workspaces.connection.generation.changed.no.workspace.mutation":
     "Connection generation changed; no workspace mutation was dispatched.",
   "workspaces.outcome.uncertain.the.operation.may.have":

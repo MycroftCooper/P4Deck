@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
@@ -112,7 +112,6 @@ export function ResolveDialog({
   ): Promise<WorkflowResult | unknown>;
   resolveStats?(request: ResolveStatsRequest): Promise<ResolveStats>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     nodes: [
       ...new Map(
@@ -201,9 +200,10 @@ export function ResolveDialog({
     const p = value as ResolvePreflight | undefined;
     const fail = (reason: string): never => {
       throw new Error(
-        tr(
-          `Resolve 数据无效：${reason}`,
-          `Invalid resolve preflight payload: ${reason}`,
+        tFor(
+          zh ? "zh-CN" : "en-US",
+          "files.invalid.resolve.preflight.payload",
+          { p1: reason },
         ),
       );
     };
@@ -243,15 +243,16 @@ export function ResolveDialog({
       const depotPath = conflict!.depotPath!;
       if (seen.has(depotPath))
         fail(
-          tr(`重复的冲突文件 ${depotPath}`, `duplicate conflict ${depotPath}`),
+          tFor(zh ? "zh-CN" : "en-US", "files.duplicate.conflict", {
+            p1: depotPath,
+          }),
         );
       seen.add(depotPath);
       if (!allowed.has(depotPath))
         fail(
-          tr(
-            `冲突不在目标范围内 ${depotPath}`,
-            `conflict outside scope ${depotPath}`,
-          ),
+          tFor(zh ? "zh-CN" : "en-US", "files.conflict.outside.scope", {
+            p1: depotPath,
+          }),
         );
       const sources = Array.isArray(conflict!.sources)
         ? conflict!.sources.filter((item) => !!item && typeof item === "object")
@@ -343,13 +344,19 @@ export function ResolveDialog({
           key: `resolve-preflight:${next.contentDigest}`,
           title: t("files.resolve.awaits.attention"),
           body: next.blockers.length
-            ? tr(
-                `${next.blockers.length} 个 Resolve 阻断项需要处理。`,
-                `${next.blockers.length} Resolve blocker(s) need review.`,
+            ? tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.resolve.blocker.s.need.review",
+                { p1: next.blockers.length },
               )
-            : tr(
-                `${next.conflicts.filter((item) => item.status === "unresolved").length} 个冲突等待选择策略。`,
-                `${next.conflicts.filter((item) => item.status === "unresolved").length} conflict(s) await a strategy.`,
+            : tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.conflict.s.await.a.strategy",
+                {
+                  p1: next.conflicts.filter(
+                    (item) => item.status === "unresolved",
+                  ).length,
+                },
               ),
           kind: "attention",
         });
@@ -779,29 +786,32 @@ export function ResolveDialog({
   const diffBlocksText = (value?: number) =>
     value === undefined
       ? t("files.diff.blocks.vs.base.pending")
-      : tr(`与 base 差异块：${value}`, `Diff blocks vs base: ${value}`);
+      : tFor(zh ? "zh-CN" : "en-US", "files.diff.blocks.vs.base", {
+          p1: value,
+        });
   const targetBaseRevision = statsTarget?.baseRevision ?? baseSource?.revision;
   const mergedBefore =
     conflictBlocks === undefined
       ? t("files.pending")
-      : tr(`${conflictBlocks} 个冲突块`, `${conflictBlocks} conflict block(s)`);
+      : tFor(zh ? "zh-CN" : "en-US", "files.conflict.block.s", {
+          p1: conflictBlocks,
+        });
   const mergedAfter =
     conflictBlocks === undefined && !autoMergeable
       ? t("files.pending")
-      : tr(
-          `${autoMergeable ? 0 : conflictBlocks} 个冲突块`,
-          `${autoMergeable ? 0 : conflictBlocks} conflict block(s)`,
-        );
+      : tFor(zh ? "zh-CN" : "en-US", "files.conflict.block.s.2", {
+          p1: autoMergeable ? 0 : (conflictBlocks ?? 0),
+        });
 
   return (
     <Dialog
       title={t("files.resolve.files")}
       description={
         preflight
-          ? tr(
-              `待处理 ${unresolvedConflicts.length} · 已解决 ${resolvedCount}`,
-              `${unresolvedConflicts.length} pending · ${resolvedCount} resolved`,
-            )
+          ? tFor(zh ? "zh-CN" : "en-US", "files.pending.resolved", {
+              p1: unresolvedConflicts.length,
+              p2: resolvedCount,
+            })
           : t("files.reading.conflicts")
       }
       source={source}
@@ -865,7 +875,9 @@ export function ResolveDialog({
                       checked={checked.has(conflict.depotPath)}
                       disabled={busy || conflict.status !== "unresolved"}
                       onChange={() => toggleChecked(conflict.depotPath)}
-                      aria-label={tr(`选择 ${name}`, `Select ${name}`)}
+                      aria-label={tFor(zh ? "zh-CN" : "en-US", "files.select", {
+                        p1: name,
+                      })}
                     />
                     <button
                       type="button"
@@ -941,9 +953,10 @@ export function ResolveDialog({
                         current.depotPath,
                     )}
                     <small>
-                      {tr(
-                        `工作区修改 · 基于 #${targetBaseRevision ?? "—"}`,
-                        `Workspace modification · based on #${targetBaseRevision ?? "—"}`,
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "files.workspace.modification.based.on",
+                        { p1: targetBaseRevision ?? "—" },
                       )}
                     </small>
                     <em>{diffBlocksText(statsTarget?.diffBlocks)}</em>
