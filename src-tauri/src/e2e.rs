@@ -6193,7 +6193,6 @@ mod tests {
             GlobalSearchKind::PendingChange,
             GlobalSearchKind::WorkspaceFile,
             GlobalSearchKind::DepotFile,
-            GlobalSearchKind::Job,
             GlobalSearchKind::Stream,
             GlobalSearchKind::Shelf,
         ];
@@ -6252,7 +6251,7 @@ mod tests {
         }
         ensure(
             kinds.iter().all(|kind| returned_kinds.contains(kind)),
-            format!("global search pages did not cover all seven kinds: {returned_kinds:?}"),
+            format!("global search pages did not cover all six kinds: {returned_kinds:?}"),
         )?;
         let mut replayed = base.clone();
         replayed.operation_id = "global-search-replay".into();
@@ -6370,7 +6369,7 @@ mod tests {
                     operation_id: "global-search-unicode".into(),
                     request_generation: 111,
                     text: "你好".into(),
-                    kinds: vec![GlobalSearchKind::Job],
+                    kinds: vec![GlobalSearchKind::Shelf],
                     page_size: 20,
                     cursor: None,
                 },

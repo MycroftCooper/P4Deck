@@ -231,6 +231,9 @@ impl SearchRepository {
         })
     }
 
+    /// Job results are no longer offered by the global search UI; kept for
+    /// protocol compatibility until the Job kind is fully retired.
+    #[allow(dead_code)]
     pub async fn jobs(
         &self,
         context: &P4Context,
