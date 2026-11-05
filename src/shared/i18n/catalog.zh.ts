@@ -496,6 +496,9 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.collapse": "折叠{p1}",
+  "settings.expand": "展开{p1}",
+  "pending.files.loaded.total.unknown": "已加载 {p1} 个文件 · 总数未知",
   "shell.last.ms": "最近 {p1} ms",
   "shell.insufficient.samples.5": "样本不足（{p1}/5）",
   "files.empty": "请填写目标路径。",
@@ -2509,6 +2512,7 @@ export const zh = {
   "pending.file.status.icon": "文件状态图标",
   "pending.file.type": "文件类型",
   "pending.files": "个文件",
+  "pending.fileCount": "{count} 个文件",
   "pending.files.2": "文件",
   "pending.files.3": "文件",
   "pending.files.entire.cl": "个文件（整个 CL）",

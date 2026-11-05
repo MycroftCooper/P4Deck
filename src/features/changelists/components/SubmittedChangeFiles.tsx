@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, tFor } from "../../../shared/i18n";
 import {
   useEffect,
   useLayoutEffect,
@@ -109,12 +109,14 @@ export function SubmittedChangeFiles({
         <>
           <p className="submitted-files-count" role="status">
             {detail.inspectionStatus === "complete"
-              ? zh
-                ? `${detail.files.length} 个文件`
-                : `${detail.files.length} files`
-              : zh
-                ? `已加载 ${detail.files.length} 个文件 · 总数未知`
-                : `${detail.files.length} files loaded · total unknown`}
+              ? tFor(zh ? "zh-CN" : "en-US", "pending.fileCount", {
+                  count: detail.files.length,
+                })
+              : tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "pending.files.loaded.total.unknown",
+                  { p1: zh ? detail.files.length : detail.files.length },
+                )}
           </p>
           {detail.inspectionStatus !== "complete" && (
             <p role="status">

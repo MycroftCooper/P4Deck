@@ -534,6 +534,9 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "settings.collapse": "Collapse {p1}",
+  "settings.expand": "Expand {p1}",
+  "pending.files.loaded.total.unknown": "{p1} files loaded · total unknown",
   "shell.last.ms": "Last {p1} ms",
   "shell.insufficient.samples.5": "Insufficient samples ({p1}/5)",
   "files.empty": "Enter a destination path.",
@@ -2675,6 +2678,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.file.status.icon": "File status icon",
   "pending.file.type": "File type",
   "pending.files": "files",
+  "pending.fileCount": "{count} files",
   "pending.files.2": "Files",
   "pending.files.3": "files",
   "pending.files.entire.cl": "files (entire CL)",
