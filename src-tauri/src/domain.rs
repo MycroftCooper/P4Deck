@@ -123,6 +123,12 @@ pub struct P4CommandRequest {
     pub args: Vec<String>,
     pub context: P4Context,
     pub output_mode: OutputMode,
+    /// R9: family of this command; decides the enforced time limit. Callers fill
+    /// it from `p4::bounds::IoBound`, the one place the limits are defined.
+    #[serde(default)]
+    pub bound: crate::p4::bounds::IoBound,
+    /// Optional narrowing of [`Self::bound`]; a request can only shorten its
+    /// family limit, never extend it.
     pub timeout_ms: Option<u64>,
     #[serde(default)]
     pub input: Option<String>,

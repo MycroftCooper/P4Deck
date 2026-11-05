@@ -16,6 +16,7 @@ import {
   type SubmitLifecycle,
 } from "../submitLifecycle";
 import { requestDesktopAttention } from "../../../app/notifications/notifications";
+import { useConfirmationGuard } from "../../../shared/confirmation";
 
 export type SubmitCheck = SubmitPreflight;
 interface Props {
@@ -67,9 +68,15 @@ export function SubmitDialog(props: Props) {
   const [message, setMessage] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const generation = useRef(0);
+  // The dispatch claim is tracked without re-rendering the review surface:
+  // `phase` already drives the visible busy state, and an extra render here
+  // would reset in-progress focus/selection on every attempt.
   const running = useRef(false);
   const operationId = useRef<string | undefined>(undefined);
   const staleConnection = origin.connectionKey !== props.connectionKey;
+  // One-use token, expiry, target drift and the in-flight claim live in the
+  // shared confirmation guard; this dialog only owns its own review surface.
+  const guard = useConfirmationGuard(origin.connectionKey, props.connectionKey);
   const latestConnection = useRef(props.connectionKey);
   latestConnection.current = props.connectionKey;
   const loadSummary = useRef(props.loadSummary);
@@ -77,6 +84,7 @@ export function SubmitDialog(props: Props) {
     if (origin.connectionKey !== props.connectionKey) {
       generation.current++;
       running.current = false;
+      guard.settle();
       setPhase("stale");
       setAcknowledged(false);
     }
@@ -108,6 +116,10 @@ export function SubmitDialog(props: Props) {
     if (!check || phase !== "ready") return;
     const timer = setTimeout(
       () => {
+        // Expiry is an outcome of the shared guard: settle with the expired
+        // reason so the reviewed token is dropped, never merely hidden.
+        guard.settle({ blocks: ["expired"] });
+        setCheck(undefined);
         setPhase("stale");
         setAcknowledged(false);
       },
@@ -163,18 +175,30 @@ export function SubmitDialog(props: Props) {
         kind: "attention",
       });
       const checkedChange = result.change;
-      setPhase(
+      const nextPhase =
         !result.ready ||
-          result.blockers.length ||
-          !checkedChange ||
-          !checkedChange.files.length ||
-          !checkedChange.description.trim()
+        result.blockers.length ||
+        !checkedChange ||
+        !checkedChange.files.length ||
+        !checkedChange.description.trim()
           ? "blocked"
           : result.expiresAt <= Date.now()
             ? "stale"
-            : "ready",
+            : "ready";
+      // The reviewed token is held by the shared guard only while it can be
+      // spent; an already-expired or blocked plan is never handed to confirm.
+      guard.hold(
+        nextPhase === "ready"
+          ? {
+              ready: result.ready,
+              token: result.token,
+              expiresAt: result.expiresAt,
+            }
+          : undefined,
       );
+      setPhase(nextPhase);
     } catch (error) {
+      guard.hold(undefined);
       if (epoch === generation.current) {
         setMessage(String(error));
         setPhase("failed");
@@ -189,16 +213,18 @@ export function SubmitDialog(props: Props) {
       !check ||
       phase !== "ready" ||
       running.current ||
-      !acknowledged ||
       staleConnection
     )
       return;
-    if (check.expiresAt <= Date.now()) {
-      setPhase("stale");
+    // One gate for double-click, live token, expiry, acknowledgement and
+    // connection drift; nothing below may dispatch without it.
+    if (!guard.begin({ missingAcknowledgement: !acknowledged })) {
+      if (!guard.checked({ missingAcknowledgement: !acknowledged }))
+        setPhase("stale");
       return;
     }
-    const epoch = generation.current;
     running.current = true;
+    const epoch = generation.current;
     setPhase("submitting");
     setMessage("");
     setSubmitResult(undefined);
@@ -250,7 +276,11 @@ export function SubmitDialog(props: Props) {
         setCheck(undefined);
         setAcknowledged(false);
       }
+      // The token was spent by this dispatch; only the host result is
+      // authoritative from here on.
+      guard.hold(undefined);
     } catch (error) {
+      guard.hold(undefined);
       if (epoch === generation.current) {
         setMessage(String(error));
         setPhase("failed");
@@ -259,6 +289,7 @@ export function SubmitDialog(props: Props) {
       }
     } finally {
       running.current = false;
+      guard.settle();
     }
   }
   /** Cancellation uses the existing IPC with the SAME operationId (never a new id). */
@@ -307,7 +338,8 @@ export function SubmitDialog(props: Props) {
               !props.submit ||
               phase !== "ready" ||
               staleConnection ||
-              !acknowledged
+              !acknowledged ||
+              !guard.checked({ missingAcknowledgement: !acknowledged })
             }
             onClick={() => void confirm()}
           >

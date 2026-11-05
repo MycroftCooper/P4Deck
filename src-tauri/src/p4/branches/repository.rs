@@ -157,7 +157,13 @@ impl BranchMappingRepository {
         // `p4 -Mj branch -i` switches form input away from the normal text form
         // protocol and the server reports a missing Branch field. Writes use the
         // ordinary form protocol; the independent verification read remains tagged JSON.
-        let mut write_request = request(context, invocation, operation_id, Some(input), 120_000);
+        let mut write_request = request(
+            context,
+            invocation,
+            operation_id,
+            Some(input),
+            crate::p4::bounds::IoBound::Command,
+        );
         write_request.output_mode = OutputMode::Text;
         self.runner
             .run_with_mutation_guard(write_request, app, Some(1), guard)
@@ -175,7 +181,13 @@ impl BranchMappingRepository {
     ) -> Result<OperationResult, String> {
         self.runner
             .run_with_mutation_guard(
-                request(context, command::delete(name)?, operation_id, None, 120_000),
+                request(
+                    context,
+                    command::delete(name)?,
+                    operation_id,
+                    None,
+                    crate::p4::bounds::IoBound::Command,
+                ),
                 app,
                 Some(1),
                 guard,
@@ -193,7 +205,13 @@ impl BranchMappingRepository {
     ) -> Result<OperationResult, String> {
         self.runner
             .run(
-                request(context, invocation, operation_id, None, 120_000),
+                request(
+                    context,
+                    invocation,
+                    operation_id,
+                    None,
+                    crate::p4::bounds::IoBound::ReadLong,
+                ),
                 app,
             )
             .await
@@ -206,16 +224,17 @@ fn request(
     invocation: command::Invocation,
     operation_id: String,
     input: Option<String>,
-    timeout_ms: u64,
+    bound: crate::p4::bounds::IoBound,
 ) -> P4CommandRequest {
     P4CommandRequest {
+        bound,
         operation_id: Some(operation_id),
         source: OperationSource::Gui,
         command: invocation.command.into(),
         args: invocation.args,
         context: context.clone(),
         output_mode: OutputMode::JsonLines,
-        timeout_ms: Some(timeout_ms),
+        timeout_ms: None,
         input,
     }
 }

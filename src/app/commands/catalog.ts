@@ -318,18 +318,13 @@ export const appCommands: readonly AppCommandDefinition[] = [
       ["file.rename", "commands.file.rename", "commands.file.rename", "rename"],
       ["file.lock", "commands.file.lock", "commands.file.lock", "lock"],
       ["file.unlock", "commands.file.unlock", "commands.file.unlock", "unlock"],
-      [
-        "file.resolve",
-        "commands.file.resolve",
-        "commands.file.resolve",
-        "resolve",
-      ],
-      [
-        "file.checkout",
-        "commands.file.checkout",
-        "commands.file.checkout",
-        "checkout",
-      ],
+      // Keep each mutating file command on one line: the contract validator
+      // matches this table by `["id", "zh", "en", "shell"]` on a single line,
+      // so a wrapped entry silently drops out of the production catalog.
+      // prettier-ignore
+      ["file.resolve", "commands.file.resolve", "commands.file.resolve", "resolve"],
+      // prettier-ignore
+      ["file.checkout", "commands.file.checkout", "commands.file.checkout", "checkout"],
       ["file.add", "commands.file.add", "commands.file.add", "add"],
       ["file.delete", "commands.file.delete", "commands.file.delete", "delete"],
       ["file.revert", "commands.file.revert", "commands.file.revert", "revert"],

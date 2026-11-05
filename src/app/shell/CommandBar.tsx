@@ -81,6 +81,7 @@ import {
   useOperationWatchdog,
   type ActiveOperation,
 } from "./useOperationWatchdog";
+import { commandFamily } from "./commandWatchdog";
 import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 
 const groups: {
@@ -647,7 +648,12 @@ export function CommandBar({
           startOperation(
             queryOperationId,
             t("shell.loading.pending.changelists"),
-            { kind: "other", cancellable: true, targetCount: nodes.length },
+            {
+              // Reading pending changelists is a plain query, not a mutation.
+              kind: "other",
+              cancellable: true,
+              targetCount: nodes.length,
+            },
           ),
         );
         try {
@@ -813,7 +819,10 @@ export function CommandBar({
         operationId,
         tFor(zh ? "zh-CN" : "en-US", entry.zh as MsgKey),
         {
-          kind: id === "refresh" ? "refresh" : "sync",
+          // Each command names its host family instead of sharing one wide
+          // "sync" bucket: a checkout that the host bounds at 660 s must not be
+          // watched as a transfer, and a refresh must not inherit that bound.
+          kind: commandFamily(id),
           cancellable: id !== "refresh",
           targetCount: nodes.length,
         },

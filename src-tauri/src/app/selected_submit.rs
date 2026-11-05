@@ -828,13 +828,15 @@ impl Backend for Live<'_> {
             .runner
             .run_with_mutation_guard(
                 P4CommandRequest {
+                    // Submit/describe/resolve are mutations guarded by the lane.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(format!("{}:create", r.operation_id)),
                     source: OperationSource::Gui,
                     command: prepared.invocation.command.into(),
                     args: prepared.invocation.args,
                     context: self.context.clone(),
                     output_mode: OutputMode::Text,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: prepared.invocation.input,
                 },
                 Some(self.app),

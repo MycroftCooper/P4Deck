@@ -429,9 +429,9 @@ impl SearchRepository {
                 break;
             }
             ensure_active()?;
-            let remaining_ms = SHELF_DEEP_SEARCH_BUDGET_MS
-                .saturating_sub(started.elapsed().as_millis())
-                .max(1) as u64;
+            // The batch loop is bounded by SHELF_DEEP_SEARCH_BUDGET_MS above;
+            // each `p4 describe` gets the short-read family instead of a
+            // shrinking literal, so a slow batch still yields a partial result.
             let mut args = vec![
                 "-s".into(),
                 "-S".into(),
@@ -440,7 +440,14 @@ impl SearchRepository {
             ];
             args.extend(chunk.iter().map(|change| change.id.to_string()));
             let result = match self
-                .run_with_timeout(context, operation_id, "describe", args, remaining_ms, app)
+                .run_with_timeout(
+                    context,
+                    operation_id,
+                    "describe",
+                    args,
+                    crate::p4::bounds::IoBound::Read,
+                    app,
+                )
                 .await
             {
                 Ok(result) => result,
@@ -589,8 +596,15 @@ impl SearchRepository {
         args: Vec<String>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
-        self.run_with_timeout(context, operation_id, command, args, 30_000, app)
-            .await
+        self.run_with_timeout(
+            context,
+            operation_id,
+            command,
+            args,
+            crate::p4::bounds::IoBound::Read,
+            app,
+        )
+        .await
     }
 
     async fn run_with_timeout(
@@ -599,20 +613,21 @@ impl SearchRepository {
         operation_id: &str,
         command: &str,
         args: Vec<String>,
-        timeout_ms: u64,
+        bound: crate::p4::bounds::IoBound,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let result = self
             .runner
             .run(
                 P4CommandRequest {
+                    bound,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(timeout_ms),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

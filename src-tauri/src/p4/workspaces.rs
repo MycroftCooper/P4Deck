@@ -54,13 +54,14 @@ pub async fn list(
     let result = runner
         .run(
             P4CommandRequest {
+                bound: crate::p4::bounds::IoBound::Read,
                 operation_id: None,
                 source: OperationSource::Gui,
                 command: "clients".into(),
                 args: vec!["--me".into(), "-t".into()],
                 context,
                 output_mode: OutputMode::JsonLines,
-                timeout_ms: Some(30_000),
+                timeout_ms: None,
                 input: None,
             },
             app,

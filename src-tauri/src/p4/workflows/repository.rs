@@ -597,13 +597,15 @@ impl WorkflowRepository {
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    // `p4 resolve` opens a merge editor, so it is a mutation.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::Text,
-                    timeout_ms: Some(120_000),
+                    timeout_ms: None,
                     input: Some("s\n".into()),
                 },
                 app,
@@ -698,13 +700,14 @@ impl WorkflowRepository {
         self.runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -727,13 +730,15 @@ impl WorkflowRepository {
         self.runner
             .run_with_mutation_guard_and_input(
                 P4CommandRequest {
+                    // Guarded mutation (submit, reject, resolve -am, shelve...).
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

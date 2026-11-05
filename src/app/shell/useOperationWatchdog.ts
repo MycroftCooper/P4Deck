@@ -1,23 +1,53 @@
 import { useEffect, useRef } from "react";
+import {
+  IO_DEADLINE_HEADROOM_MS,
+  WATCHDOG_TICK_MS,
+  WORKSPACE_BOUNDS_MS,
+  type WorkspaceBound,
+} from "../../shared/operationBounds.generated";
 
 export type OperationKind =
   "sync" | "getLatest" | "getRevision" | "refresh" | "other";
 
 /**
- * Upper bounds for a toolbar operation. Backend sync commands are capped at
- * 600 s, so the UI leaves headroom for IPC and result reporting; anything that
- * outlives its limit is treated as an uncertain outcome instead of holding the
- * toolbar busy forever.
+ * The host family each watched operation dispatches. R9: the lengths are no
+ * longer written here — they come from `operationBounds.generated`, which is
+ * generated from the runner's own table, so the UI and the host cannot drift
+ * apart again.
+ *
+ * `other` is the generic mutating workspace family (`workspaceCommand`, the
+ * widest interactive bound), not `workspaceOther`: checkout/add/delete/
+ * lock/unlock and revert batches all run as mutating commands, and the UI must
+ * never give up on a command the host is still allowed to finish.
  */
-export const OPERATION_LIMITS: Record<OperationKind, number> = {
-  sync: 660_000,
-  getLatest: 660_000,
-  getRevision: 660_000,
-  refresh: 60_000,
-  other: 180_000,
+const OPERATION_BOUND: Record<OperationKind, WorkspaceBound> = {
+  sync: "workspaceSync",
+  getLatest: "workspaceSync",
+  getRevision: "workspaceSync",
+  refresh: "workspacePreview",
+  other: "workspaceCommand",
 };
 
-export const OPERATION_WATCHDOG_INTERVAL_MS = 5_000;
+/** The host family a watched operation runs under. */
+export function operationBound(kind: OperationKind): WorkspaceBound {
+  return OPERATION_BOUND[kind];
+}
+
+/**
+ * How long the UI waits before treating a toolbar operation as an uncertain
+ * outcome: the host limit for its family plus the shared IPC/report headroom,
+ * so a command that times out on the host still reports its own failure first.
+ */
+export const OPERATION_LIMITS: Record<OperationKind, number> =
+  Object.fromEntries(
+    (Object.keys(OPERATION_BOUND) as OperationKind[]).map((kind) => [
+      kind,
+      WORKSPACE_BOUNDS_MS[OPERATION_BOUND[kind]] + IO_DEADLINE_HEADROOM_MS,
+    ]),
+  ) as Record<OperationKind, number>;
+
+/** Interval of the watchdog: a tick only re-checks elapsed time. */
+export const OPERATION_WATCHDOG_INTERVAL_MS = WATCHDOG_TICK_MS;
 
 export function operationLimit(kind: OperationKind): number {
   return OPERATION_LIMITS[kind];

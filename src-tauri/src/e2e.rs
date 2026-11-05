@@ -8552,13 +8552,14 @@ mod tests {
         let result = runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: None,
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode,
-                    timeout_ms: Some(60_000),
+                    timeout_ms: None,
                     input,
                 },
                 None,

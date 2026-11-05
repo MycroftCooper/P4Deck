@@ -3869,13 +3869,15 @@ pub async fn confirm_revert_action(
         .runner
         .run_with_mutation_guard_and_input(
             P4CommandRequest {
+                // Durable file action (revert/revertUnchanged): a mutation.
+                bound: crate::p4::bounds::IoBound::Command,
                 operation_id: Some(id.clone()),
                 source: OperationSource::Gui,
                 command: plan.command.into(),
                 args: plan.args,
                 context: context.clone(),
                 output_mode: OutputMode::JsonLines,
-                timeout_ms: Some(600_000),
+                timeout_ms: None,
                 input: None,
             },
             Some(&app),
@@ -3910,13 +3912,14 @@ pub async fn confirm_revert_action(
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(format!("{id}:reconcile")),
                     source: OperationSource::Gui,
                     command: query.command.into(),
                     args: query.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 Some(&app),
@@ -3996,13 +3999,15 @@ async fn perform_durable_file_action(
         .runner
         .run_with_mutation_guard_and_input(
             P4CommandRequest {
+                // Durable generic file action: a mutation.
+                bound: crate::p4::bounds::IoBound::Command,
                 operation_id: Some(id.clone()),
                 source: OperationSource::Gui,
                 command: plan.command.into(),
                 args: plan.args,
                 context: context.clone(),
                 output_mode: plan.output_mode,
-                timeout_ms: Some(600_000),
+                timeout_ms: None,
                 input: None,
             },
             Some(app),

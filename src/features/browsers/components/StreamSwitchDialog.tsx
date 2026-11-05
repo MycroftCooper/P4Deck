@@ -1,4 +1,4 @@
-import { t } from "../../../shared/i18n";
+import { t, type MsgKey } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
@@ -22,6 +22,12 @@ import type {
   StreamSwitchPreflight,
   StreamSwitchResult,
 } from "../../../shared/contracts";
+import {
+  acknowledgementRequired,
+  guardPreset,
+  useConfirmationGuard,
+  useTokenExpiry,
+} from "../../../shared/confirmation";
 
 type Phase = "preflight" | "review" | "executing" | "result";
 
@@ -64,6 +70,17 @@ export function StreamSwitchDialog({
   const operation = useRef<string | undefined>(undefined);
   const pendingRuntime = useRef<RuntimeInfo | undefined>(undefined);
   const mounted = useRef(true);
+  // One-use token, live expiry, target drift and the in-flight claim are owned
+  // by the shared confirmation guard. The warning acknowledgement stays a
+  // separate review input of this dialog and is passed into the guard, never
+  // merged into the token check.
+  const guard = useConfirmationGuard(connectionKey, connectionKey);
+  const preset = guardPreset("streamSwitch");
+  const missingAcknowledgement = acknowledgementRequired(preset, {
+    warnings: plan?.warnings.length ?? 0,
+  })
+    ? !acknowledge
+    : false;
   const snapshot = useMemo(
     () => ({
       stream: { ...stream },
@@ -81,19 +98,14 @@ export function StreamSwitchDialog({
     };
   }, [connectionKey]);
 
-  useEffect(() => {
-    if (!plan || phase !== "review") return;
-    const timer = window.setTimeout(
-      () => {
-        setPlan(undefined);
-        setAcknowledge(false);
-        setError(t("browse.the.preflight.expired.inspect.the.current"));
-        setPhase("preflight");
-      },
-      Math.min(2147483647, Math.max(0, plan.expiresAt - Date.now())),
-    );
-    return () => window.clearTimeout(timer);
-  }, [phase, plan, zh]);
+  // Expiry drops the reviewed token; it never merely hides the button.
+  useTokenExpiry(phase === "review" ? plan?.expiresAt : undefined, () => {
+    guard.settle({ blocks: ["expired"] });
+    setPlan(undefined);
+    setAcknowledge(false);
+    setError(t(preset.expiredMessageKey as MsgKey));
+    setPhase("preflight");
+  });
 
   async function preflight(nextMode = mode) {
     if (busy) return;
@@ -105,6 +117,7 @@ export function StreamSwitchDialog({
     setResult(undefined);
     setPlan(undefined);
     setAcknowledge(false);
+    guard.hold(undefined);
     try {
       const next = await backend.preflightStreamSwitch({
         targetStream: snapshot.stream.stream,
@@ -113,6 +126,12 @@ export function StreamSwitchDialog({
       });
       if (!mounted.current || seq !== sequence.current) return;
       setPlan(next);
+      // Only a live, ready token may later be spent by confirm.
+      guard.hold(
+        next.ready && next.token
+          ? { ready: true, token: next.token, expiresAt: next.expiresAt }
+          : undefined,
+      );
       setPhase("review");
     } catch (cause) {
       if (mounted.current && seq === sequence.current) setError(String(cause));
@@ -149,12 +168,13 @@ export function StreamSwitchDialog({
     if (
       busy ||
       !plan?.ready ||
-      !plan.token ||
       !plan.targetSnapshot ||
-      plan.expiresAt <= Date.now() ||
       (plan.warnings.length > 0 && !acknowledge)
     )
       return;
+    // One gate for double-click, live token, expiry, warnings acknowledgement
+    // and context drift; nothing below may dispatch without it.
+    if (!guard.begin({ missingAcknowledgement })) return;
     const seq = ++sequence.current;
     const operationId = crypto.randomUUID();
     operation.current = operationId;
@@ -173,7 +193,8 @@ export function StreamSwitchDialog({
           t("browse.connection.identity.changed.no.stream.switch"),
         );
       let next = await backend.confirmStreamSwitch({
-        token: plan.token,
+        // `begin()` proved this exact reviewed token is still spendable.
+        token: plan.token!,
         target: plan.targetSnapshot,
         previewDigest: plan.previewDigest,
         acknowledgeWarnings: acknowledge,
@@ -203,6 +224,10 @@ export function StreamSwitchDialog({
       setResult(unknownStreamSwitchResult(operationId, String(cause)));
       setPhase("result");
     } finally {
+      // The token was spent by this dispatch (or the attempt failed); only the
+      // host readback is authoritative from here on, so it is never re-spent.
+      guard.hold(undefined);
+      guard.settle();
       if (seq === sequence.current) {
         operation.current = undefined;
         setBusy(false);
@@ -214,6 +239,9 @@ export function StreamSwitchDialog({
     sequence.current++;
     if (operation.current) void backend.cancelOperation(operation.current);
     operation.current = undefined;
+    // Back to a fresh review: the previous review token is withdrawn.
+    guard.settle();
+    guard.hold(undefined);
     setBusy(false);
     setPlan(undefined);
     setResult(undefined);
@@ -285,10 +313,9 @@ export function StreamSwitchDialog({
                 className={mode === "sync" ? "danger" : "primary"}
                 disabled={
                   !plan?.ready ||
-                  !plan.token ||
                   !plan.targetSnapshot ||
-                  plan.expiresAt <= Date.now() ||
-                  (plan.warnings.length > 0 && !acknowledge)
+                  (plan.warnings.length > 0 && !acknowledge) ||
+                  !guard.checked({ missingAcknowledgement })
                 }
                 onClick={() => void confirm()}
               >

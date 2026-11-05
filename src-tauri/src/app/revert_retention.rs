@@ -176,13 +176,14 @@ pub async fn capture(
     let observed = runner
         .run_with_progress(
             P4CommandRequest {
+                bound: crate::p4::bounds::IoBound::ReadLong,
                 operation_id: Some(format!("{id}:facts")),
                 source: OperationSource::Gui,
                 command: query.command.into(),
                 args: query.args,
                 context: context.clone(),
                 output_mode: OutputMode::JsonLines,
-                timeout_ms: Some(300_000),
+                timeout_ms: None,
                 input: None,
             },
             Some(app),
@@ -212,13 +213,14 @@ pub async fn capture(
     let diff = runner
         .run_with_progress(
             P4CommandRequest {
+                bound: crate::p4::bounds::IoBound::ReadLong,
                 operation_id: Some(format!("{id}:changed")),
                 source: OperationSource::Gui,
                 command: query.command.into(),
                 args: query.args,
                 context: context.clone(),
                 output_mode: OutputMode::JsonLines,
-                timeout_ms: Some(300_000),
+                timeout_ms: None,
                 input: None,
             },
             Some(app),
