@@ -534,6 +534,22 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "pending.moveBlockedOutcomeUnknown": "unknown",
+  "companySubmit.invalidChangeId": "Invalid CL number.",
+  "companySubmit.toolMissing": "Tool is missing.",
+  "companySubmit.toolNotFile": "Tool path is not a file.",
+  "companySubmit.toolChanged": "Tool identity changed.",
+  "companySubmit.busy": "A session is active or unresolved.",
+  "companySubmit.staleSession": "Stale session.",
+  "companySubmit.invalidTransition": "Invalid session transition.",
+  "companySubmit.realStartDisabled": "Real launch remains disabled.",
+  "companySubmit.notStarted": "Simulation: no process was created.",
+  "pending.move": "move",
+  "pending.removal": "revert/shelf delete",
+  "pending.localDelete": "local delete",
+  "pending.fileAction": "file action",
+  "pending.running": "in progress",
+  "pending.verificationRequired": "needs verification",
   "files.ambiguous.folder.path": "Ambiguous folder path",
   "files.file.or.folder.not.found": "File or folder not found",
   "files.i.confirm.marking.resolve.with.the":

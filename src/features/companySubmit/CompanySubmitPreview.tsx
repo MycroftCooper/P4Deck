@@ -8,50 +8,29 @@ import {
   type Simulation,
   type PlanError,
 } from "./model";
-const errors: Record<PlanError, [string, string]> = {
-  singleNumberedChangeRequired: [
+const errors: Record<PlanError, string> = {
+  singleNumberedChangeRequired:
     "companySubmit.select.one.numbered.cl.default.multiple",
-    "companySubmit.select.one.numbered.cl.default.multiple",
-  ],
-  invalidChangeId: ["CL 编号无效。", "Invalid CL number."],
-  invalidExecutablePath: [
-    "companySubmit.a.local.drive.absolute.exe.path",
-    "companySubmit.a.local.drive.absolute.exe.path",
-  ],
-  invalidConnection: [
-    "companySubmit.active.profile.identity.or.host.connection",
-    "companySubmit.active.profile.identity.or.host.connection",
-  ],
-  connectionChanged: [
+  invalidChangeId: "companySubmit.invalidChangeId",
+  invalidExecutablePath: "companySubmit.a.local.drive.absolute.exe.path",
+  invalidConnection: "companySubmit.active.profile.identity.or.host.connection",
+  connectionChanged:
     "companySubmit.connection.changed.verification.is.required.again",
-    "companySubmit.connection.changed.verification.is.required.again",
-  ],
-  toolMissing: ["工具不存在。", "Tool is missing."],
-  toolNotFile: ["工具路径不是文件。", "Tool path is not a file."],
-  toolUnverified: [
-    "companySubmit.tool.availability.has.not.been.verified",
-    "companySubmit.tool.availability.has.not.been.verified",
-  ],
-  toolChanged: ["工具身份已变化。", "Tool identity changed."],
-  busy: ["已有未结束或未核实的会话。", "A session is active or unresolved."],
-  staleSession: ["会话已过期。", "Stale session."],
-  invalidTransition: ["无效会话状态转换。", "Invalid session transition."],
-  realStartDisabled: ["真实启动仍禁用。", "Real launch remains disabled."],
+  toolMissing: "companySubmit.toolMissing",
+  toolNotFile: "companySubmit.toolNotFile",
+  toolUnverified: "companySubmit.tool.availability.has.not.been.verified",
+  toolChanged: "companySubmit.toolChanged",
+  busy: "companySubmit.busy",
+  staleSession: "companySubmit.staleSession",
+  invalidTransition: "companySubmit.invalidTransition",
+  realStartDisabled: "companySubmit.realStartDisabled",
 };
 const phases = {
-  reserved: [
-    "companySubmit.simulation.reserved.session.creation.is.not",
-    "companySubmit.simulation.reserved.session.creation.is.not",
-  ],
-  running: [
-    "companySubmit.simulation.running.submission.result.unverified",
-    "companySubmit.simulation.running.submission.result.unverified",
-  ],
-  notStarted: ["模拟：明确未创建进程。", "Simulation: no process was created."],
-  outcomeUnknown: [
+  reserved: "companySubmit.simulation.reserved.session.creation.is.not",
+  running: "companySubmit.simulation.running.submission.result.unverified",
+  notStarted: "companySubmit.notStarted",
+  outcomeUnknown:
     "companySubmit.simulation.session.or.submission.outcome.unknown",
-    "companySubmit.simulation.session.or.submission.outcome.unknown",
-  ],
 };
 /** No launch callback. Mock state is supplied only by tests; normal UI cannot advance it. */
 export function CompanySubmitPreview({
@@ -67,8 +46,6 @@ export function CompanySubmitPreview({
   simulation?: Simulation;
   zh?: boolean;
 }) {
-  const tr = (pair: readonly string[]) =>
-    tFor(zh ? "zh-CN" : "en-US", pair[0] as MsgKey);
   const result = currentReply(reply, request, requestId);
   const error = inputHint(request) || (!result?.ok ? result?.error : undefined);
   const state =
@@ -93,7 +70,9 @@ export function CompanySubmitPreview({
         )}
       </p>
       {error ? (
-        <p role="alert">{tr(errors[error])}</p>
+        <p role="alert">
+          {tFor(zh ? "zh-CN" : "en-US", errors[error] as MsgKey)}
+        </p>
       ) : !result ? (
         <p role="status">
           {tFor(
@@ -119,7 +98,11 @@ export function CompanySubmitPreview({
           </ul>
         </>
       )}
-      {state && <p role="status">{tr(phases[state.state.state])}</p>}
+      {state && (
+        <p role="status">
+          {tFor(zh ? "zh-CN" : "en-US", phases[state.state.state] as MsgKey)}
+        </p>
+      )}
       {simulation && !state && (
         <p role="status">
           {tFor(
