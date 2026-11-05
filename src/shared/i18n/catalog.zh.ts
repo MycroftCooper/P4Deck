@@ -496,6 +496,29 @@ export const zh = {
   "contextMenu.copy.task.id": "复制任务 ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "common.preview.is.restricted.to.the.current":
+    "仅可预览当前工作区目录内的文件。",
+  "common.path.is.outside.the.current.workspace": "路径不在当前工作区内。",
+  "common.path.is.outside.the.current.client": "路径不在当前客户端视图中。",
+  "common.file.is.not.available.locally.sync":
+    "文件不在本地，请先获取最新（Sync）后再试。",
+  "common.depot.file.is.not.mapped.to": "该 Depot 文件未映射到当前工作区。",
+  "common.workspace.root.has.not.been.verified": "工作区根目录尚未校验。",
+  "common.workspace.root.must.be.an.absolute": "工作区根目录必须是绝对路径。",
+  "common.select.a.regular.file": "请选择一个普通文件。",
+  "common.file.is.too.large.to.preview": "文件过大，无法预览。",
+  "common.the.path.is.outside.the.workspace": "路径不在当前工作区内",
+  "pending.maximum.512.characters": "最多 512 字符",
+  "pending.current.stream.unavailable": "当前 Stream 不可用",
+  "pending.select.valid.streams.maximum.16": "请选择有效 Stream（最多16项）",
+  "pending.depot.path.without.or":
+    "请输入有效的 //depot 路径（不可含 @ 或 #） / Enter a valid /",
+  "pending.depot.path.does.not.intersect.selected":
+    "Depot Path 与所选 Stream 无交集",
+  "pending.enter.a.valid.start.time": "请输入有效起始时间",
+  "pending.enter.a.valid.end.time": "请输入有效结束时间",
+  "pending.end.time.must.not.be.before": "结束时间不得早于起始时间",
+  "pending.invalid.submission.type": "无效提交类型",
   "pending.reading": "正在读取…",
   "pending.12.read.budget.reached.explicitly.refresh":
     "达到12次读取预算；请显式刷新以重新调查",

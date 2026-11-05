@@ -534,6 +534,36 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.copy.task.id": "Copy task ID",
 
   // ---- remaining hardcoded Chinese translated --------------------
+  "common.preview.is.restricted.to.the.current":
+    "Preview is restricted to the current workspace directory.",
+  "common.path.is.outside.the.current.workspace":
+    "Path is outside the current workspace.",
+  "common.path.is.outside.the.current.client":
+    "Path is outside the current client view.",
+  "common.file.is.not.available.locally.sync":
+    "File is not available locally. Sync it first, then retry.",
+  "common.depot.file.is.not.mapped.to":
+    "Depot file is not mapped to this workspace.",
+  "common.workspace.root.has.not.been.verified":
+    "Workspace Root has not been verified.",
+  "common.workspace.root.must.be.an.absolute":
+    "Workspace Root must be an absolute path.",
+  "common.select.a.regular.file": "Select a regular file.",
+  "common.file.is.too.large.to.preview": "File is too large to preview.",
+  "common.the.path.is.outside.the.workspace":
+    "The path is outside the workspace:",
+  "pending.maximum.512.characters": "Maximum 512 characters",
+  "pending.current.stream.unavailable": "Current stream unavailable",
+  "pending.select.valid.streams.maximum.16":
+    "Select valid streams (maximum 16)",
+  "pending.depot.path.without.or": "depot path without @ or #",
+  "pending.depot.path.does.not.intersect.selected":
+    "Depot path does not intersect selected streams",
+  "pending.enter.a.valid.start.time": "Enter a valid start time",
+  "pending.enter.a.valid.end.time": "Enter a valid end time",
+  "pending.end.time.must.not.be.before":
+    "End time must not be before start time",
+  "pending.invalid.submission.type": "Invalid submission type",
   "pending.reading": "Reading…",
   "pending.12.read.budget.reached.explicitly.refresh":
     "12-read budget reached; explicitly refresh to start another investigation",

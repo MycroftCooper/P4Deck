@@ -1,3 +1,5 @@
+import { tFor } from "./i18n/t";
+import type { MsgKey } from "./i18n/catalog.zh";
 /**
  * Localized copy for backend errors that the UI surfaces verbatim.
  *
@@ -18,55 +20,55 @@ interface Rule {
 const RULES: Rule[] = [
   {
     match: "Preview is restricted to the current workspace directory",
-    zh: "仅可预览当前工作区目录内的文件。",
-    en: "Preview is restricted to the current workspace directory.",
+    zh: "common.preview.is.restricted.to.the.current",
+    en: "common.preview.is.restricted.to.the.current",
   },
   {
     match: "Path is outside the current workspace",
-    zh: "路径不在当前工作区内。",
-    en: "Path is outside the current workspace.",
+    zh: "common.path.is.outside.the.current.workspace",
+    en: "common.path.is.outside.the.current.workspace",
   },
   {
     match: "Path is outside the current client view",
-    zh: "路径不在当前客户端视图中。",
-    en: "Path is outside the current client view.",
+    zh: "common.path.is.outside.the.current.client",
+    en: "common.path.is.outside.the.current.client",
   },
   {
     match: "File is not available locally. Sync it first, then retry.",
-    zh: "文件不在本地，请先获取最新（Sync）后再试。",
-    en: "File is not available locally. Sync it first, then retry.",
+    zh: "common.file.is.not.available.locally.sync",
+    en: "common.file.is.not.available.locally.sync",
   },
   {
     match: "Depot file is not mapped to this workspace",
-    zh: "该 Depot 文件未映射到当前工作区。",
-    en: "Depot file is not mapped to this workspace.",
+    zh: "common.depot.file.is.not.mapped.to",
+    en: "common.depot.file.is.not.mapped.to",
   },
   {
     match: "Workspace Root has not been verified",
-    zh: "工作区根目录尚未校验。",
-    en: "Workspace Root has not been verified.",
+    zh: "common.workspace.root.has.not.been.verified",
+    en: "common.workspace.root.has.not.been.verified",
   },
   {
     match: "Workspace Root must be an absolute path",
-    zh: "工作区根目录必须是绝对路径。",
-    en: "Workspace Root must be an absolute path.",
+    zh: "common.workspace.root.must.be.an.absolute",
+    en: "common.workspace.root.must.be.an.absolute",
   },
   {
     match: "Select a regular file",
-    zh: "请选择一个普通文件。",
-    en: "Select a regular file.",
+    zh: "common.select.a.regular.file",
+    en: "common.select.a.regular.file",
   },
   {
     match: "File is too large to preview",
-    zh: "文件过大，无法预览。",
-    en: "File is too large to preview.",
+    zh: "common.file.is.too.large.to.preview",
+    en: "common.file.is.too.large.to.preview",
   },
   {
     // The opener is followed by the offending path.
     match: "The path is outside the workspace:",
     prefix: true,
-    zh: "路径不在当前工作区内",
-    en: "The path is outside the workspace:",
+    zh: "common.the.path.is.outside.the.workspace",
+    en: "common.the.path.is.outside.the.workspace",
   },
 ];
 
@@ -83,10 +85,14 @@ export function localizeBackendError(message: string, zh: boolean): string {
     if (rule.prefix) {
       if (!text.startsWith(rule.match)) continue;
       const rest = text.slice(rule.match.length).trim();
-      return zh ? `${rule.zh}：${rest}` : `${rule.en} ${rest}`;
+      // The prefix rule appends the offending path; the separator differs per
+      // language, so it stays here rather than in the catalog.
+      return zh
+        ? `${tFor("zh-CN", rule.zh as MsgKey)}：${rest}`
+        : `${tFor("en-US", rule.zh as MsgKey)} ${rest}`;
     }
     if (text !== rule.match) continue;
-    return zh ? rule.zh : rule.en;
+    return tFor(zh ? "zh-CN" : "en-US", rule.zh as MsgKey);
   }
   return message;
 }
