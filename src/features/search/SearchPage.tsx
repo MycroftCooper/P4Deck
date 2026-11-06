@@ -1,5 +1,4 @@
 import { t, tFor, type MsgKey } from "../../shared/i18n";
-import { FixedPageHeader } from "../../app/docking/chrome";
 import {
   AlertTriangle,
   ArrowDown,
@@ -638,22 +637,6 @@ export function SearchPage({
         {statusText}
       </div>
       <div className="search-body">
-        <FixedPageHeader
-          description={t(
-            "search.search.submitted.and.pending.changelists.workspace",
-          )}
-        >
-          {mock ? (
-            <span className="search-ui-badge">
-              {t("search.simulated.no.p4.access")}
-            </span>
-          ) : (
-            <span className="search-production-badge">
-              {t("search.live.p4.search")}
-            </span>
-          )}
-        </FixedPageHeader>
-
         {mock ? (
           <div className="search-ui-note">
             <AlertTriangle size={15} />
@@ -680,7 +663,7 @@ export function SearchPage({
                 id="global-search-input"
                 value={draft}
                 aria-invalid={!!validationError}
-                aria-describedby="global-search-help global-search-error"
+                aria-describedby="global-search-error"
                 autoComplete="off"
                 maxLength={256}
                 onChange={(event) => setDraft(event.target.value)}
@@ -707,9 +690,6 @@ export function SearchPage({
                 )}
                 {t("search.search")}
               </button>
-            </div>
-            <div id="global-search-help" className="search-help">
-              {t("search.enter.or.press.search.to.start.queries")}
             </div>
             <div
               id="global-search-error"

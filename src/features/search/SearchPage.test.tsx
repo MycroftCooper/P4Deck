@@ -480,7 +480,11 @@ it("exposes mock, responsive, keyboard, and aria states without hidden controls"
     );
     await render("mock");
     await enter("needle");
-    expect(host.textContent).toContain("Simulated · No P4 access");
+    // Mock mode is disclosed in the body note, not in the page title bar.
+    expect(
+      host.querySelector(".search-ui-badge, .search-production-badge"),
+    ).toBeNull();
+    expect(host.querySelector(".search-ui-note")).toBeTruthy();
     expect(
       host.querySelector('[role="status"][aria-live="polite"]'),
     ).toBeTruthy();

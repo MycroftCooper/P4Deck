@@ -694,7 +694,7 @@ export const zh = {
   "pending.selected.files.belong.to.multiple.cls":
     "所选文件分属多个 CL。请选择本次搁置的来源组；其他 CL 文件不在此次范围内。",
   "workspaces.the.active.connection.changed.refresh.workspaces":
-    "活动连接已变化，请刷新 Workspace 后重试。",
+    "活动连接已变化，已重新同步连接状态，请重试。",
   "workspaces.the.current.profile.requires.login.authenticate":
     "当前 Profile 需要登录，请到设置中完成认证后重试。",
   "workspaces.target.failed.check":

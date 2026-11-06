@@ -6,14 +6,17 @@
   color: var(--text);
 }
 /* The page itself owns the height; this wrapper scrolls the whole column so the
-   results card can stretch to whatever the controls leave behind. */
+   results card can stretch to whatever the controls leave behind. The fixed
+   page chrome already pads `.search-page`, so this wrapper must not add a
+   second inset: that doubled the band between the results card and the tool
+   drawer below. */
 .search-body {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: auto;
-  padding: 24px;
+  padding: 0;
 }
 .search-live {
   position: absolute;
@@ -50,20 +53,6 @@
   font-size: var(--font-md);
   line-height: 1.6;
   margin: 0;
-}
-.search-ui-badge,
-.search-production-badge {
-  border-radius: 20px;
-  padding: 5px 9px;
-  font-size: var(--font-base);
-}
-.search-ui-badge {
-  color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-}
-.search-production-badge {
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 .search-ui-note,
 .search-partial,
@@ -152,19 +141,19 @@
   background: var(--accent-soft);
   color: var(--accent);
 }
-.search-help,
 .search-validation,
 .search-bounded-note {
-  min-height: 17px;
-  margin: 6px 0 0 27px;
+  margin: 4px 0 0 27px;
   font-size: var(--font-base);
-  line-height: 1.5;
-}
-.search-help {
-  color: var(--muted);
+  line-height: 1.4;
 }
 .search-validation {
   color: var(--danger);
+}
+/* The error slot reserved its own line even when empty, which pushed the
+   category chips ~23 px away from the query row for no reason. */
+.search-validation:empty {
+  display: none;
 }
 .search-bounded-note {
   margin-left: 0;
@@ -226,9 +215,16 @@
 .search-results h2 {
   font-size: var(--font-xl);
 }
+/* The results card owns the leftover height, so the idle/loading/empty state
+   fills it instead of hugging the heading and leaving a blank band underneath.
+   `min-height: 0` lets those states shrink with the panel so the copy stays
+   visible in the narrow/short window instead of being pushed off the bottom. */
 .search-empty {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   text-align: center;
   padding: 34px 12px;
@@ -405,9 +401,6 @@
 }
 
 @media (max-width: 390px) {
-  .search-body {
-    padding: 12px;
-  }
   .search-heading {
     align-items: flex-start;
     margin-bottom: 12px;
@@ -426,7 +419,6 @@
     grid-column: 1 / -1;
     width: 100%;
   }
-  .search-help,
   .search-validation,
   .search-bounded-note {
     margin-left: 0;

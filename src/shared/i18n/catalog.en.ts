@@ -743,7 +743,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.selected.files.belong.to.multiple.cls":
     "Selected files belong to multiple CLs. Choose the source group for this shelf operation; other groups are out of scope.",
   "workspaces.the.active.connection.changed.refresh.workspaces":
-    "The active connection changed. Refresh workspaces and retry.",
+    "The active connection changed. Its latest state was resynchronized; retry the switch.",
   "workspaces.the.current.profile.requires.login.authenticate":
     "The current profile requires login. Authenticate in Settings, then retry.",
   "workspaces.target.failed.check":
