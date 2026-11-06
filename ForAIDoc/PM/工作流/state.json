@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T11:22:40.841Z",
+  "updatedAt": "2026-11-06T11:25:33.062Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1983,7 +1983,7 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
-      "stage": "in-progress",
+      "stage": "implemented",
       "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
@@ -1991,7 +1991,7 @@
         "src/features/changelists/components/SubmittedPage.tsx",
         "src/features/search/SearchPage.tsx"
       ],
-      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 2026-11-06 定口径：ConnectionProfilesCard 不做 reducer 化（20 个 useState 是 12 个异步动作的瞬时输出、约 155 处单字段散写，改 reducer 等于 155 点机械替换），改为 B+C——写结论注释 + 抽成组重置函数但不改写入语义；`rootRequestRevision` 经论证可推导但**不删**（会触碰 RUI-03 刚建的 workspace-root lease 生命周期，且 `=== 0` 首帧守卫不是纯等价改写）。实际动手页限定为 UnshelveDialog/SyncDialog/MoveFilesDialog/ShelfDialog 四个对话框；明确不做 BranchMappingsPage/StreamGraphPage（等 RUI-06）、App.tsx、DiffView。2026-11-06 进展：UnshelveDialog 完成（34cfb0d，useState 14→7，7 个瞬态字段成组进 reducer，输入量保留，原测试未改），SyncDialog 完成（8dd0872，useState 10→6，phase/plan/result/error/forceAck 四处重复的「清零+推进」规则收进 SyncRun reducer）；MoveFilesDialog 完成（d2caa15，useState 10→7，busy/attempted/error/receipt 收成 MoveAttempt reducer，error 被连接探测复用故用逐字段事件；该页不用 operationSession，ref 路径未动）；ShelfDialog 进行中。原记录： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
+      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 2026-11-06 完成（4 页改 + 1 页论证跳过）：UnshelveDialog 34cfb0d（14→7）、SyncDialog 8dd0872（10→6）、MoveFilesDialog d2caa15（10→7）、ShelfDialog aa48967（9→3），四个文件原测试一行未改全过、全量 vitest 1851 绿；ConnectionProfilesCard 论证不做（155 处单字段散写，reducer 化只是 setter→dispatch 机械替换）。**指标修正**：真正产生收益的是「同一套字段清理/推进规则的重复次数 4→1」，而非 useState 计数；建议后续同类任务以「转移规则重复次数 ≥3 才 reducer 化」为验收指标，本任务结论记为部分达成（降低重复规则、未显著降低字段总数）。 定口径： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
       "depsRaw": "RUI-03",
       "deps": [
         "RUI-03"
