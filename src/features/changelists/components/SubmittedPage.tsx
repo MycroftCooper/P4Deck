@@ -14,6 +14,13 @@ import { useWorkspaceList } from "../../workspaces/workspaceList";
 import { SubmittedGoTo } from "./SubmittedGoTo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryKey } from "@tanstack/react-query";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../../shared/operationSession";
+
+/** The submitted query channel; `lease.epoch` is the wire `requestGeneration`. */
+const CHAIN = "submitted";
 import { ChangelistPage } from "./ChangelistPage";
 import { SubmittedFilterPanel } from "./SubmittedFilterPanel";
 import { backend } from "../../../infrastructure/backend";
@@ -283,8 +290,17 @@ export function SubmittedPage({
   const [error, setError] = useState("");
   const [pageError, setPageError] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
-  const generation = useRef(0);
-  const queryOperation = useRef<string | undefined>(undefined);
+  /**
+   * Every submitted query is a lease on one channel. Starting a lease
+   * supersedes the previous one, so a filter edit, a reconnect or a refresh
+   * retires the chain that was running and its late answer is dropped instead
+   * of repainting the page.
+   */
+  const session = useOperationSession();
+  /** The chain whose pages are shown; load-more reuses its lease. */
+  const chain = useRef<OperationLease | undefined>(undefined);
+  /** True while a query of the live chain is still in flight. */
+  const chainBusy = useRef(false);
   /** The query whose pages are shown; load-more must reuse it with its cursor. */
   const currentQuery = useRef<
     { base: SubmittedBase; key: QueryKey } | undefined
@@ -308,13 +324,17 @@ export function SubmittedPage({
   const mounted = useRef(true);
   const zh = useIsZh(); // subscribed: re-renders on language switch
 
+  /**
+   * Retires the live chain: a newer query, a filter edit, a reconnect or
+   * unmount all go through here, and the retired lease cancels its backend
+   * operation exactly once.
+   */
   const cancelQuery = useCallback(() => {
-    generation.current++;
-    const operationId = queryOperation.current;
-    queryOperation.current = undefined;
-    if (operationId)
-      void backend.cancelOperation(operationId).catch(() => undefined);
-  }, []);
+    const live = chain.current;
+    chain.current = undefined;
+    chainBusy.current = false;
+    if (live) session.abandon(live);
+  }, [session]);
 
   const applyResults = useCallback((results: SubmittedResults) => {
     changesRef.current = results.changes;
@@ -381,10 +401,17 @@ export function SubmittedPage({
     ): Promise<void> => {
       if (!remoteReady) return;
       cancelQuery();
-      const requestGeneration = generation.current;
+      // One lease per chain: `load-more` continues the live chain with the same
+      // `requestGeneration`, every other caller starts a chain from page one.
+      const lease =
+        append && chain.current ? chain.current : session.start(CHAIN);
+      chain.current = lease;
+      chainBusy.current = true;
+      // `lease.epoch` is stable for the whole chain and changes for a new one,
+      // which is exactly what the backend's echoed `requestGeneration` needs.
+      const requestGeneration = lease.epoch;
+      const operationId = lease.operationId;
       const connectionGeneration = runtime.contextGeneration;
-      const operationId = crypto.randomUUID();
-      queryOperation.current = operationId;
       if (cursor) usedCursors.current.add(cursor);
       if (append) setLoadingMore(true);
       else {
@@ -403,7 +430,7 @@ export function SubmittedPage({
         });
         if (
           !mounted.current ||
-          requestGeneration !== generation.current ||
+          !session.isCurrent(lease) ||
           result.requestGeneration !== requestGeneration
         )
           return;
@@ -447,8 +474,7 @@ export function SubmittedPage({
           generation: connectionGeneration,
         });
       } catch (cause) {
-        if (!mounted.current || requestGeneration !== generation.current)
-          return;
+        if (!mounted.current || !session.isCurrent(lease)) return;
         if (append && canRestartCursor(cause)) {
           // Retain displayed rows, discard the cursor, and retry page one once.
           hasMoreRef.current = false;
@@ -465,9 +491,9 @@ export function SubmittedPage({
           setError(String(cause));
         }
       } finally {
-        if (queryOperation.current === operationId)
-          queryOperation.current = undefined;
-        if (requestGeneration === generation.current) {
+        // Only the chain that is still live may clear the spinners.
+        if (mounted.current && session.isCurrent(lease)) {
+          chainBusy.current = false;
           setLoading(false);
           setLoadingMore(false);
         }
@@ -479,6 +505,7 @@ export function SubmittedPage({
       reconcileSelection,
       remoteReady,
       runtime.contextGeneration,
+      session,
       zh,
     ],
   );
@@ -607,7 +634,7 @@ export function SubmittedPage({
   }, [navigation, applyDefaultDraft]);
 
   const refresh = useCallback(() => {
-    if (!stableQuery || !cacheKey || queryOperation.current) return;
+    if (!stableQuery || !cacheKey || chainBusy.current) return;
     if (defaultPreset) {
       const next = createDefaultSubmittedFilter(
         new Date(),
@@ -667,13 +694,15 @@ export function SubmittedPage({
   }
 
   async function perform(action: ClAction) {
-    const started = generation.current;
+    // An action only refreshes the view it was started in: a filter edit, a
+    // reconnect or unmount in the meantime retires the epoch it captured.
+    const started = session.epoch(CHAIN);
     try {
       const result = await backend.performClAction(action);
       await onOperation(result.warnings);
-      if (mounted.current && started === generation.current) refresh();
+      if (mounted.current && started === session.epoch(CHAIN)) refresh();
     } catch (cause) {
-      if (mounted.current && started === generation.current)
+      if (mounted.current && started === session.epoch(CHAIN))
         setError(String(cause));
     }
   }
