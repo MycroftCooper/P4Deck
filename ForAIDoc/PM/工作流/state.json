@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-04T13:01:48.263Z",
+  "updatedAt": "2026-11-06T08:06:51.337Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
     "note": "由 state.mjs import 生成；此后 state.json 为唯一真值。verification 由 evidence.mjs 从回执派生。"
   },
   "batch": {
-    "id": "CON06+ACTION-R01",
-    "goal": "只完成 CON06（服务器状态）与 ACTION-R01 全矩阵迁移及必要 QA",
-    "stopCondition": "两项完成 + 联合 QA 通过 → BE 一次性 Apply 到本地原树 → 全员停工",
+    "id": "RUI-0.1.12",
+    "goal": "按用户指令顺序推进 RUI-01→RUI-05（0.1.12 重构收口）",
+    "stopCondition": "RUI-02 与 RUI-01 提交且门禁绿；RUI-03 至少一个切片落地并过测试",
     "devClosedByUser": true,
     "applyMode": "batched",
     "openQuestions": [
@@ -96,9 +96,9 @@
     ]
   },
   "counts": {
-    "main": 51,
+    "main": 56,
     "archived": 12,
-    "total": 63,
+    "total": 68,
     "subitems": 32,
     "slices": 7
   },
@@ -1864,6 +1864,190 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
+    },
+    {
+      "id": "RUI-01",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "LEAD（协调）＋FE＋BE",
+      "module": "交付",
+      "scope": "交付：补回 0.1.12 丢失的搜索页/预览本地化 UI 改动",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P0",
+      "evidence": [
+        "src/features/search/SearchPage.tsx",
+        "src/features/search/searchModel.ts",
+        "src/app/styles/search.css",
+        "src/features/browsers/components/FilePreviewPage.tsx",
+        "src/shared/localizeError.ts"
+      ],
+      "note": "2026-11-04 已在 dev 完成并验证（搜索 7→6 类去 Job、去掉 300ms 自动搜索改为点击/Enter、删标题与分割线、结果区铺满、预览/路径错误按语言本地化），但 i18n 分支基于 00052b3 合并回 dev 后这批改动丢失；按当前 t()/catalog 写法重做，验收=6 类、无自动触发、无标题/分割线、预览错误中英双语",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.035Z"
+    },
+    {
+      "id": "RUI-02",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "LEAD（协调）＋FE＋BE",
+      "module": "交付",
+      "scope": "交付：收口 operationSession 与 ipc-surface 进行中工作",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P0",
+      "evidence": [
+        "src/shared/operationSession",
+        "scripts/validate-ipc-surface.mjs"
+      ],
+      "note": "2026-11-06 已提交并验证：LEAD 614bce5（ipc-surface + operationSession 模块）、BE 0014ab2（bounds/confirmation 迁移，537 Rust 测试绿）、FE ba6bc10（26 个 src 文件收口，1832 web 测试绿）；vite 排除 node:test 套件后全量门禁干净；剩余=用户抽验。原记录： | 工作树已有未提交改动（43 文件）：operationSession（session/useOperationSession + 14 个对话框迁移）、validate-ipc-surface 静态校验（Rust 命令↔invoke↔Backend↔事件）；验收=ci-fast 与定向测试绿、ipc-surface 进 CI、提交代码并记录",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-03",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE＋BE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：操作会话收敛（取消/代次/迟到隔离统一）",
+      "stage": "partial",
+      "statusRaw": "部分实现",
+      "priority": "P1",
+      "evidence": [
+        "src/shared/operationSession",
+        "src/shared/confirmation/useConfirmationGuard.ts",
+        "src/shared/cache/snapshots.ts"
+      ],
+      "note": "P0-02 落地后，把剩余手写 cancelOperation/generation.current/operationId 的页面迁到同一会话 owner；验收=每页取消、代次漂移、迟到响应隔离有测试，无新 stale-state 路径",
+      "depsRaw": "RUI-02",
+      "deps": [
+        "RUI-02"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-04",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "重构",
+      "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P1",
+      "evidence": [
+        "src/features/settings/ConnectionProfilesCard.tsx",
+        "src/features/changelists/components/SubmittedPage.tsx",
+        "src/features/search/SearchPage.tsx"
+      ],
+      "note": "现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
+      "depsRaw": "RUI-03",
+      "deps": [
+        "RUI-03"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-05",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "重构",
+      "scope": "重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P1",
+      "evidence": [
+        "src/app/styles/workbench.css",
+        "src/app/styles/tokens.css"
+      ],
+      "note": "现状 workbench.css 4225 行/81KB、字号 17 种（10/11/12px 占 250 处）、tokens 仅 42 个变量、硬编码色值 109 处；验收=按域拆分、引入排版刻度变量、theme-contrast 与视觉回归通过",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
     },
     {
       "id": "UI-07",

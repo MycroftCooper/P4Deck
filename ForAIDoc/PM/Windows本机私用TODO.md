@@ -32,7 +32,7 @@
 
 混合工作包按下方关联子项执行/验收。**55个活跃主工作包**（新增CL-07跨CL提交选中文件；2026-10-31 新增 DIFF-01/MERGE-01 并补登 UI-13；阶段与Bug子项不重复计数），子项不额外计数为新工作包；单个Bug修复或共享抽取通过，不把父项所有功能/验收一并关闭。同一证据可引用但不能重复计算完成数。原2项完成归档保留对应历史基线，不因分类改变重新宣称最新版本通过。
 
-共 **63** 项（活跃 52 + 归档 11）：已实现且有相应验收证据 **30**、已实现待验收 **9**、部分实现 **10**、待实现 **2**、进行中（方案/实施分阶段）**0**、受阻 **2**、建议待确认 **2**。归档 11 项均已有验收证据；本次新增归档 4 项为 DIFF-01/DIFF-02/CL-06/CL-07（2026-11-04 人工验收收尾）。计数以 state.json 的活跃主工作包为准，不表示当前工作树通过编译。
+共 **68** 项（活跃 57 + 归档 11）：已实现且有相应验收证据 **30**、已实现待验收 **9**、部分实现 **11**、待实现 **5**、进行中（方案/实施分阶段）**0**、受阻 **2**、建议待确认 **2**。归档 11 项均已有验收证据；本次新增归档 4 项为 DIFF-01/DIFF-02/CL-06/CL-07（2026-11-04 人工验收收尾）。计数以 state.json 的活跃主工作包为准，不表示当前工作树通过编译。
 
 | 模块 | 总数 | 有证据完成 | 实现待验收 | 部分 | 待实现 | 受阻 | 待确认 | 进行中 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -47,10 +47,11 @@
 | 工具与可靠性 | 2 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |
 | 阶段收口 | 3 | 0 | 0 | 1 | 1 | 1 | 0 | 0 |
 | 后续候选 | 2 | 0 | 0 | 0 | 0 | 0 | 2 | 0 |
-| **合计** | **52** | **30** | **9** | **10** | **2** | **2** | **2** | **0** |
+| **合计** | **57** | **30** | **9** | **12** | **5** | **2** | **2** | **0** |
 
 > 2026-10-31 增补：新增 **DIFF-01**（Diff 工具重做，整套替换 `@pierre/diffs` 1.6.2）与 **MERGE-01**（冲突合并工具重做，先接 P4Merge 外部合并）两个主工作包（活跃 52→54），并补登 **UI-13**（标题栏版本号，0.1.9 已实现，活跃 54→55）；当前活跃 55 + 归档 7 = 62。选型依据见 [预研-Diff与合并工具重做.md](预研-Diff与合并工具重做.md)，明细见唯一任务表。
 > 2026-11-04 结项：DIFF-01（Diff 工具重做）、DIFF-02（Diff 计算层优化）、CL-06（公司自定义提交工具接入）、CL-07（跨 Pending CL 提交选中文件）均已完成人工验收收尾并登记验收，四项行已移入下方「完成项归档」；活跃主工作包 55→52，已实现待验收 13→9。
+> 2026-11-06 登记：新增 5 个 0.1.12 重构主包 —— RUI-01（补回丢失的搜索页/预览本地化 UI 改动，P0）、RUI-02（收口 operationSession 与 ipc-surface 进行中工作，P0/进行中）、RUI-03（操作会话收敛，P1.5，依赖 RUI-02）、RUI-04（React 状态收敛，P1.5，依赖 RUI-03）、RUI-05（CSS 收敛，P1.5）。活跃主工作包 51→56，总数 63→68；回填早前漏计的部分实现行（上下文菜单英文映射，UI-02-B01）。
 >
 > 编号口径：决议与发布记录里的 **UI-12**（背景色 chrome 层次）对应子项 **UI-09-3**，不重复立主包；**UI-13**（标题栏版本号）原先只存在于决议/发布记录，本次补登为主工作包。
 
@@ -112,6 +113,11 @@
 | CL-05 | 功能需求 | FE | CL 工作流：Pending编号数值正倒序按钮（用户已批准） | 已验收（用户 2026-10-30：CL 编号排序验证通过） | P1 | [pending证据](../../tests/qa/preview-audit/pending-evidence/results.json)；[并行交接](并行交接.md) | 11浏览器断言＋23mock边界/刷新、TS/diff通过，无新增产品改动。PM核JSON/hash及390px图Default/2/10/100顺序；合成验升降序、选择展开、菜单拖放目标、既有偏好及零额外读取。真实Pending逻辑但数据/菜单/移动确认替身，不能外推真实P4执行或全包；保留Default特殊位置和现有交互 | 真实操作依赖SAFE-02；本项合成阶段收尾 |
 | UI-06 | 功能需求 | FE | 界面与导航：全局横纵滚动条对比与边界（UI优化） | 已验收（用户 2026-10-30：全页面/窄窗滚动条通过） | P1 | [滚动条覆盖](../../tests/qa/preview-audit/scroll-evidence/coverage.json)；[并行交接](并行交接.md) | 双主题28实际拖动及4窄窗150%检查通过，另2无横向溢出不计实际拖动；17mock/TS/diff通过，无产品改动。PM核矩阵/JSON/hash及Dockview截图，表格/虚拟表/预览真实组件，弹窗/侧栏/嵌套部分结构替身。保留Windows WebView、OS overlay/高对比、未实例化Dockview自绘纵条缺口；不能宣称全平台/所有页面验收 | 原生/OS覆盖待验；本轮合成矩阵收尾 |
 
+| RUI-01 | 重构与代码优化 | LEAD（协调）＋FE＋BE | 交付：补回 0.1.12 丢失的搜索页/预览本地化 UI 改动 | 待实现 | P0 | [SearchPage.tsx](../../src/features/search/SearchPage.tsx)；[searchModel.ts](../../src/features/search/searchModel.ts)；[search.css](../../src/app/styles/search.css)；[FilePreviewPage.tsx](../../src/features/browsers/components/FilePreviewPage.tsx)；[localizeError.ts](../../src/shared/localizeError.ts) | 2026-11-04 已在 dev 完成并验证（搜索 7→6 类去 Job、去掉 300ms 自动搜索改为点击/Enter、删标题与分割线、结果区铺满、预览/路径错误按语言本地化），但 i18n 分支基于 00052b3 合并回 dev 后这批改动丢失；按当前 t()/catalog 写法重做，验收=6 类、无自动触发、无标题/分割线、预览错误中英双语 | 无 |
+| RUI-02 | 重构与代码优化 | LEAD（协调）＋FE＋BE | 交付：收口 operationSession 与 ipc-surface 进行中工作 | 已实现待验收 | P0 | [src/shared/operationSession/](../../src/shared/operationSession/)；[validate-ipc-surface.mjs](../../scripts/validate-ipc-surface.mjs) | 2026-11-06 已提交并验证：LEAD 614bce5（ipc-surface + operationSession 模块）、BE 0014ab2（bounds/confirmation 迁移，537 Rust 测试绿）、FE ba6bc10（26 个 src 文件收口，1832 web 测试绿）；vite 排除 node:test 套件后全量门禁干净；剩余=用户抽验。原记录：| 工作树已有未提交改动（43 文件）：operationSession（session/useOperationSession + 14 个对话框迁移）、validate-ipc-surface 静态校验（Rust 命令↔invoke↔Backend↔事件）；验收=ci-fast 与定向测试绿、ipc-surface 进 CI、提交代码并记录 | 无 |
+| RUI-03 | 重构与代码优化 | FE＋BE（PM拆领取范围） | 重构：操作会话收敛（取消/代次/迟到隔离统一） | 部分实现 | P1 | [operationSession](../../src/shared/operationSession/)；[useConfirmationGuard.ts](../../src/shared/confirmation/useConfirmationGuard.ts)；[snapshots.ts](../../src/shared/cache/snapshots.ts) | P0-02 落地后，把剩余手写 cancelOperation/generation.current/operationId 的页面迁到同一会话 owner；验收=每页取消、代次漂移、迟到响应隔离有测试，无新 stale-state 路径 | RUI-02 |
+| RUI-04 | 重构与代码优化 | FE | 重构：React 状态复杂度收敛（useState 集中页面转 reducer） | 待实现 | P1 | [ConnectionProfilesCard.tsx](../../src/features/settings/ConnectionProfilesCard.tsx)；[SubmittedPage.tsx](../../src/features/changelists/components/SubmittedPage.tsx)；[SearchPage.tsx](../../src/features/search/SearchPage.tsx) | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化 | RUI-03 |
+| RUI-05 | 重构与代码优化 | FE | 重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化） | 待实现 | P1 | [workbench.css](../../src/app/styles/workbench.css)；[tokens.css](../../src/app/styles/tokens.css) | 现状 workbench.css 4225 行/81KB、字号 17 种（10/11/12px 占 250 处）、tokens 仅 42 个变量、硬编码色值 109 处；验收=按域拆分、引入排版刻度变量、theme-contrast 与视觉回归通过 | 无 |
 | UI-07 | Bug修复 | BE宿主先行；FE自然检查点协作 | 界面与导航：WebView导航/初始化失败时保留关闭与恢复通道 | 部分实现（旧原生兜底已撤销，待CHROME-OFF替换；CLOSE独立继续） | P0 | [tauri.conf.json](../../src-tauri/tauri.conf.json)；[TopBar.tsx](../../src/app/shell/TopBar.tsx)；[并行交接](并行交接.md) | 根核实截图为Edge ERR_CONNECTION_REFUSED/127.0.0.1，无应用标题栏或关闭按钮。主窗decorations=false、devUrl=127.0.0.1:1422；截图无端口，未证明dev断服或生产资源错误，0.1.2影响未知。先核查实际构建/导航路径及原生关闭生命周期；网页不可达也须有宿主级关闭保障，React边界仅覆盖页面内错误。故障注入验主窗/popout/启动引导/初始化失败、系统关闭快捷键及未保存/在途操作保护；不得强杀/静默丢失、不改代理防火墙。纯mock不等于原生关闭验证 | BE1纯策略11/11已审核；FE1A完成；BE2发现旧文档身份不可证；PM冻结v1.1保持wire，未验证clean一律unknown并原生确认，FE1根报告82＋1测试/TS/diff通过，PM核4场景TopBar JSON及390px图；BE2根报告12纯测试＋11策略回归/libcheck/fmt/diff通过，PM抽查v1.1宿主接线；实现阶段收尾，原生故障验收明确挂起，现释放JSON-only待根代转，不归档全项；隔离原生验收另证；不自动打包 |
 
 
