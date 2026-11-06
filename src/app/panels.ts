@@ -1,104 +1,42 @@
-import { messages } from "../shared/i18n";
+import { tFor } from "../shared/i18n";
+import type { MsgKey } from "../shared/i18n";
 import type { GlobalSearchTarget } from "../shared/contracts";
 
+/**
+ * Every page title is a catalog key, never a translated string: the authoring
+ * side only names the key, and `pageLabels` resolves it for the requested
+ * locale. Anything that renders a label goes through there, so a raw key can
+ * never reach the activity bar or a page header.
+ */
 export const pageDefinitions = {
-  files: {
-    zh: messages["zh-CN"].files,
-    en: messages["en-US"].files,
-    scope: "global",
-    target: "depot",
-  },
-  search: {
-    zh: "shell.search",
-    en: "shell.search",
-    scope: "global",
-    target: "depot",
-  },
-  pending: {
-    zh: messages["zh-CN"].pending,
-    en: messages["en-US"].pending,
-    scope: "global",
-    target: "depot",
-  },
-  submitted: {
-    zh: messages["zh-CN"].submitted,
-    en: messages["en-US"].submitted,
-    scope: "global",
-    target: "depot",
-  },
+  files: { key: "changes.columns.files", scope: "global", target: "depot" },
+  search: { key: "shell.search", scope: "global", target: "depot" },
+  pending: { key: "changes.pending", scope: "global", target: "depot" },
+  submitted: { key: "changes.submitted", scope: "global", target: "depot" },
   workspaces: {
-    zh: messages["zh-CN"].workspace,
-    en: messages["en-US"].workspace,
+    key: "changes.columns.workspace",
     scope: "global",
     target: "depot",
   },
-  history: {
-    zh: messages["zh-CN"].history,
-    en: messages["en-US"].history,
-    scope: "file",
-    target: "depot",
-  },
-  streams: {
-    zh: messages["zh-CN"].streams,
-    en: messages["en-US"].streams,
-    scope: "global",
-    target: "depot",
-  },
-  streamgraph: {
-    zh: "shell.stream.graph",
-    en: "shell.stream.graph",
-    scope: "global",
-    target: "depot",
-  },
+  history: { key: "nav.history", scope: "file", target: "depot" },
+  streams: { key: "nav.streams", scope: "global", target: "depot" },
+  streamgraph: { key: "shell.stream.graph", scope: "global", target: "depot" },
   branchmappings: {
-    zh: "shell.branch.mappings",
-    en: "shell.branch.mappings",
+    key: "shell.branch.mappings",
     scope: "global",
     target: "depot",
   },
-  terminal: {
-    zh: messages["zh-CN"].terminal,
-    en: messages["en-US"].terminal,
-    scope: "global",
-    target: "depot",
-  },
-  p4log: {
-    zh: "shell.p4.log",
-    en: "shell.p4.log",
-    scope: "global",
-    target: "depot",
-  },
-  diff: {
-    zh: messages["zh-CN"].diff,
-    en: messages["en-US"].diff,
-    scope: "file",
-    target: "depot",
-  },
-  shelf: {
-    zh: "shell.shelf.detail",
-    en: "shell.shelf.detail",
-    scope: "file",
-    target: "depot",
-  },
-  revgraph: {
-    zh: messages["zh-CN"].revGraph,
-    en: messages["en-US"].revGraph,
-    scope: "file",
-    target: "depot",
-  },
-  settings: {
-    zh: "shell.settings",
-    en: "shell.settings",
-    scope: "global",
-    target: "depot",
-  },
-  preview: {
-    zh: "shell.preview",
-    en: "shell.preview",
-    scope: "file",
-    target: "local",
-  },
-} as const;
+  terminal: { key: "nav.terminal", scope: "global", target: "depot" },
+  p4log: { key: "shell.p4.log", scope: "global", target: "depot" },
+  diff: { key: "common.diff", scope: "file", target: "depot" },
+  shelf: { key: "shell.shelf.detail", scope: "file", target: "depot" },
+  revgraph: { key: "files.revGraph", scope: "file", target: "depot" },
+  settings: { key: "shell.settings", scope: "global", target: "depot" },
+  preview: { key: "shell.preview", scope: "file", target: "local" },
+} as const satisfies Record<
+  string,
+  { key: MsgKey; scope: "global" | "file"; target: "depot" | "local" }
+>;
 export type PageId = keyof typeof pageDefinitions;
 export type FilePageId = {
   [K in PageId]: (typeof pageDefinitions)[K]["scope"] extends "file"
@@ -106,9 +44,18 @@ export type FilePageId = {
     : never;
 }[PageId];
 export const pageIds = Object.keys(pageDefinitions) as PageId[];
+/**
+ * Resolves every page title through the catalog for the requested locale.
+ *
+ * The locale is passed explicitly (`tFor`) rather than read from the module
+ * global (`t`): preferences activate the global in an effect, so during the
+ * render that follows a locale switch the global can still be one locale
+ * behind. The caller's `zh` is the authority.
+ */
 export function pageLabels(zh: boolean): Record<PageId, string> {
+  const locale = zh ? "zh-CN" : "en-US";
   return Object.fromEntries(
-    pageIds.map((id) => [id, pageDefinitions[id][zh ? "zh" : "en"]]),
+    pageIds.map((id) => [id, tFor(locale, pageDefinitions[id].key)]),
   ) as Record<PageId, string>;
 }
 export function targetForPage(page: PageId, depot?: string, local?: string) {
