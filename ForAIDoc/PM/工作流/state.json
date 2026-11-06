@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:22:04.213Z",
+  "updatedAt": "2026-11-06T08:28:37.215Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -2021,8 +2021,8 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化）",
-      "stage": "todo",
-      "statusRaw": "待实现",
+      "stage": "partial",
+      "statusRaw": "部分实现",
       "priority": "P1",
       "evidence": [
         "src/app/styles/workbench.css",
