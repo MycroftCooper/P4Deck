@@ -1,8 +1,9 @@
 import { tFor } from "../../shared/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import type { ConnectionSnapshot } from "../companySubmit/model";
 import {
   lookupWorkspaceMutationAction,
@@ -58,20 +59,14 @@ export function WorkspaceMutationDialog({
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const alive = useRef(true);
+  const session = useOperationSession();
+  // Latest dispatch id, shown in the result and used by explicit cancel.
   const operationId = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-      if (operationId.current)
-        void backend
-          .cancelOperation(operationId.current)
-          .catch(() => undefined);
-    };
-  }, []);
   async function inspect() {
     if (busy) return;
+    // The preflight request carries no operation id, so unmounting only drops
+    // its result locally and never asks the host to cancel anything.
+    const lease = session.start("operation", { cancelBackend: false });
     setBusy(true);
     setError("");
     setResult(undefined);
@@ -80,11 +75,12 @@ export function WorkspaceMutationDialog({
         ...request,
         newName: request.action === "rename" ? name.trim() : undefined,
       });
-      if (alive.current) setPreview(value);
+      if (session.isCurrent(lease)) setPreview(value);
     } catch (e) {
-      if (alive.current) setError(String(e));
+      if (session.isCurrent(lease)) setError(String(e));
     } finally {
-      if (alive.current) setBusy(false);
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
   async function recover(
@@ -122,8 +118,8 @@ export function WorkspaceMutationDialog({
   async function confirm() {
     if (!preview || busy) return;
     if (request.action === "delete" && !acknowledged) return;
-    const id = crypto.randomUUID();
-    operationId.current = id;
+    const lease = session.start("operation");
+    operationId.current = lease.operationId;
     setBusy(true);
     setPreview(undefined);
     setError("");
@@ -132,7 +128,7 @@ export function WorkspaceMutationDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       if (String(preview.request.expectedGeneration) !== dispatching.generation)
         throw new Error(
           tFor(
@@ -140,20 +136,23 @@ export function WorkspaceMutationDialog({
             "workspaces.connection.generation.changed.no.workspace.mutation",
           ),
         );
-      let value = await backend.confirmWorkspaceMutation(preview.token, id);
-      if (!alive.current) return;
+      let value = await backend.confirmWorkspaceMutation(
+        preview.token,
+        lease.operationId,
+      );
+      if (!session.isCurrent(lease)) return;
       if (value.outcome === "unknown") {
-        const recovered = await recover(id, dispatching);
+        const recovered = await recover(lease.operationId, dispatching);
         if (recovered) value = recovered;
       }
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       apply(value);
     } catch (cause) {
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(id, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         apply(recovered);
         return;
@@ -172,7 +171,8 @@ export function WorkspaceMutationDialog({
         verified: false,
       });
     } finally {
-      if (alive.current) setBusy(false);
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
   const resultVerified =

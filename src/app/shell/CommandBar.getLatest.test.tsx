@@ -19,6 +19,7 @@ const deps = vi.hoisted(() => ({
   invalidate: vi.fn(),
   resolveSelection: vi.fn(),
   refresh: vi.fn(),
+  cancel: vi.fn(),
   log: vi.fn(),
   feedback: vi.fn(),
   focus: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock("../../infrastructure/backend", () => ({
   backend: {
     previewSync: deps.previewSync,
     syncLatest: deps.syncLatest,
+    cancelOperation: deps.cancel,
     subscribeOperationEvents: async () => () => {},
   },
 }));
@@ -166,6 +168,7 @@ beforeEach(() => {
   deps.invalidate.mockResolvedValue(undefined);
   deps.resolveSelection.mockImplementation(async (nodes: unknown) => nodes);
   deps.refresh.mockResolvedValue(undefined);
+  deps.cancel.mockResolvedValue(undefined);
   deps.previewSync.mockResolvedValue(previewPlan());
   deps.syncLatest.mockResolvedValue(syncResult());
   deps.log.mockResolvedValue({ status: "unavailable" });
@@ -491,4 +494,27 @@ it("keeps Refresh usable while another operation is pending but still blocks Get
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+});
+
+it("cancels the in-flight command when the connection changes", async () => {
+  let finishPreview: (value: SyncPreviewPlan) => void = () => undefined;
+  const pending = new Promise<SyncPreviewPlan>((resolve) => {
+    finishPreview = resolve;
+  });
+  deps.previewSync.mockReturnValueOnce(pending);
+  await mount();
+  await run("getLatest");
+  expect(deps.previewSync).toHaveBeenCalledTimes(1);
+  const operationId = deps.previewSync.mock.calls[0][0].operationId as string;
+  // A connection switch retires the toolbar session: the host operation must be
+  // cancelled instead of becoming an orphan the UI can no longer reach.
+  await mount({ connectionKey: "fixture-2" });
+  expect(deps.cancel).toHaveBeenCalledWith(operationId);
+  await act(async () => {
+    finishPreview(previewPlan());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  // The retired preview must not dispatch a sync against the old connection.
+  expect(deps.syncLatest).not.toHaveBeenCalled();
 });

@@ -16,7 +16,14 @@ import {
   type SubmitLifecycle,
 } from "../submitLifecycle";
 import { requestDesktopAttention } from "../../../app/notifications/notifications";
-import { useConfirmationGuard } from "../../../shared/confirmation";
+import {
+  useConfirmationGuard,
+  useTokenExpiry,
+} from "../../../shared/confirmation";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../../shared/operationSession";
 
 export type SubmitCheck = SubmitPreflight;
 interface Props {
@@ -67,34 +74,38 @@ export function SubmitDialog(props: Props) {
   const [lifecycle, setLifecycle] = useState<SubmitLifecycle>();
   const [message, setMessage] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
-  const generation = useRef(0);
+  const session = useOperationSession();
   // The dispatch claim is tracked without re-rendering the review surface:
   // `phase` already drives the visible busy state, and an extra render here
   // would reset in-progress focus/selection on every attempt.
   const running = useRef(false);
-  const operationId = useRef<string | undefined>(undefined);
+  /** The confirmed submission; Cancel reuses its exact operationId. */
+  const dispatchLease = useRef<OperationLease | undefined>(undefined);
   const staleConnection = origin.connectionKey !== props.connectionKey;
   // One-use token, expiry, target drift and the in-flight claim live in the
   // shared confirmation guard; this dialog only owns its own review surface.
   const guard = useConfirmationGuard(origin.connectionKey, props.connectionKey);
-  const latestConnection = useRef(props.connectionKey);
-  latestConnection.current = props.connectionKey;
   const loadSummary = useRef(props.loadSummary);
   useEffect(() => {
     if (origin.connectionKey !== props.connectionKey) {
-      generation.current++;
+      // A changed connection retires both lanes locally; a confirmed
+      // submission is never cancelled on the host.
+      session.invalidate("preflight");
+      session.invalidate("dispatch");
       running.current = false;
       guard.settle();
       setPhase("stale");
       setAcknowledged(false);
     }
-  }, [origin.connectionKey, props.connectionKey]);
+  }, [origin.connectionKey, props.connectionKey, session]);
   useEffect(() => {
-    const epoch = ++generation.current;
+    // The summary read shares the preflight lane, so a connection change
+    // retires it; a read never asks the host to cancel an operation.
+    const lease = session.start("preflight", { cancelBackend: false });
     void loadSummary
       .current()
       .then((change) => {
-        if (epoch !== generation.current) return;
+        if (!session.isCurrent(lease)) return;
         if (change?.id !== origin.id)
           throw new Error(
             t("pending.changelist.summary.unavailable.refresh.and.retry"),
@@ -103,30 +114,24 @@ export function SubmitDialog(props: Props) {
         setPhase("unchecked");
       })
       .catch((error) => {
-        if (epoch === generation.current) {
+        if (session.isCurrent(lease)) {
           setMessage(String(error));
           setPhase("failed");
         }
-      });
+      })
+      .finally(() => session.finish(lease));
     return () => {
-      generation.current++;
+      session.abandon(lease);
     };
-  }, [origin]);
-  useEffect(() => {
-    if (!check || phase !== "ready") return;
-    const timer = setTimeout(
-      () => {
-        // Expiry is an outcome of the shared guard: settle with the expired
-        // reason so the reviewed token is dropped, never merely hidden.
-        guard.settle({ blocks: ["expired"] });
-        setCheck(undefined);
-        setPhase("stale");
-        setAcknowledged(false);
-      },
-      Math.min(2147483647, Math.max(0, check.expiresAt - Date.now())),
-    );
-    return () => clearTimeout(timer);
-  }, [check, phase]);
+  }, [origin, session]);
+  useTokenExpiry(phase === "ready" ? check?.expiresAt : undefined, () => {
+    // Expiry is an outcome of the shared guard: settle with the expired
+    // reason so the reviewed token is dropped, never merely hidden.
+    guard.settle({ blocks: ["expired"] });
+    setCheck(undefined);
+    setPhase("stale");
+    setAcknowledged(false);
+  });
   async function inspect() {
     if (
       !props.check ||
@@ -136,21 +141,16 @@ export function SubmitDialog(props: Props) {
     )
       return;
     running.current = true;
-    const epoch = generation.current;
+    const lease = session.start("preflight");
     setPhase("checking");
     setMessage("");
     setCheck(undefined);
     setSubmitResult(undefined);
     setLifecycle(undefined);
-    operationId.current = undefined;
     setAcknowledged(false);
     try {
       const result = await props.check(origin.id);
-      if (
-        epoch !== generation.current ||
-        latestConnection.current !== origin.connectionKey
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       if (
         (result.change !== undefined && result.change.id !== origin.id) ||
         result.target.changeId !== origin.id ||
@@ -199,11 +199,12 @@ export function SubmitDialog(props: Props) {
       setPhase(nextPhase);
     } catch (error) {
       guard.hold(undefined);
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(error));
         setPhase("failed");
       }
     } finally {
+      session.finish(lease);
       running.current = false;
     }
   }
@@ -224,7 +225,6 @@ export function SubmitDialog(props: Props) {
       return;
     }
     running.current = true;
-    const epoch = generation.current;
     setPhase("submitting");
     setMessage("");
     setSubmitResult(undefined);
@@ -232,16 +232,18 @@ export function SubmitDialog(props: Props) {
     // One UUID for this dispatch; a receipt lookup must reuse it and a new
     // user-initiated submit gets a new one only after an explicit new preflight.
     const id = crypto.randomUUID();
-    operationId.current = id;
+    // A confirmed submission outlives the dialog, so the host is never asked to
+    // cancel it; the local lease only stops late writes from this attempt.
+    const lease = session.start("dispatch", {
+      operationId: id,
+      cancelBackend: false,
+    });
+    dispatchLease.current = lease;
     try {
       const dispatching = await (
         props.connection ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (
-        epoch !== generation.current ||
-        latestConnection.current !== origin.connectionKey
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       if (!submitConnectionMatchesTarget(check.target, dispatching))
         throw new Error(
           t("pending.connection.identity.changed.nothing.was.submitted"),
@@ -250,11 +252,7 @@ export function SubmitDialog(props: Props) {
         { token: check.token!, target: check.target, operationId: id },
         dispatching,
       );
-      if (
-        epoch !== generation.current ||
-        latestConnection.current !== origin.connectionKey
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       const life = submitLifecycle(result, id);
       setSubmitResult(result);
       setLifecycle(life);
@@ -281,22 +279,23 @@ export function SubmitDialog(props: Props) {
       guard.hold(undefined);
     } catch (error) {
       guard.hold(undefined);
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(error));
         setPhase("failed");
         setCheck(undefined);
         setAcknowledged(false);
       }
     } finally {
+      session.finish(lease);
       running.current = false;
       guard.settle();
     }
   }
   /** Cancellation uses the existing IPC with the SAME operationId (never a new id). */
   async function cancel() {
-    const id = operationId.current;
-    if (!id || !running.current) return;
-    await backend.cancelOperation(id).catch(() => undefined);
+    const lease = dispatchLease.current;
+    if (!lease || !running.current) return;
+    await backend.cancelOperation(lease.operationId).catch(() => undefined);
   }
   const busy = phase === "checking" || phase === "submitting";
   return (

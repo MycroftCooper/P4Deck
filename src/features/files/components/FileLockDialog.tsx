@@ -12,6 +12,7 @@ import type {
   FileLockResult,
   WorkspaceNode,
 } from "../../../shared/contracts";
+import { useOperationSession } from "../../../shared/operationSession";
 
 type Phase = "idle" | "checking" | "review" | "running" | "result";
 import {
@@ -52,39 +53,30 @@ export function FileLockDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<FileLockPreflight>();
   const [result, setResult] = useState<FileLockResult>();
-  const pendingOperation = useRef<string | undefined>(undefined);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<number>();
-  const generation = useRef(0);
-  const activeOperation = useRef<string | undefined>(undefined);
-  const connection = useRef(connectionKey);
-  connection.current = connectionKey;
+  const session = useOperationSession();
+  // The session owns cancellation; this id only routes progress events and the
+  // explicit Cancel button to the live dispatch operation.
+  const dispatchOperation = useRef<string | undefined>(undefined);
 
-  useEffect(
-    () => () => {
-      generation.current += 1;
-      if (activeOperation.current)
-        void backend
-          .cancelOperation(activeOperation.current)
-          .catch(() => undefined);
-    },
-    [],
-  );
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     setPreflight(undefined);
     setResult(undefined);
     setError("");
     setPhase("idle");
-  }, [connectionKey]);
+  }, [connectionKey, session]);
   useEffect(() => {
     let dispose: (() => void) | undefined;
     void backend
       .subscribeOperationEvents((event) => {
+        const operationId = dispatchOperation.current;
         if (
-          activeOperation.current &&
-          (event.operationId === activeOperation.current ||
-            event.operationId.startsWith(`${activeOperation.current}:`)) &&
+          operationId &&
+          (event.operationId === operationId ||
+            event.operationId.startsWith(`${operationId}:`)) &&
           event.progress != null
         )
           setProgress(event.progress);
@@ -95,8 +87,7 @@ export function FileLockDialog({
 
   async function runPreflight() {
     if (!paths.length || phase === "checking" || phase === "running") return;
-    const epoch = ++generation.current;
-    const expectedConnection = connectionKey;
+    const lease = session.start("preflight");
     setPhase("checking");
     setError("");
     setResult(undefined);
@@ -104,29 +95,26 @@ export function FileLockDialog({
       const value = await check({
         operation,
         paths,
-        operationId: (pendingOperation.current ??= crypto.randomUUID()),
+        operationId: lease.operationId,
       });
-      if (
-        epoch !== generation.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       setPreflight(value);
       setPhase("review");
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       setError(String(cause));
       setPhase("idle");
+    } finally {
+      session.finish(lease);
     }
   }
 
   async function confirm() {
     if (!preflight?.ready || !preflight.token || !preflight.targetSnapshot)
       return;
-    const epoch = generation.current;
-    const expectedConnection = connectionKey;
-    const operationId = pendingOperation.current ?? crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("dispatch");
+    const operationId = lease.operationId;
+    dispatchOperation.current = operationId;
     beginFileLockProjection(operationId, operation, paths, connectionKey);
     setProgress(0);
     setError("");
@@ -138,11 +126,7 @@ export function FileLockDialog({
         stateDigest: preflight.stateDigest,
         operationId,
       });
-      if (
-        epoch !== generation.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       settleFileLockProjection(operationId, value, false);
       setResult(value);
       setPhase("result");
@@ -150,23 +134,23 @@ export function FileLockDialog({
         .then(() => settleFileLockProjection(operationId, value, true))
         .catch(() => undefined);
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       withdrawFileLockProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
-      if (activeOperation.current === operationId) {
-        activeOperation.current = undefined;
-        pendingOperation.current = undefined;
-      }
+      if (dispatchOperation.current === operationId)
+        dispatchOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
   const title =
     operation === "lock" ? t("files.lock.files") : t("files.unlock.files");
   const retry = () => {
-    generation.current += 1;
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     setPreflight(undefined);
     setResult(undefined);
     setError("");
@@ -176,8 +160,8 @@ export function FileLockDialog({
     phase === "running" ? (
       <button
         onClick={() => {
-          if (activeOperation.current)
-            void backend.cancelOperation(activeOperation.current);
+          if (dispatchOperation.current)
+            void backend.cancelOperation(dispatchOperation.current);
         }}
       >
         {t("files.cancel.remaining")}

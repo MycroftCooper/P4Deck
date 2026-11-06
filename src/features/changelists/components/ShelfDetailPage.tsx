@@ -25,6 +25,7 @@ import type {
   ShelfFilePreview,
 } from "../../../shared/contracts";
 import { makeReviewScope } from "../../browsers/reviewModel";
+import { useOperationSession } from "../../../shared/operationSession";
 import { SwarmAction } from "../../swarm/SwarmAction";
 
 const PAGE_SIZE = 500;
@@ -75,6 +76,7 @@ export function ShelfDetailPage({
     id: "shelf-detail",
     gutter: 48,
   });
+  const session = useOperationSession();
   const [detail, setDetail] = useState<ShelfDetail>();
   const [selected, setSelected] = useState<ShelfDetailFile>();
   const [preview, setPreview] = useState<ShelfFilePreview>();
@@ -89,11 +91,7 @@ export function ShelfDetailPage({
   const [refresh, setRefresh] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const listOperations = useRef(new Set<string>());
-  const contentOperations = useRef(new Set<string>());
   const usedCursors = useRef(new Set<string>());
-  const requestGeneration = useRef(0);
-  const contentGeneration = useRef(0);
   const files = detail?.files ?? [];
   const rows = useVirtualizer({
     count: files.length,
@@ -125,7 +123,9 @@ export function ShelfDetailPage({
       }));
 
   useEffect(() => {
-    requestGeneration.current += 1;
+    // A new reviewed context supersedes both channels before they reload.
+    session.invalidate("detail");
+    session.invalidate("content");
     setCancelled(false);
     setDetail(undefined);
     setSelected(undefined);
@@ -140,6 +140,7 @@ export function ShelfDetailPage({
     runtime.context.user,
     runtime.context.client,
     runtime.contextGeneration,
+    session,
   ]);
 
   useEffect(() => {
@@ -151,23 +152,23 @@ export function ShelfDetailPage({
       setError("");
       return;
     }
-    let active = true;
-    const generation = requestGeneration.current;
-    const operationId = crypto.randomUUID();
-    listOperations.current.add(operationId);
+    const lease = session.start("detail", { identity: String(changeId) });
     setLoading(true);
+    // This lease now owns the channel: a superseded page request can no longer
+    // clear the pagination flag in its guarded finally.
+    setLoadingMore(false);
     setError("");
     void backend
       .getShelfDetail({
         changeId,
-        requestGeneration: generation,
+        requestGeneration: lease.epoch,
         pageSize: PAGE_SIZE,
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (!active || generation !== requestGeneration.current) return;
-        if (!ownsShelfResult(value, runtime, changeId, generation)) {
+        if (!session.isCurrent(lease)) return;
+        if (!ownsShelfResult(value, runtime, changeId, lease.epoch)) {
           setRestartRequired(true);
           setError(t("pending.the.response.does"));
           return;
@@ -180,7 +181,7 @@ export function ShelfDetailPage({
         }
       })
       .catch((cause) => {
-        if (active && generation === requestGeneration.current) {
+        if (session.isCurrent(lease)) {
           const failure = shelfError(cause);
           setRestartRequired(
             ["invalidCursor", "cursorExpired", "snapshotChanged"].includes(
@@ -191,22 +192,17 @@ export function ShelfDetailPage({
         }
       })
       .finally(() => {
-        listOperations.current.delete(operationId);
-        if (active && generation === requestGeneration.current)
-          setLoading(false);
+        if (session.isCurrent(lease)) setLoading(false);
+        session.finish(lease);
       });
     return () => {
-      active = false;
-      void backend.cancelOperation(operationId);
+      session.abandon(lease);
     };
-  }, [changeId, refresh, runtime, zh]);
+  }, [changeId, refresh, runtime, zh, session]);
 
   useEffect(() => {
     if (!selected) return;
-    let active = true;
-    const generation = ++contentGeneration.current;
-    const operationId = crypto.randomUUID();
-    contentOperations.current.add(operationId);
+    const lease = session.start("content", { identity: selected.depotPath });
     setPreview(undefined);
     setDiff(undefined);
     setContentLoading(true);
@@ -216,26 +212,22 @@ export function ShelfDetailPage({
         scope: makeReviewScope(runtime, selected.depotPath),
         changeId,
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (active && generation === contentGeneration.current)
-          setPreview(value);
+        if (session.isCurrent(lease)) setPreview(value);
       })
       .catch((cause) => {
-        if (active && generation === contentGeneration.current)
-          setError(String(cause));
+        if (session.isCurrent(lease)) setError(String(cause));
       })
       .finally(() => {
-        contentOperations.current.delete(operationId);
-        if (active && generation === contentGeneration.current)
-          setContentLoading(false);
+        if (session.isCurrent(lease)) setContentLoading(false);
+        session.finish(lease);
       });
     return () => {
-      active = false;
-      void backend.cancelOperation(operationId);
+      session.abandon(lease);
     };
-  }, [selected, changeId, refresh, runtime]);
+  }, [selected, changeId, refresh, runtime, session]);
 
   const loadMore = useCallback(() => {
     const cursor = detail?.nextCursor;
@@ -246,21 +238,22 @@ export function ShelfDetailPage({
       return;
     }
     usedCursors.current.add(cursor);
-    const generation = requestGeneration.current;
-    const operationId = crypto.randomUUID();
-    listOperations.current.add(operationId);
+    const lease = session.start("detail", { identity: String(changeId) });
+    // Pagination supersedes an in-flight first-page request, whose guarded
+    // finally cannot clear `loading` any more; this lease owns it now.
+    setLoading(false);
     setLoadingMore(true);
     void backend
       .getShelfDetail({
         changeId,
-        requestGeneration: generation,
+        requestGeneration: lease.epoch,
         pageSize: PAGE_SIZE,
         cursor,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((page) => {
-        if (generation !== requestGeneration.current) return;
-        if (!ownsShelfResult(page, runtime, changeId, generation)) {
+        if (!session.isCurrent(lease)) return;
+        if (!ownsShelfResult(page, runtime, changeId, lease.epoch)) {
           setRestartRequired(true);
           setError(t("pending.the.page.does"));
           return;
@@ -285,7 +278,7 @@ export function ShelfDetailPage({
         });
       })
       .catch((cause) => {
-        if (generation === requestGeneration.current) {
+        if (session.isCurrent(lease)) {
           const failure = shelfError(cause);
           setRestartRequired(true);
           setError(
@@ -296,10 +289,10 @@ export function ShelfDetailPage({
         }
       })
       .finally(() => {
-        listOperations.current.delete(operationId);
-        if (generation === requestGeneration.current) setLoadingMore(false);
+        if (session.isCurrent(lease)) setLoadingMore(false);
+        session.finish(lease);
       });
-  }, [changeId, detail, loadingMore, restartRequired, runtime, zh]);
+  }, [changeId, detail, loadingMore, restartRequired, runtime, zh, session]);
 
   useEffect(() => {
     if (cancelled || selected || !initialPath || !detail) return;
@@ -309,33 +302,21 @@ export function ShelfDetailPage({
   }, [cancelled, detail, initialPath, loadMore, loadingMore, selected]);
 
   const supersedeOperations = () => {
-    requestGeneration.current += 1;
-    contentGeneration.current += 1;
-    for (const operationId of [
-      ...listOperations.current,
-      ...contentOperations.current,
-    ])
-      void backend.cancelOperation(operationId);
-    listOperations.current.clear();
-    contentOperations.current.clear();
+    session.invalidate("detail");
+    session.invalidate("content");
     setLoading(false);
     setLoadingMore(false);
     setContentLoading(false);
   };
 
   const supersedeContent = () => {
-    contentGeneration.current += 1;
-    for (const operationId of contentOperations.current)
-      void backend.cancelOperation(operationId);
-    contentOperations.current.clear();
+    session.invalidate("content");
     setContentLoading(false);
   };
 
   const compare = () => {
     if (!selected) return;
-    const generation = ++contentGeneration.current;
-    const operationId = crypto.randomUUID();
-    contentOperations.current.add(operationId);
+    const lease = session.start("content", { identity: selected.depotPath });
     setContentLoading(true);
     setError("");
     void backend
@@ -344,19 +325,19 @@ export function ShelfDetailPage({
         left: baseline,
         right: { kind: "shelf", changeId },
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (generation !== contentGeneration.current) return;
+        if (!session.isCurrent(lease)) return;
         setPreview(undefined);
         setDiff(value);
       })
       .catch((cause) => {
-        if (generation === contentGeneration.current) setError(String(cause));
+        if (session.isCurrent(lease)) setError(String(cause));
       })
       .finally(() => {
-        contentOperations.current.delete(operationId);
-        if (generation === contentGeneration.current) setContentLoading(false);
+        if (session.isCurrent(lease)) setContentLoading(false);
+        session.finish(lease);
       });
   };
 
@@ -368,21 +349,6 @@ export function ShelfDetailPage({
     setContentLoading(false);
     setError(t("pending.operation.cancelled"));
   };
-
-  useEffect(
-    () => () => {
-      requestGeneration.current += 1;
-      contentGeneration.current += 1;
-      for (const operationId of [
-        ...listOperations.current,
-        ...contentOperations.current,
-      ])
-        void backend.cancelOperation(operationId);
-      listOperations.current.clear();
-      contentOperations.current.clear();
-    },
-    [],
-  );
 
   const refreshButton = (
     <button

@@ -1,5 +1,5 @@
 import { t, tFor, type MsgKey } from "../../../shared/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -10,6 +10,7 @@ import type {
   RenameMoveResult,
   WorkspaceNode,
 } from "../../../shared/contracts";
+import { useOperationSession } from "../../../shared/operationSession";
 import { checkRenamePath, type RenamePathError } from "../renamePath";
 import {
   beginLocalIoProjection,
@@ -71,8 +72,10 @@ export function RenameDialog({
   };
   const [failure, setFailure] = useState("");
   const [discard, setDiscard] = useState(false);
-  const generation = useRef(0);
-  const activeOperation = useRef<string | undefined>(undefined);
+  const session = useOperationSession();
+  // The session owns cancellation; this id only routes the explicit Cancel
+  // button to the live dispatch operation.
+  const dispatchOperation = useRef<string | undefined>(undefined);
   const error = checkRenamePath(
     from,
     target,
@@ -81,19 +84,9 @@ export function RenameDialog({
   );
   const blockedInput = snapshot.kind !== "file" || !snapshot.absolutePath;
 
-  useEffect(
-    () => () => {
-      generation.current += 1;
-      if (activeOperation.current)
-        void backend
-          .cancelOperation(activeOperation.current)
-          .catch(() => undefined);
-    },
-    [],
-  );
-
   function invalidatePreview() {
-    generation.current += 1;
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     setPreflight(undefined);
     setResult(undefined);
     setFailure("");
@@ -109,7 +102,7 @@ export function RenameDialog({
 
   async function preview() {
     if (error || blockedInput || phase === "checking") return;
-    const epoch = ++generation.current;
+    const lease = session.start("preflight");
     setFailure("");
     setPreflight(undefined);
     setResult(undefined);
@@ -119,15 +112,17 @@ export function RenameDialog({
         sourcePath: from,
         targetPath: target,
         targetChangeId,
-        operationId: crypto.randomUUID(),
+        operationId: lease.operationId,
       });
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       setPreflight(value);
       setPhase("review");
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       setFailure(String(cause));
       setPhase("preview");
+    } finally {
+      session.finish(lease);
     }
   }
 
@@ -139,9 +134,9 @@ export function RenameDialog({
       !preflight.targetSnapshot
     )
       return;
-    const epoch = generation.current;
-    const operationId = crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("dispatch");
+    const operationId = lease.operationId;
+    dispatchOperation.current = operationId;
     beginLocalIoProjection({
       operationId,
       kind: "renameMove",
@@ -157,7 +152,7 @@ export function RenameDialog({
         previewDigest: preflight.previewDigest,
         operationId,
       });
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       const lifecycle = lifecycleOf(value);
       if (lifecycle && lifecycle.state === "unknown") {
         withdrawLocalIoProjection(operationId);
@@ -186,14 +181,15 @@ export function RenameDialog({
           void Promise.resolve(onRefresh?.()).catch(() => undefined);
       }
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       withdrawLocalIoProjection(operationId);
       setFailure(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
-      if (activeOperation.current === operationId)
-        activeOperation.current = undefined;
+      if (dispatchOperation.current === operationId)
+        dispatchOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -202,7 +198,7 @@ export function RenameDialog({
       <>
         <button
           onClick={() => {
-            const operationId = activeOperation.current;
+            const operationId = dispatchOperation.current;
             if (operationId) void backend.cancelOperation(operationId);
           }}
         >

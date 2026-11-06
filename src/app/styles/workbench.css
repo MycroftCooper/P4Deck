@@ -1038,18 +1038,43 @@ button {
   overflow-wrap: anywhere;
 }
 /* The revision list reuses the shared resizable header, but it does not carry
-   one of the list-specific column classes; give it the grid it declares. */
+   one of the list-specific column classes; give it the grid it declares.
+   Header and rows scroll together inside one vertical scroll box, so both
+   carry identical tracks and padding: overflow-x here stays visible and the
+   inner virtual list is the only horizontal scroll owner. */
 .revision-file-list .workspace-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 34px;
   display: grid;
   align-items: center;
   gap: 0;
-  padding: 0 6px;
+  padding: 0 8px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+/* The shared grip draws its rule 6px inside the next column, which is exactly
+   where that column's header label starts, so the line crossed the text. Keep
+   this list's rule on the track boundary instead. */
+.revision-file-list .workspace-head .history-column-resizer {
+  right: 0;
+}
+/* Give every column its own inset after the rule: the rule sits on the track
+   boundary, so labels and values must start a few pixels to its right. Header
+   and rows use the same inset, so each value stays under its own label. */
+.revision-file-list .workspace-head > span,
+.revision-file-scroll > .revision-file-spacer > button > * {
+  padding-left: 8px;
 }
 .revision-file-scroll {
   position: relative;
   height: min(280px, 35vh);
   min-height: 80px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   contain: strict;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -1057,19 +1082,34 @@ button {
 .revision-file-spacer {
   position: relative;
   width: 100%;
+  min-width: 100%;
 }
 .revision-file-spacer > button {
+  /* The shared menu stylesheet makes these rows flex; the header and every row
+     must stay a grid or the declared column tracks are ignored. */
+  display: grid;
   align-items: center;
+  /* The header draws its tracks with no gap, so rows must not add one either:
+     a per-row gap shifts every column right of its header divider. */
+  gap: 0;
+  padding: 0 8px;
+  min-width: 100%;
   border-width: 0 0 1px;
-}
-.revision-file-spacer > button span {
-  min-width: 0;
-  flex: 1;
   white-space: nowrap;
 }
+.revision-file-spacer > button > * {
+  /* Match the header cell's own padding so text starts on the same rail.
+     Do not make these flex containers: `text-overflow: ellipsis` needs a block
+     container, otherwise the path paints over the action and revision columns. */
+  min-width: 0;
+  padding-right: 10px;
+}
+.revision-file-spacer > button span,
 .revision-file-spacer > button small {
-  flex: 0 0 auto;
-  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .detail-actions {
   display: grid;
@@ -2504,7 +2544,9 @@ button {
   .submitted-page .detail-panel {
     padding: 12px;
   }
-  .submitted-page .revision-file-scroll {
+  /* The expanded list virtualizes against the outer list, so it sets an inline
+     natural height; only the standalone inner-scroll variant keeps a cap. */
+  .submitted-page .revision-file-scroll:not([style*="height"]) {
     height: 180px;
   }
 }
@@ -2654,7 +2696,9 @@ button {
   .submitted-page .detail-panel {
     padding: 12px;
   }
-  .submitted-page .revision-file-scroll {
+  /* The expanded list virtualizes against the outer list, so it sets an inline
+     natural height; only the standalone inner-scroll variant keeps a cap. */
+  .submitted-page .revision-file-scroll:not([style*="height"]) {
     height: 180px;
   }
 }

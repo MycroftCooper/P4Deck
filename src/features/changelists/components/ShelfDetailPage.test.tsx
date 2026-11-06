@@ -322,6 +322,55 @@ it("cancels and isolates stale shelf responses across a runtime generation chang
   expect(backend.cancelOperation).toHaveBeenCalled();
 });
 
+it("does not strand the first-page spinner when load more supersedes a refresh", async () => {
+  const files = Array.from({ length: 501 }, (_, index) => ({
+    ...detail.files[0],
+    depotPath: `//depot/file-${String(index).padStart(3, "0")}.txt`,
+  }));
+  let resolveRefresh: (value: ShelfDetail) => void = () => undefined;
+  const refreshResult = new Promise<ShelfDetail>((resolve) => {
+    resolveRefresh = resolve;
+  });
+  backend.getShelfDetail
+    .mockResolvedValueOnce({
+      ...detail,
+      files: files.slice(0, 500),
+      totalFiles: 501,
+      hasMore: true,
+      nextCursor: "cursor-a",
+    })
+    .mockReturnValueOnce(refreshResult)
+    .mockResolvedValueOnce({
+      ...detail,
+      requestGeneration: 2,
+      files: files.slice(500),
+      totalFiles: 501,
+      hasMore: false,
+    });
+  await act(async () =>
+    root.render(<ShelfDetailPage target="42" runtime={runtime} zh={false} />),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const refresh = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Refresh"]',
+  )!;
+  await act(async () => refresh.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  const loadMore = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Load more",
+  );
+  expect(loadMore).toBeDefined();
+  await act(async () => loadMore!.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  // The superseded refresh lease can no longer clear `loading`; pagination must
+  // take the flag over instead of leaving the page permanently busy.
+  expect(
+    host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!
+      .disabled,
+  ).toBe(false);
+  await act(async () => resolveRefresh({ ...detail, requestGeneration: 2 }));
+});
+
 it("keeps resizing in the shelf file list and leaves code-preview columns independent", async () => {
   await act(async () =>
     root.render(

@@ -83,6 +83,8 @@ import {
 } from "./useOperationWatchdog";
 import { commandFamily } from "./commandWatchdog";
 import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
+import { useOperationSession } from "../../shared/operationSession";
+import type { OperationLease } from "../../shared/operationSession";
 
 const groups: {
   id: CommandId;
@@ -219,9 +221,10 @@ export function CommandBar({
     if (targetError) openOperations.current(targetError);
   }, [targetError, connectionKey]);
   const [locating, setLocating] = useState(false);
+  const session = useOperationSession();
+  const activeLease = useRef<OperationLease | undefined>(undefined);
   const running = useRef<string | undefined>(undefined);
   const navigation = useRef(0);
-  const generation = useRef(0);
   const latest = useRef({ connectionKey, targetPath, targetKey });
   latest.current = { connectionKey, targetPath, targetKey };
   const dialogs = useCommandDialogs(
@@ -231,7 +234,7 @@ export function CommandBar({
     runtime.mode === "mock",
     targetKey,
     async (refreshNodes) => {
-      const epoch = generation.current;
+      const epoch = session.epoch("commandbar");
       const expectedConnection = connectionKey;
       const expectedTarget = targetKey;
       try {
@@ -242,7 +245,7 @@ export function CommandBar({
           true,
         );
         if (
-          epoch !== generation.current ||
+          epoch !== session.epoch("commandbar") ||
           latest.current.connectionKey !== expectedConnection ||
           latest.current.targetKey !== expectedTarget
         )
@@ -259,7 +262,7 @@ export function CommandBar({
         );
       } catch {
         if (
-          epoch === generation.current &&
+          epoch === session.epoch("commandbar") &&
           latest.current.connectionKey === expectedConnection &&
           latest.current.targetKey === expectedTarget
         )
@@ -322,20 +325,16 @@ export function CommandBar({
   );
   useEffect(() => {
     navigation.current++;
-    generation.current++;
+    // A new connection/generation retires the toolbar session: the live lease
+    // is cancelled on the host instead of becoming an orphaned operation that
+    // can no longer be cancelled or watched.
+    session.invalidate("commandbar");
     running.current = undefined;
     setOperation(undefined);
     setNotice("");
     setError("");
     setLocating(false);
-  }, [connectionKey, runtime.contextGeneration]);
-  useEffect(
-    () => () => {
-      navigation.current++;
-      generation.current++;
-    },
-    [],
-  );
+  }, [connectionKey, runtime.contextGeneration, session]);
   useEffect(
     () =>
       subscribeSafely(
@@ -351,10 +350,10 @@ export function CommandBar({
     [],
   );
   const attempt = (work: () => Promise<void>) => {
-    const epoch = generation.current;
+    const epoch = session.epoch("commandbar");
     setError("");
     void work().catch((cause) => {
-      if (epoch === generation.current) setError(String(cause));
+      if (epoch === session.epoch("commandbar")) setError(String(cause));
     });
   };
   async function navigate(raw: string) {
@@ -381,7 +380,7 @@ export function CommandBar({
     snapshot?: CommandTarget,
     source?: HTMLElement,
   ) {
-    const epoch = generation.current;
+    const epoch = session.epoch("commandbar");
     const actionTarget = snapshot ?? target;
     const actionNodes =
       actionTarget.type === "file"
@@ -397,7 +396,7 @@ export function CommandBar({
           ? undefined
           : localCapabilities;
     if (
-      epoch !== generation.current ||
+      epoch !== session.epoch("commandbar") ||
       latest.current.connectionKey !== connectionKey
     )
       throw new Error(t("shell.connection.changed.select.the.target"));
@@ -460,8 +459,10 @@ export function CommandBar({
       // background (spinner, no dialog). Only the preview's affected-file count
       // decides whether an explicit confirmation is required; a preview failure
       // never executes and never opens a dialog.
-      const operationId = crypto.randomUUID();
-      const epoch = generation.current;
+      const lease = session.start("commandbar", { identity: "getLatest" });
+      const operationId = lease.operationId;
+      activeLease.current = lease;
+      const epoch = lease.epoch;
       running.current = operationId;
       setOperation(
         startOperation(operationId, t("shell.get.latest"), {
@@ -486,6 +487,9 @@ export function CommandBar({
           force: false,
           operationId,
         });
+        // A connection/target change while the preview ran must not dispatch the
+        // sync against the retired connection.
+        if (!session.isCurrent(lease)) return;
         const affected =
           plan.counts.added + plan.counts.updated + plan.counts.deleted;
         if (affected > getLatestConfirmThreshold) {
@@ -515,6 +519,8 @@ export function CommandBar({
           running.current = undefined;
           setOperation(undefined);
         }
+        session.finish(lease);
+        if (activeLease.current === lease) activeLease.current = undefined;
       }
       if (delegatedToDialog) return;
       if (failed) {
@@ -534,7 +540,7 @@ export function CommandBar({
           connectionKey,
           affectedPaths: [...paths],
         });
-        if (epoch !== generation.current) return;
+        if (epoch !== session.epoch("commandbar")) return;
         if (target.type === "file" && latest.current.targetKey === targetKey) {
           const updated = await resolveSelection(
             nodes,
@@ -542,7 +548,7 @@ export function CommandBar({
             runtime.context.cwd,
           );
           if (
-            epoch === generation.current &&
+            epoch === session.epoch("commandbar") &&
             latest.current.targetKey === targetKey
           )
             onFocus({
@@ -597,6 +603,12 @@ export function CommandBar({
         if (localDeleteRecord(running.current))
           cancelLocalDelete(running.current);
         else await backend.cancelOperation(running.current);
+        // The host call is already cancelled above; retire the lease without
+        // asking the owner to cancel the same operation a second time.
+        if (activeLease.current) {
+          session.finish(activeLease.current);
+          activeLease.current = undefined;
+        }
       }
       // Cancel is a request signal: it never implies a rollback or that nothing ran.
       return;
@@ -609,7 +621,14 @@ export function CommandBar({
       return;
     }
     if (target.type === "file" && (id === "reveal" || id === "openWith")) {
-      const operationId = crypto.randomUUID();
+      // A system dialog is not cancellable from the UI; the lease only keeps the
+      // ownership bookkeeping consistent (no host cancel on a connection change).
+      const lease = session.start("commandbar", {
+        identity: id,
+        cancelBackend: false,
+      });
+      const operationId = lease.operationId;
+      activeLease.current = lease;
       running.current = operationId;
       setOperation(
         startOperation(operationId, t("shell.waiting.for.system.dialog"), {
@@ -626,13 +645,15 @@ export function CommandBar({
       } finally {
         running.current = undefined;
         setOperation(undefined);
+        session.finish(lease);
+        if (activeLease.current === lease) activeLease.current = undefined;
         void workspaceCache.invalidateQueries({
           queryKey: ["local-path-capabilities", connectionKey],
         });
       }
       return;
     }
-    const actionEpoch = generation.current;
+    const actionEpoch = session.epoch("commandbar");
     const folders = nodes.some((n) => n.kind === "directory");
     let checkoutChangeId = 0;
     if (id === "checkout" && !preferences.ui.checkoutUseDefault) {
@@ -642,7 +663,11 @@ export function CommandBar({
       let changes = await cachedPendingChanges(runtime);
       const stale = !isFresh(pendingSnapshotKey(runtime));
       if (!changes || (stale && !changes.some((change) => change.id > 0))) {
-        const queryOperationId = crypto.randomUUID();
+        const lease = session.start("commandbar", {
+          identity: "pendingChangelists",
+        });
+        const queryOperationId = lease.operationId;
+        activeLease.current = lease;
         running.current = queryOperationId;
         setOperation(
           startOperation(
@@ -661,10 +686,12 @@ export function CommandBar({
         } finally {
           running.current = undefined;
           setOperation(undefined);
+          session.finish(lease);
+          if (activeLease.current === lease) activeLease.current = undefined;
         }
       }
       if (
-        actionEpoch !== generation.current ||
+        actionEpoch !== session.epoch("commandbar") ||
         latest.current.connectionKey !== connectionKey ||
         latest.current.targetKey !== selectionKey
       )
@@ -678,7 +705,7 @@ export function CommandBar({
         });
         if (
           !choice ||
-          actionEpoch !== generation.current ||
+          actionEpoch !== session.epoch("commandbar") ||
           latest.current.connectionKey !== connectionKey
         )
           return;
@@ -706,7 +733,7 @@ export function CommandBar({
       if (!confirmed) return;
     }
     if (
-      actionEpoch !== generation.current ||
+      actionEpoch !== session.epoch("commandbar") ||
       latest.current.connectionKey !== connectionKey
     )
       return;
@@ -720,7 +747,7 @@ export function CommandBar({
         nodes,
         id,
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         target.wholeChangelistId,
       );
@@ -738,7 +765,7 @@ export function CommandBar({
         runtime,
         nodes.map((n) => n.absolutePath).filter((p): p is string => !!p),
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         undefined,
         {
@@ -776,7 +803,7 @@ export function CommandBar({
         request,
         affectedPathAliases(request.paths, nodes) ?? request.paths,
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         undefined,
         targetKey,
@@ -791,7 +818,7 @@ export function CommandBar({
       refreshInFlight.current = true;
       try {
         await refreshFileLockFacts(connectionKey);
-        if (actionEpoch !== generation.current) return;
+        if (actionEpoch !== session.epoch("commandbar")) return;
         await invalidateData(commandActions.refresh.effects, { connectionKey });
       } finally {
         refreshInFlight.current = false;
@@ -800,8 +827,10 @@ export function CommandBar({
     }
     if (running.current)
       throw new Error(t("shell.another.operation.is.running.try"));
-    const operationId = crypto.randomUUID();
-    const epoch = generation.current;
+    const lease = session.start("commandbar", { identity: id });
+    const operationId = lease.operationId;
+    activeLease.current = lease;
+    const epoch = lease.epoch;
     running.current = operationId;
     const entry =
       groups.flat().find((item) => item.id === id) ??
@@ -843,7 +872,7 @@ export function CommandBar({
           connectionKey,
           affectedPaths,
         });
-        if (epoch !== generation.current) return;
+        if (epoch !== session.epoch("commandbar")) return;
         if (target.type === "file" && latest.current.targetKey === targetKey) {
           const updated = await resolveSelection(
             nodes,
@@ -851,7 +880,7 @@ export function CommandBar({
             runtime.context.cwd,
           );
           if (
-            epoch === generation.current &&
+            epoch === session.epoch("commandbar") &&
             latest.current.targetKey === targetKey
           )
             onFocus({
@@ -882,7 +911,7 @@ export function CommandBar({
         affectedPaths,
       }).catch(() => undefined);
       if (
-        epoch === generation.current &&
+        epoch === session.epoch("commandbar") &&
         latest.current.targetKey === targetKey
       )
         onFocus({ type: "none" });
@@ -899,6 +928,8 @@ export function CommandBar({
           })
           .catch(() => undefined);
       }
+      session.finish(lease);
+      if (activeLease.current === lease) activeLease.current = undefined;
     }
   }
   useEffect(() => {

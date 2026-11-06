@@ -8,21 +8,12 @@ const tick = async () => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 };
 function wire(generation = "9007199254740993") {
-  let handler!: Parameters<CloseGuardWire["listen"]>[0];
   const report = vi
     .fn<CloseGuardWire["report"]>()
     .mockResolvedValue({ accepted: true });
-  const stop = vi.fn();
   return {
     register: vi.fn().mockResolvedValue({ generation }),
     report,
-    listen: vi.fn(async (fn: typeof handler) => {
-      handler = fn;
-      return stop;
-    }),
-    stop,
-    probe: (id = "p", gen = generation) =>
-      handler({ generation: gen, probeId: id }),
   };
 }
 describe("window state aggregation", () => {
@@ -84,7 +75,7 @@ describe("window state aggregation", () => {
   });
 });
 describe("frozen close wire", () => {
-  it("reports only state metadata, reads synchronously for probes and ignores a different generation", async () => {
+  it("reports only state metadata on every registry change", async () => {
     const registry = new CloseStateRegistry(),
       transport = wire(),
       token = Symbol();
@@ -92,19 +83,23 @@ describe("frozen close wire", () => {
     await tick();
     registry.setReady(true);
     registry.attach(token, "dirty");
-    transport.probe("close-1");
+    // register, ready, attach — every registry change is pushed exactly once.
+    expect(transport.report).toHaveBeenCalledTimes(3);
+    expect(transport.report.mock.calls.map(([value]) => value.state)).toEqual([
+      "unknown",
+      "clean",
+      "dirty",
+    ]);
     expect(transport.report.mock.lastCall![0]).toEqual({
       generation: "9007199254740993",
-      sequence: 4,
+      sequence: 3,
       state: "dirty",
       dirtyCategories: ["otherDraft"],
-      probeId: "close-1",
+      probeId: null,
     });
     const count = transport.report.mock.calls.length;
-    transport.probe("old", "1");
-    expect(transport.report).toHaveBeenCalledTimes(count);
     stop();
-    transport.probe();
+    registry.update(token, "clean");
     expect(transport.report).toHaveBeenCalledTimes(count);
   });
   it("keeps increasing sequence through same-generation reconnects", async () => {
@@ -120,18 +115,17 @@ describe("frozen close wire", () => {
       first.report.mock.calls[0][0].sequence,
     );
   });
-  it("listener failure never registers or publishes clean", async () => {
+  it("never publishes a state before the host acknowledges the window", async () => {
     const registry = new CloseStateRegistry(),
       transport = wire();
     registry.setReady(true);
-    transport.listen.mockRejectedValueOnce(new Error("unavailable"));
+    transport.register.mockRejectedValueOnce(new Error("unavailable"));
     connectCloseGuard(registry, transport);
     await tick();
     expect(registry.snapshot()).toBe("unknown");
-    expect(transport.register).not.toHaveBeenCalled();
     expect(transport.report).not.toHaveBeenCalled();
   });
-  it("registration failure stays unknown and releases the listener on unmount", async () => {
+  it("registration failure stays unknown after unmount", async () => {
     const registry = new CloseStateRegistry(),
       transport = wire();
     registry.setReady(true);
@@ -140,18 +134,24 @@ describe("frozen close wire", () => {
     await tick();
     stop();
     expect(registry.snapshot()).toBe("unknown");
-    expect(transport.stop).toHaveBeenCalledOnce();
+    expect(transport.report).not.toHaveBeenCalled();
   });
   it("a rejected report fails closed without unbounded retries", async () => {
     const registry = new CloseStateRegistry(),
       transport = wire();
     registry.setReady(true);
-    transport.report.mockResolvedValue({ accepted: false });
-    connectCloseGuard(registry, transport);
+    // The host refuses the first pushed report (clean).
+    transport.report.mockResolvedValueOnce({ accepted: false });
+    const stop = connectCloseGuard(registry, transport);
     await tick();
-    transport.probe();
+    // A refused report must never leave the window looking closeable.
     expect(registry.snapshot()).toBe("unknown");
     expect(transport.report).toHaveBeenCalledTimes(1);
+    // The transport is dead: later registry changes are not retried.
+    registry.attach(Symbol(), "dirty");
+    await tick();
+    expect(transport.report).toHaveBeenCalledTimes(1);
+    stop();
   });
   it("late registration after teardown never reports", async () => {
     const registry = new CloseStateRegistry(),

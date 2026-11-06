@@ -10,6 +10,7 @@ import type {
   SyncRevisionSpec,
   WorkspaceNode,
 } from "../../../shared/contracts";
+import { useOperationSession } from "../../../shared/operationSession";
 import { compactTargets, selectionRequest } from "../selectionCommands";
 import {
   beginLocalIoProjection,
@@ -62,9 +63,10 @@ export function SyncDialog({
   const [result, setResult] = useState<SyncResult>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const sequence = useRef(0);
+  const session = useOperationSession();
+  // The session owns cancellation; this id only routes the explicit Cancel
+  // button to the live operation.
   const operation = useRef<string | undefined>(undefined);
-  const mounted = useRef(true);
   const revision = useMemo(
     () =>
       snapshot.fixedRevision === undefined
@@ -78,13 +80,9 @@ export function SyncDialog({
   );
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      sequence.current++;
-      if (operation.current) void backend.cancelOperation(operation.current);
-    };
-  }, [connectionKey]);
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
+  }, [connectionKey, session]);
 
   useEffect(() => {
     if (!plan || phase !== "review") return;
@@ -108,8 +106,8 @@ export function SyncDialog({
 
   async function preview() {
     if (!revision || !paths.length || busy) return;
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
+    const lease = session.start("preflight");
+    const operationId = lease.operationId;
     operation.current = operationId;
     setBusy(true);
     setError("");
@@ -123,16 +121,15 @@ export function SyncDialog({
         force,
         operationId,
       });
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       setPlan(next);
       setPhase("review");
     } catch (cause) {
-      if (mounted.current && seq === sequence.current) setError(String(cause));
+      if (session.isCurrent(lease)) setError(String(cause));
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      if (operation.current === operationId) operation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -145,8 +142,8 @@ export function SyncDialog({
       busy
     )
       return;
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
+    const lease = session.start("dispatch");
+    const operationId = lease.operationId;
     operation.current = operationId;
     // change/date/label cannot be proven by the host recheck -> intent/progress only, no projection.
     if (revision && (revision.kind === "head" || revision.kind === "revision"))
@@ -166,7 +163,7 @@ export function SyncDialog({
         acknowledgeForce: forceAck,
         operationId,
       });
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const lifecycle = lifecycleOf(raw);
       if (!lifecycle) {
         // Older/mocked payload: legacy shape only, no new lifecycle facts.
@@ -196,16 +193,15 @@ export function SyncDialog({
         .then(() => settleLocalIoProjection(operationId, lifecycle, true))
         .catch(() => undefined);
     } catch (cause) {
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       withdrawLocalIoProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh()).catch(() => undefined);
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      if (operation.current === operationId) operation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -215,8 +211,8 @@ export function SyncDialog({
   }
 
   function resetPreview() {
-    sequence.current++;
-    if (operation.current) void backend.cancelOperation(operation.current);
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     operation.current = undefined;
     setBusy(false);
     setPlan(undefined);

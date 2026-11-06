@@ -166,9 +166,6 @@ export interface CloseGuardWire {
     dirtyCategories?: DirtyCategory[];
     resolvedDirtyThroughSequence?: number;
   }): Promise<{ accepted: boolean }>;
-  listen(
-    handler: (probe: { generation: string; probeId: string }) => void,
-  ): Promise<() => void>;
 }
 
 export function connectCloseGuard(
@@ -177,7 +174,6 @@ export function connectCloseGuard(
 ) {
   let live = true,
     generation: string | undefined;
-  let stopListening: (() => void) | undefined;
   let failed = false;
   const fail = () => {
     if (live && !failed) {
@@ -218,16 +214,10 @@ export function connectCloseGuard(
       .catch(fail);
   };
   const unsubscribe = registry.subscribe(() => report(null));
+  // Registration is the only host handshake: the state is pushed on every
+  // registry change, so there is no inbound probe channel to subscribe to.
   void (async () => {
     try {
-      const stop = await wire.listen((probe) => {
-        if (live && generation === probe.generation) report(probe.probeId);
-      });
-      if (!live) {
-        stop();
-        return;
-      }
-      stopListening = stop;
       const registered = await wire.register();
       if (!live) return;
       if (!/^\d+$/.test(registered.generation)) {
@@ -243,6 +233,5 @@ export function connectCloseGuard(
   return () => {
     live = false;
     unsubscribe();
-    stopListening?.();
   };
 }

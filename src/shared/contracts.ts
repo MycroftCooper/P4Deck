@@ -2462,6 +2462,8 @@ export interface ResolvePreflightRequest {
   depotPaths: string[];
   /** Re-resolve already resolved files with `p4 resolve -f` (target = last resolution). */
   force?: boolean;
+  /** Runner prefix for the inspection; lets the dialog cancel an in-flight preflight. */
+  operationId?: string;
 }
 
 export interface ResolveVersionSource {

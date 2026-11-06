@@ -1,8 +1,9 @@
 import { t, tFor } from "../../shared/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import type { ConnectionSnapshot } from "../companySubmit/model";
 import {
   lookupConnectionCreateAction,
@@ -105,19 +106,7 @@ export function ConnectionSpecCreateDialog({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const sequence = useRef(0);
-  const operation = useRef<string | undefined>(undefined);
-
-  useEffect(
-    () => () => {
-      sequence.current += 1;
-      if (operation.current)
-        void Promise.resolve(backend.cancelOperation(operation.current)).catch(
-          () => undefined,
-        );
-    },
-    [],
-  );
+  const session = useOperationSession();
 
   function workspaceMapping() {
     if (mappingKind === "stream")
@@ -160,9 +149,7 @@ export function ConnectionSpecCreateDialog({
       );
       return;
     }
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
-    operation.current = operationId;
+    const lease = session.start("preflight");
     setBusy(true);
     setError("");
     setPreflight(undefined);
@@ -173,7 +160,7 @@ export function ConnectionSpecCreateDialog({
           ? await backend.preflightCreateConnectionUser({
               context: { ...snapshot, user: trimmedName, client: "" },
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               plan: {
                 name: trimmedName,
                 fullName: fullName.trim(),
@@ -183,7 +170,7 @@ export function ConnectionSpecCreateDialog({
           : await backend.preflightCreateConnectionWorkspace({
               context: { ...snapshot, client: "" },
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               plan: {
                 name: trimmedName,
                 root: root.trim(),
@@ -192,7 +179,7 @@ export function ConnectionSpecCreateDialog({
                 syncMode,
               },
             });
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (next.requestGeneration !== requestGeneration) {
         setError(t("settings.the.connection.settings.for.this.preflight"));
         return;
@@ -200,13 +187,11 @@ export function ConnectionSpecCreateDialog({
       setPreflight(next);
       setPhase("review");
     } catch (cause) {
-      if (seq === sequence.current)
+      if (session.isCurrent(lease))
         setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
 
@@ -248,10 +233,8 @@ export function ConnectionSpecCreateDialog({
       setPhase("edit");
       return;
     }
-    const seq = ++sequence.current;
+    const lease = session.start("dispatch");
     // One UUID for dispatch + same-id receipt lookup; never a retry identity.
-    const operationId = crypto.randomUUID();
-    operation.current = operationId;
     setBusy(true);
     setError("");
     let dispatching: ConnectionSnapshot | undefined;
@@ -259,7 +242,7 @@ export function ConnectionSpecCreateDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       // Generation is the drift marker captured for the same-id receipt lookup;
       // the host revalidates the full exact context (server/user/client) itself.
       if (String(requestGeneration) !== dispatching.generation)
@@ -268,7 +251,7 @@ export function ConnectionSpecCreateDialog({
         );
       const confirmation = {
         token: preflight.token,
-        operationId,
+        operationId: lease.operationId,
         context:
           kind === "user"
             ? { ...snapshot, user: preflight.name, client: "" }
@@ -281,19 +264,19 @@ export function ConnectionSpecCreateDialog({
         kind === "user"
           ? await backend.confirmCreateConnectionUser(confirmation)
           : await backend.confirmCreateConnectionWorkspace(confirmation);
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (next.outcome === "unknown")
-        next = (await recover(operationId, dispatching)) ?? next;
-      if (seq !== sequence.current) return;
+        next = (await recover(lease.operationId, dispatching)) ?? next;
+      if (!session.isCurrent(lease)) return;
       setResult(next);
       if (next.outcome === "created") setSavedForm(formState);
       setPhase("result");
     } catch (cause) {
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(operationId, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         setResult(recovered);
         if (recovered.outcome === "created") setSavedForm(formState);
@@ -308,15 +291,13 @@ export function ConnectionSpecCreateDialog({
         kind: kind === "user" ? "userSelf" : "workspace",
         name: preflight.name,
         message: t("settings.outcome.uncertain.the.creation.may.have"),
-        operationIds: [operationId],
+        operationIds: [lease.operationId],
         simulated: false,
       });
       setPhase("result");
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
 

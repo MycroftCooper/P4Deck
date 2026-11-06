@@ -21,6 +21,7 @@ import type {
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { requestDesktopAttention } from "../../../app/notifications/notifications";
 import { publishWorkflowResult } from "../../changelists/workflowRefresh";
+import { useTokenExpiry } from "../../../shared/confirmation";
 import {
   beginMergeIntent,
   lifecycleOf,
@@ -36,7 +37,7 @@ import {
 type ExecutableStrategy = Exclude<ResolveStrategy, "mergePreview">;
 type Phase = "idle" | "checking" | "ready" | "stale" | "running" | "failed";
 
-/** The preflight IPC has no cancellation path; never leave the dialog stuck. */
+/** A preflight that never answers must not leave the dialog stuck. */
 export const RESOLVE_CHECK_TIMEOUT_MS = 30_000;
 
 function executableStrategies(detail: ResolveConflictDetail) {
@@ -45,12 +46,20 @@ function executableStrategies(detail: ResolveConflictDetail) {
   );
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+  onTimeout?: () => void,
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     promise,
     new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), ms);
+      timer = setTimeout(() => {
+        onTimeout?.();
+        reject(new Error(message));
+      }, ms);
     }),
   ]).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
@@ -143,6 +152,8 @@ export function ResolveDialog({
   >({});
   const generation = useRef(0);
   const running = useRef(false);
+  /** Runner prefix of the outstanding inspection; cancellable until it settles. */
+  const activeOperation = useRef<string | undefined>(undefined);
   const statsInFlight = useRef(new Set<string>());
   const autoInspected = useRef(false);
   const initialUnresolved = useRef<number | undefined>(undefined);
@@ -302,15 +313,24 @@ export function ResolveDialog({
     const epoch = ++generation.current;
     running.current = true;
     const previousIndex = selection?.previousIndex ?? index;
+    const operationId = crypto.randomUUID();
+    activeOperation.current = operationId;
     setPhase("checking");
     setMessage("");
     setResult(undefined);
 
     try {
       const value = await withTimeout(
-        check({ depotPaths: paths, force }),
+        // The host names the runner children after this id, so cancelling the
+        // exact operation reaches the inspection commands while they run.
+        check({ depotPaths: paths, force, operationId }),
         RESOLVE_CHECK_TIMEOUT_MS,
         t("files.conflict.inspection.timed.out.after.30"),
+        () => {
+          if (activeOperation.current !== operationId) return;
+          activeOperation.current = undefined;
+          void backend.cancelOperation(operationId).catch(() => undefined);
+        },
       );
       if (epoch !== generation.current) return false;
       const next = validatePreflight(value);
@@ -370,19 +390,24 @@ export function ResolveDialog({
       }
       return false;
     } finally {
+      if (activeOperation.current === operationId)
+        activeOperation.current = undefined;
       running.current = false;
     }
   }
 
   async function recoverMergeUnknown(
     operationId: string,
+    epoch: number,
     currentResult?: MergeResolveActionResultLike,
   ) {
     // Same-operationId lookup only: never a fresh retry id, never an automatic re-execution.
     if (!mergeUncertain(currentResult) && currentResult) return false;
     try {
       const connection = await backend.companySubmitConnectionSnapshot();
+      if (epoch !== generation.current) return false;
       const found = await lookupMergeReceipt(operationId, connection);
+      if (epoch !== generation.current) return false;
       if (found.kind !== "found" || found.receipt.state !== "settled")
         return false;
       const recovered = found.receipt.result;
@@ -434,6 +459,9 @@ export function ResolveDialog({
     ): Promise<void> => {
       settleMergeIntent(operationId);
       running.current = false;
+      // A superseded attempt must not repaint the dialog: the invalidated effect
+      // has already published the "connection or scope changed" state.
+      if (epoch !== generation.current) return;
       setPreflight(undefined);
       setMessage(detail);
       setPhase("failed");
@@ -443,15 +471,24 @@ export function ResolveDialog({
         body: attentionBody,
         kind: "failure",
       });
-      const recoveredOk = await recoverMergeUnknown(operationId, recovered);
-      if (recoveredOk) {
-        const checked = await inspect({
-          previousIndex: options.previousIndex,
-          resolvedPath: options.resolvedPath,
-        });
-        if (!checked) setMessage(detail);
-        else setMessage(t("files.resolved.per.durable.receipt"));
+      const recoveredOk = await recoverMergeUnknown(
+        operationId,
+        epoch,
+        recovered,
+      );
+      if (epoch !== generation.current) return;
+      if (!recoveredOk) return;
+      const checked = await inspect({
+        previousIndex: options.previousIndex,
+        resolvedPath: options.resolvedPath,
+      });
+      if (!checked) {
+        // The inspection reported its own failure; restore the operation detail
+        // unless this chain was invalidated while the inspection ran.
+        if (epoch === generation.current) setMessage(detail);
+        return;
       }
+      setMessage(t("files.resolved.per.durable.receipt"));
     };
     try {
       const raw: unknown = await execute({
@@ -502,6 +539,9 @@ export function ResolveDialog({
       }
       setResult(legacy);
       await publishWorkflowResult(legacy, preflight.target, connectionKey);
+      // The publish is the last await before the legacy branch re-inspects; a
+      // context change while it ran must not start another resolve -n.
+      if (epoch !== generation.current) return;
       const succeeded =
         legacy.outcome === "succeeded" &&
         legacy.files.length === resolutions.length &&
@@ -532,23 +572,37 @@ export function ResolveDialog({
     }
   }
 
+  // Closing the dialog retires the review; an inspection nobody reads must not
+  // keep a P4 child process alive.
+  useEffect(
+    () => () => {
+      generation.current++;
+      if (!activeOperation.current) return;
+      void backend
+        .cancelOperation(activeOperation.current)
+        .catch(() => undefined);
+      activeOperation.current = undefined;
+    },
+    [],
+  );
   useEffect(() => {
     if (!invalidated) return;
     generation.current++;
     running.current = false;
+    if (activeOperation.current) {
+      void backend
+        .cancelOperation(activeOperation.current)
+        .catch(() => undefined);
+      activeOperation.current = undefined;
+    }
     setPreflight(undefined);
 
     setMessage(t("files.connection.or.resolve.scope.changed.inspect"));
     setPhase("stale");
   }, [invalidated]);
-  useEffect(() => {
-    if (!preflight || phase !== "ready") return;
-    const timer = setTimeout(
-      () => setPhase("stale"),
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => clearTimeout(timer);
-  }, [phase, preflight]);
+  useTokenExpiry(phase === "ready" ? preflight?.expiresAt : undefined, () => {
+    setPhase("stale");
+  });
   // P4V opens with the file list loaded; inspect once on mount.
   useEffect(() => {
     if (autoInspected.current || preflight || invalidated || !paths.length)
@@ -669,6 +723,9 @@ export function ResolveDialog({
 
   async function openP4Merge() {
     if (!current || externalBusy || busy) return;
+    // The whole external-merge chain belongs to this dialog session: once the
+    // connection or scope changes, no later step may publish result or copy.
+    const epoch = generation.current;
     setExternalBusy(true);
     setMessage("");
     try {
@@ -676,6 +733,7 @@ export function ResolveDialog({
         depotPath: current.depotPath,
         operationId: crypto.randomUUID(),
       });
+      if (epoch !== generation.current) return;
       const session = unwrapMergeLegacy<ManualMergeSession>(opened);
       if (!session) throw new Error(t("files.unable.to.open.merge.session"));
       const external = await backend.runExternalMerge({
@@ -683,6 +741,7 @@ export function ResolveDialog({
         result: session.result,
         operationId: crypto.randomUUID(),
       });
+      if (epoch !== generation.current) return;
       if (external.status === "notInstalled")
         throw new Error(external.reason ?? t("files.p4merge.is.not.installed"));
       if (external.status === "cancelled" || external.status === "timeout")
@@ -700,6 +759,7 @@ export function ResolveDialog({
         result: merged,
         operationId: crypto.randomUUID(),
       });
+      if (epoch !== generation.current) return;
       const validation = unwrapMergeLegacy<ManualMergeValidation>(validatedRaw);
       if (!validation?.valid || !validation.token)
         throw new Error(
@@ -712,6 +772,7 @@ export function ResolveDialog({
         resultDigest: validation.resultDigest,
         operationId: crypto.randomUUID(),
       });
+      if (epoch !== generation.current) return;
       const saved = unwrapMergeLegacy<ManualMergeSaveResult>(savedRaw);
       if (!saved?.resolveToken)
         throw new Error(
@@ -724,14 +785,17 @@ export function ResolveDialog({
         acknowledge: true,
         operationId: crypto.randomUUID(),
       });
+      if (epoch !== generation.current) return;
       const resolved =
         unwrapMergeLegacy<WorkflowResult>(resolvedRaw) ??
         (resolvedRaw as WorkflowResult);
       if (resolved.outcome !== "succeeded") throw new Error(resolved.message);
       setResult(resolved);
       setMessage(resolved.message);
-      if (preflight)
+      if (preflight) {
         await publishWorkflowResult(resolved, preflight.target, connectionKey);
+        if (epoch !== generation.current) return;
+      }
       const checked = await inspect({
         previousIndex: index,
         resolvedPath: current.depotPath,
@@ -739,6 +803,7 @@ export function ResolveDialog({
       if (checked)
         setMessage(t("files.p4merge.merge.completed") + " " + resolved.message);
     } catch (cause) {
+      if (epoch !== generation.current) return;
       setMessage(cause instanceof Error ? cause.message : String(cause));
       setPhase("failed");
     } finally {

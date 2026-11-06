@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import {
   CloseStateRegistry,
   connectCloseGuard,
@@ -19,11 +18,6 @@ export function useCloseGuard() {
     const stop = connectCloseGuard(closeState, {
       register: () => invoke("close_guard_register"),
       report: (payload) => invoke("close_guard_report", payload),
-      listen: (handler) =>
-        listen<{ generation: string; probeId: string }>(
-          "close-guard-probe",
-          (event) => handler(event.payload),
-        ),
     });
     return () => {
       stop();
@@ -36,11 +30,6 @@ export function useCloseGuard() {
 export function useCloseGuardReady() {
   useLayoutEffect(() => {
     closeState.setReady(true);
-    // The host keeps a native caption bar on windows whose page never painted;
-    // this acknowledgement removes it. Not routed through close admission so it
-    // still succeeds during a close fence.
-    if (isTauri())
-      void invoke("shell_recovery_connected").catch(() => undefined);
     return () => closeState.setReady(false);
   }, []);
 }

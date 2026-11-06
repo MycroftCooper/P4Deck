@@ -71,7 +71,9 @@ export function RevisionFileList({
   };
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  // In an expanded CL, virtualize against the main list viewport, not an inner scrollbar.
+  // In an expanded CL, virtualize against the main list viewport, not an inner
+  // scrollbar. Rows live below the sticky header inside the same scroll box,
+  // so the scroll margin starts at the list's top edge plus that header.
   useLayoutEffect(() => {
     const outer = outerScroll?.current,
       inner = scrollRef.current;
@@ -82,12 +84,13 @@ export function RevisionFileList({
       !inner.getClientRects().length
     )
       return;
+    const header = inner.querySelector<HTMLElement>(".workspace-head");
     const offset =
       inner.getBoundingClientRect().top -
       outer.getBoundingClientRect().top -
       outer.clientTop +
       outer.scrollTop +
-      inner.clientTop;
+      (header?.offsetHeight ?? 0);
     setScrollMargin((previous) =>
       Math.abs(previous - offset) < 0.5 ? previous : offset,
     );
@@ -97,6 +100,8 @@ export function RevisionFileList({
     count: files.length,
     getScrollElement: () => outerScroll?.current ?? scrollRef.current,
     scrollMargin: outerScroll ? scrollMargin : 0,
+    // Rows start below the sticky header inside the same scroll box.
+    scrollPaddingStart: 34,
     estimateSize: () => 40,
     overscan: 8,
     initialRect: { width: 320, height: 240 },
@@ -104,14 +109,22 @@ export function RevisionFileList({
   const measuredRows = virtualizer.getVirtualItems();
   const visibleRows = measuredRows.length
     ? measuredRows
-    : Array.from({ length: Math.min(files.length, 14) }, (_, index) => ({
-        index,
-        key: `${files[index].depotPath}#${files[index].revision ?? "unknown"}`,
-        start: index * 40,
-        size: 40,
-        end: (index + 1) * 40,
-        lane: 0,
-      }));
+    : (() => {
+        // Unmeasured fallback (first paint / jsdom): rows sit below the sticky
+        // header, which is what `start` is offset by once the virtualizer boots.
+        const base = outerScroll ? scrollMargin : 34;
+        return Array.from(
+          { length: Math.min(files.length, 14) },
+          (_, index) => ({
+            index,
+            key: `${files[index].depotPath}#${files[index].revision ?? "unknown"}`,
+            start: base + index * 40,
+            size: 40,
+            end: base + (index + 1) * 40,
+            lane: 0,
+          }),
+        );
+      })();
   useEffect(() => {
     setActiveIndex(0);
   }, [scope]);
@@ -129,7 +142,7 @@ export function RevisionFileList({
   return (
     <section
       className="revision-file-list"
-      style={{ overflowX: "auto" }}
+      style={{ overflowX: "auto", minWidth: 0 }}
       aria-label={t("pending.submitted.files")}
     >
       {demo && (
@@ -137,17 +150,6 @@ export function RevisionFileList({
           {t("pending.these.are.simulated.browser.mock")}
         </p>
       )}
-      <TableHeader
-        className="workspace-head"
-        resize={resize}
-        columns={[
-          { id: "icon", label: "" },
-          { id: "path", label: t("pending.path") },
-          ...(showFileType ? [{ id: "type", label: t("pending.type") }] : []),
-          { id: "action", label: t("pending.action") },
-          { id: "revision", label: t("pending.revision") },
-        ]}
-      />
       <div
         ref={scrollRef}
         className="revision-file-scroll"
@@ -157,7 +159,6 @@ export function RevisionFileList({
                 height: files.length * 40 + 2,
                 minHeight: 0,
                 contain: "layout style",
-                overflow: "visible",
                 flex: "none",
               }
             : undefined
@@ -167,6 +168,17 @@ export function RevisionFileList({
         aria-label={t("pending.submitted.files")}
         tabIndex={files.length ? -1 : 0}
       >
+        <TableHeader
+          className="workspace-head"
+          resize={resize}
+          columns={[
+            { id: "icon", label: "" },
+            { id: "path", label: t("pending.path") },
+            ...(showFileType ? [{ id: "type", label: t("pending.type") }] : []),
+            { id: "action", label: t("pending.action") },
+            { id: "revision", label: t("pending.revision") },
+          ]}
+        />
         <div
           className="revision-file-spacer"
           style={{
@@ -220,7 +232,10 @@ export function RevisionFileList({
                 tabIndex={row.index === activeIndex ? 0 : -1}
                 className={selection.isSelected(file) ? "selected" : ""}
                 style={{
-                  transform: `translateY(${row.start - (outerScroll && measuredRows.length ? scrollMargin : 0)}px)`,
+                  // Inline so no shared stylesheet can turn the row into flex
+                  // and silently drop the column tracks it shares with the header.
+                  display: "grid",
+                  transform: `translateY(${row.start - scrollMargin}px)`,
                   height: `${row.size}px`,
                   ...columnStyle,
                 }}
@@ -259,8 +274,8 @@ export function RevisionFileList({
                     {file.fileType || "—"}
                   </small>
                 )}
-                <small>{file.action || "—"}</small>
-                <small>
+                <small title={t("pending.action")}>{file.action || "—"}</small>
+                <small title={t("pending.revision")}>
                   {file.revision === undefined ? "#?" : `#${file.revision}`}
                 </small>
               </button>

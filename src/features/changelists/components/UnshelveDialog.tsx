@@ -11,6 +11,11 @@ import type {
   WorkflowConfirmation,
   WorkflowResult,
 } from "../../../shared/contracts";
+import { useTokenExpiry } from "../../../shared/confirmation";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../../shared/operationSession";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import {
   PreflightStatus,
@@ -158,9 +163,10 @@ export function UnshelveDialog({
   const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [message, setMessage] = useState("");
-  const generation = useRef(0);
+  const session = useOperationSession();
   const running = useRef(false);
-  const operationId = useRef<string | undefined>(undefined);
+  /** The confirmed write; Cancel reuses its exact operationId. */
+  const dispatchLease = useRef<OperationLease | undefined>(undefined);
   const loadWorkspacesRef = useRef(loadWorkspaces);
   /** Created CL kept across re-checks; only cleanup reads it on unmount. */
   const createdChangeIdRef = useRef<number | undefined>(undefined);
@@ -214,24 +220,19 @@ export function UnshelveDialog({
   }, [currentWorkspace, newChange]);
   useEffect(() => {
     if (!invalidated) return;
-    generation.current++;
+    // A changed source or connection retires both lanes locally; a confirmed
+    // write is never cancelled on the host.
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     running.current = false;
     setPreflight(undefined);
     setAck(false);
     setPhase("stale");
-  }, [invalidated]);
-  useEffect(() => {
-    if (!preflight || phase !== "ready") return;
-    const timer = setTimeout(
-      () => {
-        setPhase("stale");
-        setAck(false);
-      },
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => clearTimeout(timer);
-  }, [phase, preflight]);
-  useEffect(() => () => void ++generation.current, []);
+  }, [invalidated, session]);
+  useTokenExpiry(phase === "ready" ? preflight?.expiresAt : undefined, () => {
+    setPhase("stale");
+    setAck(false);
+  });
   useEffect(
     () => () => {
       unmountedRef.current = true;
@@ -253,13 +254,15 @@ export function UnshelveDialog({
   );
 
   const targetChanged = () => {
-    generation.current++;
+    session.invalidate("preflight");
+    // Parity with the old shared epoch: changing the reviewed inputs also
+    // retires a dispatch result that started under the previous review.
+    session.invalidate("dispatch");
     running.current = false;
     setPreflight(undefined);
     setResult(undefined);
     setLifecycle(undefined);
     setRefreshFailed(false);
-    operationId.current = undefined;
     setMessage("");
     setAck(false);
     setPhase("idle");
@@ -274,8 +277,8 @@ export function UnshelveDialog({
       (!newChange && !validTarget)
     )
       return;
-    const epoch = ++generation.current;
     running.current = true;
+    const lease = session.start("preflight");
     setPhase("checking");
     setMessage("");
     setResult(undefined);
@@ -311,7 +314,7 @@ export function UnshelveDialog({
         targetWorkspace,
         targetChangeId,
       });
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       const samePaths =
         JSON.stringify([...value.target.depotPaths].sort()) ===
         JSON.stringify(snapshot.paths);
@@ -334,11 +337,12 @@ export function UnshelveDialog({
             : "ready",
       );
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(cause));
         setPhase("failed");
       }
     } finally {
+      session.finish(lease);
       running.current = false;
     }
   }
@@ -368,7 +372,6 @@ export function UnshelveDialog({
     }
     // Once confirm is dispatched the CL may hold unshelved files: never delete it.
     confirmAttemptedRef.current = true;
-    const epoch = generation.current;
     running.current = true;
     setPhase("running");
     setMessage("");
@@ -377,10 +380,16 @@ export function UnshelveDialog({
     setRefreshFailed(false);
     // One UUID for this dispatch; it is reused by receipt lookup, never by a retry.
     const id = crypto.randomUUID();
-    operationId.current = id;
+    // A confirmed write outlives the dialog, so the host is never asked to
+    // cancel it; the local lease only stops late writes from this attempt.
+    const lease = session.start("dispatch", {
+      operationId: id,
+      cancelBackend: false,
+    });
+    dispatchLease.current = lease;
     try {
       const dispatching = await connection();
-      if (epoch !== generation.current || invalidated) return;
+      if (!session.isCurrent(lease)) return;
       if (
         !workflowConnectionMatchesTarget(
           preflight.target,
@@ -402,7 +411,7 @@ export function UnshelveDialog({
           refresh: (key, target, value) => boundedRefresh(key, target, value),
         },
       );
-      if (epoch !== generation.current || invalidated) return;
+      if (!session.isCurrent(lease)) return;
       setResult(run.result);
       setLifecycle(run.lifecycle);
       setRefreshFailed(!run.refreshSucceeded);
@@ -421,22 +430,23 @@ export function UnshelveDialog({
         setAck(false);
       }
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(cause));
         setPhase("failed");
         setPreflight(undefined);
         setAck(false);
       }
     } finally {
+      session.finish(lease);
       running.current = false;
     }
   }
 
   /** Cancellation is the existing IPC with the SAME operationId (never a new id). */
   async function cancel() {
-    const id = operationId.current;
-    if (!id || !running.current) return;
-    await backend.cancelOperation(id).catch(() => undefined);
+    const lease = dispatchLease.current;
+    if (!lease || !running.current) return;
+    await backend.cancelOperation(lease.operationId).catch(() => undefined);
   }
 
   const status: PreflightState = !snapshot.paths.length

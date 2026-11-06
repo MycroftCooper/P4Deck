@@ -27,6 +27,8 @@ import type {
   BranchViewLine,
   RuntimeInfo,
 } from "../../../shared/contracts";
+import { useTokenExpiry } from "../../../shared/confirmation";
+import { useOperationSession } from "../../../shared/operationSession";
 import { validateBranchDraft, validateBranchView } from "../branchMappingModel";
 
 type Phase = "edit" | "checking" | "review" | "running" | "result";
@@ -110,11 +112,9 @@ export function BranchMappingMutationDialog({
   const [result, setResult] = useState<BranchMutationResult>();
   const [error, setError] = useState("");
   const [acknowledgeDelete, setAcknowledgeDelete] = useState(false);
-  const sequence = useRef(0);
+  const session = useOperationSession();
+  // Latest operation id, so explicit cancel can withdraw the host operation.
   const activeOperation = useRef<string | undefined>(undefined);
-  const mounted = useRef(true);
-  const connection = useRef(connectionKey);
-  connection.current = connectionKey;
   const name = mode === "create" ? (draft?.name ?? "") : (detail?.name ?? "");
   const draftIssues = useMemo(
     () => (draft ? validateBranchDraft(draft) : []),
@@ -131,39 +131,22 @@ export function BranchMappingMutationDialog({
   const editingBlocked = mode === "edit" && detail?.editable !== true;
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      sequence.current += 1;
-      if (activeOperation.current)
-        void backend.cancelOperation(activeOperation.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    sequence.current += 1;
-    if (activeOperation.current)
-      void backend.cancelOperation(activeOperation.current);
+    // A connection change withdraws any in-flight lease and drops its review.
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     activeOperation.current = undefined;
     setError("");
     setPreflight(undefined);
     setResult(undefined);
     setPhase("edit");
-  }, [connectionKey]);
+  }, [connectionKey, session]);
 
-  useEffect(() => {
-    if (phase !== "review" || !preflight) return;
-    const timeout = window.setTimeout(
-      () => {
-        setPreflight(undefined);
-        setAcknowledgeDelete(false);
-        setError(t("browse.the.preflight.expired.inspect.the.branch"));
-        setPhase("edit");
-      },
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => window.clearTimeout(timeout);
-  }, [phase, preflight, zh]);
+  useTokenExpiry(phase === "review" ? preflight?.expiresAt : undefined, () => {
+    setPreflight(undefined);
+    setAcknowledgeDelete(false);
+    setError(t("browse.the.preflight.expired.inspect.the.branch"));
+    setPhase("edit");
+  });
 
   const updateLine = (index: number, value: BranchViewLine) =>
     setDraft((current) =>
@@ -197,10 +180,8 @@ export function BranchMappingMutationDialog({
       lineIssues.length
     )
       return;
-    const seq = ++sequence.current;
-    const expectedConnection = connectionKey;
-    const operationId = crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("preflight");
+    activeOperation.current = lease.operationId;
     setPhase("checking");
     setError("");
     setResult(undefined);
@@ -211,23 +192,19 @@ export function BranchMappingMutationDialog({
         mode,
         name,
         desired: mode === "delete" ? undefined : draft,
-        operationId,
+        operationId: lease.operationId,
       });
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       setPreflight(value);
       setPhase("review");
     } catch (cause) {
-      if (mounted.current && seq === sequence.current) {
+      if (session.isCurrent(lease)) {
         setError(String(cause));
         setPhase("edit");
       }
     } finally {
-      if (seq === sequence.current) activeOperation.current = undefined;
+      if (session.isCurrent(lease)) activeOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -277,10 +254,8 @@ export function BranchMappingMutationDialog({
       (mode === "delete" && !acknowledgeDelete)
     )
       return;
-    const seq = ++sequence.current;
-    const expectedConnection = connectionKey;
-    const operationId = crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("dispatch");
+    activeOperation.current = lease.operationId;
     setPhase("running");
     setError("");
     let dispatching: ConnectionSnapshot | undefined;
@@ -290,12 +265,7 @@ export function BranchMappingMutationDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       if (!branchConnectionMatchesTarget(preflight.target, dispatching))
         throw new Error(
           t("browse.connection.identity.changed.no.branch.mapping"),
@@ -305,45 +275,44 @@ export function BranchMappingMutationDialog({
         target: preflight.target,
         previewDigest: preflight.previewDigest,
         acknowledgeDangerousDelete: mode === "delete" && acknowledgeDelete,
-        operationId,
+        operationId: lease.operationId,
       });
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       // Unknown may have applied: query the durable receipt once by identity.
       if (value.outcome === "unknown")
-        value = (await recover(operationId, dispatching)) ?? value;
-      if (!mounted.current || seq !== sequence.current) return;
+        value = (await recover(lease.operationId, dispatching)) ?? value;
+      if (!session.isCurrent(lease)) return;
       commit(value);
     } catch (cause) {
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(operationId, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         commit(recovered);
         return;
       }
       // Transport failure is unknown, not "not applied"; refresh once and keep
       // the uncertainty explicit.
-      const fallback = unknownBranchMutationResult(operationId, String(cause));
+      const fallback = unknownBranchMutationResult(
+        lease.operationId,
+        String(cause),
+      );
       setError(String(cause));
       setResult(fallback);
       setPhase("result");
       onResult(fallback);
     } finally {
-      if (seq === sequence.current) activeOperation.current = undefined;
+      if (session.isCurrent(lease)) activeOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
   function reset() {
-    sequence.current += 1;
-    if (activeOperation.current)
-      void backend.cancelOperation(activeOperation.current);
+    // Back to edit withdraws whatever the dialog still owns.
+    session.cancel("preflight");
+    session.cancel("dispatch");
     activeOperation.current = undefined;
     setPreflight(undefined);
     setResult(undefined);

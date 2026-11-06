@@ -1,7 +1,8 @@
 import { t, tFor } from "../../shared/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import type {
   ConnectionUserCandidate,
   ConnectionUserDirectoryResult,
@@ -42,28 +43,14 @@ export function ConnectionDirectoryDialog({
   const [result, setResult] = useState<DirectoryResult>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const sequence = useRef(0);
-  const operation = useRef<string | undefined>(undefined);
-
-  useEffect(
-    () => () => {
-      sequence.current += 1;
-      if (operation.current)
-        void Promise.resolve(backend.cancelOperation(operation.current)).catch(
-          () => undefined,
-        );
-    },
-    [],
-  );
+  const session = useOperationSession();
 
   const identity = kind === "user" ? queryUser.trim() : snapshot.user.trim();
   const canQuery = !!snapshot.server.trim() && !!identity;
 
   async function browse() {
     if (busy || !canQuery) return;
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
-    operation.current = operationId;
+    const lease = session.start("operation");
     setBusy(true);
     setError("");
     setResult(undefined);
@@ -78,29 +65,27 @@ export function ConnectionDirectoryDialog({
           ? await backend.browseConnectionUsers({
               context: requestContext,
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               prefix: prefix.trim() || undefined,
             })
           : await backend.browseConnectionWorkspaces({
               context: requestContext,
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               prefix: prefix.trim() || undefined,
             });
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (next.requestGeneration !== requestGeneration) {
         setError(t("settings.the.connection.settings.for.this.query"));
         return;
       }
       setResult(next);
     } catch (cause) {
-      if (seq === sequence.current)
+      if (session.isCurrent(lease))
         setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
 
