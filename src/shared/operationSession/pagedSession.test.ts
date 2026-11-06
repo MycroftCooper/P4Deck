@@ -61,6 +61,25 @@ describe("paged session chains", () => {
     expect(session.isCurrent(chain, sibling)).toBe(true);
   });
 
+  it("keeps a side read current when the page that started it is settled or abandoned", () => {
+    // The invariant a page relies on: a side read that rides on the chain is
+    // not silenced by superseding the page that happened to start it. Only the
+    // chain's own retirement may do that.
+    const { session } = harness();
+    const chain = session.open("graph");
+    const page = session.request(chain);
+    const sideRead = session.request(chain);
+    session.settle(page);
+    expect(session.isCurrent(chain, sideRead)).toBe(true);
+    expect(session.isCurrent(chain, page)).toBe(false);
+
+    const superseded = session.request(chain);
+    session.abandon(superseded);
+    expect(session.isCurrent(chain, sideRead)).toBe(true);
+    session.open("graph");
+    expect(session.isCurrent(chain, sideRead)).toBe(false);
+  });
+
   it("hands out an already-aborted request for a dead chain and never reaches the host", async () => {
     const { session, cancelled } = harness();
     const chain = session.open("graph");
