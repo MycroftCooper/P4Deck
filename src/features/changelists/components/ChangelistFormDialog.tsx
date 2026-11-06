@@ -1,7 +1,11 @@
 import { t } from "../../../shared/i18n";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
+import { useOperationSession } from "../../../shared/operationSession";
+
+/** The submission channel: one lease per submitted draft. */
+const FORM = "changelist-form";
 
 export interface ChangelistDraft {
   description: string;
@@ -38,12 +42,12 @@ export function ChangelistFormDialog({
   const [discard, setDiscard] = useState(false);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
-  const generation = useRef(0);
-  useEffect(() => {
-    return () => {
-      generation.current += 1;
-    };
-  }, []);
+  /**
+   * Closing the dialog retires the submission: the owner cancels the channel on
+   * unmount, so a late answer can neither dismiss the dialog again nor clear a
+   * busy state nobody is looking at.
+   */
+  const session = useOperationSession();
   const formId = useId(),
     errorId = useId();
   const dirty = description !== initialDescription;
@@ -76,19 +80,26 @@ export function ChangelistFormDialog({
       return;
     }
     running.current = true;
-    const requestGeneration = generation.current;
+    // One lease per submission. It stays current until this attempt settles;
+    // closing the dialog supersedes it through the owner, so a late answer can
+    // neither dismiss the dialog again nor revive a closed form.
+    const submission = session.start(FORM, { cancelBackend: false });
     setBusy(true);
     try {
       await onSubmit(draft);
-      if (generation.current === requestGeneration) {
+      if (session.isCurrent(submission)) {
         clearUnsaved();
         onDismiss();
       }
     } catch (cause) {
-      if (generation.current === requestGeneration) setError(String(cause));
+      if (session.isCurrent(submission)) setError(String(cause));
     } finally {
       running.current = false;
-      if (generation.current === requestGeneration) setBusy(false);
+      // Clear busy before retiring: a finished lease is no longer current.
+      if (session.isCurrent(submission)) {
+        setBusy(false);
+        session.finish(submission);
+      }
     }
   }
   return (

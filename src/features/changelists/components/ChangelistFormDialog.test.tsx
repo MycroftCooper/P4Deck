@@ -186,6 +186,22 @@ it("does not dismiss a later workflow when a disposed request completes", async 
   await act(async () => finish());
   expect(dismiss).not.toHaveBeenCalled();
 });
+it("accepts a second submission after a failed one settles its lease", async () => {
+  const adapter = vi
+    .fn<(draft: ChangelistDraft) => Promise<void>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(undefined);
+  await render("Retry me", adapter);
+  await submit();
+  expect(document.querySelector('[role="alert"]')!.textContent).toContain(
+    "offline",
+  );
+  // The failed attempt must retire its lease; a lease left current would be
+  // silently superseded by the retry instead of the retry starting clean.
+  await submit();
+  expect(adapter).toHaveBeenCalledTimes(2);
+  expect(dismiss).toHaveBeenCalledTimes(1);
+});
 it("rejects editing Default instead of treating it as a numbered CL", async () => {
   const adapter = vi.fn(async () => {});
   await act(async () =>
