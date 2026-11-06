@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T11:25:33.062Z",
+  "updatedAt": "2026-11-06T11:54:33.542Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -96,9 +96,9 @@
     ]
   },
   "counts": {
-    "main": 57,
+    "main": 58,
     "archived": 12,
-    "total": 69,
+    "total": 70,
     "subitems": 32,
     "slices": 7
   },
@@ -1983,7 +1983,7 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
-      "stage": "implemented",
+      "stage": "todo",
       "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
@@ -2055,8 +2055,8 @@
       "typeRaw": "重构与代码优化",
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "重构",
-      "scope": "重构：分页会话模型（owner 支持同代次连续租约 + 多 id 取消集合）",
-      "stage": "todo",
+      "scope": "重构：分页会话模型（组合层 PagedChain + owner 最小增量）",
+      "stage": "in-progress",
       "statusRaw": "待实现",
       "priority": "P1（RUI-04 之后）",
       "evidence": [
@@ -2065,7 +2065,7 @@
         "src/features/browsers/components/BranchMappingsPage.tsx",
         "src/features/tools/ToolPanel.tsx"
       ],
-      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。三条设计前提必须先定：① 契约字段（StreamGraphQuery.requestGeneration 必填且用后端回显反查）与本地判活代次如何分离 ② owner 是否支持「同 generation 并发/串行多租约」变体 ③ 多 id 取消是否收敛为集合语义。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
+      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
       "depsRaw": "RUI-04",
       "deps": [
         "RUI-04"
@@ -2087,6 +2087,39 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-11-06T11:13:08.101Z"
+    },
+    {
+      "id": "RUI-07",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "BE＋FE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：工具面板订阅式会话（事件订阅无完成点 + 终端取消双路）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P2（RUI-06 之后）",
+      "evidence": [
+        "src/features/tools/ToolPanel.tsx",
+        "src/features/tools/components/ToolDrawer.tsx"
+      ],
+      "note": "与分页会话是两个不同问题：① `subscribeOperationEvents` 是长驻订阅、无完成点，lease 永远无法 finish，硬套 owner 会让租约永久占住 channel；② 终端执行的代次在 ToolDrawer（terminalGeneration）且取消已由其手发（:107/:120 → onCancel → backend.cancelOperation），迁过去会双路取消；③ temporaryId 是发给 runP4 的契约字段。立项前提：先定「订阅类生命周期」是否需要独立原语（与 PagedChain/owner 并列），以及取消权威来源唯一化策略。验收=取消只发一次、订阅可干净卸载、契约字段语义不变",
+      "depsRaw": "RUI-06",
+      "deps": [
+        "RUI-06"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null
+      },
+      "updatedAt": null,
+      "firstSeenAt": "2026-11-06T11:54:33.540Z",
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null
     },
     {
       "id": "UI-07",
