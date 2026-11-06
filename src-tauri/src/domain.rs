@@ -3353,6 +3353,10 @@ pub struct ResolvePreflightRequest {
     /// original workspace content).
     #[serde(default)]
     pub force: bool,
+    /// Caller-supplied runner prefix; `cancel_operation` with the same id
+    /// cancels the inspection commands while they run.
+    #[serde(default)]
+    pub operation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

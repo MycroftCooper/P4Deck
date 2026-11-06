@@ -7541,6 +7541,7 @@ mod tests {
                 ResolvePreflightRequest {
                     depot_paths: vec![B.into()],
                     force: false,
+                    operation_id: None,
                 },
                 None,
             )
@@ -7593,6 +7594,7 @@ mod tests {
                 ResolvePreflightRequest {
                     depot_paths: vec![A.into()],
                     force: false,
+                    operation_id: None,
                 },
                 None,
             )

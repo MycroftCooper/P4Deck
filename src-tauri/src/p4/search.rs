@@ -429,9 +429,15 @@ impl SearchRepository {
                 break;
             }
             ensure_active()?;
-            // The batch loop is bounded by SHELF_DEEP_SEARCH_BUDGET_MS above;
-            // each `p4 describe` gets the short-read family instead of a
-            // shrinking literal, so a slow batch still yields a partial result.
+            // The deep search has a total budget. The loop check above only runs
+            // between batches, so each `p4 describe` must also be narrowed to
+            // whatever budget is left — otherwise one stuck batch spends the
+            // whole family limit and the total overruns by an order of magnitude.
+            // `limit_for_request` keeps the family as a hard ceiling even if this
+            // arithmetic is ever wrong.
+            let remaining_ms = SHELF_DEEP_SEARCH_BUDGET_MS
+                .saturating_sub(started.elapsed().as_millis())
+                .max(1) as u64;
             let mut args = vec![
                 "-s".into(),
                 "-S".into(),
@@ -445,7 +451,7 @@ impl SearchRepository {
                     operation_id,
                     "describe",
                     args,
-                    crate::p4::bounds::IoBound::Read,
+                    Some(remaining_ms),
                     app,
                 )
                 .await
@@ -596,38 +602,35 @@ impl SearchRepository {
         args: Vec<String>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
-        self.run_with_timeout(
-            context,
-            operation_id,
-            command,
-            args,
-            crate::p4::bounds::IoBound::Read,
-            app,
-        )
-        .await
+        self.run_with_timeout(context, operation_id, command, args, None, app)
+            .await
     }
 
+    /// Runs one `p4` read under the short-read family. `narrowing_ms` can only
+    /// shorten that family, so a caller with a smaller local budget (the shelf
+    /// deep search) still gets a bounded command without a bare millisecond
+    /// literal.
     async fn run_with_timeout(
         &self,
         context: &P4Context,
         operation_id: &str,
         command: &str,
         args: Vec<String>,
-        bound: crate::p4::bounds::IoBound,
+        narrowing_ms: Option<u64>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let result = self
             .runner
             .run(
                 P4CommandRequest {
-                    bound,
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: None,
+                    timeout_ms: narrowing_ms,
                     input: None,
                 },
                 app,

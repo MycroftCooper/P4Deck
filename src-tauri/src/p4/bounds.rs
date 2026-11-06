@@ -111,41 +111,19 @@ pub const P4_PROCESS_HARD_CAP_MS: u64 = WORKSPACE_COMMAND_MS; // generated: P4_P
 pub const IO_DEADLINE_HEADROOM_MS: u64 = 15_000; // generated: IO_DEADLINE_HEADROOM_MS
 
 /// `sync` can change the workspace after the UI treats the result as unknown, so
-/// the host keeps a grace window no shorter than the UI's headroom before it
-/// declares the operation safe to abandon.
+/// this is the window the host keeps before declaring a timed-out `sync` safe to
+/// abandon. Reserved: the runner does not yet wait after a timeout, it kills the
+/// child immediately and reports `RunnerError::Timeout`.
 pub const SYNC_LATE_RESULT_GRACE_MS: u64 = IO_DEADLINE_HEADROOM_MS; // generated: SYNC_LATE_RESULT_GRACE_MS
 
 /// The watch interval of the frontend watchdog, in milliseconds.
 pub const WATCHDOG_TICK_MS: u64 = 5_000; // generated: WATCHDOG_TICK_MS
 
-/// Toolbar operation families the frontend watches. Their limits are the host
-/// limit plus [`IO_DEADLINE_HEADROOM_MS`]; the runner's own clamp remains the
-/// authority, this only tells the UI how long to stay busy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WatchdogKind {
-    Sync,
-    GetLatest,
-    GetRevision,
-    Refresh,
-    Other,
-}
-
-impl WatchdogKind {
-    pub const fn limit_ms(self) -> u64 {
-        match self {
-            // `sync` and both Get variants run under the transfer bound.
-            Self::Sync | Self::GetLatest | Self::GetRevision => {
-                WORKSPACE_SYNC_MS + IO_DEADLINE_HEADROOM_MS
-            }
-            // A refresh is a short read plus a settings reload; it gets its own
-            // narrow family instead of inheriting the mutation bound.
-            Self::Refresh => WORKSPACE_PREVIEW_MS + IO_DEADLINE_HEADROOM_MS,
-            // Generic mutating workspace commands (checkout/add/delete/lock...)
-            // run under the widest interactive family.
-            Self::Other => WORKSPACE_COMMAND_MS + IO_DEADLINE_HEADROOM_MS,
-        }
-    }
-}
+// The UI watchdog is NOT listed here on purpose. A watchdog limit is always
+// `family limit + IO_DEADLINE_HEADROOM_MS`, which is a rule, not data: keeping a
+// second enum of pre-summed values would be a second copy of the same facts and
+// would drift from the table above. The frontend derives it from
+// `WORKSPACE_BOUNDS_MS` (see `src/app/shell/useOperationWatchdog.ts`).
 
 #[cfg(test)]
 mod tests {
@@ -194,41 +172,11 @@ mod tests {
     }
 
     #[test]
-    fn watchdog_limits_are_host_limits_plus_headroom() {
+    fn watchdog_headroom_and_tick_are_consistent() {
         assert_eq!(IO_DEADLINE_HEADROOM_MS, 15_000);
-        assert_eq!(
-            WatchdogKind::Sync.limit_ms(),
-            WORKSPACE_SYNC_MS + IO_DEADLINE_HEADROOM_MS
-        );
-        assert_eq!(
-            WatchdogKind::Refresh.limit_ms(),
-            WORKSPACE_PREVIEW_MS + IO_DEADLINE_HEADROOM_MS
-        );
-        assert_eq!(
-            WatchdogKind::Other.limit_ms(),
-            WORKSPACE_COMMAND_MS + IO_DEADLINE_HEADROOM_MS
-        );
-        // The UI never waits past the host deadline plus its own headroom...
-        for kind in [
-            WatchdogKind::Sync,
-            WatchdogKind::GetLatest,
-            WatchdogKind::GetRevision,
-            WatchdogKind::Refresh,
-            WatchdogKind::Other,
-        ] {
-            assert!(
-                kind.limit_ms() <= P4_PROCESS_HARD_CAP_MS + IO_DEADLINE_HEADROOM_MS,
-                "{kind:?} waits past the host deadline"
-            );
-        }
-        // ...and never gives up on a command the host may still finish.
-        assert!(
-            WatchdogKind::Other.limit_ms() >= WORKSPACE_COMMAND_MS,
-            "a mutating command must not be abandoned before the host gives up"
-        );
-        // Both are the same const today; the type-level check keeps the intent
-        // explicit without asserting a constant.\r
-        let _: [(); 1] = [(); (SYNC_LATE_RESULT_GRACE_MS >= IO_DEADLINE_HEADROOM_MS) as usize];
-        assert!(WATCHDOG_TICK_MS < WatchdogKind::Refresh.limit_ms() / 4);
+        // The tick must be much finer than the headroom, otherwise the watchdog
+        // could overshoot by a whole tick and still be inside its slack budget.
+        const { assert!(WATCHDOG_TICK_MS < IO_DEADLINE_HEADROOM_MS / 2) };
+        assert_eq!(SYNC_LATE_RESULT_GRACE_MS, IO_DEADLINE_HEADROOM_MS);
     }
 }

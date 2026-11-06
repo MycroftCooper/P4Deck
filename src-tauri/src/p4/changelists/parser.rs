@@ -181,6 +181,8 @@ pub fn parse_submitted_detail(
         else {
             break;
         };
+        // `p4 -ztag -Mj describe -s` provides one bare action per file
+        // ("integrate"/"branch"/"edit"); it is shown verbatim in the file list.
         let action = text(&value, &format!("action{index}"));
         let file = SubmittedChangeFile {
             depot_path: depot_path.to_owned(),
@@ -795,6 +797,40 @@ mod tests {
             detail.merge_classification,
             MergeClassification::ReliableMerge
         );
+    }
+
+    #[test]
+    fn submitted_detail_keeps_the_real_action_per_file() {
+        // Real `p4 -ztag -Mj describe -s 11562403` (captured from the live
+        // server): six files, every action the bare word "integrate", and no
+        // per-file integration block. The parsed action must stay verbatim so
+        // the file list can show it in its own column.
+        let events = [event(
+            r#"{"action0":"integrate","action1":"integrate","action2":"integrate","change":"11562403","changeType":"public","client":"workspacepool_sid_3_stream_DM42.Beyond.Project-Development-Beyond_v2d0_uuid_2hbx98ek","depotFile0":"//DM42.Beyond.Project/Development/Beyond_v2d0/Assets/Beyond/Scripts/Gameplay/RemoteFactory/FormationZone/FormationZoneQuery.cs","depotFile1":"//DM42.Beyond.Project/Development/Beyond_v2d0/Assets/Beyond/Scripts/Gameplay/RemoteFactory/FormationZone/FormationZoneSolver.cs","depotFile2":"//DM42.Beyond.Project/Development/Beyond_v2d0/Assets/Beyond/Scripts/Gameplay/RemoteFactory/FormationZone/FormationZoneTypes.cs","desc":"[CODE]1.按水平范围合并阵法Zone","rev0":"14","rev1":"7","rev2":"11","status":"submitted","time":"1793765034","type0":"text","type1":"text","type2":"text","user":"fenganmeng"}"#,
+        )];
+        let detail = parse_submitted_detail(&events, 11_562_403).unwrap();
+        assert_eq!(detail.status, "submitted");
+        assert_eq!(detail.files.len(), 3);
+        for (file, revision) in detail.files.iter().zip([14, 7, 11]) {
+            assert_eq!(file.action, "integrate");
+            assert_eq!(file.revision, Some(revision));
+        }
+        assert_eq!(
+            detail.merge_classification,
+            MergeClassification::ReliableMerge
+        );
+    }
+
+    #[test]
+    fn submitted_detail_never_invents_an_integration_source_revision() {
+        // An integration block without P4's revision marker: the action stays
+        // bare instead of guessing a revision from the source path.
+        let events = [event(
+            r#"{"change":"44","status":"submitted","user":"alice","client":"ws","desc":"Promote","time":"1700000000","depotFile0":"//depot/main/a","action0":"integrate","rev0":"4","how0":"integrate","file0":"//depot/dev/a","depotFile1":"//depot/main/b","action1":"branch","rev1":"9"}"#,
+        )];
+        let files = parse_submitted_detail(&events, 44).unwrap().files;
+        assert_eq!(files[0].action, "integrate");
+        assert_eq!(files[1].action, "branch");
     }
 
     #[test]

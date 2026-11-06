@@ -1204,6 +1204,15 @@ impl WorkflowService {
     ) -> ResolvePreflight {
         request.depot_paths = normalized_paths(request.depot_paths);
         let force = request.force;
+        // The runner cancels an operation and every child named `{id}:...`, so
+        // the caller's id roots the inspection commands as well. The group keeps
+        // the preflight cancellable before it starts and lets a cancel that
+        // lands mid-inspection reject the (partial) result instead of evaluating
+        // it; a superseded preflight must never look like a real review.
+        let operation_id =
+            safe_operation_prefix(request.operation_id.as_deref(), "resolve-preflight");
+        let operation_prefix = format!("{operation_id}:resolve");
+        let operation = self.repository.begin_operation_group(operation_id);
         let (context, generation) = self.contexts.snapshot();
         let target = target(
             "resolve",
@@ -1213,16 +1222,21 @@ impl WorkflowService {
             None,
             request.depot_paths.clone(),
         );
-        let inspection = self
-            .repository
-            .inspect_resolve(
-                &context,
-                &request.depot_paths,
-                force,
-                &format!("resolve-preflight-{}", Uuid::new_v4()),
-                app,
-            )
-            .await;
+        let inspection = if operation.ensure_active().is_err() {
+            Err("operation was cancelled".to_string())
+        } else {
+            self.repository
+                .inspect_resolve(
+                    &context,
+                    &request.depot_paths,
+                    force,
+                    &operation_prefix,
+                    Some(&operation),
+                    app,
+                )
+                .await
+        };
+        let inspection = inspection.and_then(|value| operation.ensure_active().map(|()| value));
         let evaluation = inspection
             .map(|value| evaluate_resolve(&request.depot_paths, value, force))
             .unwrap_or_else(|_| failed_resolve_evaluation(&request.depot_paths));
@@ -1276,6 +1290,7 @@ impl WorkflowService {
                 &paths,
                 false,
                 &format!("{operation_id}:inspect"),
+                None,
                 app,
             )
             .await?;
@@ -1403,6 +1418,7 @@ impl WorkflowService {
                 &paths,
                 false,
                 &format!("{operation_id}:final-record"),
+                None,
                 app,
             )
             .await?;
@@ -1666,6 +1682,7 @@ impl WorkflowService {
                 &[session_record.session.depot_path.clone()],
                 false,
                 &format!("{operation_id}:recheck"),
+                None,
                 app,
             )
             .await?;
@@ -1849,6 +1866,7 @@ impl WorkflowService {
                 std::slice::from_ref(&session.session.depot_path),
                 false,
                 &format!("{operation_id}:recheck"),
+                None,
                 app,
             )
             .await;
@@ -1916,6 +1934,7 @@ impl WorkflowService {
                 std::slice::from_ref(&selection.depot_path),
                 false,
                 &format!("{operation_id}:verify"),
+                None,
                 app,
             )
             .await;
@@ -2056,6 +2075,7 @@ impl WorkflowService {
                 &paths,
                 force,
                 &format!("resolve-recheck-{}", Uuid::new_v4()),
+                None,
                 app,
             )
             .await;
@@ -2111,6 +2131,7 @@ impl WorkflowService {
                 &paths,
                 force,
                 &format!("resolve-verify-{}", Uuid::new_v4()),
+                None,
                 app,
             )
             .await;
@@ -3217,6 +3238,17 @@ fn valid_operation_id(value: Option<String>) -> String {
     value
         .filter(|value| !value.trim().is_empty() && value.len() <= 200)
         .unwrap_or_else(|| Uuid::new_v4().to_string())
+}
+/// Callers own the runner prefix (and therefore cancellation); a malformed or
+/// missing id falls back to a fresh one.
+fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
+    value
+        .filter(|value| valid_operation_prefix(value))
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("{fallback}-{}", Uuid::new_v4()))
+}
+fn valid_operation_prefix(value: &str) -> bool {
+    !value.trim().is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 fn preview_mentions_resolve(lines: &[String], path: &str) -> bool {
     lines.iter().any(|line| {
@@ -4509,6 +4541,7 @@ exit 9
                 ResolvePreflightRequest {
                     depot_paths: vec!["//depot/a".into(), "//depot/b".into()],
                     force: false,
+                    operation_id: None,
                 },
                 None,
             )
@@ -4612,6 +4645,7 @@ exit 9
                 ResolvePreflightRequest {
                     depot_paths: vec!["//depot/a".into()],
                     force: true,
+                    operation_id: None,
                 },
                 None,
             )

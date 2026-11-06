@@ -129,7 +129,13 @@ impl UndoService {
         let result = self
             .runner
             .run_with_mutation_guard(
-                request(&context, "undo", vec![filespec(&record.target)?]),
+                // The real write: `p4 undo` rewrites the client file.
+                request(
+                    &context,
+                    "undo",
+                    vec![filespec(&record.target)?],
+                    crate::p4::bounds::IoBound::Command,
+                ),
                 app,
                 Some(1),
                 &guard,
@@ -156,11 +162,12 @@ impl UndoService {
         context: &P4Context,
         command: &str,
         args: Vec<String>,
+        bound: crate::p4::bounds::IoBound,
         app: Option<&AppHandle>,
     ) -> Result<Vec<Value>, String> {
         let result = self
             .runner
-            .run_with_progress(request(context, command, args), app, None, None)
+            .run_with_progress(request(context, command, args, bound), app, None, None)
             .await
             .map_err(|error| error.to_string())?;
         records(&result)
@@ -178,8 +185,18 @@ impl UndoService {
             return Err("An explicit server, user and workspace are required for Undo.".into());
         }
         let spec = filespec(target)?;
+        // Read-only pre-checks. The dialog abandons them after 30 s, so a hung
+        // server must fail the read fast instead of keeping a query alive for
+        // the mutation family's full limit (the old R9 revision did exactly that,
+        // which turned a read timeout into an "Unknown" outcome).
         let revision = self
-            .query(context, "files", vec![spec.clone()], app)
+            .query(
+                context,
+                "files",
+                vec![spec.clone()],
+                crate::p4::bounds::IoBound::Read,
+                app,
+            )
             .await?;
         let entry = single_file(&revision, &target.depot_path)?;
         if number(entry, "rev") != Some(target.revision as u64)
@@ -202,6 +219,7 @@ impl UndoService {
                 context,
                 "fstat",
                 vec!["-Ol".into(), target.depot_path.clone()],
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -222,6 +240,7 @@ impl UndoService {
                 context,
                 "diff",
                 vec!["-se".into(), target.depot_path.clone()],
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -239,7 +258,14 @@ impl UndoService {
             Err(_) => return Err("Cannot verify workspace file contents before Undo.".into()),
         };
         let preview = self
-            .query(context, "undo", vec!["-n".into(), spec], app)
+            .query(
+                context,
+                "undo",
+                vec!["-n".into(), spec],
+                // `undo -n` only previews; it must not wait like the real write.
+                crate::p4::bounds::IoBound::Read,
+                app,
+            )
             .await?;
         single_file(&preview, &target.depot_path)?;
         let messages = preview
@@ -262,10 +288,14 @@ impl UndoService {
         Ok((digest, messages))
     }
 }
-fn request(context: &P4Context, command: &str, args: Vec<String>) -> P4CommandRequest {
+fn request(
+    context: &P4Context,
+    command: &str,
+    args: Vec<String>,
+    bound: crate::p4::bounds::IoBound,
+) -> P4CommandRequest {
     P4CommandRequest {
-        // `p4 undo` rewrites files on the client, so it is a mutation.
-        bound: crate::p4::bounds::IoBound::Command,
+        bound,
         operation_id: None,
         source: OperationSource::Gui,
         command: command.into(),
