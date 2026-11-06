@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:49:51.944Z",
+  "updatedAt": "2026-11-06T08:55:19.408Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1953,7 +1953,7 @@
         "src/shared/confirmation/useConfirmationGuard.ts",
         "src/shared/cache/snapshots.ts"
       ],
-      "note": "2026-11-06 批 1 完成：ResolveDialog 移除全部 23 处 generation.current（FE 8cb7183，19 例绿，原 16 例未改）；批 2 完成：LogView（a8620a3，16 例绿）+ SubmittedPage（8090c34，39 例绿；requestGeneration 取 lease.epoch，Rust 侧确认为纯回填字段；迁移中自查修正 chainBusy 语义 bug）；批 3 双线并行：fe2 c8116a5（DiagnosticsView/OperationJournalView，原 16 例未改 + 8 例新），fe 在途（ConnectionProfilesCard/SearchPage）；已记录通用坑：finish(lease) 会立即 non-current，必须先清 busy/loading 再 finish；StreamGraphPage/BranchMappingsPage **经论证排除**（requestGeneration 为必填契约字段且用后端回显反查、续期式分页会话与 owner「start 即 supersede」冲突、activeOperations 多 id 集合取消语义无法表达；合并为「分页会话模型」单独立项）；ToolPanel **经论证排除**（内部三种生命周期：事件订阅无完成点、终端代次在 ToolDrawer 且已自行发 cancel，硬迁会造成双路取消与契约字段改动；如需处理属跨 ToolDrawer 单独立项）；剩余=SubmittedPage/ConnectionProfilesCard/SearchPage/工具页；验收=每页取消、代次漂移、迟到响应隔离有测试，无新 stale-state 路径",
+      "note": "2026-11-06 已迁移 7 页：ResolveDialog（8cb7183）、LogView（a8620a3）、SubmittedPage（8090c34）、DiagnosticsView+OperationJournalView（c8116a5）、ConnectionProfilesCard（91409e4）、SearchPage（c48b7fd）；批 4 剩余 ChangelistFormDialog；三页论证排除（ToolPanel/StreamGraph/BranchMapping，需「分页会话模型」立项）。通用规则：先清 busy/loading 再 finish；改输入用 finish 而非 abandon；非回显型 requestGeneration 保留原单调 seq。",
       "depsRaw": "RUI-02",
       "deps": [
         "RUI-02"
