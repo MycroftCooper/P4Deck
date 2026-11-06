@@ -166,7 +166,11 @@ export function ToolDrawer(props: Props) {
       const result = await props.onRun(raw, temporaryId);
       if (generation !== terminalGeneration.current) return;
       if (!decision.sensitive) rememberHistory(raw);
-      setRunning(result.operationId);
+      // The host echoes the id it was given (runner.rs adopts a supplied id and
+      // only mints one when missing; commands.rs only requires non-empty and
+      // at most 256 characters, never equality). So this line records the
+      // contract, it does not switch state — and an empty echo keeps our id.
+      if (result.operationId) setRunning(result.operationId);
       const output = streamedCount.current
         ? []
         : result.events
@@ -437,7 +441,17 @@ export function ToolDrawer(props: Props) {
               {props.t.run}
             </button>
             {running && (
-              <button onClick={() => props.onCancel(running)}>
+              <button
+                onClick={() => {
+                  // One cancel per run: a second click while the first is still
+                  // being dispatched must not ask the host twice.
+                  const operation = runningRef.current;
+                  if (!operation) return;
+                  runningRef.current = null;
+                  setRunning(null);
+                  props.onCancel(operation);
+                }}
+              >
                 <Ban size={14} />
                 {props.t.cancel}
               </button>
