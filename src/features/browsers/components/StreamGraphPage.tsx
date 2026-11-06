@@ -30,7 +30,7 @@ import type {
   StreamGraphResult,
   StreamSummary,
 } from "../../../shared/contracts";
-import type { QueryKey } from "@tanstack/react-query";
+
 import { serverScope, snapshotKey } from "../../../shared/cache/policy";
 import {
   hydrateSnapshot,
@@ -39,6 +39,12 @@ import {
   writePagedSnapshot,
 } from "../../../shared/cache/snapshots";
 import { useViewRefresh } from "../../../shared/cache/useViewRefresh";
+import {
+  CursorLedger,
+  PagedSession,
+  type PagedChain,
+  type PagedRequest,
+} from "../../../shared/operationSession/pagedSession";
 import { cachedWorkspaceList } from "../../workspaces/workspaceList";
 import { StreamSwitchDialog } from "./StreamSwitchDialog";
 import {
@@ -128,20 +134,25 @@ export function StreamGraphPage({
     stream: StreamSummary;
     source: HTMLElement | null;
   }>();
-  const activeOperations = useRef(new Set<string>());
-  const requestToken = useRef(0);
-  const requestGeneration = useRef(0);
-  const consumedCursors = useRef(new Set<string>());
-  const pendingCursors = useRef(new Set<string>());
-  const session = useRef<
-    | {
-        token: number;
-        generation: number;
-        query: GraphQuery;
-        key: QueryKey;
-      }
-    | undefined
-  >(undefined);
+  /**
+   * Paging is a chain: the first page and every "load more" belong to one
+   * reviewed query and must not cancel each other, while a new query, a
+   * reconnect or unmount retires the whole chain. The chain also owns the wire
+   * `requestGeneration` and the cursor ledger the page used to track by hand.
+   */
+  const paged = useMemo(
+    () =>
+      new PagedSession({
+        cancelOperation: (id) =>
+          backend.cancelOperation(id).then(() => undefined),
+        mintOperationId: operationId,
+      }),
+    [],
+  );
+  const chain = useRef<PagedChain | undefined>(undefined);
+  /** Cursor bookkeeping for the live chain (replaces two hand-written Sets). */
+  const cursors = useMemo(() => new CursorLedger(), []);
+  useEffect(() => () => paged.cancelAll(), [paged]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const latestRuntime = useRef(runtime);
   latestRuntime.current = runtime;
@@ -175,29 +186,27 @@ export function StreamGraphPage({
     ],
   );
 
-  const cancelOperations = useCallback(() => {
-    for (const id of activeOperations.current)
-      void backend.cancelOperation(id).catch(() => undefined);
-    activeOperations.current.clear();
-  }, []);
-
   /** The current workspace stream comes from the shared workspace snapshot. */
-  const loadCurrentStream = useCallback((token: number) => {
-    const current = latestRuntime.current;
-    const allowRefresh =
-      current.p4Version !== "loading" &&
-      current.connection.state === "connected";
-    void cachedWorkspaceList(current, allowRefresh)
-      .then((workspaces) => {
-        if (requestToken.current !== token) return;
-        setCurrentStream(
-          workspaces.find(
-            (workspace) => workspace.name === current.context.client,
-          )?.stream,
-        );
-      })
-      .catch(() => undefined);
-  }, []);
+  const loadCurrentStream = useCallback(
+    (request: PagedRequest, target: PagedChain) => {
+      const current = latestRuntime.current;
+      const allowRefresh =
+        current.p4Version !== "loading" &&
+        current.connection.state === "connected";
+      void cachedWorkspaceList(current, allowRefresh)
+        .then((workspaces) => {
+          // A newer chain or a retired request must not overwrite the sidebar.
+          if (!paged.isCurrent(target, request)) return;
+          setCurrentStream(
+            workspaces.find(
+              (workspace) => workspace.name === current.context.client,
+            )?.stream,
+          );
+        })
+        .catch(() => undefined);
+    },
+    [paged],
+  );
 
   const scopeMatches = useCallback(
     (page: StreamGraphResult) =>
@@ -217,14 +226,12 @@ export function StreamGraphPage({
 
   const startFresh = useCallback(
     async (refresh: boolean) => {
-      cancelOperations();
-      const token = ++requestToken.current;
-      const generation = ++requestGeneration.current;
-      const id = operationId();
-      session.current = { token, generation, query, key: graphKey };
-      consumedCursors.current.clear();
-      pendingCursors.current.clear();
-      activeOperations.current.add(id);
+      const started = paged.open("graph");
+      chain.current = started;
+      const page = paged.request(started);
+      // The side stream is fetched against its own request: it belongs to the
+      // chain, not to the page, so superseding the page must not silence it.
+      const sidebar = paged.request(started);
       setPhase("loading");
       setError("");
       setNotice("");
@@ -233,25 +240,25 @@ export function StreamGraphPage({
         setResult(undefined);
         setCurrentStream(undefined);
       }
-      loadCurrentStream(token);
+      loadCurrentStream(sidebar, started);
       try {
-        const page = await backend.queryStreamGraph({
+        const result = await backend.queryStreamGraph({
           ...query,
-          operationId: id,
-          requestGeneration: generation,
+          operationId: page.operationId,
+          requestGeneration: page.generation,
           refresh,
         });
         if (
-          requestToken.current !== token ||
-          page.requestGeneration !== generation ||
-          !scopeMatches(page)
+          !paged.isCurrent(started, page) ||
+          result.requestGeneration !== page.generation ||
+          !scopeMatches(result)
         )
           return;
-        writePagedSnapshot(graphKey, page);
-        setResult(page);
+        writePagedSnapshot(graphKey, result);
+        setResult(result);
         setPhase("ready");
       } catch (cause) {
-        if (requestToken.current !== token) return;
+        if (!paged.isCurrent(started, page)) return;
         const failure = streamGraphError(cause);
         if (failure.code === "cancelled") {
           setPhase("idle");
@@ -260,29 +267,22 @@ export function StreamGraphPage({
         setError(failure.message);
         setPhase("error");
       } finally {
-        activeOperations.current.delete(id);
+        paged.settle(page);
       }
     },
-    [cancelOperations, graphKey, loadCurrentStream, query, scopeMatches],
+    [graphKey, loadCurrentStream, paged, query, scopeMatches],
   );
 
-  /** Shows cached pages and resumes their paging session without P4. */
+  /**
+   * Shows cached pages and resumes their paging session without P4. The cached
+   * `requestGeneration` is only a record of the chain that produced it; the
+   * next chain takes a fresh generation of its own.
+   */
   const restore = useCallback(
     (cached: StreamGraphResult) => {
-      cancelOperations();
-      const token = ++requestToken.current;
-      requestGeneration.current = Math.max(
-        requestGeneration.current,
-        cached.requestGeneration,
-      );
-      session.current = {
-        token,
-        generation: cached.requestGeneration,
-        query,
-        key: graphKey,
-      };
-      consumedCursors.current.clear();
-      pendingCursors.current.clear();
+      const resumed = paged.open("graph");
+      chain.current = resumed;
+      const request = paged.request(resumed);
       setResult(cached);
       setPhase("ready");
       setError("");
@@ -292,9 +292,9 @@ export function StreamGraphPage({
           ? path
           : undefined,
       );
-      loadCurrentStream(token);
+      loadCurrentStream(request, resumed);
     },
-    [cancelOperations, graphKey, loadCurrentStream, query],
+    [loadCurrentStream, paged],
   );
 
   useEffect(() => {
@@ -329,18 +329,22 @@ export function StreamGraphPage({
     }
     return () => {
       live = false;
-      requestToken.current += 1;
-      cancelOperations();
+      // Leaves the page without a chain: the next visit opens a fresh one, so
+      // a late answer from this visit can never paint it.
+      paged.cancelAll();
+      chain.current = undefined;
+      cursors.reset();
     };
   }, [
     connectionOwner,
+    cursors,
     graphKey,
+    paged,
     runtime.p4Version,
     remoteReady,
     restore,
     scopeMatches,
     startFresh,
-    cancelOperations,
   ]);
 
   useViewRefresh("streamgraph", graphKey, () => {
@@ -350,52 +354,47 @@ export function StreamGraphPage({
 
   const loadMore = useCallback(async () => {
     const cursor = result?.nextCursor;
-    const active = session.current;
+    const active = chain.current;
     if (
       !remoteReady ||
       phase === "loading" ||
       phase === "loadingMore" ||
       !cursor ||
       !result?.hasMore ||
-      !active ||
-      pendingCursors.current.has(cursor) ||
-      consumedCursors.current.has(cursor)
+      !active
     )
       return;
-    pendingCursors.current.add(cursor);
-    const id = operationId();
-    activeOperations.current.add(id);
+    if (!cursors.claim(cursor)) return;
+    // One more page of the same chain: same generation, sibling request.
+    const page = paged.request(active);
     setPhase("loadingMore");
     setError("");
     try {
-      const page = await backend.queryStreamGraph({
-        ...active.query,
-        operationId: id,
-        requestGeneration: active.generation,
+      const next = await backend.queryStreamGraph({
+        ...query,
+        operationId: page.operationId,
+        requestGeneration: page.generation,
         cursor,
       });
       if (
-        requestToken.current !== active.token ||
-        page.requestGeneration !== active.generation ||
-        !scopeMatches(page)
+        !paged.isCurrent(active, page) ||
+        next.requestGeneration !== page.generation ||
+        !scopeMatches(next)
       )
         return;
-      consumedCursors.current.add(cursor);
+      cursors.consume(cursor);
       const nonProgressing =
-        page.hasMore &&
-        (!page.nextCursor ||
-          page.nextCursor === cursor ||
-          consumedCursors.current.has(page.nextCursor));
-      const merged = mergeStreamGraphResults(result, page);
-      const next = nonProgressing
+        next.hasMore && cursors.isStalled(next.nextCursor, cursor);
+      const merged = mergeStreamGraphResults(result, next);
+      const combined = nonProgressing
         ? { ...merged, hasMore: false, nextCursor: undefined }
         : merged;
-      writePagedSnapshot(active.key, next);
-      setResult(next);
+      writePagedSnapshot(graphKey, combined);
+      setResult(combined);
       setPhase("ready");
       if (nonProgressing) setNotice(t("browse.the.backend.returned.a.non"));
     } catch (cause) {
-      if (requestToken.current !== active.token) return;
+      if (!paged.isCurrent(active, page)) return;
       const failure = streamGraphError(cause);
       if (
         failure.code === "invalidCursor" ||
@@ -408,10 +407,22 @@ export function StreamGraphPage({
       if (failure.code !== "cancelled") setError(failure.message);
       setPhase("ready");
     } finally {
-      pendingCursors.current.delete(cursor);
-      activeOperations.current.delete(id);
+      // A settled page may be retried; the paged request itself is retired.
+      cursors.release(cursor);
+      paged.settle(page);
     }
-  }, [phase, remoteReady, result, scopeMatches, startFresh, zh]);
+  }, [
+    cursors,
+    graphKey,
+    paged,
+    phase,
+    query,
+    remoteReady,
+    result,
+    scopeMatches,
+    startFresh,
+    zh,
+  ]);
 
   const rows = useMemo(
     () =>
@@ -469,9 +480,13 @@ export function StreamGraphPage({
     onLocateStream(selected.node.stream);
   };
   const cancel = () => {
-    const token = ++requestToken.current;
-    if (session.current) session.current.token = token;
-    cancelOperations();
+    // Cancelling in-flight pages ends the chain: paging cannot resume against
+    // a page set nobody is waiting for any more.
+    const active = chain.current;
+    if (active) paged.cancel(active);
+    paged.cancelAll();
+    chain.current = undefined;
+    cursors.reset();
     setPhase(result ? "ready" : "idle");
     setNotice(t("browse.current.query.was.cancelled"));
   };
