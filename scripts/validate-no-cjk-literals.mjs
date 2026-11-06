@@ -82,7 +82,7 @@ const BASELINE = new Set([
   "src/app/shell/StatusBar.tsx:264",
   "src/features/browsers/components/DiffView.tsx:392",
   "src/features/browsers/components/DiffView.tsx:483",
-  "src/features/browsers/components/StreamGraphPage.tsx:577",
+  "src/features/browsers/components/StreamGraphPage.tsx:592",
   "src/features/changelists/components/ChangelistFormDialog.tsx:110",
   "src/features/changelists/components/ChangelistPage.tsx:433",
   "src/features/changelists/components/ChangelistPage.tsx:475",
