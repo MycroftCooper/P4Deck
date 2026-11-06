@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:55:19.408Z",
+  "updatedAt": "2026-11-06T08:59:29.687Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1945,7 +1945,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "重构",
       "scope": "重构：操作会话收敛（取消/代次/迟到隔离统一）",
-      "stage": "partial",
+      "stage": "implemented",
       "statusRaw": "部分实现",
       "priority": "P1",
       "evidence": [
@@ -1953,7 +1953,7 @@
         "src/shared/confirmation/useConfirmationGuard.ts",
         "src/shared/cache/snapshots.ts"
       ],
-      "note": "2026-11-06 已迁移 7 页：ResolveDialog（8cb7183）、LogView（a8620a3）、SubmittedPage（8090c34）、DiagnosticsView+OperationJournalView（c8116a5）、ConnectionProfilesCard（91409e4）、SearchPage（c48b7fd）；批 4 剩余 ChangelistFormDialog；三页论证排除（ToolPanel/StreamGraph/BranchMapping，需「分页会话模型」立项）。通用规则：先清 busy/loading 再 finish；改输入用 finish 而非 abandon；非回显型 requestGeneration 保留原单调 seq。",
+      "note": "2026-11-06 已迁移 7 页：ResolveDialog（8cb7183）、LogView（a8620a3）、SubmittedPage（8090c34）、DiagnosticsView+OperationJournalView（c8116a5）、ConnectionProfilesCard（91409e4）、SearchPage（c48b7fd）；ChangelistFormDialog（d069ba9）+ SearchPage 安全整数防护（1b63135）；全量 vitest 1851 绿；全仓仅剩 ToolPanel 3 处（已论证排除）；三页论证排除（ToolPanel/StreamGraph/BranchMapping，需「分页会话模型」立项）。通用规则：先清 busy/loading 再 finish；改输入用 finish 而非 abandon；非回显型 requestGeneration 保留原单调 seq。",
       "depsRaw": "RUI-02",
       "deps": [
         "RUI-02"
