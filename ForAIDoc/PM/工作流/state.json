@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:06:51.337Z",
+  "updatedAt": "2026-11-06T08:22:04.213Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1872,8 +1872,8 @@
       "owner": "LEAD（协调）＋FE＋BE",
       "module": "交付",
       "scope": "交付：补回 0.1.12 丢失的搜索页/预览本地化 UI 改动",
-      "stage": "todo",
-      "statusRaw": "待实现",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
       "priority": "P0",
       "evidence": [
         "src/features/search/SearchPage.tsx",
@@ -1882,7 +1882,7 @@
         "src/features/browsers/components/FilePreviewPage.tsx",
         "src/shared/localizeError.ts"
       ],
-      "note": "2026-11-04 已在 dev 完成并验证（搜索 7→6 类去 Job、去掉 300ms 自动搜索改为点击/Enter、删标题与分割线、结果区铺满、预览/路径错误按语言本地化），但 i18n 分支基于 00052b3 合并回 dev 后这批改动丢失；按当前 t()/catalog 写法重做，验收=6 类、无自动触发、无标题/分割线、预览错误中英双语",
+      "note": "2026-11-06 重做完成：FE 5bbe55d（11 文件，SearchPage 8 例含「等待 400ms 零请求 / Enter 恰好一次 / 改输入取消且迟到响应不渲染」硬断言；全量 vitest 1834 绿），LEAD 78014b7 同步 i18n 基线；剩余=用户抽验。原记录： | 2026-11-04 已在 dev 完成并验证（搜索 7→6 类去 Job、去掉 300ms 自动搜索改为点击/Enter、删标题与分割线、结果区铺满、预览/路径错误按语言本地化），但 i18n 分支基于 00052b3 合并回 dev 后这批改动丢失；按当前 t()/catalog 写法重做，验收=6 类、无自动触发、无标题/分割线、预览错误中英双语",
       "depsRaw": "无",
       "deps": [],
       "archived": false,
@@ -2021,8 +2021,8 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化）",
-      "stage": "in-progress",
-      "statusRaw": "进行中（CSS 拆分）",
+      "stage": "todo",
+      "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
         "src/app/styles/workbench.css",
