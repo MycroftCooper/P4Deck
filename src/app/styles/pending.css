@@ -76,6 +76,8 @@
 .file-state.openedEdit,
 .file-state.openedAdd {
   color: var(--warning);
+  /* Alpha tint of the light-mode --warning (#996218). No token: the other
+     states use color-mix on the theme token, this one is a frozen literal. */
   background: #b773161a;
 }
 .file-state.openedEdit,
@@ -100,6 +102,8 @@
 .file-state.outOfDate,
 .file-state.conflicted {
   color: var(--danger);
+  /* Alpha tint of the light-mode --danger (#c24848), frozen literal like the
+     warning tint above; not a token because it must not follow the theme. */
   background: #c7444418;
 }
 .file-state-stale {
@@ -147,7 +151,7 @@
 .pending-query-bar > .search-field {
   max-width: none;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .pending-query-bar > button {
   height: 35px;
@@ -202,7 +206,7 @@
   height: 28px;
   padding: 4px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--font-base);
   cursor: pointer;
 }
 .pending-card > header .pending-cl-actions button:not(:disabled):hover {
@@ -275,7 +279,7 @@
   align-items: center;
   gap: 10px;
   min-height: 22px;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
 }
 .pending-file-tools button {
@@ -312,7 +316,7 @@
 }
 .pending-file-header {
   min-height: 34px;
-  font-size: 11px;
+  font-size: var(--font-base);
   font-weight: 500;
   color: var(--muted);
 }
@@ -374,7 +378,7 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--panel);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .pending-file-header button {
   display: block;
@@ -408,7 +412,7 @@
 .pending-file-empty {
   margin: 0;
   padding: 8px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .pending-card.drop-target {
   outline: 2px solid var(--accent);
@@ -419,7 +423,7 @@
   content: "Drop to move / 拖放以移动";
   margin-left: auto;
   color: var(--accent);
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 .query-bar {
@@ -536,7 +540,7 @@
   min-width: 0;
   flex-shrink: 0;
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: var(--font-base);
   border-radius: 6px;
 }
 .file-toolbar button:disabled {
@@ -581,7 +585,7 @@
   gap: 8px;
 }
 .file-table-head {
-  font-size: 10px;
+  font-size: var(--font-sm);
   letter-spacing: 0.2px;
   font-weight: 500;
   background: var(--panel-2);
@@ -590,7 +594,7 @@
   overflow: auto;
 }
 .file-row {
-  font-size: 11px;
+  font-size: var(--font-base);
   border-bottom-color: color-mix(in srgb, var(--border) 55%, transparent);
 }
 .file-row b {
@@ -604,7 +608,7 @@
   box-shadow: inset 3px 0 var(--accent);
 }
 .file-state {
-  font-size: 10px;
+  font-size: var(--font-sm);
   border-radius: 4px;
   padding: 4px 6px;
   white-space: nowrap;
@@ -619,7 +623,7 @@
 }
 .file-row time,
 .file-row > span:not(:first-child) {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
 }
 .file-details {
@@ -641,7 +645,7 @@
   color: var(--accent);
 }
 .file-details h2 {
-  font-size: 15px;
+  font-size: var(--font-2xl);
   overflow-wrap: anywhere;
   margin: 0 0 14px;
   font-weight: 600;
@@ -655,7 +659,7 @@
   gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .file-details dt {
   color: var(--muted);
@@ -687,7 +691,7 @@
 .pending-card > header {
   height: 44px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: var(--font-md);
   gap: 8px;
   cursor: pointer;
 }
@@ -698,13 +702,13 @@
   padding: 6px 10px 10px;
 }
 .pending-body h4 {
-  font-size: 10px;
+  font-size: var(--font-sm);
   letter-spacing: 0.7px;
   margin: 10px 0 6px;
 }
 .pending-file {
   height: 30px;
-  font-size: 11px;
+  font-size: var(--font-base);
   gap: 10px;
 }
 .pending-file .pending-file-path {
@@ -723,7 +727,7 @@
 }
 .search-field input,
 .select-field select {
-  font-size: 11px;
+  font-size: var(--font-base);
   min-width: 0;
   width: 100%;
 }
@@ -745,16 +749,16 @@
   gap: 5px;
 }
 .cl-table-head {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .cl-description strong {
-  font-size: 11px;
+  font-size: var(--font-base);
   width: 48px;
   flex-shrink: 0;
   color: var(--accent);
 }
 .cl-description > span {
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 @media (max-width: 1200px) {
   .file-content.has-details {
@@ -766,7 +770,7 @@
   }
   .file-toolbar button {
     padding: 8px 6px;
-    font-size: 10px;
+    font-size: var(--font-sm);
   }
   .workbench {
     grid-template-columns: 210px minmax(0, 1fr);
@@ -907,7 +911,7 @@
   min-height: 28px;
   padding: 4px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .pending-shelf-actions button:not(:disabled):hover {
   background: var(--hover);
@@ -964,8 +968,8 @@
   overflow: hidden;
   /* The header's generic span rule sets a muted foreground; the warning badge must stay
      white-on-red or the exclamation disappears. */
-  color: #fff;
-  background: #b42338;
+  color: var(--white);
+  background: var(--badge-danger);
   line-height: 1;
 }
 .pending-resolve-badge {
@@ -979,9 +983,9 @@
   overflow: hidden;
   padding: 0 2px;
   border-radius: 3px;
-  background: #b42338;
-  color: #fff;
-  font-size: 10px;
+  background: var(--badge-danger);
+  color: var(--white);
+  font-size: var(--font-sm);
   font-weight: 700;
   line-height: 1;
 }

@@ -19,7 +19,7 @@
   padding: 10px 14px;
   background: var(--panel-2);
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
 }
 .review-toolbar .filter-count {
@@ -67,7 +67,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .diff-tool-group {
   display: flex;
@@ -169,7 +169,7 @@
   min-width: 28px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: var(--font-base);
   white-space: nowrap;
 }
 .diff-line-tools {
@@ -225,7 +225,7 @@
 }
 .diff-partial {
   color: var(--warning);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .diff-reference-headers {
   display: grid;
@@ -286,7 +286,7 @@
 }
 .graph-legend {
   flex: 1;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .diff-pane-header {
   display: grid;
@@ -298,7 +298,7 @@
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--panel-2);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .diff-pane-header > span {
   display: flex;
@@ -387,7 +387,7 @@
 }
 .review-graph .graph-label {
   fill: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .review-footer {
   margin-top: auto;
@@ -473,7 +473,7 @@
 
 .shelf-file-scroll em {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-style: normal;
 }
 
@@ -511,7 +511,7 @@
   gap: 4px;
   min-width: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .graph-focus-controls select,
 .graph-focus-controls input {
@@ -536,7 +536,7 @@
   gap: 4px;
   margin-top: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .graph-evidence strong {
   color: var(--text);
@@ -549,7 +549,7 @@
 }
 .graph-lane-picker {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .graph-lane-picker > div {
   display: flex;
@@ -678,7 +678,7 @@
 .diff-fallback-note {
   margin: 0 0 8px;
   color: var(--warning);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .diff-patch-fallback {
   margin: 0;

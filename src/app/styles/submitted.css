@@ -16,7 +16,7 @@
 .status-pill {
   padding: 3px 5px;
   border-radius: 4px;
-  font-size: 7px;
+  font-size: var(--font-3xs);
   font-style: normal;
 }
 .merge-tag {
@@ -45,7 +45,7 @@
 .detail-empty,
 .preview-note {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
   line-height: 1.5;
 }
 .mock-detail-notice {
@@ -60,7 +60,7 @@
   gap: 8px;
   min-height: 80px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .submitted-detail-state.error {
   align-items: stretch;
@@ -91,7 +91,7 @@
 }
 .submitted-detail-section h3 {
   margin: 0 0 7px;
-  font-size: 10px;
+  font-size: var(--font-sm);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -102,7 +102,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .submitted-jobs li,
 .integration-evidence li {
@@ -126,7 +126,7 @@
   place-content: center;
   height: 100%;
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--font-xs);
 }
 .submitted-page {
   position: absolute;
@@ -162,7 +162,7 @@
   padding: 8px 10px;
   cursor: pointer;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   font-weight: 600;
 }
 .submitted-filter-body {
@@ -176,7 +176,7 @@
 .submitted-mock-notice,
 .submitted-filter-error {
   margin: 0 0 8px;
-  font-size: 10px;
+  font-size: var(--font-sm);
   color: var(--muted);
 }
 .submitted-mock-notice {
@@ -198,7 +198,7 @@
   gap: 4px;
   min-width: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .submitted-filter-field > span:has(input[type="checkbox"]) {
   display: flex;
@@ -249,7 +249,7 @@
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .submitted-merge-filters legend {
   color: var(--muted);
@@ -277,7 +277,7 @@
   padding: 7px;
   border: 1px solid var(--warning);
   border-radius: 5px;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .submitted-filter-confirmation span {
   margin-right: auto;
@@ -313,7 +313,7 @@
   padding: 3px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
   font-weight: 500;
   letter-spacing: 0;
@@ -329,7 +329,7 @@
   border: 0;
   background: transparent;
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: var(--font-base);
   border-radius: 5px;
   color: var(--muted);
 }
@@ -339,7 +339,7 @@
   box-shadow: 0 1px 3px var(--shadow);
 }
 .filter-count {
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
 }
 .density-button {
@@ -348,7 +348,7 @@
   background: transparent;
   border-radius: 6px;
   padding: 6px 9px;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
 }
 .folder-icon {
@@ -357,17 +357,17 @@
 }
 .status-pill,
 .merge-tag {
-  font-size: 9px;
+  font-size: var(--font-xs);
 }
 .empty-state {
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .streams-empty svg {
   margin: auto;
   color: var(--accent);
 }
 .streams-empty p {
-  font-size: 13px;
+  font-size: var(--font-lg);
   line-height: 1.8;
 }
 @media (max-width: 650px) {
@@ -520,7 +520,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-style: normal;
   color: var(--muted);
 }
@@ -679,7 +679,7 @@
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .submitted-query-error > button {
   flex: 0 0 auto;
@@ -696,7 +696,7 @@
   height: 30px;
   min-height: 30px;
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 16px;
   align-self: center;
 }
@@ -787,7 +787,7 @@
   flex: 0 0 auto;
   margin: 0 0 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 18px;
 }
 .submitted-result-summary small {
@@ -950,7 +950,7 @@
   border-radius: 6px;
   background: var(--panel);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.5;
   box-shadow: 0 10px 30px var(--shadow);
 }
@@ -964,6 +964,6 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-xl);
   line-height: 1;
 }

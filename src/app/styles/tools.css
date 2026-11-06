@@ -58,7 +58,7 @@
 }
 .terminal-output {
   overflow: auto;
-  color: #cbd5d9;
+  color: var(--terminal-text);
   font:
     10px/1.6 ui-monospace,
     monospace;
@@ -67,8 +67,8 @@
 .terminal-input {
   gap: 6px;
   padding: 5px 8px;
-  border-top: 1px solid #30353a;
-  color: #66b6ff;
+  border-top: 1px solid var(--terminal-border);
+  color: var(--terminal-prompt);
   font:
     9px ui-monospace,
     monospace;
@@ -78,17 +78,17 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: var(--white);
 }
 .terminal-input button {
   display: flex;
   align-items: center;
   gap: 3px;
   padding: 5px;
-  border: 1px solid #343a40;
+  border: 1px solid var(--terminal-control-border);
   border-radius: 4px;
-  background: #1c2024;
-  color: #ddd;
+  background: var(--terminal-control-bg);
+  color: var(--terminal-control-text);
 }
 .terminal-security-notice {
   display: flex;
@@ -99,7 +99,7 @@
   border-top: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 10%, var(--terminal));
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .terminal-security-notice button {
   flex: none;
@@ -137,7 +137,7 @@
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   overflow: hidden;
   background: var(--panel);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .diagnostic-toolbar {
   display: flex;
@@ -157,7 +157,7 @@
   background: var(--panel-2);
   color: var(--text);
   padding: 0 7px;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .diagnostic-toolbar > input:first-child {
   flex: 1 1 180px;
@@ -179,7 +179,7 @@
   justify-content: center;
   gap: 4px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .diagnostic-toolbar button:focus-visible,
 .diagnostic-footer button:focus-visible,
@@ -354,7 +354,7 @@
 }
 .journal-recovery small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   white-space: normal;
 }
 .journal-recovery.danger strong {
@@ -423,7 +423,7 @@
 }
 .metric-grid dd {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--font-md);
   font-variant-numeric: tabular-nums;
 }
 .export-result {
@@ -452,22 +452,22 @@
 }
 .tool-tabs > button,
 .tool-tab-list > button {
-  font-size: 11px;
+  font-size: var(--font-base);
   gap: 7px;
   padding: 0 12px;
 }
 .terminal-output {
-  font-size: 12px;
+  font-size: var(--font-md);
   padding: 16px;
 }
 .terminal-input {
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .terminal-input button {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .log-row {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 @media (max-width: 650px) {
   .tool-tabs {
@@ -512,7 +512,7 @@
   flex: 0 0 auto;
   white-space: nowrap;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .log-toolbar .log-search {
   flex: 1 1 200px;
@@ -547,7 +547,7 @@
   min-width: 96px;
   height: 28px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 26px;
 }
 .log-toolbar > select::picker-icon {

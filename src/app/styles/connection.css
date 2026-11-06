@@ -64,7 +64,7 @@
 .inspector header button {
   border: 0;
   background: transparent;
-  font-size: 20px;
+  font-size: var(--font-5xl);
 }
 .inspector pre {
   margin: 0;
@@ -108,12 +108,12 @@
   stroke-width: 3;
 }
 .revision-graph text {
-  fill: #fff;
-  font-size: 9px;
+  fill: var(--white);
+  font-size: var(--font-xs);
 }
 .revision-graph .graph-cl {
   fill: var(--muted);
-  font-size: 7px;
+  font-size: var(--font-3xs);
 }
 .detail-panel {
   display: none;
@@ -209,10 +209,10 @@
   padding: 7px 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .connection small {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .workspace-heading {
   display: flex;
@@ -220,7 +220,7 @@
   justify-content: space-between;
 }
 .workspace-eyebrow {
-  font-size: 10px;
+  font-size: var(--font-sm);
   letter-spacing: 1.4px;
   color: var(--muted);
   font-weight: 600;
@@ -230,40 +230,40 @@
   align-items: center;
   gap: 12px;
   margin: 9px 0 5px;
-  font-size: 25px;
+  font-size: var(--font-9xl);
   letter-spacing: -0.8px;
   font-weight: 650;
 }
 .workspace-heading p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .workspace-heading .secondary {
   padding: 8px 12px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .address-bar {
   padding: 0;
   border-bottom: 0;
   gap: 10px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .address-bar input {
   height: 32px;
   background: var(--panel);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--font-base);
   border-radius: 6px;
 }
 .detail-caption {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
 }
 .detail-path-label {
-  font-size: 9px;
+  font-size: var(--font-xs);
   letter-spacing: 1px;
   color: var(--muted);
 }
@@ -284,7 +284,7 @@
   width: 100%;
   padding: 9px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .detail-diff {
   background: var(--accent-soft);
@@ -312,12 +312,12 @@
   text-align: center;
 }
 .detail-unselected h3 {
-  font-size: 13px;
+  font-size: var(--font-lg);
   color: var(--muted);
   margin: 20px 0 0;
 }
 .detail-unselected p {
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.8;
 }
 .workspace-error {
@@ -331,7 +331,7 @@
   border: 1px solid var(--danger);
   color: var(--danger);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .workspace-error button {
   float: right;
@@ -344,7 +344,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 7%, transparent);
-  font-size: 11px;
+  font-size: var(--font-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -355,25 +355,25 @@
   border-radius: 10px;
 }
 .inspector header {
-  font-size: 12px;
+  font-size: var(--font-md);
   height: 40px;
 }
 .inspector pre {
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.9;
 }
 .history-list article {
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .detail-panel {
   padding: 18px;
 }
 .detail-description {
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.7;
 }
 .detail-panel dl div {
-  font-size: 11px;
+  font-size: var(--font-base);
   padding: 12px 0;
 }
 /* Mixed at-rule lives whole in pending.css (first matching selector is its own): @media (max-width: 1200px) */
@@ -387,7 +387,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--accent-soft);
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .file-action-progress progress {
   width: 100%;

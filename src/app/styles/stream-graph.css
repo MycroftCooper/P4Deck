@@ -26,7 +26,7 @@
   gap: 4px;
   min-width: 180px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .stream-graph-query input[type="text"],
 .stream-graph-query input:not([type]) {
@@ -44,7 +44,7 @@
   gap: 6px;
   min-height: 30px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .stream-graph-status {
   display: flex;
@@ -54,7 +54,7 @@
   min-height: 24px;
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .stream-graph-status span {
   padding: 3px 6px;
@@ -69,7 +69,7 @@
 .stream-graph-notice {
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .stream-graph-page .workspace-load-error {
   display: flex;
@@ -109,7 +109,7 @@
   border-bottom: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
   overflow-x: auto;
 }
 .stream-graph-toolbar button {
@@ -202,7 +202,7 @@
   border-radius: 4px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 8px;
+  font-size: var(--font-2xs);
   white-space: nowrap;
 }
 .stream-graph-badges .current {
@@ -231,12 +231,12 @@
 }
 .stream-graph-details header span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--font-xs);
   text-transform: uppercase;
 }
 .stream-graph-details h2 {
   margin: 4px 0 0;
-  font-size: 15px;
+  font-size: var(--font-2xl);
   overflow-wrap: anywhere;
 }
 .stream-graph-details header button {
@@ -256,7 +256,7 @@
 }
 .stream-graph-details dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .stream-graph-details dd {
   margin: 0;
@@ -267,7 +267,7 @@
   padding-top: 10px;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.6;
   white-space: pre-wrap;
 }
