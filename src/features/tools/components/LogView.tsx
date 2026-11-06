@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
+import { useOperationSession } from "../../../shared/operationSession";
 import { LOG_LEVELS, logLevelLabel } from "../logLevels";
 import type {
   LogEntry,
@@ -74,7 +75,14 @@ export function LogView({
   const [draft, setDraft] = useState<LogPolicy>();
   const [policyBusy, setPolicyBusy] = useState(false);
   const [policyStatus, setPolicyStatus] = useState("");
-  const generation = useRef(0);
+  /**
+   * Two independent channels: the log page reads and the policy readback. Each
+   * new request or invalidation retires the previous one, so a late answer can
+   * never paint the view it no longer belongs to.
+   */
+  const session = useOperationSession();
+  const LOGS = "logs",
+    POLICY = "logs-policy";
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: entries.length,
@@ -99,7 +107,6 @@ export function LogView({
   const paddingBottom = virtualRows.length
     ? totalSize - virtualRows.at(-1)!.end
     : 0;
-  const policyGeneration = useRef(0);
 
   useEffect(() => {
     storage.setItem(
@@ -115,7 +122,10 @@ export function LogView({
 
   const load = useCallback(
     async (cursor?: string) => {
-      const request = ++generation.current;
+      // Reading the epoch before the request makes a supersede or an
+      // invalidation (connection, refresh, clear, unmount) visible below.
+      const review = session.epoch(LOGS);
+      const isCurrent = () => review === session.epoch(LOGS);
       setLoading(true);
       if (cursor) setAppendError("");
       else setError("");
@@ -129,7 +139,7 @@ export function LogView({
           cursor,
           limit: PAGE_SIZE,
         });
-        if (request !== generation.current) return;
+        if (!isCurrent()) return;
         setEntries((current) => {
           const incoming = cursor
             ? [...current, ...page.entries]
@@ -142,7 +152,7 @@ export function LogView({
         });
         setNextCursor(page.nextCursor);
       } catch (cause) {
-        if (request !== generation.current) return;
+        if (!isCurrent()) return;
         if (cursor) setAppendError(String(cause));
         else {
           setEntries([]);
@@ -150,53 +160,52 @@ export function LogView({
           setError(String(cause));
         }
       } finally {
-        if (request === generation.current) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     },
-    [command, keyword, level, operationFilter, source],
+    [command, keyword, level, operationFilter, session, source],
   );
 
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate(LOGS);
     setEntries([]);
     setNextCursor(undefined);
     void load();
-    return () => void ++generation.current;
-  }, [connectionKey, load, refreshKey]);
+    return () => session.invalidate(LOGS);
+  }, [connectionKey, load, refreshKey, session]);
 
   useEffect(
     () =>
       subscribeSafely(
         () =>
           backend.subscribeLogsCleared(() => {
-            generation.current += 1;
+            session.invalidate(LOGS);
             setEntries([]);
             setNextCursor(undefined);
             void load();
           }),
         (cause) => setError(String(cause)),
       ),
-    [load],
+    [load, session],
   );
 
   useEffect(() => {
-    const request = ++policyGeneration.current;
+    const review = session.epoch(POLICY);
     setPolicy(undefined);
     setDraft(undefined);
     setPolicyStatus("");
     void backend
       .getLogPolicy()
       .then((value) => {
-        if (request !== policyGeneration.current) return;
+        if (review !== session.epoch(POLICY)) return;
         setPolicy(value);
         setDraft(value);
       })
       .catch((cause) => {
-        if (request === policyGeneration.current)
-          setPolicyStatus(String(cause));
+        if (review === session.epoch(POLICY)) setPolicyStatus(String(cause));
       });
-    return () => void ++policyGeneration.current;
-  }, [connectionKey]);
+    return () => session.invalidate(POLICY);
+  }, [connectionKey, session]);
 
   async function savePolicy() {
     if (!draft || policyBusy) return;
@@ -319,7 +328,8 @@ export function LogView({
         </button>
         <button
           onClick={() => {
-            generation.current += 1;
+            // Clearing the view retires the read it was showing.
+            session.invalidate(LOGS);
             setEntries([]);
             setNextCursor(undefined);
             setLoading(false);
