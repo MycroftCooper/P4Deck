@@ -13,13 +13,7 @@ pub async fn custom_submit_start(
     let scope = crate::app::company_submit::from_host_snapshot(profile, generation, &context)
         .map_err(|_| "invalidConnection".to_owned())?;
     let settle = |session: &crate::app::custom_submit::Session| {
-        if crate::app::custom_submit_action::is_terminal(session) {
-            let result =
-                crate::app::custom_submit_action::project(session, Some(operation_id.clone()));
-            if let Ok(value) = serde_json::to_value(&result) {
-                let _ = state.journal.finish_action(&operation_id, &value);
-            }
-        }
+        crate::app::custom_submit_action::settle(&state.journal, session);
     };
     if let Some(previous) = state.custom_submit.prior(&request)? {
         settle(&previous);
@@ -111,9 +105,10 @@ pub fn custom_submit_status(
     let session = state.custom_submit.status()?;
     let result = crate::app::custom_submit_action::project(&session, None);
     if crate::app::custom_submit_action::is_terminal(&session) {
-        if let Ok(value) = serde_json::to_value(&result) {
-            let _ = state.journal.finish_action(&session.request_id, &value);
-        }
+        // The watcher normally settles the receipt on parent exit; this keeps
+        // the command a safe idempotent fallback for a session whose exit was
+        // observed during a restart or before the watcher started.
+        crate::app::custom_submit_action::settle(&state.journal, &session);
     }
     Some(result)
 }
@@ -456,6 +451,7 @@ pub async fn confirm_stream_switch(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<StreamSwitchResult, String> {
+    use tauri::Emitter;
     let mut confirmation = confirmation;
     let id = confirmation
         .operation_id
@@ -489,17 +485,23 @@ pub async fn confirm_stream_switch(
         .await;
     let runtime = state.connection.runtime_info();
     if result.stream_changed {
-        invalidate_after_context_change(&state);
+        invalidate_after_context_change(&state).await;
         if runtime.context_generation == expected_generation.saturating_add(1) {
-            result.runtime = Some(state.connection.verified_runtime(
+            let verified = state.connection.verified_runtime(
                 "Client Stream and workspace state were verified after switching.",
-            ));
+            );
+            // The dialog applies this runtime when the user closes it; broadcast
+            // the new generation as well so a dialog dismissed another way (or
+            // an unmounted page) cannot leave the frontend on a stale generation
+            // and make the next generation-checked action fail.
+            let _ = app.emit("connection-changed", &verified);
+            result.runtime = Some(verified);
         }
     } else if result.sync_performed
         || result.outcome == StreamSwitchOutcome::Unknown
         || result.failure == Some(StreamSwitchFailureCode::VerificationFailed)
     {
-        invalidate_workspace_dependent_caches(&state);
+        invalidate_workspace_dependent_caches(&state).await;
     }
     let verified = result.outcome == StreamSwitchOutcome::Succeeded
         && (result.runtime.is_some() || !result.stream_changed);
@@ -713,9 +715,13 @@ pub async fn create_connection_profile(
             return Err(error);
         }
     };
-    if before != state.connection.context() {
-        invalidate_after_context_change(&state);
-        let _ = app.emit("connection-changed", state.connection.runtime_info());
+    let runtime = state.connection.runtime_info();
+    // Compare the generation too: activating the first profile can bump it
+    // without changing the visible context, and a silent bump would leave every
+    // generation-guarded action in the frontend rejected as "connection changed".
+    if before != runtime.context || generation != runtime.context_generation {
+        invalidate_after_context_change(&state).await;
+        let _ = app.emit("connection-changed", runtime);
     }
     if let Err(error) = state.journal.finish_action(
         &id,
@@ -780,9 +786,15 @@ pub async fn update_connection_profile(
             return Err(error);
         }
     };
-    if before != state.connection.context() {
-        invalidate_after_context_change(&state);
-        let _ = app.emit("connection-changed", state.connection.runtime_info());
+    let runtime = state.connection.runtime_info();
+    // Saving an active profile always advances the runtime generation, even when
+    // only its name changed. Emitting only on a context diff left the frontend
+    // holding the old generation, so every generation-checked action afterwards
+    // (workspace switch, confirmations, VFS inspect) failed as "connection
+    // changed" until the window was reloaded.
+    if before != runtime.context || generation != runtime.context_generation {
+        invalidate_after_context_change(&state).await;
+        let _ = app.emit("connection-changed", runtime);
     }
     if let Err(error) = state.journal.finish_action(
         &id,
@@ -867,7 +879,7 @@ pub async fn delete_connection_profile(
     };
     let runtime = state.connection.runtime_info();
     if before != runtime.context_generation {
-        invalidate_after_context_change(&state);
+        invalidate_after_context_change(&state).await;
         let _ = app.emit("connection-changed", runtime);
     }
     if let Err(error) = state.journal.finish_action(
@@ -941,7 +953,7 @@ pub async fn set_active_connection_profile(
             return Err(error);
         }
     };
-    invalidate_after_context_change(&state);
+    invalidate_after_context_change(&state).await;
     let _ = app.emit("connection-changed", &runtime);
     if let Err(error) = state.journal.finish_action(
         &id,
@@ -969,7 +981,7 @@ pub async fn switch_workspace(
         .connection
         .switch_workspace(request, Some(&app))
         .await?;
-    invalidate_after_context_change(&state);
+    invalidate_after_context_change(&state).await;
     let _ = app.emit("connection-changed", &runtime);
     Ok(runtime)
 }
@@ -987,36 +999,36 @@ pub async fn save_connection(
         .save(context, Some(&app))
         .await
         .map_err(|error| error.to_string())?;
-    invalidate_after_context_change(&state);
+    invalidate_after_context_change(&state).await;
     let _ = app.emit("connection-changed", state.connection.runtime_info());
     Ok(saved)
 }
 
-fn invalidate_after_context_change(state: &AppState) {
+async fn invalidate_after_context_change(state: &AppState) {
     state.runner.cancel_all();
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.stream_graph.clear_for_context_switch();
-    state.branch_mappings.clear_for_context_switch();
-    state.submit.clear_confirmations();
-    state.sync.clear_confirmations();
-    state.undo.clear_confirmations();
-    state.workflows.clear_confirmations();
+    state.branch_mappings.clear_for_context_switch().await;
+    state.submit.clear_confirmations().await;
+    state.sync.clear_confirmations().await;
+    state.undo.clear_confirmations().await;
+    state.workflows.clear_confirmations().await;
     state.workflows.clear_shelf_details();
     state.files.clear_review_cache();
-    state.rename.clear_confirmations();
-    state.file_locks.clear_confirmations();
-    state.stream_switch.clear_confirmations();
+    state.rename.clear_confirmations().await;
+    state.file_locks.clear_confirmations().await;
+    state.stream_switch.clear_confirmations().await;
     state.status_cache.clear_for_context_switch();
 }
 
-fn invalidate_workspace_dependent_caches(state: &AppState) {
+async fn invalidate_workspace_dependent_caches(state: &AppState) {
     state.changelists.clear_caches();
     state.search.clear_for_context_switch();
     state.stream_graph.clear_for_context_switch();
-    state.branch_mappings.clear_for_context_switch();
+    state.branch_mappings.clear_for_context_switch().await;
     state.files.clear_review_cache();
-    state.file_locks.clear_confirmations();
+    state.file_locks.clear_confirmations().await;
     state.status_cache.clear_for_context_switch();
 }
 

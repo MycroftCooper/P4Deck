@@ -54,10 +54,11 @@ impl FileLockService {
         }
     }
 
-    pub fn clear_confirmations(&self) {
-        // Blocking clear: await it so a context switch serialises against
-        // any in-flight confirmation of this family.
-        tauri::async_runtime::block_on(self.tickets.clear());
+    pub async fn clear_confirmations(&self) {
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family; blocking inside the async runtime would
+        // stall the command that performs the switch.
+        self.tickets.clear().await;
     }
 
     pub async fn preflight(

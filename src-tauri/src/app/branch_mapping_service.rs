@@ -115,12 +115,14 @@ impl BranchMappingService {
         self.runner.cancel(operation_id);
     }
 
-    pub fn clear_for_context_switch(&self) {
+    pub async fn clear_for_context_switch(&self) {
         self.snapshots.lock().clear();
         self.cancelled.lock().clear();
-        // Blocking clear: await it so a context switch serialises against
-        // any in-flight confirmation of this family.
-        tauri::async_runtime::block_on(self.tokens.clear());
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family. This must stay async: the command that
+        // performs the context switch already runs inside the async runtime, so
+        // a blocking wait here would stall (or panic on) that worker thread.
+        self.tokens.clear().await;
     }
 
     pub async fn list(
