@@ -13,6 +13,9 @@
     "Microsoft YaHei",
     sans-serif;
   font-synthesis: none;
+  /* Terminal surface -- LIGHT theme value. Do not delete as a "duplicate":
+     :root[data-theme="dark"] below redefines it (@111713) exactly like every
+     other theme-following token (--bg, --panel, --accent, ...). */
   --terminal: #101418;
   color: var(--text);
   background: var(--bg);
@@ -101,6 +104,8 @@
   --success: #8bccaa;
   --warning: #dcbd79;
   --danger: #ed9990;
+  /* Terminal surface -- DARK theme value. The pairing is the light value in the
+     plain :root block near the top of this file; both are required. */
   --terminal: #111713;
   --shadow: #00000045;
   --overlay-shadow: 0 16px 48px #00000055;
