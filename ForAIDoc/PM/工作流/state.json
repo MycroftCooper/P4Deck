@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:28:37.215Z",
+  "updatedAt": "2026-11-06T08:30:22.484Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1953,7 +1953,7 @@
         "src/shared/confirmation/useConfirmationGuard.ts",
         "src/shared/cache/snapshots.ts"
       ],
-      "note": "P0-02 落地后，把剩余手写 cancelOperation/generation.current/operationId 的页面迁到同一会话 owner；验收=每页取消、代次漂移、迟到响应隔离有测试，无新 stale-state 路径",
+      "note": "2026-11-06 批 1 完成：ResolveDialog 移除全部 23 处 generation.current（FE 8cb7183，19 例绿，原 16 例未改）；批 2 进行中（LogView → SubmittedPage）；剩余=SubmittedPage/ConnectionProfilesCard/SearchPage/工具页；验收=每页取消、代次漂移、迟到响应隔离有测试，无新 stale-state 路径",
       "depsRaw": "RUI-02",
       "deps": [
         "RUI-02"
