@@ -1,7 +1,8 @@
 import { tFor } from "../../../shared/i18n";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Copy, Download, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
+import { useOperationSession } from "../../../shared/operationSession";
 import type {
   CacheDiagnostics,
   DiagnosticExportResult,
@@ -50,30 +51,43 @@ export function DiagnosticsView({
   const [exportBusy, setExportBusy] = useState(false);
   const [exportResult, setExportResult] = useState<DiagnosticExportResult>();
   const [exportStatus, setExportStatus] = useState("");
-  const generation = useRef(0);
+  /**
+   * One channel for the cache readback. Each refresh or invalidation (connection
+   * change, unmount) retires the previous lease, so a late answer can never
+   * paint the view it no longer belongs to.
+   */
+  const session = useOperationSession();
+  const CACHE = "diagnostics-cache";
 
   const refresh = useCallback(async () => {
-    const request = ++generation.current;
+    // The read is local and idempotent: cancel it locally only, never ask the
+    // host to cancel a diagnostics readback.
+    const lease = session.start(CACHE, { cancelBackend: false });
     setCacheBusy(true);
     setCacheError("");
     try {
       const value = await backend.statusCacheDiagnostics();
-      if (request === generation.current) setCache(value);
+      if (!session.isCurrent(lease)) return;
+      setCache(value);
     } catch (cause) {
-      if (request === generation.current) setCacheError(String(cause));
+      if (!session.isCurrent(lease)) return;
+      setCacheError(String(cause));
     } finally {
-      if (request === generation.current) setCacheBusy(false);
+      // Clear the busy flag BEFORE retiring the lease: `finish` makes the lease
+      // non-current, so it can no longer gate this update.
+      if (session.isCurrent(lease)) setCacheBusy(false);
+      session.finish(lease);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate(CACHE);
     setCache(undefined);
     setExportResult(undefined);
     setExportStatus("");
     void refresh();
-    return () => void ++generation.current;
-  }, [connectionKey, refresh]);
+    return () => session.invalidate(CACHE);
+  }, [connectionKey, refresh, session]);
 
   async function exportDiagnostics() {
     if (exportBusy) return;

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
+import { useOperationSession } from "../../../shared/operationSession";
 import type {
   JournalState,
   OperationCategory,
@@ -111,7 +112,9 @@ export function OperationJournalView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [appendError, setAppendError] = useState("");
-  const generation = useRef(0);
+  /** Read-only journal queries: local cancellation only, no host cancel. */
+  const session = useOperationSession();
+  const JOURNAL = "operation-journal";
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: records.length,
@@ -142,7 +145,9 @@ export function OperationJournalView({
 
   const load = useCallback(
     async (cursor?: string) => {
-      const request = ++generation.current;
+      // Starting a lease supersedes the previous read on this channel, so a
+      // refresh, page change or connection change retires the older request.
+      const lease = session.start(JOURNAL, { cancelBackend: false });
       setLoading(true);
       if (cursor) setAppendError("");
       else setError("");
@@ -156,7 +161,7 @@ export function OperationJournalView({
           cursor,
           limit: PAGE_SIZE,
         });
-        if (request !== generation.current) return;
+        if (!session.isCurrent(lease)) return;
         setRecords((current) => {
           const incoming = cursor
             ? [...current, ...page.records]
@@ -170,7 +175,7 @@ export function OperationJournalView({
         });
         setNextCursor(page.nextCursor);
       } catch (cause) {
-        if (request !== generation.current) return;
+        if (!session.isCurrent(lease)) return;
         if (cursor) setAppendError(String(cause));
         else {
           setRecords([]);
@@ -178,10 +183,13 @@ export function OperationJournalView({
           setError(String(cause));
         }
       } finally {
-        if (request === generation.current) setLoading(false);
+        // Clear the busy flag BEFORE retiring the lease: `finish` makes the
+        // lease non-current, so it can no longer gate this update.
+        if (session.isCurrent(lease)) setLoading(false);
+        session.finish(lease);
       }
     },
-    [category, from, keyword, state, to],
+    [category, from, keyword, session, state, to],
   );
 
   useEffect(() => {
@@ -189,12 +197,12 @@ export function OperationJournalView({
   }, [focusOperationId]);
 
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate(JOURNAL);
     setRecords([]);
     setNextCursor(undefined);
     void load();
-    return () => void ++generation.current;
-  }, [connectionKey, load]);
+    return () => session.invalidate(JOURNAL);
+  }, [connectionKey, load, session]);
 
   return (
     <div className="diagnostic-view journal-view">
