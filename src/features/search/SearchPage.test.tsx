@@ -169,7 +169,7 @@ beforeEach(() => {
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
   backend.globalSearch.mockReset();
-  backend.cancelOperation.mockClear();
+  backend.cancelOperation.mockReset().mockResolvedValue(undefined);
   navigate = vi.fn(async () => undefined);
   backend.globalSearch.mockImplementation(async (query: GlobalSearchQuery) =>
     result(
@@ -251,8 +251,9 @@ it("runs nothing while typing, one query per submit, and clears back to idle whe
   const firstQuery = backend.globalSearch.mock.calls[0][0] as GlobalSearchQuery;
 
   await type("second");
-  // Editing cancels the in-flight query and drops its results entirely.
-  expect(backend.cancelOperation).toHaveBeenCalledWith(firstQuery.operationId);
+  // Editing invalidates the accepted query: it is never cancelled on the host
+  // (it already ran) and its late answer is dropped instead of rendered.
+  expect(backend.cancelOperation).not.toHaveBeenCalled();
   expect(host.querySelectorAll(".search-result-row")).toHaveLength(0);
   expect(host.textContent).toContain("Enter a query to search");
   await settle(400);
@@ -314,8 +315,8 @@ it("submits by button, cancels the accepted query on a category change, and igno
     ...host.querySelectorAll<HTMLLabelElement>(".search-kind-picker label"),
   ].find((label) => label.textContent === "Submitted")!;
   await click(submitted.querySelector("input")!);
-  // Re-filtering drops the query that only covered the previous categories.
-  expect(backend.cancelOperation).toHaveBeenCalledWith(firstQuery.operationId);
+  // Re-filtering invalidates the accepted query the same way.
+  expect(backend.cancelOperation).not.toHaveBeenCalled();
   expect(host.textContent).toContain("Enter a query to search");
   await settle(400);
   expect(backend.globalSearch).toHaveBeenCalledTimes(1);

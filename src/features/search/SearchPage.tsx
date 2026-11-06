@@ -15,6 +15,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { backend } from "../../infrastructure/backend";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../shared/operationSession";
 import type {
   GlobalSearchItem,
   GlobalSearchKind,
@@ -35,6 +39,9 @@ import {
 type SearchFacet = GlobalSearchResult["facets"][number];
 type SearchPhase = "idle" | "loading" | "ready" | "error";
 type RequestMode = "fresh" | "append" | "category";
+
+/** The search session channel: one lease per submitted query. */
+const SEARCH = "search";
 
 const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
   submittedChange: Hash,
@@ -321,8 +328,13 @@ export function SearchPage({
   const [navigationBusy, setNavigationBusy] = useState<string>();
   const [navigationNotice, setNavigationNotice] = useState("");
 
-  const generation = useRef(0);
-  const operations = useRef(new Set<string>());
+  /**
+   * One lease per search session, on a single channel. Submitting starts a
+   * lease, append/category requests continue it, and typing or re-filtering
+   * abandons it, which is exactly the "later answer must not paint" rule.
+   */
+  const session = useOperationSession();
+  const currentSession = useRef<OperationLease | undefined>(undefined);
   const itemsRef = useRef(items);
   const facetsRef = useRef(facets);
   const nextCursorRef = useRef(nextCursor);
@@ -340,13 +352,15 @@ export function SearchPage({
 
   const validation = useMemo(() => validateSearchText(draft), [draft]);
   const kindSignature = kinds.join(",");
-  void kindSignature;
 
   const cancelOperations = useCallback(() => {
-    for (const operationId of operations.current)
-      void backend.cancelOperation(operationId).catch(() => undefined);
-    operations.current.clear();
-  }, []);
+    const live = currentSession.current;
+    currentSession.current = undefined;
+    // `finish` rather than `abandon`: the session may have already published
+    // its result, and a published operation must never be cancelled. A request
+    // that is still in flight is simply ignored by the lease check below.
+    if (live) session.finish(live);
+  }, [session]);
 
   const resetResults = useCallback(() => {
     itemsRef.current = [];
@@ -369,17 +383,21 @@ export function SearchPage({
 
   const execute = useCallback(
     async (
-      session: number,
+      lease: OperationLease,
       text: string,
       requestedKinds: GlobalSearchKind[],
       cursor: string | undefined,
       mode: RequestMode,
     ) => {
       const operationId = crypto.randomUUID();
-      operations.current.add(operationId);
-      // A request that outlived its session never writes UI state: typing or
-      // re-filtering invalidates the session before the response lands.
-      const live = () => generation.current === session;
+      // The session is the lease, not a counter: a request that outlived its
+      // session never writes UI state.
+      const live = () => session.isCurrent(lease);
+      // The backend only echoes this value, so the session's stable id is used:
+      // every request in one session shares it and a new session gets a new one.
+      const requestGeneration = Number(
+        `0x${lease.operationId.replace(/-/g, "")}`,
+      );
       if (cursor) usedCursors.current.add(cursor);
       if (mode === "append") {
         loadingMoreRef.current = true;
@@ -393,13 +411,13 @@ export function SearchPage({
       try {
         const result = await backend.globalSearch({
           operationId,
-          requestGeneration: session,
+          requestGeneration,
           text,
           kinds: requestedKinds,
           pageSize: GLOBAL_SEARCH_PAGE_SIZE,
           cursor,
         });
-        if (!live() || result.requestGeneration !== session) return;
+        if (!live() || result.requestGeneration !== requestGeneration) return;
         const incoming = itemsFromGroups(result.groups);
         const invalidContinuation =
           result.hasMore &&
@@ -477,7 +495,8 @@ export function SearchPage({
           setPhase("error");
         }
       } finally {
-        operations.current.delete(operationId);
+        // Clear the spinners before nothing else has to: the lease is only
+        // retired by the caller, so `live()` still answers honestly here.
         if (live()) {
           if (mode === "append") {
             loadingMoreRef.current = false;
@@ -487,7 +506,7 @@ export function SearchPage({
         }
       }
     },
-    [zh],
+    [session, zh],
   );
 
   /**
@@ -498,27 +517,27 @@ export function SearchPage({
   const startSession = useCallback(
     (value: string, selectedKinds: GlobalSearchKind[]) => {
       cancelOperations();
-      generation.current += 1;
-      const session = generation.current;
+      const lease = session.start(SEARCH);
+      currentSession.current = lease;
       resetResults();
       const checked = validateSearchText(value);
       if (!checked.valid || !selectedKinds.length) {
         current.current = undefined;
+        cancelOperations();
         setPhase("idle");
         return;
       }
       const query = { text: checked.text, kinds: [...selectedKinds] };
       current.current = query;
-      void execute(session, query.text, query.kinds, undefined, "fresh");
+      void execute(lease, query.text, query.kinds, undefined, "fresh");
     },
-    [cancelOperations, execute, resetResults],
+    [cancelOperations, execute, resetResults, session],
   );
 
   useEffect(() => {
     // A changed draft or category invalidates the previous session outright:
     // its results describe a query the user can no longer see.
     cancelOperations();
-    generation.current += 1;
     current.current = undefined;
     resetResults();
     setPhase("idle");
@@ -526,7 +545,6 @@ export function SearchPage({
 
   useEffect(
     () => () => {
-      generation.current += 1;
       cancelOperations();
     },
     [cancelOperations],
@@ -536,14 +554,22 @@ export function SearchPage({
   const loadMore = () => {
     const query = current.current;
     const cursor = nextCursorRef.current;
-    if (!query || !cursor || !hasMoreRef.current || loadingMoreRef.current)
+    const lease = currentSession.current;
+    if (
+      !query ||
+      !lease ||
+      !cursor ||
+      !hasMoreRef.current ||
+      loadingMoreRef.current
+    )
       return;
-    void execute(generation.current, query.text, query.kinds, cursor, "append");
+    void execute(lease, query.text, query.kinds, cursor, "append");
   };
   const retryCategory = (kind: GlobalSearchKind) => {
     const query = current.current;
-    if (!query || categoryLoading) return;
-    void execute(generation.current, query.text, [kind], undefined, "category");
+    const lease = currentSession.current;
+    if (!query || !lease || categoryLoading) return;
+    void execute(lease, query.text, [kind], undefined, "category");
   };
 
   const grouped = useMemo(
