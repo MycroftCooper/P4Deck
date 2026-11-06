@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:49:24.189Z",
+  "updatedAt": "2026-11-06T08:49:51.944Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1991,7 +1991,7 @@
         "src/features/changelists/components/SubmittedPage.tsx",
         "src/features/search/SearchPage.tsx"
       ],
-      "note": "现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
+      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
       "depsRaw": "RUI-03",
       "deps": [
         "RUI-03"
