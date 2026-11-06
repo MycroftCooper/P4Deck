@@ -1,4 +1,5 @@
 import { t } from "../../../shared/i18n";
+import { localizeBackendError } from "../../../shared/localizeError";
 import {
   useCallback,
   useDeferredValue,
@@ -581,7 +582,7 @@ export function DiffView({
     <>
       {error && (
         <div role="alert" className="workspace-load-error">
-          {error}
+          {localizeBackendError(error, zh)}
         </div>
       )}
       <section

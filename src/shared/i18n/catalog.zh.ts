@@ -1208,17 +1208,17 @@ export const zh = {
   "search.the.backend.returned.a.non.progressing":
     "后端返回了不可继续的游标；已保留当前部分结果。",
   "search.search.submitted.and.pending.changelists.workspace":
-    "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
+    "搜索已提交与待提交 CL、工作区与 Depot 文件、Stream 和 Shelf。",
   "search.mock.mode.is.active.results.validate":
     "当前为 Mock 模式；结果用于交互验证，不代表服务器数据。",
-  "search.file.path.changelist.user.job.stream":
-    "文件、路径、CL、用户、Job、Stream 或 Shelf…",
-  "search.search.starts.after.a.300ms.pause":
-    "输入停止 300ms 后自动搜索；Enter 立即搜索。最多 128 个 Unicode 字符。",
+  "search.file.path.changelist.user.stream":
+    "文件、路径、CL、用户、Stream 或 Shelf…",
+  "search.enter.or.press.search.to.start.queries":
+    "输入后按 Enter 或点击“搜索”开始查询；修改内容或类别会清空结果。最多 128 个 Unicode 字符。",
   "search.shelf.deep.search.is.bounded.if":
     "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
-  "search.seven.result.categories.are.available.use":
-    "支持七类结果；可使用上方筛选缩小范围。",
+  "search.six.result.categories.are.available.use":
+    "支持六类结果；可使用上方筛选缩小范围。",
   "pending.preflight.does.not.match.the.fixed": "预检结果与固定目标不匹配。",
   "pending.connection.identity.changed.nothing.was.shelved":
     "连接身份与预检目标不一致，未执行任何搁置操作。",

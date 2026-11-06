@@ -1,8 +1,19 @@
 .search-page {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--text);
+}
+/* The page itself owns the height; this wrapper scrolls the whole column so the
+   results card can stretch to whatever the controls leave behind. */
+.search-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   padding: 24px;
-  color: var(--text);
 }
 .search-live {
   position: absolute;
@@ -78,7 +89,7 @@
   border: 1px solid var(--border);
   background: var(--panel);
   border-radius: 9px;
-  padding: 16px;
+  padding: 10px;
   margin-bottom: 14px;
   min-width: 0;
 }
@@ -106,13 +117,19 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* The query label and the category legend are screen-reader only: the input
+   placeholder and the chips already say what the controls are. */
 .search-query-label,
 .search-kind-picker legend {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .search-input-row {
   display: flex;
@@ -162,9 +179,8 @@
   align-items: center;
   gap: 7px;
   border: 0;
-  border-top: 1px solid var(--border);
   margin: 10px 0 0;
-  padding: 12px 0 0;
+  padding: 0;
 }
 .search-kind-picker legend {
   float: left;
@@ -244,9 +260,21 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.search-results {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 0;
+}
 .search-groups {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 .search-group {
   min-width: 0;
@@ -377,7 +405,7 @@
 }
 
 @media (max-width: 390px) {
-  .search-page {
+  .search-body {
     padding: 12px;
   }
   .search-heading {
@@ -388,7 +416,7 @@
     font-size: 20px;
   }
   .search-card {
-    padding: 12px;
+    padding: 10px;
   }
   .search-input-row {
     display: grid;

@@ -1302,17 +1302,17 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.the.backend.returned.a.non.progressing":
     "The backend returned a non-progressing cursor; current partial results were preserved.",
   "search.search.submitted.and.pending.changelists.workspace":
-    "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
+    "Search Submitted and Pending changelists, workspace and depot files, streams, and shelves.",
   "search.mock.mode.is.active.results.validate":
     "Mock mode is active. Results validate interaction only and do not represent server data.",
-  "search.file.path.changelist.user.job.stream":
-    "File, path, changelist, user, job, stream, or shelf…",
-  "search.search.starts.after.a.300ms.pause":
-    "Search starts after a 300ms pause; Enter searches immediately. Maximum 128 Unicode characters.",
+  "search.file.path.changelist.user.stream":
+    "File, path, changelist, user, stream, or shelf…",
+  "search.enter.or.press.search.to.start.queries":
+    "Press Enter or Search to start a query; editing the text or categories clears the results. Maximum 128 Unicode characters.",
   "search.shelf.deep.search.is.bounded.if":
     "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
-  "search.seven.result.categories.are.available.use":
-    "Seven result categories are available; use the filters above to narrow the search.",
+  "search.six.result.categories.are.available.use":
+    "Six result categories are available; use the filters above to narrow the search.",
   "pending.preflight.does.not.match.the.fixed":
     "Preflight does not match the fixed target.",
   "pending.connection.identity.changed.nothing.was.shelved":

@@ -108,7 +108,8 @@ async function render(mode: "mock" | "tauri" = "tauri", zh = false) {
   );
 }
 
-async function enter(value: string, wait = 330) {
+/** Types into the query box only; searching never happens on input alone. */
+async function type(value: string) {
   const input = host.querySelector<HTMLInputElement>("#global-search-input")!;
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(
@@ -118,8 +119,37 @@ async function enter(value: string, wait = 330) {
     setter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  if (wait)
-    await act(async () => new Promise((resolve) => setTimeout(resolve, wait)));
+}
+
+/** Waits past any plausible debounce window with the real timers running. */
+async function settle(wait = 360) {
+  await act(async () => new Promise((resolve) => setTimeout(resolve, wait)));
+}
+
+async function pressEnter() {
+  const input = host.querySelector<HTMLInputElement>("#global-search-input")!;
+  // A real Enter keypress is what the browser turns into a form submit.
+  await act(async () =>
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+      }),
+    ),
+  );
+  await act(async () =>
+    input
+      .closest("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+}
+
+/** Types, submits with Enter, and lets the response settle. */
+async function enter(value: string, wait = 0) {
+  await type(value);
+  await pressEnter();
+  if (wait) await settle(wait);
 }
 
 async function click(element: HTMLElement) {
@@ -157,9 +187,17 @@ afterEach(async () => {
   host.remove();
 });
 
-it("groups all seven production kinds, shows stream and shelf facts, and honors navigation targets", async () => {
+it("groups the six navigable kinds and opens every row, while a typed query stays idle", async () => {
   await render();
-  await enter("needle");
+  await type("needle");
+  // Typing alone must never reach the backend, however long the pause.
+  await settle();
+  expect(backend.globalSearch).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Enter a query to search");
+  expect(host.textContent).toContain("Six result categories are available");
+
+  await pressEnter();
+  expect(backend.globalSearch).toHaveBeenCalledTimes(1);
   expect(backend.globalSearch).toHaveBeenCalledWith(
     expect.objectContaining({
       text: "needle",
@@ -167,12 +205,17 @@ it("groups all seven production kinds, shows stream and shelf facts, and honors 
       pageSize: 50,
     }),
   );
-  expect(host.querySelectorAll(".search-group")).toHaveLength(7);
-  expect(host.textContent).toContain("7 loaded · 7 matched · 49 scanned");
+  expect(host.querySelectorAll(".search-group")).toHaveLength(6);
+  expect(host.textContent).toContain("6 loaded · 6 matched · 42 scanned");
   expect(host.textContent).toContain("Matched: Title");
   expect(host.textContent).toContain("Path: //atlas/needle");
   expect(host.textContent).toContain("Numbered CL: 404");
   expect(host.textContent).toContain("Shelf deep search is bounded");
+  // No Job chip, row or footer special case survives on the page.
+  expect(host.querySelector(".search-kind-picker")?.textContent).not.toMatch(
+    /job/i,
+  );
+  expect(host.textContent).not.toContain("no destination page");
 
   await click(button("submittedChange needle"));
   await click(button("pendingChange needle"));
@@ -188,16 +231,54 @@ it("groups all seven production kinds, shows stream and shelf facts, and honors 
     TARGETS.stream,
     TARGETS.shelf,
   ]);
-  const job = button("job needle");
-  expect(job.disabled).toBe(true);
-  expect(job.textContent).toContain("no destination page");
+});
+
+it("runs nothing while typing, one query per submit, and clears back to idle when the draft changes", async () => {
+  const first = deferred<GlobalSearchResult>();
+  const second = deferred<GlobalSearchResult>();
+  backend.globalSearch
+    .mockImplementationOnce(() => first.promise)
+    .mockImplementationOnce(() => second.promise);
+  await render();
+
+  await type("first");
+  // Waiting past the old 300ms debounce must produce zero requests.
+  await settle(400);
+  expect(backend.globalSearch).not.toHaveBeenCalled();
+
+  await pressEnter();
+  expect(backend.globalSearch).toHaveBeenCalledTimes(1);
+  const firstQuery = backend.globalSearch.mock.calls[0][0] as GlobalSearchQuery;
+
+  await type("second");
+  // Editing cancels the in-flight query and drops its results entirely.
+  expect(backend.cancelOperation).toHaveBeenCalledWith(firstQuery.operationId);
+  expect(host.querySelectorAll(".search-result-row")).toHaveLength(0);
+  expect(host.textContent).toContain("Enter a query to search");
+  await settle(400);
+  expect(backend.globalSearch).toHaveBeenCalledTimes(1);
+  await act(async () =>
+    first.resolve(result(firstQuery, [searchItem("submittedChange", "stale")])),
+  );
+  expect(host.textContent).not.toContain("stale");
+  expect(host.querySelectorAll(".search-result-row")).toHaveLength(0);
+
+  await pressEnter();
+  expect(backend.globalSearch).toHaveBeenCalledTimes(2);
+  const secondQuery = backend.globalSearch.mock
+    .calls[1][0] as GlobalSearchQuery;
+  await act(async () =>
+    second.resolve(result(secondQuery, [searchItem("shelf", "fresh")])),
+  );
+  expect(host.textContent).toContain("shelf needle fresh");
+  expect(host.textContent).not.toContain("stale");
 });
 
 it("renders Unicode UTF-16 highlights and injection-shaped content as text", async () => {
   backend.globalSearch.mockImplementationOnce(
     async (query: GlobalSearchQuery) =>
       result(query, [
-        searchItem("job", "unicode", {
+        searchItem("depotFile", "unicode", {
           title: "A😀<img src=x>尾",
           summary: "safe <script>alert(1)</script>",
           matchedFields: ["title", "summary"],
@@ -217,39 +298,48 @@ it("renders Unicode UTF-16 highlights and injection-shaped content as text", asy
   expect(host.querySelector("script")).toBeNull();
 });
 
-it("debounces, cancels the old operation, and ignores stale rapid-input responses", async () => {
+it("submits by button, cancels the accepted query on a category change, and ignores in-flight work", async () => {
   const first = deferred<GlobalSearchResult>();
   const second = deferred<GlobalSearchResult>();
   backend.globalSearch
     .mockImplementationOnce(() => first.promise)
     .mockImplementationOnce(() => second.promise);
   await render();
-  await enter("first");
+  await type("first");
+  await click(button("Search"));
+  expect(backend.globalSearch).toHaveBeenCalledTimes(1);
   const firstQuery = backend.globalSearch.mock.calls[0][0] as GlobalSearchQuery;
-  await enter("second", 0);
+
+  const submitted = [
+    ...host.querySelectorAll<HTMLLabelElement>(".search-kind-picker label"),
+  ].find((label) => label.textContent === "Submitted")!;
+  await click(submitted.querySelector("input")!);
+  // Re-filtering drops the query that only covered the previous categories.
   expect(backend.cancelOperation).toHaveBeenCalledWith(firstQuery.operationId);
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 330)));
+  expect(host.textContent).toContain("Enter a query to search");
+  await settle(400);
+  expect(backend.globalSearch).toHaveBeenCalledTimes(1);
+
+  await click(button("Search"));
+  expect(backend.globalSearch).toHaveBeenCalledTimes(2);
   const secondQuery = backend.globalSearch.mock
     .calls[1][0] as GlobalSearchQuery;
+  expect(secondQuery.kinds).not.toContain("submittedChange");
+  expect(secondQuery.cursor).toBeUndefined();
   await act(async () =>
-    second.resolve(
-      result(secondQuery, [searchItem("job", "latest", { title: "latest" })]),
-    ),
+    second.resolve(result(secondQuery, [searchItem("shelf", "latest")])),
   );
-  expect(host.textContent).toContain("latest");
+  expect(host.textContent).toContain("shelf needle latest");
   await act(async () =>
-    first.resolve(
-      result(firstQuery, [searchItem("job", "stale", { title: "stale" })]),
-    ),
+    first.resolve(result(firstQuery, [searchItem("shelf", "stale")])),
   );
   expect(host.textContent).not.toContain("stale");
-  expect(backend.globalSearch).toHaveBeenCalledTimes(2);
 });
 
 it("appends cursor pages with identity dedupe and preserves results across page retry", async () => {
   backend.globalSearch
     .mockImplementationOnce(async (query: GlobalSearchQuery) =>
-      result(query, [searchItem("job", "one", { title: "page one" })], {
+      result(query, [searchItem("shelf", "one", { title: "page one" })], {
         hasMore: true,
         nextCursor: "cursor-2",
       }),
@@ -257,8 +347,8 @@ it("appends cursor pages with identity dedupe and preserves results across page 
     .mockRejectedValueOnce(new Error("page unavailable"))
     .mockImplementationOnce(async (query: GlobalSearchQuery) =>
       result(query, [
-        searchItem("job", "one", { title: "duplicate" }),
-        searchItem("job", "two", { title: "page two" }),
+        searchItem("shelf", "one", { title: "duplicate" }),
+        searchItem("shelf", "two", { title: "page two" }),
       ]),
     );
   await render();
@@ -373,7 +463,7 @@ it("keeps one shelf identity across pages and offers a fresh search after cursor
   });
 });
 
-it("resets results and cursors on category change and exposes mock, responsive, keyboard, and aria states", async () => {
+it("exposes mock, responsive, keyboard, and aria states without hidden controls", async () => {
   const previousWidth = window.innerWidth;
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
@@ -393,13 +483,19 @@ it("resets results and cursors on category change and exposes mock, responsive, 
     expect(
       host.querySelector('[role="status"][aria-live="polite"]'),
     ).toBeTruthy();
-    expect(host.querySelector(".search-kind-picker")).toBeTruthy();
+    // The category picker keeps an accessible name without a visible legend.
+    const picker = host.querySelector(".search-kind-picker")!;
+    expect(picker.getAttribute("aria-label")).toBe("Categories");
+    expect(picker.querySelector("legend")).toBeNull();
+    // The query box is labelled for assistive tech, not by visible text.
+    expect(
+      host.querySelector('label[for="global-search-input"]')?.textContent,
+    ).toBe("Search query");
 
     const rows = [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        ".search-result-row:not(:disabled)",
-      ),
+      ...host.querySelectorAll<HTMLButtonElement>(".search-result-row"),
     ];
+    expect(rows.every((row) => !row.disabled)).toBe(true);
     rows[0].focus();
     await act(async () =>
       rows[0].dispatchEvent(
@@ -413,12 +509,9 @@ it("resets results and cursors on category change and exposes mock, responsive, 
     ].find((label) => label.textContent === "Submitted")!;
     await click(submitted.querySelector("input")!);
     expect(host.querySelectorAll(".search-result-row")).toHaveLength(0);
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 330)));
-    const query = backend.globalSearch.mock.calls.at(
-      -1,
-    )![0] as GlobalSearchQuery;
-    expect(query.kinds).not.toContain("submittedChange");
-    expect(query.cursor).toBeUndefined();
+    // Re-filtering never queries on its own.
+    await settle(400);
+    expect(backend.globalSearch).toHaveBeenCalledTimes(1);
   } finally {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,

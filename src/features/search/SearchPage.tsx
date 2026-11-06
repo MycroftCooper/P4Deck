@@ -58,7 +58,6 @@ function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
   };
   return tFor(zh ? "zh-CN" : "en-US", labels[kind][0] as MsgKey);
 }
-
 function fieldLabel(field: string, zh: boolean): string {
   const labels: Record<string, [string, string]> = {
     title: ["search.title", "search.title"],
@@ -193,10 +192,8 @@ function VirtualSearchResults({
             "[data-search-index]",
           )?.dataset.searchIndex,
         );
-        const enabled = items
-          .map((item, index) => (item.target.type === "job" ? -1 : index))
-          .filter((index) => index >= 0);
-        if (!enabled.length) return;
+        // Search jobs are not listed, so every rendered row is navigable.
+        const enabled = items.map((_, index) => index);
         const position = enabled.indexOf(current);
         const next =
           event.key === "Home"
@@ -219,7 +216,6 @@ function VirtualSearchResults({
         {rows.map((row) => {
           const item = items[row.index];
           const Icon = KIND_ICON[item.kind];
-          const disabled = item.target.type === "job";
           return (
             <div
               key={item.identity}
@@ -234,14 +230,10 @@ function VirtualSearchResults({
               <button
                 data-search-index={row.index}
                 className="search-result-row"
-                disabled={disabled || navigationBusy === item.identity}
-                title={
-                  disabled
-                    ? t("search.no.job.details.page.exists")
-                    : tFor(zh ? "zh-CN" : "en-US", "search.open", {
-                        p1: zh ? item.title : item.title,
-                      })
-                }
+                disabled={navigationBusy === item.identity}
+                title={tFor(zh ? "zh-CN" : "en-US", "search.open", {
+                  p1: item.title,
+                })}
                 onClick={() => void onOpen(item)}
               >
                 <Icon size={16} />
@@ -266,14 +258,9 @@ function VirtualSearchResults({
                     {item.matchedFields
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
-                    {disabled ? t("search.no.destination.page") : ""}
                   </small>
                 </span>
-                {disabled ? (
-                  <span className="search-navigation-unavailable">
-                    {t("search.unavailable")}
-                  </span>
-                ) : navigationBusy === item.identity ? (
+                {navigationBusy === item.identity ? (
                   <LoaderCircle className="spin" size={15} />
                 ) : (
                   <ChevronRight size={15} />
@@ -336,7 +323,6 @@ export function SearchPage({
 
   const generation = useRef(0);
   const operations = useRef(new Set<string>());
-  const timer = useRef<number | undefined>(undefined);
   const itemsRef = useRef(items);
   const facetsRef = useRef(facets);
   const nextCursorRef = useRef(nextCursor);
@@ -354,10 +340,9 @@ export function SearchPage({
 
   const validation = useMemo(() => validateSearchText(draft), [draft]);
   const kindSignature = kinds.join(",");
+  void kindSignature;
 
   const cancelOperations = useCallback(() => {
-    if (timer.current !== undefined) window.clearTimeout(timer.current);
-    timer.current = undefined;
     for (const operationId of operations.current)
       void backend.cancelOperation(operationId).catch(() => undefined);
     operations.current.clear();
@@ -392,6 +377,9 @@ export function SearchPage({
     ) => {
       const operationId = crypto.randomUUID();
       operations.current.add(operationId);
+      // A request that outlived its session never writes UI state: typing or
+      // re-filtering invalidates the session before the response lands.
+      const live = () => generation.current === session;
       if (cursor) usedCursors.current.add(cursor);
       if (mode === "append") {
         loadingMoreRef.current = true;
@@ -411,11 +399,7 @@ export function SearchPage({
           pageSize: GLOBAL_SEARCH_PAGE_SIZE,
           cursor,
         });
-        if (
-          generation.current !== session ||
-          result.requestGeneration !== session
-        )
-          return;
+        if (!live() || result.requestGeneration !== session) return;
         const incoming = itemsFromGroups(result.groups);
         const invalidContinuation =
           result.hasMore &&
@@ -481,7 +465,7 @@ export function SearchPage({
         setSimulated(result.simulated);
         setError("");
       } catch (cause) {
-        if (generation.current !== session) return;
+        if (!live()) return;
         const message = errorMessage(cause);
         if (mode === "append") {
           setPageError(message);
@@ -494,7 +478,7 @@ export function SearchPage({
         }
       } finally {
         operations.current.delete(operationId);
-        if (generation.current === session) {
+        if (live()) {
           if (mode === "append") {
             loadingMoreRef.current = false;
             setLoadingMore(false);
@@ -506,8 +490,13 @@ export function SearchPage({
     [zh],
   );
 
+  /**
+   * Search runs only on an explicit submit (Enter or the search button); typing
+   * and re-filtering cancel the in-flight request and return to idle instead of
+   * chasing the draft with new queries.
+   */
   const startSession = useCallback(
-    (value: string, selectedKinds: GlobalSearchKind[], delay: number) => {
+    (value: string, selectedKinds: GlobalSearchKind[]) => {
       cancelOperations();
       generation.current += 1;
       const session = generation.current;
@@ -520,22 +509,20 @@ export function SearchPage({
       }
       const query = { text: checked.text, kinds: [...selectedKinds] };
       current.current = query;
-      const run = () => {
-        timer.current = undefined;
-        void execute(session, query.text, query.kinds, undefined, "fresh");
-      };
-      if (delay) timer.current = window.setTimeout(run, delay);
-      else run();
+      void execute(session, query.text, query.kinds, undefined, "fresh");
     },
     [cancelOperations, execute, resetResults],
   );
 
   useEffect(() => {
-    startSession(draft, kinds, 300);
-    return () => {
-      if (timer.current !== undefined) window.clearTimeout(timer.current);
-    };
-  }, [draft, kindSignature, startSession]);
+    // A changed draft or category invalidates the previous session outright:
+    // its results describe a query the user can no longer see.
+    cancelOperations();
+    generation.current += 1;
+    current.current = undefined;
+    resetResults();
+    setPhase("idle");
+  }, [cancelOperations, draft, resetResults, kindSignature]);
 
   useEffect(
     () => () => {
@@ -545,7 +532,7 @@ export function SearchPage({
     [cancelOperations],
   );
 
-  const submit = () => startSession(draft, kinds, 0);
+  const submit = () => startSession(draft, kinds);
   const loadMore = () => {
     const query = current.current;
     const cursor = nextCursorRef.current;
@@ -597,7 +584,6 @@ export function SearchPage({
             : t("search.ready.to.search");
 
   const openItem = async (item: GlobalSearchItem) => {
-    if (item.target.type === "job") return;
     setNavigationBusy(item.identity);
     setNavigationNotice("");
     try {
@@ -622,285 +608,298 @@ export function SearchPage({
       <div className="search-live" role="status" aria-live="polite">
         {statusText}
       </div>
-      <FixedPageHeader
-        description={t(
-          "search.search.submitted.and.pending.changelists.workspace",
-        )}
-      >
-        {mock ? (
-          <span className="search-ui-badge">
-            {t("search.simulated.no.p4.access")}
-          </span>
-        ) : (
-          <span className="search-production-badge">
-            {t("search.live.p4.search")}
-          </span>
-        )}
-      </FixedPageHeader>
-
-      {mock ? (
-        <div className="search-ui-note">
-          <AlertTriangle size={15} />
-          <span>{t("search.mock.mode.is.active.results.validate")}</span>
-        </div>
-      ) : null}
-
-      <section className="search-card" aria-label={t("search.search.controls")}>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (validation.valid && !noKinds) submit();
-          }}
+      <div className="search-body">
+        <FixedPageHeader
+          description={t(
+            "search.search.submitted.and.pending.changelists.workspace",
+          )}
         >
-          <label className="search-query-label" htmlFor="global-search-input">
-            {t("search.search.query")}
-          </label>
-          <div className="search-input-row">
-            <Search size={18} aria-hidden="true" />
-            <input
-              id="global-search-input"
-              value={draft}
-              aria-invalid={!!validationError}
-              aria-describedby="global-search-help global-search-error"
-              autoComplete="off"
-              maxLength={256}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={t("search.file.path.changelist.user.job.stream")}
-            />
-            {draft ? (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label={t("search.clear.search")}
-                onClick={() => setDraft("")}
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-            <button
-              className="search-primary"
-              disabled={!validation.valid || noKinds || phase === "loading"}
-            >
-              {phase === "loading" ? (
-                <LoaderCircle className="spin" size={14} />
-              ) : (
-                <Search size={14} />
-              )}
-              {t("search.search")}
-            </button>
-          </div>
-          <div id="global-search-help" className="search-help">
-            {t("search.search.starts.after.a.300ms.pause")}
-          </div>
-          <div
-            id="global-search-error"
-            className="search-validation"
-            role={validationError || noKinds ? "alert" : undefined}
-          >
-            {validationError ||
-              (noKinds ? t("search.select.at.least.one.category") : "")}
-          </div>
-          <fieldset className="search-kind-picker">
-            <legend>{t("search.categories")}</legend>
-            {GLOBAL_SEARCH_KINDS.map((kind) => (
-              <label key={kind}>
-                <input
-                  type="checkbox"
-                  checked={kinds.includes(kind)}
-                  onChange={() =>
-                    setKinds((currentKinds) =>
-                      currentKinds.includes(kind)
-                        ? currentKinds.filter((value) => value !== kind)
-                        : GLOBAL_SEARCH_KINDS.filter(
-                            (value) =>
-                              value === kind || currentKinds.includes(value),
-                          ),
-                    )
-                  }
-                />
-                {kindLabel(kind, zh)}
-              </label>
-            ))}
-          </fieldset>
-          {kinds.includes("shelf") ? (
-            <p className="search-bounded-note" id="search-shelf-bounds">
-              {t("search.shelf.deep.search.is.bounded.if")}
-            </p>
-          ) : null}
-        </form>
-      </section>
+          {mock ? (
+            <span className="search-ui-badge">
+              {t("search.simulated.no.p4.access")}
+            </span>
+          ) : (
+            <span className="search-production-badge">
+              {t("search.live.p4.search")}
+            </span>
+          )}
+        </FixedPageHeader>
 
-      <section
-        className="search-card search-results"
-        aria-label={t("search.search.results")}
-        aria-busy={phase === "loading" || loadingMore}
-      >
-        <div className="search-results-heading">
-          <div>
-            <h2>{t("search.results")}</h2>
-            {phase === "ready" ? (
-              <p>
-                {tFor(zh ? "zh-CN" : "en-US", "search.loaded.matched.scanned", {
-                  p1: items.length,
-                  p2: totalMatched,
-                  p3: totalScanned,
-                })}
+        {mock ? (
+          <div className="search-ui-note">
+            <AlertTriangle size={15} />
+            <span>{t("search.mock.mode.is.active.results.validate")}</span>
+          </div>
+        ) : null}
+
+        <section
+          className="search-card"
+          aria-label={t("search.search.controls")}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (validation.valid && !noKinds) submit();
+            }}
+          >
+            <label className="search-query-label" htmlFor="global-search-input">
+              <span className="sr-only">{t("search.search.query")}</span>
+            </label>
+            <div className="search-input-row">
+              <Search size={18} aria-hidden="true" />
+              <input
+                id="global-search-input"
+                value={draft}
+                aria-invalid={!!validationError}
+                aria-describedby="global-search-help global-search-error"
+                autoComplete="off"
+                maxLength={256}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={t("search.file.path.changelist.user.stream")}
+              />
+              {draft ? (
+                <button
+                  type="button"
+                  className="search-clear"
+                  aria-label={t("search.clear.search")}
+                  onClick={() => setDraft("")}
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+              <button
+                className="search-primary"
+                disabled={!validation.valid || noKinds || phase === "loading"}
+              >
+                {phase === "loading" ? (
+                  <LoaderCircle className="spin" size={14} />
+                ) : (
+                  <Search size={14} />
+                )}
+                {t("search.search")}
+              </button>
+            </div>
+            <div id="global-search-help" className="search-help">
+              {t("search.enter.or.press.search.to.start.queries")}
+            </div>
+            <div
+              id="global-search-error"
+              className="search-validation"
+              role={validationError || noKinds ? "alert" : undefined}
+            >
+              {validationError ||
+                (noKinds ? t("search.select.at.least.one.category") : "")}
+            </div>
+            <fieldset
+              className="search-kind-picker"
+              aria-label={t("search.categories")}
+            >
+              {GLOBAL_SEARCH_KINDS.map((kind) => (
+                <label key={kind}>
+                  <input
+                    type="checkbox"
+                    checked={kinds.includes(kind)}
+                    onChange={() =>
+                      setKinds((currentKinds) =>
+                        currentKinds.includes(kind)
+                          ? currentKinds.filter((value) => value !== kind)
+                          : GLOBAL_SEARCH_KINDS.filter(
+                              (value) =>
+                                value === kind || currentKinds.includes(value),
+                            ),
+                      )
+                    }
+                  />
+                  {kindLabel(kind, zh)}
+                </label>
+              ))}
+            </fieldset>
+            {kinds.includes("shelf") ? (
+              <p className="search-bounded-note" id="search-shelf-bounds">
+                {t("search.shelf.deep.search.is.bounded.if")}
               </p>
             ) : null}
-          </div>
-          {phase === "ready" || phase === "error" ? (
-            <button className="secondary" onClick={submit}>
-              <RefreshCw size={14} />
-              {t("search.retry.all")}
-            </button>
-          ) : null}
-        </div>
+          </form>
+        </section>
 
-        {partial ? (
-          <div className="search-partial" role="status">
-            <AlertTriangle size={15} />
-            {tr(
-              failures
-                ? `${failures} 个类别失败，当前结果不完整。`
-                : "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
-              failures
-                ? `${failures} categories failed; results are incomplete.`
-                : "Results are incomplete because a category hit its scan limit or returned partial data.",
-            )}
-          </div>
-        ) : null}
-
-        {phase === "loading" ? (
-          <div className="search-empty">
-            <LoaderCircle className="spin" size={32} />
-            <h3>{t("search.searching.2")}</h3>
-            <p>{t("search.querying.selected.categories")}</p>
-          </div>
-        ) : phase === "error" ? (
-          <div className="search-error" role="alert">
-            <AlertTriangle size={22} />
+        <section
+          className="search-card search-results"
+          aria-label={t("search.search.results")}
+          aria-busy={phase === "loading" || loadingMore}
+        >
+          <div className="search-results-heading">
             <div>
-              <strong>{t("search.search.failed.2")}</strong>
-              <p>{error}</p>
+              <h2>{t("search.results")}</h2>
+              {phase === "ready" ? (
+                <p>
+                  {tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "search.loaded.matched.scanned",
+                    {
+                      p1: items.length,
+                      p2: totalMatched,
+                      p3: totalScanned,
+                    },
+                  )}
+                </p>
+              ) : null}
             </div>
-            <button onClick={submit}>{t("search.retry")}</button>
-          </div>
-        ) : phase === "ready" && !items.length && !failures ? (
-          <div className="search-empty">
-            <FolderSearch size={32} />
-            <h3>{t("search.no.results")}</h3>
-            <p>{t("search.try.another.query.or.category")}</p>
-          </div>
-        ) : phase === "idle" ? (
-          <div className="search-empty">
-            <FolderSearch size={32} />
-            <h3>{t("search.enter.a.query.to.search")}</h3>
-            <p>{t("search.seven.result.categories.are.available.use")}</p>
-          </div>
-        ) : null}
-
-        {phase === "ready" ? (
-          <div className="search-groups">
-            {grouped.map(({ kind, items: groupItems, facet }) => {
-              const Icon = KIND_ICON[kind];
-              const truncated =
-                !!facet?.partial &&
-                !facet.error &&
-                facet.scannedCount >= safetyLimit;
-              return (
-                <section
-                  className="search-group"
-                  key={kind}
-                  aria-labelledby={`search-group-${kind}`}
-                >
-                  <header>
-                    <div>
-                      <Icon size={16} />
-                      <h3 id={`search-group-${kind}`}>{kindLabel(kind, zh)}</h3>
-                      <span className="search-facet-count">
-                        {facet?.matchedCount ?? 0}
-                      </span>
-                    </div>
-                    <small>
-                      {t("search.scanned")} {facet?.scannedCount ?? 0}
-                      {truncated
-                        ? t("search.scan.limit.reached")
-                        : facet?.partial && !facet.error
-                          ? t("search.partial")
-                          : ""}
-                    </small>
-                  </header>
-                  {facet?.partialReason ? (
-                    <div className="search-category-partial" role="status">
-                      <AlertTriangle size={14} />
-                      <span>
-                        <strong>{t("search.partial.reason")}</strong>
-                        {facet.partialReason}
-                      </span>
-                    </div>
-                  ) : null}
-                  {facet?.error ? (
-                    <div className="search-category-error" role="alert">
-                      <span>
-                        <strong>{facet.error.code}</strong> ·{" "}
-                        {facet.error.message}
-                      </span>
-                      <button
-                        disabled={categoryLoading === kind}
-                        onClick={() => retryCategory(kind)}
-                      >
-                        <RefreshCw
-                          size={13}
-                          className={categoryLoading === kind ? "spin" : ""}
-                        />
-                        {t("search.retry.category")}
-                      </button>
-                    </div>
-                  ) : null}
-                  {groupItems.length ? (
-                    <VirtualSearchResults
-                      items={groupItems}
-                      zh={zh}
-                      navigationBusy={navigationBusy}
-                      onOpen={openItem}
-                    />
-                  ) : !facet?.error ? (
-                    <p className="search-group-empty">
-                      {t("search.no.matches.in.this.category")}
-                    </p>
-                  ) : null}
-                </section>
-              );
-            })}
-          </div>
-        ) : null}
-
-        {pageError ? (
-          <div className="search-page-error" role="alert">
-            <span>{pageError}</span>
-            {hasMore ? (
-              <>
-                <button onClick={loadMore}>{t("search.retry.page")}</button>
-                <button onClick={submit}>{t("search.restart.search")}</button>
-              </>
+            {phase === "ready" || phase === "error" ? (
+              <button className="secondary" onClick={submit}>
+                <RefreshCw size={14} />
+                {t("search.retry.all")}
+              </button>
             ) : null}
           </div>
-        ) : null}
-        {phase === "ready" && hasMore ? (
-          <button
-            className="search-load-more"
-            disabled={loadingMore}
-            onClick={loadMore}
-          >
-            {loadingMore ? (
-              <LoaderCircle className="spin" size={14} />
-            ) : (
-              <ArrowDown size={14} />
-            )}
-            {loadingMore ? t("search.loading") : t("search.load.more")}
-          </button>
-        ) : null}
-      </section>
+
+          {partial ? (
+            <div className="search-partial" role="status">
+              <AlertTriangle size={15} />
+              {tr(
+                failures
+                  ? `${failures} 个类别失败，当前结果不完整。`
+                  : "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
+                failures
+                  ? `${failures} categories failed; results are incomplete.`
+                  : "Results are incomplete because a category hit its scan limit or returned partial data.",
+              )}
+            </div>
+          ) : null}
+
+          {phase === "loading" ? (
+            <div className="search-empty">
+              <LoaderCircle className="spin" size={32} />
+              <h3>{t("search.searching.2")}</h3>
+              <p>{t("search.querying.selected.categories")}</p>
+            </div>
+          ) : phase === "error" ? (
+            <div className="search-error" role="alert">
+              <AlertTriangle size={22} />
+              <div>
+                <strong>{t("search.search.failed.2")}</strong>
+                <p>{error}</p>
+              </div>
+              <button onClick={submit}>{t("search.retry")}</button>
+            </div>
+          ) : phase === "ready" && !items.length && !failures ? (
+            <div className="search-empty">
+              <FolderSearch size={32} />
+              <h3>{t("search.no.results")}</h3>
+              <p>{t("search.try.another.query.or.category")}</p>
+            </div>
+          ) : phase === "idle" ? (
+            <div className="search-empty">
+              <FolderSearch size={32} />
+              <h3>{t("search.enter.a.query.to.search")}</h3>
+              <p>{t("search.six.result.categories.are.available.use")}</p>
+            </div>
+          ) : null}
+
+          {phase === "ready" ? (
+            <div className="search-groups">
+              {grouped.map(({ kind, items: groupItems, facet }) => {
+                const Icon = KIND_ICON[kind];
+                const truncated =
+                  !!facet?.partial &&
+                  !facet.error &&
+                  facet.scannedCount >= safetyLimit;
+                return (
+                  <section
+                    className="search-group"
+                    key={kind}
+                    aria-labelledby={`search-group-${kind}`}
+                  >
+                    <header>
+                      <div>
+                        <Icon size={16} />
+                        <h3 id={`search-group-${kind}`}>
+                          {kindLabel(kind, zh)}
+                        </h3>
+                        <span className="search-facet-count">
+                          {facet?.matchedCount ?? 0}
+                        </span>
+                      </div>
+                      <small>
+                        {t("search.scanned")} {facet?.scannedCount ?? 0}
+                        {truncated
+                          ? t("search.scan.limit.reached")
+                          : facet?.partial && !facet.error
+                            ? t("search.partial")
+                            : ""}
+                      </small>
+                    </header>
+                    {facet?.partialReason ? (
+                      <div className="search-category-partial" role="status">
+                        <AlertTriangle size={14} />
+                        <span>
+                          <strong>{t("search.partial.reason")}</strong>
+                          {facet.partialReason}
+                        </span>
+                      </div>
+                    ) : null}
+                    {facet?.error ? (
+                      <div className="search-category-error" role="alert">
+                        <span>
+                          <strong>{facet.error.code}</strong> ·{" "}
+                          {facet.error.message}
+                        </span>
+                        <button
+                          disabled={categoryLoading === kind}
+                          onClick={() => retryCategory(kind)}
+                        >
+                          <RefreshCw
+                            size={13}
+                            className={categoryLoading === kind ? "spin" : ""}
+                          />
+                          {t("search.retry.category")}
+                        </button>
+                      </div>
+                    ) : null}
+                    {groupItems.length ? (
+                      <VirtualSearchResults
+                        items={groupItems}
+                        zh={zh}
+                        navigationBusy={navigationBusy}
+                        onOpen={openItem}
+                      />
+                    ) : !facet?.error ? (
+                      <p className="search-group-empty">
+                        {t("search.no.matches.in.this.category")}
+                      </p>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {pageError ? (
+            <div className="search-page-error" role="alert">
+              <span>{pageError}</span>
+              {hasMore ? (
+                <>
+                  <button onClick={loadMore}>{t("search.retry.page")}</button>
+                  <button onClick={submit}>{t("search.restart.search")}</button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {phase === "ready" && hasMore ? (
+            <button
+              className="search-load-more"
+              disabled={loadingMore}
+              onClick={loadMore}
+            >
+              {loadingMore ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <ArrowDown size={14} />
+              )}
+              {loadingMore ? t("search.loading") : t("search.load.more")}
+            </button>
+          ) : null}
+        </section>
+      </div>
     </section>
   );
 }

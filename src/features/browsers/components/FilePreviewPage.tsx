@@ -1,4 +1,5 @@
 import { t, tFor } from "../../../shared/i18n";
+import { localizeBackendError } from "../../../shared/localizeError";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
@@ -313,7 +314,7 @@ export function FilePreviewPage({
         {error ? (
           <div role="alert" className="preview-empty">
             {t("browse.preview.unavailable")}
-            <p>{error}</p>
+            <p>{localizeBackendError(error, zh)}</p>
           </div>
         ) : !target ? (
           <div className="preview-empty">{t("browse.select.double.click")}</div>
