@@ -1,5 +1,5 @@
-import { tFor } from "../../../shared/i18n";
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { tFor } from "../../../shared/i18n";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
 import { TargetList } from "../../../app/dialogs/TargetList";
@@ -21,6 +21,39 @@ import {
 } from "../../actions/localIoLifecycle";
 
 type Phase = "preview" | "review" | "confirming" | "result";
+
+/**
+ * One preview-and-confirm run. These five fields are cleared, advanced and
+ * re-published together by every step (preview, confirm, expiry, reset), so the
+ * run is one piece of state rather than five parallel ones.
+ */
+interface SyncRun {
+  phase: Phase;
+  plan?: SyncPreviewPlan;
+  result?: SyncResult;
+  error: string;
+  forceAck: boolean;
+}
+
+const INITIAL_RUN: SyncRun = {
+  phase: "preview",
+  plan: undefined,
+  result: undefined,
+  error: "",
+  forceAck: false,
+};
+
+type SyncRunEvent =
+  | { type: "phase"; value: Phase }
+  | { type: "plan"; value: SyncPreviewPlan | undefined }
+  | { type: "result"; value: SyncResult | undefined }
+  | { type: "error"; value: string }
+  | { type: "forceAck"; value: boolean };
+
+/** Field-at-a-time reducer: the callers express transitions, not permutations. */
+function reduceSyncRun(state: SyncRun, event: SyncRunEvent): SyncRun {
+  return { ...state, [event.type]: event.value };
+}
 
 export interface SyncDialogRequest {
   nodes: WorkspaceNode[];
@@ -57,11 +90,15 @@ export function SyncDialog({
     request.fixedRevision === undefined ? "" : String(request.fixedRevision),
   );
   const [force, setForce] = useState(false);
-  const [forceAck, setForceAck] = useState(false);
-  const [phase, setPhase] = useState<Phase>("preview");
-  const [plan, setPlan] = useState<SyncPreviewPlan>();
-  const [result, setResult] = useState<SyncResult>();
-  const [error, setError] = useState("");
+  const [run, dispatch] = useReducer(reduceSyncRun, INITIAL_RUN);
+  const { phase, plan, result, error, forceAck } = run;
+  const setPhase = (value: Phase) => dispatch({ type: "phase", value });
+  const setPlan = (value: SyncPreviewPlan | undefined) =>
+    dispatch({ type: "plan", value });
+  const setResult = (value: SyncResult | undefined) =>
+    dispatch({ type: "result", value });
+  const setError = (value: string) => dispatch({ type: "error", value });
+  const setForceAck = (value: boolean) => dispatch({ type: "forceAck", value });
   const [busy, setBusy] = useState(false);
   const session = useOperationSession();
   // The session owns cancellation; this id only routes the explicit Cancel
