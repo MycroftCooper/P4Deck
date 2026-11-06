@@ -299,8 +299,9 @@ interface CancelBookkeeping {
 1. **唯一账本**：租约集合在 owner 内，页面无法绕过（页面拿不到内部 Map）；
 2. **兜底**：`useOperationSession` 卸载时 `cancelAll()`——只要租约经 owner 发放，卸载必然取消
    （`useOperationSession.test.tsx:51-57` 已有该断言，新增用例扩展为多租约）；
-3. **静态可检**：ESLint 禁令 `no-restricted-syntax` / 自定义规则——`src/features/**` 下禁止
-   出现 `backend.cancelOperation(` 直接调用（`ToolPanel.tsx:138` 是唯一现存违规，随 §10 单独处理）。
+3. **静态可检**：**本仓库没有 ESLint**（详见 §13.1 核实过程），因此防线落在既有脚本门禁
+   `scripts/validate-frontend-contracts.mjs` 上——`src/features/**` 下禁止出现
+   `backend.cancelOperation(` 直调（`ToolPanel.tsx:138` 是唯一现存违规，随 §10 的 RUI-07 处理）。
 
 ---
 
@@ -402,6 +403,17 @@ export class PagedSession {
 ---
 
 ## 7. 推荐方案
+
+> ### ✅ LEAD 裁决（2026-11-06）：**采纳方案 B**，理由 = **判据复杂度不换概念数量**。
+> - LEAD 已独立复核 §3.1 的关键证据：SGS 6 处 `request_generation`、BMS 12 处，
+>   确实只有 `:526` / `:1201` 的 `== 0` 非零校验，**无一处相等比较**。
+>   → 「`requestGeneration` 取 `lease.epoch`、`src-tauri` 零改动」结论成立。
+> - 采纳理由：方案 A 要把「一 channel 一活租约」这个 **23 个调用点的隐含前提**改成"可能多个"，
+>   `isCurrent` 从单比较变集合比较，写错会**静默放行迟到响应**（最难测的一类 bug），
+>   而收益只是少一个概念。**用判据复杂度换概念数量，这笔交易不划算。**
+> - 分期按 §12 执行：第 1 期 `pagedSession.ts` + `StreamGraphPage` 试点；
+>   第 2 期 `BranchMappingsPage` 三链；`ToolPanel` 另立 **RUI-07**。
+> - 本文档以下内容为该裁决的实施依据；**§6 方案 A 保留作为备选记录**，不再作为候选。
 
 ### 推荐：**方案 B 的收敛版 —— 组合层 `PagedSession`，owner 只加最小增量**
 
@@ -564,7 +576,7 @@ export class OperationSessionOwner {
 1. 把 `ToolPanel` 的 `generation` 手写判活换成 `useOperationSession()` 的
    `session.epoch(channel)` 判活（**能力已具备，纯机械替换，约 10 行**）；
 2. 把 `ToolDrawer` 的 `onCancel(id)` 接到 owner（`session` 传入或回调上提），
-   **消除全仓最后一处 `backend.cancelOperation` 直调**（可配合 ESLint 禁令守门）；
+   **消除全仓最后一处 `backend.cancelOperation` 直调**（守门方式见 §13.1 的脚本门禁）；
 3. 讨论 `subscribeOperationEvents` 是否需要"订阅批次"概念（`subscribe(channel) → stop()` 的现有形态
    在 `subscribeSafely` 已有封装，**大概率不需要新模型**）；
 4. 验收：`src/features/**` 下 `backend.cancelOperation(` 出现次数 = 0。
@@ -627,8 +639,10 @@ export class OperationSessionOwner {
 1. `BranchMappingsPage` 按第 1 期验证过的 API 回迁（3 条链）；
 2. **可选**：`SubmittedPage` / `ShelfDetailPage` 收敛到 `PagedSession`，
    顺手消掉 `ShelfDetailPage.tsx:242-243` 那条"分页打断首屏"的反语义注释；
-3. ESLint 禁令开关打开：`src/features/**` 禁止 `backend.cancelOperation(` 直调
-   （等待 RUI-07 修掉 `ToolPanel.tsx:138` 后才能开；**在此之前只加 `warn`**）。
+3. **脚本门禁放开到全 `src/features/**`**（不是 ESLint，见 §13.1）：在
+   `scripts/validate-frontend-contracts.mjs` 中启用"禁止 `backend.cancelOperation(` 直调"检查，
+   并纳入验收命令。等待 RUI-07 修掉 `ToolPanel.tsx:138` 后才能放开到全 `features`；
+   **在此之前只对 `features/browsers` + `features/changelists` 生效**。
 
 ### 三页不一起做的理由
 
@@ -645,5 +659,74 @@ export class OperationSessionOwner {
 | 1 | 快照里的 `requestGeneration` 字段要不要**直接删除**？ | **保留但不再读取**，避免破坏已有磁盘快照的反序列化校验（`isStreamGraphSnapshot` / `isBranchMappingSnapshot`）；在类型注释里写明"仅记录，不参与恢复" |
 | 2 | `PagedSession` 与 `ReviewRequestOwner` 是否合并？ | 暂不。二者 channel 分配策略不同（后者按 review identity 分 channel），合并会引入回归 |
 | 3 | `SubmittedPage` 的 `chain.current` 中"中间 lease 无句柄"是否本期修？ | 本期不修（靠 `chainBusy` 保证串行），二期收敛时自然消失 |
-| 4 | ESLint 禁令的具体实现 | 待与 `scripts/workflow/` 的既有 lint 配置一并确认（本轮未读 lint 配置，**列为待办**） |
+| 4 | 禁止 `features` 直调 `backend.cancelOperation` 的静态防线 | ✅ **已核实完毕，见 §13.1**：全仓**没有 ESLint**，该说法是笔误；防线应落在 `validate-frontend-contracts.mjs` |
 | 5 | 是否需要在 `docs` 层同步更新前端架构约定 | 建议实施完成后在 `ForAIDoc/Coder/前端架构与维护约定.md` 补一节"分页链与会话 owner" |
+
+### 13.1 【已核实】静态防线落点：**全仓没有 ESLint**，防回退只能用脚本门禁
+
+#### 核实过程与结论
+
+| 检查项 | 结果 |
+| --- | --- |
+| `package.json` devDependencies | **无 `eslint`、无任何 `eslint-*` 插件**；也没有 `lint` / `lint:*` script |
+| 配置文件 | **不存在** `eslint.config.*`（flat）或 `.eslintrc*`（legacy），仅 `node_modules` 内第三方自带 |
+| `scripts/**` 中 `eslint` 字样 | **0 命中**（`grep -rn "eslint\|\.lint\b\|lint:" scripts --include=*.mjs`） |
+| `ci-fast.mjs` 的步骤 | 只有 `prettier --check`（`format:changed`）、`tsc -b`（`typecheck`）、`vitest related`、`cargo check --offline`、`ownership`、`state.mjs check`——**没有 lint 步骤** |
+| `.github/` | **目录不存在**，无 CI workflow |
+
+> ⚠️ **更正**：§5.3 第 3 条与本节原标题写的「ESLint 禁令 `no-restricted-syntax` / 自定义规则」**是错误的**——
+> 本仓库根本没有 ESLint。这不是"规则名待确认"，而是"载体不存在"。
+> 本轮起，§5.3 的表述以本节为准。
+
+#### 现有可用的"同类"防线（唯一的先例，可直接照抄）
+
+`scripts/validate-frontend-contracts.mjs`（146 行）已经是一个**前端源码静态检查器**：
+
+- **遍历能力现成**：`walk(fn)` 递归读取 `src/**`（:19-26），第 125-138 行已对全部 `src/**` 做
+  `<button>` 正则扫描并校验 `aria-label`；
+- **失败信号现成**：`throw new Error(...)` → 非零退出；`assertSame(...)` 工具函数已存在；
+- **接入点现成**：`package.json:40` 的 `validate:frontend-contracts` 脚本。
+
+→ **新增"禁止直调取消"只需要在 :140 之后追加约 15 行**，零新依赖、零新文件、零配置：
+
+```js
+// 追加到 scripts/validate-frontend-contracts.mjs（示意，非最终实现）
+const cancelFailures = [];
+for (const file of await walk(fileURLToPath(new URL("../src", import.meta.url)))) {
+  if (!/[\\/]features[\\/]/.test(file)) continue;   // 只约束 features 层
+  const source = await readFile(file, "utf8");
+  for (const match of source.matchAll(/backend\s*\.\s*cancelOperation\s*\(/g)) {
+    cancelFailures.push(
+      `${path.relative(process.cwd(), file)}:${source.slice(0, match.index).split("\n").length}`,
+    );
+  }
+}
+if (cancelFailures.length)
+  throw new Error(
+    `backend.cancelOperation must be called by the session owner only:\n${cancelFailures.join("\n")}`,
+  );
+```
+
+#### 对第 1 期的影响（回答了"第 1 期能否用 lint 防回退"）
+
+**不能靠 lint，但能用门禁脚本防回退。** 具体建议：
+
+1. **第 1 期即可落地**，但**必须先排除现有违规**：目前 `src/features` 下唯一命中是
+   `ToolPanel.tsx:138`（`backend.cancelOperation(operationId)`），它属于 RUI-07 的清理范围。
+   → 第 1 期**先不开启**该检查，或开启时用**显式豁免**（例如只对 `src/features/browsers/**`
+   和 `src/features/changelists/**` 生效），等 RUI-07 干掉 `ToolPanel.tsx:138` 再放开到全 `features`。
+2. **第 2 期（BMP 落地后）放开到全 `src/features/**`**，并把
+   `validate:frontend-contracts` 纳入 RUI-06 的验收命令：
+   ```bash
+   node scripts/validate-frontend-contracts.mjs      # 应输出 valid 且不抛错
+   ```
+3. ⚠️ **注意门禁覆盖面缺口**：`ci-fast.mjs` 目前**不会**自动跑 `validate:frontend-contracts`
+   （它只跑 format / typecheck / vitest / cargo / ownership）。若要让它成为硬门禁，
+   需要在 `scripts/workflow/select-tests.mjs` 的 `commands` 里新增一步并在 `ci-fast.mjs` 中 push
+   ——**这属于改 `scripts/**`，超出 RUI-06 的写域，应另立小任务或并入 RUI-07**。
+   在第 1 期，最稳妥的做法是**把它写进 RUI-06 的验收清单人工执行**。
+4. **额外低成本防线（建议第 1 期就加）**：一条 grep 型验收断言，不依赖任何工具：
+   ```bash
+   # 期望输出为空
+   grep -rn "backend\.cancelOperation" src/features
+   ```
