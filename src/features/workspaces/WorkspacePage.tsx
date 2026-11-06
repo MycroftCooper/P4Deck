@@ -17,7 +17,7 @@ import { action } from "../../app/context-menu/bindings";
 import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
 import { appCache } from "../../shared/cache/appCache";
 import { useViewRefresh } from "../../shared/cache/useViewRefresh";
-import { switchFailure } from "./workspaceSwitch";
+import { switchFailure, switchWorkspaceWithResync } from "./workspaceSwitch";
 import { useWorkspaceList, workspaceListKey } from "./workspaceList";
 
 export function WorkspacePage({
@@ -160,13 +160,19 @@ export function WorkspacePage({
     setError("");
     switchTarget.current = name;
     try {
-      const next = await backend.switchWorkspace({
-        expectedGeneration: runtime.contextGeneration,
-        client: name,
-      });
+      const attempt = await switchWorkspaceWithResync(
+        { expectedGeneration: runtime.contextGeneration, client: name },
+        runtime,
+      );
+      if (attempt.error) {
+        // A resync that could not retry still hands back the authoritative
+        // runtime, so the next manual switch is not rejected again.
+        if (attempt.runtime) onRuntime(attempt.runtime);
+        throw attempt.error;
+      }
       setSwitchPhase("committing");
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      onRuntime(next);
+      if (attempt.runtime) onRuntime(attempt.runtime);
     } catch (cause) {
       switchTarget.current = "";
       setSwitchPhase("error");

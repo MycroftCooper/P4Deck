@@ -10,6 +10,7 @@ import { WorkspacePage } from "./WorkspacePage";
 const backend = vi.hoisted(() => ({
   listUserWorkspaces: vi.fn(),
   switchWorkspace: vi.fn(),
+  runtimeInfo: vi.fn(),
   inspectP4Vfs: vi.fn(),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
@@ -109,6 +110,7 @@ beforeEach(() => {
   ).IS_REACT_ACT_ENVIRONMENT = true;
   backend.listUserWorkspaces.mockReset().mockResolvedValue(workspaces);
   backend.switchWorkspace.mockReset();
+  backend.runtimeInfo.mockReset();
   backend.inspectP4Vfs.mockReset().mockResolvedValue({
     contextGeneration: 7,
     workspace: "C:\\work\\main",
@@ -256,6 +258,45 @@ it("keeps the old runtime, detail, data, and focus when switching fails", async 
   expect(host.textContent).toContain("dev-client");
   expect(host.querySelector('[aria-current="true"]')).toBeNull();
   expect(document.activeElement).toBe(switchButton);
+});
+
+it("resynchronizes a stale generation and retries the switch once", async () => {
+  const stale: RuntimeInfo = {
+    ...initial,
+    contextGeneration: 8,
+    context: { ...initial.context, client: "other-client" },
+  };
+  const retried: RuntimeInfo = {
+    ...stale,
+    contextGeneration: 9,
+    context: {
+      ...stale.context,
+      client: "dev-client",
+      cwd: "C:\\work\\dev",
+    },
+  };
+  backend.switchWorkspace
+    .mockRejectedValueOnce({ code: "contextChanged" })
+    .mockResolvedValueOnce(retried);
+  backend.runtimeInfo.mockResolvedValue(stale);
+  await render();
+  await act(async () => button("dev-client").click());
+  const switchButton = button("切换到此工作区");
+  await act(async () => {
+    switchButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(backend.switchWorkspace).toHaveBeenNthCalledWith(1, {
+    expectedGeneration: 7,
+    client: "dev-client",
+  });
+  expect(backend.runtimeInfo).toHaveBeenCalledOnce();
+  expect(backend.switchWorkspace).toHaveBeenNthCalledWith(2, {
+    expectedGeneration: 8,
+    client: "dev-client",
+  });
+  expect(applied).toHaveBeenCalledWith(retried);
 });
 
 it("keeps row buttons keyboard focusable and provides polite switch status", async () => {

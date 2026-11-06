@@ -8,6 +8,7 @@ import { TopBar } from "../../app/shell/TopBar";
 const backend = vi.hoisted(() => ({
   listUserWorkspaces: vi.fn(),
   switchWorkspace: vi.fn(),
+  runtimeInfo: vi.fn(),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
 const initial: RuntimeInfo = {
@@ -58,6 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   backend.listUserWorkspaces.mockResolvedValue(items);
   backend.switchWorkspace.mockReset();
+  backend.runtimeInfo.mockReset();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -202,4 +204,53 @@ it("discards old list and switch responses when another connection becomes activ
   await render(next);
   await act(async () => resolveSwitch(initial));
   expect(applied).not.toHaveBeenCalled();
+});
+
+it("resynchronizes a stale generation once and retries the switch", async () => {
+  const stale: RuntimeInfo = {
+    ...initial,
+    contextGeneration: 8,
+    context: { ...initial.context, client: "other-client" },
+  };
+  const retried: RuntimeInfo = {
+    ...stale,
+    contextGeneration: 9,
+    context: { ...stale.context, client: "dev-client" },
+  };
+  backend.switchWorkspace
+    .mockRejectedValueOnce({ code: "contextChanged" })
+    .mockResolvedValueOnce(retried);
+  backend.runtimeInfo.mockResolvedValue(stale);
+  await render();
+  await open();
+  await act(async () => item("dev-client").click());
+  expect(backend.switchWorkspace).toHaveBeenNthCalledWith(1, {
+    expectedGeneration: 7,
+    client: "dev-client",
+  });
+  expect(backend.runtimeInfo).toHaveBeenCalledOnce();
+  expect(backend.switchWorkspace).toHaveBeenNthCalledWith(2, {
+    expectedGeneration: 8,
+    client: "dev-client",
+  });
+  expect(applied).toHaveBeenCalledWith(retried);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("applies the resynchronized runtime without retrying across connections", async () => {
+  const other: RuntimeInfo = {
+    ...initial,
+    activeProfileId: "other-profile",
+    contextGeneration: 9,
+  };
+  backend.switchWorkspace.mockRejectedValue({ code: "contextChanged" });
+  backend.runtimeInfo.mockResolvedValue(other);
+  await render();
+  await open();
+  await act(async () => item("dev-client").click());
+  expect(backend.switchWorkspace).toHaveBeenCalledOnce();
+  expect(applied).toHaveBeenCalledWith(other);
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "已重新同步连接状态",
+  );
 });

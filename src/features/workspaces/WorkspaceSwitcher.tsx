@@ -1,9 +1,8 @@
 import { t } from "../../shared/i18n";
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, RefreshCw, Search } from "lucide-react";
-import { backend } from "../../infrastructure/backend";
 import type { RuntimeInfo } from "../../shared/contracts";
-import { switchFailure } from "./workspaceSwitch";
+import { switchFailure, switchWorkspaceWithResync } from "./workspaceSwitch";
 import { useWorkspaceList } from "./workspaceList";
 
 export function WorkspaceSwitcher({
@@ -65,13 +64,14 @@ export function WorkspaceSwitcher({
     setSwitching(client);
     setError("");
     try {
-      const next = await backend.switchWorkspace({
-        expectedGeneration: runtime.contextGeneration,
-        client,
-      });
+      const attempt = await switchWorkspaceWithResync(
+        { expectedGeneration: runtime.contextGeneration, client },
+        runtime,
+      );
       if (!live.current) return;
+      if (attempt.runtime) onRuntime(attempt.runtime);
+      if (attempt.error) throw attempt.error;
       close();
-      onRuntime(next);
     } catch (cause) {
       if (!live.current) return;
       setError(
