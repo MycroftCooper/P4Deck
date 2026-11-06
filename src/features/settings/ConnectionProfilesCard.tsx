@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import { canPickExecutables, pickExecutablePath } from "./executablePicker";
 import {
   beginConnectionControlIntent,
@@ -317,9 +318,18 @@ export function ConnectionProfilesCard({
     savedRootResolution(runtime.context),
   );
   const [rootRequestRevision, setRootRequestRevision] = useState(0);
+  /** The busy token; see `bumpToken` for why it is not a session lease. */
+  const tokenRef = useRef(0);
+  const bumpToken = () => ++tokenRef.current;
   const runtimeRef = useRef(runtime);
   runtimeRef.current = runtime;
-  const generation = useRef(0);
+  /**
+   * The busy token below is an ordering token, not a cancellable operation: it
+   * only answers "is this still the newest action", and every increment is a
+   * supersede point. The workspace-root browse has its own channel because it
+   * is the one request here that must actually be cancelled.
+   */
+  const session = useOperationSession();
   const inFlight = useRef(false);
   const selectedIdRef = useRef(selectedId);
   const dirtyRef = useRef(false);
@@ -427,7 +437,7 @@ export function ConnectionProfilesCard({
 
   const resetTransient = useCallback(
     (next: ProfileDraft, status?: ConnectionStatus) => {
-      generation.current += 1;
+      bumpToken();
       inFlight.current = false;
       setBusy(false);
       setOperation("");
@@ -547,8 +557,18 @@ export function ConnectionProfilesCard({
       return;
     }
     const seq = ++rootSequence.current;
-    const operationId = `workspace-root-${crypto.randomUUID()}`;
+    // The root browse is the one request here that must be cancelled: it names
+    // a runner prefix and its cleanup aborts it. It is also the only place the
+    // host compares the generation (a re-confirmation must match), which is why
+    // it keeps the monotonic `seq` rather than a shared lease value.
+    const lease = session.start("workspace-root", {
+      operationId: `workspace-root-${crypto.randomUUID()}`,
+      cancelBackend: false,
+    });
+    const operationId = lease.operationId;
     rootOperation.current = operationId;
+    /** The browse is still the current one for this effect run. */
+    const isCurrent = () => seq === rootSequence.current;
     const clearDerivedRoot = () =>
       setDraft((value) => {
         if (workspaceRootIdentity(normalizeContext(value.context)) !== identity)
@@ -571,7 +591,7 @@ export function ConnectionProfilesCard({
         })
         .then((result) => {
           if (
-            seq !== rootSequence.current ||
+            !isCurrent() ||
             result.requestGeneration !== seq ||
             workspaceRootIdentity(normalizeContext(draft.context)) !== identity
           )
@@ -644,7 +664,7 @@ export function ConnectionProfilesCard({
           });
         })
         .catch((cause) => {
-          if (seq !== rootSequence.current) return;
+          if (!isCurrent()) return;
           clearDerivedRoot();
           setConnection(notTestedStatus(current.server));
           setRootResolution({
@@ -654,18 +674,17 @@ export function ConnectionProfilesCard({
           });
         })
         .finally(() => {
-          if (seq === rootSequence.current) rootOperation.current = undefined;
+          if (isCurrent()) rootOperation.current = undefined;
         });
     }, 250);
     return () => {
       window.clearTimeout(timer);
       rootSequence.current += 1;
-      if (rootOperation.current === operationId) {
+      // Superseding the lease is the cancel: it fires once, only for the id
+      // this run actually sent.
+      if (rootOperation.current === operationId)
         rootOperation.current = undefined;
-        void Promise.resolve(backend.cancelOperation(operationId)).catch(
-          () => undefined,
-        );
-      }
+      session.abandon(lease);
     };
     // current is intentionally captured by the explicit, stable identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -674,7 +693,7 @@ export function ConnectionProfilesCard({
   function begin(nextOperation: string) {
     if (inFlight.current) return;
     inFlight.current = true;
-    const token = ++generation.current;
+    const token = bumpToken();
     setBusy(true);
     setOperation(nextOperation);
     setError("");
@@ -683,7 +702,7 @@ export function ConnectionProfilesCard({
   }
 
   function isCurrent(token: number) {
-    return token === generation.current;
+    return token === tokenRef.current;
   }
 
   function finish(token: number) {
@@ -1046,7 +1065,7 @@ export function ConnectionProfilesCard({
     if (selected) updateContext(key, selected);
   }
   function updateContext(key: keyof P4Context, value: string) {
-    generation.current += 1;
+    bumpToken();
     if (key === "swarmBaseUrl" || key === "customSubmitExecutablePath") {
       setDraft({ ...draft, context: { ...draft.context, [key]: value } });
       setNotice("");
@@ -1079,7 +1098,7 @@ export function ConnectionProfilesCard({
       setError(t("settings.this.workspace.root.is.not.usable"));
       return;
     }
-    generation.current += 1;
+    bumpToken();
     setResourceDialog(undefined);
     const next = {
       ...draft.context,
@@ -1106,7 +1125,7 @@ export function ConnectionProfilesCard({
     mode: ResourceDialog["mode"],
     source: HTMLButtonElement,
   ) {
-    const requestGeneration = ++generation.current;
+    const requestGeneration = bumpToken();
     setResourceDialog({
       kind,
       mode,
@@ -1371,7 +1390,7 @@ export function ConnectionProfilesCard({
                     t("settings.generated.when.saved")
                   }
                   onChange={(event) => {
-                    generation.current += 1;
+                    bumpToken();
                     setDraft({ ...draft, name: event.target.value });
                     setNotice("");
                     setError("");
