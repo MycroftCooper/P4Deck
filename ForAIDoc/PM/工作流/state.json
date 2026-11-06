@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T11:54:33.542Z",
+  "updatedAt": "2026-11-06T12:01:05.291Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1984,7 +1984,7 @@
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
       "stage": "implemented",
-      "statusRaw": "已实现待验收",
+      "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
         "src/features/settings/ConnectionProfilesCard.tsx",
@@ -2065,7 +2065,7 @@
         "src/features/browsers/components/BranchMappingsPage.tsx",
         "src/features/tools/ToolPanel.tsx"
       ],
-      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
+      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。2026-11-06 第 1 期 a 阶段完成（fe 85cd2d0）：新增 `pagedSession.ts`（118 行代码，零依赖）+ 6 个单测（兄弟隔离/settle-cancel/单请求 abandon/死链请求/channel 独立/游标 stall），`session.ts` 纯新增 `cancelLive`+`liveOperationIds` 两个方法（既有语义零改动）；写测试时自查出「只 abort 不取消宿主」的真 bug；generation 用 per-channel 独立单调计数（不用 owner.epoch，避免与 request channel epoch 脱节）。b 阶段 StreamGraphPage 试点进行中。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
       "depsRaw": "RUI-04",
       "deps": [
         "RUI-04"
@@ -2112,14 +2112,18 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
-      "firstSeenAt": "2026-11-06T11:54:33.540Z",
       "archivedAt": null,
       "archivedBy": null,
       "archiveReason": null,
-      "archiveEvidence": null
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T11:54:33.540Z"
     },
     {
       "id": "UI-07",
