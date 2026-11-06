@@ -1,6 +1,6 @@
-import { t } from "../../../shared/i18n";
+﻿import { t } from "../../../shared/i18n";
 import { invalidateShelfObservations } from "../../actions/shelfObservation";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useReducer, useRef, useState } from "react";
 import { MenuEnvironment } from "../../../app/context-menu/environment";
 import { DeleteShelfDialog } from "./DeleteShelfDialog";
 import { shelfIdentity } from "../deleteShelfTask";
@@ -53,6 +53,44 @@ type Phase =
   | "completed"
   | "unknown"
   | "failed";
+
+/**
+ * One shelf review's transient output. As in the unshelve dialog, these move
+ * together: starting an attempt clears the previous result, a refusal clears
+ * the acknowledgement, and a completed review keeps it.
+ */
+interface ShelfReview {
+  phase: Phase;
+  preflight?: ShelfPreflight;
+  result?: WorkflowResult;
+  lifecycle?: ShelfUnshelveLifecycle;
+  refreshFailed: boolean;
+  message: string;
+  ack: boolean;
+}
+
+const INITIAL_REVIEW: ShelfReview = {
+  phase: "idle",
+  preflight: undefined,
+  result: undefined,
+  lifecycle: undefined,
+  refreshFailed: false,
+  message: "",
+  ack: false,
+};
+
+type ReviewEvent =
+  | { type: "phase"; value: Phase }
+  | { type: "preflight"; value: ShelfPreflight | undefined }
+  | { type: "result"; value: WorkflowResult | undefined }
+  | { type: "lifecycle"; value: ShelfUnshelveLifecycle | undefined }
+  | { type: "refreshFailed"; value: boolean }
+  | { type: "message"; value: string }
+  | { type: "ack"; value: boolean };
+
+function reduceReview(state: ShelfReview, event: ReviewEvent): ShelfReview {
+  return { ...state, [event.type]: event.value };
+}
 
 export function ShelfDialog(props: Parameters<typeof ShelfWorkflowDialog>[0]) {
   if (props.request.mode === "delete")
@@ -139,13 +177,20 @@ function ShelfWorkflowDialog({
     connectionKey,
   }));
   const [replace, setReplace] = useState(false);
-  const [ack, setAck] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [preflight, setPreflight] = useState<ShelfPreflight>();
-  const [result, setResult] = useState<WorkflowResult>();
-  const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
-  const [refreshFailed, setRefreshFailed] = useState(false);
-  const [message, setMessage] = useState("");
+  const [review, dispatch] = useReducer(reduceReview, INITIAL_REVIEW);
+  const { phase, preflight, result, lifecycle, refreshFailed, message, ack } =
+    review;
+  const setPhase = (value: Phase) => dispatch({ type: "phase", value });
+  const setPreflight = (value: ShelfPreflight | undefined) =>
+    dispatch({ type: "preflight", value });
+  const setResult = (value: WorkflowResult | undefined) =>
+    dispatch({ type: "result", value });
+  const setLifecycle = (value: ShelfUnshelveLifecycle | undefined) =>
+    dispatch({ type: "lifecycle", value });
+  const setRefreshFailed = (value: boolean) =>
+    dispatch({ type: "refreshFailed", value });
+  const setMessage = (value: string) => dispatch({ type: "message", value });
+  const setAck = (value: boolean) => dispatch({ type: "ack", value });
   const session = useOperationSession();
   const running = useRef(false);
   /** The confirmed write; Cancel reuses its exact operationId. */
