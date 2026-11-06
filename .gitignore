@@ -21,6 +21,8 @@ Desktop.ini
 !.env.example
 .local/
 artifacts/
+# Agent Team Kit runtime docs (requests/plans/snapshots, local only)
+.agent-team/
 ForAIDoc/PM/工作流/看板.html
 test-results/
 playwright-report/

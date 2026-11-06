@@ -38,6 +38,8 @@
     "validate:versions": "node scripts/validate-versions.mjs",
     "validate:bundle": "node scripts/verify-desktop-bundle.mjs",
     "validate:frontend-contracts": "node scripts/validate-frontend-contracts.mjs",
+    "validate:ipc-surface": "node scripts/validate-ipc-surface.mjs",
+    "test:ipc-surface": "node --test scripts/validate-ipc-surface.test.mjs",
     "validate:i18n-literals": "node scripts/validate-no-cjk-literals.mjs",
     "validate:i18n-key-quality": "node scripts/validate-i18n-key-quality.mjs",
     "i18n:audit": "node scripts/i18n-audit-logic.mjs",
