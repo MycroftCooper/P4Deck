@@ -1983,8 +1983,8 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
-      "stage": "todo",
-      "statusRaw": "待实现",
+      "stage": "in-progress",
+      "statusRaw": "进行中（4 个对话框）",
       "priority": "P1",
       "evidence": [
         "src/features/settings/ConnectionProfilesCard.tsx",
