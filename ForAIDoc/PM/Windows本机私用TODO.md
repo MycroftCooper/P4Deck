@@ -1,5 +1,7 @@
 # Windows 本机私用 TODO
 
+> **⛔ 2026-11-06 起冻结（只读）**：本表不再新增或推进任务；任务调度已迁移到本机 **Agent Team Kit**（`http://127.0.0.1:1421`，项目 `P4Deck`），新需求请在 ATK 网页用 **+ New request** 创建。本表仅保留历史结论、证据与数量口径。
+
 > **状态真值已迁移。** 任务/批次状态以 [工作流/state.json](工作流/state.json) 为准（由 `node scripts/workflow/state.mjs import` 从本表机械生成，62 项口径已核对一致）。
 > 本表保留为历史台账与详情来源；改状态优先改本表再运行 `node scripts/workflow/state.mjs import`（也可直接改 state.json），之后运行 `node scripts/workflow/state.mjs board` 刷新看板。
 > 工作流入口：[工作流/README.md](工作流/README.md)。
