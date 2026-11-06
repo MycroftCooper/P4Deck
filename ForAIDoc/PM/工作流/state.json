@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T12:07:15.703Z",
+  "updatedAt": "2026-11-06T12:26:44.082Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1984,7 +1984,7 @@
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
       "stage": "implemented",
-      "statusRaw": "待实现",
+      "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
         "src/features/settings/ConnectionProfilesCard.tsx",
@@ -2056,8 +2056,8 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "重构",
       "scope": "重构：分页会话模型（组合层 PagedChain + owner 最小增量）",
-      "stage": "in-progress",
-      "statusRaw": "待实现",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
       "priority": "P1（RUI-04 之后）",
       "evidence": [
         "src/shared/operationSession",
@@ -2065,7 +2065,7 @@
         "src/features/browsers/components/BranchMappingsPage.tsx",
         "src/features/tools/ToolPanel.tsx"
       ],
-      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。2026-11-06 第 1 期 a 阶段完成（fe 85cd2d0）：新增 `pagedSession.ts`（118 行代码，零依赖）+ 6 个单测（兄弟隔离/settle-cancel/单请求 abandon/死链请求/channel 独立/游标 stall），`session.ts` 纯新增 `cancelLive`+`liveOperationIds` 两个方法（既有语义零改动）；写测试时自查出「只 abort 不取消宿主」的真 bug；generation 用 per-channel 独立单调计数（不用 owner.epoch，避免与 request channel epoch 脱节）。b 阶段完成（fe d5a13d1）：StreamGraphPage 6 个手写 ref 清零（activeOperations/requestToken/requestGeneration/consumedCursors/pendingCursors/session.current），接 paged.open/request/isCurrent + CursorLedger，原 6 例未改全过（含精确 cancel 断言）；实测改动 +122/−107，与 arch 估算 −120/+60 相差近一个数量级（真实原因：估算只算删掉的账本、没算约 20 处成对改写、游标两态→三态、侧栏独立请求边界）；试点中自行发现并修正「侧栏 Stream 用首页 token 判活会被静默丢弃」的非等价点。二期 BranchMappingsPage 三链进行中。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
+      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。2026-11-06 第 1 期 a 阶段完成（fe 85cd2d0）：新增 `pagedSession.ts`（118 行代码，零依赖）+ 6 个单测（兄弟隔离/settle-cancel/单请求 abandon/死链请求/channel 独立/游标 stall），`session.ts` 纯新增 `cancelLive`+`liveOperationIds` 两个方法（既有语义零改动）；写测试时自查出「只 abort 不取消宿主」的真 bug；generation 用 per-channel 独立单调计数（不用 owner.epoch，避免与 request channel epoch 脱节）。b 阶段完成（fe d5a13d1）：StreamGraphPage 6 个手写 ref 清零（activeOperations/requestToken/requestGeneration/consumedCursors/pendingCursors/session.current），接 paged.open/request/isCurrent + CursorLedger，原 6 例未改全过（含精确 cancel 断言）；实测改动 +122/−107，与 arch 估算 −120/+60 相差近一个数量级（真实原因：估算只算删掉的账本、没算约 20 处成对改写、游标两态→三态、侧栏独立请求边界）；试点中自行发现并修正「侧栏 Stream 用首页 token 判活会被静默丢弃」的非等价点。二期完成（fe 1316dde）：BranchMappingsPage list/detail/preview 三链各持独立 PagedSession、统一从 cancelAll 一处退役，7 个手写 ref 清零，原 8 例未改全过，新增三链同死断言；三条链 cancelBackend 均为 true（已被取代时 id 已发宿主）；实测 +151/−157（净 −6）。**结项：全仓 generation.current 仅剩 ToolPanel 3 处（RUI-07）**。收益性质：StreamGraph 是结构收益（+122/−107 净 +15，不往估算凑），BranchMapping 是取消路径从 5 处散落收敛到 2 个具名入口 + 1 个统一门，非行数收益；arch 估算 −120/+60、−150/+80 均低估近一个数量级（只算删掉的账本、未算约 20 处成对改写、游标两态→三态、侧栏独立请求边界）。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
       "depsRaw": "RUI-04",
       "deps": [
         "RUI-04"
