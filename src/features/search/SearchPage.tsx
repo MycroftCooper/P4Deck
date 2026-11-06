@@ -394,9 +394,12 @@ export function SearchPage({
       // session never writes UI state.
       const live = () => session.isCurrent(lease);
       // The backend only echoes this value, so the session's stable id is used:
-      // every request in one session shares it and a new session gets a new one.
+      // every request in one session shares it and a new session gets a new
+      // one. It is reduced into the safe-integer range so the wire value stays
+      // an exact JSON number (`2 ** 53` keeps `Number(x)` idempotent across the
+      // send/echo round trip); the lease, not this number, decides staleness.
       const requestGeneration = Number(
-        `0x${lease.operationId.replace(/-/g, "")}`,
+        BigInt(`0x${lease.operationId.replace(/-/g, "")}`) % (1n << 53n),
       );
       if (cursor) usedCursors.current.add(cursor);
       if (mode === "append") {
