@@ -1,6 +1,6 @@
-import { t } from "../../../shared/i18n";
+﻿import { t } from "../../../shared/i18n";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
 import type {
   ClientWorkspace,
@@ -50,6 +50,40 @@ type Phase =
   | "completed"
   | "unknown"
   | "failed";
+
+/** Everything one review attempt publishes; see the reducer below. */
+interface ReviewState {
+  phase: Phase;
+  preflight?: UnshelvePreflight;
+  result?: WorkflowResult;
+  lifecycle?: ShelfUnshelveLifecycle;
+  refreshFailed: boolean;
+  message: string;
+  ack: boolean;
+}
+
+const INITIAL_REVIEW: ReviewState = {
+  phase: "idle",
+  preflight: undefined,
+  result: undefined,
+  lifecycle: undefined,
+  refreshFailed: false,
+  message: "",
+  ack: false,
+};
+
+type ReviewEvent =
+  | { type: "phase"; value: Phase }
+  | { type: "preflight"; value: UnshelvePreflight | undefined }
+  | { type: "ack"; value: boolean }
+  | { type: "message"; value: string }
+  | { type: "result"; value: WorkflowResult | undefined }
+  | { type: "lifecycle"; value: ShelfUnshelveLifecycle | undefined }
+  | { type: "refreshFailed"; value: boolean };
+
+function reduceReview(state: ReviewState, event: ReviewEvent): ReviewState {
+  return { ...state, [event.type]: event.value };
+}
 
 export function UnshelveDialog({
   request,
@@ -156,13 +190,14 @@ export function UnshelveDialog({
   const [targetChange, setTargetChange] = useState("0");
   /** New-CL mode: id of the CL created right before the first preflight. */
   const [createdChangeId, setCreatedChangeId] = useState<number>();
-  const [ack, setAck] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [preflight, setPreflight] = useState<UnshelvePreflight>();
-  const [result, setResult] = useState<WorkflowResult>();
-  const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
-  const [refreshFailed, setRefreshFailed] = useState(false);
-  const [message, setMessage] = useState("");
+  /**
+   * The review's transient output lives in one reducer. These six fields always
+   * move together at the start of an action, so the transitions below make the
+   * "what is cleared when" rule explicit instead of repeating it per handler:
+   * starting an attempt clears the previous attempt's result, a refusal clears
+   * the acknowledgement, and a completed review keeps its acknowledgement.
+   */
+  const [review, dispatch] = useReducer(reduceReview, INITIAL_REVIEW);
   const session = useOperationSession();
   const running = useRef(false);
   /** The confirmed write; Cancel reuses its exact operationId. */
@@ -179,6 +214,19 @@ export function UnshelveDialog({
   const connectionKeyRef = useRef(connectionKey);
   connectionKeyRef.current = connectionKey;
   const staleConnection = snapshot.connectionKey !== connectionKey;
+  const { phase, preflight, result, lifecycle, refreshFailed, message, ack } =
+    review;
+  const setPhase = (value: Phase) => dispatch({ type: "phase", value });
+  const setPreflight = (value: UnshelvePreflight | undefined) =>
+    dispatch({ type: "preflight", value });
+  const setAck = (value: boolean) => dispatch({ type: "ack", value });
+  const setMessage = (value: string) => dispatch({ type: "message", value });
+  const setResult = (value: WorkflowResult | undefined) =>
+    dispatch({ type: "result", value });
+  const setLifecycle = (value: ShelfUnshelveLifecycle | undefined) =>
+    dispatch({ type: "lifecycle", value });
+  const setRefreshFailed = (value: boolean) =>
+    dispatch({ type: "refreshFailed", value });
   const sourceChanged =
     request.changeId !== snapshot.changeId ||
     JSON.stringify([...new Set(request.paths)].sort()) !==
