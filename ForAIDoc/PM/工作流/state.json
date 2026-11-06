@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:35:09.738Z",
+  "updatedAt": "2026-11-06T08:37:05.855Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -2021,14 +2021,14 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化）",
-      "stage": "partial",
-      "statusRaw": "部分实现",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
         "src/app/styles/workbench.css",
         "src/app/styles/tokens.css"
       ],
-      "note": "现状 workbench.css 4225 行/81KB、字号 17 种（10/11/12px 占 250 处）、tokens 仅 42 个变量、硬编码色值 109 处；验收=按域拆分、引入排版刻度变量、theme-contrast 与视觉回归通过",
+      "note": "2026-11-06 完成：FE2 2b0609f 按域拆分（workbench 4269→643，798 规则/2412 声明零丢失）+ 391417c 字号 16 token（297/298 映射，逐字节等价）与 13 处色值 token 化；同文件重复块 3 处保留（改动层叠无法证明等价）。后续可选（单独立项、有视觉影响）：字号收敛为 6~8 档。原记录： | 现状 workbench.css 4225 行/81KB、字号 17 种（10/11/12px 占 250 处）、tokens 仅 42 个变量、硬编码色值 109 处；验收=按域拆分、引入排版刻度变量、theme-contrast 与视觉回归通过",
       "depsRaw": "无",
       "deps": [],
       "archived": false,
