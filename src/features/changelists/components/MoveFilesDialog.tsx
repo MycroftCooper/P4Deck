@@ -1,5 +1,5 @@
-import { t } from "../../../shared/i18n";
-import { useEffect, useRef, useState } from "react";
+﻿import { t } from "../../../shared/i18n";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
 import { useUnsavedEditor } from "../../../app/closeGuard";
@@ -10,6 +10,34 @@ import {
   type SelectedMoveRequest,
   type SelectedMoveReceipt,
 } from "../selectedMove";
+/** What the last move attempt published; see the reducer below. */
+interface MoveAttempt {
+  busy: boolean;
+  attempted: boolean;
+  error: string;
+  receipt?: SelectedMoveReceipt;
+}
+
+const INITIAL_ATTEMPT: MoveAttempt = {
+  busy: false,
+  attempted: false,
+  error: "",
+  receipt: undefined,
+};
+
+type MoveAttemptEvent =
+  | { type: "busy"; value: boolean }
+  | { type: "attempted"; value: boolean }
+  | { type: "error"; value: string }
+  | { type: "receipt"; value: SelectedMoveReceipt | undefined };
+
+function reduceAttempt(
+  state: MoveAttempt,
+  event: MoveAttemptEvent,
+): MoveAttempt {
+  return { ...state, [event.type]: event.value };
+}
+
 export interface MoveFilesRequest {
   from: number;
   origins?: Record<string, number>;
@@ -55,10 +83,20 @@ export function MoveFilesDialog({
     snapshot.target,
   );
   const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false),
-    [attempted, setAttempted] = useState(false),
-    [error, setError] = useState("");
-  const [receipt, setReceipt] = useState<SelectedMoveReceipt>();
+  /**
+   * What the last attempt published. These four move together: any attempt
+   * sets busy/attempted and clears the error, and a result replaces the
+   * receipt; `error` is also used by the connection probe, so this is a
+   * field-at-a-time reducer rather than a set of named transitions.
+   */
+  const [attempt, dispatch] = useReducer(reduceAttempt, INITIAL_ATTEMPT);
+  const { busy, attempted, error, receipt } = attempt;
+  const setBusy = (value: boolean) => dispatch({ type: "busy", value });
+  const setAttempted = (value: boolean) =>
+    dispatch({ type: "attempted", value });
+  const setError = (value: string) => dispatch({ type: "error", value });
+  const setReceipt = (value: SelectedMoveReceipt | undefined) =>
+    dispatch({ type: "receipt", value });
   const operation = useRef<SelectedMoveRequest | undefined>(undefined);
   const lock = useRef(false),
     alive = useRef(true),
