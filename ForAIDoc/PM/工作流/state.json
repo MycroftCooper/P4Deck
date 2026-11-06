@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T08:59:29.687Z",
+  "updatedAt": "2026-11-06T11:12:48.045Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -1945,7 +1945,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "重构",
       "scope": "重构：操作会话收敛（取消/代次/迟到隔离统一）",
-      "stage": "implemented",
+      "stage": "partial",
       "statusRaw": "部分实现",
       "priority": "P1",
       "evidence": [
@@ -1983,7 +1983,7 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
-      "stage": "todo",
+      "stage": "in-progress",
       "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
@@ -1991,7 +1991,7 @@
         "src/features/changelists/components/SubmittedPage.tsx",
         "src/features/search/SearchPage.tsx"
       ],
-      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
+      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 2026-11-06 定口径：ConnectionProfilesCard 不做 reducer 化（20 个 useState 是 12 个异步动作的瞬时输出、约 155 处单字段散写，改 reducer 等于 155 点机械替换），改为 B+C——写结论注释 + 抽成组重置函数但不改写入语义；`rootRequestRevision` 经论证可推导但**不删**（会触碰 RUI-03 刚建的 workspace-root lease 生命周期，且 `=== 0` 首帧守卫不是纯等价改写）。实际动手页限定为 UnshelveDialog/SyncDialog/MoveFilesDialog/ShelfDialog 四个对话框；明确不做 BranchMappingsPage/StreamGraphPage（等 RUI-06）、App.tsx、DiffView。原记录： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
       "depsRaw": "RUI-03",
       "deps": [
         "RUI-03"
