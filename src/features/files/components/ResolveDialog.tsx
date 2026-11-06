@@ -3,6 +3,11 @@ import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
 import type {
+  OperationLease,
+  OperationSessionOwner,
+} from "../../../shared/operationSession";
+import { useOperationSession } from "../../../shared/operationSession";
+import type {
   ManualMergeSaveResult,
   ManualMergeSession,
   ManualMergeValidation,
@@ -39,6 +44,53 @@ type Phase = "idle" | "checking" | "ready" | "stale" | "running" | "failed";
 
 /** A preflight that never answers must not leave the dialog stuck. */
 export const RESOLVE_CHECK_TIMEOUT_MS = 30_000;
+
+/** The inspection channel: one cancellable preflight at a time. */
+const INSPECTION = "resolve-preflight";
+
+type SessionOwner = OperationSessionOwner;
+
+/**
+ * Hands out the runner prefix for the next inspection and supersedes the
+ * previous one. Nothing has reached the host yet, so superseding never asks for
+ * a remote cancel (`cancelBackend: false`) — the dialog is the only canceller
+ * and it must cancel exactly the ids it actually sent.
+ */
+function beginInspection(owner: SessionOwner): OperationLease {
+  return owner.start(INSPECTION, { cancelBackend: false });
+}
+
+/** Mints a runner prefix for a call made inside an already-admitted review. */
+function runnerPrefix(owner: SessionOwner): string {
+  return owner.start(INSPECTION, { cancelBackend: false }).operationId;
+}
+
+/**
+ * The review a late response belongs to. Any epoch that is not the channel's
+ * current one means "connection, scope or dialog state changed", so a late
+ * answer from a retired review cannot publish over the newer one.
+ */
+function reviewEpoch(owner: SessionOwner): number {
+  return owner.epoch(INSPECTION);
+}
+
+function reviewIsCurrent(owner: SessionOwner, epoch: number): boolean {
+  return epoch === owner.epoch(INSPECTION);
+}
+
+/** Retires a settled inspection; it must never be cancelled afterwards. */
+function settleInspection(owner: SessionOwner, lease: OperationLease) {
+  owner.finish(lease);
+}
+
+/**
+ * Multi-step chains (resolve, manual merge) live inside one review: every step
+ * re-reads the epoch before its next write, so a connection or scope change in
+ * between stops the chain instead of publishing over it.
+ */
+function beginReview(owner: SessionOwner): number {
+  return reviewEpoch(owner);
+}
 
 function executableStrategies(detail: ResolveConflictDetail) {
   return detail.availableStrategies.filter(
@@ -150,10 +202,10 @@ export function ResolveDialog({
   const [statsByKey, setStatsByKey] = useState<
     Record<string, ResolveStats | null>
   >({});
-  const generation = useRef(0);
-  const running = useRef(false);
-  /** Runner prefix of the outstanding inspection; cancellable until it settles. */
+  const session = useOperationSession();
+  /** Prefix of the command chain running inside the current review (recovery). */
   const activeOperation = useRef<string | undefined>(undefined);
+  const running = useRef(false);
   const statsInFlight = useRef(new Set<string>());
   const autoInspected = useRef(false);
   const initialUnresolved = useRef<number | undefined>(undefined);
@@ -310,10 +362,13 @@ export function ResolveDialog({
     initial?: boolean;
   }): Promise<boolean> {
     if (running.current || invalidated || !paths.length) return false;
-    const epoch = ++generation.current;
+    // Starting the lease supersedes the previous inspection. The `epoch` below
+    // is this inspection's review: any later invalidation makes it stale.
+    const lease = beginInspection(session);
+    const epoch = lease.epoch;
     running.current = true;
     const previousIndex = selection?.previousIndex ?? index;
-    const operationId = crypto.randomUUID();
+    const operationId = lease.operationId;
     activeOperation.current = operationId;
     setPhase("checking");
     setMessage("");
@@ -327,12 +382,14 @@ export function ResolveDialog({
         RESOLVE_CHECK_TIMEOUT_MS,
         t("files.conflict.inspection.timed.out.after.30"),
         () => {
-          if (activeOperation.current !== operationId) return;
+          // The dialog cannot cancel its own inspect: it never passes an abort
+          // signal as the runner prefix, but a timed-out inspection must still
+          // release the host runner, so the id is cancelled exactly once here.
           activeOperation.current = undefined;
           void backend.cancelOperation(operationId).catch(() => undefined);
         },
       );
-      if (epoch !== generation.current) return false;
+      if (!reviewIsCurrent(session, epoch)) return false;
       const next = validatePreflight(value);
       setPreflight(next);
       if (initialUnresolved.current === undefined)
@@ -383,7 +440,7 @@ export function ResolveDialog({
       setPhase("ready");
       return true;
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (reviewIsCurrent(session, epoch)) {
         setPreflight(undefined);
         setMessage(cause instanceof Error ? cause.message : String(cause));
         setPhase("failed");
@@ -393,21 +450,25 @@ export function ResolveDialog({
       if (activeOperation.current === operationId)
         activeOperation.current = undefined;
       running.current = false;
+      // A settled inspection retires its lease; the review it established
+      // survives until the next inspect or an invalidation supersedes it.
+      settleInspection(session, lease);
     }
   }
 
   async function recoverMergeUnknown(
     operationId: string,
-    epoch: number,
+    review: number,
     currentResult?: MergeResolveActionResultLike,
   ) {
+    const stillCurrent = () => reviewIsCurrent(session, review);
     // Same-operationId lookup only: never a fresh retry id, never an automatic re-execution.
     if (!mergeUncertain(currentResult) && currentResult) return false;
     try {
       const connection = await backend.companySubmitConnectionSnapshot();
-      if (epoch !== generation.current) return false;
+      if (!stillCurrent()) return false;
       const found = await lookupMergeReceipt(operationId, connection);
-      if (epoch !== generation.current) return false;
+      if (!stillCurrent()) return false;
       if (found.kind !== "found" || found.receipt.state !== "settled")
         return false;
       const recovered = found.receipt.result;
@@ -440,13 +501,16 @@ export function ResolveDialog({
     },
   ) {
     if (!executeReady || !preflight?.token || !resolutions.length) return;
-    const epoch = generation.current;
+    // The admitted review: a later invalidation retires it, and every step of
+    // this chain stops writing before it can start another write.
+    const review = beginReview(session);
+    const stillCurrent = () => reviewIsCurrent(session, review);
     running.current = true;
     setPhase("running");
     setMessage("");
     setResult(undefined);
 
-    const operationId = crypto.randomUUID();
+    const operationId = runnerPrefix(session);
     beginMergeIntent({
       kind: "resolve",
       operationId,
@@ -461,7 +525,7 @@ export function ResolveDialog({
       running.current = false;
       // A superseded attempt must not repaint the dialog: the invalidated effect
       // has already published the "connection or scope changed" state.
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       setPreflight(undefined);
       setMessage(detail);
       setPhase("failed");
@@ -473,10 +537,10 @@ export function ResolveDialog({
       });
       const recoveredOk = await recoverMergeUnknown(
         operationId,
-        epoch,
+        review,
         recovered,
       );
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       if (!recoveredOk) return;
       const checked = await inspect({
         previousIndex: options.previousIndex,
@@ -485,7 +549,7 @@ export function ResolveDialog({
       if (!checked) {
         // The inspection reported its own failure; restore the operation detail
         // unless this chain was invalidated while the inspection ran.
-        if (epoch === generation.current) setMessage(detail);
+        if (stillCurrent()) setMessage(detail);
         return;
       }
       setMessage(t("files.resolved.per.durable.receipt"));
@@ -497,7 +561,7 @@ export function ResolveDialog({
         resolutions,
         operationId,
       } as never);
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const lifecycle = lifecycleOf(raw);
       const legacy =
         unwrapMergeLegacy<WorkflowResult>(raw) ?? (raw as WorkflowResult);
@@ -541,7 +605,7 @@ export function ResolveDialog({
       await publishWorkflowResult(legacy, preflight.target, connectionKey);
       // The publish is the last await before the legacy branch re-inspects; a
       // context change while it ran must not start another resolve -n.
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const succeeded =
         legacy.outcome === "succeeded" &&
         legacy.files.length === resolutions.length &&
@@ -561,7 +625,7 @@ export function ResolveDialog({
       if (checked) setMessage(done);
     } catch (cause) {
       settleMergeIntent(operationId);
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       running.current = false;
       await fail(
         cause instanceof Error ? cause.message : String(cause),
@@ -573,10 +637,10 @@ export function ResolveDialog({
   }
 
   // Closing the dialog retires the review; an inspection nobody reads must not
-  // keep a P4 child process alive.
+  // keep a P4 child process alive. The owner also cancels every lease on
+  // unmount, so only the id this dialog actually sent needs withdrawing here.
   useEffect(
     () => () => {
-      generation.current++;
       if (!activeOperation.current) return;
       void backend
         .cancelOperation(activeOperation.current)
@@ -587,7 +651,9 @@ export function ResolveDialog({
   );
   useEffect(() => {
     if (!invalidated) return;
-    generation.current++;
+    // Retires the review: the cancelled inspection and any chain running
+    // inside it can no longer publish.
+    session.invalidate(INSPECTION);
     running.current = false;
     if (activeOperation.current) {
       void backend
@@ -599,7 +665,7 @@ export function ResolveDialog({
 
     setMessage(t("files.connection.or.resolve.scope.changed.inspect"));
     setPhase("stale");
-  }, [invalidated]);
+  }, [invalidated, session]);
   useTokenExpiry(phase === "ready" ? preflight?.expiresAt : undefined, () => {
     setPhase("stale");
   });
@@ -614,7 +680,10 @@ export function ResolveDialog({
     // starts a fresh request instead of leaving the dialog stuck in "checking".
     return () => {
       autoInspected.current = false;
-      generation.current++;
+      // Supersedes the first inspection so its answer cannot land after the
+      // remount. It holds no lease of its own: the owner retires the channel on
+      // the unmount that follows.
+      session.invalidate(INSPECTION);
       running.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -725,23 +794,24 @@ export function ResolveDialog({
     if (!current || externalBusy || busy) return;
     // The whole external-merge chain belongs to this dialog session: once the
     // connection or scope changes, no later step may publish result or copy.
-    const epoch = generation.current;
+    const review = beginReview(session);
+    const stillCurrent = () => reviewIsCurrent(session, review);
     setExternalBusy(true);
     setMessage("");
     try {
       const opened = await backend.openManualMerge({
         depotPath: current.depotPath,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
-      if (epoch !== generation.current) return;
-      const session = unwrapMergeLegacy<ManualMergeSession>(opened);
-      if (!session) throw new Error(t("files.unable.to.open.merge.session"));
+      if (!stillCurrent()) return;
+      const merge = unwrapMergeLegacy<ManualMergeSession>(opened);
+      if (!merge) throw new Error(t("files.unable.to.open.merge.session"));
       const external = await backend.runExternalMerge({
-        sessionId: session.sessionId,
-        result: session.result,
-        operationId: crypto.randomUUID(),
+        sessionId: merge.sessionId,
+        result: merge.result,
+        operationId: runnerPrefix(session),
       });
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       if (external.status === "notInstalled")
         throw new Error(external.reason ?? t("files.p4merge.is.not.installed"));
       if (external.status === "cancelled" || external.status === "timeout")
@@ -752,14 +822,14 @@ export function ResolveDialog({
         throw new Error(external.reason ?? t("files.p4merge.failed"));
       const merged =
         external.status === "completed"
-          ? (external.result ?? session.result)
-          : session.result;
+          ? (external.result ?? merge.result)
+          : merge.result;
       const validatedRaw = await backend.validateManualMerge({
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         result: merged,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const validation = unwrapMergeLegacy<ManualMergeValidation>(validatedRaw);
       if (!validation?.valid || !validation.token)
         throw new Error(
@@ -768,11 +838,11 @@ export function ResolveDialog({
         );
       const savedRaw = await backend.confirmManualMergeSave({
         token: validation.token,
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         resultDigest: validation.resultDigest,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const saved = unwrapMergeLegacy<ManualMergeSaveResult>(savedRaw);
       if (!saved?.resolveToken)
         throw new Error(
@@ -780,12 +850,12 @@ export function ResolveDialog({
         );
       const resolvedRaw = await backend.confirmManualMergeResolve({
         token: saved.resolveToken,
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         resultDigest: saved.resultDigest,
         acknowledge: true,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const resolved =
         unwrapMergeLegacy<WorkflowResult>(resolvedRaw) ??
         (resolvedRaw as WorkflowResult);
@@ -794,7 +864,7 @@ export function ResolveDialog({
       setMessage(resolved.message);
       if (preflight) {
         await publishWorkflowResult(resolved, preflight.target, connectionKey);
-        if (epoch !== generation.current) return;
+        if (!stillCurrent()) return;
       }
       const checked = await inspect({
         previousIndex: index,
@@ -803,7 +873,7 @@ export function ResolveDialog({
       if (checked)
         setMessage(t("files.p4merge.merge.completed") + " " + resolved.message);
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       setMessage(cause instanceof Error ? cause.message : String(cause));
       setPhase("failed");
     } finally {

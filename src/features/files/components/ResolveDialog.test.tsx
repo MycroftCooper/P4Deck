@@ -753,3 +753,135 @@ it("cancels only the outstanding inspection when the dialog closes", async () =>
   expect(cancel).not.toHaveBeenCalledWith(operationIds[0]);
   await act(async () => resolveSecond(preflight([conflict("a")])));
 });
+
+it("never cancels a settled inspection or one the connection change already retired", async () => {
+  const second = deferredStats<ResolvePreflight>();
+  const third = deferredStats<ResolvePreflight>();
+  const check = vi
+    .fn()
+    .mockResolvedValueOnce(preflight([conflict("a")]))
+    .mockImplementationOnce(() => second.promise)
+    .mockImplementationOnce(() => third.promise);
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const execute = vi
+    .fn()
+    .mockResolvedValue(
+      legacyResult("succeeded", [
+        { depotPath: "//depot/a", state: "succeeded" },
+      ]),
+    );
+  const render = (connectionKey: string) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes}
+        source={null}
+        connectionKey={connectionKey}
+        zh
+        onDismiss={vi.fn()}
+        check={check}
+        execute={execute}
+      />,
+    );
+  await render("connection-a");
+  await flush();
+  // The first inspection settled once; settling retires it, so it can never be
+  // cancelled later while nobody is looking at it.
+  expect(cancel).not.toHaveBeenCalled();
+  await act(async () => action("保留来源").click());
+  await flush();
+  // The re-inspection started by the resolve is now in flight.
+  expect(check).toHaveBeenCalledTimes(2);
+  const retired = check.mock.calls[1][0].operationId;
+  const review = vi.fn();
+  second.promise.then(review);
+  await render("connection-b");
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(cancel).toHaveBeenCalledWith(retired);
+  await act(async () => {
+    second.resolve(preflight([conflict("a")]));
+    await Promise.resolve();
+  });
+  expect(review).toHaveBeenCalled();
+  // Cancelling is idempotent per inspection: the retired answer is not cancelled.
+  expect(cancel).toHaveBeenCalledTimes(1);
+});
+
+it("drops a superseded inspection when the dialog re-opens for a different scope", async () => {
+  const first = deferredStats<ResolvePreflight>();
+  const requests: ResolvePreflightRequest[] = [];
+  const check = vi.fn((request: ResolvePreflightRequest) => {
+    requests.push(request);
+    return first.promise;
+  });
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const render = (depotPaths: string[]) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes.filter((node) => depotPaths.includes(node.depotPath!))}
+        source={null}
+        connectionKey="connection-a"
+        zh
+        onDismiss={vi.fn()}
+        check={check}
+      />,
+    );
+  // Mount, unmount and mount again: the first inspection belongs to a review
+  // that no longer exists, so its answer must not paint the second dialog.
+  await render(nodes.map((node) => node.depotPath!));
+  await flush();
+  const firstOperation = requests[0].operationId;
+  await act(async () => harness.render(null));
+  await render([nodes[0].depotPath!]);
+  await flush();
+  expect(check).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    first.resolve(preflight([conflict("a"), conflict("b"), conflict("c")]));
+    await Promise.resolve();
+  });
+  expect(document.body.textContent ?? "").not.toContain("待处理 3");
+  expect(cancel).toHaveBeenCalledWith(firstOperation);
+});
+
+it("keeps every id it sent cancellable and ignores a late resolve after the dialog closes", async () => {
+  const pending = deferredStats<WorkflowResult>();
+  const execute = vi.fn(() => pending.promise);
+  const publish = vi.mocked(
+    (await import("../../changelists/workflowRefresh")).publishWorkflowResult,
+  );
+  publish.mockClear();
+  const check = vi.fn(async () => preflight([conflict("a")]));
+  await harness.render(
+    <ResolveDialog
+      nodes={nodes}
+      source={null}
+      connectionKey="connection-a"
+      zh
+      onDismiss={vi.fn()}
+      check={check}
+      execute={execute}
+    />,
+  );
+  await flush();
+  await act(async () => action("保留来源").click());
+  await flush();
+  const operationId = (execute.mock.calls[0] as unknown[])[0] as {
+    operationId: string;
+  };
+  // Closing retires the review: the late answer can neither repaint the dialog
+  // nor publish a workflow result.
+  await act(async () => harness.render(null));
+  await act(async () => {
+    pending.resolve(
+      legacyResult("succeeded", [
+        { depotPath: "//depot/a", state: "succeeded" },
+      ]),
+    );
+    await Promise.resolve();
+  });
+  expect(publish).not.toHaveBeenCalled();
+  expect(operationId.operationId).toEqual(expect.any(String));
+});
