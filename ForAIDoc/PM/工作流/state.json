@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-06T11:12:48.045Z",
+  "updatedAt": "2026-11-06T11:13:08.102Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
@@ -96,9 +96,9 @@
     ]
   },
   "counts": {
-    "main": 56,
+    "main": 57,
     "archived": 12,
-    "total": 68,
+    "total": 69,
     "subitems": 32,
     "slices": 7
   },
@@ -1983,7 +1983,7 @@
       "owner": "FE",
       "module": "重构",
       "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
-      "stage": "in-progress",
+      "stage": "todo",
       "statusRaw": "待实现",
       "priority": "P1",
       "evidence": [
@@ -2048,6 +2048,41 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-06",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE＋BE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：分页会话模型（owner 支持同代次连续租约 + 多 id 取消集合）",
+      "stage": "todo",
+      "statusRaw": "待实现",
+      "priority": "P1（RUI-04 之后）",
+      "evidence": [
+        "src/shared/operationSession",
+        "src/features/browsers/components/StreamGraphPage.tsx",
+        "src/features/browsers/components/BranchMappingsPage.tsx",
+        "src/features/tools/ToolPanel.tsx"
+      ],
+      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。三条设计前提必须先定：① 契约字段（StreamGraphQuery.requestGeneration 必填且用后端回显反查）与本地判活代次如何分离 ② owner 是否支持「同 generation 并发/串行多租约」变体 ③ 多 id 取消是否收敛为集合语义。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
+      "depsRaw": "RUI-04",
+      "deps": [
+        "RUI-04"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null
+      },
+      "updatedAt": null,
+      "firstSeenAt": "2026-11-06T11:13:08.101Z",
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null
     },
     {
       "id": "UI-07",
