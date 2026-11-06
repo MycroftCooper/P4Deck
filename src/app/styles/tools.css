@@ -1,0 +1,556 @@
+/* Tools drawer: logs, diagnostics, policy, journal, terminal, tool tabs. */
+.tool-drawer {
+  position: relative;
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+.resize-handle {
+  position: absolute;
+  z-index: 3;
+  top: -4px;
+  width: 100%;
+  height: 8px;
+  cursor: ns-resize;
+}
+.tool-tabs {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tool-tab-list {
+  display: contents;
+}
+.tool-drawer:not(.embedded) .tool-tab-list > [data-tool-tab="terminal"] {
+  margin-inline-start: auto;
+}
+.tool-tabs > button,
+.tool-tab-list > button {
+  height: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.tool-tab-list > button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.tool-tabs .drawer-toggle {
+  border: 0;
+  color: var(--text);
+}
+.tool-unread-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 1px var(--surface);
+}
+.terminal-view {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 38px auto;
+  background: var(--terminal);
+}
+.terminal-output {
+  overflow: auto;
+  color: #cbd5d9;
+  font:
+    10px/1.6 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+}
+.terminal-input {
+  gap: 6px;
+  padding: 5px 8px;
+  border-top: 1px solid #30353a;
+  color: #66b6ff;
+  font:
+    9px ui-monospace,
+    monospace;
+}
+.terminal-input input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+}
+.terminal-input button {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid #343a40;
+  border-radius: 4px;
+  background: #1c2024;
+  color: #ddd;
+}
+.terminal-security-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--terminal));
+  font-size: 11px;
+}
+.terminal-security-notice button {
+  flex: none;
+}
+.log-scroll {
+  min-height: 0;
+  overflow: auto;
+  contain: strict;
+}
+.log-row {
+  position: absolute;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 70px 55px 170px minmax(180px, 1fr) 32px 22px;
+  align-items: center;
+  padding: 0 9px;
+  border-bottom: 1px solid var(--border);
+}
+.log-row code,
+.log-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-row.error strong {
+  color: var(--danger);
+}
+.log-row.warning strong {
+  color: var(--warning);
+}
+.diagnostic-view {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+  background: var(--panel);
+  font-size: 10px;
+}
+.diagnostic-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.diagnostic-toolbar input,
+.diagnostic-toolbar select,
+.policy-grid input {
+  min-width: 0;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 7px;
+  font-size: 10px;
+}
+.diagnostic-toolbar > input:first-child {
+  flex: 1 1 180px;
+}
+.diagnostic-toolbar button,
+.diagnostic-footer button,
+.policy-grid button,
+.diagnostic-card button,
+.active-filter button,
+.inline-error button,
+.diagnostic-table button {
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 10px;
+}
+.diagnostic-toolbar button:focus-visible,
+.diagnostic-footer button:focus-visible,
+.policy-grid button:focus-visible,
+.diagnostic-card button:focus-visible,
+.active-filter button:focus-visible,
+.diagnostic-table button:focus-visible,
+.tool-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.compact-field {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+}
+.active-filter,
+.mock-disclosure,
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.active-filter span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mock-disclosure {
+  background: var(--accent-soft);
+}
+.inline-error {
+  color: var(--danger);
+}
+.policy-panel {
+  border-bottom: 1px solid var(--border);
+}
+.policy-panel summary {
+  cursor: pointer;
+  padding: 7px 9px;
+  color: var(--muted);
+}
+.policy-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  padding: 0 9px 8px;
+}
+.policy-grid label:not(.check-field) {
+  display: grid;
+  gap: 3px;
+}
+.policy-grid .check-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.policy-grid .check-field input {
+  width: auto;
+  height: auto;
+}
+.policy-boundary {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.diagnostic-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+.diagnostic-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.diagnostic-table th,
+.diagnostic-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 7px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.diagnostic-table .virtual-table-spacer td {
+  border: 0;
+  padding: 0;
+}
+.diagnostic-table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.diagnostic-table th:nth-child(1) {
+  width: 128px;
+}
+.diagnostic-table th:nth-child(2),
+.diagnostic-table th:nth-child(3) {
+  width: 72px;
+}
+.diagnostic-table th:nth-last-child(1) {
+  width: 36px;
+}
+.diagnostic-table td span,
+.diagnostic-table td code,
+.diagnostic-table td time {
+  display: block;
+}
+.diagnostic-table td span {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.diagnostic-table tr.error td:nth-child(2),
+.diagnostic-table tr.failed td:first-child,
+.diagnostic-table tr.interrupted td:first-child {
+  color: var(--danger);
+}
+.diagnostic-table tr.warning td:nth-child(2) {
+  color: var(--warning);
+}
+.diagnostic-table tr.cancelled td:nth-child(2) {
+  color: var(--muted);
+}
+.log-row.cancelled strong {
+  color: var(--muted);
+}
+.journal-table th:nth-child(1) {
+  width: 82px;
+}
+.journal-table th:nth-child(2) {
+  width: 24%;
+}
+.journal-table th:nth-child(3) {
+  width: 180px;
+}
+.journal-table th:nth-child(4) {
+  width: 70px;
+}
+.journal-table th:nth-child(5) {
+  width: 28%;
+}
+.journal-table th:last-child {
+  width: 80px;
+}
+.journal-recovery-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel-2));
+  color: var(--danger);
+}
+.journal-recovery-banner span {
+  color: var(--muted);
+}
+.journal-recovery {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+  line-height: 1.35;
+}
+.journal-recovery small {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+}
+.journal-recovery.danger strong {
+  color: var(--danger);
+}
+.journal-recovery.warning strong {
+  color: var(--warning);
+}
+.link-button {
+  max-width: 100%;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diagnostic-footer {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 9px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+.diagnostics-view {
+  display: block;
+  overflow: auto;
+  padding: 10px;
+}
+.diagnostic-card {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.diagnostic-card > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.diagnostic-card h3,
+.diagnostic-card p {
+  margin: 0 0 5px;
+}
+.diagnostic-card header p {
+  color: var(--muted);
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.metric-grid div {
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.metric-grid dt {
+  color: var(--muted);
+}
+.metric-grid dd {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.export-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0;
+}
+.export-result code {
+  flex: 1 1 240px;
+  overflow-wrap: anywhere;
+}
+.tool-drawer {
+  min-height: 38px;
+  grid-template-rows: 38px minmax(0, 1fr);
+  box-shadow: none;
+  background: var(--panel-2);
+}
+.tool-drawer.collapsed {
+  height: 38px;
+  min-height: 38px;
+}
+.tool-tabs {
+  padding: 0 14px;
+}
+.tool-tabs > button,
+.tool-tab-list > button {
+  font-size: 11px;
+  gap: 7px;
+  padding: 0 12px;
+}
+.terminal-output {
+  font-size: 12px;
+  padding: 16px;
+}
+.terminal-input {
+  font-size: 11px;
+}
+.terminal-input button {
+  font-size: 10px;
+}
+.log-row {
+  font-size: 10px;
+}
+@media (max-width: 650px) {
+  .tool-tabs {
+    overflow-x: auto;
+  }
+  .tool-tabs > button,
+  .tool-tab-list > button {
+    padding-inline: 8px;
+  }
+  .diagnostic-toolbar {
+    align-items: stretch;
+  }
+  .diagnostic-toolbar > input,
+  .diagnostic-toolbar > select,
+  .diagnostic-toolbar > .compact-field,
+  .diagnostic-toolbar > button {
+    flex: 1 1 calc(50% - 6px);
+  }
+  .diagnostic-toolbar > input:first-child {
+    flex-basis: 100%;
+  }
+  .diagnostic-table {
+    min-width: 720px;
+  }
+  .journal-table {
+    min-width: 850px;
+  }
+  .policy-grid > * {
+    flex: 1 1 100%;
+  }
+  .diagnostic-card > header {
+    flex-direction: column;
+  }
+  .diagnostic-card > header button {
+    width: 100%;
+  }
+}
+.log-toolbar {
+  align-items: center;
+}
+.log-toolbar > .muted {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+}
+.log-toolbar .log-search {
+  flex: 1 1 200px;
+  min-width: 120px;
+  height: 28px;
+}
+.log-toolbar .log-command {
+  flex: 0 1 160px;
+  min-width: 110px;
+  height: 28px;
+}
+.log-toolbar > select,
+.log-toolbar > button {
+  flex: 0 0 auto;
+  height: 28px;
+}
+.log-toolbar .log-follow-tail {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  white-space: nowrap;
+}
+.log-toolbar .log-follow-tail input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+.log-toolbar > select {
+  flex: 0 0 auto;
+  min-width: 96px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 26px;
+}
+.log-toolbar > select::picker-icon {
+  color: var(--muted);
+  margin-inline-start: 6px;
+}

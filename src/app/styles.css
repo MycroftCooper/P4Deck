@@ -1,12 +1,20 @@
 @import "./styles/context-menu.css";
 @import "./styles/dialogs.css";
 @import "@xterm/xterm/css/xterm.css";
-/* Ordered entry point: tokens, docking, shared workbench, then scoped features. */
+/* Ordered entry point: tokens, docking, shared workbench shell, then one file
+   per workbench domain (RUI-05), then the remaining scoped features. The
+   workbench split keeps the original in-file order inside every domain; files
+   are imported in domain order so later domains still win by cascade. */
 @import "./styles/tokens.css";
 @import "./styles/review.css";
 @import "./styles/docking.css";
 @import "./styles/browsers.css";
 @import "./styles/workbench.css";
+@import "./styles/pending.css";
+@import "./styles/submitted.css";
+@import "./styles/tools.css";
+@import "./styles/resolve.css";
+@import "./styles/connection.css";
 @import "./styles/targets.css";
 @import "./styles/settings.css";
 @import "./styles/preferences.css";
