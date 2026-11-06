@@ -139,6 +139,29 @@ export class OperationSessionOwner {
     for (const channel of [...this.leases.keys()]) this.abort(channel);
   }
 
+  /**
+   * Cancels the host operation behind `operationId` exactly once.
+   *
+   * A paged chain runs several requests at a time under one owner channel, so
+   * it cancels by id rather than by channel. Ids this owner never issued (or
+   * that were already cancelled) are ignored, which makes the call idempotent
+   * for a caller that may race its own cleanup.
+   */
+  cancelLive(operationId: string): void {
+    for (const [channel, registered] of this.leases) {
+      if (registered.lease.operationId !== operationId) continue;
+      this.abort(channel);
+      return;
+    }
+    void this.cancelOperation(operationId).catch(() => undefined);
+  }
+
+  /** Snapshot of the live lease ids on a channel (assertion/debug helper). */
+  liveOperationIds(channel: string): readonly string[] {
+    const registered = this.leases.get(channel);
+    return registered ? [registered.lease.operationId] : [];
+  }
+
   private abort(channel: string): void {
     const registered = this.leases.get(channel);
     if (!registered) return;
