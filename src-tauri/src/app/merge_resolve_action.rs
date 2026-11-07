@@ -44,13 +44,14 @@ pub async fn recheck_facts(
         query.args[2] = RECHECK_FIELDS.into();
     }
     let request = P4CommandRequest {
+        bound: crate::p4::bounds::IoBound::ReadLong,
         operation_id: Some(format!("{operation_id}:recheck")),
         source: OperationSource::Gui,
         command: query.command.into(),
         args: query.args,
         context: context.clone(),
         output_mode: OutputMode::JsonLines,
-        timeout_ms: Some(300_000),
+        timeout_ms: None,
         input: None,
     };
     let result = runner

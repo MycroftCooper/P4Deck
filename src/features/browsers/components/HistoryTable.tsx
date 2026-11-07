@@ -1,3 +1,4 @@
+import { t, tFor, type MsgKey } from "../../../shared/i18n";
 import { formatLocalTime as historyTime } from "../../../shared/lib/localTime";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -23,7 +24,7 @@ function Description({
   text,
   expanded,
   toggle,
-  zh,
+  zh: _zh,
   controls,
 }: {
   text: string;
@@ -54,12 +55,8 @@ function Description({
     };
   }, [text]);
   const label = expanded
-    ? zh
-      ? "折叠描述"
-      : "Collapse description"
-    : zh
-      ? "展开描述"
-      : "Expand description";
+    ? t("browse.collapse.description")
+    : t("browse.expand.description");
   return (
     <div className="history-description-cell" role="gridcell">
       <span ref={preview} className="history-description-preview">
@@ -129,9 +126,12 @@ export function HistoryTable({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const identity = (row: FileRevision) => `${row.depotPath}#${row.revision}`;
   const instance = useId();
-  const labels = zh
-    ? ["版本号 / CL号", "时间", "提交人", "描述"]
-    : ["Revision / CL", "Time", "User", "Description"];
+  const labels = [
+    "browse.history.revisionCl",
+    "browse.history.time",
+    "browse.history.user",
+    "browse.history.description",
+  ];
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroll.current,
@@ -158,7 +158,7 @@ export function HistoryTable({
       className="history-table"
       style={{ minWidth: widths.reduce((sum, value) => sum + value, 0) }}
       role="grid"
-      aria-label={zh ? "文件历史" : "File history"}
+      aria-label={t("browse.file.history")}
       aria-multiselectable="true"
     >
       <div
@@ -167,12 +167,15 @@ export function HistoryTable({
         role="row"
         style={style}
       >
-        {labels.map((label, index) => (
-          <div role="columnheader" key={label}>
-            {label}
-            <ColumnResizer resize={columns} index={index} label={label} />
-          </div>
-        ))}
+        {labels.map((key, index) => {
+          const label = tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
+          return (
+            <div role="columnheader" key={key}>
+              {label}
+              <ColumnResizer resize={columns} index={index} label={label} />
+            </div>
+          );
+        })}
       </div>
       <div
         className="virtual-spacer"
@@ -197,16 +200,12 @@ export function HistoryTable({
                 tabIndex={0}
                 aria-selected={isSelected(item)}
                 data-selection-order={selectionOrder?.(item) || undefined}
-                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? (zh ? "，先选版本" : ", first selected") : zh ? "，后选版本，获取此版本的目标" : ", last selected, Get this revision target") : ""}`}
+                aria-label={`${item.depotPath}#${item.revision}${selectionOrder?.(item) ? (selectionOrder(item) === 1 ? t("browse.first.selected") : t("browse.last.selected.get.this.revision")) : ""}`}
                 title={
                   selectionOrder?.(item)
                     ? selectionOrder(item) === 1
-                      ? zh
-                        ? "先选版本"
-                        : "First selected"
-                      : zh
-                        ? "后选版本 · 获取此版本的目标"
-                        : "Last selected · Get this revision target"
+                      ? t("browse.first.selected")
+                      : t("browse.last.selected.get.this.revision")
                     : undefined
                 }
                 className={`history-columns workspace-row history-row ${isSelected(item) ? "selected" : ""}`}

@@ -77,6 +77,8 @@ pub struct FileService {
 
 struct RunOptions {
     output_mode: OutputMode,
+    /// R9: enforced time family; see `p4::bounds`.
+    bound: crate::p4::bounds::IoBound,
     operation_id: Option<String>,
     progress_total: Option<usize>,
     argument_input: Option<Vec<String>>,
@@ -775,6 +777,9 @@ impl FileService {
                 invocation.args,
                 RunOptions {
                     output_mode: invocation.output_mode,
+                    // A file mutation (edit/add/delete/revert) may wait on a
+                    // server-side lock, so it gets the mutation family.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     progress_total: Some(progress_total),
                     argument_input: invocation.argument_input,
@@ -1537,6 +1542,10 @@ impl FileService {
                 } else {
                     OutputMode::Text
                 },
+                // Plain reads: status, history, graph, diff. A long read may
+                // legitimately take minutes on a big depot, so this is the
+                // long-read family rather than the short probe.
+                bound: crate::p4::bounds::IoBound::ReadLong,
                 operation_id: None,
                 progress_total: None,
                 argument_input: None,
@@ -1565,6 +1574,8 @@ impl FileService {
                 } else {
                     OutputMode::Text
                 },
+                // Status queries share the long-read family with plain reads.
+                bound: crate::p4::bounds::IoBound::ReadLong,
                 operation_id,
                 progress_total: None,
                 argument_input: None,
@@ -1585,13 +1596,14 @@ impl FileService {
         self.runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: options.bound,
                     operation_id: options.operation_id,
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode: options.output_mode,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

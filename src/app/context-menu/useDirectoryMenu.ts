@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContextMenu } from "./ContextMenu";
 import { useMenuEnvironment } from "./environment";
 import { action, copy } from "./bindings";
@@ -23,13 +24,13 @@ export function useDirectoryMenu(
       复制当前目录路径: copy(directory),
       在当前目录搜索: action(
         () => env.searchInDirectory(directory),
-        directory ? undefined : "没有当前目录",
+        directory ? undefined : t("contextMenu.noCurrentDirectory"),
       ),
       系统中定位当前目录: {
         reason:
           env.runtime.mode === "tauri"
-            ? "正在检查目录 / Checking folder"
-            : "请在桌面应用中使用 / Desktop app required",
+            ? t("shell.checking.folder")
+            : t("shell.desktop.app.required"),
       },
     }),
     {
@@ -56,7 +57,7 @@ export function useDirectoryMenu(
                 path: node.absolutePath,
                 mode: "reveal",
               }),
-            caps.reveal ? undefined : "本地目录不存在或不在工作区内",
+            caps.reveal ? undefined : t("contextMenu.localDirectoryMissing"),
           ),
         };
       },

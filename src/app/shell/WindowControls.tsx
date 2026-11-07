@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -50,7 +51,7 @@ export function WindowControls({ zh }: { zh: boolean }) {
       <button
         type="button"
         data-window-chrome-action="minimize"
-        aria-label={zh ? "最小化" : "Minimize"}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.minimize")}
         onClick={() => run(() => getCurrentWindow().minimize())}
       >
         <Minus size={14} />
@@ -60,12 +61,8 @@ export function WindowControls({ zh }: { zh: boolean }) {
         data-window-chrome-action="maximize"
         aria-label={
           maximized
-            ? zh
-              ? "还原窗口"
-              : "Restore window"
-            : zh
-              ? "最大化"
-              : "Maximize"
+            ? tFor(zh ? "zh-CN" : "en-US", "shell.restore.window")
+            : tFor(zh ? "zh-CN" : "en-US", "shell.maximize")
         }
         onClick={() =>
           run(async () => {
@@ -81,14 +78,14 @@ export function WindowControls({ zh }: { zh: boolean }) {
         type="button"
         className="window-close"
         data-window-chrome-action="close"
-        aria-label={zh ? "关闭窗口" : "Close window"}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.close.window")}
         onClick={() => run(() => requestGuardedClose("window"))}
       >
         <X size={15} />
       </button>
       {error && (
         <span role="alert" className="window-control-error">
-          {zh ? "窗控操作失败" : "Window action failed"}
+          {tFor(zh ? "zh-CN" : "en-US", "shell.window.action.failed")}
         </span>
       )}
     </div>

@@ -1,7 +1,10 @@
 use crate::{
-    app::confirmation::{ConfirmationStore, ExpiringConfirmation},
+    app::confirmation::{
+        Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest,
+        ConfirmationTicket, IssuedConfirmation, MutationLane, RecheckVerdict, ReviewSpec,
+    },
     domain::*,
-    p4::{context::ContextStore, runner::P4Runner},
+    p4::{context::ContextStore, runner::MutationGuard, runner::P4Runner},
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -13,19 +16,18 @@ use uuid::Uuid;
 const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 const MAX_REPORTED_PATHS: usize = 100;
 
-#[derive(Clone)]
-struct TokenRecord {
-    target: StreamSwitchTargetSnapshot,
+/// What a stream-switch review binds next to its target snapshot.
+///
+/// `has_warnings` is stored with the token: the reviewed warnings are what
+/// forces the acknowledgement, so a caller cannot clear the requirement by
+/// omitting a field on the wire.
+#[derive(Clone, PartialEq)]
+struct StreamReview {
     preview_digest: String,
     has_warnings: bool,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
-}
+type StreamTicket = ConfirmationTicket<StreamSwitchTargetSnapshot, StreamReview>;
 
 #[derive(Debug, Clone)]
 struct Inspection {
@@ -45,9 +47,8 @@ struct Inspection {
 pub struct StreamSwitchService {
     runner: Arc<P4Runner>,
     contexts: Arc<ContextStore>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    ticket: StreamTicket,
+    confirmation_gate: Arc<AsyncMutex<()>>,
 }
 
 impl StreamSwitchService {
@@ -60,17 +61,21 @@ impl StreamSwitchService {
         contexts: Arc<ContextStore>,
         ttl_ms: u64,
     ) -> Self {
+        let confirmation_gate = Arc::new(AsyncMutex::new(()));
+        let ticket = StreamTicket::with_gate(ttl_ms.max(1), Some(confirmation_gate.clone()));
         Self {
             runner,
             contexts,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            ticket,
+            confirmation_gate,
         }
     }
 
-    pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+    pub async fn clear_confirmations(&self) {
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family; blocking inside the async runtime would
+        // stall the command that performs the switch.
+        self.ticket.clear().await;
     }
 
     pub async fn preflight(
@@ -89,7 +94,7 @@ impl StreamSwitchService {
                 return blocked_preflight(
                     request,
                     issue(StreamSwitchIssueCode::InvalidTarget, message, Vec::new()),
-                    self.ttl_ms,
+                    self.ticket.ttl_ms(),
                     vec![operation_id],
                 )
             }
@@ -116,7 +121,7 @@ impl StreamSwitchService {
                     ),
                         Vec::new(),
                     ),
-                    self.ttl_ms,
+                    self.ticket.ttl_ms(),
                     vec![operation_id],
                 )
             }
@@ -139,18 +144,18 @@ impl StreamSwitchService {
             ));
         }
         let ready = blockers.is_empty();
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
-                    preview_digest: preview_digest.clone(),
-                    has_warnings: !inspection.warnings.is_empty(),
-                    expires_at,
-                },
-                now_ms(),
-            )
-        });
+        let has_warnings = !inspection.warnings.is_empty();
+        let (token, expires_at) = match self.ticket.issue(
+            ready,
+            target.clone(),
+            StreamReview {
+                preview_digest: preview_digest.clone(),
+                has_warnings,
+            },
+        ) {
+            Some((expires_at, token)) => (Some(token), expires_at),
+            None => (None, self.ticket.planned_expires_at()),
+        };
         StreamSwitchPreflight {
             ready,
             current_stream: inspection.current_stream,
@@ -166,7 +171,7 @@ impl StreamSwitchService {
             preview_digest,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.ticket.ttl_ms(),
             log_reference: inspection.operation_ids.first().cloned(),
             operation_ids: inspection.operation_ids,
         }
@@ -197,130 +202,48 @@ impl StreamSwitchService {
     async fn confirm_inner(
         self: &Arc<Self>,
         confirmation: StreamSwitchConfirmation,
-        admitted: Option<&crate::p4::runner::MutationGuard>,
+        admitted: Option<&MutationGuard>,
         app: Option<&AppHandle>,
     ) -> StreamSwitchResult {
-        let _gate = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
-            return rejected(
-                StreamSwitchFailureCode::TokenUnknown,
-                "The stream switch token is unknown or was already used.",
-            );
+        let request = ConfirmationRequest {
+            token: &confirmation.token,
+            target: &confirmation.target,
+            digest: None,
+            acknowledged: Acknowledgement::required(false, confirmation.acknowledge_warnings),
         };
-        if record.expires_at <= now_ms() {
-            return rejected(
-                StreamSwitchFailureCode::TokenExpired,
-                "The stream switch preflight expired. Run preflight again.",
-            );
+        let mut spec = StreamSwitchReviewSpec {
+            service: self.clone(),
+            admitted,
+            app,
+            requested_operation_id: confirmation.operation_id,
+            reviewed: None,
+            recheck_operation_ids: Vec::new(),
+            echoed_target: Some(confirmation.target.clone()),
+            recheck_error: None,
+            attempt_operation_id: None,
+        };
+        match self.ticket.confirm(request, &mut spec).await {
+            Ok(output) => output,
+            Err(refusal) => stream_refusal_result(refusal, &spec),
         }
-        if record.target != confirmation.target
-            || record.preview_digest != confirmation.preview_digest
-        {
-            return rejected(
-                StreamSwitchFailureCode::TargetMismatch,
-                "The confirmation does not match the reviewed stream switch snapshot.",
-            );
-        }
-        if record.has_warnings && !confirmation.acknowledge_warnings {
-            return rejected(
-                StreamSwitchFailureCode::WarningAcknowledgementRequired,
-                "The reviewed warnings require explicit acknowledgement.",
-            );
-        }
-        let (context, generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected(
-                StreamSwitchFailureCode::ContextChanged,
-                "The profile, connection, workspace, or runtime generation changed after preflight.",
-            );
-        }
+    }
 
-        let operation_id = valid_operation_id(confirmation.operation_id)
-            .unwrap_or_else(|| format!("stream-switch-{}", Uuid::new_v4()));
+    /// The mutation itself, run by the review spec after every shared check and
+    /// the re-check passed. Public to the crate so the spec (a sibling type)
+    /// can call it while the service keeps ownership of the lane.
+    async fn run_stream_switch(
+        &self,
+        target: &StreamSwitchTargetSnapshot,
+        guard: &MutationGuard,
+        operation_id: String,
+        app: Option<&AppHandle>,
+    ) -> StreamSwitchResult {
+        let (context, _) = self.contexts.snapshot();
         let group = self.runner.begin_operation_group(operation_id.clone());
-        let owned_guard;
-        let guard = match admitted {
-            Some(guard) => guard,
-            None => {
-                owned_guard = self.runner.lock_mutations(&context.server).await;
-                &owned_guard
-            }
-        };
         if let Err(message) = group.ensure_active() {
             return cancelled_result(operation_id, message, false, false);
         }
-        let reinspection = self
-            .inspect(
-                &context,
-                &record.target.target_stream,
-                record.target.mode,
-                &operation_id,
-                &group,
-                app,
-            )
-            .await;
-        let reinspection = match reinspection {
-            Ok(value) => value,
-            Err(message) => {
-                return rejected_with_operation(
-                    StreamSwitchFailureCode::PreflightBlocked,
-                    format!("The workspace could not be revalidated safely: {message}"),
-                    operation_id,
-                )
-            }
-        };
-        let rechecked = snapshot(
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-            record.target.mode,
-            &reinspection,
-        );
-        if !reinspection.blockers.is_empty() {
-            return rejected_with_operation(
-                StreamSwitchFailureCode::PreflightBlocked,
-                "Workspace risks now block the stream switch. Review a fresh preflight.",
-                operation_id,
-            );
-        }
-        if rechecked != record.target
-            || preview_digest(&rechecked, &reinspection.blockers, &reinspection.warnings)
-                != record.preview_digest
-        {
-            return rejected_with_operation(
-                StreamSwitchFailureCode::PreflightChanged,
-                "The client spec, target stream, or workspace file state changed after preflight.",
-                operation_id,
-            );
-        }
-        if record.expires_at <= now_ms() {
-            return rejected_with_operation(
-                StreamSwitchFailureCode::TokenExpired,
-                "The preflight expired while waiting for the mutation lane.",
-                operation_id,
-            );
-        }
-        let (latest_context, latest_generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &latest_context,
-            latest_generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected_with_operation(
-                StreamSwitchFailureCode::ContextChanged,
-                "The active runtime changed during confirmation.",
-                operation_id,
-            );
-        }
-
-        let needs_switch =
-            record.target.current_stream.as_deref() != Some(record.target.target_stream.as_str());
+        let needs_switch = target.current_stream.as_deref() != Some(target.target_stream.as_str());
         let mut stream_changed = false;
         if needs_switch {
             let switch_id = format!("{operation_id}:client-switch");
@@ -333,11 +256,11 @@ impl StreamSwitchService {
                         vec![
                             "-s".into(),
                             "-S".into(),
-                            record.target.target_stream.clone(),
-                            record.target.client.clone(),
+                            target.target_stream.clone(),
+                            target.client.clone(),
                         ],
                         switch_id.clone(),
-                        120_000,
+                        crate::p4::bounds::IoBound::Command,
                     ),
                     app,
                     Some(1),
@@ -356,11 +279,11 @@ impl StreamSwitchService {
                         .await
                         .ok()
                         .and_then(|value| client_stream(&value));
-                    let changed = observed.as_deref() == Some(&record.target.target_stream);
+                    let changed = observed.as_deref() == Some(&target.target_stream);
                     return if changed {
                         finish_after_change(
                             &self.contexts,
-                            &record.target,
+                            target,
                             StreamSwitchOutcome::Cancelled,
                             Some(StreamSwitchFailureCode::Cancelled),
                             "Cancellation arrived after the server changed the client Stream. Files were not synced or rolled back; run a fresh recovery preflight.",
@@ -389,11 +312,11 @@ impl StreamSwitchService {
                         .await
                         .ok()
                         .and_then(|value| client_stream(&value));
-                    let changed = observed.as_deref() == Some(&record.target.target_stream);
+                    let changed = observed.as_deref() == Some(&target.target_stream);
                     return if changed {
                         finish_after_change(
                             &self.contexts,
-                            &record.target,
+                            target,
                             StreamSwitchOutcome::Unknown,
                             Some(StreamSwitchFailureCode::UncertainOutcome),
                             "The client command reported failure, but the target Stream is now active. Files were not synced or rolled back; run a fresh recovery preflight.",
@@ -426,11 +349,11 @@ impl StreamSwitchService {
                         .await
                         .ok()
                         .and_then(|value| client_stream(&value));
-                    let changed = observed.as_deref() == Some(&record.target.target_stream);
+                    let changed = observed.as_deref() == Some(&target.target_stream);
                     return if changed {
                         finish_after_change(
                             &self.contexts,
-                            &record.target,
+                            target,
                             if message.to_ascii_lowercase().contains("cancel") {
                                 StreamSwitchOutcome::Cancelled
                             } else {
@@ -462,11 +385,11 @@ impl StreamSwitchService {
             .as_ref()
             .ok()
             .and_then(client_stream)
-            .filter(|value| value == &record.target.target_stream);
+            .filter(|value| value == &target.target_stream);
         if verified_stream.is_none() {
             return finish_after_change(
                 &self.contexts,
-                &record.target,
+                target,
                 StreamSwitchOutcome::Failed,
                 Some(StreamSwitchFailureCode::VerificationFailed),
                 "The client command completed, but the target Stream could not be verified. Files were not synced; refresh before recovery.",
@@ -480,7 +403,7 @@ impl StreamSwitchService {
 
         let mut sync_performed = false;
         let mut sync_completed = false;
-        if record.target.mode == StreamSwitchMode::Sync {
+        if target.mode == StreamSwitchMode::Sync {
             if let Err(message) = group.ensure_active() {
                 return cancelled_result(operation_id, message, stream_changed, false);
             }
@@ -492,9 +415,9 @@ impl StreamSwitchService {
                     command_request(
                         &context,
                         "sync",
-                        vec![format!("//{}/...#head", record.target.client)],
+                        vec![format!("//{}/...#head", target.client)],
                         sync_id,
-                        600_000,
+                        crate::p4::bounds::IoBound::Sync,
                     ),
                     app,
                     None,
@@ -506,7 +429,7 @@ impl StreamSwitchService {
                 Ok(result) if was_cancelled(&result) => {
                     return finish_after_change(
                         &self.contexts,
-                        &record.target,
+                        target,
                         StreamSwitchOutcome::Cancelled,
                         Some(StreamSwitchFailureCode::Cancelled),
                         "The stream view changed, but sync was cancelled. Already transferred files were not rolled back; run a fresh preflight to recover.",
@@ -520,7 +443,7 @@ impl StreamSwitchService {
                 Ok(_) => {
                     return finish_after_change(
                         &self.contexts,
-                        &record.target,
+                        target,
                         StreamSwitchOutcome::Failed,
                         Some(StreamSwitchFailureCode::SyncFailed),
                         "The stream view changed, but sync did not complete. Local files were not cleaned or reverted; run a fresh sync preflight to recover.",
@@ -535,7 +458,7 @@ impl StreamSwitchService {
                     let cancelled = error.to_string().to_ascii_lowercase().contains("cancel");
                     return finish_after_change(
                         &self.contexts,
-                        &record.target,
+                        target,
                         if cancelled { StreamSwitchOutcome::Cancelled } else { StreamSwitchOutcome::Unknown },
                         Some(if cancelled { StreamSwitchFailureCode::Cancelled } else { StreamSwitchFailureCode::UncertainOutcome }),
                         "The stream view changed, but the sync outcome is incomplete or unknown. Refresh before retrying; no automatic rollback was attempted.",
@@ -552,7 +475,7 @@ impl StreamSwitchService {
         if let Err(message) = group.ensure_active() {
             return finish_after_change(
                 &self.contexts,
-                &record.target,
+                target,
                 StreamSwitchOutcome::Cancelled,
                 Some(StreamSwitchFailureCode::Cancelled),
                 message,
@@ -565,7 +488,7 @@ impl StreamSwitchService {
         }
         finish_after_change(
             &self.contexts,
-            &record.target,
+            target,
             StreamSwitchOutcome::Succeeded,
             None,
             if sync_completed {
@@ -612,7 +535,14 @@ impl StreamSwitchService {
         let mut operation_ids = Vec::new();
         let info_id = format!("{operation_id}:info");
         let info = self
-            .run(context, "info", Vec::new(), info_id.clone(), 30_000, app)
+            .run(
+                context,
+                "info",
+                Vec::new(),
+                info_id.clone(),
+                crate::p4::bounds::IoBound::Read,
+                app,
+            )
             .await?;
         operation_ids.push(info_id);
         group.ensure_active()?;
@@ -660,7 +590,7 @@ impl StreamSwitchService {
                 "stream",
                 vec!["-o".into(), target_stream.into()],
                 stream_id.clone(),
-                30_000,
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -712,7 +642,7 @@ impl StreamSwitchService {
                     format!("{}/...", canonical_stream.trim_end_matches('/')),
                 ],
                 protects_id.clone(),
-                30_000,
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -742,7 +672,7 @@ impl StreamSwitchService {
                 "opened",
                 vec!["//...".into()],
                 opened_id.clone(),
-                60_000,
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -758,7 +688,7 @@ impl StreamSwitchService {
                 "resolve",
                 vec!["-n".into(), "-N".into(), "//...".into()],
                 resolve_id.clone(),
-                60_000,
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -786,7 +716,7 @@ impl StreamSwitchService {
                     reconcile_filespec,
                 ],
                 reconcile_id.clone(),
-                180_000,
+                crate::p4::bounds::IoBound::ReadLong,
                 app,
             )
             .await?;
@@ -808,7 +738,7 @@ impl StreamSwitchService {
                     format!("{}/...", canonical_stream.trim_end_matches('/')),
                 ],
                 sizes_id.clone(),
-                60_000,
+                crate::p4::bounds::IoBound::ReadLong,
                 app,
             )
             .await?;
@@ -904,7 +834,7 @@ impl StreamSwitchService {
                 "client",
                 vec!["-o".into(), context.client.clone()],
                 operation_id.into(),
-                30_000,
+                crate::p4::bounds::IoBound::Read,
                 app,
             )
             .await?;
@@ -918,16 +848,312 @@ impl StreamSwitchService {
         command: &str,
         args: Vec<String>,
         operation_id: String,
-        timeout_ms: u64,
+        bound: crate::p4::bounds::IoBound,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         self.runner
             .run(
-                command_request(context, command, args, operation_id, timeout_ms),
+                command_request(context, command, args, operation_id, bound),
                 app,
             )
             .await
             .map_err(|error| error.to_string())
+    }
+}
+
+/// What a stream-switch confirmation decided on the way through the shared
+/// sequence, so refusals can report exactly what the hand-written flow did.
+struct StreamSwitchReviewSpec<'a> {
+    service: Arc<StreamSwitchService>,
+    /// Lane admitted by the caller (production IPC). Otherwise taken inside
+    /// `execute`, where the hand-written flow locked it.
+    admitted: Option<&'a MutationGuard>,
+    app: Option<&'a AppHandle>,
+    requested_operation_id: Option<String>,
+    reviewed: Option<IssuedConfirmation<StreamSwitchTargetSnapshot, StreamReview>>,
+    /// The re-check's operation ids, so a post-recheck refusal points at them.
+    recheck_operation_ids: Vec<String>,
+    /// The target echoed by the confirmation, used by the context checks that
+    /// run before `on_reviewed` hands over the consumed record.
+    echoed_target: Option<StreamSwitchTargetSnapshot>,
+    /// Diagnostic from a re-check that could not run; the ticket has no place
+    /// for it, so it is carried here and folded into the refusal message.
+    recheck_error: Option<String>,
+    /// The single operation id for this attempt (see `operation_id`).
+    attempt_operation_id: Option<String>,
+}
+
+impl StreamSwitchReviewSpec<'_> {
+    /// One operation id per confirmation attempt.
+    ///
+    /// Computed once and remembered: the re-check log, the write log and the
+    /// result must share one id, otherwise `cancelOperation` reaches only one of
+    /// them and the reported `operationId` does not match the re-check entries.
+    /// The operation id remembered for this attempt, if one was minted yet.
+    fn attempt_operation_id(&self) -> String {
+        self.attempt_operation_id.clone().unwrap_or_default()
+    }
+
+    fn operation_id(&mut self) -> String {
+        if let Some(id) = self.attempt_operation_id.as_ref() {
+            return id.clone();
+        }
+        let id = valid_operation_id(self.requested_operation_id.clone())
+            .unwrap_or_else(|| format!("stream-switch-{}", Uuid::new_v4()));
+        self.attempt_operation_id = Some(id.clone());
+        id
+    }
+}
+
+impl<'a> ReviewSpec for StreamSwitchReviewSpec<'a> {
+    type Target = StreamSwitchTargetSnapshot;
+    type Digest = StreamReview;
+    type Recheck = (Inspection, StreamSwitchTargetSnapshot);
+    type Output = StreamSwitchResult;
+    type RefusalCode = StreamSwitchFailureCode;
+    type Error = ConfirmRefusal<StreamSwitchFailureCode>;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<Self::RefusalCode> {
+        error
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> StreamSwitchFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => StreamSwitchFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => StreamSwitchFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => StreamSwitchFailureCode::TargetMismatch,
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                StreamSwitchFailureCode::WarningAcknowledgementRequired
+            }
+            ConfirmationRefusalCode::ContextChanged => StreamSwitchFailureCode::ContextChanged,
+            // This domain has no separate "now blocked" outcome; it keeps reporting
+            // a blocked re-check as a changed one.
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                StreamSwitchFailureCode::PreflightChanged
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                StreamSwitchFailureCode::PreflightBlocked
+            }
+            ConfirmationRefusalCode::Cancelled => StreamSwitchFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The stream switch token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => {
+                "The stream switch preflight expired. Run preflight again."
+            }
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation does not match the reviewed stream switch snapshot."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "The reviewed warnings require explicit acknowledgement."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The profile, connection, workspace, or runtime generation changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                "The client spec, target stream, or workspace file state changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The workspace could not be revalidated safely."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "The stream switch was cancelled before it executed."
+            }
+        }
+    }
+
+    /// The reviewed warnings force the acknowledgement, read from the token
+    /// record so the wire cannot clear the requirement.
+    fn required_acknowledgement(
+        &self,
+        reviewed: &IssuedConfirmation<Self::Target, Self::Digest>,
+    ) -> Acknowledgement {
+        Acknowledgement::required(false, reviewed.digest.has_warnings)
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        // `check_record` runs before `on_reviewed` on the first pass, so fall
+        // back to the echoed target, which `check_record` already proved equal
+        // to the reviewed one.
+        let target = self
+            .reviewed
+            .as_ref()
+            .map(|reviewed| &reviewed.target)
+            .or(self.echoed_target.as_ref());
+        match target {
+            Some(target) => context_matches(
+                target,
+                &context,
+                generation,
+                self.service.contexts.active_profile_id(),
+            ),
+            None => false,
+        }
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed = Some(reviewed.clone());
+    }
+
+    fn lane(&mut self, _operation_id: &str) -> BoxFuture<'_, Option<MutationLane>> {
+        // The lane is taken inside `execute`, exactly where the hand-written
+        // flow locked it; an admitted guard is reused there.
+        Box::pin(async { None })
+    }
+
+    fn recheck(&mut self) -> BoxFuture<'_, Result<Self::Recheck, String>> {
+        Box::pin(async move {
+            let reviewed = self
+                .reviewed
+                .clone()
+                .ok_or_else(|| "The stream switch review is unavailable.".to_string())?;
+            let service = self.service.clone();
+            let operation_id = self.operation_id();
+            let group = service.runner.begin_operation_group(operation_id.clone());
+            let (context, generation) = service.contexts.snapshot();
+            let recheck_id = format!("{operation_id}:recheck");
+            let reinspection = service
+                .inspect(
+                    &context,
+                    &reviewed.target.target_stream,
+                    reviewed.target.mode,
+                    &recheck_id,
+                    &group,
+                    self.app,
+                )
+                .await
+                .inspect_err(|message| {
+                    // Keep the diagnostic: a refusal decided here reports it,
+                    // exactly as the hand-written format!() did.
+                    self.recheck_error = Some(message.clone());
+                })?;
+            let rechecked = snapshot(
+                &context,
+                generation,
+                service.contexts.active_profile_id(),
+                reviewed.target.mode,
+                &reinspection,
+            );
+            self.recheck_operation_ids = vec![recheck_id];
+            Ok((reinspection, rechecked))
+        })
+    }
+
+    fn recheck_verdict(&self, recheck: &Self::Recheck) -> RecheckVerdict {
+        let (inspection, rechecked) = recheck;
+        let Some(reviewed) = self.reviewed.as_ref() else {
+            return RecheckVerdict::Changed;
+        };
+        // New blockers are reported by `execute` with their own message, so the
+        // verdict itself only judges the snapshot and the reviewed digest.
+        if !inspection.blockers.is_empty() {
+            return RecheckVerdict::Unchanged;
+        }
+        if *rechecked != reviewed.target
+            || preview_digest(rechecked, &inspection.blockers, &inspection.warnings)
+                != reviewed.digest.preview_digest
+        {
+            return RecheckVerdict::Changed;
+        }
+        RecheckVerdict::Unchanged
+    }
+
+    fn gate(&self) -> Arc<AsyncMutex<()>> {
+        self.service.confirmation_gate.clone()
+    }
+
+    fn execute<'b>(
+        &'b mut self,
+        recheck: Self::Recheck,
+        _operation_id: String,
+    ) -> BoxFuture<'b, Result<StreamSwitchResult, Self::Error>> {
+        Box::pin(async move {
+            let (inspection, _rechecked) = recheck;
+            let service = self.service.clone();
+            let reviewed = match self.reviewed.clone() {
+                Some(reviewed) => reviewed,
+                None => {
+                    return Err(refused_stream(
+                        StreamSwitchFailureCode::TokenUnknown,
+                        "The stream switch review is unavailable.".to_string(),
+                    ))
+                }
+            };
+            if !inspection.blockers.is_empty() {
+                return Err(refused_stream(
+                    StreamSwitchFailureCode::PreflightBlocked,
+                    "Workspace risks now block the stream switch. Review a fresh preflight."
+                        .to_string(),
+                )
+                .with_recheck_operation_ids(self.recheck_operation_ids.clone()));
+            }
+
+            let operation_id = self.operation_id();
+            let (context, _) = service.contexts.snapshot();
+            let owned_guard;
+            let guard = match self.admitted {
+                Some(guard) => guard,
+                None => {
+                    owned_guard = service.runner.lock_mutations(&context.server).await;
+                    &owned_guard
+                }
+            };
+            Ok(service
+                .run_stream_switch(&reviewed.target, guard, operation_id, self.app)
+                .await)
+        })
+    }
+}
+
+/// A refusal the stream-switch flow decided itself, after its own re-check.
+fn refused_stream(
+    code: StreamSwitchFailureCode,
+    message: String,
+) -> ConfirmRefusal<StreamSwitchFailureCode> {
+    ConfirmRefusal::Refused {
+        shared: ConfirmationRefusalCode::RecheckChanged,
+        code,
+        message,
+        recheck: None,
+    }
+}
+
+/// Map a ticket refusal onto the stream-switch result wire shape.
+fn stream_refusal_result(
+    refusal: ConfirmRefusal<StreamSwitchFailureCode>,
+    spec: &StreamSwitchReviewSpec<'_>,
+) -> StreamSwitchResult {
+    let code = refusal.code().unwrap_or(StreamSwitchFailureCode::Cancelled);
+    let mut message = refusal
+        .message()
+        .unwrap_or("The stream switch was cancelled before it executed.")
+        .to_string();
+    // A re-check that could not run reports WHY (the p4 diagnostic), exactly as
+    // the hand-written `format!("...: {message}")` did.
+    if let Some(detail) = spec.recheck_error.as_deref() {
+        if code == StreamSwitchFailureCode::PreflightBlocked {
+            message = format!("{message}: {detail}");
+        }
+    }
+    // The hand-written flow attached the re-check's operation id to every
+    // refusal decided inside the lane — including the one where the re-check
+    // itself could not run.
+    let recheck_ran = refusal.after_recheck() || spec.recheck_error.is_some();
+    if recheck_ran {
+        let operation_id = spec
+            .recheck_operation_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(|| spec.attempt_operation_id());
+        rejected_with_operation(code, message, operation_id)
+    } else {
+        rejected(code, message)
     }
 }
 
@@ -961,16 +1187,17 @@ fn command_request(
     command: &str,
     args: Vec<String>,
     operation_id: String,
-    timeout_ms: u64,
+    bound: crate::p4::bounds::IoBound,
 ) -> P4CommandRequest {
     P4CommandRequest {
+        bound,
         operation_id: Some(operation_id),
         source: OperationSource::Gui,
         command: command.into(),
         args,
         context: context.clone(),
         output_mode: OutputMode::JsonLines,
-        timeout_ms: Some(timeout_ms),
+        timeout_ms: None,
         input: None,
     }
 }
@@ -1422,6 +1649,7 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::confirmation::ConfirmationStore;
 
     #[test]
     fn empty_reconcile_does_not_hide_another_inspection_error() {
@@ -1515,35 +1743,41 @@ mod tests {
         let store = ConfirmationStore::default();
         let target = target();
         let token = store.issue(
-            TokenRecord {
-                target: target.clone(),
-                preview_digest: "digest".into(),
-                has_warnings: true,
-                expires_at: 50,
-            },
+            IssuedConfirmation::new(
+                target.clone(),
+                StreamReview {
+                    preview_digest: "digest".into(),
+                    has_warnings: true,
+                },
+                50,
+            ),
             0,
         );
         let record = store.consume(&token).unwrap();
         assert_eq!(record.target, target);
-        assert!(record.has_warnings);
+        assert!(record.digest.has_warnings);
         assert!(store.consume(&token).is_none());
 
         let expired = store.issue(
-            TokenRecord {
+            IssuedConfirmation::new(
                 target,
-                preview_digest: "old".into(),
-                has_warnings: false,
-                expires_at: 1,
-            },
+                StreamReview {
+                    preview_digest: "old".into(),
+                    has_warnings: false,
+                },
+                1,
+            ),
             0,
         );
         let _fresh = store.issue(
-            TokenRecord {
-                target: target_for("//depot/other"),
-                preview_digest: "new".into(),
-                has_warnings: false,
-                expires_at: 100,
-            },
+            IssuedConfirmation::new(
+                target_for("//depot/other"),
+                StreamReview {
+                    preview_digest: "new".into(),
+                    has_warnings: false,
+                },
+                100,
+            ),
             2,
         );
         assert!(store.consume(&expired).is_none());

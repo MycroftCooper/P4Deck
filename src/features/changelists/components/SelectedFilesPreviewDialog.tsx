@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useId, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { useUnsavedEditor } from "../../../app/closeGuard";
@@ -26,7 +27,6 @@ export function SelectedFilesPreviewDialog({
   onDismiss,
   onConfirm,
 }: Props) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [description, setDescription] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [discard, setDiscard] = useState(false);
@@ -43,7 +43,7 @@ export function SelectedFilesPreviewDialog({
   };
   return (
     <Dialog
-      title={tr("提交选中文件", "Submit selected files")}
+      title={t("pending.submit.selected.files")}
       source={source}
       zh={zh}
       busy={busy}
@@ -51,7 +51,7 @@ export function SelectedFilesPreviewDialog({
       footer={
         <>
           <button type="button" disabled={busy} onClick={dismiss}>
-            {tr("取消", "Cancel")}
+            {t("pending.cancel")}
           </button>
           <button
             type="submit"
@@ -59,24 +59,19 @@ export function SelectedFilesPreviewDialog({
             className="primary"
             disabled={busy || confirmed || !files.length}
           >
-            {tr("创建并移动，继续提交", "Create and move, continue to submit")}
+            {t("pending.create.move.continue")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {tr("工作区", "Workspace")}: {workspace} · {files.length}{" "}
-        {tr("个文件", "files")} · {routeLabel}
+        {t("pending.workspace")}: {workspace} · {files.length}{" "}
+        {t("pending.files")} · {routeLabel}
       </div>
-      <p>
-        {tr(
-          "目标：新建编号 CL。取消后续提交时，文件保留在新 CL；移动不完整或结果未知时不会继续提交。",
-          "Target: a new numbered CL. Cancelling submission leaves files in the new CL. Incomplete or unknown moves do not continue to submission.",
-        )}
-      </p>
+      <p>{t("pending.target.a.new.numbered.cl.cancelling")}</p>
       <ul
         style={{ maxHeight: "30vh", overflow: "auto" }}
-        aria-label={tr("仅选中文件及原 CL", "Selected files and original CL")}
+        aria-label={t("pending.selected.files.and.original.cl")}
       >
         {files.map((file) => (
           <li key={file.depotPath} style={{ overflowWrap: "anywhere" }}>
@@ -106,7 +101,7 @@ export function SelectedFilesPreviewDialog({
       >
         <fieldset disabled={busy || confirmed}>
           <label>
-            {tr("描述（必填）", "Description (required)")}
+            {t("pending.description.required")}
             <textarea
               rows={5}
               autoFocus
@@ -123,18 +118,13 @@ export function SelectedFilesPreviewDialog({
       </form>
       {invalid && (
         <DialogNotice error>
-          {tr("请填写 CL 描述。", "Enter a changelist description.")}
+          {t("pending.enter.a.changelist.description")}
         </DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
       {discard && (
         <DialogNotice>
-          <span>
-            {tr(
-              "放弃描述并取消？尚未创建或移动文件。",
-              "Discard the description? No files have been created or moved.",
-            )}
-          </span>
+          <span>{t("pending.discard.the.description.no.files.have")}</span>
           <button
             type="button"
             onClick={() => {
@@ -142,10 +132,10 @@ export function SelectedFilesPreviewDialog({
               onDismiss();
             }}
           >
-            {tr("放弃并关闭", "Discard and close")}
+            {t("pending.discard.and.close.2")}
           </button>
           <button type="button" onClick={() => setDiscard(false)}>
-            {tr("继续编辑", "Keep editing")}
+            {t("pending.keep.editing")}
           </button>
         </DialogNotice>
       )}

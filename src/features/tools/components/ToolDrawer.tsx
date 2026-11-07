@@ -1,3 +1,4 @@
+import { tFor } from "../../../shared/i18n";
 import { FixedPageHeader } from "../../../app/docking/chrome";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -148,13 +149,12 @@ export function ToolDrawer(props: Props) {
       setCredentialBlocked(decision.reason === "credential");
       setLines((value) => [
         ...value,
-        props.zh
-          ? decision.reason === "lockWorkflow"
-            ? "Lock/Unlock 不能从 Terminal 执行；请使用文件工具栏或右键菜单的预检工作流。"
-            : "安全策略已阻止该命令。请在设置 > 连接中使用受控的 Trust、登录或退出流程。"
-          : decision.reason === "lockWorkflow"
-            ? "Lock/Unlock cannot run from Terminal; use the file toolbar or context-menu preflight workflow."
-            : "Security policy blocked this command. Use the controlled Trust, Login or Logout flow in Settings > Connections.",
+        tFor(
+          props.zh ? "zh-CN" : "en-US",
+          decision.reason === "lockWorkflow"
+            ? "tools.terminal.lockBlocked"
+            : "tools.securityPolicy.blocked",
+        ),
       ]);
       return;
     }
@@ -166,7 +166,11 @@ export function ToolDrawer(props: Props) {
       const result = await props.onRun(raw, temporaryId);
       if (generation !== terminalGeneration.current) return;
       if (!decision.sensitive) rememberHistory(raw);
-      setRunning(result.operationId);
+      // The host echoes the id it was given (runner.rs adopts a supplied id and
+      // only mints one when missing; commands.rs only requires non-empty and
+      // at most 256 characters, never equality). So this line records the
+      // contract, it does not switch state — and an empty echo keeps our id.
+      if (result.operationId) setRunning(result.operationId);
       const output = streamedCount.current
         ? []
         : result.events
@@ -190,12 +194,14 @@ export function ToolDrawer(props: Props) {
       setLines((value) => [
         ...value,
         controlled
-          ? props.zh
-            ? "安全策略已阻止该命令。请在设置 > 连接中使用受控认证流程。"
-            : "Security policy blocked this command. Use controlled authentication in Settings > Connections."
-          : props.zh
-            ? "error: 命令未返回安全结果；请查看已脱敏的 P4 Log。"
-            : "error: The command returned no safe result; inspect the redacted P4 Log.",
+          ? tFor(
+              props.zh ? "zh-CN" : "en-US",
+              "tools.security.policy.blocked.this.command.use",
+            )
+          : tFor(
+              props.zh ? "zh-CN" : "en-US",
+              "tools.error.the.command.returned.no.safe",
+            ),
       ]);
     } finally {
       if (generation === terminalGeneration.current) setRunning(null);
@@ -226,12 +232,12 @@ export function ToolDrawer(props: Props) {
     { id: "logs", label: props.t.logs, icon: <CircleAlert size={14} /> },
     {
       id: "journal",
-      label: props.zh ? "操作" : "Operations",
+      label: tFor(props.zh ? "zh-CN" : "en-US", "tools.operations"),
       icon: <ListChecks size={14} />,
     },
     {
       id: "diagnostics",
-      label: props.zh ? "诊断" : "Diagnostics",
+      label: tFor(props.zh ? "zh-CN" : "en-US", "tools.diagnostics"),
       icon: <Wrench size={14} />,
     },
     {
@@ -255,7 +261,7 @@ export function ToolDrawer(props: Props) {
       <div
         className="tool-tab-list"
         role="tablist"
-        aria-label={props.zh ? "工具视图" : "Tool views"}
+        aria-label={tFor(props.zh ? "zh-CN" : "en-US", "tools.tool.views")}
       >
         {tabs
           .filter(
@@ -275,16 +281,16 @@ export function ToolDrawer(props: Props) {
               {tab.id === "logs" && props.unread ? (
                 <span
                   className="tool-unread-dot"
-                  title={
-                    props.zh
-                      ? `${props.unread} 个未查看的新错误`
-                      : `${props.unread} new unviewed errors`
-                  }
+                  title={tFor(
+                    props.zh ? "zh-CN" : "en-US",
+                    "tools.unreadErrors",
+                    { count: props.unread },
+                  )}
                 >
                   <span className="sr-only">
-                    {props.zh
-                      ? `${props.unread} 个未查看的新错误`
-                      : `${props.unread} new unviewed errors`}
+                    {tFor(props.zh ? "zh-CN" : "en-US", "tools.unreadErrors", {
+                      count: props.unread,
+                    })}
                   </span>
                 </span>
               ) : null}
@@ -298,7 +304,10 @@ export function ToolDrawer(props: Props) {
     <section
       className={`tool-drawer ${props.embedded ? "embedded" : ""} ${props.open ? "expanded" : "collapsed"}`}
       style={props.open && !props.embedded ? { height } : undefined}
-      aria-label={props.zh ? "P4 工具与诊断" : "P4 tools and diagnostics"}
+      aria-label={tFor(
+        props.zh ? "zh-CN" : "en-US",
+        "tools.p4.tools.and.diagnostics",
+      )}
     >
       {props.open && !props.embedded && (
         <div
@@ -331,12 +340,14 @@ export function ToolDrawer(props: Props) {
       {textSelection.dialog}
       {pasteDialog.request && (
         <Dialog
-          title={props.zh ? "粘贴多行文本" : "Paste multiline text"}
-          description={
-            props.zh
-              ? "只填入命令输入框，不自动执行。确认后会替换当前输入。"
-              : "Fills the command input only; does not execute. Replaces the current input after confirmation."
-          }
+          title={tFor(
+            props.zh ? "zh-CN" : "en-US",
+            "tools.paste.multiline.text",
+          )}
+          description={tFor(
+            props.zh ? "zh-CN" : "en-US",
+            "tools.fills.the.command.input.only.does",
+          )}
           source={pasteDialog.request.source}
           zh={props.zh}
           onRequestClose={() => pasteDialog.answer(null)}
@@ -346,12 +357,12 @@ export function ToolDrawer(props: Props) {
                 data-dialog-autofocus
                 onClick={() => pasteDialog.answer(null)}
               >
-                {props.zh ? "取消" : "Cancel"}
+                {tFor(props.zh ? "zh-CN" : "en-US", "tools.cancel")}
               </button>
               <button
                 onClick={() => pasteDialog.answer(pasteDialog.request!.text)}
               >
-                {props.zh ? "仅填入输入框" : "Fill input only"}
+                {tFor(props.zh ? "zh-CN" : "en-US", "tools.fill.input.only")}
               </button>
             </>
           }
@@ -361,9 +372,10 @@ export function ToolDrawer(props: Props) {
           </pre>
           {pasteDialog.request.text.length > 5000 && (
             <DialogNotice>
-              {props.zh
-                ? "此处仅预览前 5,000 字符，确认将填入完整文本。"
-                : "Only the first 5,000 characters are previewed; confirmation fills the full text."}
+              {tFor(
+                props.zh ? "zh-CN" : "en-US",
+                "tools.only.the.first.5.000.characters",
+              )}
             </DialogNotice>
           )}
         </Dialog>
@@ -374,7 +386,10 @@ export function ToolDrawer(props: Props) {
             className="terminal-output"
             ref={textSelection.surfaceRef}
             tabIndex={0}
-            aria-label={props.zh ? "终端输出" : "Terminal output"}
+            aria-label={tFor(
+              props.zh ? "zh-CN" : "en-US",
+              "tools.terminal.output",
+            )}
             {...menu("U01", () => ({
               复制所选文本: copy(textSelection.selectedText()),
               全选: action(() => textSelection.selectAll(lines.join("\n"))),
@@ -426,7 +441,17 @@ export function ToolDrawer(props: Props) {
               {props.t.run}
             </button>
             {running && (
-              <button onClick={() => props.onCancel(running)}>
+              <button
+                onClick={() => {
+                  // One cancel per run: a second click while the first is still
+                  // being dispatched must not ask the host twice.
+                  const operation = runningRef.current;
+                  if (!operation) return;
+                  runningRef.current = null;
+                  setRunning(null);
+                  props.onCancel(operation);
+                }}
+              >
                 <Ban size={14} />
                 {props.t.cancel}
               </button>
@@ -439,12 +464,16 @@ export function ToolDrawer(props: Props) {
           {credentialBlocked && (
             <div className="terminal-security-notice" role="alert">
               <span>
-                {props.zh
-                  ? "认证秘密不能通过通用 Terminal 读取或修改。"
-                  : "Authentication secrets cannot be read or changed through the generic Terminal."}
+                {tFor(
+                  props.zh ? "zh-CN" : "en-US",
+                  "tools.authentication.be.read",
+                )}
               </span>
               <button onClick={props.onOpenSettings}>
-                {props.zh ? "打开连接设置" : "Open connection settings"}
+                {tFor(
+                  props.zh ? "zh-CN" : "en-US",
+                  "tools.open.connection.settings",
+                )}
               </button>
             </div>
           )}

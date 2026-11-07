@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { tFor } from "../../../shared/i18n";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { PreflightStatus } from "../../../app/dialogs/PreflightStatus";
 import { TargetList } from "../../../app/dialogs/TargetList";
@@ -9,6 +10,7 @@ import type {
   SyncRevisionSpec,
   WorkspaceNode,
 } from "../../../shared/contracts";
+import { useOperationSession } from "../../../shared/operationSession";
 import { compactTargets, selectionRequest } from "../selectionCommands";
 import {
   beginLocalIoProjection,
@@ -19,6 +21,39 @@ import {
 } from "../../actions/localIoLifecycle";
 
 type Phase = "preview" | "review" | "confirming" | "result";
+
+/**
+ * One preview-and-confirm run. These five fields are cleared, advanced and
+ * re-published together by every step (preview, confirm, expiry, reset), so the
+ * run is one piece of state rather than five parallel ones.
+ */
+interface SyncRun {
+  phase: Phase;
+  plan?: SyncPreviewPlan;
+  result?: SyncResult;
+  error: string;
+  forceAck: boolean;
+}
+
+const INITIAL_RUN: SyncRun = {
+  phase: "preview",
+  plan: undefined,
+  result: undefined,
+  error: "",
+  forceAck: false,
+};
+
+type SyncRunEvent =
+  | { type: "phase"; value: Phase }
+  | { type: "plan"; value: SyncPreviewPlan | undefined }
+  | { type: "result"; value: SyncResult | undefined }
+  | { type: "error"; value: string }
+  | { type: "forceAck"; value: boolean };
+
+/** Field-at-a-time reducer: the callers express transitions, not permutations. */
+function reduceSyncRun(state: SyncRun, event: SyncRunEvent): SyncRun {
+  return { ...state, [event.type]: event.value };
+}
 
 export interface SyncDialogRequest {
   nodes: WorkspaceNode[];
@@ -55,15 +90,20 @@ export function SyncDialog({
     request.fixedRevision === undefined ? "" : String(request.fixedRevision),
   );
   const [force, setForce] = useState(false);
-  const [forceAck, setForceAck] = useState(false);
-  const [phase, setPhase] = useState<Phase>("preview");
-  const [plan, setPlan] = useState<SyncPreviewPlan>();
-  const [result, setResult] = useState<SyncResult>();
-  const [error, setError] = useState("");
+  const [run, dispatch] = useReducer(reduceSyncRun, INITIAL_RUN);
+  const { phase, plan, result, error, forceAck } = run;
+  const setPhase = (value: Phase) => dispatch({ type: "phase", value });
+  const setPlan = (value: SyncPreviewPlan | undefined) =>
+    dispatch({ type: "plan", value });
+  const setResult = (value: SyncResult | undefined) =>
+    dispatch({ type: "result", value });
+  const setError = (value: string) => dispatch({ type: "error", value });
+  const setForceAck = (value: boolean) => dispatch({ type: "forceAck", value });
   const [busy, setBusy] = useState(false);
-  const sequence = useRef(0);
+  const session = useOperationSession();
+  // The session owns cancellation; this id only routes the explicit Cancel
+  // button to the live operation.
   const operation = useRef<string | undefined>(undefined);
-  const mounted = useRef(true);
   const revision = useMemo(
     () =>
       snapshot.fixedRevision === undefined
@@ -77,13 +117,9 @@ export function SyncDialog({
   );
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      sequence.current++;
-      if (operation.current) void backend.cancelOperation(operation.current);
-    };
-  }, [connectionKey]);
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
+  }, [connectionKey, session]);
 
   useEffect(() => {
     if (!plan || phase !== "review") return;
@@ -95,9 +131,9 @@ export function SyncDialog({
       setPlan(undefined);
       setForceAck(false);
       setError(
-        tr(
-          "预览已过期，请重新从服务器获取。",
-          "The preview expired; request a fresh server preview.",
+        tFor(
+          zh ? "zh-CN" : "en-US",
+          "files.the.preview.expired.request.a.fresh",
         ),
       );
       setPhase("preview");
@@ -107,8 +143,8 @@ export function SyncDialog({
 
   async function preview() {
     if (!revision || !paths.length || busy) return;
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
+    const lease = session.start("preflight");
+    const operationId = lease.operationId;
     operation.current = operationId;
     setBusy(true);
     setError("");
@@ -122,16 +158,15 @@ export function SyncDialog({
         force,
         operationId,
       });
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       setPlan(next);
       setPhase("review");
     } catch (cause) {
-      if (mounted.current && seq === sequence.current) setError(String(cause));
+      if (session.isCurrent(lease)) setError(String(cause));
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      if (operation.current === operationId) operation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -144,8 +179,8 @@ export function SyncDialog({
       busy
     )
       return;
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
+    const lease = session.start("dispatch");
+    const operationId = lease.operationId;
     operation.current = operationId;
     // change/date/label cannot be proven by the host recheck -> intent/progress only, no projection.
     if (revision && (revision.kind === "head" || revision.kind === "revision"))
@@ -165,7 +200,7 @@ export function SyncDialog({
         acknowledgeForce: forceAck,
         operationId,
       });
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const lifecycle = lifecycleOf(raw);
       if (!lifecycle) {
         // Older/mocked payload: legacy shape only, no new lifecycle facts.
@@ -195,16 +230,15 @@ export function SyncDialog({
         .then(() => settleLocalIoProjection(operationId, lifecycle, true))
         .catch(() => undefined);
     } catch (cause) {
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       withdrawLocalIoProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh()).catch(() => undefined);
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      if (operation.current === operationId) operation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -214,8 +248,8 @@ export function SyncDialog({
   }
 
   function resetPreview() {
-    sequence.current++;
-    if (operation.current) void backend.cancelOperation(operation.current);
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     operation.current = undefined;
     setBusy(false);
     setPlan(undefined);
@@ -243,18 +277,15 @@ export function SyncDialog({
               warnings: plan.warnings.map((item) => item.message),
             } as const);
   const simulated = demo
-    ? tr(
-        "浏览器 Mock：以下预览和结果均为模拟，不访问服务器或文件。",
-        "Browser Mock: preview and result are simulated; no server or files are accessed.",
-      )
+    ? tFor(zh ? "zh-CN" : "en-US", "files.browser.mock.preview.and.result.are")
     : undefined;
 
   return (
     <Dialog
-      title={tr("安全同步", "Safe sync")}
-      description={tr(
-        "先运行真实 p4 sync -n，核对服务器计划后才能执行。",
-        "A real p4 sync -n preview must be reviewed before execution.",
+      title={tFor(zh ? "zh-CN" : "en-US", "files.safe.sync")}
+      description={tFor(
+        zh ? "zh-CN" : "en-US",
+        "files.a.real.p4.sync.n.preview",
       )}
       source={snapshot.source}
       zh={zh}
@@ -266,20 +297,26 @@ export function SyncDialog({
         <>
           {phase === "preview" && (
             <>
-              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.cancel")}
+              </button>
               <button
                 className="primary"
                 data-dialog-autofocus
                 disabled={busy || !revision || !paths.length}
                 onClick={() => void preview()}
               >
-                {busy ? tr("正在预览…", "Previewing…") : tr("预览", "Preview")}
+                {busy
+                  ? tFor(zh ? "zh-CN" : "en-US", "files.previewing")
+                  : tFor(zh ? "zh-CN" : "en-US", "files.preview")}
               </button>
             </>
           )}
           {phase === "review" && (
             <>
-              <button onClick={resetPreview}>{tr("返回修改", "Back")}</button>
+              <button onClick={resetPreview}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.back")}
+              </button>
               <button
                 className={plan?.target.force ? "danger" : "primary"}
                 disabled={
@@ -290,21 +327,23 @@ export function SyncDialog({
                 }
                 onClick={() => void confirm()}
               >
-                {tr("确认并执行", "Confirm and sync")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.confirm.and.sync")}
               </button>
             </>
           )}
           {phase === "confirming" && (
             <button className="danger" onClick={() => void cancelCurrent()}>
-              {tr("取消同步", "Cancel sync")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.cancel.sync")}
             </button>
           )}
           {phase === "result" && (
             <>
-              <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+              <button onClick={onDismiss}>
+                {tFor(zh ? "zh-CN" : "en-US", "files.close")}
+              </button>
               {result?.outcome !== "succeeded" && (
                 <button className="primary" onClick={resetPreview}>
-                  {tr("重新预览", "Preview again")}
+                  {tFor(zh ? "zh-CN" : "en-US", "files.preview.again")}
                 </button>
               )}
             </>
@@ -315,13 +354,16 @@ export function SyncDialog({
       {simulated && <DialogNotice>{simulated}</DialogNotice>}
       <div className="workflow-context">
         {snapshot.scopeLabel ? `${snapshot.scopeLabel} · ` : ""}
-        {snapshot.nodes.length} {tr("个目标", "targets")}
+        {snapshot.nodes.length} {tFor(zh ? "zh-CN" : "en-US", "files.targets")}
       </div>
       {phase === "preview" && (
         <>
-          <TargetList paths={paths} label={tr("同步范围", "Sync scope")} />
+          <TargetList
+            paths={paths}
+            label={tFor(zh ? "zh-CN" : "en-US", "files.sync.scope.2")}
+          />
           <label>
-            {tr("目标版本", "Target revision")}
+            {tFor(zh ? "zh-CN" : "en-US", "files.target.revision")}
             <select
               value={kind}
               disabled={snapshot.fixedRevision !== undefined}
@@ -330,20 +372,26 @@ export function SyncDialog({
                 setValue("");
               }}
             >
-              <option value="head">{tr("最新版本", "Latest / head")}</option>
+              <option value="head">
+                {tFor(zh ? "zh-CN" : "en-US", "files.latest.head.2")}
+              </option>
               <option value="revision">
-                {tr("文件修订号", "File revision")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.file.revision.2")}
               </option>
               <option value="change">
-                {tr("截至 CL", "As of changelist")}
+                {tFor(zh ? "zh-CN" : "en-US", "files.as.of.changelist.2")}
               </option>
-              <option value="date">{tr("截至日期", "As of date")}</option>
-              <option value="label">{tr("标签", "Label")}</option>
+              <option value="date">
+                {tFor(zh ? "zh-CN" : "en-US", "files.as.of.date.2")}
+              </option>
+              <option value="label">
+                {tFor(zh ? "zh-CN" : "en-US", "files.label")}
+              </option>
             </select>
           </label>
           {kind !== "head" && (
             <label>
-              {tr("值", "Value")}
+              {tFor(zh ? "zh-CN" : "en-US", "files.value")}
               <input
                 type={kind === "date" ? "date" : "text"}
                 inputMode={
@@ -364,17 +412,14 @@ export function SyncDialog({
               checked={force}
               onChange={(event) => setForce(event.target.checked)}
             />
-            {tr(
-              "强制重新同步（高风险；预览后还需再次确认）",
-              "Force re-sync (high risk; requires a second acknowledgement after preview)",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "files.force.re.sync.high.risk.requires",
             )}
           </label>
           {force && (
             <DialogNotice error>
-              {tr(
-                "Force 会重新传输当前文件，并可能触发 writable/clobber 风险；不会默认启用。",
-                "Force re-transfers current files and may expose writable/clobber risks. It is never enabled by default.",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "files.force.current.files")}
             </DialogNotice>
           )}
           <PreflightStatus state={previewState} zh={zh} />
@@ -384,39 +429,41 @@ export function SyncDialog({
         <>
           <PreflightStatus state={previewState} zh={zh} />
           <p className="workflow-context">
-            {tr("目标", "Target")}:{" "}
+            {tFor(zh ? "zh-CN" : "en-US", "files.target")}:{" "}
             <code>{revisionLabel(plan.target.revision)}</code>
           </p>
           <div
             className="sync-counts"
-            aria-label={tr("变更计数", "Change counts")}
+            aria-label={tFor(zh ? "zh-CN" : "en-US", "files.change.counts")}
           >
             <span>
-              {tr("新增", "Add")} {plan.counts.added}
+              {tFor(zh ? "zh-CN" : "en-US", "files.add")} {plan.counts.added}
             </span>
             <span>
-              {tr("更新", "Update")} {plan.counts.updated}
+              {tFor(zh ? "zh-CN" : "en-US", "files.update")}{" "}
+              {plan.counts.updated}
             </span>
             <span>
-              {tr("删除", "Delete")} {plan.counts.deleted}
+              {tFor(zh ? "zh-CN" : "en-US", "files.delete")}{" "}
+              {plan.counts.deleted}
             </span>
             <span>
-              {tr("已最新", "Up to date")} {plan.counts.upToDate}
+              {tFor(zh ? "zh-CN" : "en-US", "files.up.to.date")}{" "}
+              {plan.counts.upToDate}
             </span>
             <span>
-              {tr("警告", "Warnings")} {plan.counts.warnings}
+              {tFor(zh ? "zh-CN" : "en-US", "files.warnings")}{" "}
+              {plan.counts.warnings}
             </span>
             <span>
-              {tr("冲突", "Conflicts")} {plan.counts.conflicts}
+              {tFor(zh ? "zh-CN" : "en-US", "files.conflicts")}{" "}
+              {plan.counts.conflicts}
             </span>
           </div>
           {(plan.partial || plan.truncated) && (
             <DialogNotice error={plan.partial}>
               {plan.partial
-                ? tr(
-                    "预览为 partial；请检查阻塞项与日志。",
-                    "Preview is partial; inspect blockers and logs.",
-                  )
+                ? tFor(zh ? "zh-CN" : "en-US", "files.preview.inspect.blockers")
                 : tr(
                     `代表性列表已截断：显示 ${plan.entries.length}/${plan.totalEntries}。`,
                     `Representative list truncated: ${plan.entries.length}/${plan.totalEntries} shown.`,
@@ -428,7 +475,7 @@ export function SyncDialog({
               (entry) =>
                 `${entry.kind}: ${entry.depotPath ?? entry.clientPath ?? entry.message}`,
             )}
-            label={tr("代表性文件", "Representative files")}
+            label={tFor(zh ? "zh-CN" : "en-US", "files.representative.files")}
           />
           {plan.target.force && (
             <label className="workflow-checkbox">
@@ -437,10 +484,7 @@ export function SyncDialog({
                 checked={forceAck}
                 onChange={(event) => setForceAck(event.target.checked)}
               />
-              {tr(
-                "我已核对真实预览，并再次确认执行 Force 同步。",
-                "I reviewed the real preview and explicitly confirm forced sync again.",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "files.i.real.preview")}
             </label>
           )}
         </>
@@ -448,9 +492,9 @@ export function SyncDialog({
       {phase === "confirming" && (
         <section aria-live="polite" aria-busy="true">
           <DialogNotice>
-            {tr(
-              "正在执行已确认的同步。取消不会回滚已传输文件。",
-              "Executing the confirmed sync. Cancellation does not roll back transferred files.",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "files.executing.the.confirmed.sync.cancellation.does",
             )}
           </DialogNotice>
         </section>
@@ -462,7 +506,7 @@ export function SyncDialog({
           </DialogNotice>
           {result && (
             <p className="workflow-context">
-              {tr("结果", "Result")}: {result.outcome}
+              {tFor(zh ? "zh-CN" : "en-US", "files.result")}: {result.outcome}
               {result.operationId ? ` · ${result.operationId}` : ""}
             </p>
           )}

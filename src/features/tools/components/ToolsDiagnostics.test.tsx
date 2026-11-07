@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act, createRef, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ import {
 } from "./OperationJournalView";
 import { ToolArea, type ToolHandle } from "../ToolArea";
 import { ToolPanel } from "../ToolPanel";
-import { messages } from "../../../shared/i18n";
+import { messages, setLocale } from "../../../shared/i18n";
 import { ContextMenuProvider } from "../../../app/context-menu/ContextMenu";
 
 const backend = vi.hoisted(() => ({
@@ -80,6 +80,8 @@ function button(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -312,6 +314,64 @@ it("clears visible logs immediately and ignores stale loads after all logs are d
   await act(async () => cleared());
   await act(async () => stale({ entries: [log("stale-deleted")] }));
   expect(host.textContent).not.toContain("safe message");
+  expect(host.textContent).toContain("No matching logs");
+});
+
+it("drops a policy readback that a connection change retired", async () => {
+  const policyInputs = () => [
+    ...host.querySelectorAll<HTMLInputElement>(".policy-grid input"),
+  ];
+  let resolveFirst!: (value: LogPolicy) => void;
+  backend.getLogPolicy.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveFirst = resolve;
+    }),
+  );
+  const props: ComponentProps<typeof LogView> = {
+    zh: false,
+    connectionKey: "connection-a",
+    refreshKey: 0,
+    onOperationFilter: vi.fn(),
+    onOpenJournal: vi.fn(),
+  };
+  await act(async () => root.render(<LogView {...props} />));
+  expect(policyInputs()).toHaveLength(0);
+  // The first connection's readback is still outstanding.
+  backend.getLogPolicy.mockResolvedValue({ ...policy, retentionDays: 7 });
+  await act(async () =>
+    root.render(<LogView {...props} connectionKey="connection-b" />),
+  );
+  await flush();
+  expect(policyInputs()[0]?.value).toBe("7");
+  await act(async () => resolveFirst({ ...policy, retentionDays: 29 }));
+  await flush();
+  // The retired readback must not overwrite the new connection's policy.
+  expect(policyInputs()[0]?.value).toBe("7");
+});
+
+it("retires an in-flight log read when the view is cleared", async () => {
+  let resolveRead!: (value: { entries: LogEntry[] }) => void;
+  backend.queryLogPage.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveRead = resolve;
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <LogView
+        zh={false}
+        connectionKey="a"
+        refreshKey={0}
+        onOperationFilter={vi.fn()}
+        onOpenJournal={vi.fn()}
+      />,
+    ),
+  );
+  await act(async () => button("Clear view").click());
+  await act(async () => resolveRead({ entries: [log("late")] }));
+  await flush();
+  // A read nobody is waiting for any more cannot repopulate the cleared view.
+  expect(host.textContent).not.toContain("safe message late");
   expect(host.textContent).toContain("No matching logs");
 });
 

@@ -32,7 +32,7 @@
   border-radius: 9px;
   background: var(--panel);
   box-shadow: 0 10px 32px var(--shadow);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .workspace-switcher-heading,
 .workspace-switcher-search {

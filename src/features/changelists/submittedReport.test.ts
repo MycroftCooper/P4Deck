@@ -1,4 +1,5 @@
-import { expect, it, vi } from "vitest";
+import { setLocale } from "../../shared/i18n";
+import { expect, it, vi, beforeEach } from "vitest";
 import type { ChangelistSummary, ClQueryResult } from "../../shared/contracts";
 import {
   classifySubmission,
@@ -51,6 +52,11 @@ const options = () => ({
   generation: 7,
   cancelled: () => false,
 });
+// This suite asserts the Chinese copy; align the module resolver.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("uses only exact automation signatures, never a generic merge word or integration proof", () => {
   expect(classifySubmission("Manually merge branch").kind).toBe("ordinary");
   expect(classifySubmission("[AutoGen]\n提交人: alice").kind).toBe(

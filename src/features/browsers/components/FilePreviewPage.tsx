@@ -1,3 +1,5 @@
+import { t, tFor } from "../../../shared/i18n";
+import { localizeBackendError } from "../../../shared/localizeError";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
@@ -38,7 +40,6 @@ export function FilePreviewPage({
 }) {
   const menu = useContentMenu();
   const textSelection = useFullTextSelection();
-  const tr = (a: string, b: string) => (zh ? a : b);
   const refreshSlot = useContext(PageRefreshSlotContext);
   const [zoom, setZoom] = useState<number | null>(null),
     [imageError, setImageError] = useState(false);
@@ -118,16 +119,17 @@ export function FilePreviewPage({
   const notes = table ? truncationNotes(table, zh, hardTruncation(table)) : [];
   const rowCountTitle =
     shownTable?.rowCountSource === "dimension" && shownTable.rowCount != null
-      ? tr(
-          `工作表共约 ${shownTable.rowCount} 行（声明值，可能包含空行）`,
-          `About ${shownTable.rowCount} rows from the worksheet dimension; may include empty rows`,
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "browse.about.rows.from.the.worksheet.dimension",
+          { p1: shownTable.rowCount },
         )
       : undefined;
   const refreshButton = (
     <button
       type="button"
-      title={tr("刷新", "Refresh")}
-      aria-label={tr("刷新", "Refresh")}
+      title={t("browse.refresh")}
+      aria-label={t("browse.refresh")}
       aria-busy={loading}
       disabled={!target || loading}
       onClick={reload}
@@ -137,7 +139,7 @@ export function FilePreviewPage({
         className={loading ? "spin" : ""}
         aria-hidden="true"
       />
-      {!refreshSlot && <span>{tr("刷新", "Refresh")}</span>}
+      {!refreshSlot && <span>{t("browse.refresh")}</span>}
     </button>
   );
   return (
@@ -145,10 +147,7 @@ export function FilePreviewPage({
       {refreshSlot ? createPortal(refreshButton, refreshSlot) : refreshButton}
       {runtime.mode === "mock" && (
         <div className="preview-note">
-          {tr(
-            "浏览器演示：显示模拟内容，不读取本地文件。可输入 demo.png / demo.csv / demo.xlsx 查看示例。",
-            "Browser demo: simulated content, no local files accessed. Enter demo.png, demo.csv or demo.xlsx for samples.",
-          )}
+          {t("browse.browser.demo.simulated.content.no.local")}
         </div>
       )}
       <div className="preview-toolbar">
@@ -159,25 +158,24 @@ export function FilePreviewPage({
               {shownTable.format === "xlsx" ? "XLSX" : "CSV"}
             </span>
             <span className="preview-table-stats" title={rowCountTitle}>
-              {tableModel?.columnCount ?? 0} {tr("列", "cols")} ×{" "}
-              {tableModel?.dataRowCount ?? 0} {tr("行", "rows")}
+              {tableModel?.columnCount ?? 0} {t("browse.cols")} ×{" "}
+              {tableModel?.dataRowCount ?? 0} {t("browse.rows")}
             </span>
             {shownTable.format === "csv" && shownEncoding && (
               <span className="preview-toolbar-secondary">
-                {tr("编码", "Encoding")} {shownEncoding}
-                {shownEncodingGuess ? tr("（推测）", " (guessed)") : ""}
+                {t("browse.encoding")} {shownEncoding}
+                {shownEncodingGuess ? t("browse.guessed") : ""}
               </span>
             )}
             {shownTable.format === "csv" && shownTable.delimiter && (
               <span className="preview-toolbar-secondary">
-                {tr("分隔符", "Delimiter")}{" "}
-                {delimiterLabel(shownTable.delimiter)}
+                {t("browse.delimiter")} {delimiterLabel(shownTable.delimiter)}
               </span>
             )}
             {shownTable.sheetNames && shownTable.sheetNames.length > 1 && (
               <select
                 className="preview-table-select"
-                aria-label={tr("工作表", "Worksheet")}
+                aria-label={t("browse.worksheet")}
                 value={sheetIndex}
                 onChange={(event) =>
                   setView({
@@ -191,7 +189,9 @@ export function FilePreviewPage({
                 {shownTable.sheetNames.map((name, index) => (
                   <option key={index} value={index}>
                     {name ||
-                      tr(`工作表 ${index + 1}`, `Worksheet ${index + 1}`)}
+                      tFor(zh ? "zh-CN" : "en-US", "browse.worksheet", {
+                        p1: index + 1,
+                      })}
                   </option>
                 ))}
               </select>
@@ -199,13 +199,13 @@ export function FilePreviewPage({
             <span
               className="preview-table-steps"
               role="group"
-              aria-label={tr("冻结表头行数", "Frozen header rows")}
+              aria-label={t("browse.frozen.header.rows")}
             >
               <button
                 type="button"
                 className="preview-table-step"
-                aria-label={tr("减少冻结表头行", "Fewer frozen header rows")}
-                title={tr("减少冻结表头行", "Fewer frozen header rows")}
+                aria-label={t("browse.fewer.frozen.header.rows")}
+                title={t("browse.fewer.frozen.header.rows")}
                 disabled={headerRows <= 0}
                 onClick={() =>
                   setView({ target, sheetIndex, headerRows: headerRows - 1 })
@@ -214,16 +214,15 @@ export function FilePreviewPage({
                 <Minus size={14} aria-hidden="true" />
               </button>
               <span className="preview-table-steps-label">
-                {tr(
-                  `冻结表头 ${headerRows} 行`,
-                  `Frozen header rows: ${headerRows}`,
-                )}
+                {tFor(zh ? "zh-CN" : "en-US", "browse.frozenHeaderRows", {
+                  count: headerRows,
+                })}
               </span>
               <button
                 type="button"
                 className="preview-table-step"
-                aria-label={tr("增加冻结表头行", "More frozen header rows")}
-                title={tr("增加冻结表头行", "More frozen header rows")}
+                aria-label={t("browse.more.frozen.header.rows")}
+                title={t("browse.more.frozen.header.rows")}
                 disabled={headerRows >= headerRowLimit}
                 onClick={() =>
                   setView({ target, sheetIndex, headerRows: headerRows + 1 })
@@ -240,22 +239,22 @@ export function FilePreviewPage({
               {data.width} × {data.height}
             </span>
             <button
-              aria-label={tr("缩小图片", "Zoom out")}
+              aria-label={t("browse.zoom.out")}
               onClick={() => setZoom((n) => Math.max(0.1, (n ?? 1) / 1.25))}
             >
               <Minus size={14} />
             </button>
             <button onClick={() => setZoom(1)}>
-              {zoom === null ? tr("适应", "Fit") : `${Math.round(zoom * 100)}%`}
+              {zoom === null ? t("browse.fit") : `${Math.round(zoom * 100)}%`}
             </button>
             <button
-              aria-label={tr("放大图片", "Zoom in")}
+              aria-label={t("browse.zoomIn")}
               onClick={() => setZoom((n) => Math.min(4, (n ?? 1) * 1.25))}
             >
               <Plus size={14} />
             </button>
             <button onClick={() => setZoom(null)}>
-              {tr("适应窗口", "Fit to window")}
+              {t("browse.fit.to.window")}
             </button>
           </>
         ) : (
@@ -263,7 +262,7 @@ export function FilePreviewPage({
             <FileText size={14} />
             <span>{data?.encoding ?? "—"}</span>
             <span>
-              {lines.length} {tr("行", "lines")}
+              {lines.length} {t("browse.lines")}
             </span>
           </>
         )}
@@ -305,7 +304,7 @@ export function FilePreviewPage({
             "复制整表（TSV）": copyLazy(
               () =>
                 table ? tableToTsv(normalizeTable(table, headerRows)) : "",
-              table ? undefined : "没有可复制的表格 / Nothing to copy",
+              table ? undefined : t("browse.nothing.to.copy"),
             ),
             适应窗口: action(() => setZoom(null)),
             原始尺寸: action(() => setZoom(1)),
@@ -314,23 +313,18 @@ export function FilePreviewPage({
       >
         {error ? (
           <div role="alert" className="preview-empty">
-            {tr("无法预览", "Preview unavailable")}
-            <p>{error}</p>
+            {t("browse.preview.unavailable")}
+            <p>{localizeBackendError(error, zh)}</p>
           </div>
         ) : !target ? (
-          <div className="preview-empty">
-            {tr(
-              "选择文件后点击“预览”，或双击文件。",
-              "Select Preview or double-click a file.",
-            )}
-          </div>
+          <div className="preview-empty">{t("browse.select.double.click")}</div>
         ) : loading && !data ? (
           <div role="status" className="preview-empty">
-            {tr("正在读取…", "Reading…")}
+            {t("browse.reading")}
           </div>
         ) : data?.kind === "text" && data.content.length === 0 ? (
           <div role="status" className="preview-empty">
-            {tr("文件为空", "File is empty")}
+            {t("browse.file.is.empty")}
           </div>
         ) : data?.kind === "text" ? (
           <div className="preview-text" ref={scroll}>
@@ -351,10 +345,7 @@ export function FilePreviewPage({
                   <code>
                     {lines[row.index].slice(0, 4000) || " "}
                     {lines[row.index].length > 4000
-                      ? tr(
-                          " … [此行过长，已截断显示]",
-                          " … [long line truncated]",
-                        )
+                      ? t("browse.long.line.truncated")
                       : ""}
                   </code>
                 </div>
@@ -364,10 +355,7 @@ export function FilePreviewPage({
         ) : data?.kind === "image" ? (
           imageError ? (
             <div role="alert" className="preview-empty">
-              {tr(
-                "图片损坏或当前系统不支持此格式。",
-                "Invalid image or unsupported system decoder.",
-              )}
+              {t("browse.invalid.image.or.unsupported.system.decoder")}
             </div>
           ) : (
             <div className={`preview-image ${zoom === null ? "fit" : ""}`}>
@@ -405,27 +393,18 @@ export function FilePreviewPage({
             </div>
           ) : (
             <div role="alert" className="preview-empty">
-              {tr(
-                "表格数据不完整，无法显示",
-                "Table data is incomplete and cannot be displayed",
-              )}
+              {t("browse.table.data.is.incomplete.and.cannot")}
             </div>
           )
         ) : data ? (
           <div role="alert" className="preview-empty">
-            {tr(
-              "此版本不支持该预览类型，请更新应用",
-              "This build cannot display this preview type; update the app",
-            )}
+            {t("browse.this.build.cannot.display.this.preview")}
           </div>
         ) : null}
       </section>
       {textSelection.dialog}
       <footer className="preview-footer">
-        {tr(
-          "文本 ≤ 2 MiB · 图片 ≤ 8 MiB / 2000 万像素 · 表格 ≤ 500 行 × 64 列 · 百分比/货币显示原始值 · 不自动下载服务器文件",
-          "Text ≤ 2 MiB · Images ≤ 8 MiB / 20 MP · Tables ≤ 500 rows × 64 cols · Percent/currency shown as raw values · No automatic depot downloads",
-        )}
+        {t("browse.text.2.mib.images.8.mib")}
       </footer>
     </section>
   );

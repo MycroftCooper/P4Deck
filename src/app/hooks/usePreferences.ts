@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { initialLocale, messages } from "../../shared/i18n";
+import { activateLocale, initialLocale, messages } from "../../shared/i18n";
+import { changeLocale } from "../../shared/i18n/index";
 import type { Locale, ThemeMode } from "../../shared/contracts";
 import {
   readUiPreferences,
@@ -24,8 +25,8 @@ export function usePreferences() {
   useEffect(() => {
     if (!saveUiPreferences(ui))
       notifyFailure(undefined, {
-        zh: "外观设置保存失败；重启后可能不会保留本次更改。",
-        en: "Saving appearance preferences failed; these changes may not persist after a restart.",
+        zh: "shell.saving.appearance.preferences.failed.these.changes",
+        en: "shell.saving.appearance.preferences.failed.these.changes",
       });
     document.documentElement.style.setProperty(
       "--list-font-size",
@@ -44,6 +45,9 @@ export function usePreferences() {
   useEffect(() => {
     document.documentElement.lang = locale;
     storage.setItem("p4deck.locale", locale);
+    // Keep the non-React resolver (notices, action confirmations) in step.
+    activateLocale(locale);
+    changeLocale(locale);
   }, [locale]);
   useEffect(() => {
     storage.setItem("p4deck.theme", theme);

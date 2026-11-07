@@ -2,11 +2,11 @@ import { contrast } from "./accent";
 
 /** Preset background tones. Each tone is a seed adapted to the active theme. */
 export const backgroundPresets = [
-  { tone: "#2c3a33", zh: "松绿", en: "Pine" },
-  { tone: "#2b3442", zh: "石板蓝", en: "Slate blue" },
-  { tone: "#3a3138", zh: "梅灰", en: "Plum grey" },
-  { tone: "#413729", zh: "暖沙", en: "Warm sand" },
-  { tone: "#26323a", zh: "雾青", en: "Mist teal" },
+  { tone: "#2c3a33", zh: "settings.pine", en: "settings.pine" },
+  { tone: "#2b3442", zh: "settings.slate.blue", en: "settings.slate.blue" },
+  { tone: "#3a3138", zh: "settings.plum.grey", en: "settings.plum.grey" },
+  { tone: "#413729", zh: "settings.warm.sand", en: "settings.warm.sand" },
+  { tone: "#26323a", zh: "settings.mist.teal", en: "settings.mist.teal" },
 ] as const;
 
 /** Empty string means "follow the theme background" (the default). */

@@ -1,6 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { t } from "../../../shared/i18n";
+import { useId, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
+import { useOperationSession } from "../../../shared/operationSession";
+
+/** The submission channel: one lease per submitted draft. */
+const FORM = "changelist-form";
 
 export interface ChangelistDraft {
   description: string;
@@ -30,19 +35,19 @@ export function ChangelistFormDialog({
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const initialDescription =
     initial?.description ??
-    (mode === "create" ? tr("新ChangeList", "New changelist") : "");
+    (mode === "create" ? t("pending.new.changelist") : "");
   const [description, setDescription] = useState(initialDescription);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [discard, setDiscard] = useState(false);
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
-  const generation = useRef(0);
-  useEffect(() => {
-    return () => {
-      generation.current += 1;
-    };
-  }, []);
+  /**
+   * Closing the dialog retires the submission: the owner cancels the channel on
+   * unmount, so a late answer can neither dismiss the dialog again nor clear a
+   * busy state nobody is looking at.
+   */
+  const session = useOperationSession();
   const formId = useId(),
     errorId = useId();
   const dirty = description !== initialDescription;
@@ -59,13 +64,11 @@ export function ChangelistFormDialog({
     setError("");
     setNotice("");
     if (!description.trim()) {
-      setError(tr("请填写 CL 描述。", "Enter a changelist description."));
+      setError(t("pending.enter.a.changelist.description"));
       return;
     }
     if (mode === "edit" && (!changeId || changeId < 1)) {
-      setError(
-        tr("只能编辑已编号的 CL。", "A numbered changelist is required."),
-      );
+      setError(t("pending.a.numbered.changelist.is.required"));
       return;
     }
     const draft = {
@@ -73,41 +76,40 @@ export function ChangelistFormDialog({
       jobs: mode === "edit" ? [...(initial?.jobs ?? [])] : [],
     };
     if (!onSubmit) {
-      setNotice(
-        tr(
-          "表单检查通过。这是界面预览，尚未创建或保存 CL。",
-          "Form checked. UI preview only: no changelist was created or saved.",
-        ),
-      );
+      setNotice(t("pending.form.preview.only"));
       return;
     }
     running.current = true;
-    const requestGeneration = generation.current;
+    // One lease per submission. It stays current until this attempt settles;
+    // closing the dialog supersedes it through the owner, so a late answer can
+    // neither dismiss the dialog again nor revive a closed form.
+    const submission = session.start(FORM, { cancelBackend: false });
     setBusy(true);
     try {
       await onSubmit(draft);
-      if (generation.current === requestGeneration) {
+      if (session.isCurrent(submission)) {
         clearUnsaved();
         onDismiss();
       }
     } catch (cause) {
-      if (generation.current === requestGeneration) setError(String(cause));
+      if (session.isCurrent(submission)) setError(String(cause));
     } finally {
       running.current = false;
-      if (generation.current === requestGeneration) setBusy(false);
+      // Clear busy before retiring: a finished lease is no longer current.
+      if (session.isCurrent(submission)) {
+        setBusy(false);
+        session.finish(submission);
+      }
     }
   }
   return (
     <Dialog
       title={
         mode === "create"
-          ? tr("新建 Changelist", "New changelist")
+          ? t("pending.new.changelist.2")
           : tr(`编辑 CL ${changeId ?? ""}`, `Edit CL ${changeId ?? ""}`)
       }
-      description={tr(
-        "描述这组变更；新建 CL 不会自动移动文件或提交。",
-        "Describe the changes. Creating a CL does not move or submit files.",
-      )}
+      description={t("pending.describe.the.changes.creating.a.cl")}
       source={source}
       busy={busy}
       zh={zh}
@@ -115,7 +117,7 @@ export function ChangelistFormDialog({
       footer={
         <>
           <button type="button" disabled={busy} onClick={dismiss}>
-            {tr("取消", "Cancel")}
+            {t("pending.cancel")}
           </button>
           <button
             type="submit"
@@ -125,28 +127,21 @@ export function ChangelistFormDialog({
           >
             {busy
               ? mode === "create"
-                ? tr("正在新建…", "Creating…")
-                : tr("正在保存…", "Saving…")
+                ? t("pending.creating")
+                : t("pending.saving")
               : !onSubmit
-                ? tr("检查表单（不提交）", "Check form (no submission)")
+                ? t("pending.check.form.no.submission")
                 : mode === "create"
-                  ? tr("新建", "Create")
-                  : tr("保存", "Save")}
+                  ? t("pending.create")
+                  : t("pending.save")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {tr("工作区", "Workspace")} <strong>{client || "—"}</strong>
+        {t("pending.workspace")} <strong>{client || "—"}</strong>
       </div>
-      {!onSubmit && (
-        <DialogNotice>
-          {tr(
-            "界面预览 · 未连接 CL 写入流程，不会访问 P4 服务器。",
-            "UI preview · CL writing is not connected. No P4 server requests.",
-          )}
-        </DialogNotice>
-      )}
+      {!onSubmit && <DialogNotice>{t("pending.ui.cl.writing")}</DialogNotice>}
       <form
         id={formId}
         onSubmit={(event) => {
@@ -156,7 +151,7 @@ export function ChangelistFormDialog({
       >
         <fieldset disabled={busy}>
           <label>
-            {tr("描述（必填）", "Description (required)")}
+            {t("pending.description.required")}
             <textarea
               autoFocus
               data-dialog-autofocus
@@ -183,16 +178,11 @@ export function ChangelistFormDialog({
         <section
           className="workflow-discard"
           role="alert"
-          aria-label={tr("未保存的修改", "Unsaved changes")}
+          aria-label={t("pending.unsaved.changes")}
         >
-          <p>
-            {tr(
-              "关闭将丢弃此次输入，是否继续？",
-              "Closing discards this draft. Continue?",
-            )}
-          </p>
+          <p>{t("pending.closing.discards.this.draft.continue")}</p>
           <button type="button" onClick={() => setDiscard(false)}>
-            {tr("继续编辑", "Keep editing")}
+            {t("pending.keep.editing")}
           </button>
           <button
             type="button"
@@ -202,7 +192,7 @@ export function ChangelistFormDialog({
               onDismiss();
             }}
           >
-            {tr("放弃修改并关闭", "Discard and close")}
+            {t("pending.discard.and.close")}
           </button>
         </section>
       )}

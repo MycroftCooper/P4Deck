@@ -1,8 +1,11 @@
+import { tFor } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, RefreshCw } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
+import { useOperationSession } from "../../../shared/operationSession";
 import { LOG_LEVELS, logLevelLabel } from "../logLevels";
 import type {
   LogEntry,
@@ -72,7 +75,14 @@ export function LogView({
   const [draft, setDraft] = useState<LogPolicy>();
   const [policyBusy, setPolicyBusy] = useState(false);
   const [policyStatus, setPolicyStatus] = useState("");
-  const generation = useRef(0);
+  /**
+   * Two independent channels: the log page reads and the policy readback. Each
+   * new request or invalidation retires the previous one, so a late answer can
+   * never paint the view it no longer belongs to.
+   */
+  const session = useOperationSession();
+  const LOGS = "logs",
+    POLICY = "logs-policy";
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: entries.length,
@@ -97,7 +107,6 @@ export function LogView({
   const paddingBottom = virtualRows.length
     ? totalSize - virtualRows.at(-1)!.end
     : 0;
-  const policyGeneration = useRef(0);
 
   useEffect(() => {
     storage.setItem(
@@ -113,7 +122,10 @@ export function LogView({
 
   const load = useCallback(
     async (cursor?: string) => {
-      const request = ++generation.current;
+      // Reading the epoch before the request makes a supersede or an
+      // invalidation (connection, refresh, clear, unmount) visible below.
+      const review = session.epoch(LOGS);
+      const isCurrent = () => review === session.epoch(LOGS);
       setLoading(true);
       if (cursor) setAppendError("");
       else setError("");
@@ -127,7 +139,7 @@ export function LogView({
           cursor,
           limit: PAGE_SIZE,
         });
-        if (request !== generation.current) return;
+        if (!isCurrent()) return;
         setEntries((current) => {
           const incoming = cursor
             ? [...current, ...page.entries]
@@ -140,7 +152,7 @@ export function LogView({
         });
         setNextCursor(page.nextCursor);
       } catch (cause) {
-        if (request !== generation.current) return;
+        if (!isCurrent()) return;
         if (cursor) setAppendError(String(cause));
         else {
           setEntries([]);
@@ -148,53 +160,52 @@ export function LogView({
           setError(String(cause));
         }
       } finally {
-        if (request === generation.current) setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     },
-    [command, keyword, level, operationFilter, source],
+    [command, keyword, level, operationFilter, session, source],
   );
 
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate(LOGS);
     setEntries([]);
     setNextCursor(undefined);
     void load();
-    return () => void ++generation.current;
-  }, [connectionKey, load, refreshKey]);
+    return () => session.invalidate(LOGS);
+  }, [connectionKey, load, refreshKey, session]);
 
   useEffect(
     () =>
       subscribeSafely(
         () =>
           backend.subscribeLogsCleared(() => {
-            generation.current += 1;
+            session.invalidate(LOGS);
             setEntries([]);
             setNextCursor(undefined);
             void load();
           }),
         (cause) => setError(String(cause)),
       ),
-    [load],
+    [load, session],
   );
 
   useEffect(() => {
-    const request = ++policyGeneration.current;
+    const review = session.epoch(POLICY);
     setPolicy(undefined);
     setDraft(undefined);
     setPolicyStatus("");
     void backend
       .getLogPolicy()
       .then((value) => {
-        if (request !== policyGeneration.current) return;
+        if (review !== session.epoch(POLICY)) return;
         setPolicy(value);
         setDraft(value);
       })
       .catch((cause) => {
-        if (request === policyGeneration.current)
-          setPolicyStatus(String(cause));
+        if (review === session.epoch(POLICY)) setPolicyStatus(String(cause));
       });
-    return () => void ++policyGeneration.current;
-  }, [connectionKey]);
+    return () => session.invalidate(POLICY);
+  }, [connectionKey, session]);
 
   async function savePolicy() {
     if (!draft || policyBusy) return;
@@ -207,14 +218,12 @@ export function LogView({
       draft.maxMib > 50
     ) {
       setPolicyStatus(
-        zh
-          ? "保留期必须为 1–30 天，容量必须为 5–50 MiB。"
-          : "Retention must be 1–30 days and capacity 5–50 MiB.",
+        tFor(zh ? "zh-CN" : "en-US", "tools.retention.must.be.1.30"),
       );
       return;
     }
     setPolicyBusy(true);
-    setPolicyStatus(zh ? "正在保存…" : "Saving…");
+    setPolicyStatus(tFor(zh ? "zh-CN" : "en-US", "tools.saving"));
     const operationId = crypto.randomUUID();
     try {
       const dispatching = await (
@@ -233,28 +242,30 @@ export function LogView({
         setPolicy(readback);
         setDraft(readback);
         setPolicyStatus(
-          zh
-            ? "日志策略已保存（回读逐字段一致）。"
-            : "Log policy saved (readback matches every field).",
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.log.policy.saved.readback.matches",
+          ),
         );
       } else if (result.state === "legacy") {
         const savedLegacy = controlPlaneLegacy<LogPolicy>(result) ?? draft;
         setPolicy(savedLegacy);
         setDraft(savedLegacy);
-        setPolicyStatus(zh ? "日志策略已保存。" : "Log policy saved.");
+        setPolicyStatus(tFor(zh ? "zh-CN" : "en-US", "tools.log.policy.saved"));
       } else {
         // Uncertain: never show "saved"; restore the last known policy and be explicit.
         setDraft(policy);
         setPolicyStatus(
-          zh
-            ? "保存结果不确定：回读未逐字段匹配。已用同一操作号查询持久回执；已恢复上次已知策略，请核对后再操作。"
-            : "Save outcome uncertain: the readback did not match every field. The durable receipt was queried with the same operation id; the last known policy was restored for inspection.",
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "tools.save.outcome.uncertain.the.readback",
+          ),
         );
       }
     } catch (cause) {
       setDraft(policy);
       setPolicyStatus(
-        `${zh ? "保存失败，已恢复原策略：" : "Save failed; previous policy restored: "}${String(cause)}`,
+        `${tFor(zh ? "zh-CN" : "en-US", "tools.save.failed.previous.policy.restored")}${String(cause)}`,
       );
     } finally {
       setPolicyBusy(false);
@@ -265,24 +276,26 @@ export function LogView({
     <div className="diagnostic-view log-view">
       <div
         className="diagnostic-toolbar log-toolbar"
-        aria-label={zh ? "日志筛选" : "Log filters"}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.log.filters")}
       >
         <span className="muted">
-          {zh ? "本次运行日志" : "Current session logs"}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.current.session.logs")}
         </span>
         <input
           className="log-search"
-          aria-label={zh ? "搜索日志" : "Search logs"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.search.logs")}
           value={keyword}
-          placeholder={zh ? "消息或命令" : "Message or command"}
+          placeholder={tFor(zh ? "zh-CN" : "en-US", "tools.message.or.command")}
           onChange={(event) => setKeyword(event.target.value)}
         />
         <select
-          aria-label={zh ? "日志级别" : "Log level"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.log.level")}
           value={level}
           onChange={(event) => setLevel(event.target.value as LogLevel | "")}
         >
-          <option value="">{zh ? "全部级别" : "All levels"}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.levels")}
+          </option>
           {LOG_LEVELS.map((value) => (
             <option key={value} value={value}>
               {logLevelLabel(value, zh)}
@@ -290,29 +303,33 @@ export function LogView({
           ))}
         </select>
         <select
-          aria-label={zh ? "日志来源" : "Log source"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.log.source")}
           value={source}
           onChange={(event) =>
             setSource(event.target.value as OperationSource | "")
           }
         >
-          <option value="">{zh ? "全部来源" : "All sources"}</option>
+          <option value="">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.all.sources")}
+          </option>
           <option value="gui">GUI</option>
           <option value="terminal">Terminal</option>
         </select>
         <input
           className="log-command"
-          aria-label={zh ? "命令或类别" : "Command or category"}
+          aria-label={tFor(zh ? "zh-CN" : "en-US", "tools.command.or.category")}
           value={command}
-          placeholder={zh ? "命令 / 类别" : "Command / category"}
+          placeholder={tFor(zh ? "zh-CN" : "en-US", "tools.command.category")}
           onChange={(event) => setCommand(event.target.value)}
         />
         <button onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={13} /> {zh ? "应用 / 刷新" : "Apply / refresh"}
+          <RefreshCw size={13} />{" "}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.apply.refresh")}
         </button>
         <button
           onClick={() => {
-            generation.current += 1;
+            // Clearing the view retires the read it was showing.
+            session.invalidate(LOGS);
             setEntries([]);
             setNextCursor(undefined);
             setLoading(false);
@@ -320,7 +337,7 @@ export function LogView({
             setAppendError("");
           }}
         >
-          {zh ? "清空显示" : "Clear view"}
+          {tFor(zh ? "zh-CN" : "en-US", "tools.clear.view")}
         </button>
         <label className="check-field log-follow-tail">
           <input
@@ -328,30 +345,35 @@ export function LogView({
             checked={followTail}
             onChange={(event) => setFollowTail(event.target.checked)}
           />
-          <span>{zh ? "跟随尾部" : "Follow tail"}</span>
+          <span>{tFor(zh ? "zh-CN" : "en-US", "tools.follow.tail")}</span>
         </label>
       </div>
 
       {operationFilter && (
         <div className="active-filter" role="status">
           <span>
-            {zh ? "操作筛选" : "Operation filter"}: {operationFilter}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.operation.filter")}:{" "}
+            {operationFilter}
           </span>
           <button onClick={() => onOpenJournal(operationFilter)}>
-            {zh ? "查看操作" : "View operation"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.view.operation")}
           </button>
           <button onClick={() => onOperationFilter(undefined)}>
-            {zh ? "清除" : "Clear"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.clear")}
           </button>
         </div>
       )}
 
       <details className="policy-panel">
-        <summary>{zh ? "日志保留策略" : "Log retention policy"}</summary>
+        <summary>
+          {tFor(zh ? "zh-CN" : "en-US", "tools.log.retention.policy")}
+        </summary>
         {draft ? (
           <div className="policy-grid">
             <label>
-              <span>{zh ? "保留天数（1–30）" : "Retention days (1–30)"}</span>
+              <span>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.retention.days.1.30")}
+              </span>
               <input
                 type="number"
                 min={1}
@@ -366,7 +388,9 @@ export function LogView({
               />
             </label>
             <label>
-              <span>{zh ? "容量上限（5–50 MiB）" : "Capacity (5–50 MiB)"}</span>
+              <span>
+                {tFor(zh ? "zh-CN" : "en-US", "tools.capacity.5.50.mib")}
+              </span>
               <input
                 type="number"
                 min={5}
@@ -378,16 +402,17 @@ export function LogView({
               />
             </label>
             <p className="policy-boundary">
-              {zh
-                ? "保留期与容量由后端强制执行。新日志不会自动展开或切换工具区；未查看的新 Error 只在底部日志入口显示红点。"
-                : "Retention and capacity are enforced by the backend. New logs never expand or switch tools automatically; new unviewed errors only mark the bottom Log entry with a red dot."}
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "tools.retention.and.capacity.are.enforced",
+              )}
             </p>
             <button onClick={() => void savePolicy()} disabled={policyBusy}>
-              {zh ? "保存策略" : "Save policy"}
+              {tFor(zh ? "zh-CN" : "en-US", "tools.save.policy")}
             </button>
           </div>
         ) : (
-          <p>{zh ? "正在读取策略…" : "Loading policy…"}</p>
+          <p>{tFor(zh ? "zh-CN" : "en-US", "tools.loading.policy")}</p>
         )}
         <div className="sr-status" role="status" aria-live="polite">
           {policyStatus}
@@ -406,16 +431,20 @@ export function LogView({
           className="diagnostic-table"
           aria-rowcount={entries.length + 1}
         >
-          <caption className="sr-only">{zh ? "P4 日志" : "P4 log"}</caption>
+          <caption className="sr-only">
+            {tFor(zh ? "zh-CN" : "en-US", "tools.p4.log")}
+          </caption>
           <thead>
             <tr>
-              <th>{zh ? "时间" : "Time"}</th>
-              <th>{zh ? "级别" : "Level"}</th>
-              <th>{zh ? "来源" : "Source"}</th>
-              <th>{zh ? "命令 / 消息" : "Command / message"}</th>
-              <th>{zh ? "操作" : "Operation"}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.time")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.level")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.source")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.command.message")}</th>
+              <th>{tFor(zh ? "zh-CN" : "en-US", "tools.operation")}</th>
               <th>
-                <span className="sr-only">{zh ? "动作" : "Actions"}</span>
+                <span className="sr-only">
+                  {tFor(zh ? "zh-CN" : "en-US", "tools.actions")}
+                </span>
               </th>
             </tr>
           </thead>
@@ -438,7 +467,7 @@ export function LogView({
                 >
                   <td>
                     <time dateTime={entry.timestamp}>
-                      {new Date(entry.timestamp).toLocaleString()}
+                      {formatLocalTime(entry.timestamp, zh ? "zh-CN" : "en-US")}
                     </time>
                   </td>
                   <td>{logLevelLabel(entry.level, zh)}</td>
@@ -458,7 +487,10 @@ export function LogView({
                   </td>
                   <td>
                     <button
-                      aria-label={zh ? "复制日志" : "Copy log"}
+                      aria-label={tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "tools.copy.log",
+                      )}
                       onClick={() =>
                         void navigator.clipboard.writeText(
                           `${entry.timestamp}\n${entry.command}\n${entry.message}`,
@@ -480,35 +512,35 @@ export function LogView({
         </ResizableTable>
         {!entries.length && !loading && !error && (
           <div className="empty-state">
-            {zh ? "暂无匹配日志" : "No matching logs"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.no.matching.logs")}
           </div>
         )}
       </div>
       {error && (
         <div className="inline-error" role="alert">
           {error}{" "}
-          <button onClick={() => void load()}>{zh ? "重试" : "Retry"}</button>
+          <button onClick={() => void load()}>
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry")}
+          </button>
         </div>
       )}
       {appendError && (
         <div className="inline-error" role="alert">
           {appendError}{" "}
           <button onClick={() => void load(nextCursor)}>
-            {zh ? "重试继续加载" : "Retry load more"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.retry.load.more")}
           </button>
         </div>
       )}
       <div className="diagnostic-footer" role="status" aria-live="polite">
         <span>
           {loading
-            ? zh
-              ? "正在加载…"
-              : "Loading…"
-            : `${entries.length} ${zh ? "条" : "records"}`}
+            ? tFor(zh ? "zh-CN" : "en-US", "tools.loading")
+            : `${entries.length} ${tFor(zh ? "zh-CN" : "en-US", "tools.records")}`}
         </span>
         {nextCursor && !appendError && (
           <button onClick={() => void load(nextCursor)} disabled={loading}>
-            {zh ? "继续加载" : "Load more"}
+            {tFor(zh ? "zh-CN" : "en-US", "tools.load.more")}
           </button>
         )}
       </div>

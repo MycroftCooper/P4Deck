@@ -1,3 +1,4 @@
+import { t, tFor } from "../../../shared/i18n";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import {
   SyncDialog,
@@ -74,15 +75,11 @@ export function isStreamList(value: unknown): value is StreamSummary[] {
   );
 }
 
-function historyNoticeFor(page: FileHistoryPage, zh: boolean) {
+function historyNoticeFor(page: FileHistoryPage, _zh: boolean) {
   return page.truncated
-    ? zh
-      ? "历史结果达到安全上限，当前结果已截断。"
-      : "History reached its safety limit and was truncated."
+    ? t("browse.history.reached.its.safety.limit")
     : page.partial
-      ? zh
-        ? "历史结果不完整。"
-        : "History results are partial."
+      ? t("browse.history.results.are.partial")
       : "";
 }
 
@@ -360,12 +357,14 @@ export function ReadOnlyPage({
   const streamNavigationNotice =
     kind === "streams" && navigation && search === navigation.stream && !loading
       ? rows.some((row) => "stream" in row && row.stream === navigation.stream)
-        ? zh
-          ? `已定位 Stream：${navigation.stream}`
-          : `Located stream: ${navigation.stream}`
-        : zh
-          ? `已在 Streams 中搜索 ${navigation.stream}，当前列表没有精确匹配。`
-          : `Searching Streams for ${navigation.stream}; the current list has no exact match.`
+        ? tFor(zh ? "zh-CN" : "en-US", "browse.located.stream", {
+            p1: zh ? navigation.stream : navigation.stream,
+          })
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "browse.searching.streams.for.the.current.list",
+            { p1: zh ? navigation.stream : navigation.stream },
+          )
       : "";
   const menu = useContextMenu();
   const openChangeDetails = useChangeDetails();
@@ -457,9 +456,7 @@ export function ReadOnlyPage({
                 : onPreviewChange?.(item.changelistId),
             item.changelistId > 0 && (openChangeDetails || onPreviewChange)
               ? undefined
-              : zh
-                ? "此记录没有可预览的 CL"
-                : "No submitted CL is available",
+              : t("browse.no.submitted.cl.is.available"),
           ),
           获取这个版本: action(
             (source) =>
@@ -477,14 +474,12 @@ export function ReadOnlyPage({
                 ],
                 revisionMode: "choose",
                 fixedRevision: newest.revision,
-                scopeLabel: `${zh ? "后选版本" : "Most recently selected"}: ${newest.depotPath}#${newest.revision}`,
+                scopeLabel: `${t("browse.most.recently.selected")}: ${newest.depotPath}#${newest.revision}`,
                 source: source ?? null,
               }),
             remoteReady && valid
               ? undefined
-              : zh
-                ? "连接或文件修订无效"
-                : "Connection or file revision is invalid",
+              : t("browse.connection.file.revision"),
           ),
           Undo: action(
             (source) =>
@@ -494,24 +489,18 @@ export function ReadOnlyPage({
                 changelistId: item.changelistId,
                 source: source ?? null,
               }),
-            remoteReady
-              ? undefined
-              : zh
-                ? "连接不可用"
-                : "Connection unavailable",
+            remoteReady ? undefined : t("browse.connection.unavailable"),
           ),
           Diff: action(
             () => compareHistory(queue),
             historyDiffPair(queue)
               ? undefined
-              : zh
-                ? "请选择同一文件的两个有效修订"
-                : "Select two valid revisions of the same file",
+              : t("browse.select.valid.revisions"),
           ),
         };
       },
       {
-        title: `${item.depotPath}#${item.revision} · ${zh ? "获取目标：后选" : "Get target: latest selection"} #${historyMenuQueue(selectedHistory, item).at(-1)!.revision}`,
+        title: `${item.depotPath}#${item.revision} · ${t("browse.get.target.latest.selection")} #${historyMenuQueue(selectedHistory, item).at(-1)!.revision}`,
         onOpen: () => selection.context(item),
       },
     );
@@ -554,8 +543,8 @@ export function ReadOnlyPage({
   const refreshButton = (
     <button
       type="button"
-      title={zh ? "刷新" : "Refresh"}
-      aria-label={zh ? "刷新" : "Refresh"}
+      title={t("browse.refresh")}
+      aria-label={t("browse.refresh")}
       aria-busy={loading}
       disabled={loading || !remoteReady || (kind === "history" && !queryPath)}
       onClick={() => void reload()}
@@ -566,7 +555,7 @@ export function ReadOnlyPage({
         aria-hidden="true"
       />
       {kind === "streams" || !refreshSlot ? (
-        <span>{zh ? "刷新" : "Refresh"}</span>
+        <span>{t("browse.refresh")}</span>
       ) : null}
     </button>
   );
@@ -600,22 +589,18 @@ export function ReadOnlyPage({
         )
       ) : (
         <FixedPageHeader
-          description={
-            zh
-              ? "查看服务器上的分支流、类型和父子关系。"
-              : "Streams, types and parent relationships on this server."
-          }
+          description={t("browse.streams.types.and.parent.relationships")}
         >
           <div className="section-title-actions">
             <button disabled={!onOpenStreamGraph} onClick={onOpenStreamGraph}>
               <Network size={15} />
-              {zh ? "打开 Stream 图" : "Open Stream Graph"}
+              {t("browse.open.stream.graph")}
             </button>
             <button
               disabled={!onOpenBranchMappings}
               onClick={onOpenBranchMappings}
             >
-              {zh ? "打开 Branch Mappings" : "Open Branch Mappings"}
+              {t("browse.open.branch.mappings")}
             </button>
           </div>
           {refreshButton}
@@ -625,8 +610,8 @@ export function ReadOnlyPage({
         <label className="search-field">
           <Search size={15} />
           <input
-            aria-label={zh ? "搜索当前列表" : "Search list"}
-            placeholder={zh ? "搜索当前列表…" : "Search list…"}
+            aria-label={t("browse.search.list")}
+            placeholder={t("browse.search.list.2")}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -635,7 +620,7 @@ export function ReadOnlyPage({
           />
         </label>
         <span className="filter-count">
-          {filtered.length} {zh ? "条记录" : "records"}
+          {filtered.length} {t("browse.records")}
         </span>
       </div>
       {kind === "history" && historyHasMore && (
@@ -696,9 +681,7 @@ export function ReadOnlyPage({
                 if (nonProgressing)
                   setOwnedError({
                     owner: ownerAtStart,
-                    message: zh
-                      ? "后端返回了重复游标；已保留当前历史记录。"
-                      : "The backend returned a repeated cursor; current history was preserved.",
+                    message: t("browse.the.backend.returned.a.repeated.2"),
                   });
               })
               .catch((cause) => {
@@ -722,7 +705,7 @@ export function ReadOnlyPage({
               });
           }}
         >
-          {zh ? "加载更多历史" : "Load more history"}
+          {t("browse.load.more.history")}
         </button>
       )}
       {error && (
@@ -801,7 +784,7 @@ export function ReadOnlyPage({
                   columns={[
                     { id: "stream", label: "Stream" },
                     { id: "parent", label: "Type / Parent" },
-                    { id: "description", label: zh ? "描述" : "Description" },
+                    { id: "description", label: t("browse.description") },
                   ]}
                 />
                 <div
@@ -859,20 +842,12 @@ export function ReadOnlyPage({
             {!filtered.length && (
               <div className="workspace-empty">
                 {loading && !rowsLoaded
-                  ? zh
-                    ? "加载中…"
-                    : "Loading…"
+                  ? t("browse.loading.2")
                   : error
-                    ? zh
-                      ? "加载失败，可刷新重试"
-                      : "Loading failed. Refresh to retry."
+                    ? t("browse.loading.failed.refresh.to.retry")
                     : kind === "history" && !queryPath
-                      ? zh
-                        ? "从文件页选择文件后打开 History，或输入 Depot 文件路径。"
-                        : "Select a file before opening History, or enter its depot path."
-                      : zh
-                        ? "没有匹配记录"
-                        : "No matching records"}
+                      ? t("browse.select.a.file.before.opening")
+                      : t("browse.no.matching.records")}
               </div>
             )}
           </div>

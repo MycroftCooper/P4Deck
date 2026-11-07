@@ -1,3 +1,4 @@
+import { tFor } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
@@ -29,7 +30,6 @@ export function PreviewTable({
   zh: boolean;
   headerRows: number;
 }) {
-  const tr = (a: string, b: string) => (zh ? a : b);
   const scroll = useRef<HTMLDivElement>(null);
   const model = useMemo(
     () => normalizeTable(table, headerRows),
@@ -62,7 +62,7 @@ export function PreviewTable({
   if (model.columnCount === 0 || table.rows.length === 0) {
     return (
       <div className="preview-empty preview-table-empty" role="status">
-        {tr("此工作表为空", "This worksheet is empty")}
+        {tFor(zh ? "zh-CN" : "en-US", "browse.this.worksheet.is.empty")}
       </div>
     );
   }
@@ -77,7 +77,7 @@ export function PreviewTable({
       className="preview-table-scroll"
       tabIndex={0}
       role="region"
-      aria-label={tr("表格预览", "Table preview")}
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "browse.table.preview")}
     >
       <ResizableTable
         // A different file/sheet/column count starts from fresh column widths;
@@ -91,7 +91,9 @@ export function PreviewTable({
         aria-rowcount={model.ariaRowCount}
         aria-colcount={model.columnCount}
       >
-        <caption className="sr-only">{tr("表格内容", "Table content")}</caption>
+        <caption className="sr-only">
+          {tFor(zh ? "zh-CN" : "en-US", "browse.table.content")}
+        </caption>
         <thead>
           {/* Always present: holds the column letters and the resize grips. */}
           <tr>
@@ -185,7 +187,7 @@ export function PreviewTable({
           {model.headerOnly && items.length === 0 && (
             <tr className="preview-table-empty-row">
               <td colSpan={model.columnCount + 1}>
-                {tr("没有数据行", "No data rows")}
+                {tFor(zh ? "zh-CN" : "en-US", "browse.no.data.rows")}
               </td>
             </tr>
           )}

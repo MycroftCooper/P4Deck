@@ -58,7 +58,7 @@
   width: 100%;
   gap: 6px;
   padding-right: 8px;
-  font-size: 11px;
+  font-size: var(--font-base);
   cursor: default;
 }
 .resource-tree-row:focus-visible {
@@ -107,7 +107,7 @@
 .tree-notice {
   padding: 6px 14px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   overflow-wrap: anywhere;
   max-height: 50%;
   overflow: auto;
@@ -283,6 +283,9 @@ body:has(.resource-resize-handle.is-resizing) * {
 .detached-shell .activity-bar {
   display: none;
 }
+/* RUI-05: the single owner of `.detached-shell .workbench`. docking.css used to
+   repeat this rule identically; it is imported earlier, so this copy was the
+   one that won and the docking.css duplicate was removed instead of this. */
 .detached-shell .workbench {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -299,13 +302,16 @@ body:has(.resource-resize-handle.is-resizing) * {
 }
 :root[data-activity-bar-text="true"] .activity-text {
   display: block;
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
 .activity-bar button > svg {
   flex-shrink: 0;
 }
+/* RUI-05: sole owner of the 520px activity-bar-text overrides. workbench.css
+   used to carry an identical copy inside its own 520px query; this one is
+   imported later, so it won and that copy was removed. */
 @media (max-width: 520px) {
   :root[data-activity-bar-text="true"] .activity-bar button {
     width: 40px;
@@ -355,7 +361,7 @@ body:has(.resource-resize-handle.is-resizing) * {
   .toolbar-navigation.activity-bar
   .activity-text {
   display: block;
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.2;
   overflow-wrap: normal;
 }

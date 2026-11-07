@@ -1,3 +1,5 @@
+import { t } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
@@ -80,16 +82,13 @@ function IntegrationTraceDialogInner({
   function begin() {
     if (active.current) return;
     if (runtime.mode !== "mock" && runtime.connection.state !== "connected") {
-      setWarnings([tr("连接不可用", "Connection unavailable")]);
+      setWarnings([t("pending.connection.unavailable")]);
       return;
     }
     if (budget.current >= 12) {
       setWarnings((previous) => [
         ...previous,
-        tr(
-          "达到12次读取预算；请显式刷新以重新调查",
-          "12-read budget reached; explicitly refresh to start another investigation",
-        ),
+        t("pending.12.read.budget.reached.explicitly.refresh"),
       ]);
       return;
     }
@@ -100,7 +99,7 @@ function IntegrationTraceDialogInner({
   }
   function take() {
     if (budget.current >= 12)
-      throw new Error(tr("达到12次读取预算", "12-read budget reached"));
+      throw new Error(t("pending.12.read.budget.reached"));
     budget.current++;
     setRequests(budget.current);
   }
@@ -236,7 +235,7 @@ function IntegrationTraceDialogInner({
     `${record.sourcePath}#(${record.sourceStart},${record.sourceEnd}] → ${record.targetPath}#(${record.targetStart},${record.targetEnd}] · ${record.how} · CL ${record.recordChange}`;
   return (
     <Dialog
-      title={`${tr("追踪合并去向", "Trace integration destinations")} · CL ${changeId}`}
+      title={`${t("pending.trace.integration.destinations")} · CL ${changeId}`}
       zh={zh}
       source={source}
       onRequestClose={() => {
@@ -252,11 +251,11 @@ function IntegrationTraceDialogInner({
             onClick={() => void run()}
           >
             {detail
-              ? tr("继续查询下一批文件", "Read next file batch")
-              : tr("查询集成记录", "Query integration records")}
+              ? t("pending.read.next.file.batch")
+              : t("pending.query.integration.records")}
           </button>
           <button disabled={busy} onClick={() => void run(true)}>
-            {tr("刷新调查", "Refresh investigation")}
+            {t("pending.refresh.investigation")}
           </button>
           {busy && (
             <button
@@ -265,42 +264,29 @@ function IntegrationTraceDialogInner({
                 setIncomplete(true);
                 setWarnings((previous) => [
                   ...previous,
-                  tr(
-                    "已取消，当前结果不完整",
-                    "Cancelled; current results incomplete",
-                  ),
+                  t("pending.cancelled.current.results.incomplete"),
                 ]);
               }}
             >
-              {tr("取消读取", "Cancel reads")}
+              {t("pending.cancel.reads")}
             </button>
           )}
         </>
       }
     >
-      <p>
-        {tr(
-          "只验证已读取的集成记录覆盖，不证明已穷尽所有去向，也不保证目标当前内容仍包含修改。未发现记录不等于未合入；目标分支无法可靠映射时显示 depot 路径。",
-          "Coverage of retrieved integration records only; neither exhaustive destinations nor current content inclusion. No records does not mean not integrated; unmapped destinations retain their depot paths.",
-        )}
-      </p>
+      <p>{t("pending.coverage.of.retrieved.integration.records.only")}</p>
       <p role="status">
-        {tr("已查询文件", "Files queried")}: {next}/{uniqueFiles} ·{" "}
-        {tr("读取预算", "Read budget")}: {requests}/12 ·{" "}
+        {t("pending.files.queried")}: {next}/{uniqueFiles} ·{" "}
+        {t("pending.read.budget")}: {requests}/12 ·{" "}
         {readAt
-          ? new Date(readAt).toLocaleString()
-          : tr("尚未读取", "Not read")}
+          ? formatLocalTime(readAt, zh ? "zh-CN" : "en-US")
+          : t("pending.not.read")}
       </p>
       {detail &&
         (detail.inspectionStatus !== "complete" ||
           incomplete ||
           next < uniqueFiles) && (
-          <p>
-            {tr(
-              "源CL文件集或调查尚不完整，未查询项为未知。",
-              "Source file set or investigation is incomplete; unqueried files are unknown.",
-            )}
-          </p>
+          <p>{t("pending.sourceInvestigationIncomplete")}</p>
         )}
       {warnings.map((warning, index) => (
         <p role="alert" key={index}>
@@ -309,35 +295,29 @@ function IntegrationTraceDialogInner({
       ))}
       {detail && !groups.length && (
         <p>
-          {tr(
-            "当前未发现匹配记录，去向未知。",
-            "No matching records in current results; destinations unknown.",
-          )}
+          {t("pending.no.matching.records.in.current.results")}
           {records.length > 0
             ? tr(
                 ` 返回了 ${records.length} 条记录，但源路径或源修订范围与此CL未匹配。`,
                 ` ${records.length} records returned, but their source paths or revision ranges do not match this CL.`,
               )
-            : tr(
-                " 后端返回0条记录；这不能证明未合入，可刷新重新核对。",
-                " Backend returned 0 records; this does not prove no integration. Refresh to recheck.",
-              )}
+            : t("pending.backend.returned.0.records.this.does")}
         </p>
       )}
       {groups.map((group) => (
         <details key={group.change}>
           <summary>
-            {tr("记录 CL", "Record CL")} {group.change} · {group.covered.size}/
+            {t("pending.record.cl")} {group.change} · {group.covered.size}/
             {group.total} ·{" "}
             {group.full
-              ? tr("完整文件记录覆盖", "Full file record coverage")
-              : tr("部分记录 / 未知", "Partial records / unknown")}
+              ? t("pending.full.file.record.coverage")
+              : t("pending.partial.records.unknown")}
           </summary>
           <button
             disabled={busy || !!metadata[group.change]}
             onClick={() => void inspect(group.change)}
           >
-            {tr("核对目标CL与时间", "Verify destination CL and time")}
+            {t("pending.verify.destination.cl.and.time")}
           </button>
           {metadata[group.change] && (
             <p>
@@ -350,11 +330,8 @@ function IntegrationTraceDialogInner({
                     file.revision === record.targetEnd,
                 ),
               )
-                ? `${tr("目标 CL", "Destination CL")} ${group.change} · ${metadata[group.change].time}`
-                : tr(
-                    "记录CL未能与全部目标修订核对，目标CL/时间未知",
-                    "Record CL could not be verified against all destination revisions; destination CL/time unknown",
-                  )}
+                ? `${t("pending.destination.cl")} ${group.change} · ${metadata[group.change].time}`
+                : t("pending.record.cl.could.not.be.verified")}
             </p>
           )}
           {group.records.map((record, index) => (
@@ -371,10 +348,7 @@ function IntegrationTraceDialogInner({
                 }
                 onClick={() => void follow(record)}
               >
-                {tr(
-                  "按需查询此去向的下一跳",
-                  "Read this destination's next hop",
-                )}
+                {t("pending.read.this.destination.s.next.hop")}
               </button>
             </div>
           ))}
@@ -383,10 +357,7 @@ function IntegrationTraceDialogInner({
       {hops.map((hop, index) => (
         <details key={index} open>
           <summary>
-            {tr(
-              "中转线索（不计为完整覆盖）",
-              "Intermediate evidence (not full coverage)",
-            )}
+            {t("pending.intermediate.evidence.not.full.coverage")}
           </summary>
           <p style={{ overflowWrap: "anywhere" }}>{evidence(hop.via)}</p>
           {hop.batch.records
@@ -404,13 +375,8 @@ function IntegrationTraceDialogInner({
               </p>
             ))}
           <p>
-            {tr(
-              "仅下一跳记录；忽略/撤销/编辑动作和缺失范围需独立核对。",
-              "Next-hop records only; ignored/undo/edit actions and missing ranges require separate verification.",
-            )}
-            {hop.batch.incomplete
-              ? tr("结果不完整。", "Incomplete results.")
-              : ""}
+            {t("pending.next.hop.records.only.ignored.undo")}
+            {hop.batch.incomplete ? t("pending.incomplete.results") : ""}
           </p>
         </details>
       ))}

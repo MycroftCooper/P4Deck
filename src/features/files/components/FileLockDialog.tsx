@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
@@ -11,6 +12,7 @@ import type {
   FileLockResult,
   WorkspaceNode,
 } from "../../../shared/contracts";
+import { useOperationSession } from "../../../shared/operationSession";
 
 type Phase = "idle" | "checking" | "review" | "running" | "result";
 import {
@@ -40,7 +42,6 @@ export function FileLockDialog({
   check?(request: FileLockPreflightRequest): Promise<FileLockPreflight>;
   execute?(confirmation: FileLockConfirmation): Promise<FileLockResult>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => nodes.map((node) => ({ ...node })));
   const paths = useMemo(
     () =>
@@ -52,39 +53,30 @@ export function FileLockDialog({
   const [phase, setPhase] = useState<Phase>("idle");
   const [preflight, setPreflight] = useState<FileLockPreflight>();
   const [result, setResult] = useState<FileLockResult>();
-  const pendingOperation = useRef<string | undefined>(undefined);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<number>();
-  const generation = useRef(0);
-  const activeOperation = useRef<string | undefined>(undefined);
-  const connection = useRef(connectionKey);
-  connection.current = connectionKey;
+  const session = useOperationSession();
+  // The session owns cancellation; this id only routes progress events and the
+  // explicit Cancel button to the live dispatch operation.
+  const dispatchOperation = useRef<string | undefined>(undefined);
 
-  useEffect(
-    () => () => {
-      generation.current += 1;
-      if (activeOperation.current)
-        void backend
-          .cancelOperation(activeOperation.current)
-          .catch(() => undefined);
-    },
-    [],
-  );
   useEffect(() => {
-    generation.current += 1;
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     setPreflight(undefined);
     setResult(undefined);
     setError("");
     setPhase("idle");
-  }, [connectionKey]);
+  }, [connectionKey, session]);
   useEffect(() => {
     let dispose: (() => void) | undefined;
     void backend
       .subscribeOperationEvents((event) => {
+        const operationId = dispatchOperation.current;
         if (
-          activeOperation.current &&
-          (event.operationId === activeOperation.current ||
-            event.operationId.startsWith(`${activeOperation.current}:`)) &&
+          operationId &&
+          (event.operationId === operationId ||
+            event.operationId.startsWith(`${operationId}:`)) &&
           event.progress != null
         )
           setProgress(event.progress);
@@ -95,8 +87,7 @@ export function FileLockDialog({
 
   async function runPreflight() {
     if (!paths.length || phase === "checking" || phase === "running") return;
-    const epoch = ++generation.current;
-    const expectedConnection = connectionKey;
+    const lease = session.start("preflight");
     setPhase("checking");
     setError("");
     setResult(undefined);
@@ -104,29 +95,26 @@ export function FileLockDialog({
       const value = await check({
         operation,
         paths,
-        operationId: (pendingOperation.current ??= crypto.randomUUID()),
+        operationId: lease.operationId,
       });
-      if (
-        epoch !== generation.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       setPreflight(value);
       setPhase("review");
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       setError(String(cause));
       setPhase("idle");
+    } finally {
+      session.finish(lease);
     }
   }
 
   async function confirm() {
     if (!preflight?.ready || !preflight.token || !preflight.targetSnapshot)
       return;
-    const epoch = generation.current;
-    const expectedConnection = connectionKey;
-    const operationId = pendingOperation.current ?? crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("dispatch");
+    const operationId = lease.operationId;
+    dispatchOperation.current = operationId;
     beginFileLockProjection(operationId, operation, paths, connectionKey);
     setProgress(0);
     setError("");
@@ -138,11 +126,7 @@ export function FileLockDialog({
         stateDigest: preflight.stateDigest,
         operationId,
       });
-      if (
-        epoch !== generation.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       settleFileLockProjection(operationId, value, false);
       setResult(value);
       setPhase("result");
@@ -150,25 +134,23 @@ export function FileLockDialog({
         .then(() => settleFileLockProjection(operationId, value, true))
         .catch(() => undefined);
     } catch (cause) {
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       withdrawFileLockProjection(operationId);
       setError(String(cause));
       setPhase("result");
       void Promise.resolve(onRefresh?.()).catch(() => undefined);
     } finally {
-      if (activeOperation.current === operationId) {
-        activeOperation.current = undefined;
-        pendingOperation.current = undefined;
-      }
+      if (dispatchOperation.current === operationId)
+        dispatchOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
   const title =
-    operation === "lock"
-      ? tr("锁定文件", "Lock files")
-      : tr("解锁文件", "Unlock files");
+    operation === "lock" ? t("files.lock.files") : t("files.unlock.files");
   const retry = () => {
-    generation.current += 1;
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     setPreflight(undefined);
     setResult(undefined);
     setError("");
@@ -178,24 +160,24 @@ export function FileLockDialog({
     phase === "running" ? (
       <button
         onClick={() => {
-          if (activeOperation.current)
-            void backend.cancelOperation(activeOperation.current);
+          if (dispatchOperation.current)
+            void backend.cancelOperation(dispatchOperation.current);
         }}
       >
-        {tr("取消剩余操作", "Cancel remaining")}
+        {t("files.cancel.remaining")}
       </button>
     ) : phase === "result" ? (
       <>
-        <button onClick={retry}>{tr("人工重试", "Retry manually")}</button>
+        <button onClick={retry}>{t("files.retry.manually")}</button>
         <button className="primary" onClick={onDismiss}>
-          {tr("关闭", "Close")}
+          {t("files.close")}
         </button>
       </>
     ) : phase === "review" ? (
       <>
-        <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={onDismiss}>{t("files.cancel")}</button>
         <button onClick={() => void runPreflight()}>
-          {tr("重新预检", "Check again")}
+          {t("files.check.again")}
         </button>
         <button
           className="primary"
@@ -205,21 +187,21 @@ export function FileLockDialog({
           onClick={() => void confirm()}
         >
           {operation === "lock"
-            ? tr("确认锁定", "Confirm lock")
-            : tr("确认解锁", "Confirm unlock")}
+            ? t("files.confirm.lock")
+            : t("files.confirm.unlock")}
         </button>
       </>
     ) : (
       <>
-        <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+        <button onClick={onDismiss}>{t("files.cancel")}</button>
         <button
           className="primary"
           disabled={!paths.length || phase === "checking"}
           onClick={() => void runPreflight()}
         >
           {phase === "checking"
-            ? tr("预检中…", "Checking…")
-            : tr("开始预检", "Run preflight")}
+            ? t("files.checking")
+            : t("files.run.preflight")}
         </button>
       </>
     );
@@ -227,10 +209,7 @@ export function FileLockDialog({
   return (
     <Dialog
       title={title}
-      description={tr(
-        "完整文件集与连接代次会绑定到一次性令牌；批量结果逐文件报告，部分成功不会回滚。",
-        "The complete file set and connection generation are bound to a one-use token. Batch results are per-file and partial success is not rolled back.",
-      )}
+      description={t("files.the.complete.file.set.and.connection")}
       zh={zh}
       source={source}
       busy={phase === "running"}
@@ -238,7 +217,7 @@ export function FileLockDialog({
       footer={footer}
     >
       <div className="workflow-context">
-        {title} · {paths.length} {tr("个文件", "files")}
+        {title} · {paths.length} {t("files.files")}
       </div>
       <PreflightStatus
         zh={zh}
@@ -259,15 +238,14 @@ export function FileLockDialog({
       {preflight && (
         <>
           <DialogNotice>
-            {tr("适用", "Applicable")} {preflight.counts.applicable} ·{" "}
-            {tr("已满足", "already satisfied")}{" "}
-            {preflight.counts.alreadySatisfied} · {tr("阻塞", "blocked")}{" "}
-            {preflight.counts.blocked} · +l {preflight.counts.exclusive}
+            {t("files.applicable")} {preflight.counts.applicable} ·{" "}
+            {t("files.already.satisfied")} {preflight.counts.alreadySatisfied} ·{" "}
+            {t("files.blocked")} {preflight.counts.blocked} · +l{" "}
+            {preflight.counts.exclusive}
           </DialogNotice>
           {preflight.logReference && (
             <DialogNotice>
-              {tr("预检日志", "Preflight log")} ·{" "}
-              <code>{preflight.logReference}</code>
+              {t("files.preflight.log")} · <code>{preflight.logReference}</code>
             </DialogNotice>
           )}
           <div className="workflow-mapping-scroll">
@@ -279,11 +257,11 @@ export function FileLockDialog({
             >
               <thead>
                 <tr>
-                  <th>{tr("文件", "File")}</th>
-                  <th>{tr("打开状态 / CL", "Opened / CL")}</th>
-                  <th>{tr("类型", "Type")}</th>
-                  <th>{tr("锁状态", "Lock")}</th>
-                  <th>{tr("处理", "Decision")}</th>
+                  <th>{t("files.file")}</th>
+                  <th>{t("files.opened.cl")}</th>
+                  <th>{t("files.type")}</th>
+                  <th>{t("files.lock")}</th>
+                  <th>{t("files.decision")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -307,8 +285,8 @@ export function FileLockDialog({
                     </td>
                     <td>
                       {file.applicable
-                        ? tr("将执行", "will run")
-                        : (file.reason ?? tr("不可用", "unavailable"))}
+                        ? t("files.will.run")
+                        : (file.reason ?? t("files.unavailable"))}
                     </td>
                   </tr>
                 ))}
@@ -319,11 +297,8 @@ export function FileLockDialog({
       )}
       {phase === "running" && (
         <DialogNotice>
-          {tr(
-            "同一 mutation lane 内重验、执行并验证",
-            "Revalidating, executing and verifying in one mutation lane",
-          )}{" "}
-          · {Math.round(progress ?? 0)}%
+          {t("files.revalidating.executing.and.verifying.in.one")} ·{" "}
+          {Math.round(progress ?? 0)}%
         </DialogNotice>
       )}
       {result && (
@@ -332,7 +307,7 @@ export function FileLockDialog({
           <p>{result.message}</p>
           {(result.operationId || result.logReference) && (
             <p>
-              {tr("操作 / 日志", "Operation / log")} ·{" "}
+              {t("files.operation.log")} ·{" "}
               <code>{result.operationId ?? result.logReference}</code>
             </p>
           )}

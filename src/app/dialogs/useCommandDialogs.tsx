@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { useEffect, useRef } from "react";
 import type {
   PendingChange,
@@ -263,10 +264,14 @@ export function useCommandDialogs(
             onDismiss={close}
             loadSummary={async () => {
               if (latest.current !== connectionKey)
-                throw new Error(zh ? "连接已改变" : "Connection changed");
+                throw new Error(
+                  tFor(zh ? "zh-CN" : "en-US", "dialogs.connection.changed"),
+                );
               const changes = await queryAllPendingChanges();
               if (latest.current !== connectionKey)
-                throw new Error(zh ? "连接已改变" : "Connection changed");
+                throw new Error(
+                  tFor(zh ? "zh-CN" : "en-US", "dialogs.connection.changed"),
+                );
               return changes.find((change) => change.id === request.id);
             }}
             check={(changeId) => backend.preflightSubmit({ changeId })}

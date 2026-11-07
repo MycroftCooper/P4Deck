@@ -34,7 +34,7 @@ export function TopBar({
     <header className="topbar" ref={header} data-tauri-drag-region={dragRegion}>
       <div className="brand" data-tauri-drag-region={dragRegion}>
         <span className="brand-mark" data-tauri-drag-region={dragRegion}>
-          P4
+          <img src="/p4deck-mark.png" alt="" aria-hidden="true" />
         </span>
         <strong data-tauri-drag-region={dragRegion}>P4Deck</strong>
         {appVersion && (

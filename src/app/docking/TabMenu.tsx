@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContext, useEffect, useRef } from "react";
 import {
   DockviewDefaultTab,
@@ -32,38 +33,40 @@ export function TabMenu(props: IDockviewPanelHeaderProps) {
               关闭: action(() => panel.api.close()),
               关闭其他页签: action(
                 close(others),
-                others.length ? undefined : "没有其他页签",
+                others.length ? undefined : t("shell.tab.noOtherTabs"),
               ),
               关闭右侧页签: action(
                 close(right),
-                right.length ? undefined : "右侧没有页签",
+                right.length ? undefined : t("shell.tab.noTabsToTheRight"),
               ),
               关闭本组页签: action(close([...group.panels])),
               关闭所有页签: action(close([...props.containerApi.panels])),
               移到右侧分屏: action(
                 () => panel.api.moveTo({ group, position: "right" }),
-                others.length ? undefined : "本组至少需要两个页签",
+                others.length ? undefined : t("shell.tab.needsTwoTabs"),
               ),
               移到下方分屏: action(
                 () => panel.api.moveTo({ group, position: "bottom" }),
-                others.length ? undefined : "本组至少需要两个页签",
+                others.length ? undefined : t("shell.tab.needsTwoTabs"),
               ),
               "移到其他组 › 目标组": {
                 children: props.containerApi.groups
                   .filter((g) => g.id !== group.id)
                   .map((g) => ({
                     id: `group:${g.id}`,
-                    label: g.activePanel?.title ?? `分屏 ${g.id}`,
+                    label:
+                      g.activePanel?.title ??
+                      t("shell.tab.groupFallback", { id: g.id }),
                     run: () => panel.api.moveTo({ group: g }),
                   })),
                 reason:
                   props.containerApi.groups.length > 1
                     ? undefined
-                    : "没有其他分屏组",
+                    : t("shell.tab.noOtherGroups"),
               },
               弹出独立窗口: action(
                 () => popout(panel),
-                detachedPage ? "当前已在独立窗口" : undefined,
+                detachedPage ? t("shell.tab.alreadyDetached") : undefined,
               ),
               "锁定/解锁目标": {
                 ...action(() =>

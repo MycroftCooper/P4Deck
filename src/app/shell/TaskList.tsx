@@ -1,3 +1,4 @@
+import { tFor, t } from "../../shared/i18n";
 import { useState } from "react";
 import { Square } from "lucide-react";
 import { useContextMenu } from "../context-menu/ContextMenu";
@@ -34,17 +35,17 @@ export function TaskList({
       id={id}
       className="task-list"
       role="dialog"
-      aria-label={zh ? "P4 任务" : "P4 tasks"}
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.p4.tasks")}
     >
       <header role="presentation">
-        {zh ? "P4 任务" : "P4 tasks"}
-        <button onClick={onClose} aria-label="关闭任务列表 / Close task list">
+        {tFor(zh ? "zh-CN" : "en-US", "shell.p4.tasks")}
+        <button onClick={onClose} aria-label={t("shell.close.task.list")}>
           ×
         </button>
       </header>
       {!tasks.length && (
         <p className="task-idle" role="status">
-          {zh ? "P4 空闲" : "P4 idle"}
+          {tFor(zh ? "zh-CN" : "en-US", "shell.p4.idle")}
         </p>
       )}
       {tasks.map((task) => (
@@ -60,9 +61,7 @@ export function TaskList({
               取消此任务: action(
                 () => onCancel(task.id),
                 cancelling.has(task.id)
-                  ? zh
-                    ? "正在取消"
-                    : "Cancelling"
+                  ? tFor(zh ? "zh-CN" : "en-US", "shell.cancelling")
                   : undefined,
               ),
             }),
@@ -77,33 +76,25 @@ export function TaskList({
             <strong>{task.label}</strong>
             <small>
               {task.phase === "queued"
-                ? zh
-                  ? "排队中"
-                  : "Queued"
-                : zh
-                  ? "执行中"
-                  : "Running"}
+                ? tFor(zh ? "zh-CN" : "en-US", "shell.queued")
+                : tFor(zh ? "zh-CN" : "en-US", "shell.running")}
               {task.progress !== undefined
                 ? ` · ${Math.round(task.progress)}%`
                 : ""}
             </small>
             <progress
-              aria-label={`${task.label} ${zh ? "进度" : "progress"}`}
+              aria-label={`${task.label} ${tFor(zh ? "zh-CN" : "en-US", "shell.progress")}`}
               max={100}
               value={task.progress}
             />
           </button>
           <button
             className="task-cancel"
-            aria-label={`${zh ? "取消任务" : "Cancel task"}: ${task.label} (${task.id})`}
+            aria-label={`${tFor(zh ? "zh-CN" : "en-US", "shell.cancel.task")}: ${task.label} (${task.id})`}
             title={
               cancelling.has(task.id)
-                ? zh
-                  ? "取消中…"
-                  : "Cancelling…"
-                : zh
-                  ? "取消任务"
-                  : "Cancel task"
+                ? tFor(zh ? "zh-CN" : "en-US", "shell.cancelling.2")
+                : tFor(zh ? "zh-CN" : "en-US", "shell.cancel.task")
             }
             disabled={cancelling.has(task.id)}
             onClick={() => void onCancel(task.id)}
@@ -127,19 +118,21 @@ export function TaskList({
         <p>
           {selected} ·{" "}
           {tasks.some((task) => task.id === selected)
-            ? zh
-              ? "执行中；取消不会回滚已完成的修改"
-              : "Running; cancellation does not undo completed changes"
-            : zh
-              ? "已结束"
-              : "Finished"}
+            ? tFor(
+                zh ? "zh-CN" : "en-US",
+                "shell.running.cancellation.does.not.undo",
+              )
+            : tFor(zh ? "zh-CN" : "en-US", "shell.finished")}
         </p>
       )}
       {tasks.length > 0 && (
         <footer role="presentation">
           <button
             className="p4-cancel-all"
-            aria-label={zh ? "取消全部 P4 任务" : "Cancel all P4 tasks"}
+            aria-label={tFor(
+              zh ? "zh-CN" : "en-US",
+              "shell.cancel.all.p4.tasks",
+            )}
             disabled={
               cancellingAll || tasks.every((task) => cancelling.has(task.id))
             }
@@ -152,7 +145,7 @@ export function TaskList({
               strokeWidth={0}
               aria-hidden="true"
             />
-            <span>{zh ? "取消全部" : "Cancel all"}</span>
+            <span>{tFor(zh ? "zh-CN" : "en-US", "shell.cancel.all")}</span>
           </button>
         </footer>
       )}

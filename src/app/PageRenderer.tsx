@@ -1,3 +1,4 @@
+import { t as translate } from "../shared/i18n";
 import { lazy, Suspense } from "react";
 import { FileWorkbench } from "../features/files/components/FileWorkbench";
 import { canScanWorkspace } from "../features/files/workspaceQueries";
@@ -155,13 +156,9 @@ function Content({
   )
     return (
       <div className="workspace-empty" role="status">
-        <p>
-          {zh
-            ? "未连接，请在设置中添加或选择连接。"
-            : "Not connected. Add or select a connection in Settings."}
-        </p>
+        <p>{translate("page.empty.notConnected")}</p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {zh ? "连接设置" : "Connection settings"}
+          {translate("page.empty.connectionSettings")}
         </button>
       </div>
     );
@@ -175,11 +172,7 @@ function Content({
   )
     return (
       <div className="workspace-empty" role="status">
-        <p>
-          {zh
-            ? "正在自动检查连接与登录状态…"
-            : "Checking connection and login automatically…"}
-        </p>
+        <p>{translate("page.empty.checkingConnection")}</p>
       </div>
     );
   if (
@@ -197,7 +190,7 @@ function Content({
           {status.title} · {status.detail}
         </p>
         <button className="secondary" onClick={() => onOpenPage("settings")}>
-          {zh ? "连接设置" : "Connection settings"}
+          {translate("page.empty.connectionSettings")}
         </button>
       </div>
     );
@@ -384,7 +377,7 @@ export function PageRenderer(props: Props) {
       <Suspense
         fallback={
           <div className="workspace-empty" role="status">
-            {props.preferences.zh ? "正在打开页面…" : "Opening page…"}
+            {translate("shell.opening.page")}
           </div>
         }
       >

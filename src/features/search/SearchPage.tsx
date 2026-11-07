@@ -1,4 +1,4 @@
-import { FixedPageHeader } from "../../app/docking/chrome";
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import {
   AlertTriangle,
   ArrowDown,
@@ -14,6 +14,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { backend } from "../../infrastructure/backend";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../shared/operationSession";
 import type {
   GlobalSearchItem,
   GlobalSearchKind,
@@ -35,6 +39,9 @@ type SearchFacet = GlobalSearchResult["facets"][number];
 type SearchPhase = "idle" | "loading" | "ready" | "error";
 type RequestMode = "fresh" | "append" | "category";
 
+/** The search session channel: one lease per submitted query. */
+const SEARCH = "search";
+
 const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
   submittedChange: Hash,
   pendingChange: Hash,
@@ -47,38 +54,39 @@ const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
 
 function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
   const labels: Record<GlobalSearchKind, [string, string]> = {
-    submittedChange: ["已提交 CL", "Submitted"],
-    pendingChange: ["待提交 CL", "Pending"],
-    workspaceFile: ["工作区文件", "Workspace files"],
-    depotFile: ["Depot 文件", "Depot files"],
+    submittedChange: ["search.submittedChange", "search.submittedChange"],
+    pendingChange: ["search.pendingChange", "search.pendingChange"],
+    workspaceFile: ["search.workspaceFile", "search.workspaceFile"],
+    depotFile: ["search.depotFile", "search.depotFile"],
     job: ["Job", "Jobs"],
     stream: ["Stream", "Streams"],
     shelf: ["Shelf", "Shelves"],
   };
-  return labels[kind][zh ? 0 : 1];
+  return tFor(zh ? "zh-CN" : "en-US", labels[kind][0] as MsgKey);
 }
-
 function fieldLabel(field: string, zh: boolean): string {
   const labels: Record<string, [string, string]> = {
-    title: ["标题", "Title"],
-    summary: ["摘要", "Summary"],
-    description: ["描述", "Description"],
-    user: ["用户", "User"],
-    client: ["工作区", "Client"],
+    title: ["search.title", "search.title"],
+    summary: ["search.summary", "search.summary"],
+    description: ["search.description", "search.description"],
+    user: ["search.user", "search.user"],
+    client: ["search.client", "search.client"],
     jobs: ["Job", "Jobs"],
     jobId: ["Job ID", "Job ID"],
-    status: ["状态", "Status"],
-    absolutePath: ["本地路径", "Local path"],
-    depotPath: ["Depot 路径", "Depot path"],
-    streamPath: ["Stream 路径", "Stream path"],
-    name: ["名称", "Name"],
-    owner: ["所有者", "Owner"],
-    type: ["类型", "Type"],
-    parent: ["父 Stream", "Parent stream"],
-    changeId: ["变更号", "Change ID"],
-    time: ["时间", "Time"],
+    status: ["search.status", "search.status"],
+    absolutePath: ["search.absolutePath", "search.absolutePath"],
+    depotPath: ["search.depotPath", "search.depotPath"],
+    streamPath: ["search.streamPath", "search.streamPath"],
+    name: ["search.name", "search.name"],
+    owner: ["search.owner", "search.owner"],
+    type: ["search.type", "search.type"],
+    parent: ["search.parent", "search.parent"],
+    changeId: ["search.changeId", "search.changeId"],
+    time: ["search.time", "search.time"],
   };
-  return labels[field]?.[zh ? 0 : 1] ?? field;
+  return labels[field]
+    ? tFor(zh ? "zh-CN" : "en-US", labels[field][0] as MsgKey)
+    : field;
 }
 
 function HighlightedText({
@@ -106,7 +114,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Stream</span>
         <span>
-          {zh ? "路径：" : "Path: "}
+          {t("search.path")}
           <HighlightedText
             value={item.target.streamPath}
             field="streamPath"
@@ -121,7 +129,7 @@ function ResultIdentity({ item, zh }: { item: GlobalSearchItem; zh: boolean }) {
       <span className="search-result-identity">
         <span className="search-result-kind">Shelf</span>
         <span>
-          {zh ? "编号 CL：" : "Numbered CL: "}
+          {t("search.numbered.cl")}
           <HighlightedText value={changeId} field="changeId" item={item} />
         </span>
       </span>
@@ -190,10 +198,8 @@ function VirtualSearchResults({
             "[data-search-index]",
           )?.dataset.searchIndex,
         );
-        const enabled = items
-          .map((item, index) => (item.target.type === "job" ? -1 : index))
-          .filter((index) => index >= 0);
-        if (!enabled.length) return;
+        // Search jobs are not listed, so every rendered row is navigable.
+        const enabled = items.map((_, index) => index);
         const position = enabled.indexOf(current);
         const next =
           event.key === "Home"
@@ -216,7 +222,6 @@ function VirtualSearchResults({
         {rows.map((row) => {
           const item = items[row.index];
           const Icon = KIND_ICON[item.kind];
-          const disabled = item.target.type === "job";
           return (
             <div
               key={item.identity}
@@ -231,16 +236,10 @@ function VirtualSearchResults({
               <button
                 data-search-index={row.index}
                 className="search-result-row"
-                disabled={disabled || navigationBusy === item.identity}
-                title={
-                  disabled
-                    ? zh
-                      ? "尚无 Job 详情页，无法导航。"
-                      : "No Job details page exists yet; navigation is unavailable."
-                    : zh
-                      ? `打开 ${item.title}`
-                      : `Open ${item.title}`
-                }
+                disabled={navigationBusy === item.identity}
+                title={tFor(zh ? "zh-CN" : "en-US", "search.open", {
+                  p1: item.title,
+                })}
                 onClick={() => void onOpen(item)}
               >
                 <Icon size={16} />
@@ -261,22 +260,13 @@ function VirtualSearchResults({
                     />
                   </span>
                   <small>
-                    {zh ? "匹配：" : "Matched: "}
+                    {t("search.matched")}
                     {item.matchedFields
                       .map((field) => fieldLabel(field, zh))
                       .join(" · ")}
-                    {disabled
-                      ? zh
-                        ? " · 暂无可用详情页"
-                        : " · no destination page"
-                      : ""}
                   </small>
                 </span>
-                {disabled ? (
-                  <span className="search-navigation-unavailable">
-                    {zh ? "不可导航" : "Unavailable"}
-                  </span>
-                ) : navigationBusy === item.identity ? (
+                {navigationBusy === item.identity ? (
                   <LoaderCircle className="spin" size={15} />
                 ) : (
                   <ChevronRight size={15} />
@@ -295,14 +285,17 @@ function validationMessage(
   zh: boolean,
 ): string {
   if (reason === "control")
-    return zh
-      ? "搜索内容不能包含控制字符。"
-      : "Search text cannot contain control characters.";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "search.search.text.cannot.contain.control",
+    );
   if (reason === "tooLong")
-    return zh
-      ? `搜索内容最多 ${GLOBAL_SEARCH_MAX_CHARACTERS} 个 Unicode 字符。`
-      : `Search text is limited to ${GLOBAL_SEARCH_MAX_CHARACTERS} Unicode characters.`;
-  return zh ? "请输入搜索内容。" : "Enter a search query.";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "search.search.text.is.limited.to.unicode",
+      { p1: zh ? GLOBAL_SEARCH_MAX_CHARACTERS : GLOBAL_SEARCH_MAX_CHARACTERS },
+    );
+  return tFor(zh ? "zh-CN" : "en-US", "search.enter.a.search.query");
 }
 
 export function SearchPage({
@@ -334,9 +327,13 @@ export function SearchPage({
   const [navigationBusy, setNavigationBusy] = useState<string>();
   const [navigationNotice, setNavigationNotice] = useState("");
 
-  const generation = useRef(0);
-  const operations = useRef(new Set<string>());
-  const timer = useRef<number | undefined>(undefined);
+  /**
+   * One lease per search session, on a single channel. Submitting starts a
+   * lease, append/category requests continue it, and typing or re-filtering
+   * abandons it, which is exactly the "later answer must not paint" rule.
+   */
+  const session = useOperationSession();
+  const currentSession = useRef<OperationLease | undefined>(undefined);
   const itemsRef = useRef(items);
   const facetsRef = useRef(facets);
   const nextCursorRef = useRef(nextCursor);
@@ -356,12 +353,13 @@ export function SearchPage({
   const kindSignature = kinds.join(",");
 
   const cancelOperations = useCallback(() => {
-    if (timer.current !== undefined) window.clearTimeout(timer.current);
-    timer.current = undefined;
-    for (const operationId of operations.current)
-      void backend.cancelOperation(operationId).catch(() => undefined);
-    operations.current.clear();
-  }, []);
+    const live = currentSession.current;
+    currentSession.current = undefined;
+    // `finish` rather than `abandon`: the session may have already published
+    // its result, and a published operation must never be cancelled. A request
+    // that is still in flight is simply ignored by the lease check below.
+    if (live) session.finish(live);
+  }, [session]);
 
   const resetResults = useCallback(() => {
     itemsRef.current = [];
@@ -384,14 +382,24 @@ export function SearchPage({
 
   const execute = useCallback(
     async (
-      session: number,
+      lease: OperationLease,
       text: string,
       requestedKinds: GlobalSearchKind[],
       cursor: string | undefined,
       mode: RequestMode,
     ) => {
       const operationId = crypto.randomUUID();
-      operations.current.add(operationId);
+      // The session is the lease, not a counter: a request that outlived its
+      // session never writes UI state.
+      const live = () => session.isCurrent(lease);
+      // The backend only echoes this value, so the session's stable id is used:
+      // every request in one session shares it and a new session gets a new
+      // one. It is reduced into the safe-integer range so the wire value stays
+      // an exact JSON number (`2 ** 53` keeps `Number(x)` idempotent across the
+      // send/echo round trip); the lease, not this number, decides staleness.
+      const requestGeneration = Number(
+        BigInt(`0x${lease.operationId.replace(/-/g, "")}`) % (1n << 53n),
+      );
       if (cursor) usedCursors.current.add(cursor);
       if (mode === "append") {
         loadingMoreRef.current = true;
@@ -405,17 +413,13 @@ export function SearchPage({
       try {
         const result = await backend.globalSearch({
           operationId,
-          requestGeneration: session,
+          requestGeneration,
           text,
           kinds: requestedKinds,
           pageSize: GLOBAL_SEARCH_PAGE_SIZE,
           cursor,
         });
-        if (
-          generation.current !== session ||
-          result.requestGeneration !== session
-        )
-          return;
+        if (!live() || result.requestGeneration !== requestGeneration) return;
         const incoming = itemsFromGroups(result.groups);
         const invalidContinuation =
           result.hasMore &&
@@ -444,9 +448,13 @@ export function SearchPage({
           );
           if (result.hasMore)
             setPageError(
-              tr(
-                `${kindLabel(retriedKind, true)}重试只恢复了前 ${GLOBAL_SEARCH_PAGE_SIZE} 条；请整体重试以继续分页。`,
-                `${kindLabel(retriedKind, false)} retry restored the first ${GLOBAL_SEARCH_PAGE_SIZE} items; retry all to continue paging.`,
+              tFor(
+                zh ? "zh-CN" : "en-US",
+                "search.retry.restored.the.first.items.retry",
+                {
+                  p1: kindLabel(retriedKind, true),
+                  p2: GLOBAL_SEARCH_PAGE_SIZE,
+                },
               ),
             );
         } else {
@@ -464,12 +472,7 @@ export function SearchPage({
             nextCursorRef.current = undefined;
             setHasMore(false);
             setNextCursor(undefined);
-            setPageError(
-              tr(
-                "后端返回了不可继续的游标；已保留当前部分结果。",
-                "The backend returned a non-progressing cursor; current partial results were preserved.",
-              ),
-            );
+            setPageError(t("search.the.backend.returned.a.non.progressing"));
           } else {
             hasMoreRef.current = result.hasMore;
             nextCursorRef.current = result.nextCursor;
@@ -482,7 +485,7 @@ export function SearchPage({
         setSimulated(result.simulated);
         setError("");
       } catch (cause) {
-        if (generation.current !== session) return;
+        if (!live()) return;
         const message = errorMessage(cause);
         if (mode === "append") {
           setPageError(message);
@@ -494,8 +497,9 @@ export function SearchPage({
           setPhase("error");
         }
       } finally {
-        operations.current.delete(operationId);
-        if (generation.current === session) {
+        // Clear the spinners before nothing else has to: the lease is only
+        // retired by the caller, so `live()` still answers honestly here.
+        if (live()) {
           if (mode === "append") {
             loadingMoreRef.current = false;
             setLoadingMore(false);
@@ -504,60 +508,70 @@ export function SearchPage({
         }
       }
     },
-    [zh],
+    [session, zh],
   );
 
+  /**
+   * Search runs only on an explicit submit (Enter or the search button); typing
+   * and re-filtering cancel the in-flight request and return to idle instead of
+   * chasing the draft with new queries.
+   */
   const startSession = useCallback(
-    (value: string, selectedKinds: GlobalSearchKind[], delay: number) => {
+    (value: string, selectedKinds: GlobalSearchKind[]) => {
       cancelOperations();
-      generation.current += 1;
-      const session = generation.current;
+      const lease = session.start(SEARCH);
+      currentSession.current = lease;
       resetResults();
       const checked = validateSearchText(value);
       if (!checked.valid || !selectedKinds.length) {
         current.current = undefined;
+        cancelOperations();
         setPhase("idle");
         return;
       }
       const query = { text: checked.text, kinds: [...selectedKinds] };
       current.current = query;
-      const run = () => {
-        timer.current = undefined;
-        void execute(session, query.text, query.kinds, undefined, "fresh");
-      };
-      if (delay) timer.current = window.setTimeout(run, delay);
-      else run();
+      void execute(lease, query.text, query.kinds, undefined, "fresh");
     },
-    [cancelOperations, execute, resetResults],
+    [cancelOperations, execute, resetResults, session],
   );
 
   useEffect(() => {
-    startSession(draft, kinds, 300);
-    return () => {
-      if (timer.current !== undefined) window.clearTimeout(timer.current);
-    };
-  }, [draft, kindSignature, startSession]);
+    // A changed draft or category invalidates the previous session outright:
+    // its results describe a query the user can no longer see.
+    cancelOperations();
+    current.current = undefined;
+    resetResults();
+    setPhase("idle");
+  }, [cancelOperations, draft, resetResults, kindSignature]);
 
   useEffect(
     () => () => {
-      generation.current += 1;
       cancelOperations();
     },
     [cancelOperations],
   );
 
-  const submit = () => startSession(draft, kinds, 0);
+  const submit = () => startSession(draft, kinds);
   const loadMore = () => {
     const query = current.current;
     const cursor = nextCursorRef.current;
-    if (!query || !cursor || !hasMoreRef.current || loadingMoreRef.current)
+    const lease = currentSession.current;
+    if (
+      !query ||
+      !lease ||
+      !cursor ||
+      !hasMoreRef.current ||
+      loadingMoreRef.current
+    )
       return;
-    void execute(generation.current, query.text, query.kinds, cursor, "append");
+    void execute(lease, query.text, query.kinds, cursor, "append");
   };
   const retryCategory = (kind: GlobalSearchKind) => {
     const query = current.current;
-    if (!query || categoryLoading) return;
-    void execute(generation.current, query.text, [kind], undefined, "category");
+    const lease = currentSession.current;
+    if (!query || !lease || categoryLoading) return;
+    void execute(lease, query.text, [kind], undefined, "category");
   };
 
   const grouped = useMemo(
@@ -585,33 +599,32 @@ export function SearchPage({
   const statusText = navigationNotice
     ? navigationNotice
     : phase === "loading"
-      ? tr("正在搜索。", "Searching.")
+      ? t("search.searching")
       : loadingMore
-        ? tr("正在加载更多结果。", "Loading more results.")
+        ? t("search.loading.more.results")
         : phase === "error"
-          ? tr("搜索失败。", "Search failed.")
+          ? t("search.search.failed")
           : phase === "ready"
-            ? tr(
-                `已加载 ${items.length} 条，共匹配 ${totalMatched} 条。`,
-                `${items.length} loaded, ${totalMatched} matched.`,
-              )
-            : tr("等待搜索。", "Ready to search.");
+            ? tFor(zh ? "zh-CN" : "en-US", "search.loaded.matched", {
+                p1: items.length,
+                p2: totalMatched,
+              })
+            : t("search.ready.to.search");
 
   const openItem = async (item: GlobalSearchItem) => {
-    if (item.target.type === "job") return;
     setNavigationBusy(item.identity);
     setNavigationNotice("");
     try {
       await onNavigate(item.target);
       setNavigationNotice(
-        tr(`已打开 ${item.title}。`, `Opened ${item.title}.`),
+        tFor(zh ? "zh-CN" : "en-US", "search.opened", { p1: item.title }),
       );
     } catch (cause) {
       setNavigationNotice(
-        tr(
-          `无法打开 ${item.title}：${errorMessage(cause)}`,
-          `Could not open ${item.title}: ${errorMessage(cause)}`,
-        ),
+        tFor(zh ? "zh-CN" : "en-US", "search.could.not.open", {
+          p1: item.title,
+          p2: errorMessage(cause),
+        }),
       );
     } finally {
       setNavigationBusy(undefined);
@@ -623,319 +636,279 @@ export function SearchPage({
       <div className="search-live" role="status" aria-live="polite">
         {statusText}
       </div>
-      <FixedPageHeader
-        description={tr(
-          "搜索已提交与待提交 CL、工作区与 Depot 文件、Job、Stream 和 Shelf。",
-          "Search Submitted and Pending changelists, workspace and depot files, jobs, streams, and shelves.",
-        )}
-      >
+      <div className="search-body">
         {mock ? (
-          <span className="search-ui-badge">
-            {tr("模拟结果 · 未访问 P4", "Simulated · No P4 access")}
-          </span>
-        ) : (
-          <span className="search-production-badge">
-            {tr("真实 P4 搜索", "Live P4 search")}
-          </span>
-        )}
-      </FixedPageHeader>
+          <div className="search-ui-note">
+            <AlertTriangle size={15} />
+            <span>{t("search.mock.mode.is.active.results.validate")}</span>
+          </div>
+        ) : null}
 
-      {mock ? (
-        <div className="search-ui-note">
-          <AlertTriangle size={15} />
-          <span>
-            {tr(
-              "当前为 Mock 模式；结果用于交互验证，不代表服务器数据。",
-              "Mock mode is active. Results validate interaction only and do not represent server data.",
-            )}
-          </span>
-        </div>
-      ) : null}
-
-      <section
-        className="search-card"
-        aria-label={tr("搜索条件", "Search controls")}
-      >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (validation.valid && !noKinds) submit();
-          }}
+        <section
+          className="search-card"
+          aria-label={t("search.search.controls")}
         >
-          <label className="search-query-label" htmlFor="global-search-input">
-            {tr("搜索内容", "Search query")}
-          </label>
-          <div className="search-input-row">
-            <Search size={18} aria-hidden="true" />
-            <input
-              id="global-search-input"
-              value={draft}
-              aria-invalid={!!validationError}
-              aria-describedby="global-search-help global-search-error"
-              autoComplete="off"
-              maxLength={256}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={tr(
-                "文件、路径、CL、用户、Job、Stream 或 Shelf…",
-                "File, path, changelist, user, job, stream, or shelf…",
-              )}
-            />
-            {draft ? (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label={tr("清空搜索", "Clear search")}
-                onClick={() => setDraft("")}
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-            <button
-              className="search-primary"
-              disabled={!validation.valid || noKinds || phase === "loading"}
-            >
-              {phase === "loading" ? (
-                <LoaderCircle className="spin" size={14} />
-              ) : (
-                <Search size={14} />
-              )}
-              {tr("搜索", "Search")}
-            </button>
-          </div>
-          <div id="global-search-help" className="search-help">
-            {tr(
-              "输入停止 300ms 后自动搜索；Enter 立即搜索。最多 128 个 Unicode 字符。",
-              "Search starts after a 300ms pause; Enter searches immediately. Maximum 128 Unicode characters.",
-            )}
-          </div>
-          <div
-            id="global-search-error"
-            className="search-validation"
-            role={validationError || noKinds ? "alert" : undefined}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (validation.valid && !noKinds) submit();
+            }}
           >
-            {validationError ||
-              (noKinds
-                ? tr("请至少选择一个类别。", "Select at least one category.")
-                : "")}
-          </div>
-          <fieldset className="search-kind-picker">
-            <legend>{tr("搜索类别", "Categories")}</legend>
-            {GLOBAL_SEARCH_KINDS.map((kind) => (
-              <label key={kind}>
-                <input
-                  type="checkbox"
-                  checked={kinds.includes(kind)}
-                  onChange={() =>
-                    setKinds((currentKinds) =>
-                      currentKinds.includes(kind)
-                        ? currentKinds.filter((value) => value !== kind)
-                        : GLOBAL_SEARCH_KINDS.filter(
-                            (value) =>
-                              value === kind || currentKinds.includes(value),
-                          ),
-                    )
-                  }
-                />
-                {kindLabel(kind, zh)}
-              </label>
-            ))}
-          </fieldset>
-          {kinds.includes("shelf") ? (
-            <p className="search-bounded-note" id="search-shelf-bounds">
-              {tr(
-                "Shelf 深度搜索是有界扫描；触及 metadata、详情、文件数或时间预算时会保留其他类别，并在 Shelf 分组显示不完整原因。",
-                "Shelf deep search is bounded. If metadata, detail, file, or time budgets are reached, other categories remain available and the Shelf group reports why results are partial.",
-              )}
-            </p>
-          ) : null}
-        </form>
-      </section>
-
-      <section
-        className="search-card search-results"
-        aria-label={tr("搜索结果", "Search results")}
-        aria-busy={phase === "loading" || loadingMore}
-      >
-        <div className="search-results-heading">
-          <div>
-            <h2>{tr("搜索结果", "Results")}</h2>
-            {phase === "ready" ? (
-              <p>
-                {tr(
-                  `已载入 ${items.length} · 匹配 ${totalMatched} · 扫描 ${totalScanned}`,
-                  `${items.length} loaded · ${totalMatched} matched · ${totalScanned} scanned`,
+            <label className="search-query-label" htmlFor="global-search-input">
+              <span className="sr-only">{t("search.search.query")}</span>
+            </label>
+            <div className="search-input-row">
+              <Search size={18} aria-hidden="true" />
+              <input
+                id="global-search-input"
+                value={draft}
+                aria-invalid={!!validationError}
+                aria-describedby="global-search-error"
+                autoComplete="off"
+                maxLength={256}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={t("search.file.path.changelist.user.stream")}
+              />
+              {draft ? (
+                <button
+                  type="button"
+                  className="search-clear"
+                  aria-label={t("search.clear.search")}
+                  onClick={() => setDraft("")}
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+              <button
+                className="search-primary"
+                disabled={!validation.valid || noKinds || phase === "loading"}
+              >
+                {phase === "loading" ? (
+                  <LoaderCircle className="spin" size={14} />
+                ) : (
+                  <Search size={14} />
                 )}
+                {t("search.search")}
+              </button>
+            </div>
+            <div
+              id="global-search-error"
+              className="search-validation"
+              role={validationError || noKinds ? "alert" : undefined}
+            >
+              {validationError ||
+                (noKinds ? t("search.select.at.least.one.category") : "")}
+            </div>
+            <fieldset
+              className="search-kind-picker"
+              aria-label={t("search.categories")}
+            >
+              {GLOBAL_SEARCH_KINDS.map((kind) => (
+                <label key={kind}>
+                  <input
+                    type="checkbox"
+                    checked={kinds.includes(kind)}
+                    onChange={() =>
+                      setKinds((currentKinds) =>
+                        currentKinds.includes(kind)
+                          ? currentKinds.filter((value) => value !== kind)
+                          : GLOBAL_SEARCH_KINDS.filter(
+                              (value) =>
+                                value === kind || currentKinds.includes(value),
+                            ),
+                      )
+                    }
+                  />
+                  {kindLabel(kind, zh)}
+                </label>
+              ))}
+            </fieldset>
+            {kinds.includes("shelf") ? (
+              <p className="search-bounded-note" id="search-shelf-bounds">
+                {t("search.shelf.deep.search.is.bounded.if")}
               </p>
             ) : null}
-          </div>
-          {phase === "ready" || phase === "error" ? (
-            <button className="secondary" onClick={submit}>
-              <RefreshCw size={14} />
-              {tr("整体重试", "Retry all")}
-            </button>
-          ) : null}
-        </div>
+          </form>
+        </section>
 
-        {partial ? (
-          <div className="search-partial" role="status">
-            <AlertTriangle size={15} />
-            {tr(
-              failures
-                ? `${failures} 个类别失败，当前结果不完整。`
-                : "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
-              failures
-                ? `${failures} categories failed; results are incomplete.`
-                : "Results are incomplete because a category hit its scan limit or returned partial data.",
-            )}
-          </div>
-        ) : null}
-
-        {phase === "loading" ? (
-          <div className="search-empty">
-            <LoaderCircle className="spin" size={32} />
-            <h3>{tr("正在搜索", "Searching")}</h3>
-            <p>{tr("正在查询所选类别…", "Querying selected categories…")}</p>
-          </div>
-        ) : phase === "error" ? (
-          <div className="search-error" role="alert">
-            <AlertTriangle size={22} />
+        <section
+          className="search-card search-results"
+          aria-label={t("search.search.results")}
+          aria-busy={phase === "loading" || loadingMore}
+        >
+          <div className="search-results-heading">
             <div>
-              <strong>{tr("搜索失败", "Search failed")}</strong>
-              <p>{error}</p>
+              <h2>{t("search.results")}</h2>
+              {phase === "ready" ? (
+                <p>
+                  {tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "search.loaded.matched.scanned",
+                    {
+                      p1: items.length,
+                      p2: totalMatched,
+                      p3: totalScanned,
+                    },
+                  )}
+                </p>
+              ) : null}
             </div>
-            <button onClick={submit}>{tr("重试", "Retry")}</button>
-          </div>
-        ) : phase === "ready" && !items.length && !failures ? (
-          <div className="search-empty">
-            <FolderSearch size={32} />
-            <h3>{tr("没有匹配结果", "No results")}</h3>
-            <p>
-              {tr("请尝试其他关键词或类别。", "Try another query or category.")}
-            </p>
-          </div>
-        ) : phase === "idle" ? (
-          <div className="search-empty">
-            <FolderSearch size={32} />
-            <h3>{tr("输入内容开始搜索", "Enter a query to search")}</h3>
-            <p>
-              {tr(
-                "支持七类结果；可使用上方筛选缩小范围。",
-                "Seven result categories are available; use the filters above to narrow the search.",
-              )}
-            </p>
-          </div>
-        ) : null}
-
-        {phase === "ready" ? (
-          <div className="search-groups">
-            {grouped.map(({ kind, items: groupItems, facet }) => {
-              const Icon = KIND_ICON[kind];
-              const truncated =
-                !!facet?.partial &&
-                !facet.error &&
-                facet.scannedCount >= safetyLimit;
-              return (
-                <section
-                  className="search-group"
-                  key={kind}
-                  aria-labelledby={`search-group-${kind}`}
-                >
-                  <header>
-                    <div>
-                      <Icon size={16} />
-                      <h3 id={`search-group-${kind}`}>{kindLabel(kind, zh)}</h3>
-                      <span className="search-facet-count">
-                        {facet?.matchedCount ?? 0}
-                      </span>
-                    </div>
-                    <small>
-                      {tr("扫描", "Scanned")} {facet?.scannedCount ?? 0}
-                      {truncated
-                        ? tr(" · 达到扫描上限", " · scan limit reached")
-                        : facet?.partial && !facet.error
-                          ? tr(" · 部分结果", " · partial")
-                          : ""}
-                    </small>
-                  </header>
-                  {facet?.partialReason ? (
-                    <div className="search-category-partial" role="status">
-                      <AlertTriangle size={14} />
-                      <span>
-                        <strong>
-                          {tr("不完整原因：", "Partial reason: ")}
-                        </strong>
-                        {facet.partialReason}
-                      </span>
-                    </div>
-                  ) : null}
-                  {facet?.error ? (
-                    <div className="search-category-error" role="alert">
-                      <span>
-                        <strong>{facet.error.code}</strong> ·{" "}
-                        {facet.error.message}
-                      </span>
-                      <button
-                        disabled={categoryLoading === kind}
-                        onClick={() => retryCategory(kind)}
-                      >
-                        <RefreshCw
-                          size={13}
-                          className={categoryLoading === kind ? "spin" : ""}
-                        />
-                        {tr("重试此类别", "Retry category")}
-                      </button>
-                    </div>
-                  ) : null}
-                  {groupItems.length ? (
-                    <VirtualSearchResults
-                      items={groupItems}
-                      zh={zh}
-                      navigationBusy={navigationBusy}
-                      onOpen={openItem}
-                    />
-                  ) : !facet?.error ? (
-                    <p className="search-group-empty">
-                      {tr("此类别没有匹配项。", "No matches in this category.")}
-                    </p>
-                  ) : null}
-                </section>
-              );
-            })}
-          </div>
-        ) : null}
-
-        {pageError ? (
-          <div className="search-page-error" role="alert">
-            <span>{pageError}</span>
-            {hasMore ? (
-              <>
-                <button onClick={loadMore}>
-                  {tr("重试加载", "Retry page")}
-                </button>
-                <button onClick={submit}>
-                  {tr("重新开始搜索", "Restart search")}
-                </button>
-              </>
+            {phase === "ready" || phase === "error" ? (
+              <button className="secondary" onClick={submit}>
+                <RefreshCw size={14} />
+                {t("search.retry.all")}
+              </button>
             ) : null}
           </div>
-        ) : null}
-        {phase === "ready" && hasMore ? (
-          <button
-            className="search-load-more"
-            disabled={loadingMore}
-            onClick={loadMore}
-          >
-            {loadingMore ? (
-              <LoaderCircle className="spin" size={14} />
-            ) : (
-              <ArrowDown size={14} />
-            )}
-            {loadingMore
-              ? tr("加载中…", "Loading…")
-              : tr("继续加载", "Load more")}
-          </button>
-        ) : null}
-      </section>
+
+          {partial ? (
+            <div className="search-partial" role="status">
+              <AlertTriangle size={15} />
+              {tr(
+                failures
+                  ? `${failures} 个类别失败，当前结果不完整。`
+                  : "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
+                failures
+                  ? `${failures} categories failed; results are incomplete.`
+                  : "Results are incomplete because a category hit its scan limit or returned partial data.",
+              )}
+            </div>
+          ) : null}
+
+          {phase === "loading" ? (
+            <div className="search-empty">
+              <LoaderCircle className="spin" size={32} />
+              <h3>{t("search.searching.2")}</h3>
+              <p>{t("search.querying.selected.categories")}</p>
+            </div>
+          ) : phase === "error" ? (
+            <div className="search-error" role="alert">
+              <AlertTriangle size={22} />
+              <div>
+                <strong>{t("search.search.failed.2")}</strong>
+                <p>{error}</p>
+              </div>
+              <button onClick={submit}>{t("search.retry")}</button>
+            </div>
+          ) : phase === "ready" && !items.length && !failures ? (
+            <div className="search-empty">
+              <FolderSearch size={32} />
+              <h3>{t("search.no.results")}</h3>
+              <p>{t("search.try.another.query.or.category")}</p>
+            </div>
+          ) : phase === "idle" ? (
+            <div className="search-empty">
+              <FolderSearch size={32} />
+              <h3>{t("search.enter.a.query.to.search")}</h3>
+              <p>{t("search.six.result.categories.are.available.use")}</p>
+            </div>
+          ) : null}
+
+          {phase === "ready" ? (
+            <div className="search-groups">
+              {grouped.map(({ kind, items: groupItems, facet }) => {
+                const Icon = KIND_ICON[kind];
+                const truncated =
+                  !!facet?.partial &&
+                  !facet.error &&
+                  facet.scannedCount >= safetyLimit;
+                return (
+                  <section
+                    className="search-group"
+                    key={kind}
+                    aria-labelledby={`search-group-${kind}`}
+                  >
+                    <header>
+                      <div>
+                        <Icon size={16} />
+                        <h3 id={`search-group-${kind}`}>
+                          {kindLabel(kind, zh)}
+                        </h3>
+                        <span className="search-facet-count">
+                          {facet?.matchedCount ?? 0}
+                        </span>
+                      </div>
+                      <small>
+                        {t("search.scanned")} {facet?.scannedCount ?? 0}
+                        {truncated
+                          ? t("search.scan.limit.reached")
+                          : facet?.partial && !facet.error
+                            ? t("search.partial")
+                            : ""}
+                      </small>
+                    </header>
+                    {facet?.partialReason ? (
+                      <div className="search-category-partial" role="status">
+                        <AlertTriangle size={14} />
+                        <span>
+                          <strong>{t("search.partial.reason")}</strong>
+                          {facet.partialReason}
+                        </span>
+                      </div>
+                    ) : null}
+                    {facet?.error ? (
+                      <div className="search-category-error" role="alert">
+                        <span>
+                          <strong>{facet.error.code}</strong> ·{" "}
+                          {facet.error.message}
+                        </span>
+                        <button
+                          disabled={categoryLoading === kind}
+                          onClick={() => retryCategory(kind)}
+                        >
+                          <RefreshCw
+                            size={13}
+                            className={categoryLoading === kind ? "spin" : ""}
+                          />
+                          {t("search.retry.category")}
+                        </button>
+                      </div>
+                    ) : null}
+                    {groupItems.length ? (
+                      <VirtualSearchResults
+                        items={groupItems}
+                        zh={zh}
+                        navigationBusy={navigationBusy}
+                        onOpen={openItem}
+                      />
+                    ) : !facet?.error ? (
+                      <p className="search-group-empty">
+                        {t("search.no.matches.in.this.category")}
+                      </p>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {pageError ? (
+            <div className="search-page-error" role="alert">
+              <span>{pageError}</span>
+              {hasMore ? (
+                <>
+                  <button onClick={loadMore}>{t("search.retry.page")}</button>
+                  <button onClick={submit}>{t("search.restart.search")}</button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {phase === "ready" && hasMore ? (
+            <button
+              className="search-load-more"
+              disabled={loadingMore}
+              onClick={loadMore}
+            >
+              {loadingMore ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <ArrowDown size={14} />
+              )}
+              {loadingMore ? t("search.loading") : t("search.load.more")}
+            </button>
+          ) : null}
+        </section>
+      </div>
     </section>
   );
 }

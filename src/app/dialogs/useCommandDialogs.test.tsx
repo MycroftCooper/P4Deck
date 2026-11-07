@@ -405,6 +405,7 @@ it("connects toolbar and context-menu resolve requests to the typed workflow", a
   expect(preflight).toHaveBeenCalledExactlyOnceWith({
     depotPaths: ["//depot/a"],
     force: false,
+    operationId: expect.any(String),
   });
   const acceptSafe = [
     ...document.querySelectorAll<HTMLButtonElement>("dialog button"),

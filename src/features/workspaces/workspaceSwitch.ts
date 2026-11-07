@@ -1,33 +1,91 @@
-export function switchFailure(cause: unknown, zh: boolean) {
+import { tFor } from "../../shared/i18n";
+import { backend } from "../../infrastructure/backend";
+import type {
+  RuntimeInfo,
+  SwitchWorkspaceRequest,
+} from "../../shared/contracts";
+
+interface WorkspaceSwitchApi {
+  switchWorkspace(request: SwitchWorkspaceRequest): Promise<RuntimeInfo>;
+  runtimeInfo(): Promise<RuntimeInfo>;
+}
+
+export interface WorkspaceSwitchAttempt {
+  /** Runtime the caller must apply, either the switch result or a resync. */
+  runtime?: RuntimeInfo;
+  /** Failure to report when the switch still did not happen. */
+  error?: unknown;
+}
+
+function failureCode(cause: unknown) {
   const value =
     cause && typeof cause === "object"
       ? (cause as { code?: string; message?: string })
       : undefined;
-  const code = value?.code ?? String(cause).match(/(?:Error:\s*)?(\w+):/)?.[1];
-  const recovery: Record<string, [string, string]> = {
-    contextChanged: [
-      "活动连接已变化，请刷新 Workspace 后重试。",
-      "The active connection changed. Refresh workspaces and retry.",
-    ],
-    authenticationRequired: [
-      "当前 Profile 需要登录，请到设置中完成认证后重试。",
-      "The current profile requires login. Authenticate in Settings, then retry.",
-    ],
-    connectionFailed: [
-      "目标 Workspace 验证失败，请检查 Server、Client 与 Root。",
-      "Target workspace verification failed. Check its server, client, and root.",
-    ],
-    notFound: [
-      "目标 Workspace 已不存在或不再属于当前用户，请刷新列表。",
-      "The target workspace no longer exists or is not owned by this user. Refresh the list.",
-    ],
+  return value?.code ?? String(cause).match(/(?:Error:\s*)?(\w+):/)?.[1];
+}
+
+export function switchFailure(cause: unknown, zh: boolean) {
+  const code = failureCode(cause);
+  const recovery: Record<string, string> = {
+    contextChanged:
+      "workspaces.the.active.connection.changed.refresh.workspaces",
+    authenticationRequired:
+      "workspaces.the.current.profile.requires.login.authenticate",
+    connectionFailed: "workspaces.target.failed.check",
+    notFound: "workspaces.the.target.workspace.no.longer.exists",
   };
-  const copy = code ? recovery[code] : undefined;
-  return copy
-    ? zh
-      ? copy[0]
-      : copy[1]
-    : zh
-      ? "切换请求未完成，请刷新后重试。"
-      : "The switch request did not complete. Refresh and retry.";
+  const key = code ? recovery[code] : undefined;
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    (key ?? "workspaces.the.request.did") as never,
+  );
+}
+
+/**
+ * A switch is generation-checked, so a frontend whose runtime lags behind (a
+ * missed `connection-changed`, or a switch response that landed after the
+ * switcher unmounted) is rejected with `contextChanged` before the backend
+ * verifies anything, and every retry keeps failing on the same stale value.
+ * Re-read the authoritative runtime once and retry inside the same profile,
+ * server and user; a real connection change still needs the reviewed flow.
+ */
+export async function switchWorkspaceWithResync(
+  request: SwitchWorkspaceRequest,
+  current: RuntimeInfo,
+  api: WorkspaceSwitchApi = backend,
+): Promise<WorkspaceSwitchAttempt> {
+  try {
+    return { runtime: await api.switchWorkspace(request) };
+  } catch (cause) {
+    if (failureCode(cause) !== "contextChanged") return { error: cause };
+    let fresh: RuntimeInfo;
+    try {
+      fresh = await api.runtimeInfo();
+    } catch {
+      return { error: cause };
+    }
+    // The backend already holds the requested workspace: the old request lost
+    // the race with a switch that did land, so only the runtime needs syncing.
+    if (fresh.context.client === request.client) return { runtime: fresh };
+    const sameConnection =
+      fresh.activeProfileId === current.activeProfileId &&
+      fresh.context.server === current.context.server &&
+      fresh.context.user === current.context.user;
+    if (
+      !sameConnection ||
+      fresh.contextGeneration === request.expectedGeneration
+    )
+      return { runtime: fresh, error: cause };
+    try {
+      return {
+        runtime: await api.switchWorkspace({
+          expectedGeneration: fresh.contextGeneration,
+          client: request.client,
+        }),
+      };
+    } catch (retryCause) {
+      return { runtime: fresh, error: retryCause };
+    }
+  }
 }

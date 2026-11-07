@@ -289,13 +289,14 @@ impl FileService {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(id),
                     source: OperationSource::Gui,
                     command: "integrated".into(),
                     args,
                     context,
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

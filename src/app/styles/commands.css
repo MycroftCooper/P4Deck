@@ -93,7 +93,7 @@
   border-radius: var(--radius-control);
   background: var(--panel);
   color: var(--warning);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .tool-panel-page,
 .tool-drawer.embedded {
@@ -128,7 +128,7 @@
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--warning) 8%, transparent);
   color: var(--warning);
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.6;
 }
 .command-notice-error {
@@ -179,7 +179,7 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .address-scope {
-  font-size: 10px;
+  font-size: var(--font-sm);
   font-weight: 700;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -193,7 +193,7 @@
   background: transparent;
   color: var(--text);
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .global-address button {
   display: grid;
@@ -236,7 +236,7 @@
   border: 1px solid transparent;
   border-radius: 5px;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-base);
   white-space: nowrap;
 }
 .command-group button.command-accent:not(:disabled) {
@@ -299,7 +299,7 @@
 }
 
 .file-workbench .workspace-heading h1 {
-  font-size: 18px;
+  font-size: var(--font-4xl);
   margin: 0;
   white-space: nowrap;
 }
@@ -325,7 +325,7 @@
     display: none;
   }
   .file-workbench .workspace-heading h1 {
-    font-size: 15px;
+    font-size: var(--font-2xl);
   }
   .file-workbench .workspace-heading > button {
     font-size: 0;
@@ -412,7 +412,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-base);
   white-space: nowrap;
   border: 0;
   border-radius: var(--radius-control);

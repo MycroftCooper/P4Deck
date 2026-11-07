@@ -1,3 +1,5 @@
+import { t } from "../../shared/i18n";
+import { localizeBackendError } from "../../shared/localizeError";
 import { useContext, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileCode2, LoaderCircle } from "lucide-react";
@@ -69,7 +71,7 @@ export function DiffPathInput({
   const [draft, setDraft] = useState<{ owner: string; text: string }>();
   const [failure, setFailure] = useState<{ owner: string; message: string }>();
   const error = failure?.owner === owner ? failure.message : "";
-
+  const localizedError = error ? localizeBackendError(error, zh) : "";
   const open = (raw: string) => {
     if (locked) return;
     try {
@@ -104,16 +106,10 @@ export function DiffPathInput({
         className="target-path-input"
         aria-label={label}
         aria-invalid={!!error}
-        title={error || target || context.cwd}
+        title={localizedError || target || context.cwd}
         value={draft?.owner === owner ? draft.text : display}
         disabled={locked}
-        placeholder={
-          raw
-            ? label
-            : zh
-              ? "工作区内路径 · 可粘贴本地或 Depot 路径"
-              : "Workspace path · paste a local or depot path"
-        }
+        placeholder={raw ? label : t("docking.workspace.path.paste.a.local")}
         onChange={(event) => {
           setDraft({ owner, text: event.target.value });
           setFailure(undefined);
@@ -140,7 +136,7 @@ export function DiffPathInput({
       {children}
       {error && (
         <span className="diff-path-error" role="alert">
-          {error}
+          {localizedError}
         </span>
       )}
     </div>

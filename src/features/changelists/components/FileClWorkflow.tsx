@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useState } from "react";
 import type { PendingChange, WorkspaceNode } from "../../../shared/contracts";
 import { queryAllPendingChanges } from "../pendingQueries";
@@ -28,7 +29,6 @@ export function FileClWorkflow({
   zh: boolean;
   onDismiss(): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => nodes.map((node) => ({ ...node })));
   const [changes, setChanges] = useState<PendingChange[]>();
   const [error, setError] = useState("");
@@ -95,18 +95,18 @@ export function FileClWorkflow({
     <Dialog
       title={
         mode === "moveFiles"
-          ? tr("移动文件到 CL", "Move files to changelist")
-          : tr("搁置文件", "Shelve files")
+          ? t("pending.move.files.to.changelist")
+          : t("pending.shelve.files")
       }
       zh={zh}
       source={source}
       onRequestClose={onDismiss}
       footer={
         <>
-          <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+          <button onClick={onDismiss}>{t("pending.close")}</button>
           {error && (
             <button onClick={() => setRetry((value) => value + 1)}>
-              {tr("重试", "Retry")}
+              {t("pending.retry")}
             </button>
           )}
         </>
@@ -114,31 +114,21 @@ export function FileClWorkflow({
     >
       {!changes && !error && (
         <DialogNotice>
-          {tr(
-            "正在读取已打开文件的 CL 归属…",
-            "Loading CL membership for opened files…",
-          )}
+          {t("pending.loading.cl.membership.for.opened.files")}
         </DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
       {scope?.unknown.length ? (
         <>
-          <DialogNotice error>
-            {tr(
-              "以下文件的唯一 CL 归属尚未确认。请刷新状态；不会忽略这些文件后操作其余文件。",
-              "Unique CL membership is unknown for these files. Refresh their state; they will not be silently omitted from the operation.",
-            )}
-          </DialogNotice>
+          <DialogNotice error>{t("pending.unique.is.unknown")}</DialogNotice>
           <TargetList
             paths={scope.unknown}
-            label={tr("归属未知的文件", "Files with unknown membership")}
+            label={t("pending.files.with.unknown.membership")}
           />
         </>
       ) : null}
       {scope && !scope.paths.length && (
-        <DialogNotice>
-          {tr("没有选择文件。", "No files selected.")}
-        </DialogNotice>
+        <DialogNotice>{t("pending.no.files.selected")}</DialogNotice>
       )}
       {scope &&
         !scope.unknown.length &&
@@ -146,10 +136,7 @@ export function FileClWorkflow({
         scope.ids.length > 1 && (
           <>
             <DialogNotice>
-              {tr(
-                "所选文件分属多个 CL。请选择本次搁置的来源组；其他 CL 文件不在此次范围内。",
-                "Selected files belong to multiple CLs. Choose the source group for this shelf operation; other groups are out of scope.",
-              )}
+              {t("pending.selected.files.belong.to.multiple.cls")}
             </DialogNotice>
             {scope.ids.map((id) => (
               <button key={id} onClick={() => setGroup(id)}>
@@ -158,7 +145,7 @@ export function FileClWorkflow({
                   scope.paths.filter((path) => scope.origins[path] === id)
                     .length
                 }{" "}
-                {tr("个文件", "files")}
+                {t("pending.files")}
               </button>
             ))}
           </>

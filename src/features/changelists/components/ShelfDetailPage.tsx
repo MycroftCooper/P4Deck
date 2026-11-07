@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { createPortal } from "react-dom";
@@ -24,6 +25,7 @@ import type {
   ShelfFilePreview,
 } from "../../../shared/contracts";
 import { makeReviewScope } from "../../browsers/reviewModel";
+import { useOperationSession } from "../../../shared/operationSession";
 import { SwarmAction } from "../../swarm/SwarmAction";
 
 const PAGE_SIZE = 500;
@@ -74,6 +76,7 @@ export function ShelfDetailPage({
     id: "shelf-detail",
     gutter: 48,
   });
+  const session = useOperationSession();
   const [detail, setDetail] = useState<ShelfDetail>();
   const [selected, setSelected] = useState<ShelfDetailFile>();
   const [preview, setPreview] = useState<ShelfFilePreview>();
@@ -88,11 +91,7 @@ export function ShelfDetailPage({
   const [refresh, setRefresh] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const listOperations = useRef(new Set<string>());
-  const contentOperations = useRef(new Set<string>());
   const usedCursors = useRef(new Set<string>());
-  const requestGeneration = useRef(0);
-  const contentGeneration = useRef(0);
   const files = detail?.files ?? [];
   const rows = useVirtualizer({
     count: files.length,
@@ -124,7 +123,9 @@ export function ShelfDetailPage({
       }));
 
   useEffect(() => {
-    requestGeneration.current += 1;
+    // A new reviewed context supersedes both channels before they reload.
+    session.invalidate("detail");
+    session.invalidate("content");
     setCancelled(false);
     setDetail(undefined);
     setSelected(undefined);
@@ -139,55 +140,48 @@ export function ShelfDetailPage({
     runtime.context.user,
     runtime.context.client,
     runtime.contextGeneration,
+    session,
   ]);
 
   useEffect(() => {
     if (!Number.isSafeInteger(changeId) || changeId <= 0) {
-      setError(zh ? "Shelf 编号无效。" : "Invalid shelf changelist ID.");
+      setError(t("pending.invalid.shelf.changelist.id"));
       return;
     }
     if (runtime.p4Version === "loading") {
       setError("");
       return;
     }
-    let active = true;
-    const generation = requestGeneration.current;
-    const operationId = crypto.randomUUID();
-    listOperations.current.add(operationId);
+    const lease = session.start("detail", { identity: String(changeId) });
     setLoading(true);
+    // This lease now owns the channel: a superseded page request can no longer
+    // clear the pagination flag in its guarded finally.
+    setLoadingMore(false);
     setError("");
     void backend
       .getShelfDetail({
         changeId,
-        requestGeneration: generation,
+        requestGeneration: lease.epoch,
         pageSize: PAGE_SIZE,
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (!active || generation !== requestGeneration.current) return;
-        if (!ownsShelfResult(value, runtime, changeId, generation)) {
+        if (!session.isCurrent(lease)) return;
+        if (!ownsShelfResult(value, runtime, changeId, lease.epoch)) {
           setRestartRequired(true);
-          setError(
-            zh
-              ? "Shelf 响应与当前连接或请求代次不匹配；请重新加载。"
-              : "The shelf response does not match the current connection or request generation; restart the query.",
-          );
+          setError(t("pending.the.response.does"));
           return;
         }
         setDetail(value);
         setRestartRequired(false);
         if (value.hasMore && !value.nextCursor) {
           setRestartRequired(true);
-          setError(
-            zh
-              ? "后端未返回可继续的 Shelf 游标；请重新加载。"
-              : "The backend did not return a usable shelf cursor; restart the query.",
-          );
+          setError(t("pending.the.backend.did.not.return"));
         }
       })
       .catch((cause) => {
-        if (active && generation === requestGeneration.current) {
+        if (session.isCurrent(lease)) {
           const failure = shelfError(cause);
           setRestartRequired(
             ["invalidCursor", "cursorExpired", "snapshotChanged"].includes(
@@ -198,22 +192,17 @@ export function ShelfDetailPage({
         }
       })
       .finally(() => {
-        listOperations.current.delete(operationId);
-        if (active && generation === requestGeneration.current)
-          setLoading(false);
+        if (session.isCurrent(lease)) setLoading(false);
+        session.finish(lease);
       });
     return () => {
-      active = false;
-      void backend.cancelOperation(operationId);
+      session.abandon(lease);
     };
-  }, [changeId, refresh, runtime, zh]);
+  }, [changeId, refresh, runtime, zh, session]);
 
   useEffect(() => {
     if (!selected) return;
-    let active = true;
-    const generation = ++contentGeneration.current;
-    const operationId = crypto.randomUUID();
-    contentOperations.current.add(operationId);
+    const lease = session.start("content", { identity: selected.depotPath });
     setPreview(undefined);
     setDiff(undefined);
     setContentLoading(true);
@@ -223,61 +212,50 @@ export function ShelfDetailPage({
         scope: makeReviewScope(runtime, selected.depotPath),
         changeId,
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (active && generation === contentGeneration.current)
-          setPreview(value);
+        if (session.isCurrent(lease)) setPreview(value);
       })
       .catch((cause) => {
-        if (active && generation === contentGeneration.current)
-          setError(String(cause));
+        if (session.isCurrent(lease)) setError(String(cause));
       })
       .finally(() => {
-        contentOperations.current.delete(operationId);
-        if (active && generation === contentGeneration.current)
-          setContentLoading(false);
+        if (session.isCurrent(lease)) setContentLoading(false);
+        session.finish(lease);
       });
     return () => {
-      active = false;
-      void backend.cancelOperation(operationId);
+      session.abandon(lease);
     };
-  }, [selected, changeId, refresh, runtime]);
+  }, [selected, changeId, refresh, runtime, session]);
 
   const loadMore = useCallback(() => {
     const cursor = detail?.nextCursor;
     if (!detail?.hasMore || loadingMore || restartRequired) return;
     if (!cursor || usedCursors.current.has(cursor)) {
       setRestartRequired(true);
-      setError(
-        zh
-          ? "Shelf 游标不可继续；请从第一页重新加载。"
-          : "The shelf cursor cannot advance; restart from the first page.",
-      );
+      setError(t("pending.the.shelf.cursor.cannot.advance"));
       return;
     }
     usedCursors.current.add(cursor);
-    const generation = requestGeneration.current;
-    const operationId = crypto.randomUUID();
-    listOperations.current.add(operationId);
+    const lease = session.start("detail", { identity: String(changeId) });
+    // Pagination supersedes an in-flight first-page request, whose guarded
+    // finally cannot clear `loading` any more; this lease owns it now.
+    setLoading(false);
     setLoadingMore(true);
     void backend
       .getShelfDetail({
         changeId,
-        requestGeneration: generation,
+        requestGeneration: lease.epoch,
         pageSize: PAGE_SIZE,
         cursor,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((page) => {
-        if (generation !== requestGeneration.current) return;
-        if (!ownsShelfResult(page, runtime, changeId, generation)) {
+        if (!session.isCurrent(lease)) return;
+        if (!ownsShelfResult(page, runtime, changeId, lease.epoch)) {
           setRestartRequired(true);
-          setError(
-            zh
-              ? "Shelf 分页响应与当前连接或请求代次不匹配；已保留当前结果，请重新加载。"
-              : "The shelf page does not match the current connection or request generation; current results were preserved. Restart the query.",
-          );
+          setError(t("pending.the.page.does"));
           return;
         }
         setDetail((current) => {
@@ -289,11 +267,7 @@ export function ShelfDetailPage({
           const stalled = incoming.length !== page.files.length;
           if (stalled || (page.hasMore && !page.nextCursor)) {
             setRestartRequired(true);
-            setError(
-              zh
-                ? "Shelf 快照返回了重复项或不可继续的游标；已保留当前结果，请重新加载。"
-                : "The shelf snapshot returned duplicates or a non-progressing cursor; current results were preserved. Restart the query.",
-            );
+            setError(t("pending.the.shelf.snapshot.returned.duplicates"));
           }
           return {
             ...page,
@@ -304,23 +278,21 @@ export function ShelfDetailPage({
         });
       })
       .catch((cause) => {
-        if (generation === requestGeneration.current) {
+        if (session.isCurrent(lease)) {
           const failure = shelfError(cause);
           setRestartRequired(true);
           setError(
-            `${failure.message} ${
-              zh
-                ? "已保留当前结果；请从第一页重新加载。"
-                : "Current results were preserved; restart from the first page."
-            }`,
+            `${failure.message} ${t(
+              "pending.current.results.were.preserved.restart",
+            )}`,
           );
         }
       })
       .finally(() => {
-        listOperations.current.delete(operationId);
-        if (generation === requestGeneration.current) setLoadingMore(false);
+        if (session.isCurrent(lease)) setLoadingMore(false);
+        session.finish(lease);
       });
-  }, [changeId, detail, loadingMore, restartRequired, runtime, zh]);
+  }, [changeId, detail, loadingMore, restartRequired, runtime, zh, session]);
 
   useEffect(() => {
     if (cancelled || selected || !initialPath || !detail) return;
@@ -330,33 +302,21 @@ export function ShelfDetailPage({
   }, [cancelled, detail, initialPath, loadMore, loadingMore, selected]);
 
   const supersedeOperations = () => {
-    requestGeneration.current += 1;
-    contentGeneration.current += 1;
-    for (const operationId of [
-      ...listOperations.current,
-      ...contentOperations.current,
-    ])
-      void backend.cancelOperation(operationId);
-    listOperations.current.clear();
-    contentOperations.current.clear();
+    session.invalidate("detail");
+    session.invalidate("content");
     setLoading(false);
     setLoadingMore(false);
     setContentLoading(false);
   };
 
   const supersedeContent = () => {
-    contentGeneration.current += 1;
-    for (const operationId of contentOperations.current)
-      void backend.cancelOperation(operationId);
-    contentOperations.current.clear();
+    session.invalidate("content");
     setContentLoading(false);
   };
 
   const compare = () => {
     if (!selected) return;
-    const generation = ++contentGeneration.current;
-    const operationId = crypto.randomUUID();
-    contentOperations.current.add(operationId);
+    const lease = session.start("content", { identity: selected.depotPath });
     setContentLoading(true);
     setError("");
     void backend
@@ -365,19 +325,19 @@ export function ShelfDetailPage({
         left: baseline,
         right: { kind: "shelf", changeId },
         refresh: refresh > 0,
-        operationId,
+        operationId: lease.operationId,
       })
       .then((value) => {
-        if (generation !== contentGeneration.current) return;
+        if (!session.isCurrent(lease)) return;
         setPreview(undefined);
         setDiff(value);
       })
       .catch((cause) => {
-        if (generation === contentGeneration.current) setError(String(cause));
+        if (session.isCurrent(lease)) setError(String(cause));
       })
       .finally(() => {
-        contentOperations.current.delete(operationId);
-        if (generation === contentGeneration.current) setContentLoading(false);
+        if (session.isCurrent(lease)) setContentLoading(false);
+        session.finish(lease);
       });
   };
 
@@ -387,29 +347,14 @@ export function ShelfDetailPage({
     setLoading(false);
     setLoadingMore(false);
     setContentLoading(false);
-    setError(zh ? "操作已取消。" : "Operation cancelled.");
+    setError(t("pending.operation.cancelled"));
   };
-
-  useEffect(
-    () => () => {
-      requestGeneration.current += 1;
-      contentGeneration.current += 1;
-      for (const operationId of [
-        ...listOperations.current,
-        ...contentOperations.current,
-      ])
-        void backend.cancelOperation(operationId);
-      listOperations.current.clear();
-      contentOperations.current.clear();
-    },
-    [],
-  );
 
   const refreshButton = (
     <button
       type="button"
-      title={zh ? "刷新" : "Refresh"}
-      aria-label={zh ? "刷新" : "Refresh"}
+      title={t("pending.refresh")}
+      aria-label={t("pending.refresh")}
       aria-busy={loading}
       disabled={loading}
       onClick={() => {
@@ -423,7 +368,7 @@ export function ShelfDetailPage({
         className={loading ? "spin" : ""}
         aria-hidden="true"
       />
-      {!refreshSlot && <span>{zh ? "刷新" : "Refresh"}</span>}
+      {!refreshSlot && <span>{t("pending.refresh")}</span>}
     </button>
   );
   return (
@@ -433,14 +378,12 @@ export function ShelfDetailPage({
         <div>
           <span className="workspace-eyebrow">PERFORCE / SHELF</span>
           <h1>
-            {zh ? "搁置 CL" : "Shelf CL"}{" "}
+            {t("pending.shelf.cl")}{" "}
             {Number.isFinite(changeId) ? changeId : target}
           </h1>
           <p>
             {detail?.description ||
-              (zh
-                ? "独立 Shelf 详情与内容预览"
-                : "Shelf detail and content preview")}
+              t("pending.shelf.detail.and.content.preview")}
           </p>
         </div>
         {!refreshSlot && refreshButton}
@@ -448,7 +391,7 @@ export function ShelfDetailPage({
           disabled={!loading && !loadingMore && !contentLoading}
           onClick={cancel}
         >
-          {zh ? "取消" : "Cancel"}
+          {t("pending.cancel")}
         </button>
         <SwarmAction
           runtime={runtime}
@@ -469,7 +412,7 @@ export function ShelfDetailPage({
                 setRefresh((value) => value + 1);
               }}
             >
-              {zh ? "重新加载" : "Restart"}
+              {t("pending.restart")}
             </button>
           )}
         </div>
@@ -481,32 +424,24 @@ export function ShelfDetailPage({
           </span>
           <span>{detail.time}</span>
           <span>
-            {detail.totalFiles} {zh ? "个文件" : "files"}
+            {detail.totalFiles} {t("pending.files")}
           </span>
           <span>
             {detail.cacheFreshness === "cached"
-              ? zh
-                ? "缓存"
-                : "cached"
-              : zh
-                ? "最新"
-                : "fresh"}
+              ? t("pending.cached")
+              : t("pending.fresh")}
           </span>
           {(detail.inspectionStatus === "partial" || detail.truncated) && (
-            <strong>
-              {detail.message ?? (zh ? "部分结果" : "Partial result")}
-            </strong>
+            <strong>{detail.message ?? t("pending.partial.result")}</strong>
           )}
         </div>
       )}
       {loading && !detail ? (
         <div className="workspace-empty" role="status">
-          {zh ? "正在读取 Shelf…" : "Loading shelf…"}
+          {t("pending.loading.shelf")}
         </div>
       ) : detail && !detail.totalFiles ? (
-        <div className="workspace-empty">
-          {zh ? "Shelf 为空" : "Shelf is empty"}
-        </div>
+        <div className="workspace-empty">{t("pending.shelf.is.empty")}</div>
       ) : detail ? (
         <div className="shelf-detail-layout">
           <section className="review-surface">
@@ -517,10 +452,7 @@ export function ShelfDetailPage({
               aria-label="Shelved files"
             >
               <ResizeHeader
-                columns={[
-                  zh ? "路径" : "Path",
-                  zh ? "动作 / 类型 / 大小" : "Action / type / size",
-                ]}
+                columns={[t("pending.path"), t("pending.action.type.size")]}
                 resize={tableColumns}
               />
               <div
@@ -584,13 +516,7 @@ export function ShelfDetailPage({
                   loadMore();
                 }}
               >
-                {loadingMore
-                  ? zh
-                    ? "加载中…"
-                    : "Loading…"
-                  : zh
-                    ? "加载更多"
-                    : "Load more"}
+                {loadingMore ? t("pending.loading") : t("pending.load.more")}
               </button>
             )}
           </section>
@@ -603,10 +529,10 @@ export function ShelfDetailPage({
                   void writeClipboardText(`${selected.depotPath}@=${changeId}`)
                 }
               >
-                <Copy size={13} /> {zh ? "复制 Depot spec" : "Copy depot spec"}
+                <Copy size={13} /> {t("pending.copy.depot.spec")}
               </button>
               <select
-                aria-label={zh ? "比较基线" : "Diff baseline"}
+                aria-label={t("pending.diff.baseline")}
                 value={baseline.kind}
                 onChange={(event) =>
                   setBaseline({
@@ -626,25 +552,23 @@ export function ShelfDetailPage({
                   compare();
                 }}
               >
-                {zh ? "比较" : "Diff"}
+                {t("pending.diff")}
               </button>
             </div>
             {!selected ? (
               <div className="workspace-empty">
-                {zh
-                  ? "选择 Shelf 文件以预览"
-                  : "Select a shelved file to preview"}
+                {t("pending.select.shelved.file")}
               </div>
             ) : contentLoading && !preview && !diff ? (
               <div className="workspace-empty" role="status">
-                {zh ? "正在读取 Shelf 内容…" : "Loading shelved content…"}
+                {t("pending.loading.shelved.content")}
               </div>
             ) : preview?.unsupported || diff?.unsupported || diff?.binary ? (
               <div className="workspace-empty">
                 <strong>
                   {preview?.reason ??
                     diff?.reason ??
-                    (zh ? "不支持文本预览" : "Text preview unsupported")}
+                    t("pending.text.preview.unsupported")}
                 </strong>
                 <div>
                   {selected.fileType ?? "unknown"} · {selected.size ?? 0} B ·{" "}

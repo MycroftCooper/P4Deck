@@ -561,6 +561,7 @@ mod tests {
     }
     fn request(cmd: &str, args: &[&str]) -> P4CommandRequest {
         P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Read,
             operation_id: None,
             source: OperationSource::Gui,
             command: cmd.into(),

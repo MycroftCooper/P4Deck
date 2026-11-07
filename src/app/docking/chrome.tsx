@@ -1,3 +1,4 @@
+import { t, tFor } from "../../shared/i18n";
 import {
   createContext,
   useContext,
@@ -106,13 +107,9 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
   const params = normalizePanelTarget(props.params);
   const PageIcon = kind ? pageIcons[kind] : undefined;
   const lockLabel = params.locked
-    ? zh
-      ? "目标已锁定；点击恢复跟随文件选择"
-      : "Target locked; click to follow file selection"
-    : zh
-      ? "正在跟随文件选择；点击锁定当前目标"
-      : "Following file selection; click to lock current target";
-  const newTabLabel = zh ? "新页签" : "New tab";
+    ? tFor(zh ? "zh-CN" : "en-US", "docking.target.locked.click.to.follow")
+    : tFor(zh ? "zh-CN" : "en-US", "docking.following.selection.click");
+  const newTabLabel = tFor(zh ? "zh-CN" : "en-US", "docking.new.tab");
   // Global pages with a compact title bar; their actions portal into it.
   const titled = !!kind && !isMultiPage(kind);
   return (
@@ -156,20 +153,18 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                   key={params.target}
                   label={
                     kind === "diff"
-                      ? zh
-                        ? "差异文件路径"
-                        : "Diff file path"
+                      ? tFor(zh ? "zh-CN" : "en-US", "docking.diff.file.path")
                       : kind === "revgraph"
-                        ? zh
-                          ? "修订图文件路径"
-                          : "Revision graph file path"
+                        ? tFor(
+                            zh ? "zh-CN" : "en-US",
+                            "docking.revision.graph.file.path",
+                          )
                         : kind === "history"
-                          ? zh
-                            ? "Depot 路径"
-                            : "Depot path"
-                          : zh
-                            ? "预览文件路径"
-                            : "Preview file path"
+                          ? tFor(zh ? "zh-CN" : "en-US", "docking.depot.path")
+                          : tFor(
+                              zh ? "zh-CN" : "en-US",
+                              "docking.preview.file.path",
+                            )
                   }
                   raw={kind === "history" || kind === "preview"}
                   target={params.target}
@@ -185,7 +180,7 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
                 <span className="target-control-value" title={params.target}>
                   <span className="target-control-text">
                     {params.target ||
-                      (zh ? "尚未选择文件" : "No file selected")}
+                      tFor(zh ? "zh-CN" : "en-US", "docking.no.file.selected")}
                   </span>
                   <span ref={setRefreshSlot} className="target-refresh-slot" />
                 </span>
@@ -229,33 +224,33 @@ export const dockTheme = {
   className: "dockview-theme-light dockview-theme-p4deck",
 };
 export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
+  const zh = useContext(LanguageContext);
   const popout = useContext(PopoutContext);
   const closeAll = useContext(CloseAllContext);
-  const zh = useContext(LanguageContext);
   return (
     <div
       className="dock-actions"
       tabIndex={0}
-      aria-label="页签组操作 / Tab group actions"
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.tab.group.actions")}
     >
       <button
-        title="左右分屏 / Split right"
-        aria-label="左右分屏"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.split.right")}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.dock.splitLeftRight")}
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "right" })}
       >
         <Columns2 size={14} />
       </button>
       <button
-        title="上下分屏 / Split below"
-        aria-label="上下分屏"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.split.below")}
+        aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.dock.splitUpDown")}
         disabled={!activePanel || group.panels.length < 2}
         onClick={() => activePanel?.api.moveTo({ group, position: "bottom" })}
       >
         <Rows2 size={14} />
       </button>
       <button
-        title="弹出独立窗口 / Pop out"
+        title={tFor(zh ? "zh-CN" : "en-US", "shell.pop.out")}
         aria-label="弹出独立窗口"
         disabled={!activePanel || !!detachedPage}
         onClick={() => activePanel && popout(activePanel)}
@@ -264,8 +259,8 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
       </button>
       <button
         type="button"
-        title={zh ? "关闭所有页签" : "Close all tabs"}
-        aria-label={zh ? "关闭所有页签" : "Close all tabs"}
+        title={t("docking.close.all.tabs")}
+        aria-label={t("docking.close.all.tabs")}
         disabled={!closeAll.enabled}
         onClick={closeAll.run}
       >
@@ -277,8 +272,8 @@ export function Actions({ activePanel, group }: IDockviewHeaderActionsProps) {
 export function Empty() {
   return (
     <div className="closed-pages" tabIndex={0}>
-      <h2>没有打开的页签</h2>
-      <p>点击左侧活动栏图标打开页面。拖动页签到边缘可分屏。</p>
+      <h2>{t("shell.dock.noOpenTabs")}</h2>
+      <p>{t("shell.dock.emptyHint")}</p>
     </div>
   );
 }

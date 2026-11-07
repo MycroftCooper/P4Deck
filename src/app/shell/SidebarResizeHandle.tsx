@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   sidebarMaxWidth,
@@ -9,7 +10,7 @@ const collapseThreshold = 96;
 export function SidebarResizeHandle({
   width,
   collapsed,
-  zh,
+  zh: _zh,
   onPreview,
   onCommit,
   onCollapsedChange,
@@ -55,7 +56,7 @@ export function SidebarResizeHandle({
     <div
       role="separator"
       tabIndex={collapsed ? -1 : 0}
-      aria-label={zh ? "调整资源侧栏宽度" : "Resize resource sidebar"}
+      aria-label={t("shell.resize.resource.sidebar")}
       aria-controls="resource-explorer"
       aria-orientation="vertical"
       aria-valuemin={0}

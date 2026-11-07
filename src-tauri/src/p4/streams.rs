@@ -49,13 +49,14 @@ impl StreamRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.to_owned()),
                     source: OperationSource::Gui,
                     command: "streams".into(),
                     args: build_stream_args(depot_prefix, include_deleted),
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

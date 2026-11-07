@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { t } from "../../../shared/i18n";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { backend } from "../../../infrastructure/backend";
 import { useUnsavedEditor } from "../../../app/closeGuard";
@@ -9,6 +10,34 @@ import {
   type SelectedMoveRequest,
   type SelectedMoveReceipt,
 } from "../selectedMove";
+/** What the last move attempt published; see the reducer below. */
+interface MoveAttempt {
+  busy: boolean;
+  attempted: boolean;
+  error: string;
+  receipt?: SelectedMoveReceipt;
+}
+
+const INITIAL_ATTEMPT: MoveAttempt = {
+  busy: false,
+  attempted: false,
+  error: "",
+  receipt: undefined,
+};
+
+type MoveAttemptEvent =
+  | { type: "busy"; value: boolean }
+  | { type: "attempted"; value: boolean }
+  | { type: "error"; value: string }
+  | { type: "receipt"; value: SelectedMoveReceipt | undefined };
+
+function reduceAttempt(
+  state: MoveAttempt,
+  event: MoveAttemptEvent,
+): MoveAttempt {
+  return { ...state, [event.type]: event.value };
+}
+
 export interface MoveFilesRequest {
   from: number;
   origins?: Record<string, number>;
@@ -36,7 +65,6 @@ export function MoveFilesDialog({
   onDismiss(): void;
   onResult?(receipt: SelectedMoveReceipt): Promise<void> | void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     ...request,
     paths: [...new Set(request.paths)],
@@ -55,10 +83,20 @@ export function MoveFilesDialog({
     snapshot.target,
   );
   const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false),
-    [attempted, setAttempted] = useState(false),
-    [error, setError] = useState("");
-  const [receipt, setReceipt] = useState<SelectedMoveReceipt>();
+  /**
+   * What the last attempt published. These four move together: any attempt
+   * sets busy/attempted and clears the error, and a result replaces the
+   * receipt; `error` is also used by the connection probe, so this is a
+   * field-at-a-time reducer rather than a set of named transitions.
+   */
+  const [attempt, dispatch] = useReducer(reduceAttempt, INITIAL_ATTEMPT);
+  const { busy, attempted, error, receipt } = attempt;
+  const setBusy = (value: boolean) => dispatch({ type: "busy", value });
+  const setAttempted = (value: boolean) =>
+    dispatch({ type: "attempted", value });
+  const setError = (value: string) => dispatch({ type: "error", value });
+  const setReceipt = (value: SelectedMoveReceipt | undefined) =>
+    dispatch({ type: "receipt", value });
   const operation = useRef<SelectedMoveRequest | undefined>(undefined);
   const lock = useRef(false),
     alive = useRef(true),
@@ -158,12 +196,7 @@ export function MoveFilesDialog({
         onDismiss();
       } else {
         operation.current = undefined;
-        setError(
-          tr(
-            "文件已有未确认移动或归属已变化，请先核实本次状态。",
-            "Files have an unresolved move or changed ownership. Check that attempt first.",
-          ),
-        );
+        setError(t("pending.files.unresolved.move"));
       }
       return;
     }
@@ -180,12 +213,7 @@ export function MoveFilesDialog({
         : await backend.selectedMoveExecute(frozen);
       if (!alive.current) return;
       if (!result || !validMoveReceipt(frozen, result))
-        throw Error(
-          tr(
-            "结果未知；仅检查本次状态，不会重新创建或移动。",
-            "Outcome unknown; check this attempt without creating or moving again.",
-          ),
-        );
+        throw Error(t("pending.outcome.unknown.check.this.attempt.without"));
       setReceipt(result);
       if (result.targetChangeId !== null) clearDraft();
       if (binding.current === snapshot.connectionKey)
@@ -208,18 +236,15 @@ export function MoveFilesDialog({
   );
   const stateLabel = (state: string) =>
     ({
-      moved: tr("已移动", "Moved"),
-      alreadyInTarget: tr("已在目标，无需移动", "Already in target"),
-      notMoved: tr("未移动", "Not moved"),
-      unknown: tr("未知", "Unknown"),
+      moved: t("pending.moved"),
+      alreadyInTarget: t("pending.already.in.target"),
+      notMoved: t("pending.not.moved"),
+      unknown: t("pending.unknown"),
     })[state] ?? state;
   return (
     <Dialog
-      title={tr("移动到 CL", "Move to changelist")}
-      description={tr(
-        "仅移动选中文件，不提交。选择目标并确认范围。",
-        "Move selected files only; never submit. Choose a target and confirm the scope.",
-      )}
+      title={t("pending.move.to.changelist")}
+      description={t("pending.move.selected.files.only.never.submit")}
       source={snapshot.source}
       zh={zh}
       busy={busy}
@@ -228,7 +253,7 @@ export function MoveFilesDialog({
     >
       <div className="move-workflow">
         <div className="workflow-context">
-          {client} · {snapshot.paths.length} {tr("个文件", "files")}
+          {client} · {snapshot.paths.length} {t("pending.files")}
         </div>
         {!attempted && (
           <>
@@ -238,17 +263,17 @@ export function MoveFilesDialog({
               disabled={stale || busy}
               onClick={() => setTarget("new")}
             >
-              {tr("新建 CL…", "New changelist…")}
+              {t("pending.new.changelist.3")}
             </button>
             <label>
-              {tr("筛选目标 CL", "Filter target changelists")}
+              {t("pending.filter.target.changelists")}
               <input
                 autoFocus
                 data-dialog-autofocus
                 value={filter}
                 disabled={stale || busy}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder={tr("编号或描述", "Number or description")}
+                placeholder={t("pending.number.or.description")}
               />
             </label>
             <div className="move-destinations">
@@ -267,12 +292,12 @@ export function MoveFilesDialog({
             </div>
             {!available.length && (
               <DialogNotice>
-                {tr("没有匹配的目标 CL。", "No matching changelists.")}
+                {t("pending.no.matching.changelists")}
               </DialogNotice>
             )}
             {target === "new" && (
               <label>
-                {tr("新 CL 描述", "New CL description")}
+                {t("pending.new.cl.description")}
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -284,17 +309,17 @@ export function MoveFilesDialog({
             {target !== undefined && (
               <>
                 <strong>
-                  {tr("目标", "Target")}:{" "}
+                  {t("pending.target")}:{" "}
                   {target === "new"
-                    ? tr("新建编号 CL", "New numbered CL")
+                    ? t("pending.new.numbered.cl")
                     : name(target)}
                 </strong>
                 <ul className="move-file-preview">
                   {files.map((f) => (
                     <li key={f.depotPath}>
                       {name(f.sourceChangeId)} →{" "}
-                      {target === "new" ? tr("新 CL", "New CL") : name(target)}{" "}
-                      · {f.depotPath}
+                      {target === "new" ? t("pending.new.cl") : name(target)} ·{" "}
+                      {f.depotPath}
                       {target === f.sourceChangeId
                         ? ` · ${stateLabel("alreadyInTarget")}`
                         : ""}
@@ -313,13 +338,13 @@ export function MoveFilesDialog({
                   }
                   onClick={() => void perform()}
                 >
-                  {tr("确认移动", "Confirm move")}
+                  {t("pending.confirm.move")}
                 </button>
               </>
             )}
             {!connection && !stale && (
               <button type="button" onClick={() => setRetry((v) => v + 1)}>
-                {tr("重新检测连接", "Check connection again")}
+                {t("pending.check.connection.again")}
               </button>
             )}
           </>
@@ -327,21 +352,18 @@ export function MoveFilesDialog({
         {attempted && (
           <>
             <p>
-              {tr("本次操作", "Attempt")}: {operation.current?.operationId}
+              {t("pending.attempt")}: {operation.current?.operationId}
             </p>
             <p>
-              {tr("目标 CL", "Target CL")}:{" "}
+              {t("pending.target.cl")}:{" "}
               {receipt?.targetChangeId == null
-                ? tr("尚未确认", "Not confirmed")
+                ? t("pending.not.confirmed")
                 : name(receipt.targetChangeId)}
             </p>
             <DialogNotice>
               {receipt?.stage === "completed"
-                ? tr("所选文件移动完成。", "Selected files move completed.")
-                : tr(
-                    "移动未确认完整；已发生的移动不会回滚。",
-                    "Move not confirmed complete; completed moves are not rolled back.",
-                  )}
+                ? t("pending.selected.files.move.completed")
+                : t("pending.move.not.confirmed.complete.completed.moves")}
             </DialogNotice>
             {receipt?.message && <p>{receipt.message}</p>}
             <ul className="move-file-preview">
@@ -360,21 +382,14 @@ export function MoveFilesDialog({
               disabled={busy || stale}
               onClick={() => void perform(true)}
             >
-              {tr("检查本次状态", "Check this attempt")}
+              {t("pending.check.this.attempt")}
             </button>
-            <p>
-              {tr(
-                "关闭仅关闭此窗口，不撤销移动，也不会删除已创建的 CL。",
-                "Closing this dialog does not undo moves or delete a created changelist.",
-              )}
-            </p>
+            <p>{t("pending.closing.this.dialog.does.not.undo")}</p>
           </>
         )}
         {busy && (
           <>
-            <span role="status">
-              {tr("正在移动或检查…", "Moving or checking…")}
-            </span>
+            <span role="status">{t("pending.moving.or.checking")}</span>
             <button
               type="button"
               onClick={() => {
@@ -384,16 +399,13 @@ export function MoveFilesDialog({
                     .catch((cause) => setError(String(cause)));
               }}
             >
-              {tr("停止后续操作", "Stop remaining operations")}
+              {t("pending.stop.remaining.operations")}
             </button>
           </>
         )}
         {stale && (
           <DialogNotice error>
-            {tr(
-              "连接已改变，请重新选择文件；保留本次结果。",
-              "Connection changed; select files again. This attempt remains recorded.",
-            )}
+            {t("pending.connection.changed.select.files.again.this")}
           </DialogNotice>
         )}
         {error && <DialogNotice error>{error}</DialogNotice>}

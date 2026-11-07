@@ -1,3 +1,4 @@
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   appCommandReason,
@@ -46,8 +47,9 @@ export function CommandPalette({
       if (command.hiddenFromPalette) return false;
       return (
         !needle ||
-        command.zh.toLowerCase().includes(needle) ||
-        command.en.toLowerCase().includes(needle) ||
+        tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)
+          .toLowerCase()
+          .includes(needle) ||
         command.id.toLowerCase().includes(needle)
       );
     });
@@ -84,7 +86,7 @@ export function CommandPalette({
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label={zh ? "命令面板" : "Command palette"}
+        aria-label={t("commands.command.palette")}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
@@ -140,8 +142,8 @@ export function CommandPalette({
               ? `${listboxId}-${commands[activeIndex].id}`
               : undefined
           }
-          aria-label={zh ? "筛选命令" : "Filter commands"}
-          placeholder={zh ? "输入命令名称或 ID" : "Type a command or ID"}
+          aria-label={t("commands.filter.commands")}
+          placeholder={t("commands.type.a.command.or.id")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -162,13 +164,13 @@ export function CommandPalette({
                   execute(index);
                 }}
               >
-                <span>{zh ? command.zh : command.en}</span>
+                <span>
+                  {tFor(zh ? "zh-CN" : "en-US", command.zh as MsgKey)}
+                </span>
                 <small>
                   {command.group} · {command.id} · {command.risk}
                   {command.confirmation === "stateMachine"
-                    ? zh
-                      ? " · 需要预检/确认"
-                      : " · preflight/confirmation required"
+                    ? t("commands.preflight.confirmation.required")
                     : ""}
                 </small>
                 {shortcuts.length > 0 && (

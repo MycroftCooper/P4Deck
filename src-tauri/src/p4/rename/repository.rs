@@ -146,13 +146,15 @@ impl RenameRepository {
         self.runner
             .run_with_mutation_guard(
                 P4CommandRequest {
+                    // `p4 move` rewrites the client, so it is a mutation.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -173,13 +175,14 @@ impl RenameRepository {
         self.runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(120_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

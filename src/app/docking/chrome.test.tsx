@@ -12,6 +12,7 @@ import {
   PageHeaderActionsContext,
 } from "./chrome";
 import { isMultiPage, pageIds, pageLabels } from "../panels";
+import { setLocale } from "../../shared/i18n";
 
 // Test only the shared chrome: never mount a page, mapping query or backend.
 vi.mock("./DiffPathInput", () => ({
@@ -26,6 +27,8 @@ vi.mock("./DiffPathInput", () => ({
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;

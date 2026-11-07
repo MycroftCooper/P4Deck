@@ -3,12 +3,15 @@ import type {
   GlobalSearchKind,
 } from "../../shared/contracts";
 
+/**
+ * Every kind this page can show. Jobs are deliberately absent: there is no Job
+ * details page, so offering them only produced rows that could not be opened.
+ */
 export const GLOBAL_SEARCH_KINDS: readonly GlobalSearchKind[] = [
   "submittedChange",
   "pendingChange",
   "workspaceFile",
   "depotFile",
-  "job",
   "stream",
   "shelf",
 ];

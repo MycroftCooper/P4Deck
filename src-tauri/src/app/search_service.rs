@@ -289,9 +289,14 @@ impl GlobalSearchService {
                         .await
                 }
                 GlobalSearchKind::Job => {
-                    self.repository
-                        .jobs(context, &query.operation_id, &query.text, app)
-                        .await
+                    // The search UI no longer offers Job results; an explicit Job
+                    // kind from an older client returns an empty, non-failing facet.
+                    Ok(SearchBatch {
+                        partial: false,
+                        partial_reason: None,
+                        scanned: 0,
+                        items: Vec::new(),
+                    })
                 }
                 GlobalSearchKind::Stream => {
                     self.repository
@@ -483,7 +488,6 @@ fn normalize_query(
             GlobalSearchKind::PendingChange,
             GlobalSearchKind::WorkspaceFile,
             GlobalSearchKind::DepotFile,
-            GlobalSearchKind::Job,
             GlobalSearchKind::Stream,
             GlobalSearchKind::Shelf,
         ];
@@ -549,15 +553,15 @@ mod tests {
     fn normalizes_unicode_whitespace_and_kind_order() {
         let mut value = query("  你好\u{2003}world [x]  ");
         value.kinds = vec![
-            GlobalSearchKind::Job,
+            GlobalSearchKind::Stream,
             GlobalSearchKind::SubmittedChange,
-            GlobalSearchKind::Job,
+            GlobalSearchKind::Stream,
         ];
         let value = normalize_query(value).unwrap();
         assert_eq!(value.text, "你好 world [x]");
         assert_eq!(
             value.kinds,
-            vec![GlobalSearchKind::SubmittedChange, GlobalSearchKind::Job]
+            vec![GlobalSearchKind::SubmittedChange, GlobalSearchKind::Stream]
         );
     }
 
@@ -575,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_kind_filter_expands_to_all_seven_production_kinds() {
+    fn empty_kind_filter_expands_to_all_six_ui_kinds() {
         let value = normalize_query(query("needle")).unwrap();
         assert_eq!(
             value.kinds,
@@ -584,7 +588,6 @@ mod tests {
                 GlobalSearchKind::PendingChange,
                 GlobalSearchKind::WorkspaceFile,
                 GlobalSearchKind::DepotFile,
-                GlobalSearchKind::Job,
                 GlobalSearchKind::Stream,
                 GlobalSearchKind::Shelf,
             ]

@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import {
   Circle,
   CircleCheck,
@@ -53,7 +54,10 @@ export function PassiveServerStatusDetails({
   return (
     <dl
       className="passive-server-details"
-      aria-label={zh ? "P4 被动连接状态" : "P4 passive connection status"}
+      aria-label={tFor(
+        zh ? "zh-CN" : "en-US",
+        "shell.p4.passive.connection.status",
+      )}
       title={view.note}
     >
       {view.rows.map((row) => (
@@ -91,33 +95,33 @@ export function PassiveStatusPanel({
   const reason = onCheckServer
     ? ""
     : native
-      ? zh
-        ? "当前连接未就绪或状态暂不可用，无法手动检查。"
-        : "The connection is not ready or the status is unavailable, so a manual check is unavailable."
-      : zh
-        ? "手动检查仅桌面版可用。"
-        : "Manual check requires the desktop app.";
+      ? tFor(zh ? "zh-CN" : "en-US", "shell.the.connection.is.not.ready")
+      : tFor(zh ? "zh-CN" : "en-US", "shell.manual.check.requires.the.desktop");
   const checkTitle = checkingServer
-    ? zh
-      ? "检查中…"
-      : "Checking…"
+    ? tFor(zh ? "zh-CN" : "en-US", "shell.checking")
     : onCheckServer
-      ? zh
-        ? "仅检查可达性，不评估响应质量或清除登录与权限状态"
-        : "Check reachability only; preserve response quality and access status"
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "shell.check.reachability.only.preserve.response",
+        )
       : reason;
   return (
     <section
       id={id}
       className="passive-server-panel"
       role="dialog"
-      aria-label={zh ? "P4 连接状态" : "P4 connection status"}
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.p4.connection.status")}
     >
       <header role="presentation">
-        <span>{zh ? "P4 连接状态" : "P4 connection status"}</span>
+        <span>
+          {tFor(zh ? "zh-CN" : "en-US", "shell.p4.connection.status")}
+        </span>
         <button
           onClick={onClose}
-          aria-label={zh ? "关闭连接状态" : "Close connection status"}
+          aria-label={tFor(
+            zh ? "zh-CN" : "en-US",
+            "shell.close.connection.status",
+          )}
         >
           ×
         </button>
@@ -134,12 +138,8 @@ export function PassiveStatusPanel({
           }}
         >
           {checkingServer
-            ? zh
-              ? "检查中…"
-              : "Checking…"
-            : zh
-              ? "手动检查"
-              : "Check now"}
+            ? tFor(zh ? "zh-CN" : "en-US", "shell.checking")
+            : tFor(zh ? "zh-CN" : "en-US", "shell.check.now")}
         </button>
       </div>
       {!onCheckServer && (

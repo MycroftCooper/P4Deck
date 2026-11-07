@@ -14,6 +14,7 @@ import {
   BranchMappingsPage,
   measureBranchMappingRow,
 } from "./BranchMappingsPage";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   queryBranchMappings: vi.fn(),
@@ -143,6 +144,8 @@ async function click(text: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -405,4 +408,71 @@ it("applies both themed filters only on explicit submit", async () => {
   expect(backend.queryBranchMappings).toHaveBeenLastCalledWith(
     expect.objectContaining({ nameFilter: "release", owner: "owner-fixture" }),
   );
+});
+it("retires the detail and preview chains together with the list, with no leaked cancel", async () => {
+  // Load the list, select a mapping, then hold the preview in flight: the
+  // preview pane only exists after the detail has been read, so the detail is
+  // awaited first and the preview is what a context change interrupts.
+  await render();
+  let resolvePreview!: (value: unknown) => void;
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[role="option"]')!.click(),
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  backend.previewBranchMappingImpact.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolvePreview = resolve;
+      }),
+  );
+  await click("Run read-only preview");
+  const listQuery = (
+    backend.queryBranchMappings.mock.calls[0] as unknown[]
+  )[0] as BranchMappingQuery;
+  const previewQuery = (
+    backend.previewBranchMappingImpact.mock.calls[0] as unknown[]
+  )[0] as BranchImpactPreviewQuery;
+
+  // A connection change retires every chain: the list, the detail and the
+  // preview are separate accounts, so a double ledger would leak here.
+  backend.cancelOperation.mockClear();
+  await render({
+    ...runtime,
+    contextGeneration: 9,
+    context: { ...runtime.context, client: "other-workspace" },
+  });
+  const cancelled = backend.cancelOperation.mock.calls.map(
+    (call) => (call as unknown[])[0],
+  );
+  // The detail finished before the change, so only the live list chain and the
+  // in-flight preview have host operations to retire.
+  expect(cancelled).toContain(previewQuery.operationId);
+  expect(cancelled).not.toContain(listQuery.operationId);
+  // Exactly once each: no account cancels another's operation twice.
+  expect(new Set(cancelled).size).toBe(cancelled.length);
+
+  // A late answer from the retired preview must not paint the new scope: a
+  // stale impact line would appear as a fresh, "non-partial" preview.
+  await act(async () => {
+    resolvePreview({
+      requestGeneration: previewQuery.requestGeneration,
+      name: "atlas-release",
+      direction: "forward",
+      items: [
+        {
+          path: "//atlas/release/stale/...",
+          action: "map",
+          source: "//atlas/main/stale/...",
+          target: "//atlas/release/stale/...",
+          rationale: "stale-preview-row",
+        },
+      ],
+      blockers: [],
+      stats: {},
+    });
+    await Promise.resolve();
+  });
+  expect(host.textContent).not.toContain("stale-preview-row");
 });

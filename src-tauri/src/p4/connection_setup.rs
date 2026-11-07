@@ -319,13 +319,14 @@ impl ConnectionSetupRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: "opened".into(),
                     args: vec!["-C".into(), name.into(), "-m".into(), "1".into()],
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -398,13 +399,14 @@ impl ConnectionSetupRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -437,6 +439,8 @@ impl ConnectionSetupRepository {
             .runner
             .run_with_mutation_guard(
                 P4CommandRequest {
+                    // `user -i` / `client -i` writes a spec: a mutation.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: command.into(),
@@ -445,7 +449,7 @@ impl ConnectionSetupRepository {
                     // P4 form stdin is plain text. `-Mj` changes the accepted stdin
                     // protocol for `user -i` / `client -i`, so writes must stay text.
                     output_mode: OutputMode::Text,
-                    timeout_ms: Some(30_000),
+                    timeout_ms: None,
                     input: Some(input),
                 },
                 app,

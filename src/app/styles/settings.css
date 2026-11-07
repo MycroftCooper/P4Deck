@@ -28,10 +28,10 @@
   gap: 10px;
   align-items: center;
   margin: 0 0 12px;
-  font-size: 16px;
+  font-size: var(--font-3xl);
 }
 .settings-card p {
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.8;
   color: var(--muted);
 }
@@ -45,7 +45,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .settings-field-label {
   display: inline-flex;
@@ -312,7 +312,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--success) 18%, transparent);
   color: var(--success);
-  font-size: 9px;
+  font-size: var(--font-xs);
   font-style: normal;
   text-transform: uppercase;
 }
@@ -333,7 +333,7 @@
 .profile-list-empty,
 .profile-list-count {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .profile-list-count {
   display: block;
@@ -347,11 +347,11 @@
   gap: 4px;
 }
 .profile-editor-heading strong {
-  font-size: 14px;
+  font-size: var(--font-xl);
 }
 .profile-editor-heading span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .profile-fields {
   margin-top: 14px;
@@ -363,7 +363,7 @@
   display: grid;
   gap: 8px;
   margin-top: 16px;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .profile-connection-name small {
   color: var(--muted);
@@ -376,7 +376,7 @@
 }
 .profile-field-group h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-xl);
 }
 .profile-field-group > p {
   margin: 7px 0 0;
@@ -420,7 +420,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .connection-root-status code,
 .connection-root-status span {
@@ -451,7 +451,7 @@
 .connection-directory-list > button span {
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .connection-directory-list > p {
   margin: 0;
@@ -470,7 +470,7 @@
 }
 .connection-create-summary dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
 }
 .connection-create-summary dd {
@@ -483,7 +483,7 @@
 .profile-operation-status:not(:empty) {
   margin-top: 14px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .connection-status-card {
   --connection-tone: var(--muted);
@@ -520,12 +520,12 @@
   min-width: 0;
 }
 .connection-status-heading strong {
-  font-size: 14px;
+  font-size: var(--font-xl);
 }
 .connection-status-heading span:not(.connection-status-indicator) {
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .connection-status-indicator {
   width: 10px;
@@ -547,7 +547,7 @@
 .connection-facts dt,
 .connection-fingerprint > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -584,7 +584,7 @@
   border-radius: 5px;
   background: var(--panel-3);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-base);
   user-select: all;
 }
 .connection-confirmation {
@@ -592,7 +592,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 9px;
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.55;
 }
 .connection-confirmation input {
@@ -601,7 +601,7 @@
 .connection-login > label {
   display: grid;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .connection-password-field {
   display: grid;
@@ -691,11 +691,11 @@
   gap: 8px;
 }
 .background-settings-heading strong {
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .background-settings-heading small,
 .background-custom small {
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.6;
   color: var(--muted);
 }
@@ -713,7 +713,7 @@
   border-radius: 6px;
   background: var(--panel);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .background-swatch:hover {
   background: var(--hover);
@@ -744,7 +744,7 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .background-custom input[type="color"] {
   width: 48px;
@@ -779,7 +779,7 @@
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .background-preview-panel {
   padding: 2px 6px;
@@ -875,7 +875,7 @@
   align-items: center;
   gap: 10px;
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-2xl);
   min-width: 0;
 }
 .settings-section-head h2 span {

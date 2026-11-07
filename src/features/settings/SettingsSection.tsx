@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
@@ -46,12 +47,12 @@ export function SettingsSection({
           aria-controls={bodyId}
           aria-label={
             expanded
-              ? zh
-                ? `折叠${title}`
-                : `Collapse ${title}`
-              : zh
-                ? `展开${title}`
-                : `Expand ${title}`
+              ? tFor(zh ? "zh-CN" : "en-US", "settings.collapse", {
+                  p1: zh ? title : title,
+                })
+              : tFor(zh ? "zh-CN" : "en-US", "settings.expand", {
+                  p1: zh ? title : title,
+                })
           }
           onClick={onToggle}
         >

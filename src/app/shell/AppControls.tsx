@@ -1,8 +1,9 @@
+import { t as translate } from "../../shared/i18n";
 import { Languages, MonitorCog, Moon, Sun } from "lucide-react";
 import type { ThemeMode } from "../../shared/contracts";
 import type { Preferences } from "../hooks/usePreferences";
 export function AppControls({ preferences }: { preferences: Preferences }) {
-  const { theme, setTheme, setLocale, t, zh } = preferences;
+  const { theme, setTheme, setLocale, t } = preferences;
   const themeIcon =
     theme === "light" ? (
       <Sun size={16} />
@@ -16,7 +17,7 @@ export function AppControls({ preferences }: { preferences: Preferences }) {
       <label className="theme-picker">
         {themeIcon}
         <select
-          aria-label={zh ? "主题" : "Theme"}
+          aria-label={translate("shell.theme")}
           value={theme}
           onChange={(event) => setTheme(event.target.value as ThemeMode)}
         >

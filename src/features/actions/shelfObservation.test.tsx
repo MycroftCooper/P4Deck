@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, vi, beforeEach } from "vitest";
 import { dialogHarness, dialogButton } from "../../app/dialogs/testHarness";
 import {
   MenuEnvironment,
@@ -33,6 +33,7 @@ import type {
   ShelfPreflight,
   WorkflowResult,
 } from "../../shared/contracts";
+import { setLocale } from "../../shared/i18n";
 const h = dialogHarness();
 let serial = 0;
 const deferred = <T,>() => {
@@ -128,6 +129,11 @@ function setup() {
     deps,
   };
 }
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("real confirmation closes modal and immediately projects while execution is unresolved", async () => {
   const f = setup(),
     write = deferred<WorkflowResult>();

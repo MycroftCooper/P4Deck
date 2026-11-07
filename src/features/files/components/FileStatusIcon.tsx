@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { memo } from "react";
 import { File, LockKeyhole, Link2, Archive, GitBranch } from "lucide-react";
 import {
@@ -20,9 +21,7 @@ export const FileStatusIcon = memo(function FileStatusIcon({
   const badges = fileBadges(facts);
   const label = badges.length
     ? badges.map((b) => fileBadgeLabel(b, zh)).join("\n")
-    : zh
-      ? "文件；未提供更多状态"
-      : "File; no additional status supplied";
+    : t("files.file.no.additional.status.supplied");
   const overflow = badges.length > 3;
   const visible = badges.slice(0, overflow ? 2 : 3);
   return (

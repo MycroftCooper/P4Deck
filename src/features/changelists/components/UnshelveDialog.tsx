@@ -1,5 +1,6 @@
+﻿import { t } from "../../../shared/i18n";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
 import type {
   ClientWorkspace,
@@ -10,6 +11,11 @@ import type {
   WorkflowConfirmation,
   WorkflowResult,
 } from "../../../shared/contracts";
+import { useTokenExpiry } from "../../../shared/confirmation";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../../shared/operationSession";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import {
   PreflightStatus,
@@ -44,6 +50,40 @@ type Phase =
   | "completed"
   | "unknown"
   | "failed";
+
+/** Everything one review attempt publishes; see the reducer below. */
+interface ReviewState {
+  phase: Phase;
+  preflight?: UnshelvePreflight;
+  result?: WorkflowResult;
+  lifecycle?: ShelfUnshelveLifecycle;
+  refreshFailed: boolean;
+  message: string;
+  ack: boolean;
+}
+
+const INITIAL_REVIEW: ReviewState = {
+  phase: "idle",
+  preflight: undefined,
+  result: undefined,
+  lifecycle: undefined,
+  refreshFailed: false,
+  message: "",
+  ack: false,
+};
+
+type ReviewEvent =
+  | { type: "phase"; value: Phase }
+  | { type: "preflight"; value: UnshelvePreflight | undefined }
+  | { type: "ack"; value: boolean }
+  | { type: "message"; value: string }
+  | { type: "result"; value: WorkflowResult | undefined }
+  | { type: "lifecycle"; value: ShelfUnshelveLifecycle | undefined }
+  | { type: "refreshFailed"; value: boolean };
+
+function reduceReview(state: ReviewState, event: ReviewEvent): ReviewState {
+  return { ...state, [event.type]: event.value };
+}
 
 export function UnshelveDialog({
   request,
@@ -92,9 +132,8 @@ export function UnshelveDialog({
 }) {
   const tr = (cn: string, en: string) => (zh ? cn : en);
   const newChange = newChangeDescription !== undefined;
-  const newChangeFailure = tr(
-    "创建 CL 的结果未确认；请刷新 Pending 后手动重试（不会自动重放）",
-    "Changelist creation outcome is unconfirmed; refresh Pending and retry manually (no automatic replay).",
+  const newChangeFailure = t(
+    "pending.changelist.creation.outcome.is.unconfirmed.refresh",
   );
   /** Default creation reuses the pending-CL lifecycle rules (no auto retry, host readback only). */
   const createChange =
@@ -151,16 +190,18 @@ export function UnshelveDialog({
   const [targetChange, setTargetChange] = useState("0");
   /** New-CL mode: id of the CL created right before the first preflight. */
   const [createdChangeId, setCreatedChangeId] = useState<number>();
-  const [ack, setAck] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [preflight, setPreflight] = useState<UnshelvePreflight>();
-  const [result, setResult] = useState<WorkflowResult>();
-  const [lifecycle, setLifecycle] = useState<ShelfUnshelveLifecycle>();
-  const [refreshFailed, setRefreshFailed] = useState(false);
-  const [message, setMessage] = useState("");
-  const generation = useRef(0);
+  /**
+   * The review's transient output lives in one reducer. These six fields always
+   * move together at the start of an action, so the transitions below make the
+   * "what is cleared when" rule explicit instead of repeating it per handler:
+   * starting an attempt clears the previous attempt's result, a refusal clears
+   * the acknowledgement, and a completed review keeps its acknowledgement.
+   */
+  const [review, dispatch] = useReducer(reduceReview, INITIAL_REVIEW);
+  const session = useOperationSession();
   const running = useRef(false);
-  const operationId = useRef<string | undefined>(undefined);
+  /** The confirmed write; Cancel reuses its exact operationId. */
+  const dispatchLease = useRef<OperationLease | undefined>(undefined);
   const loadWorkspacesRef = useRef(loadWorkspaces);
   /** Created CL kept across re-checks; only cleanup reads it on unmount. */
   const createdChangeIdRef = useRef<number | undefined>(undefined);
@@ -173,6 +214,19 @@ export function UnshelveDialog({
   const connectionKeyRef = useRef(connectionKey);
   connectionKeyRef.current = connectionKey;
   const staleConnection = snapshot.connectionKey !== connectionKey;
+  const { phase, preflight, result, lifecycle, refreshFailed, message, ack } =
+    review;
+  const setPhase = (value: Phase) => dispatch({ type: "phase", value });
+  const setPreflight = (value: UnshelvePreflight | undefined) =>
+    dispatch({ type: "preflight", value });
+  const setAck = (value: boolean) => dispatch({ type: "ack", value });
+  const setMessage = (value: string) => dispatch({ type: "message", value });
+  const setResult = (value: WorkflowResult | undefined) =>
+    dispatch({ type: "result", value });
+  const setLifecycle = (value: ShelfUnshelveLifecycle | undefined) =>
+    dispatch({ type: "lifecycle", value });
+  const setRefreshFailed = (value: boolean) =>
+    dispatch({ type: "refreshFailed", value });
   const sourceChanged =
     request.changeId !== snapshot.changeId ||
     JSON.stringify([...new Set(request.paths)].sort()) !==
@@ -201,7 +255,7 @@ export function UnshelveDialog({
             host: "",
             root: "",
             stream: "",
-            description: tr("当前工作区", "Current workspace"),
+            description: t("pending.current.workspace"),
             updated: null,
             accessed: null,
           });
@@ -214,24 +268,19 @@ export function UnshelveDialog({
   }, [currentWorkspace, newChange]);
   useEffect(() => {
     if (!invalidated) return;
-    generation.current++;
+    // A changed source or connection retires both lanes locally; a confirmed
+    // write is never cancelled on the host.
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     running.current = false;
     setPreflight(undefined);
     setAck(false);
     setPhase("stale");
-  }, [invalidated]);
-  useEffect(() => {
-    if (!preflight || phase !== "ready") return;
-    const timer = setTimeout(
-      () => {
-        setPhase("stale");
-        setAck(false);
-      },
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => clearTimeout(timer);
-  }, [phase, preflight]);
-  useEffect(() => () => void ++generation.current, []);
+  }, [invalidated, session]);
+  useTokenExpiry(phase === "ready" ? preflight?.expiresAt : undefined, () => {
+    setPhase("stale");
+    setAck(false);
+  });
   useEffect(
     () => () => {
       unmountedRef.current = true;
@@ -253,13 +302,15 @@ export function UnshelveDialog({
   );
 
   const targetChanged = () => {
-    generation.current++;
+    session.invalidate("preflight");
+    // Parity with the old shared epoch: changing the reviewed inputs also
+    // retires a dispatch result that started under the previous review.
+    session.invalidate("dispatch");
     running.current = false;
     setPreflight(undefined);
     setResult(undefined);
     setLifecycle(undefined);
     setRefreshFailed(false);
-    operationId.current = undefined;
     setMessage("");
     setAck(false);
     setPhase("idle");
@@ -274,8 +325,8 @@ export function UnshelveDialog({
       (!newChange && !validTarget)
     )
       return;
-    const epoch = ++generation.current;
     running.current = true;
+    const lease = session.start("preflight");
     setPhase("checking");
     setMessage("");
     setResult(undefined);
@@ -311,7 +362,7 @@ export function UnshelveDialog({
         targetWorkspace,
         targetChangeId,
       });
-      if (epoch !== generation.current) return;
+      if (!session.isCurrent(lease)) return;
       const samePaths =
         JSON.stringify([...value.target.depotPaths].sort()) ===
         JSON.stringify(snapshot.paths);
@@ -324,12 +375,7 @@ export function UnshelveDialog({
         (value.ready && !value.token) ||
         !Number.isFinite(value.expiresAt)
       )
-        throw new Error(
-          tr(
-            "预检结果与来源或目标不匹配。",
-            "Preflight does not match the source or target.",
-          ),
-        );
+        throw new Error(t("pending.preflight.does.not.match.the.source"));
       setPreflight(value);
       setPhase(
         !value.ready || value.blockers.length
@@ -339,11 +385,12 @@ export function UnshelveDialog({
             : "ready",
       );
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(cause));
         setPhase("failed");
       }
     } finally {
+      session.finish(lease);
       running.current = false;
     }
   }
@@ -365,12 +412,7 @@ export function UnshelveDialog({
       newChange &&
       preflight.target.targetChangeId !== createdChangeIdRef.current
     ) {
-      setMessage(
-        tr(
-          "目标 CL 与新建的 CL 不一致，未执行任何 Unshelve。",
-          "Target changelist does not match the created changelist; nothing was unshelved.",
-        ),
-      );
+      setMessage(t("pending.target.not.match"));
       setPhase("failed");
       setPreflight(undefined);
       setAck(false);
@@ -378,7 +420,6 @@ export function UnshelveDialog({
     }
     // Once confirm is dispatched the CL may hold unshelved files: never delete it.
     confirmAttemptedRef.current = true;
-    const epoch = generation.current;
     running.current = true;
     setPhase("running");
     setMessage("");
@@ -387,10 +428,16 @@ export function UnshelveDialog({
     setRefreshFailed(false);
     // One UUID for this dispatch; it is reused by receipt lookup, never by a retry.
     const id = crypto.randomUUID();
-    operationId.current = id;
+    // A confirmed write outlives the dialog, so the host is never asked to
+    // cancel it; the local lease only stops late writes from this attempt.
+    const lease = session.start("dispatch", {
+      operationId: id,
+      cancelBackend: false,
+    });
+    dispatchLease.current = lease;
     try {
       const dispatching = await connection();
-      if (epoch !== generation.current || invalidated) return;
+      if (!session.isCurrent(lease)) return;
       if (
         !workflowConnectionMatchesTarget(
           preflight.target,
@@ -399,10 +446,7 @@ export function UnshelveDialog({
         )
       )
         throw new Error(
-          tr(
-            "源连接身份与预检目标不一致，未执行任何 Unshelve。",
-            "Source connection identity changed; nothing was unshelved.",
-          ),
+          t("pending.source.connection.identity.changed.nothing.was"),
         );
       const run = await runShelfUnshelve(
         { token: preflight.token, target: preflight.target, operationId: id },
@@ -415,7 +459,7 @@ export function UnshelveDialog({
           refresh: (key, target, value) => boundedRefresh(key, target, value),
         },
       );
-      if (epoch !== generation.current || invalidated) return;
+      if (!session.isCurrent(lease)) return;
       setResult(run.result);
       setLifecycle(run.lifecycle);
       setRefreshFailed(!run.refreshSucceeded);
@@ -434,22 +478,23 @@ export function UnshelveDialog({
         setAck(false);
       }
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (session.isCurrent(lease)) {
         setMessage(String(cause));
         setPhase("failed");
         setPreflight(undefined);
         setAck(false);
       }
     } finally {
+      session.finish(lease);
       running.current = false;
     }
   }
 
   /** Cancellation is the existing IPC with the SAME operationId (never a new id). */
   async function cancel() {
-    const id = operationId.current;
-    if (!id || !running.current) return;
-    await backend.cancelOperation(id).catch(() => undefined);
+    const lease = dispatchLease.current;
+    if (!lease || !running.current) return;
+    await backend.cancelOperation(lease.operationId).catch(() => undefined);
   }
 
   const status: PreflightState = !snapshot.paths.length
@@ -470,22 +515,19 @@ export function UnshelveDialog({
                     : "blocked",
                 blockers: preflight.blockers.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.6") : ""}${item.message}`,
                 ),
                 warnings: preflight.warnings.map(
                   (item) =>
-                    `${item.certainty === "unknown" ? tr("未知：", "Unknown: ") : ""}${item.message}`,
+                    `${item.certainty === "unknown" ? t("pending.unknown.7") : ""}${item.message}`,
                 ),
               }
             : { kind: "idle" };
 
   return (
     <Dialog
-      title={tr("Unshelve 到工作区", "Unshelve to workspace")}
-      description={tr(
-        "将固定的来源 Shelf 子集应用到目标工作区与 CL；来源 Shelf 保留，不会强制覆盖本地内容。",
-        "Apply the fixed source shelf subset to a target workspace and changelist. The source shelf remains and local content is never force-overwritten.",
-      )}
+      title={t("pending.unshelve.to.workspace")}
+      description={t("pending.apply.the.fixed.source.shelf.subset")}
       zh={zh}
       source={snapshot.source}
       busy={busy}
@@ -493,11 +535,11 @@ export function UnshelveDialog({
       footer={
         <>
           <button disabled={busy} onClick={onDismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
           {phase === "running" && (
             <button onClick={() => void cancel()}>
-              {tr("取消操作", "Cancel operation")}
+              {t("pending.cancel.operation")}
             </button>
           )}
           <button
@@ -511,36 +553,29 @@ export function UnshelveDialog({
             }
             onClick={() => void inspect()}
           >
-            {tr("运行预检", "Run preflight")}
+            {t("pending.run.preflight")}
           </button>
           <button
             className="primary"
             disabled={phase !== "ready" || !preflight?.token || !ack}
             onClick={() => void confirm()}
           >
-            {tr("确认 Unshelve", "Confirm unshelve")}
+            {t("pending.confirm.unshelve")}
           </button>
         </>
       }
     >
       <div className="workflow-context">
-        {tr("来源搁置", "Source shelf")} CL {snapshot.changeId} ·{" "}
-        {snapshot.paths.length} {tr("个文件", "files")}
+        {t("pending.source.shelf")} CL {snapshot.changeId} ·{" "}
+        {snapshot.paths.length} {t("pending.files")}
       </div>
-      {demo && (
-        <DialogNotice>
-          {tr(
-            "浏览器 Mock 会模拟结果，不访问真实 P4 Server。",
-            "Browser Mock simulates the result and does not access a real P4 server.",
-          )}
-        </DialogNotice>
-      )}
+      {demo && <DialogNotice>{t("pending.browserMockSimulated")}</DialogNotice>}
       <TargetList
         paths={snapshot.paths.map((path) => `${path}@=${snapshot.changeId}`)}
-        label={tr("固定来源文件", "Fixed source files")}
+        label={t("pending.fixed.source.files")}
       />
       <label>
-        {tr("目标 Workspace", "Target workspace")}
+        {t("pending.target.workspace")}
         {newChange ? (
           <input
             data-dialog-autofocus
@@ -572,8 +607,8 @@ export function UnshelveDialog({
       {workspaceError && <DialogNotice error>{workspaceError}</DialogNotice>}
       <label>
         {newChange
-          ? tr("目标 CL", "Target CL")
-          : tr("目标 CL（0 为 Default）", "Target CL (0 means Default)")}
+          ? t("pending.target.cl")
+          : t("pending.target.cl.0.means.default")}
         {newChange ? (
           <input
             readOnly
@@ -602,10 +637,7 @@ export function UnshelveDialog({
       </label>
       {!validTarget && (
         <DialogNotice error>
-          {tr(
-            "请输入 Default（0）或有效的编号 CL。",
-            "Enter Default (0) or a valid numbered changelist.",
-          )}
+          {t("pending.enter.default.0.or.a.valid")}
         </DialogNotice>
       )}
       <div className="workflow-context">
@@ -613,21 +645,18 @@ export function UnshelveDialog({
         {newChange
           ? createdChangeId !== undefined
             ? `CL ${createdChangeId}`
-            : tr("新建 CL", "new CL")
+            : t("pending.new.cl.2")
           : targetId === 0
             ? "Default"
             : `CL ${targetId}`}
       </div>
       {newChange && createdChangeId !== undefined && (
         <DialogNotice>
-          {tr("已创建 CL", "Created CL")} #{createdChangeId}
+          {t("pending.created.cl")} #{createdChangeId}
         </DialogNotice>
       )}
       <DialogNotice>
-        {tr(
-          "预检会验证映射、本地覆盖、锁、权限、已有打开状态和 Resolve 风险；执行不会启用强制覆盖。",
-          "Preflight verifies mapping, local overwrite risk, locks, permissions, opened state and Resolve risk. Execution does not enable force overwrite.",
-        )}
+        {t("pending.preflight.verifies.mapping.local.overwrite.risk")}
       </DialogNotice>
       {preflight?.mappings.length ? (
         <div className="workflow-mapping-scroll">
@@ -639,29 +668,29 @@ export function UnshelveDialog({
           >
             <thead>
               <tr>
-                <th>{tr("来源", "Source")}</th>
-                <th>{tr("目标映射", "Target mapping")}</th>
-                <th>{tr("状态", "Status")}</th>
+                <th>{t("pending.source")}</th>
+                <th>{t("pending.target.mapping")}</th>
+                <th>{t("pending.status")}</th>
               </tr>
             </thead>
             <tbody>
               {preflight.mappings.map((mapping) => (
                 <tr key={mapping.depotPath}>
                   <td>{mapping.depotPath}</td>
-                  <td>{mapping.targetPath ?? tr("未映射", "Unmapped")}</td>
+                  <td>{mapping.targetPath ?? t("pending.unmapped")}</td>
                   <td>
                     {[
-                      !mapping.mapped && tr("映射失败", "unmapped"),
+                      !mapping.mapped && t("pending.unmapped.2"),
                       mapping.locallyModified &&
-                        tr("本地修改", "local modification"),
-                      mapping.locked && tr("已锁定", "locked"),
+                        t("pending.local.modification"),
+                      mapping.locked && t("pending.locked"),
                       mapping.openedChangeId !== undefined &&
-                        `${tr("已打开于", "opened in")} CL ${mapping.openedChangeId}`,
+                        `${t("pending.openedIn")} CL ${mapping.openedChangeId}`,
                       mapping.resolveRisk !== "none" &&
-                        `${tr("Resolve 风险", "Resolve risk")}: ${mapping.resolveRisk}`,
+                        `${t("pending.resolve.risk")}: ${mapping.resolveRisk}`,
                     ]
                       .filter(Boolean)
-                      .join(" · ") || tr("未发现风险", "No risk found")}
+                      .join(" · ") || t("pending.no.risk.found")}
                   </td>
                 </tr>
               ))}
@@ -677,18 +706,12 @@ export function UnshelveDialog({
             checked={ack}
             onChange={(event) => setAck(event.target.checked)}
           />
-          {tr(
-            "我已核对目标、映射和风险；仅按普通 Unshelve 执行，不强制覆盖。",
-            "I reviewed the target, mappings and risks; run normal unshelve without force overwrite.",
-          )}
+          {t("pending.i.target.mappings")}
         </label>
       )}
       {phase === "running" && (
         <DialogNotice>
-          {tr(
-            "正在 Unshelve；关闭保护已启用。",
-            "Unshelve in progress; closing is disabled.",
-          )}
+          {t("pending.unshelve.in.progress.closing.is.disabled")}
         </DialogNotice>
       )}
       {message && (
@@ -696,23 +719,17 @@ export function UnshelveDialog({
       )}
       {lifecycle?.state === "commandCompleted" && (
         <DialogNotice>
-          {tr(
-            "命令已完成（仅命令级生命周期）。Unshelve 的逐文件/目标 CL/Resolve 状态没有权威事实，不能据此认定完成；请以刷新后的目标工作区、Pending 与 Resolve 状态为准。",
-            "Command completed (command-level lifecycle only). Per-file unshelve state, target CL and Resolve state have no authoritative fact here, so this is not a per-file success; rely on the refreshed target workspace, Pending and Resolve state.",
-          )}
+          {t("pending.command.completed.command.level.lifecycle.only")}
         </DialogNotice>
       )}
       {lifecycle?.state === "unknown" && (
         <DialogNotice error>
-          {tr(
-            "结果不确定：命令可能已执行，逐文件状态未知。已按同一操作号查询回执并刷新一次；请先核对目标工作区/Pending/Resolve，不要直接重复确认。",
-            "Outcome uncertain: the command may have run and per-file state is unknown. The receipt was queried with the same operation id and one bounded refresh was done; inspect the target workspace/Pending/Resolve before confirming again.",
-          )}
+          {t("pending.outcome.uncertain.the.command.may.have")}
         </DialogNotice>
       )}
       {lifecycle?.state === "legacy" && lifecycle.outcome !== "succeeded" && (
         <DialogNotice error>
-          {tr("结果：", "Outcome: ")}
+          {t("pending.outcome")}
           {lifecycle.outcome}
           {result?.failure ? ` · ${result.failure}` : ""} ·{" "}
           {result?.refresh.reason}
@@ -735,18 +752,15 @@ export function UnshelveDialog({
       )}
       {refreshFailed && (
         <DialogNotice error>
-          {tr(
-            "刷新视图失败：显示可能过期，请稍后手动刷新；不会重试写操作。",
-            "View refresh failed: the display may be stale. Refresh manually later; the write is not retried.",
-          )}
+          {t("pending.view.refresh.failed.the.display.may")}
         </DialogNotice>
       )}
       {(lifecycle?.operationId || result?.operationIds.length) && (
         <p className="workflow-context">
-          {tr("操作记录", "Operations")}{" "}
+          {t("pending.operations")}{" "}
           {lifecycle?.operationId ?? result?.operationIds.join(", ")}
           {result?.logReference
-            ? ` · ${tr("日志", "Log")} ${result.logReference}`
+            ? ` · ${t("pending.log")} ${result.logReference}`
             : ""}
         </p>
       )}

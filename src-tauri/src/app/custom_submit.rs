@@ -281,6 +281,16 @@ impl Host {
         Some(session)
     }
 
+    /// Clone one session so the watcher can project a terminal state without
+    /// holding the host lock across the journal write.
+    pub fn session(&self, request_id: &str) -> Option<Session> {
+        self.0
+            .lock()
+            .entries
+            .get(request_id)
+            .map(|entry| entry.session.clone())
+    }
+
     /// 供关闭路径接入（CLOSE/DIRECT）读取启动与未知事实；当前尚无调用点。
     #[allow(dead_code)]
     pub fn close_facts(&self) -> (bool, bool) {
@@ -378,6 +388,16 @@ pub fn watch(host: std::sync::Arc<Host>, app: tauri::AppHandle) {
         loop {
             let (events, mut errors, active) = host.observe();
             for event in events {
+                // The parent exit is terminal for our observation: settle the
+                // durable receipt before telling the UI, so the Operations
+                // panel never keeps showing `running` until someone reopens
+                // the status dialog. The settle is idempotent and never infers
+                // submission success from the exit code.
+                if let Some(state) = app.try_state::<crate::AppState>() {
+                    if let Some(session) = host.session(&event.request_id) {
+                        crate::app::custom_submit_action::settle(&state.journal, &session);
+                    }
+                }
                 if app.emit("custom-submit-parent-exited", &event).is_err() {
                     errors.push(event.request_id);
                 }

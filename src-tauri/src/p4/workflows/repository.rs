@@ -3,7 +3,7 @@ use crate::{
     domain::*,
     p4::{
         changelists::ChangelistRepository,
-        runner::{MutationGuard, P4Runner},
+        runner::{MutationGuard, OperationGroup, P4Runner},
     },
 };
 use sha2::{Digest, Sha256};
@@ -455,16 +455,26 @@ impl WorkflowRepository {
         })
     }
 
+    /// Inspects the resolve state with `fstat` and `resolve -n`.
+    ///
+    /// `group` is the optional operation group that owns the caller's prefix; a
+    /// cancellation is checked before the first child and between the two
+    /// children, so a cancelled inspection returns an error instead of a
+    /// half-read (degraded) result and does not start the next command.
     pub async fn inspect_resolve(
         &self,
         context: &P4Context,
         paths: &[String],
         force: bool,
         prefix: &str,
+        group: Option<&OperationGroup>,
         app: Option<&AppHandle>,
     ) -> Result<ResolveInspection, String> {
         command::ensure_context(context)?;
         let paths = command::validate_paths(paths)?;
+        if let Some(group) = group {
+            group.ensure_active()?;
+        }
         let mut operation_ids = Vec::new();
         let facts = self
             .raw_named(
@@ -479,6 +489,9 @@ impl WorkflowRepository {
                 parser::file_facts(&result.events)
             })
             .unwrap_or_default();
+        if let Some(group) = group {
+            group.ensure_active()?;
+        }
         let preview_result = self
             .raw_named(
                 context,
@@ -597,13 +610,15 @@ impl WorkflowRepository {
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    // `p4 resolve` opens a merge editor, so it is a mutation.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::Text,
-                    timeout_ms: Some(120_000),
+                    timeout_ms: None,
                     input: Some("s\n".into()),
                 },
                 app,
@@ -698,13 +713,14 @@ impl WorkflowRepository {
         self.runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -727,13 +743,15 @@ impl WorkflowRepository {
         self.runner
             .run_with_mutation_guard_and_input(
                 P4CommandRequest {
+                    // Guarded mutation (submit, reject, resolve -am, shelve...).
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

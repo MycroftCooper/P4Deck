@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { MoveFilesDialog } from "./MoveFilesDialog";
 import type { SelectedMoveRequest, SelectedMoveReceipt } from "../selectedMove";
+import { setLocale } from "../../../shared/i18n";
 const api = vi.hoisted(() => ({
   companySubmitConnectionSnapshot: vi.fn(),
   selectedMoveExecute: vi.fn(),
@@ -82,6 +83,8 @@ async function type(text: string) {
   });
 }
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.clearAllMocks();
   api.companySubmitConnectionSnapshot.mockResolvedValue(connection);
   api.selectedMoveExecute.mockImplementation(async (r) => result(r));

@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import type { CancelOperationResult } from "../../shared/contracts";
 
 /**
@@ -31,20 +32,24 @@ export function cancelIntentMessage(
   zh: boolean,
 ): string {
   if (state === "cancelRequested")
-    return zh
-      ? "取消请求已发送；它不会回滚服务器上已生效的更改，状态仍以操作记录为准。"
-      : "Cancellation was requested. It does not roll back changes already applied on the server; the operation record remains authoritative.";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.cancellation.was.requested.it.does",
+    );
   if (state === "notFound")
-    return zh
-      ? "当前没有匹配的活动注册；这不代表操作未运行或未完成，请查看操作记录。"
-      : "No live registration matched now. This is not evidence that the operation did not run or complete; check the operation record.";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.no.live.registration.matched.now",
+    );
   if (state === "unknown")
-    return zh
-      ? "取消结果未知；请以操作记录为准，不要据此重试业务操作。"
-      : "The cancellation outcome is unknown. Check the operation record; do not retry the business action because of it.";
-  return zh
-    ? "取消请求已发送（旧响应未提供明细）；不代表回滚或未提交。"
-    : "Cancellation was requested (legacy response without details). It does not mean a rollback or that nothing was submitted.";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.the.cancellation.outcome.is.unknown",
+    );
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    "actions.cancellation.was.requested.legacy.response",
+  );
 }
 export interface CancelBoundaryReceipt {
   state: CancelIntentState;
@@ -85,14 +90,11 @@ export function bestEffortLogNote(
 ): string {
   if (receipt.status === "recorded") return "";
   if (receipt.status === "duplicate")
-    return zh
-      ? "日志已记录（重复事件已去重）。"
-      : "Log already recorded (duplicate deduplicated).";
+    return tFor(
+      zh ? "zh-CN" : "en-US",
+      "actions.log.already.recorded.duplicate.deduplicated",
+    );
   if (receipt.status === "rejected")
-    return zh
-      ? "日志条目被拒绝；业务结果不受影响。"
-      : "The log entry was rejected; the business result is unaffected.";
-  return zh
-    ? "日志暂不可用；业务结果不受影响，也不会重放业务。"
-    : "The log is unavailable; the business result is unaffected and the action is not replayed.";
+    return tFor(zh ? "zh-CN" : "en-US", "actions.the.log.entry.was.rejected");
+  return tFor(zh ? "zh-CN" : "en-US", "actions.the.is.unavailable");
 }

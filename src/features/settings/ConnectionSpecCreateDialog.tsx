@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { t, tFor } from "../../shared/i18n";
+import { useMemo, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import type { ConnectionSnapshot } from "../companySubmit/model";
 import {
   lookupConnectionCreateAction,
@@ -104,19 +106,7 @@ export function ConnectionSpecCreateDialog({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const sequence = useRef(0);
-  const operation = useRef<string | undefined>(undefined);
-
-  useEffect(
-    () => () => {
-      sequence.current += 1;
-      if (operation.current)
-        void Promise.resolve(backend.cancelOperation(operation.current)).catch(
-          () => undefined,
-        );
-    },
-    [],
-  );
+  const session = useOperationSession();
 
   function workspaceMapping() {
     if (mappingKind === "stream")
@@ -128,32 +118,22 @@ export function ConnectionSpecCreateDialog({
     if (busy) return;
     const trimmedName = name.trim();
     if (!snapshot.server.trim()) {
-      setError(tr("请先填写 Server。", "Enter Server first."));
+      setError(t("settings.enter.server.first"));
       return;
     }
     if (!trimmedName) {
-      setError(tr("名称不能为空。", "Name is required."));
+      setError(t("settings.name.is.required"));
       return;
     }
     if (
       kind === "user" &&
       (!fullName.trim() || !email.trim() || !email.includes("@"))
     ) {
-      setError(
-        tr(
-          "姓名和有效邮箱均为必填项。",
-          "Full name and a valid email address are required.",
-        ),
-      );
+      setError(t("settings.full.name.and.a.valid.email"));
       return;
     }
     if (kind === "workspace" && !snapshot.user.trim()) {
-      setError(
-        tr(
-          "请先在连接设置中填写 User。",
-          "Enter User in Connection settings first.",
-        ),
-      );
+      setError(t("settings.enter.user.in.connection.settings.first"));
       return;
     }
     let mapping: ConnectionWorkspaceMapping | undefined;
@@ -162,16 +142,14 @@ export function ConnectionSpecCreateDialog({
     } catch (cause) {
       setError(
         zh
-          ? "Classic View 每行必须包含 depot path 和 client path。"
+          ? tFor(zh ? "zh-CN" : "en-US", "settings.classicViewNeedsPaths")
           : cause instanceof Error
             ? cause.message
             : String(cause),
       );
       return;
     }
-    const seq = ++sequence.current;
-    const operationId = crypto.randomUUID();
-    operation.current = operationId;
+    const lease = session.start("preflight");
     setBusy(true);
     setError("");
     setPreflight(undefined);
@@ -182,7 +160,7 @@ export function ConnectionSpecCreateDialog({
           ? await backend.preflightCreateConnectionUser({
               context: { ...snapshot, user: trimmedName, client: "" },
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               plan: {
                 name: trimmedName,
                 fullName: fullName.trim(),
@@ -192,7 +170,7 @@ export function ConnectionSpecCreateDialog({
           : await backend.preflightCreateConnectionWorkspace({
               context: { ...snapshot, client: "" },
               requestGeneration,
-              operationId,
+              operationId: lease.operationId,
               plan: {
                 name: trimmedName,
                 root: root.trim(),
@@ -201,26 +179,19 @@ export function ConnectionSpecCreateDialog({
                 syncMode,
               },
             });
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (next.requestGeneration !== requestGeneration) {
-        setError(
-          tr(
-            "预检对应的连接设置已变化，请关闭后重试。",
-            "The connection settings for this preflight changed. Close and retry.",
-          ),
-        );
+        setError(t("settings.the.connection.settings.for.this.preflight"));
         return;
       }
       setPreflight(next);
       setPhase("review");
     } catch (cause) {
-      if (seq === sequence.current)
+      if (session.isCurrent(lease))
         setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
 
@@ -256,21 +227,14 @@ export function ConnectionSpecCreateDialog({
   async function create() {
     if (busy || !confirmed || !preflight?.ready || !preflight.token) return;
     if (preflight.expiresAt <= Date.now()) {
-      setError(
-        tr(
-          "预检已过期，请重新预检后确认。",
-          "The preflight expired. Run it again before confirming.",
-        ),
-      );
+      setError(t("settings.the.preflight.expired.run.it.again"));
       setPreflight(undefined);
       setConfirmed(false);
       setPhase("edit");
       return;
     }
-    const seq = ++sequence.current;
+    const lease = session.start("dispatch");
     // One UUID for dispatch + same-id receipt lookup; never a retry identity.
-    const operationId = crypto.randomUUID();
-    operation.current = operationId;
     setBusy(true);
     setError("");
     let dispatching: ConnectionSnapshot | undefined;
@@ -278,19 +242,16 @@ export function ConnectionSpecCreateDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       // Generation is the drift marker captured for the same-id receipt lookup;
       // the host revalidates the full exact context (server/user/client) itself.
       if (String(requestGeneration) !== dispatching.generation)
         throw new Error(
-          tr(
-            "连接代际与预检目标不一致，未执行创建。",
-            "Connection generation changed; nothing was created.",
-          ),
+          t("settings.connection.generation.changed.nothing.was.created"),
         );
       const confirmation = {
         token: preflight.token,
-        operationId,
+        operationId: lease.operationId,
         context:
           kind === "user"
             ? { ...snapshot, user: preflight.name, client: "" }
@@ -303,19 +264,19 @@ export function ConnectionSpecCreateDialog({
         kind === "user"
           ? await backend.confirmCreateConnectionUser(confirmation)
           : await backend.confirmCreateConnectionWorkspace(confirmation);
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (next.outcome === "unknown")
-        next = (await recover(operationId, dispatching)) ?? next;
-      if (seq !== sequence.current) return;
+        next = (await recover(lease.operationId, dispatching)) ?? next;
+      if (!session.isCurrent(lease)) return;
       setResult(next);
       if (next.outcome === "created") setSavedForm(formState);
       setPhase("result");
     } catch (cause) {
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(operationId, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         setResult(recovered);
         if (recovered.outcome === "created") setSavedForm(formState);
@@ -329,19 +290,14 @@ export function ConnectionSpecCreateDialog({
         failure: "verificationFailed",
         kind: kind === "user" ? "userSelf" : "workspace",
         name: preflight.name,
-        message: tr(
-          "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
-          "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
-        ),
-        operationIds: [operationId],
+        message: t("settings.outcome.uncertain.the.creation.may.have"),
+        operationIds: [lease.operationId],
         simulated: false,
       });
       setPhase("result");
     } finally {
-      if (seq === sequence.current) {
-        operation.current = undefined;
-        setBusy(false);
-      }
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
 
@@ -359,8 +315,8 @@ export function ConnectionSpecCreateDialog({
     <Dialog
       title={
         kind === "user"
-          ? tr("新建 P4 用户", "Create P4 user")
-          : tr("新建 Workspace", "Create workspace")
+          ? t("settings.create.p4.user")
+          : t("settings.create.workspace")
       }
       description={tr(
         `目标服务器：${snapshot.server || "—"}。打开或取消不会写服务器；只有预检后明确确认才会创建。创建成功也只填入当前设置，不会自动保存或切换连接。`,
@@ -374,7 +330,7 @@ export function ConnectionSpecCreateDialog({
         phase === "edit" ? (
           <>
             <button type="button" className="secondary" onClick={onDismiss}>
-              {tr("取消", "Cancel")}
+              {t("settings.cancel")}
             </button>
             <button
               type="button"
@@ -382,7 +338,7 @@ export function ConnectionSpecCreateDialog({
               disabled={busy}
               onClick={() => void inspect()}
             >
-              {busy ? tr("预检中…", "Checking…") : tr("预检", "Preflight")}
+              {busy ? t("settings.checking.2") : t("settings.preflight")}
             </button>
           </>
         ) : phase === "review" ? (
@@ -397,7 +353,7 @@ export function ConnectionSpecCreateDialog({
                 setConfirmed(false);
               }}
             >
-              {tr("返回修改", "Back")}
+              {t("settings.back")}
             </button>
             <button
               type="button"
@@ -407,13 +363,13 @@ export function ConnectionSpecCreateDialog({
               }
               onClick={() => void create()}
             >
-              {busy ? tr("创建中…", "Creating…") : tr("确认创建", "Create")}
+              {busy ? t("settings.creating.2") : t("settings.create")}
             </button>
           </>
         ) : (
           <>
             <button type="button" className="secondary" onClick={onDismiss}>
-              {tr("关闭", "Close")}
+              {t("settings.close")}
             </button>
             {!created && (
               <button
@@ -427,7 +383,7 @@ export function ConnectionSpecCreateDialog({
                   setError("");
                 }}
               >
-                {tr("返回修改", "Back to edit")}
+                {t("settings.back.to.edit")}
               </button>
             )}
             {created && createdWorkspaceUsable && (
@@ -438,7 +394,7 @@ export function ConnectionSpecCreateDialog({
                   onCreated(kind === "user" ? result.name : result.workspace!)
                 }
               >
-                {tr("填入连接设置", "Use in connection settings")}
+                {t("settings.use.in.connection.settings")}
               </button>
             )}
           </>
@@ -449,8 +405,8 @@ export function ConnectionSpecCreateDialog({
         <fieldset disabled={busy}>
           <label>
             {kind === "user"
-              ? tr("用户 ID", "User ID")
-              : tr("Workspace 名称", "Workspace name")}
+              ? t("settings.user.id")
+              : t("settings.workspace.name")}
             <input
               data-dialog-autofocus
               value={name}
@@ -461,7 +417,7 @@ export function ConnectionSpecCreateDialog({
           {kind === "user" ? (
             <>
               <label>
-                {tr("姓名", "Full name")}
+                {t("settings.full.name")}
                 <input
                   required
                   value={fullName}
@@ -469,7 +425,7 @@ export function ConnectionSpecCreateDialog({
                 />
               </label>
               <label>
-                {tr("邮箱", "Email")}
+                {t("settings.email")}
                 <input
                   required
                   type="email"
@@ -478,10 +434,7 @@ export function ConnectionSpecCreateDialog({
                 />
               </label>
               <DialogNotice>
-                {tr(
-                  "仅按该用户自身身份创建，不会以旧登录身份创建其他用户，也不会使用管理员 -f。",
-                  "Creation uses this user's own identity. It never creates another user through an old login and never uses administrator -f.",
-                )}
+                {t("settings.creation.uses.this.user.s.own")}
               </DialogNotice>
             </>
           ) : (
@@ -493,22 +446,17 @@ export function ConnectionSpecCreateDialog({
                   spellCheck={false}
                   onChange={(event) => setRoot(event.target.value)}
                 />
-                <small>
-                  {tr(
-                    "Root 仅用于创建新 Workspace；创建成功后会以后端回读结果自动填入连接设置并再次精确核对。",
-                    "Root is used only to create the new Workspace. After creation, the server read-back fills the connection settings and is checked again exactly.",
-                  )}
-                </small>
+                <small>{t("settings.root.is.used.only.to.create")}</small>
               </label>
               <label>
-                {tr("描述（可选）", "Description (optional)")}
+                {t("settings.description.optional")}
                 <input
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                 />
               </label>
               <label>
-                {tr("映射类型", "Mapping type")}
+                {t("settings.mapping.type")}
                 <select
                   value={mappingKind}
                   onChange={(event) =>
@@ -539,10 +487,7 @@ export function ConnectionSpecCreateDialog({
                     onChange={(event) => setClassicView(event.target.value)}
                   />
                   <small>
-                    {tr(
-                      "每行一个明确的 depot path 与 client path；含空格的路径必须使用引号。不会自动生成全库映射。",
-                      "One explicit depot path and client path per line; quote paths containing spaces. No all-depot mapping is generated automatically.",
-                    )}
+                    {t("settings.one.explicit.depot.path.and.client")}
                   </small>
                 </label>
               )}
@@ -555,18 +500,12 @@ export function ConnectionSpecCreateDialog({
                   }
                 />
                 <span>
-                  {tr(
-                    "启用 P4VFS 虚拟同步（只同步元数据，首次读取时按需下载）",
-                    "Enable P4VFS virtual sync (metadata first, download on first read)",
-                  )}
+                  {t("settings.enable.p4vfs.virtual.sync.metadata.first")}
                 </span>
               </label>
               {syncMode === "virtual" && (
                 <DialogNotice>
-                  {tr(
-                    "需要 Windows、P4 Server 2023.1+、P4 CLI 2023.1+ 和已安装的 P4VFS 客户端代理。创建后文件只保留占位，首次访问才会占用实际磁盘空间。",
-                    "Requires Windows, P4 Server 2023.1+, P4 CLI 2023.1+, and the P4VFS client agent. Files remain placeholders until first access.",
-                  )}
+                  {t("settings.requires.windows.p4.server.2023.1")}
                 </DialogNotice>
               )}
             </>
@@ -577,36 +516,34 @@ export function ConnectionSpecCreateDialog({
         <>
           <dl className="connection-create-summary">
             <div>
-              <dt>{tr("服务器", "Server")}</dt>
+              <dt>{t("settings.server")}</dt>
               <dd>{snapshot.server}</dd>
             </div>
             <div>
-              <dt>{tr("类型", "Type")}</dt>
+              <dt>{t("settings.type")}</dt>
               <dd>
-                {kind === "user"
-                  ? tr("用户", "User")
-                  : tr("工作区", "Workspace")}
+                {kind === "user" ? t("settings.user") : t("settings.workspace")}
               </dd>
             </div>
             <div>
-              <dt>{tr("名称", "Name")}</dt>
+              <dt>{t("settings.name")}</dt>
               <dd>{preflight.name}</dd>
             </div>
             {kind === "user" ? (
               <>
                 <div>
-                  <dt>{tr("姓名", "Full name")}</dt>
+                  <dt>{t("settings.full.name")}</dt>
                   <dd>{fullName.trim()}</dd>
                 </div>
                 <div>
-                  <dt>{tr("邮箱", "Email")}</dt>
+                  <dt>{t("settings.email")}</dt>
                   <dd>{email.trim()}</dd>
                 </div>
               </>
             ) : (
               <>
                 <div>
-                  <dt>{tr("所有者", "Owner")}</dt>
+                  <dt>{t("settings.owner")}</dt>
                   <dd>{snapshot.user}</dd>
                 </div>
                 <div>
@@ -614,7 +551,7 @@ export function ConnectionSpecCreateDialog({
                   <dd>{root.trim()}</dd>
                 </div>
                 <div>
-                  <dt>{tr("映射", "Mapping")}</dt>
+                  <dt>{t("settings.mapping")}</dt>
                   <dd>
                     {mappingKind === "stream"
                       ? `Stream · ${stream.trim()}`
@@ -622,11 +559,11 @@ export function ConnectionSpecCreateDialog({
                   </dd>
                 </div>
                 <div>
-                  <dt>{tr("同步方式", "Sync mode")}</dt>
+                  <dt>{t("settings.sync.mode")}</dt>
                   <dd>
                     {syncMode === "virtual"
-                      ? tr("P4VFS 虚拟同步", "P4VFS virtual sync")
-                      : tr("标准同步", "Standard sync")}
+                      ? t("settings.p4vfs.virtual.sync")
+                      : t("settings.standard.sync")}
                   </dd>
                 </div>
               </>
@@ -645,10 +582,7 @@ export function ConnectionSpecCreateDialog({
           ))}
           {!issues.length && (
             <DialogNotice>
-              {tr(
-                "预检通过，可以确认创建。",
-                "Preflight passed. Creation can be confirmed.",
-              )}
+              {t("settings.preflight.passed.creation.can.be.confirmed")}
             </DialogNotice>
           )}
           <label className="workflow-checkbox">
@@ -673,30 +607,21 @@ export function ConnectionSpecCreateDialog({
             <DialogNotice error={!created || !createdWorkspaceUsable}>
               {result.simulated && "Browser Mock simulated · "}
               {result.outcome === "created" &&
-                tr(
-                  "创建结果（服务器回读已确认）：",
-                  "Created (confirmed by server readback): ",
-                )}
+                t("settings.created.confirmed.by.server.readback")}
               {result.message}
               {created && !createdWorkspaceUsable
-                ? tr(
-                    " 服务端未返回可在本机使用的 Workspace Root，不能填入连接设置。",
-                    " The server did not return a Workspace Root usable on this machine, so it cannot be used in connection settings.",
-                  )
+                ? t("settings.the.not.return")
                 : ""}
             </DialogNotice>
           )}
           {result?.outcome === "unknown" && (
             <DialogNotice error>
-              {tr(
-                "结果不确定：创建可能已提交。已用同一操作号查询持久回执；请刷新用户/工作区列表核对，不要用新操作号重试。",
-                "Outcome uncertain: the creation may have been submitted. The durable receipt was queried with the same operation id; refresh the user/workspace list before any retry with a new id.",
-              )}
+              {t("settings.outcome.uncertain.the.creation.may.have")}
             </DialogNotice>
           )}
           {result && !!result.operationIds.length && (
             <p className="workflow-context">
-              {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+              {t("settings.operation")} {result.operationIds.join(", ")}
             </p>
           )}
         </>

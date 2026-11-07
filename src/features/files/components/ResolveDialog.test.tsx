@@ -5,8 +5,11 @@ import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import { ResolveDialog } from "./ResolveDialog";
 import type {
+  ManualMergeSession,
+  ManualMergeValidation,
   ResolveConflictDetail,
   ResolvePreflight,
+  ResolvePreflightRequest,
   WorkflowResult,
   WorkspaceNode,
 } from "../../../shared/contracts";
@@ -138,6 +141,7 @@ async function flush() {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 it("keep-source resolves the current file, re-inspects and advances", async () => {
@@ -261,6 +265,7 @@ it("re-resolves already resolved files with force and warns before overwriting",
   expect(check).toHaveBeenCalledWith({
     depotPaths: ["//depot/a", "//depot/b", "//depot/c"],
     force: true,
+    operationId: expect.any(String),
   });
   expect(stats.mock.calls[0][0]).toMatchObject({
     depotPath: "//depot/a",
@@ -554,4 +559,329 @@ it("ignores a late stats response after switching files", async () => {
   });
   expect(document.body.textContent).toContain("b stats");
   expect(document.body.textContent).not.toContain("a stats");
+});
+
+const mergeSession = (): ManualMergeSession => ({
+  sessionId: "merge-session",
+  target: {
+    kind: "resolve",
+    server: "server:1666",
+    user: "tester",
+    client: "workspace",
+    workspace: "/workspace",
+    contextGeneration: 1,
+    depotPaths: ["//depot/a"],
+  },
+  depotPath: "//depot/a",
+  localPath: "/workspace/a",
+  baseSource: { depotPath: "//depot/a", revision: 1 },
+  theirsSource: { depotPath: "//depot/a", revision: 2 },
+  fileSnapshot: { size: 8, modifiedMs: 1, contentDigest: "merge-digest" },
+  resolveDigest: "merge-digest",
+  base: "base\n",
+  theirs: "theirs\n",
+  yours: "yours\n",
+  result: "merged\n",
+  encoding: "UTF-8",
+  lineEnding: "LF",
+  hadBom: false,
+  unresolvedBlocks: 0,
+  expiresAt: Date.now() + 60_000,
+  operationIds: [],
+});
+
+it("cancels the in-flight preflight when the connection changes and ignores its late result", async () => {
+  const pending = deferredStats<ResolvePreflight>();
+  const check = vi.fn((_request: ResolvePreflightRequest) => pending.promise);
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const render = (connectionKey: string) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes}
+        source={null}
+        connectionKey={connectionKey}
+        zh
+        onDismiss={vi.fn()}
+        check={check}
+      />,
+    );
+  await render("connection-a");
+  await flush();
+  expect(check).toHaveBeenCalledTimes(1);
+  const request = check.mock.calls[0][0];
+  // The dialog must mint the runner prefix that makes the inspection cancellable.
+  expect(request.operationId).toEqual(expect.any(String));
+  expect(request.operationId?.length).toBeGreaterThan(0);
+  // A new connection retires the review and cancels the outstanding inspection.
+  await render("connection-b");
+  expect(cancel).toHaveBeenCalledWith(request.operationId);
+  // The late answer to the retired request must not be rendered.
+  await act(async () => {
+    pending.resolve(preflight([conflict("a")]));
+    await Promise.resolve();
+  });
+  expect(document.body.textContent).toContain(
+    "连接或 Resolve 范围已改变，请刷新。",
+  );
+  expect(document.body.textContent).not.toContain("待处理 1");
+});
+
+it("stops a manual-merge chain at the next step when the connection changes", async () => {
+  vi.spyOn(backend, "openManualMerge").mockResolvedValue(mergeSession());
+  vi.spyOn(backend, "runExternalMerge").mockResolvedValue({
+    status: "completed",
+    result: "merged\n",
+    operationIds: [],
+  });
+  const pending = deferredStats<ManualMergeValidation>();
+  const validate = vi
+    .spyOn(backend, "validateManualMerge")
+    .mockReturnValue(pending.promise);
+  const save = vi.spyOn(backend, "confirmManualMergeSave");
+  const render = (connectionKey: string) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes}
+        source={null}
+        connectionKey={connectionKey}
+        zh
+        onDismiss={vi.fn()}
+        check={async () => preflight([conflict("a")])}
+      />,
+    );
+  await render("connection-a");
+  await flush();
+  await act(async () => action("打开 P4Merge").click());
+  await flush();
+  expect(validate).toHaveBeenCalledTimes(1);
+  await render("connection-b");
+  await act(async () => {
+    pending.resolve({
+      valid: true,
+      unresolvedBlocks: 0,
+      resultDigest: "merge-digest",
+      token: "merge-token",
+      expiresAt: Date.now() + 60_000,
+      message: "validated",
+    });
+    await Promise.resolve();
+  });
+  // The retired chain must not save, resolve, or publish anything afterwards.
+  expect(save).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain(
+    "连接或 Resolve 范围已改变，请刷新。",
+  );
+  expect(document.body.textContent).not.toContain("P4Merge 合并完成。");
+});
+
+it("cancels the preflight it timed out", async () => {
+  vi.useFakeTimers();
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  let request: ResolvePreflightRequest | undefined;
+  await harness.render(
+    <ResolveDialog
+      nodes={nodes}
+      source={null}
+      connectionKey="connection-a"
+      zh
+      onDismiss={vi.fn()}
+      check={(value) => {
+        request = value;
+        return new Promise(() => undefined);
+      }}
+    />,
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(request?.operationId).toEqual(expect.any(String));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000);
+  });
+  // A timed-out inspection must release the runner instead of leaving it busy.
+  expect(cancel).toHaveBeenCalledWith(request!.operationId);
+});
+
+it("cancels only the outstanding inspection when the dialog closes", async () => {
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const operationIds: string[] = [];
+  let resolveSecond: (value: ResolvePreflight) => void = () => undefined;
+  const secondInspection = new Promise<ResolvePreflight>((resolve) => {
+    resolveSecond = resolve;
+  });
+  const check = vi
+    .fn()
+    .mockImplementationOnce((request: ResolvePreflightRequest) => {
+      operationIds.push(request.operationId!);
+      return Promise.resolve(preflight([conflict("a")]));
+    })
+    .mockImplementationOnce((request: ResolvePreflightRequest) => {
+      operationIds.push(request.operationId!);
+      return secondInspection;
+    });
+  const execute = vi
+    .fn()
+    .mockResolvedValueOnce(
+      legacyResult("succeeded", [
+        { depotPath: "//depot/a", state: "succeeded" },
+      ]),
+    );
+  await harness.render(
+    <ResolveDialog
+      nodes={nodes}
+      source={null}
+      connectionKey="connection-a"
+      zh
+      onDismiss={vi.fn()}
+      check={check}
+      execute={execute}
+    />,
+  );
+  await flush();
+  await act(async () => action("保留来源").click());
+  await flush();
+  // The successful resolve re-inspects; that second inspection is still pending.
+  expect(check).toHaveBeenCalledTimes(2);
+  await act(async () => harness.render(null));
+  expect(cancel).toHaveBeenCalledWith(operationIds[1]);
+  expect(cancel).not.toHaveBeenCalledWith(operationIds[0]);
+  await act(async () => resolveSecond(preflight([conflict("a")])));
+});
+
+it("never cancels a settled inspection or one the connection change already retired", async () => {
+  const second = deferredStats<ResolvePreflight>();
+  const third = deferredStats<ResolvePreflight>();
+  const check = vi
+    .fn()
+    .mockResolvedValueOnce(preflight([conflict("a")]))
+    .mockImplementationOnce(() => second.promise)
+    .mockImplementationOnce(() => third.promise);
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const execute = vi
+    .fn()
+    .mockResolvedValue(
+      legacyResult("succeeded", [
+        { depotPath: "//depot/a", state: "succeeded" },
+      ]),
+    );
+  const render = (connectionKey: string) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes}
+        source={null}
+        connectionKey={connectionKey}
+        zh
+        onDismiss={vi.fn()}
+        check={check}
+        execute={execute}
+      />,
+    );
+  await render("connection-a");
+  await flush();
+  // The first inspection settled once; settling retires it, so it can never be
+  // cancelled later while nobody is looking at it.
+  expect(cancel).not.toHaveBeenCalled();
+  await act(async () => action("保留来源").click());
+  await flush();
+  // The re-inspection started by the resolve is now in flight.
+  expect(check).toHaveBeenCalledTimes(2);
+  const retired = check.mock.calls[1][0].operationId;
+  const review = vi.fn();
+  second.promise.then(review);
+  await render("connection-b");
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(cancel).toHaveBeenCalledWith(retired);
+  await act(async () => {
+    second.resolve(preflight([conflict("a")]));
+    await Promise.resolve();
+  });
+  expect(review).toHaveBeenCalled();
+  // Cancelling is idempotent per inspection: the retired answer is not cancelled.
+  expect(cancel).toHaveBeenCalledTimes(1);
+});
+
+it("drops a superseded inspection when the dialog re-opens for a different scope", async () => {
+  const first = deferredStats<ResolvePreflight>();
+  const requests: ResolvePreflightRequest[] = [];
+  const check = vi.fn((request: ResolvePreflightRequest) => {
+    requests.push(request);
+    return first.promise;
+  });
+  const cancel = vi
+    .spyOn(backend, "cancelOperation")
+    .mockResolvedValue(undefined);
+  const render = (depotPaths: string[]) =>
+    harness.render(
+      <ResolveDialog
+        nodes={nodes.filter((node) => depotPaths.includes(node.depotPath!))}
+        source={null}
+        connectionKey="connection-a"
+        zh
+        onDismiss={vi.fn()}
+        check={check}
+      />,
+    );
+  // Mount, unmount and mount again: the first inspection belongs to a review
+  // that no longer exists, so its answer must not paint the second dialog.
+  await render(nodes.map((node) => node.depotPath!));
+  await flush();
+  const firstOperation = requests[0].operationId;
+  await act(async () => harness.render(null));
+  await render([nodes[0].depotPath!]);
+  await flush();
+  expect(check).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    first.resolve(preflight([conflict("a"), conflict("b"), conflict("c")]));
+    await Promise.resolve();
+  });
+  expect(document.body.textContent ?? "").not.toContain("待处理 3");
+  expect(cancel).toHaveBeenCalledWith(firstOperation);
+});
+
+it("keeps every id it sent cancellable and ignores a late resolve after the dialog closes", async () => {
+  const pending = deferredStats<WorkflowResult>();
+  const execute = vi.fn(() => pending.promise);
+  const publish = vi.mocked(
+    (await import("../../changelists/workflowRefresh")).publishWorkflowResult,
+  );
+  publish.mockClear();
+  const check = vi.fn(async () => preflight([conflict("a")]));
+  await harness.render(
+    <ResolveDialog
+      nodes={nodes}
+      source={null}
+      connectionKey="connection-a"
+      zh
+      onDismiss={vi.fn()}
+      check={check}
+      execute={execute}
+    />,
+  );
+  await flush();
+  await act(async () => action("保留来源").click());
+  await flush();
+  const operationId = (execute.mock.calls[0] as unknown[])[0] as {
+    operationId: string;
+  };
+  // Closing retires the review: the late answer can neither repaint the dialog
+  // nor publish a workflow result.
+  await act(async () => harness.render(null));
+  await act(async () => {
+    pending.resolve(
+      legacyResult("succeeded", [
+        { depotPath: "//depot/a", state: "succeeded" },
+      ]),
+    );
+    await Promise.resolve();
+  });
+  expect(publish).not.toHaveBeenCalled();
+  expect(operationId.operationId).toEqual(expect.any(String));
 });

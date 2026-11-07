@@ -914,13 +914,17 @@ impl ChangelistRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    // Changelist reads and writes are interactive: create, edit,
+                    // delete, move files in/out. Mutations may wait on the
+                    // server, so this is the widest interactive family.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: invocation.input,
                 },
                 app,
@@ -942,13 +946,14 @@ impl ChangelistRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(60_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -969,13 +974,14 @@ impl ChangelistRepository {
         self.runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(120_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -997,13 +1003,14 @@ impl ChangelistRepository {
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(120_000),
+                    timeout_ms: None,
                     input: invocation.input,
                 },
                 app,

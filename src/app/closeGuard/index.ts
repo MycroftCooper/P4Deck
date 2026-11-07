@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import {
   CloseStateRegistry,
   connectCloseGuard,
@@ -19,11 +18,6 @@ export function useCloseGuard() {
     const stop = connectCloseGuard(closeState, {
       register: () => invoke("close_guard_register"),
       report: (payload) => invoke("close_guard_report", payload),
-      listen: (handler) =>
-        listen<{ generation: string; probeId: string }>(
-          "close-guard-probe",
-          (event) => handler(event.payload),
-        ),
     });
     return () => {
       stop();

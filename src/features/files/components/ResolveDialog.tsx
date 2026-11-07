@@ -1,5 +1,12 @@
+import { t, tFor } from "../../../shared/i18n";
+import { formatLocalTime } from "../../../shared/lib/localTime";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
+import type {
+  OperationLease,
+  OperationSessionOwner,
+} from "../../../shared/operationSession";
+import { useOperationSession } from "../../../shared/operationSession";
 import type {
   ManualMergeSaveResult,
   ManualMergeSession,
@@ -19,6 +26,7 @@ import type {
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
 import { requestDesktopAttention } from "../../../app/notifications/notifications";
 import { publishWorkflowResult } from "../../changelists/workflowRefresh";
+import { useTokenExpiry } from "../../../shared/confirmation";
 import {
   beginMergeIntent,
   lifecycleOf,
@@ -34,8 +42,55 @@ import {
 type ExecutableStrategy = Exclude<ResolveStrategy, "mergePreview">;
 type Phase = "idle" | "checking" | "ready" | "stale" | "running" | "failed";
 
-/** The preflight IPC has no cancellation path; never leave the dialog stuck. */
+/** A preflight that never answers must not leave the dialog stuck. */
 export const RESOLVE_CHECK_TIMEOUT_MS = 30_000;
+
+/** The inspection channel: one cancellable preflight at a time. */
+const INSPECTION = "resolve-preflight";
+
+type SessionOwner = OperationSessionOwner;
+
+/**
+ * Hands out the runner prefix for the next inspection and supersedes the
+ * previous one. Nothing has reached the host yet, so superseding never asks for
+ * a remote cancel (`cancelBackend: false`) — the dialog is the only canceller
+ * and it must cancel exactly the ids it actually sent.
+ */
+function beginInspection(owner: SessionOwner): OperationLease {
+  return owner.start(INSPECTION, { cancelBackend: false });
+}
+
+/** Mints a runner prefix for a call made inside an already-admitted review. */
+function runnerPrefix(owner: SessionOwner): string {
+  return owner.start(INSPECTION, { cancelBackend: false }).operationId;
+}
+
+/**
+ * The review a late response belongs to. Any epoch that is not the channel's
+ * current one means "connection, scope or dialog state changed", so a late
+ * answer from a retired review cannot publish over the newer one.
+ */
+function reviewEpoch(owner: SessionOwner): number {
+  return owner.epoch(INSPECTION);
+}
+
+function reviewIsCurrent(owner: SessionOwner, epoch: number): boolean {
+  return epoch === owner.epoch(INSPECTION);
+}
+
+/** Retires a settled inspection; it must never be cancelled afterwards. */
+function settleInspection(owner: SessionOwner, lease: OperationLease) {
+  owner.finish(lease);
+}
+
+/**
+ * Multi-step chains (resolve, manual merge) live inside one review: every step
+ * re-reads the epoch before its next write, so a connection or scope change in
+ * between stops the chain instead of publishing over it.
+ */
+function beginReview(owner: SessionOwner): number {
+  return reviewEpoch(owner);
+}
 
 function executableStrategies(detail: ResolveConflictDetail) {
   return detail.availableStrategies.filter(
@@ -43,12 +98,20 @@ function executableStrategies(detail: ResolveConflictDetail) {
   );
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+  onTimeout?: () => void,
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     promise,
     new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), ms);
+      timer = setTimeout(() => {
+        onTimeout?.();
+        reject(new Error(message));
+      }, ms);
     }),
   ]).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
@@ -110,7 +173,6 @@ export function ResolveDialog({
   ): Promise<WorkflowResult | unknown>;
   resolveStats?(request: ResolveStatsRequest): Promise<ResolveStats>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [snapshot] = useState(() => ({
     nodes: [
       ...new Map(
@@ -140,7 +202,9 @@ export function ResolveDialog({
   const [statsByKey, setStatsByKey] = useState<
     Record<string, ResolveStats | null>
   >({});
-  const generation = useRef(0);
+  const session = useOperationSession();
+  /** Prefix of the command chain running inside the current review (recovery). */
+  const activeOperation = useRef<string | undefined>(undefined);
   const running = useRef(false);
   const statsInFlight = useRef(new Set<string>());
   const autoInspected = useRef(false);
@@ -199,38 +263,35 @@ export function ResolveDialog({
     const p = value as ResolvePreflight | undefined;
     const fail = (reason: string): never => {
       throw new Error(
-        tr(
-          `Resolve 数据无效：${reason}`,
-          `Invalid resolve preflight payload: ${reason}`,
+        tFor(
+          zh ? "zh-CN" : "en-US",
+          "files.invalid.resolve.preflight.payload",
+          { p1: reason },
         ),
       );
     };
-    if (!p || typeof p !== "object")
-      fail(tr("未返回 Resolve 数据", "no resolve data returned"));
+    if (!p || typeof p !== "object") fail(t("files.no.resolve.data.returned"));
     if (
       !p!.target ||
       p!.target.kind !== "resolve" ||
       !Array.isArray(p!.target.depotPaths)
     )
-      fail(tr("目标范围缺失", "missing resolve target"));
+      fail(t("files.missing.resolve.target"));
     if (
       !Array.isArray(p!.conflicts) ||
       !Array.isArray(p!.blockers) ||
       !Array.isArray(p!.warnings)
     )
-      fail(
-        tr("conflicts/blockers 不是数组", "conflicts/blockers are not arrays"),
-      );
-    if (!Number.isFinite(p!.expiresAt))
-      fail(tr("缺少过期时间", "missing expiry"));
+      fail(t("files.conflicts.blockers.are.not.arrays"));
+    if (!Number.isFinite(p!.expiresAt)) fail(t("files.missing.expiry"));
     const expected = [...paths].sort();
     if (
       JSON.stringify([...p!.target.depotPaths].sort()) !==
       JSON.stringify(expected)
     )
-      fail(tr("目标文件范围不匹配", "target scope mismatch"));
+      fail(t("files.target.scope.mismatch"));
     if (p!.ready && typeof p!.token !== "string")
-      fail(tr("ready 但缺少 token", "ready without a token"));
+      fail(t("files.ready.without.a.token"));
     const allowed = new Set(expected);
     const seen = new Set<string>();
     const normalized = p!.conflicts.map((raw: unknown) => {
@@ -241,19 +302,20 @@ export function ResolveDialog({
         typeof conflict.depotPath !== "string" ||
         !conflict.depotPath
       )
-        fail(tr("冲突缺少 depotPath", "conflict without depotPath"));
+        fail(t("files.conflict.without.depotpath"));
       const depotPath = conflict!.depotPath!;
       if (seen.has(depotPath))
         fail(
-          tr(`重复的冲突文件 ${depotPath}`, `duplicate conflict ${depotPath}`),
+          tFor(zh ? "zh-CN" : "en-US", "files.duplicate.conflict", {
+            p1: depotPath,
+          }),
         );
       seen.add(depotPath);
       if (!allowed.has(depotPath))
         fail(
-          tr(
-            `冲突不在目标范围内 ${depotPath}`,
-            `conflict outside scope ${depotPath}`,
-          ),
+          tFor(zh ? "zh-CN" : "en-US", "files.conflict.outside.scope", {
+            p1: depotPath,
+          }),
         );
       const sources = Array.isArray(conflict!.sources)
         ? conflict!.sources.filter((item) => !!item && typeof item === "object")
@@ -300,23 +362,34 @@ export function ResolveDialog({
     initial?: boolean;
   }): Promise<boolean> {
     if (running.current || invalidated || !paths.length) return false;
-    const epoch = ++generation.current;
+    // Starting the lease supersedes the previous inspection. The `epoch` below
+    // is this inspection's review: any later invalidation makes it stale.
+    const lease = beginInspection(session);
+    const epoch = lease.epoch;
     running.current = true;
     const previousIndex = selection?.previousIndex ?? index;
+    const operationId = lease.operationId;
+    activeOperation.current = operationId;
     setPhase("checking");
     setMessage("");
     setResult(undefined);
 
     try {
       const value = await withTimeout(
-        check({ depotPaths: paths, force }),
+        // The host names the runner children after this id, so cancelling the
+        // exact operation reaches the inspection commands while they run.
+        check({ depotPaths: paths, force, operationId }),
         RESOLVE_CHECK_TIMEOUT_MS,
-        tr(
-          "读取冲突超时（30 秒）。请重试或检查连接。",
-          "Conflict inspection timed out after 30 seconds. Retry or check the connection.",
-        ),
+        t("files.conflict.inspection.timed.out.after.30"),
+        () => {
+          // The dialog cannot cancel its own inspect: it never passes an abort
+          // signal as the runner prefix, but a timed-out inspection must still
+          // release the host runner, so the id is cancelled exactly once here.
+          activeOperation.current = undefined;
+          void backend.cancelOperation(operationId).catch(() => undefined);
+        },
       );
-      if (epoch !== generation.current) return false;
+      if (!reviewIsCurrent(session, epoch)) return false;
       const next = validatePreflight(value);
       setPreflight(next);
       if (initialUnresolved.current === undefined)
@@ -346,41 +419,56 @@ export function ResolveDialog({
       if (next.conflicts.length || next.blockers.length)
         requestDesktopAttention({
           key: `resolve-preflight:${next.contentDigest}`,
-          title: tr("Resolve 等待处理", "Resolve awaits attention"),
+          title: t("files.resolve.awaits.attention"),
           body: next.blockers.length
-            ? tr(
-                `${next.blockers.length} 个 Resolve 阻断项需要处理。`,
-                `${next.blockers.length} Resolve blocker(s) need review.`,
+            ? tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.resolve.blocker.s.need.review",
+                { p1: next.blockers.length },
               )
-            : tr(
-                `${next.conflicts.filter((item) => item.status === "unresolved").length} 个冲突等待选择策略。`,
-                `${next.conflicts.filter((item) => item.status === "unresolved").length} conflict(s) await a strategy.`,
+            : tFor(
+                zh ? "zh-CN" : "en-US",
+                "files.conflict.s.await.a.strategy",
+                {
+                  p1: next.conflicts.filter(
+                    (item) => item.status === "unresolved",
+                  ).length,
+                },
               ),
           kind: "attention",
         });
       setPhase("ready");
       return true;
     } catch (cause) {
-      if (epoch === generation.current) {
+      if (reviewIsCurrent(session, epoch)) {
         setPreflight(undefined);
         setMessage(cause instanceof Error ? cause.message : String(cause));
         setPhase("failed");
       }
       return false;
     } finally {
+      if (activeOperation.current === operationId)
+        activeOperation.current = undefined;
       running.current = false;
+      // A settled inspection retires its lease; the review it established
+      // survives until the next inspect or an invalidation supersedes it.
+      settleInspection(session, lease);
     }
   }
 
   async function recoverMergeUnknown(
     operationId: string,
+    review: number,
     currentResult?: MergeResolveActionResultLike,
   ) {
+    const stillCurrent = () => reviewIsCurrent(session, review);
     // Same-operationId lookup only: never a fresh retry id, never an automatic re-execution.
     if (!mergeUncertain(currentResult) && currentResult) return false;
     try {
       const connection = await backend.companySubmitConnectionSnapshot();
+      if (!stillCurrent()) return false;
       const found = await lookupMergeReceipt(operationId, connection);
+      if (!stillCurrent()) return false;
       if (found.kind !== "found" || found.receipt.state !== "settled")
         return false;
       const recovered = found.receipt.result;
@@ -394,7 +482,7 @@ export function ResolveDialog({
       const remaining = mergeRemaining(recovered);
       if (remaining.length)
         setMessage(
-          `${recovered.message} · ${tr("仍有未解决/未证实", "still unresolved/unproven")}: ${remaining.map((file) => file.depotPath).join(", ")}`,
+          `${recovered.message} · ${t("files.still.unresolved.unproven")}: ${remaining.map((file) => file.depotPath).join(", ")}`,
         );
     } catch {
       /* A failed lookup is not permission to retry the write. */
@@ -413,13 +501,16 @@ export function ResolveDialog({
     },
   ) {
     if (!executeReady || !preflight?.token || !resolutions.length) return;
-    const epoch = generation.current;
+    // The admitted review: a later invalidation retires it, and every step of
+    // this chain stops writing before it can start another write.
+    const review = beginReview(session);
+    const stillCurrent = () => reviewIsCurrent(session, review);
     running.current = true;
     setPhase("running");
     setMessage("");
     setResult(undefined);
 
-    const operationId = crypto.randomUUID();
+    const operationId = runnerPrefix(session);
     beginMergeIntent({
       kind: "resolve",
       operationId,
@@ -432,25 +523,36 @@ export function ResolveDialog({
     ): Promise<void> => {
       settleMergeIntent(operationId);
       running.current = false;
+      // A superseded attempt must not repaint the dialog: the invalidated effect
+      // has already published the "connection or scope changed" state.
+      if (!stillCurrent()) return;
       setPreflight(undefined);
       setMessage(detail);
       setPhase("failed");
       requestDesktopAttention({
         key: `resolve-result:${operationId}`,
-        title: tr("Resolve 需要处理", "Resolve needs attention"),
+        title: t("files.resolve.needs.attention"),
         body: attentionBody,
         kind: "failure",
       });
-      const recoveredOk = await recoverMergeUnknown(operationId, recovered);
-      if (recoveredOk) {
-        const checked = await inspect({
-          previousIndex: options.previousIndex,
-          resolvedPath: options.resolvedPath,
-        });
-        if (!checked) setMessage(detail);
-        else
-          setMessage(tr("已按回执确认解决。", "Resolved per durable receipt."));
+      const recoveredOk = await recoverMergeUnknown(
+        operationId,
+        review,
+        recovered,
+      );
+      if (!stillCurrent()) return;
+      if (!recoveredOk) return;
+      const checked = await inspect({
+        previousIndex: options.previousIndex,
+        resolvedPath: options.resolvedPath,
+      });
+      if (!checked) {
+        // The inspection reported its own failure; restore the operation detail
+        // unless this chain was invalidated while the inspection ran.
+        if (stillCurrent()) setMessage(detail);
+        return;
       }
+      setMessage(t("files.resolved.per.durable.receipt"));
     };
     try {
       const raw: unknown = await execute({
@@ -459,7 +561,7 @@ export function ResolveDialog({
         resolutions,
         operationId,
       } as never);
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       const lifecycle = lifecycleOf(raw);
       const legacy =
         unwrapMergeLegacy<WorkflowResult>(raw) ?? (raw as WorkflowResult);
@@ -472,7 +574,7 @@ export function ResolveDialog({
           await fail(
             `${lifecycle.message}${
               remaining.length
-                ? ` · ${tr("仍有未解决/未证实", "still unresolved/unproven")}: ${remaining.map((file) => file.depotPath).join(", ")}`
+                ? ` · ${t("files.still.unresolved.unproven")}: ${remaining.map((file) => file.depotPath).join(", ")}`
                 : ""
             }`,
             lifecycle.message,
@@ -494,16 +596,16 @@ export function ResolveDialog({
       // Legacy payload (mock / pre-S4c host).
       if (!legacy || !Array.isArray(legacy.files)) {
         await fail(
-          tr(
-            "Resolve 返回了无法识别的结果。",
-            "Resolve returned an unknown result.",
-          ),
-          tr("Resolve 返回未知结果。", "Resolve returned an unknown result."),
+          t("files.resolve.returned.an.unknown.result"),
+          t("files.resolve.returned.an.unknown.result"),
         );
         return;
       }
       setResult(legacy);
       await publishWorkflowResult(legacy, preflight.target, connectionKey);
+      // The publish is the last await before the legacy branch re-inspects; a
+      // context change while it ran must not start another resolve -n.
+      if (!stillCurrent()) return;
       const succeeded =
         legacy.outcome === "succeeded" &&
         legacy.files.length === resolutions.length &&
@@ -523,7 +625,7 @@ export function ResolveDialog({
       if (checked) setMessage(done);
     } catch (cause) {
       settleMergeIntent(operationId);
-      if (epoch !== generation.current) return;
+      if (!stillCurrent()) return;
       running.current = false;
       await fail(
         cause instanceof Error ? cause.message : String(cause),
@@ -534,28 +636,39 @@ export function ResolveDialog({
     }
   }
 
+  // Closing the dialog retires the review; an inspection nobody reads must not
+  // keep a P4 child process alive. The owner also cancels every lease on
+  // unmount, so only the id this dialog actually sent needs withdrawing here.
+  useEffect(
+    () => () => {
+      if (!activeOperation.current) return;
+      void backend
+        .cancelOperation(activeOperation.current)
+        .catch(() => undefined);
+      activeOperation.current = undefined;
+    },
+    [],
+  );
   useEffect(() => {
     if (!invalidated) return;
-    generation.current++;
+    // Retires the review: the cancelled inspection and any chain running
+    // inside it can no longer publish.
+    session.invalidate(INSPECTION);
     running.current = false;
+    if (activeOperation.current) {
+      void backend
+        .cancelOperation(activeOperation.current)
+        .catch(() => undefined);
+      activeOperation.current = undefined;
+    }
     setPreflight(undefined);
 
-    setMessage(
-      tr(
-        "连接或 Resolve 范围已改变，请刷新。",
-        "Connection or Resolve scope changed; inspect again.",
-      ),
-    );
+    setMessage(t("files.connection.or.resolve.scope.changed.inspect"));
     setPhase("stale");
-  }, [invalidated]);
-  useEffect(() => {
-    if (!preflight || phase !== "ready") return;
-    const timer = setTimeout(
-      () => setPhase("stale"),
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => clearTimeout(timer);
-  }, [phase, preflight]);
+  }, [invalidated, session]);
+  useTokenExpiry(phase === "ready" ? preflight?.expiresAt : undefined, () => {
+    setPhase("stale");
+  });
   // P4V opens with the file list loaded; inspect once on mount.
   useEffect(() => {
     if (autoInspected.current || preflight || invalidated || !paths.length)
@@ -567,7 +680,10 @@ export function ResolveDialog({
     // starts a fresh request instead of leaving the dialog stuck in "checking".
     return () => {
       autoInspected.current = false;
-      generation.current++;
+      // Supersedes the first inspection so its answer cannot land after the
+      // remount. It holds no lease of its own: the owner retires the channel on
+      // the unmount that follows.
+      session.invalidate(INSPECTION);
       running.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -610,13 +726,11 @@ export function ResolveDialog({
     setMessage("");
   };
   const blockedReason = (conflict: ResolveConflictDetail | undefined) => {
-    if (!conflict) return tr("没有可解决的文件", "No file to resolve");
-    if (conflict.status === "blocked")
-      return tr("后端标记为阻塞", "Blocked by backend");
-    if (conflict.status === "unknown")
-      return tr("冲突状态未知", "Conflict state unknown");
+    if (!conflict) return t("files.no.file.to.resolve");
+    if (conflict.status === "blocked") return t("files.blocked.by.backend");
+    if (conflict.status === "unknown") return t("files.conflict.state.unknown");
     if (!executableStrategies(conflict).length)
-      return tr("没有可执行策略", "No executable strategy");
+      return t("files.no.executable.strategy");
     return undefined;
   };
   const canManual =
@@ -655,10 +769,10 @@ export function ResolveDialog({
   const actionReason = (strategy: ExecutableStrategy) => {
     const blocked = blockedReason(current);
     if (blocked) return blocked;
-    if (!current) return tr("没有当前文件。", "No current file.");
-    if (!executeReady) return tr("当前不能执行。", "Execution is unavailable.");
+    if (!current) return t("files.no.current.file");
+    if (!executeReady) return t("files.execution.is.unavailable");
     if (!executableStrategies(current).includes(strategy))
-      return tr("后端未批准此策略。", "Strategy is not approved by backend.");
+      return t("files.strategy.not.approved");
     return undefined;
   };
   const canRun = (strategy: ExecutableStrategy) => !actionReason(strategy);
@@ -667,10 +781,10 @@ export function ResolveDialog({
     void resolve([{ depotPath: current.depotPath, strategy }], {
       label:
         strategy === "safe"
-          ? tr("接受自动合并", "Accept auto-merge")
+          ? t("files.accept.auto.merge")
           : strategy === "acceptTheirs"
-            ? tr("保留来源", "Keep source")
-            : tr("保留本地", "Keep local"),
+            ? t("files.keep.source")
+            : t("files.keep.local"),
       previousIndex: index,
       resolvedPath: current.depotPath,
     });
@@ -678,96 +792,88 @@ export function ResolveDialog({
 
   async function openP4Merge() {
     if (!current || externalBusy || busy) return;
+    // The whole external-merge chain belongs to this dialog session: once the
+    // connection or scope changes, no later step may publish result or copy.
+    const review = beginReview(session);
+    const stillCurrent = () => reviewIsCurrent(session, review);
     setExternalBusy(true);
     setMessage("");
     try {
       const opened = await backend.openManualMerge({
         depotPath: current.depotPath,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
-      const session = unwrapMergeLegacy<ManualMergeSession>(opened);
-      if (!session)
-        throw new Error(
-          tr("无法读取合并会话。", "Unable to open merge session."),
-        );
+      if (!stillCurrent()) return;
+      const merge = unwrapMergeLegacy<ManualMergeSession>(opened);
+      if (!merge) throw new Error(t("files.unable.to.open.merge.session"));
       const external = await backend.runExternalMerge({
-        sessionId: session.sessionId,
-        result: session.result,
-        operationId: crypto.randomUUID(),
+        sessionId: merge.sessionId,
+        result: merge.result,
+        operationId: runnerPrefix(session),
       });
+      if (!stillCurrent()) return;
       if (external.status === "notInstalled")
-        throw new Error(
-          external.reason ??
-            tr(
-              "未检测到 P4Merge，请先安装/配置。",
-              "P4Merge is not installed.",
-            ),
-        );
+        throw new Error(external.reason ?? t("files.p4merge.is.not.installed"));
       if (external.status === "cancelled" || external.status === "timeout")
         throw new Error(
-          external.reason ??
-            tr("P4Merge 已取消或超时。", "P4Merge was cancelled or timed out."),
+          external.reason ?? t("files.p4merge.was.cancelled.or.timed"),
         );
       if (external.status !== "completed" && external.status !== "unchanged")
-        throw new Error(
-          external.reason ?? tr("P4Merge 执行失败。", "P4Merge failed."),
-        );
+        throw new Error(external.reason ?? t("files.p4merge.failed"));
       const merged =
         external.status === "completed"
-          ? (external.result ?? session.result)
-          : session.result;
+          ? (external.result ?? merge.result)
+          : merge.result;
       const validatedRaw = await backend.validateManualMerge({
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         result: merged,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
+      if (!stillCurrent()) return;
       const validation = unwrapMergeLegacy<ManualMergeValidation>(validatedRaw);
       if (!validation?.valid || !validation.token)
         throw new Error(
           validation?.message ??
-            tr(
-              "P4Merge 合并结果仍有未解决内容。",
-              "The P4Merge result still has unresolved content.",
-            ),
+            t("files.the.p4merge.result.still.has.unresolved"),
         );
       const savedRaw = await backend.confirmManualMergeSave({
         token: validation.token,
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         resultDigest: validation.resultDigest,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
+      if (!stillCurrent()) return;
       const saved = unwrapMergeLegacy<ManualMergeSaveResult>(savedRaw);
       if (!saved?.resolveToken)
         throw new Error(
-          saved?.message ??
-            tr("保存合并结果失败。", "Saving the merge result failed."),
+          saved?.message ?? t("files.saving.the.merge.result.failed"),
         );
       const resolvedRaw = await backend.confirmManualMergeResolve({
         token: saved.resolveToken,
-        sessionId: session.sessionId,
+        sessionId: merge.sessionId,
         resultDigest: saved.resultDigest,
         acknowledge: true,
-        operationId: crypto.randomUUID(),
+        operationId: runnerPrefix(session),
       });
+      if (!stillCurrent()) return;
       const resolved =
         unwrapMergeLegacy<WorkflowResult>(resolvedRaw) ??
         (resolvedRaw as WorkflowResult);
       if (resolved.outcome !== "succeeded") throw new Error(resolved.message);
       setResult(resolved);
       setMessage(resolved.message);
-      if (preflight)
+      if (preflight) {
         await publishWorkflowResult(resolved, preflight.target, connectionKey);
+        if (!stillCurrent()) return;
+      }
       const checked = await inspect({
         previousIndex: index,
         resolvedPath: current.depotPath,
       });
       if (checked)
-        setMessage(
-          tr("P4Merge 合并完成。", "P4Merge merge completed.") +
-            " " +
-            resolved.message,
-        );
+        setMessage(t("files.p4merge.merge.completed") + " " + resolved.message);
     } catch (cause) {
+      if (!stillCurrent()) return;
       setMessage(cause instanceof Error ? cause.message : String(cause));
       setPhase("failed");
     } finally {
@@ -787,56 +893,61 @@ export function ResolveDialog({
     const parts: string[] = [];
     if (revision !== undefined) parts.push(`#${revision}`);
     if (value?.change !== undefined) parts.push(`CL ${value.change}`);
-    return parts.length ? parts.join(" · ") : tr("未返回", "not returned");
+    return parts.length ? parts.join(" · ") : t("files.not.returned");
   };
   const localTime = (value?: string) => {
-    if (!value) return tr("未返回", "not returned");
+    if (!value) return t("files.not.returned");
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : formatLocalTime(parsed.getTime(), zh ? "zh-CN" : "en-US");
   };
   const versionMeta = (value: ResolveVersionStats | undefined) =>
-    `${tr("提交人", "User")}: ${value?.user ?? tr("未返回", "not returned")} · ${tr("时间", "Time")}: ${localTime(value?.time)}`;
+    `${t("files.user")}: ${value?.user ?? t("files.not.returned")} · ${t("files.time")}: ${localTime(value?.time)}`;
   const pathDetails = (value?: string, summaryLabel?: string) => {
     if (!value)
       return (
         <strong className="resolve-version-path">
-          {tr("未返回", "not returned")}
+          {t("files.not.returned")}
         </strong>
       );
     return (
       <details className="resolve-path">
-        <summary title={value}>{summaryLabel ?? tr("路径", "Path")}</summary>
+        <summary title={value}>{summaryLabel ?? t("files.path")}</summary>
         <p>{value}</p>
       </details>
     );
   };
   const diffBlocksText = (value?: number) =>
     value === undefined
-      ? tr("与 base 差异块：待统计", "Diff blocks vs base: pending")
-      : tr(`与 base 差异块：${value}`, `Diff blocks vs base: ${value}`);
+      ? t("files.diff.blocks.vs.base.pending")
+      : tFor(zh ? "zh-CN" : "en-US", "files.diff.blocks.vs.base", {
+          p1: value,
+        });
   const targetBaseRevision = statsTarget?.baseRevision ?? baseSource?.revision;
   const mergedBefore =
     conflictBlocks === undefined
-      ? tr("待统计", "pending")
-      : tr(`${conflictBlocks} 个冲突块`, `${conflictBlocks} conflict block(s)`);
+      ? t("files.pending")
+      : tFor(zh ? "zh-CN" : "en-US", "files.conflict.block.s", {
+          p1: conflictBlocks,
+        });
   const mergedAfter =
     conflictBlocks === undefined && !autoMergeable
-      ? tr("待统计", "pending")
-      : tr(
-          `${autoMergeable ? 0 : conflictBlocks} 个冲突块`,
-          `${autoMergeable ? 0 : conflictBlocks} conflict block(s)`,
-        );
+      ? t("files.pending")
+      : tFor(zh ? "zh-CN" : "en-US", "files.conflict.block.s.2", {
+          p1: autoMergeable ? 0 : (conflictBlocks ?? 0),
+        });
 
   return (
     <Dialog
-      title={tr("解决文件合并", "Resolve files")}
+      title={t("files.resolve.files")}
       description={
         preflight
-          ? tr(
-              `待处理 ${unresolvedConflicts.length} · 已解决 ${resolvedCount}`,
-              `${unresolvedConflicts.length} pending · ${resolvedCount} resolved`,
-            )
-          : tr("正在读取冲突…", "Reading conflicts…")
+          ? tFor(zh ? "zh-CN" : "en-US", "files.pending.resolved", {
+              p1: unresolvedConflicts.length,
+              p2: resolvedCount,
+            })
+          : t("files.reading.conflicts")
       }
       source={source}
       zh={zh}
@@ -847,25 +958,17 @@ export function ResolveDialog({
     >
       <div className="resolve-p4v">
         {demo && (
-          <DialogNotice>
-            {tr(
-              "浏览器 Mock 只返回未知冲突并保持阻塞，不访问真实 P4 Server。",
-              "Browser Mock returns unknown conflicts and keeps execution blocked; it does not access a real P4 server.",
-            )}
-          </DialogNotice>
+          <DialogNotice>{t("files.browser.unknown.conflicts")}</DialogNotice>
         )}
         {force && (
           <DialogNotice>
-            {tr(
-              "重新解决：基于上次解决结果再次解决（p4 resolve -f）；如需保留原始工作区内容，请先 revert 该文件。",
-              "Re-resolve: resolves again on top of the previous resolution (p4 resolve -f). Revert first if you need the original workspace content.",
-            )}
+            {t("files.re.resolve.resolves.again.on.top")}
           </DialogNotice>
         )}
         <div className="resolve-merge">
           <aside className="resolve-sidebar">
             <div className="resolve-sidebar-head">
-              <strong>{tr("文件", "Files")}</strong>
+              <strong>{t("files.files.2")}</strong>
               <label>
                 <input
                   type="checkbox"
@@ -873,7 +976,7 @@ export function ResolveDialog({
                   disabled={busy || !unresolvedConflicts.length}
                   onChange={toggleAll}
                 />
-                {tr("全选", "Select all")}
+                {t("files.select.all")}
               </label>
             </div>
             <div className="resolve-list" role="list">
@@ -887,10 +990,10 @@ export function ResolveDialog({
                   executableStrategies(conflict).includes("safe");
                 const auto = conflictIndex === index && autoMergeable;
                 const autoLabel = auto
-                  ? tr("可自动合并", "Auto-mergeable")
+                  ? t("files.auto.mergeable")
                   : safe
-                    ? tr("需检查冲突块", "Check conflict blocks")
-                    : tr("需手工处理", "Manual");
+                    ? t("files.check.conflict.blocks")
+                    : t("files.manual");
                 return (
                   <div
                     key={conflict.depotPath}
@@ -905,7 +1008,9 @@ export function ResolveDialog({
                       checked={checked.has(conflict.depotPath)}
                       disabled={busy || conflict.status !== "unresolved"}
                       onChange={() => toggleChecked(conflict.depotPath)}
-                      aria-label={tr(`选择 ${name}`, `Select ${name}`)}
+                      aria-label={tFor(zh ? "zh-CN" : "en-US", "files.select", {
+                        p1: name,
+                      })}
                     />
                     <button
                       type="button"
@@ -922,8 +1027,8 @@ export function ResolveDialog({
               {!conflicts.length && (
                 <p className="resolve-list-empty">
                   {phase === "checking"
-                    ? tr("正在读取冲突…", "Reading conflicts…")
-                    : tr("没有冲突", "No conflicts")}
+                    ? t("files.reading.conflicts")
+                    : t("files.no.conflicts")}
                 </p>
               )}
             </div>
@@ -939,11 +1044,11 @@ export function ResolveDialog({
                   </h3>
                   {pathDetails(
                     current.clientPath ?? current.depotPath,
-                    tr("路径", "Path"),
+                    t("files.path"),
                   )}
                 </header>
                 <div className="resolve-base-card">
-                  <span>{tr("Base · 共同基线", "Base")}</span>
+                  <span>{t("files.base")}</span>
                   {pathDetails(statsBase?.depotPath ?? baseSource?.depotPath)}
                   <small>
                     {versionIdentity(statsBase, baseSource?.revision)}
@@ -951,7 +1056,7 @@ export function ResolveDialog({
                   <small>
                     {statsBase?.description ||
                       baseSource?.description ||
-                      tr("基线版本", "Base revision")}
+                      t("files.base.revision")}
                   </small>
                   <small className="resolve-version-meta">
                     {versionMeta(statsBase)}
@@ -959,7 +1064,7 @@ export function ResolveDialog({
                 </div>
                 <div className="resolve-source-grid">
                   <section className="resolve-version-card is-source">
-                    <span>{tr("来源 · Depot", "Source · depot")}</span>
+                    <span>{t("files.source.depot.2")}</span>
                     {pathDetails(
                       statsSource?.depotPath ?? sourceVersion?.depotPath,
                     )}
@@ -969,21 +1074,22 @@ export function ResolveDialog({
                     <small>
                       {statsSource?.description ||
                         sourceVersion?.description ||
-                        tr("传入版本", "Incoming revision")}
+                        t("files.incoming.revision")}
                     </small>
                     <em>{diffBlocksText(statsSource?.diffBlocks)}</em>
                   </section>
                   <section className="resolve-version-card is-target">
-                    <span>{tr("目标 · 本地", "Target · local")}</span>
+                    <span>{t("files.target.local.2")}</span>
                     {pathDetails(
                       statsTarget?.path ??
                         current.clientPath ??
                         current.depotPath,
                     )}
                     <small>
-                      {tr(
-                        `工作区修改 · 基于 #${targetBaseRevision ?? "—"}`,
-                        `Workspace modification · based on #${targetBaseRevision ?? "—"}`,
+                      {tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "files.workspace.modification.based",
+                        { p1: targetBaseRevision ?? "—" },
                       )}
                     </small>
                     <em>{diffBlocksText(statsTarget?.diffBlocks)}</em>
@@ -991,83 +1097,60 @@ export function ResolveDialog({
                 </div>
                 <div className="resolve-merged-card">
                   <div className="resolve-merge-head">
-                    <strong>{tr("合并", "Merge")}</strong>
+                    <strong>{t("files.merge")}</strong>
                     <span>
                       {autoMergeable
-                        ? tr("无剩余冲突", "No remaining conflicts")
+                        ? t("files.no.remaining.conflicts")
                         : conflictBlocks !== undefined
-                          ? tr("仍有冲突", "Conflicts remain")
-                          : tr("冲突待统计", "Conflicts pending")}
+                          ? t("files.conflicts.remain")
+                          : t("files.conflicts.pending")}
                     </span>
                   </div>
                   <div className="resolve-merge-stats">
                     <div>
-                      <span>{tr("自动合并前", "Before auto-merge")}</span>
+                      <span>{t("files.before.auto.merge")}</span>
                       <strong>{mergedBefore}</strong>
                     </div>
                     <span className="resolve-merge-arrow">→</span>
                     <div>
-                      <span>{tr("自动合并后", "After auto-merge")}</span>
+                      <span>{t("files.after.auto.merge")}</span>
                       <strong>{mergedAfter}</strong>
                     </div>
                   </div>
                   <p>
                     {autoMergeable
-                      ? tr(
-                          "已自动处理冲突块，可接受自动合并结果。",
-                          "Conflict blocks were auto-resolved; accept the merged result.",
-                        )
-                      : tr(
-                          "需要选择保留一侧，或打开合并工具处理。",
-                          "Choose one side, or open the merge tool.",
-                        )}
+                      ? t("files.conflict.blocks.were.auto.resolved.accept")
+                      : t("files.chooseSideOrMergeTool")}
                   </p>
                 </div>
                 <div className="resolve-action-row">
                   <div>
-                    <strong>{tr("保留双方修改", "Keep both changes")}</strong>
-                    <p>
-                      {tr(
-                        "接受自动合并生成的结果。",
-                        "Accept the auto-merged result.",
-                      )}
-                    </p>
+                    <strong>{t("files.keep.both.changes")}</strong>
+                    <p>{t("files.accept.the.auto.merged.result")}</p>
                   </div>
                   <button
                     className="primary"
                     disabled={!autoMergeable}
                     title={
                       !safeAvailable
-                        ? tr(
-                            "后端未提供自动合并策略。",
-                            "Auto-merge is not offered by the backend.",
-                          )
+                        ? t("files.auto.not.offered")
                         : conflictBlocks === undefined
-                          ? tr(
-                              "正在统计冲突块，请稍候。",
-                              "Measuring conflict blocks; please wait.",
-                            )
+                          ? t("files.measuring.conflict.blocks.please.wait")
                           : conflictBlocks > 0
-                            ? tr(
-                                "仍有冲突块，不能直接接受自动合并。",
-                                "Conflict blocks remain; auto-merge cannot be accepted.",
+                            ? t(
+                                "files.conflict.blocks.remain.auto.merge.cannot",
                               )
                             : undefined
                     }
                     onClick={() => resolveCurrent("safe")}
                   >
-                    {tr("接受自动合并", "Accept auto-merge")}
+                    {t("files.accept.auto.merge")}
                   </button>
                 </div>
                 <div className="resolve-action-row">
                   <div>
-                    <strong>{tr("仅保留来源", "Keep source only")}</strong>
-                    <p>
-                      {tr(
-                        "用来源替换本地，舍弃本地独有修改。",
-                        "Replace local with source; discard local-only changes.",
-                      )}
-                    </p>
+                    <strong>{t("files.keep.source.only")}</strong>
+                    <p>{t("files.replace.local.with.source.discard.local")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1075,18 +1158,13 @@ export function ResolveDialog({
                     title={actionReason("acceptTheirs")}
                     onClick={() => resolveCurrent("acceptTheirs")}
                   >
-                    {tr("保留来源", "Keep source")}
+                    {t("files.keep.source")}
                   </button>
                 </div>
                 <div className="resolve-action-row">
                   <div>
-                    <strong>{tr("仅保留本地", "Keep local only")}</strong>
-                    <p>
-                      {tr(
-                        "保留本地内容，舍弃来源独有修改。",
-                        "Keep local content; discard source-only changes.",
-                      )}
-                    </p>
+                    <strong>{t("files.keep.local.only")}</strong>
+                    <p>{t("files.keep.local.content.discard.source.only")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1094,18 +1172,13 @@ export function ResolveDialog({
                     title={actionReason("acceptYours")}
                     onClick={() => resolveCurrent("acceptYours")}
                   >
-                    {tr("保留本地", "Keep local")}
+                    {t("files.keep.local")}
                   </button>
                 </div>
                 <div className="resolve-action-row">
                   <div>
-                    <strong>{tr("手工合并", "Manual merge")}</strong>
-                    <p>
-                      {tr(
-                        "使用合并工具逐处检查并处理。",
-                        "Inspect and merge each location with the merge tool.",
-                      )}
-                    </p>
+                    <strong>{t("files.manual.merge")}</strong>
+                    <p>{t("files.inspect.each.location")}</p>
                   </div>
                   <button
                     className="secondary"
@@ -1113,23 +1186,20 @@ export function ResolveDialog({
                     onClick={() => void openP4Merge()}
                   >
                     {externalBusy
-                      ? tr("正在打开 P4Merge…", "Opening P4Merge…")
-                      : tr("打开 P4Merge…", "Open P4Merge…")}
+                      ? t("files.opening.p4merge")
+                      : t("files.open.p4merge")}
                   </button>
                 </div>
               </>
             ) : (
               <div className="resolve-preview-empty">
                 {phase === "checking" ? (
-                  tr("正在读取冲突…", "Reading conflicts…")
+                  t("files.reading.conflicts")
                 ) : (
                   <>
-                    <strong>{tr("没有冲突", "No conflicts")}</strong>
+                    <strong>{t("files.no.conflicts")}</strong>
                     <small>
-                      {tr(
-                        "所选文件没有待解决的冲突。",
-                        "No unresolved conflicts in the selected files.",
-                      )}
+                      {t("files.no.unresolved.conflicts.in.the.selected")}
                     </small>
                   </>
                 )}
@@ -1141,7 +1211,7 @@ export function ResolveDialog({
           <>
             {result.outcome !== "succeeded" && (
               <DialogNotice error>
-                {tr("结果：", "Outcome: ")}
+                {t("files.outcome")}
                 {result.outcome}
                 {result.failure ? " · " + result.failure : ""} ·{" "}
                 {result.refresh.reason}
@@ -1149,9 +1219,9 @@ export function ResolveDialog({
             )}
             {!!result.operationIds.length && (
               <p className="workflow-context">
-                {tr("操作记录", "Operations")} {result.operationIds.join(", ")}
+                {t("files.operations")} {result.operationIds.join(", ")}
                 {result.logReference
-                  ? " · " + tr("日志", "Log") + " " + result.logReference
+                  ? " · " + t("files.log") + " " + result.logReference
                   : ""}
               </p>
             )}
@@ -1167,10 +1237,7 @@ export function ResolveDialog({
         )}
         {phase === "running" && (
           <DialogNotice>
-            {tr(
-              "正在对当前选择执行 Resolve，并会重新读取全部文件。",
-              "Resolving the current selection; the full scope will be read again.",
-            )}
+            {t("files.resolving.the.current.selection.the.full")}
           </DialogNotice>
         )}
         {message && phase !== "running" && (phase === "failed" || !result) && (

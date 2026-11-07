@@ -1,3 +1,4 @@
+import { tFor } from "../../shared/i18n";
 import { notifyFailure } from "../../shared/notice";
 import { storage } from "../../shared/lib/storage";
 import { appCommands, isValidShortcut } from "./catalog";
@@ -143,8 +144,8 @@ export function saveKeymap(
   }
   if (!ok)
     notify(null, {
-      zh: "快捷键设置保存失败：本地存储不可用，本次修改仅在当前会话生效。",
-      en: "Saving shortcuts failed: local storage is unavailable; changes apply only to this session.",
+      zh: tFor("zh-CN", "shell.saving.local.storage"),
+      en: tFor("en-US", "shell.saving.local.storage"),
     });
   return ok;
 }

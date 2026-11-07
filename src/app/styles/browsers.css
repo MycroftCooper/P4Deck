@@ -17,7 +17,7 @@
   background: var(--accent-soft);
   border-radius: 6px;
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .workspace-runtime-summary {
   display: grid;
@@ -36,7 +36,7 @@
 }
 .workspace-runtime-summary span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--font-xs);
   letter-spacing: 0.08em;
 }
 .workspace-runtime-summary strong {
@@ -50,7 +50,7 @@
 .workspace-switch-status:not(:empty) {
   margin: 0 0 10px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .workspace-vfs-note {
   padding: 7px 9px;
@@ -103,7 +103,7 @@
   gap: 12px;
   padding: 0 16px;
   text-align: left;
-  font-size: 11px;
+  font-size: var(--font-base);
 }
 .workspace-head {
   height: 38px;
@@ -147,7 +147,7 @@
   text-overflow: ellipsis;
 }
 .workspace-row em {
-  font-size: 9px;
+  font-size: var(--font-xs);
   font-style: normal;
   color: var(--accent);
   background: var(--accent-soft);
@@ -156,7 +156,7 @@
   flex-shrink: 0;
 }
 .workspace-row time {
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 .workspace-details {
   border: 1px solid var(--border);
@@ -174,11 +174,11 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: 18px;
+  font-size: var(--font-4xl);
 }
 .workspace-description {
   white-space: pre-wrap;
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
@@ -186,13 +186,13 @@
   padding: 60px 20px;
   text-align: center;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .workspace-load-error,
 .workspace-notice {
   padding: 12px;
   color: var(--danger);
-  font-size: 12px;
+  font-size: var(--font-md);
   margin-bottom: 12px;
   border: 1px solid var(--danger);
   border-radius: 6px;
@@ -237,7 +237,7 @@
   display: grid;
   align-items: center;
   width: 100%;
-  font-size: 12px;
+  font-size: var(--font-md);
   text-align: left;
 }
 .history-columns > [role="columnheader"] {
@@ -325,7 +325,7 @@
   background: var(--panel-2);
   color: var(--text);
   padding: 12px;
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -388,7 +388,7 @@
   display: grid;
   padding: 7px;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
   border-bottom: 1px solid var(--border);
 }

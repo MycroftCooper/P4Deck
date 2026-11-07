@@ -1,4 +1,4 @@
-﻿import { appCache } from "../../../shared/cache/appCache";
+import { appCache } from "../../../shared/cache/appCache";
 import { PageHeaderActionsContext } from "../../../app/docking/chrome";
 import { ChangeDetailsContext } from "./ChangeDetailsDialog";
 // @vitest-environment jsdom
@@ -12,6 +12,7 @@ import {
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
 import { messages } from "../../../shared/i18n";
+import { activateLocale } from "../../../shared/i18n";
 import type {
   ChangelistSummary,
   RuntimeInfo,
@@ -196,6 +197,9 @@ async function render(
   headerTarget: HTMLElement | null = null,
 ) {
   const value = { ...runtime, mode, ...overrides };
+  // The i18n resolver is a module singleton; keep it aligned with the locale
+  // this render is made in.
+  activateLocale(locale);
   await act(async () =>
     root.render(
       <ContextMenuProvider scope={`${mode}:fixture`} zh={locale === "zh-CN"}>
@@ -1356,4 +1360,63 @@ it("splits user and workspace into independent cells and tags vxdx markers", asy
     ),
   ).toEqual(["V1D7"]);
   expect(second.children[3].textContent).toBe("bob");
+});
+
+it("mints a fresh query lease for a new chain instead of reusing a page", async () => {
+  await render();
+  backend.queryChangelists.mockClear();
+  backend.cancelOperation.mockClear();
+  const pending = deferred<ReturnType<typeof page>>();
+  backend.queryChangelists.mockImplementationOnce(() => pending.promise);
+  await enter(input("关键词"), "first");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 320)));
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(1);
+  const retired = backend.queryChangelists.mock.calls[0][0];
+
+  // Editing a filter retires the chain: its backend operation is cancelled and
+  // the rows it would have produced never reach the new filter's view.
+  backend.queryChangelists.mockResolvedValueOnce(page([changes[1]], 0));
+  await enter(input("关键词"), "second");
+  expect(backend.cancelOperation).toHaveBeenCalledWith(retired.operationId);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 320)));
+  expect(backend.queryChangelists).toHaveBeenCalledTimes(2);
+  // A filter edit starts a new chain: a fresh operation id, never the retired
+  // one, so the backend cannot bind the old chain's cursor to the new query.
+  const live = backend.queryChangelists.mock.calls[1][0];
+  expect(live.operationId).not.toBe(retired.operationId);
+  await act(async () =>
+    pending.resolve(page([changes[0]], retired.requestGeneration)),
+  );
+  expect(row(101)).toBeUndefined();
+  expect(row(102)).toBeTruthy();
+});
+
+it("stops a retired chain from clearing the spinners of the live one", async () => {
+  await render();
+  backend.cancelOperation.mockClear();
+  const retired = deferred<ReturnType<typeof page>>();
+  const live = deferred<ReturnType<typeof page>>();
+  backend.queryChangelists
+    .mockImplementationOnce(() => retired.promise)
+    .mockImplementationOnce(() => live.promise);
+  await act(async () =>
+    window.dispatchEvent(new Event("p4deck:submitted-refresh")),
+  );
+  const retiredQuery = backend.queryChangelists.mock.calls[1][0];
+  // The retired chain must not paint rows while the live chain owns the view.
+  await enter(input("关键词"), "needle");
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 320)));
+  const liveQuery = backend.queryChangelists.mock.calls.at(-1)![0];
+  expect(backend.cancelOperation).toHaveBeenCalledWith(
+    retiredQuery.operationId,
+  );
+  // The retired answer lands while the live query is still running.
+  await act(async () =>
+    retired.resolve(page([changes[0]], retiredQuery.requestGeneration)),
+  );
+  expect(row(101)).toBeUndefined();
+  await act(async () =>
+    live.resolve(page([changes[1]], liveQuery.requestGeneration)),
+  );
+  expect(row(102)).toBeTruthy();
 });

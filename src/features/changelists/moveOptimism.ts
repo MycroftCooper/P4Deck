@@ -1,3 +1,5 @@
+import { tFor } from "../../shared/i18n";
+import type { MsgKey } from "../../shared/i18n/catalog.zh";
 import { hasResourceConflict } from "../actions/resourceOverlap";
 import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 import { useMemo, useSyncExternalStore } from "react";
@@ -185,20 +187,16 @@ export function blockedPathDetails(
   }
   return details;
 }
-const BLOCKED_SOURCE_LABELS: Record<BlockedSource, readonly [string, string]> =
-  {
-    move: ["移动", "move"],
-    removal: ["还原/搁置删除", "revert/shelf delete"],
-    localDelete: ["本地删除", "local delete"],
-    fileAction: ["文件操作", "file action"],
-  };
-const BLOCKED_REASON_LABELS: Record<
-  MoveBlockReason,
-  readonly [string, string]
-> = {
-  running: ["执行中", "in progress"],
-  unknown: ["结果未知", "unknown"],
-  verificationRequired: ["需核实", "needs verification"],
+const BLOCKED_SOURCE_LABELS: Record<BlockedSource, string> = {
+  move: "pending.move",
+  removal: "pending.removal",
+  localDelete: "pending.localDelete",
+  fileAction: "pending.fileAction",
+};
+const BLOCKED_REASON_LABELS: Record<MoveBlockReason, string> = {
+  running: "pending.running",
+  unknown: "pending.moveBlockedOutcomeUnknown",
+  verificationRequired: "pending.verificationRequired",
 };
 /** Human-readable, source/reason-aware explanation for blocked paths. */
 export function formatBlockedPaths(
@@ -223,9 +221,14 @@ export function formatBlockedPaths(
   }
   if (!grouped.size) return undefined;
   const parts = [...grouped].map(([source, entry]) => {
-    const sourceLabel = BLOCKED_SOURCE_LABELS[source][zh ? 0 : 1];
+    const sourceLabel = tFor(
+      zh ? "zh-CN" : "en-US",
+      BLOCKED_SOURCE_LABELS[source] as MsgKey,
+    );
     const reasonLabel = [...entry.reasons]
-      .map((reason) => BLOCKED_REASON_LABELS[reason][zh ? 0 : 1])
+      .map((reason) =>
+        tFor(zh ? "zh-CN" : "en-US", BLOCKED_REASON_LABELS[reason] as MsgKey),
+      )
       .join(zh ? "、" : ", ");
     return zh
       ? `${sourceLabel}×${entry.count}（${reasonLabel}）`

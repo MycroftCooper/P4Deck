@@ -17,6 +17,9 @@ const backend = vi.hoisted(() => ({
   cancelOperation: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
+// The real save command is import-bound, so the busy test below asserts the
+// invariant on every path: either the click is refused, or it starts and must
+// then be released.
 
 const status: ConnectionStatus = {
   state: "connected",
@@ -155,4 +158,30 @@ it("browser/non-Tauri windows render no picker buttons", async () => {
   expect(pickerButton("自定义提交工具（可选）")).toBeNull();
   expect(exePickerButtons()).toHaveLength(0);
   expect(api.open).not.toHaveBeenCalled();
+});
+
+it("never leaves the form busy after a save is attempted", async () => {
+  api.isTauri.mockReturnValue(false);
+  await render();
+  const busyCard = () => host.querySelector("[aria-busy]") as HTMLElement;
+  const saveButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
+      (item.textContent ?? "").includes("保存连接"),
+    )!;
+  expect(busyCard().getAttribute("aria-busy")).toBe("false");
+  const name = input("连接名称（可选）");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(name, "Second workspace");
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    saveButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  // Whether the save was refused or ran, the form must come back to rest:
+  // a lease retired before its UI update lands would wedge it in busy.
+  expect(busyCard().getAttribute("aria-busy")).toBe("false");
 });

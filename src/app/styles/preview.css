@@ -15,11 +15,11 @@
   gap: 12px;
 }
 .preview-heading h1 {
-  font-size: 22px;
+  font-size: var(--font-7xl);
   margin: 8px 0;
 }
 .preview-heading p {
-  font-size: 12px;
+  font-size: var(--font-md);
   color: var(--muted);
   margin: 0;
 }
@@ -33,7 +33,7 @@
 }
 .preview-note,
 .preview-footer {
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--muted);
   line-height: 1.6;
 }
@@ -41,7 +41,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--font-md);
   flex-wrap: wrap;
 }
 .preview-toolbar button {
@@ -127,7 +127,7 @@
 .preview-empty {
   padding: 30px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-lg);
   overflow-wrap: anywhere;
 }
 .preview-empty p {
@@ -149,7 +149,7 @@
 .preview-table-notice {
   flex: none;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1.6;
   color: var(--muted);
   background: var(--panel);
@@ -171,7 +171,7 @@
   border-spacing: 0;
   table-layout: fixed;
   min-width: 100%;
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: var(--preview-table-row);
   font-variant-numeric: tabular-nums;
 }
@@ -228,7 +228,7 @@
 }
 .preview-table-heading {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: var(--preview-table-header-row);
 }
 .preview-table-row {

@@ -1,10 +1,18 @@
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{
+            Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode,
+            ConfirmationRequest, ConfirmationTicket, IssuedConfirmation, MutationLane,
+            RecheckVerdict, ReviewSpec,
+        },
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
-    p4::{connection::classify_connection_error, context::ContextStore, runner::P4Runner},
+    p4::{
+        connection::classify_connection_error,
+        context::ContextStore,
+        runner::{MutationGuard, P4Runner},
+    },
 };
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -18,27 +26,34 @@ const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 const MAX_REPRESENTATIVE_ENTRIES: usize = 200;
 const INLINE_PATH_LIMIT: usize = 128;
 const INLINE_ARGUMENT_BYTES: usize = 24 * 1024;
-/// `p4 where` is a client-side mapping read, so a short bound is enough.
-const WHERE_TIMEOUT_MS: u64 = 30_000;
+// The `p4 where` preflight is a client-side mapping read and uses the short
+// `IoBound::Read` family from `p4::bounds`; its limit is not a local literal.
 /// Real p4 diagnostics are kept at the head of the result message.
 const MAX_P4_DETAIL_CHARS: usize = 512;
 /// A failed mapping preflight lists at most this many offending targets.
 const MAX_REPORTED_UNMAPPED_PATHS: usize = 5;
 
+/// What a sync review binds next to its target snapshot.
+///
+/// The digest is the preview content digest; the reviewed paths/counts ride
+/// along so a force-acknowledgement or expiry refusal still reports the plan
+/// the reviewer saw.
 #[derive(Clone)]
-struct TokenRecord {
-    target: SyncTargetSnapshot,
+struct SyncReview {
     content_digest: String,
     affected_paths: Vec<String>,
     counts: SyncPlanCounts,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
+impl PartialEq for SyncReview {
+    fn eq(&self, other: &Self) -> bool {
+        self.content_digest == other.content_digest
+            && self.affected_paths == other.affected_paths
+            && self.counts == other.counts
     }
 }
+
+type SyncTicket = ConfirmationTicket<SyncTargetSnapshot, SyncReview>;
 
 struct Evaluation {
     entries: Vec<SyncPlanEntry>,
@@ -53,9 +68,8 @@ pub struct SyncService {
     runner: Arc<P4Runner>,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    tokens: SyncTicket,
+    confirmation_gate: Arc<AsyncMutex<()>>,
 }
 
 impl SyncService {
@@ -73,18 +87,22 @@ impl SyncService {
         status_cache: Arc<StatusCache>,
         ttl_ms: u64,
     ) -> Self {
+        let confirmation_gate = Arc::new(AsyncMutex::new(()));
+        let tokens = SyncTicket::with_gate(ttl_ms.max(1), Some(confirmation_gate.clone()));
         Self {
             runner,
             contexts,
             status_cache,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            tokens,
+            confirmation_gate,
         }
     }
 
-    pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+    pub async fn clear_confirmations(&self) {
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family; blocking inside the async runtime would
+        // stall the command that performs the switch.
+        self.tokens.clear().await;
     }
 
     pub async fn preview(
@@ -100,7 +118,7 @@ impl SyncService {
                     fallback_target(&context, generation, request),
                     SyncIssueCode::InvalidTarget,
                     message,
-                    self.ttl_ms,
+                    self.tokens.ttl_ms(),
                 )
             }
         };
@@ -115,108 +133,71 @@ impl SyncService {
         confirmation: SyncConfirmRequest,
         app: Option<&AppHandle>,
     ) -> SyncResult {
-        let _gate = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
-            return rejected(
-                SyncFailureCode::TokenUnknown,
-                "The sync confirmation token is unknown or was already used.",
-                Vec::new(),
-                SyncPlanCounts::default(),
-            );
+        let mut spec = SyncReviewSpec {
+            service: self,
+            app,
+            requested_operation_id: confirmation.operation_id.clone(),
+            reviewed: None,
+            rechecked_paths: Vec::new(),
+            rechecked_counts: SyncPlanCounts::default(),
+            lane: None,
+            echoed_target: Some(confirmation.target.clone()),
         };
-        if record.expires_at <= now_ms() {
-            return rejected(
-                SyncFailureCode::TokenExpired,
-                "The sync preview expired. Run preview again.",
-                record.affected_paths,
-                record.counts,
-            );
+        let request = ConfirmationRequest {
+            token: &confirmation.token,
+            target: &confirmation.target,
+            digest: None,
+            acknowledged: Acknowledgement::required(confirmation.acknowledge_force, false),
+        };
+        match self.tokens.confirm(request, &mut spec).await {
+            Ok(output) => output,
+            Err(refusal) => spec.refusal_result(refusal),
         }
-        if record.target != confirmation.target {
-            return rejected(
-                SyncFailureCode::TargetMismatch,
-                "The confirmation target does not match the previewed scope and options.",
-                record.affected_paths,
-                record.counts,
-            );
-        }
-        if record.target.force && !confirmation.acknowledge_force {
-            return rejected(
-                SyncFailureCode::ForceAcknowledgementRequired,
-                "Forced sync requires an explicit second acknowledgement.",
-                record.affected_paths,
-                record.counts,
-            );
-        }
+    }
 
-        let (context, generation) = self.contexts.snapshot();
-        if context_target(&context, generation, &record.target) != record.target {
-            return rejected(
-                SyncFailureCode::ContextChanged,
-                "The connection or workspace changed after preview.",
-                record.affected_paths,
-                record.counts,
-            );
-        }
-
-        // Freeze all GUI mutations from the last server recheck through the real sync.
-        let mutation_guard = self.runner.lock_mutations(&context.server).await;
-        let recheck = self.inspect(&context, &record.target, None, app).await;
-        if !recheck.blockers.is_empty() {
-            return rejected(
-                SyncFailureCode::PreflightBlocked,
-                "The sync scope no longer passes preview checks.",
-                affected_paths(&recheck.entries),
-                recheck.counts,
-            );
-        }
-        let recheck_digest = digest(&record.target, &recheck);
-        if recheck_digest != record.content_digest {
-            return rejected(
-                SyncFailureCode::PreviewChanged,
-                "The sync preview changed before execution. Review a new preview.",
-                affected_paths(&recheck.entries),
-                recheck.counts,
-            );
-        }
-        let (latest_context, latest_generation) = self.contexts.snapshot();
-        if context_target(&latest_context, latest_generation, &record.target) != record.target {
-            return rejected(
-                SyncFailureCode::ContextChanged,
-                "The connection or workspace changed during confirmation.",
-                record.affected_paths,
-                record.counts,
-            );
-        }
-
-        let operation_id = valid_operation_id(confirmation.operation_id)
-            .unwrap_or_else(|| format!("sync-{}", Uuid::new_v4()));
-        let (args, input) = execution_arguments(&record.target);
+    /// The real `p4 sync`, run after every shared check and the re-check passed.
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_sync(
+        &self,
+        target: &SyncTargetSnapshot,
+        review: &SyncReview,
+        rechecked_paths: Vec<String>,
+        rechecked_counts: SyncPlanCounts,
+        operation_id: String,
+        guard: &MutationGuard,
+        app: Option<&AppHandle>,
+    ) -> SyncResult {
+        let (context, _) = self.contexts.snapshot();
+        let (args, input) = execution_arguments(target);
         let execution = self
             .runner
             .run_with_mutation_guard_and_input(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Sync,
                     operation_id: Some(operation_id.clone()),
                     source: OperationSource::Gui,
                     command: "sync".into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
-                Some(record.counts.added + record.counts.updated + record.counts.deleted),
+                Some(review.counts.added + review.counts.updated + review.counts.deleted),
                 input,
-                &mutation_guard,
+                guard,
             )
             .await;
+        let _ = rechecked_paths;
+        let _ = rechecked_counts;
 
-        let paths = if record.affected_paths.is_empty() {
-            record.target.paths.clone()
+        let paths = if review.affected_paths.is_empty() {
+            target.paths.clone()
         } else {
-            record.affected_paths.clone()
+            review.affected_paths.clone()
         };
+        let counts = review.counts.clone();
         self.status_cache.invalidate(
             &context.server,
             &context.user,
@@ -243,7 +224,7 @@ impl SyncService {
                         operation_id: Some(operation_id.clone()),
                         log_reference: Some(operation_id),
                         affected_paths: paths.clone(),
-                        counts: record.counts.clone(),
+                        counts: counts.clone(),
                         refresh_workspace: true,
                         refresh_depot: true,
                     };
@@ -255,7 +236,7 @@ impl SyncService {
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
-                    counts: record.counts,
+                    counts,
                     refresh_workspace: true,
                     refresh_depot: true,
                 }
@@ -291,7 +272,7 @@ impl SyncService {
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
-                    counts: record.counts,
+                    counts,
                     refresh_workspace: true,
                     refresh_depot: true,
                 }
@@ -310,7 +291,7 @@ impl SyncService {
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
-                    counts: record.counts,
+                    counts,
                     refresh_workspace: true,
                     refresh_depot: true,
                 }
@@ -370,13 +351,14 @@ impl SyncService {
             .runner
             .run_with_mutation_guard_and_input(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Sync,
                     operation_id: Some(operation_id.clone()),
                     source: OperationSource::Gui,
                     command: "sync".into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -512,13 +494,14 @@ impl SyncService {
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.clone()),
                     source: OperationSource::Gui,
                     command: "where".into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(WHERE_TIMEOUT_MS),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -587,20 +570,15 @@ impl SyncService {
     ) -> SyncPreviewPlan {
         let content_digest = digest(&target, &evaluation);
         let ready = evaluation.blockers.is_empty();
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let affected = affected_paths(&evaluation.entries);
-        let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
-                    content_digest: content_digest.clone(),
-                    affected_paths: affected,
-                    counts: evaluation.counts.clone(),
-                    expires_at,
-                },
-                now_ms(),
-            )
-        });
+        let review = SyncReview {
+            content_digest: content_digest.clone(),
+            affected_paths: affected_paths(&evaluation.entries),
+            counts: evaluation.counts.clone(),
+        };
+        let (token, expires_at) = match self.tokens.issue(ready, target.clone(), review) {
+            Some((expires_at, token)) => (Some(token), expires_at),
+            None => (None, self.tokens.planned_expires_at()),
+        };
         let total_entries = evaluation.entries.len();
         let truncated = total_entries > MAX_REPRESENTATIVE_ENTRIES;
         let log_reference = evaluation.operation_ids.first().cloned();
@@ -621,7 +599,7 @@ impl SyncService {
             content_digest,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.tokens.ttl_ms(),
             operation_ids: evaluation.operation_ids,
             log_reference,
         }
@@ -641,13 +619,17 @@ impl SyncService {
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    // `sync -n` downloads nothing but still walks the depot tree,
+                    // so it shares the long-read family rather than the full
+                    // transfer bound of the real sync.
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(operation_id.clone()),
                     source: OperationSource::Gui,
                     command: "sync".into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -666,13 +648,14 @@ impl SyncService {
             .runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
                     operation_id: Some(inspection_id.clone()),
                     source: OperationSource::Gui,
                     command: "fstat".into(),
                     args: inspection_args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(300_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -727,6 +710,254 @@ impl SyncService {
             ));
         }
         evaluation
+    }
+}
+
+/// One sync confirmation attempt.
+struct SyncReviewSpec<'a> {
+    service: &'a SyncService,
+    app: Option<&'a AppHandle>,
+    requested_operation_id: Option<String>,
+    reviewed: Option<IssuedConfirmation<SyncTargetSnapshot, SyncReview>>,
+    /// Paths/counts of the last successful re-check, reported by refusals
+    /// decided after it (the hand-written flow used the refreshed plan).
+    rechecked_paths: Vec<String>,
+    rechecked_counts: SyncPlanCounts,
+    /// The mutation lane, held from `lane()` through `execute`.
+    lane: Option<MutationGuard>,
+    /// The target echoed by the confirmation, used by the context checks that
+    /// run before `on_reviewed` hands over the consumed record.
+    echoed_target: Option<SyncTargetSnapshot>,
+}
+
+impl SyncReviewSpec<'_> {
+    /// Build the result for a refusal, reporting the reviewed plan before the
+    /// re-check and the re-checked plan after it, exactly as the hand-written
+    /// flow did.
+    fn refusal_result(&self, refusal: ConfirmRefusal<SyncFailureCode>) -> SyncResult {
+        let code = refusal.code().unwrap_or(SyncFailureCode::Cancelled);
+        let message = refusal
+            .message()
+            .unwrap_or("The sync was cancelled before it executed.");
+        if refusal.after_recheck() {
+            return rejected(
+                code,
+                message,
+                self.rechecked_paths.clone(),
+                self.rechecked_counts.clone(),
+            );
+        }
+        match self.reviewed.as_ref() {
+            Some(reviewed) => rejected(
+                code,
+                message,
+                reviewed.digest.affected_paths.clone(),
+                reviewed.digest.counts.clone(),
+            ),
+            None => rejected(code, message, Vec::new(), SyncPlanCounts::default()),
+        }
+    }
+
+    fn operation_id(&self) -> String {
+        valid_operation_id(self.requested_operation_id.clone())
+            .unwrap_or_else(|| format!("sync-{}", Uuid::new_v4()))
+    }
+}
+
+impl<'a> ReviewSpec for SyncReviewSpec<'a> {
+    type Target = SyncTargetSnapshot;
+    type Digest = SyncReview;
+    type Recheck = Evaluation;
+    type Output = SyncResult;
+    type RefusalCode = SyncFailureCode;
+    type Error = ConfirmRefusal<SyncFailureCode>;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<Self::RefusalCode> {
+        error
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> SyncFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => SyncFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => SyncFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => SyncFailureCode::TargetMismatch,
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                SyncFailureCode::ForceAcknowledgementRequired
+            }
+            ConfirmationRefusalCode::ContextChanged => SyncFailureCode::ContextChanged,
+            ConfirmationRefusalCode::RecheckChanged => SyncFailureCode::PreviewChanged,
+            ConfirmationRefusalCode::RecheckBlocked => SyncFailureCode::PreflightBlocked,
+            // A blocked re-check (or one that could not run) reports the plan
+            // that no longer passes, exactly as the hand-written flow did.
+            ConfirmationRefusalCode::RecheckUnavailable => SyncFailureCode::PreflightBlocked,
+            ConfirmationRefusalCode::Cancelled => SyncFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The sync confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => "The sync preview expired. Run preview again.",
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation target does not match the previewed scope and options."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "Forced sync requires an explicit second acknowledgement."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The connection or workspace changed after preview."
+            }
+            ConfirmationRefusalCode::RecheckChanged => {
+                "The sync preview changed before execution. Review a new preview."
+            }
+            ConfirmationRefusalCode::RecheckBlocked => {
+                "The sync scope no longer passes preview checks."
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The sync scope no longer passes preview checks."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "The sync was cancelled before it executed. Refresh before retrying."
+            }
+        }
+    }
+
+    /// A forced sync needs its own acknowledgement, read from the reviewed
+    /// target so a caller cannot clear the requirement by omitting a field.
+    fn required_acknowledgement(
+        &self,
+        reviewed: &IssuedConfirmation<Self::Target, Self::Digest>,
+    ) -> Acknowledgement {
+        Acknowledgement::required(reviewed.target.force, false)
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        // `check_record` runs before `on_reviewed` on the first pass, so fall
+        // back to the echoed target, which `check_record` already proved equal
+        // to the reviewed one.
+        match self.reviewed.as_ref() {
+            Some(reviewed) => {
+                context_target(&context, generation, &reviewed.target) == reviewed.target
+            }
+            None => match self.echoed_target.as_ref() {
+                Some(target) => context_target(&context, generation, target) == *target,
+                None => false,
+            },
+        }
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed = Some(reviewed.clone());
+    }
+
+    /// The lane is taken here, after every request-shape check and before the
+    /// re-check, so it is held from the last server re-check through the write.
+    fn lane(&mut self, _operation_id: &str) -> BoxFuture<'_, Option<MutationLane>> {
+        Box::pin(async move {
+            let (context, _) = self.service.contexts.snapshot();
+            let guard = self.service.runner.lock_mutations(&context.server).await;
+            self.lane = Some(guard);
+            // The ticket drops whatever it is handed; the guard has to live
+            // until `execute` returns, so it stays on the spec.
+            None
+        })
+    }
+
+    fn recheck(&mut self) -> BoxFuture<'_, Result<Evaluation, String>> {
+        Box::pin(async move {
+            let reviewed = self
+                .reviewed
+                .clone()
+                .ok_or_else(|| "The sync review is unavailable.".to_string())?;
+            let (context, _) = self.service.contexts.snapshot();
+            let evaluation = self
+                .service
+                .inspect(&context, &reviewed.target, None, self.app)
+                .await;
+            // Capture the refreshed plan here: refusals decided by the verdict
+            // after this point report it, exactly as the hand-written flow did.
+            self.rechecked_paths = affected_paths(&evaluation.entries);
+            self.rechecked_counts = evaluation.counts.clone();
+            Ok(evaluation)
+        })
+    }
+
+    /// Sync refuses a re-check that no longer passes or no longer matches the
+    /// reviewed digest. Both are decided here, with the refreshed plan captured
+    /// by `refusal_result` through `rechecked_*`.
+    fn recheck_verdict(&self, recheck: &Evaluation) -> RecheckVerdict {
+        let Some(reviewed) = self.reviewed.as_ref() else {
+            return RecheckVerdict::Changed;
+        };
+        // A re-check that now reports blockers is NOT the same outcome as a
+        // plan that moved: the hand-written flow reported the former as
+        // `PreflightBlocked` ("no longer passes preview checks") and only the
+        // latter as `PreviewChanged`.
+        if !recheck.blockers.is_empty() {
+            return RecheckVerdict::Blocked;
+        }
+        if digest(&reviewed.target, recheck) != reviewed.digest.content_digest {
+            return RecheckVerdict::Changed;
+        }
+        RecheckVerdict::Unchanged
+    }
+
+    fn gate(&self) -> Arc<AsyncMutex<()>> {
+        self.service.confirmation_gate.clone()
+    }
+
+    fn execute<'b>(
+        &'b mut self,
+        _recheck: Evaluation,
+        _operation_id: String,
+    ) -> BoxFuture<'b, Result<SyncResult, Self::Error>> {
+        Box::pin(async move {
+            let service = self.service;
+            let reviewed = match self.reviewed.clone() {
+                Some(reviewed) => reviewed,
+                None => {
+                    return Err(refused_sync(
+                        SyncFailureCode::TokenUnknown,
+                        "The sync review is unavailable.",
+                    ))
+                }
+            };
+            let operation_id = self.operation_id();
+            let guard = match self.lane.as_ref() {
+                Some(guard) => guard,
+                None => {
+                    return Err(refused_sync(
+                        SyncFailureCode::CommandFailure,
+                        "The mutation lane closed before the sync could run.",
+                    ))
+                }
+            };
+            Ok(service
+                .execute_sync(
+                    &reviewed.target,
+                    &reviewed.digest,
+                    self.rechecked_paths.clone(),
+                    self.rechecked_counts.clone(),
+                    operation_id,
+                    guard,
+                    self.app,
+                )
+                .await)
+        })
+    }
+}
+
+impl SyncReviewSpec<'_> {}
+
+fn refused_sync(code: SyncFailureCode, message: &'static str) -> ConfirmRefusal<SyncFailureCode> {
+    ConfirmRefusal::Refused {
+        shared: ConfirmationRefusalCode::TokenUnknown,
+        code,
+        message: message.to_string(),
+        recheck: None,
     }
 }
 

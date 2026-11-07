@@ -1,12 +1,17 @@
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{
+            Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode,
+            ConfirmationRequest, ConfirmationTicket, IssuedConfirmation, MutationLane,
+            RecheckVerdict, ReviewSpec,
+        },
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
     p4::{
         connection::classify_connection_error,
         context::ContextStore,
+        runner::MutationGuard,
         submit::{PermissionAssessment, SubmitInspection, SubmitRepository},
     },
 };
@@ -18,19 +23,24 @@ use uuid::Uuid;
 
 const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 
+/// What a submit review binds next to its target snapshot.
+///
+/// The digest is `content_digest`; the depot paths ride along so an expiry or
+/// mismatch refusal can still tell the UI which files to refresh, exactly as
+/// the hand-written record did.
 #[derive(Clone)]
-struct TokenRecord {
-    target: SubmitTargetSnapshot,
+struct SubmitReview {
     content_digest: String,
     depot_paths: Vec<String>,
-    expires_at: i64,
 }
 
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
+impl PartialEq for SubmitReview {
+    fn eq(&self, other: &Self) -> bool {
+        self.content_digest == other.content_digest && self.depot_paths == other.depot_paths
     }
 }
+
+type SubmitTicket = ConfirmationTicket<SubmitTargetSnapshot, SubmitReview>;
 
 struct Evaluation {
     change: Option<PendingChange>,
@@ -44,9 +54,8 @@ pub struct SubmitService {
     repository: SubmitRepository,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    ticket: SubmitTicket,
+    confirmation_gate: Arc<AsyncMutex<()>>,
 }
 
 impl SubmitService {
@@ -64,18 +73,22 @@ impl SubmitService {
         status_cache: Arc<StatusCache>,
         ttl_ms: u64,
     ) -> Self {
+        let confirmation_gate = Arc::new(AsyncMutex::new(()));
+        let ticket = SubmitTicket::with_gate(ttl_ms.max(1), Some(confirmation_gate.clone()));
         Self {
             repository,
             contexts,
             status_cache,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            ticket,
+            confirmation_gate,
         }
     }
 
-    pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+    pub async fn clear_confirmations(&self) {
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family; blocking inside the async runtime would
+        // stall the command that performs the switch.
+        self.ticket.clear().await;
     }
 
     pub async fn preflight(
@@ -124,20 +137,19 @@ impl SubmitService {
         }
 
         let ready = evaluation.blockers.is_empty();
-        // Start the TTL after the server checks finish so a slow preflight does not hand the UI
-        // an already-expired confirmation token.
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let token = ready.then(|| {
-            self.tokens.issue(
-                TokenRecord {
-                    target: target.clone(),
-                    content_digest: evaluation.summary.content_digest.clone(),
-                    depot_paths: evaluation.summary.depot_paths.clone(),
-                    expires_at,
-                },
-                now_ms(),
-            )
-        });
+        let (token, expires_at) = match self.ticket.issue(
+            ready,
+            target.clone(),
+            SubmitReview {
+                content_digest: evaluation.summary.content_digest.clone(),
+                depot_paths: evaluation.summary.depot_paths.clone(),
+            },
+        ) {
+            Some((expires_at, token)) => (Some(token), expires_at),
+            // Start the TTL after the server checks finish so a slow preflight does not hand the
+            // UI an already-expired confirmation token.
+            None => (None, self.ticket.planned_expires_at()),
+        };
         let log_reference = evaluation.operation_ids.first().cloned();
         SubmitPreflight {
             ready,
@@ -148,7 +160,7 @@ impl SubmitService {
             file_summary: evaluation.summary,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.ticket.ttl_ms(),
             operation_ids: evaluation.operation_ids,
             log_reference,
             refresh_recommended: !ready,
@@ -171,7 +183,7 @@ impl SubmitService {
     pub async fn confirm_admitted(
         &self,
         confirmation: SubmitConfirmation,
-        guard: &crate::p4::runner::MutationGuard,
+        guard: &MutationGuard,
         app: Option<&AppHandle>,
     ) -> SubmitResult {
         self.confirm_inner(confirmation, Some(guard), app).await
@@ -180,224 +192,413 @@ impl SubmitService {
     async fn confirm_inner(
         &self,
         confirmation: SubmitConfirmation,
-        admitted: Option<&crate::p4::runner::MutationGuard>,
+        admitted: Option<&MutationGuard>,
         app: Option<&AppHandle>,
     ) -> SubmitResult {
-        let _gate = self.confirmation_gate.lock().await;
         let change_id = confirmation.target.change_id;
-        let record = self.tokens.consume(&confirmation.token);
-        let Some(record) = record else {
-            return rejected(
-                change_id,
-                SubmitFailureCode::TokenUnknown,
-                "The submit confirmation token is unknown or was already used.",
-                Vec::new(),
-            );
+        let request = ConfirmationRequest {
+            token: &confirmation.token,
+            target: &confirmation.target,
+            digest: None,
+            acknowledged: Acknowledgement::NONE,
         };
-        if record.expires_at <= now_ms() {
-            return rejected(
-                change_id,
-                SubmitFailureCode::TokenExpired,
-                "The submit preflight expired. Run preflight again.",
-                record.depot_paths,
-            );
-        }
-        if record.target != confirmation.target {
-            return rejected(
-                change_id,
-                SubmitFailureCode::TargetMismatch,
-                "The confirmation target does not match the checked snapshot.",
-                record.depot_paths,
-            );
-        }
-
-        let (context, generation) = self.contexts.snapshot();
-        if target_snapshot(&context, generation, change_id) != record.target {
-            return rejected(
-                change_id,
-                SubmitFailureCode::ContextChanged,
-                "The connection or workspace changed after preflight.",
-                record.depot_paths,
-            );
-        }
-
-        // Hold the unified server mutation lane from revalidation through submit. This prevents
-        // any other GUI mutation from slipping between the checked snapshot and the command.
-        let owned_guard;
-        let guard = match admitted {
-            Some(guard) => guard,
-            None => {
-                owned_guard = self.repository.lock_mutations(&context.server).await;
-                &owned_guard
-            }
+        let mut spec = SubmitReviewSpec {
+            service: self,
+            admitted,
+            app,
+            requested_operation_id: confirmation.operation_id,
+            reviewed: None,
+            rechecked_depot_paths: Vec::new(),
+            echoed_target: Some(confirmation.target.clone()),
         };
-        let reinspection = self
-            .repository
-            .inspect(
-                &context,
-                change_id,
-                &format!("submit-recheck-{}", Uuid::new_v4()),
-                app,
-            )
-            .await;
-        let evaluation = match reinspection {
-            Ok(inspection) => evaluate(inspection),
-            Err(_) => {
-                return rejected(
+        match self.ticket.confirm(request, &mut spec).await {
+            Ok(output) => output,
+            Err(refusal) => {
+                let depot_paths = match refusal.after_recheck() {
+                    // The hand-written flow reported the re-checked paths here.
+                    true => spec.rechecked_depot_paths.clone(),
+                    false => spec.reviewed_paths(),
+                };
+                rejected(
                     change_id,
-                    SubmitFailureCode::PreflightBlocked,
-                    "The server snapshot could not be revalidated safely.",
-                    record.depot_paths,
+                    refusal.code().unwrap_or(SubmitFailureCode::Cancelled),
+                    refusal
+                        .message()
+                        .unwrap_or("Submit was cancelled before it executed."),
+                    depot_paths,
                 )
             }
-        };
-        if !evaluation.blockers.is_empty() {
-            return rejected(
-                change_id,
-                SubmitFailureCode::PreflightBlocked,
-                "The changelist no longer passes submit preflight.",
-                evaluation.summary.depot_paths,
-            );
         }
-        if evaluation.summary.content_digest != record.content_digest {
-            return rejected(
-                change_id,
-                SubmitFailureCode::ChangeChanged,
-                "The changelist contents changed after preflight.",
-                evaluation.summary.depot_paths,
-            );
-        }
-        let (latest_context, latest_generation) = self.contexts.snapshot();
-        if target_snapshot(&latest_context, latest_generation, change_id) != record.target {
-            return rejected(
-                change_id,
-                SubmitFailureCode::ContextChanged,
-                "The connection or workspace changed during confirmation.",
-                evaluation.summary.depot_paths,
-            );
-        }
+    }
+}
 
-        let operation_id = confirmation
-            .operation_id
-            .filter(|value| !value.trim().is_empty() && value.len() <= 256)
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let execution = self
-            .repository
-            .submit(
-                &context,
-                change_id,
-                operation_id.clone(),
-                evaluation.summary.file_count,
-                guard,
-                app,
-            )
-            .await;
-        self.status_cache.invalidate(
-            &context.server,
-            &context.user,
-            &context.client,
-            &[],
-            &[
-                StatusQueryKind::WorkspaceStatus,
-                StatusQueryKind::Opened,
-                StatusQueryKind::Reconcile,
-            ],
-            InvalidationReason::Submit,
-        );
+/// The operation id for a submit: the caller's when it is usable, otherwise a
+/// fresh one (same rule the hand-written flow applied).
+fn confirmation_operation_id(requested: &Option<String>) -> String {
+    requested
+        .clone()
+        .filter(|value| !value.trim().is_empty() && value.len() <= 256)
+        .unwrap_or_else(|| Uuid::new_v4().to_string())
+}
 
-        match execution {
-            Ok(execution) if execution.operation.exit_code == 0 => {
-                match execution.submitted_change_id {
-                    Some(submitted_change_id) => SubmitResult {
-                        execution: Some(submit_execution(
-                            &operation_id,
-                            SubmitOutcome::Submitted,
-                            "commandCompleted",
-                        )),
-                        outcome: SubmitOutcome::Submitted,
-                        change_id,
-                        submitted_change_id: Some(submitted_change_id),
-                        failure: None,
-                        message: format!(
-                            "Changelist {change_id} was submitted as changelist {submitted_change_id}."
-                        ),
-                        operation_id: Some(operation_id.clone()),
-                        log_reference: Some(operation_id.clone()),
-                        refresh: refresh_advice(
-                            evaluation.summary.depot_paths,
-                            "Submit completed; refresh pending, submitted and workspace views.",
-                        ),
-                    },
-                    None => SubmitResult {
-                        execution: Some(submit_execution(
-                            &operation_id,
-                            SubmitOutcome::Unknown,
-                            "unknown",
-                        )),
-                        outcome: SubmitOutcome::Unknown,
-                        change_id,
-                        submitted_change_id: None,
-                        failure: Some(SubmitFailureCode::UncertainOutcome),
-                        message: "The submit command exited cleanly but the resulting changelist identity was not authoritative; treat the outcome as unknown and refresh before any retry.".into(),
-                        operation_id: Some(operation_id.clone()),
-                        log_reference: Some(operation_id.clone()),
-                        refresh: refresh_advice(
-                            evaluation.summary.depot_paths,
-                            "Refresh pending/submitted views and verify the changelist state before taking another action.",
-                        ),
-                    },
+/// A refusal decided before the re-check ran (no `RecheckedDetail` attached).
+fn refused_without_recheck(
+    code: SubmitFailureCode,
+    message: &'static str,
+) -> ConfirmRefusal<SubmitFailureCode> {
+    ConfirmRefusal::Refused {
+        shared: ConfirmationRefusalCode::TargetMismatch,
+        code,
+        message: message.to_string(),
+        recheck: None,
+    }
+}
+
+/// A refusal decided after the re-check ran, so the caller knows the paths it
+/// reports are the re-checked ones.
+fn refused_after_recheck(
+    code: SubmitFailureCode,
+    message: &'static str,
+) -> ConfirmRefusal<SubmitFailureCode> {
+    ConfirmRefusal::Refused {
+        shared: ConfirmationRefusalCode::RecheckChanged,
+        code,
+        message: message.to_string(),
+        recheck: None,
+    }
+    .with_recheck_operation_ids(Vec::new())
+}
+
+/// One confirmation attempt against a reviewed submit.
+///
+/// Steps 1–6 of the shared sequence run in [`ConfirmationTicket::confirm`];
+/// this type only supplies what is genuinely submit-specific: the reviewed
+/// record, the server re-inspection and the result mapping.
+struct SubmitReviewSpec<'a> {
+    service: &'a SubmitService,
+    /// Lane admitted by the caller (production IPC). Taken inside `lane()`
+    /// otherwise, exactly where the hand-written flow locked it.
+    admitted: Option<&'a MutationGuard>,
+    app: Option<&'a AppHandle>,
+    /// Operation id echoed by the confirmation.
+    requested_operation_id: Option<String>,
+    reviewed: Option<IssuedConfirmation<SubmitTargetSnapshot, SubmitReview>>,
+    /// Depot paths of the last successful re-check, reported by refusals that
+    /// happen after it (the hand-written flow used the refreshed list).
+    rechecked_depot_paths: Vec<String>,
+    /// The target echoed by the confirmation, used by the context checks that
+    /// run before `on_reviewed` hands over the consumed record.
+    echoed_target: Option<SubmitTargetSnapshot>,
+}
+
+impl SubmitReviewSpec<'_> {
+    /// Reviewed depot paths, so an expiry/mismatch refusal still tells the UI
+    /// which files to refresh.
+    fn reviewed_paths(&self) -> Vec<String> {
+        self.reviewed
+            .as_ref()
+            .map(|record| record.digest.depot_paths.clone())
+            .unwrap_or_default()
+    }
+}
+
+impl<'a> ReviewSpec for SubmitReviewSpec<'a> {
+    type Target = SubmitTargetSnapshot;
+    type Digest = SubmitReview;
+    type Recheck = Evaluation;
+    type Output = SubmitResult;
+    type RefusalCode = SubmitFailureCode;
+    type Error = ConfirmRefusal<SubmitFailureCode>;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<Self::RefusalCode> {
+        error
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> SubmitFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => SubmitFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => SubmitFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => SubmitFailureCode::TargetMismatch,
+            // Submit has no acknowledgement-gated scope, so this can only fire
+            // if a future review adds one; it blocks like a stale preflight.
+            ConfirmationRefusalCode::AcknowledgementRequired => SubmitFailureCode::PreflightBlocked,
+            ConfirmationRefusalCode::ContextChanged => SubmitFailureCode::ContextChanged,
+            // The changelist moved under the reviewed digest.
+            // This domain has no separate "now blocked" outcome; it keeps reporting
+            // a blocked re-check as a changed one.
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                SubmitFailureCode::ChangeChanged
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => SubmitFailureCode::PreflightBlocked,
+            ConfirmationRefusalCode::Cancelled => SubmitFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The submit confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => {
+                "The submit preflight expired. Run preflight again."
+            }
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation target does not match the checked snapshot."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "The submit confirmation requires an acknowledgement that was not given."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The connection or workspace changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                "The changelist contents changed after preflight."
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The server snapshot could not be revalidated safely."
+            }
+            ConfirmationRefusalCode::Cancelled => {
+                "Submit was cancelled before it executed. Refresh before retrying."
+            }
+        }
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        // `check_record` runs before `on_reviewed` on the first pass, so fall
+        // back to the echoed target, which `check_record` already proved equal
+        // to the reviewed one.
+        let target = self
+            .reviewed
+            .as_ref()
+            .map(|record| record.target.clone())
+            .or_else(|| self.echoed_target.clone());
+        match target {
+            Some(target) => target_snapshot(&context, generation, target.change_id) == target,
+            None => false,
+        }
+    }
+
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed = Some(reviewed.clone());
+    }
+
+    fn lane(&mut self, _operation_id: &str) -> BoxFuture<'_, Option<MutationLane>> {
+        Box::pin(async move {
+            match self.admitted {
+                // Production IPC already holds the unified lane/lease; the
+                // ticket must not take a second one (and must not release it).
+                Some(_) => None,
+                None => {
+                    let (context, _) = self.service.contexts.snapshot();
+                    let guard = self
+                        .service
+                        .repository
+                        .lock_mutations(&context.server)
+                        .await;
+                    Some(Box::new(guard) as MutationLane)
                 }
             }
-            Ok(execution) => {
-                let cancelled = execution
-                    .operation
-                    .events
-                    .iter()
-                    .any(|event| matches!(event.kind, EventKind::Cancelled));
-                let failure = if cancelled {
-                    SubmitFailureCode::Cancelled
-                } else {
-                    classify_failure(&execution.diagnostic_text)
-                };
-                let outcome = if cancelled {
-                    SubmitOutcome::Cancelled
-                } else {
-                    SubmitOutcome::Failed
-                };
-                SubmitResult {
-                    execution: Some(submit_execution(&operation_id, outcome, "unknown")),
-                    outcome,
+        })
+    }
+
+    fn recheck(&mut self) -> BoxFuture<'_, Result<Evaluation, String>> {
+        Box::pin(async move {
+            let reviewed = self.reviewed.clone().ok_or_else(|| {
+                "The submit review was not available for revalidation.".to_string()
+            })?;
+            let (context, _) = self.service.contexts.snapshot();
+            self.service
+                .repository
+                .inspect(
+                    &context,
+                    reviewed.target.change_id,
+                    &format!("submit-recheck-{}", Uuid::new_v4()),
+                    self.app,
+                )
+                .await
+                .map(evaluate)
+        })
+    }
+
+    /// Submit refuses a re-check that no longer passes or no longer matches the
+    /// reviewed digest with the same code (`ChangeChanged` only for a digest
+    /// move, `PreflightBlocked` for new blockers). Blockers are decided inside
+    /// `execute`, where the refreshed paths are available.
+    fn recheck_verdict(&self, recheck: &Evaluation) -> RecheckVerdict {
+        let Some(reviewed) = self.reviewed.as_ref() else {
+            return RecheckVerdict::Changed;
+        };
+        if !recheck.blockers.is_empty() {
+            return RecheckVerdict::Unchanged;
+        }
+        if recheck.summary.content_digest != reviewed.digest.content_digest {
+            return RecheckVerdict::Changed;
+        }
+        RecheckVerdict::Unchanged
+    }
+
+    fn gate(&self) -> Arc<AsyncMutex<()>> {
+        self.service.confirmation_gate.clone()
+    }
+
+    fn execute<'b>(
+        &'b mut self,
+        evaluation: Evaluation,
+        _operation_id: String,
+    ) -> BoxFuture<'b, Result<SubmitResult, Self::Error>> {
+        Box::pin(async move {
+            let service = self.service;
+            let reviewed = match self.reviewed.clone() {
+                Some(reviewed) => reviewed,
+                None => {
+                    return Err(refused_without_recheck(
+                        SubmitFailureCode::TokenUnknown,
+                        "The submit review is unavailable.",
+                    ))
+                }
+            };
+            let change_id = reviewed.target.change_id;
+            self.rechecked_depot_paths = evaluation.summary.depot_paths.clone();
+
+            // The hand-written flow refused a re-check that no longer passes
+            // with the same code it used for an unavailable one.
+            if !evaluation.blockers.is_empty() {
+                return Err(refused_after_recheck(
+                    SubmitFailureCode::PreflightBlocked,
+                    "The changelist no longer passes submit preflight.",
+                ));
+            }
+
+            let (context, _) = service.contexts.snapshot();
+            let owned_guard;
+            let guard = match self.admitted {
+                Some(guard) => guard,
+                None => {
+                    owned_guard = service.repository.lock_mutations(&context.server).await;
+                    &owned_guard
+                }
+            };
+
+            let operation_id = confirmation_operation_id(&self.requested_operation_id);
+            let execution = service
+                .repository
+                .submit(
+                    &context,
+                    change_id,
+                    operation_id.clone(),
+                    evaluation.summary.file_count,
+                    guard,
+                    self.app,
+                )
+                .await;
+            service.status_cache.invalidate(
+                &context.server,
+                &context.user,
+                &context.client,
+                &[],
+                &[
+                    StatusQueryKind::WorkspaceStatus,
+                    StatusQueryKind::Opened,
+                    StatusQueryKind::Reconcile,
+                ],
+                InvalidationReason::Submit,
+            );
+
+            Ok(match execution {
+                Ok(execution) if execution.operation.exit_code == 0 => {
+                    match execution.submitted_change_id {
+                        Some(submitted_change_id) => SubmitResult {
+                            execution: Some(submit_execution(
+                                &operation_id,
+                                SubmitOutcome::Submitted,
+                                "commandCompleted",
+                            )),
+                            outcome: SubmitOutcome::Submitted,
+                            change_id,
+                            submitted_change_id: Some(submitted_change_id),
+                            failure: None,
+                            message: format!(
+                                "Changelist {change_id} was submitted as changelist {submitted_change_id}."
+                            ),
+                            operation_id: Some(operation_id.clone()),
+                            log_reference: Some(operation_id.clone()),
+                            refresh: refresh_advice(
+                                evaluation.summary.depot_paths,
+                                "Submit completed; refresh pending, submitted and workspace views.",
+                            ),
+                        },
+                        None => SubmitResult {
+                            execution: Some(submit_execution(
+                                &operation_id,
+                                SubmitOutcome::Unknown,
+                                "unknown",
+                            )),
+                            outcome: SubmitOutcome::Unknown,
+                            change_id,
+                            submitted_change_id: None,
+                            failure: Some(SubmitFailureCode::UncertainOutcome),
+                            message: "The submit command exited cleanly but the resulting changelist identity was not authoritative; treat the outcome as unknown and refresh before any retry.".into(),
+                            operation_id: Some(operation_id.clone()),
+                            log_reference: Some(operation_id.clone()),
+                            refresh: refresh_advice(
+                                evaluation.summary.depot_paths,
+                                "Refresh pending/submitted views and verify the changelist state before taking another action.",
+                            ),
+                        },
+                    }
+                }
+                Ok(execution) => {
+                    let cancelled = execution
+                        .operation
+                        .events
+                        .iter()
+                        .any(|event| matches!(event.kind, EventKind::Cancelled));
+                    let failure = if cancelled {
+                        SubmitFailureCode::Cancelled
+                    } else {
+                        classify_failure(&execution.diagnostic_text)
+                    };
+                    let outcome = if cancelled {
+                        SubmitOutcome::Cancelled
+                    } else {
+                        SubmitOutcome::Failed
+                    };
+                    SubmitResult {
+                        execution: Some(submit_execution(&operation_id, outcome, "unknown")),
+                        outcome,
+                        change_id,
+                        submitted_change_id: None,
+                        failure: Some(failure),
+                        message: failure_message(failure).into(),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id.clone()),
+                        refresh: refresh_advice(
+                            evaluation.summary.depot_paths,
+                            "Submit did not complete cleanly; refresh before retrying because files or locks may have changed.",
+                        ),
+                    }
+                }
+                Err(_) => SubmitResult {
+                    execution: Some(submit_execution(
+                        &operation_id,
+                        SubmitOutcome::Unknown,
+                        "unknown",
+                    )),
+                    outcome: SubmitOutcome::Unknown,
                     change_id,
                     submitted_change_id: None,
-                    failure: Some(failure),
-                    message: failure_message(failure).into(),
+                    failure: Some(SubmitFailureCode::UncertainOutcome),
+                    message: failure_message(SubmitFailureCode::UncertainOutcome).into(),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id.clone()),
                     refresh: refresh_advice(
                         evaluation.summary.depot_paths,
-                        "Submit did not complete cleanly; refresh before retrying because files or locks may have changed.",
+                        "The command outcome is uncertain; refresh all related views before taking another action.",
                     ),
-                }
-            }
-            Err(_) => SubmitResult {
-                execution: Some(submit_execution(
-                    &operation_id,
-                    SubmitOutcome::Unknown,
-                    "unknown",
-                )),
-                outcome: SubmitOutcome::Unknown,
-                change_id,
-                submitted_change_id: None,
-                failure: Some(SubmitFailureCode::UncertainOutcome),
-                message: failure_message(SubmitFailureCode::UncertainOutcome).into(),
-                operation_id: Some(operation_id.clone()),
-                log_reference: Some(operation_id.clone()),
-                refresh: refresh_advice(
-                    evaluation.summary.depot_paths,
-                    "The command outcome is uncertain; refresh all related views before taking another action.",
-                ),
-            },
-        }
+                },
+            })
+        })
     }
 }
 
@@ -735,10 +936,6 @@ fn failure_message(failure: SubmitFailureCode) -> &'static str {
         }
         _ => "The server rejected the submit. Refresh the changelist before retrying.",
     }
-}
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
 }
 
 #[cfg(test)]

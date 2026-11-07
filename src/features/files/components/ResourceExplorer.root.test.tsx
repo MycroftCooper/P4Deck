@@ -8,6 +8,7 @@ import { selectionRequest } from "../selectionCommands";
 import { flattenResourceTree, type ResourceFolder } from "../resourceTree";
 import type { WorkspaceNode } from "../../../shared/contracts";
 import { messages } from "../../../shared/i18n";
+import { setLocale } from "../../../shared/i18n";
 
 const d = vi.hoisted(() => ({
   tree: {} as any,
@@ -140,6 +141,7 @@ const rootRow = () => document.querySelector<HTMLElement>(".tree-root")!;
 const toggle = () =>
   rootRow().querySelector<HTMLButtonElement>(".tree-toggle")!;
 beforeEach(() => {
+  setLocale("en-US");
   vi.clearAllMocks();
   d.cwd = "C:/fixture";
   d.menuCalls = [];

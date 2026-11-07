@@ -8,6 +8,7 @@ import type {
   FilePreviewTable,
   RuntimeInfo,
 } from "../../../shared/contracts";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({ getFilePreview: vi.fn() }));
 vi.mock("../../../infrastructure/backend", () => ({ backend }));
@@ -20,6 +21,8 @@ vi.mock("../../../app/docking/chrome", async () => ({
 let host: HTMLDivElement, root: Root;
 const runtime = { mode: "mock", p4Version: "mock", context: {} } as RuntimeInfo;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.useFakeTimers();
   // jsdom has no layout: supply a visible viewport, retain the real virtualizer.
@@ -115,6 +118,39 @@ it("shows a read failure instead of a blank body", async () => {
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
     "synthetic read failure",
   );
+});
+it("localizes known backend preview errors and leaves unknown ones untouched", async () => {
+  // The Rust side is English-only, so the renderer owns the localized copy.
+  async function failure(message: string, zh: boolean) {
+    backend.getFilePreview.mockRejectedValue(new Error(message));
+    await act(async () =>
+      root.render(
+        <FilePreviewPage
+          target="error.json"
+          locked={false}
+          onTargetChange={() => {}}
+          runtime={runtime}
+          zh={zh}
+        />,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000);
+    });
+    const text = host.querySelector('[role="alert"]')?.textContent ?? "";
+    await act(async () => root.render(<></>));
+    return text;
+  }
+  expect(
+    await failure("Path is outside the current workspace", true),
+  ).toContain("路径不在当前工作区内。");
+  expect(
+    await failure("Path is outside the current workspace", false),
+  ).toContain("Path is outside the current workspace");
+  // Unrecognized messages stay verbatim rather than disappearing.
+  const unknown = await failure("synthetic read failure", true);
+  expect(unknown).toContain("synthetic read failure");
+  expect(unknown).not.toContain("路径不在当前工作区内。");
 });
 
 function tablePreview(patch: Partial<FilePreviewTable> = {}): FilePreview {

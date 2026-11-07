@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useState } from "react";
 import { ExternalLink, Settings } from "lucide-react";
 import { action, unavailable } from "../../app/context-menu/bindings";
@@ -15,7 +16,7 @@ function settings() {
 
 export function swarmMenuAction(
   runtime: RuntimeInfo,
-  zh: boolean,
+  _zh: boolean,
   target: SwarmLinkTarget,
 ): MenuAction {
   const link = buildSwarmLink(runtime.context.swarmBaseUrl, target);
@@ -23,7 +24,7 @@ export function swarmMenuAction(
     if (link.code === "notConfigured")
       return {
         ...action(settings),
-        label: zh ? "配置 Swarm…" : "Configure Swarm…",
+        label: t("swarm.configure.swarm"),
       };
     return unavailable(link.reason);
   }
@@ -33,7 +34,7 @@ export function swarmMenuAction(
 export function SwarmAction({
   target,
   runtime,
-  zh,
+  zh: _zh,
   className,
 }: {
   target: SwarmLinkTarget;
@@ -58,22 +59,12 @@ export function SwarmAction({
             return;
           }
           void openSwarmLink(runtime, target).catch(() =>
-            setError(
-              zh
-                ? "未能安全打开 Swarm；连接可能已切换，请重试。"
-                : "Swarm was not opened safely. The connection may have changed; retry.",
-            ),
+            setError(t("swarm.swarm.was.not.opened.safely")),
           );
         }}
       >
         {configure ? <Settings size={14} /> : <ExternalLink size={14} />}
-        {configure
-          ? zh
-            ? "配置 Swarm"
-            : "Configure Swarm"
-          : zh
-            ? "在 Swarm 中打开"
-            : "Open in Swarm"}
+        {configure ? t("swarm.configure.swarm") : t("swarm.open.in.swarm")}
       </button>
       {error ? (
         <span role="alert" className="swarm-open-error">

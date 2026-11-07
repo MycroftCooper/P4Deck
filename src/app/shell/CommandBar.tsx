@@ -1,3 +1,4 @@
+import { t, tFor, type MsgKey } from "../../shared/i18n";
 import { startGenericFileAction } from "../../features/actions/genericFileTask";
 import { discardGenericFileProjectionsForTarget } from "../../features/actions/genericFileProjection";
 import { revertTargets, startRevert } from "../../features/actions/revertTask";
@@ -80,7 +81,10 @@ import {
   useOperationWatchdog,
   type ActiveOperation,
 } from "./useOperationWatchdog";
+import { commandFamily } from "./commandWatchdog";
 import { recordFrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
+import { useOperationSession } from "../../shared/operationSession";
+import type { OperationLease } from "../../shared/operationSession";
 
 const groups: {
   id: CommandId;
@@ -89,26 +93,61 @@ const groups: {
   en: string;
 }[][] = [
   [
-    { id: "refresh", icon: RefreshCw, zh: "刷新", en: "Refresh" },
-    { id: "getLatest", icon: CloudDownload, zh: "获取最新", en: "Get latest" },
+    {
+      id: "refresh",
+      icon: RefreshCw,
+      zh: "shell.refresh",
+      en: "shell.refresh",
+    },
+    {
+      id: "getLatest",
+      icon: CloudDownload,
+      zh: "shell.get.latest",
+      en: "shell.get.latest",
+    },
   ],
   [
-    { id: "checkout", icon: SquarePen, zh: "签出", en: "Checkout" },
-    { id: "add", icon: FilePlus2, zh: "添加", en: "Add" },
-    { id: "delete", icon: FileX2, zh: "标记删除", en: "Mark delete" },
-    { id: "revert", icon: RotateCcw, zh: "还原", en: "Revert" },
-    { id: "lock", icon: LockKeyhole, zh: "锁定", en: "Lock" },
-    { id: "unlock", icon: LockKeyholeOpen, zh: "解锁", en: "Unlock" },
+    {
+      id: "checkout",
+      icon: SquarePen,
+      zh: "shell.checkout",
+      en: "shell.checkout",
+    },
+    { id: "add", icon: FilePlus2, zh: "shell.add", en: "shell.add" },
+    {
+      id: "delete",
+      icon: FileX2,
+      zh: "shell.mark.delete",
+      en: "shell.mark.delete",
+    },
+    { id: "revert", icon: RotateCcw, zh: "shell.revert", en: "shell.revert" },
+    { id: "lock", icon: LockKeyhole, zh: "shell.lock", en: "shell.lock" },
+    {
+      id: "unlock",
+      icon: LockKeyholeOpen,
+      zh: "shell.unlock",
+      en: "shell.unlock",
+    },
   ],
   [
-    { id: "diff", icon: Columns2, zh: "差异", en: "Diff" },
-    { id: "history", icon: History, zh: "历史", en: "History" },
-    { id: "revgraph", icon: GitBranch, zh: "修订图", en: "Revgraph" },
-    { id: "preview", icon: Eye, zh: "文件预览", en: "Preview" },
+    { id: "diff", icon: Columns2, zh: "shell.diff", en: "shell.diff" },
+    { id: "history", icon: History, zh: "shell.history", en: "shell.history" },
+    {
+      id: "revgraph",
+      icon: GitBranch,
+      zh: "shell.revgraph",
+      en: "shell.revgraph",
+    },
+    { id: "preview", icon: Eye, zh: "shell.preview", en: "shell.preview" },
   ],
   [
-    { id: "reveal", icon: FolderOpen, zh: "系统中定位", en: "Reveal" },
-    { id: "openWith", icon: AppWindow, zh: "其他软件打开", en: "Open with…" },
+    { id: "reveal", icon: FolderOpen, zh: "shell.reveal", en: "shell.reveal" },
+    {
+      id: "openWith",
+      icon: AppWindow,
+      zh: "shell.openWithApp",
+      en: "shell.openWithApp",
+    },
   ],
 ];
 interface Props {
@@ -182,9 +221,10 @@ export function CommandBar({
     if (targetError) openOperations.current(targetError);
   }, [targetError, connectionKey]);
   const [locating, setLocating] = useState(false);
+  const session = useOperationSession();
+  const activeLease = useRef<OperationLease | undefined>(undefined);
   const running = useRef<string | undefined>(undefined);
   const navigation = useRef(0);
-  const generation = useRef(0);
   const latest = useRef({ connectionKey, targetPath, targetKey });
   latest.current = { connectionKey, targetPath, targetKey };
   const dialogs = useCommandDialogs(
@@ -194,7 +234,7 @@ export function CommandBar({
     runtime.mode === "mock",
     targetKey,
     async (refreshNodes) => {
-      const epoch = generation.current;
+      const epoch = session.epoch("commandbar");
       const expectedConnection = connectionKey;
       const expectedTarget = targetKey;
       try {
@@ -205,7 +245,7 @@ export function CommandBar({
           true,
         );
         if (
-          epoch !== generation.current ||
+          epoch !== session.epoch("commandbar") ||
           latest.current.connectionKey !== expectedConnection ||
           latest.current.targetKey !== expectedTarget
         )
@@ -222,7 +262,7 @@ export function CommandBar({
         );
       } catch {
         if (
-          epoch === generation.current &&
+          epoch === session.epoch("commandbar") &&
           latest.current.connectionKey === expectedConnection &&
           latest.current.targetKey === expectedTarget
         )
@@ -242,11 +282,7 @@ export function CommandBar({
     timedOut.current = stale.id;
     if (running.current === stale.id) running.current = undefined;
     setOperation((old) => (old && old.id === stale.id ? undefined : old));
-    setNotice(
-      zh
-        ? "操作长时间未返回，结果未知，请刷新核对"
-        : "The operation did not return in time. Its result is unknown; refresh to verify.",
-    );
+    setNotice(t("shell.the.operation.did.not.return"));
     void recordFrontendOperationLog({
       eventId: `${stale.id}-watchdog`,
       operationId: stale.id,
@@ -289,20 +325,16 @@ export function CommandBar({
   );
   useEffect(() => {
     navigation.current++;
-    generation.current++;
+    // A new connection/generation retires the toolbar session: the live lease
+    // is cancelled on the host instead of becoming an orphaned operation that
+    // can no longer be cancelled or watched.
+    session.invalidate("commandbar");
     running.current = undefined;
     setOperation(undefined);
     setNotice("");
     setError("");
     setLocating(false);
-  }, [connectionKey, runtime.contextGeneration]);
-  useEffect(
-    () => () => {
-      navigation.current++;
-      generation.current++;
-    },
-    [],
-  );
+  }, [connectionKey, runtime.contextGeneration, session]);
   useEffect(
     () =>
       subscribeSafely(
@@ -318,10 +350,10 @@ export function CommandBar({
     [],
   );
   const attempt = (work: () => Promise<void>) => {
-    const epoch = generation.current;
+    const epoch = session.epoch("commandbar");
     setError("");
     void work().catch((cause) => {
-      if (epoch === generation.current) setError(String(cause));
+      if (epoch === session.epoch("commandbar")) setError(String(cause));
     });
   };
   async function navigate(raw: string) {
@@ -348,7 +380,7 @@ export function CommandBar({
     snapshot?: CommandTarget,
     source?: HTMLElement,
   ) {
-    const epoch = generation.current;
+    const epoch = session.epoch("commandbar");
     const actionTarget = snapshot ?? target;
     const actionNodes =
       actionTarget.type === "file"
@@ -364,14 +396,10 @@ export function CommandBar({
           ? undefined
           : localCapabilities;
     if (
-      epoch !== generation.current ||
+      epoch !== session.epoch("commandbar") ||
       latest.current.connectionKey !== connectionKey
     )
-      throw new Error(
-        zh
-          ? "连接已改变，请重新选择目标"
-          : "Connection changed; select the target again",
-      );
+      throw new Error(t("shell.connection.changed.select.the.target"));
     return executeTarget(id, actionTarget, actionNodes, capabilities, source);
   }
   async function executeTarget(
@@ -431,11 +459,13 @@ export function CommandBar({
       // background (spinner, no dialog). Only the preview's affected-file count
       // decides whether an explicit confirmation is required; a preview failure
       // never executes and never opens a dialog.
-      const operationId = crypto.randomUUID();
-      const epoch = generation.current;
+      const lease = session.start("commandbar", { identity: "getLatest" });
+      const operationId = lease.operationId;
+      activeLease.current = lease;
+      const epoch = lease.epoch;
       running.current = operationId;
       setOperation(
-        startOperation(operationId, zh ? "获取最新" : "Get latest", {
+        startOperation(operationId, t("shell.get.latest"), {
           kind: "getLatest",
           cancellable: true,
           targetCount: nodes.length,
@@ -449,9 +479,7 @@ export function CommandBar({
       try {
         paths = selectionRequest("getLatest", nodes).paths;
         if (!paths.length)
-          throw new Error(
-            zh ? "没有可获取最新的目标" : "No target selected for Get Latest",
-          );
+          throw new Error(t("shell.no.target.selected.for.get"));
         const revision = { kind: "head" as const, value: "" };
         const plan = await backend.previewSync({
           paths: [...paths],
@@ -459,6 +487,9 @@ export function CommandBar({
           force: false,
           operationId,
         });
+        // A connection/target change while the preview ran must not dispatch the
+        // sync against the retired connection.
+        if (!session.isCurrent(lease)) return;
         const affected =
           plan.counts.added + plan.counts.updated + plan.counts.deleted;
         if (affected > getLatestConfirmThreshold) {
@@ -488,6 +519,8 @@ export function CommandBar({
           running.current = undefined;
           setOperation(undefined);
         }
+        session.finish(lease);
+        if (activeLease.current === lease) activeLease.current = undefined;
       }
       if (delegatedToDialog) return;
       if (failed) {
@@ -507,7 +540,7 @@ export function CommandBar({
           connectionKey,
           affectedPaths: [...paths],
         });
-        if (epoch !== generation.current) return;
+        if (epoch !== session.epoch("commandbar")) return;
         if (target.type === "file" && latest.current.targetKey === targetKey) {
           const updated = await resolveSelection(
             nodes,
@@ -515,7 +548,7 @@ export function CommandBar({
             runtime.context.cwd,
           );
           if (
-            epoch === generation.current &&
+            epoch === session.epoch("commandbar") &&
             latest.current.targetKey === targetKey
           )
             onFocus({
@@ -570,6 +603,12 @@ export function CommandBar({
         if (localDeleteRecord(running.current))
           cancelLocalDelete(running.current);
         else await backend.cancelOperation(running.current);
+        // The host call is already cancelled above; retire the lease without
+        // asking the owner to cancel the same operation a second time.
+        if (activeLease.current) {
+          session.finish(activeLease.current);
+          activeLease.current = undefined;
+        }
       }
       // Cancel is a request signal: it never implies a rollback or that nothing ran.
       return;
@@ -582,18 +621,21 @@ export function CommandBar({
       return;
     }
     if (target.type === "file" && (id === "reveal" || id === "openWith")) {
-      const operationId = crypto.randomUUID();
+      // A system dialog is not cancellable from the UI; the lease only keeps the
+      // ownership bookkeeping consistent (no host cancel on a connection change).
+      const lease = session.start("commandbar", {
+        identity: id,
+        cancelBackend: false,
+      });
+      const operationId = lease.operationId;
+      activeLease.current = lease;
       running.current = operationId;
       setOperation(
-        startOperation(
-          operationId,
-          zh ? "等待系统窗口" : "Waiting for system dialog",
-          {
-            kind: "other",
-            cancellable: false,
-            targetCount: 1,
-          },
-        ),
+        startOperation(operationId, t("shell.waiting.for.system.dialog"), {
+          kind: "other",
+          cancellable: false,
+          targetCount: 1,
+        }),
       );
       try {
         await backend.openLocalPath({
@@ -603,13 +645,15 @@ export function CommandBar({
       } finally {
         running.current = undefined;
         setOperation(undefined);
+        session.finish(lease);
+        if (activeLease.current === lease) activeLease.current = undefined;
         void workspaceCache.invalidateQueries({
           queryKey: ["local-path-capabilities", connectionKey],
         });
       }
       return;
     }
-    const actionEpoch = generation.current;
+    const actionEpoch = session.epoch("commandbar");
     const folders = nodes.some((n) => n.kind === "directory");
     let checkoutChangeId = 0;
     if (id === "checkout" && !preferences.ui.checkoutUseDefault) {
@@ -619,13 +663,22 @@ export function CommandBar({
       let changes = await cachedPendingChanges(runtime);
       const stale = !isFresh(pendingSnapshotKey(runtime));
       if (!changes || (stale && !changes.some((change) => change.id > 0))) {
-        const queryOperationId = crypto.randomUUID();
+        const lease = session.start("commandbar", {
+          identity: "pendingChangelists",
+        });
+        const queryOperationId = lease.operationId;
+        activeLease.current = lease;
         running.current = queryOperationId;
         setOperation(
           startOperation(
             queryOperationId,
-            zh ? "读取待提交 CL" : "Loading pending changelists",
-            { kind: "other", cancellable: true, targetCount: nodes.length },
+            t("shell.loading.pending.changelists"),
+            {
+              // Reading pending changelists is a plain query, not a mutation.
+              kind: "other",
+              cancellable: true,
+              targetCount: nodes.length,
+            },
           ),
         );
         try {
@@ -633,10 +686,12 @@ export function CommandBar({
         } finally {
           running.current = undefined;
           setOperation(undefined);
+          session.finish(lease);
+          if (activeLease.current === lease) activeLease.current = undefined;
         }
       }
       if (
-        actionEpoch !== generation.current ||
+        actionEpoch !== session.epoch("commandbar") ||
         latest.current.connectionKey !== connectionKey ||
         latest.current.targetKey !== selectionKey
       )
@@ -650,7 +705,7 @@ export function CommandBar({
         });
         if (
           !choice ||
-          actionEpoch !== generation.current ||
+          actionEpoch !== session.epoch("commandbar") ||
           latest.current.connectionKey !== connectionKey
         )
           return;
@@ -678,7 +733,7 @@ export function CommandBar({
       if (!confirmed) return;
     }
     if (
-      actionEpoch !== generation.current ||
+      actionEpoch !== session.epoch("commandbar") ||
       latest.current.connectionKey !== connectionKey
     )
       return;
@@ -692,7 +747,7 @@ export function CommandBar({
         nodes,
         id,
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         target.wholeChangelistId,
       );
@@ -704,13 +759,13 @@ export function CommandBar({
       nodes.length > 0 &&
       nodes.every((n) => n.state === "untracked" || n.state === "ignored")
     ) {
-      const label = zh ? "正在删除本地文件…" : "Deleting local files…";
+      const label = t("shell.deleting.local.files");
       startLocalDelete(
         connectionKey,
         runtime,
         nodes.map((n) => n.absolutePath).filter((p): p is string => !!p),
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         undefined,
         {
@@ -748,7 +803,7 @@ export function CommandBar({
         request,
         affectedPathAliases(request.paths, nodes) ?? request.paths,
         () =>
-          actionEpoch === generation.current &&
+          actionEpoch === session.epoch("commandbar") &&
           latest.current.connectionKey === connectionKey,
         undefined,
         targetKey,
@@ -763,7 +818,7 @@ export function CommandBar({
       refreshInFlight.current = true;
       try {
         await refreshFileLockFacts(connectionKey);
-        if (actionEpoch !== generation.current) return;
+        if (actionEpoch !== session.epoch("commandbar")) return;
         await invalidateData(commandActions.refresh.effects, { connectionKey });
       } finally {
         refreshInFlight.current = false;
@@ -771,31 +826,36 @@ export function CommandBar({
       return;
     }
     if (running.current)
-      throw new Error(
-        zh
-          ? "另一个操作正在运行，请稍后重试"
-          : "Another operation is running; try again later",
-      );
-    const operationId = crypto.randomUUID();
-    const epoch = generation.current;
+      throw new Error(t("shell.another.operation.is.running.try"));
+    const lease = session.start("commandbar", { identity: id });
+    const operationId = lease.operationId;
+    activeLease.current = lease;
+    const epoch = lease.epoch;
     running.current = operationId;
     const entry =
       groups.flat().find((item) => item.id === id) ??
       (id === "revertUnchanged"
         ? {
-            zh: "还原未更改",
-            en: "Revert unchanged",
+            zh: "shell.revert.unchanged",
+            en: "shell.revert.unchanged",
           }
         : {
-            zh: "获取指定版本",
-            en: "Get revision",
+            zh: "shell.get.revision",
+            en: "shell.get.revision",
           });
     setOperation(
-      startOperation(operationId, zh ? entry.zh : entry.en, {
-        kind: id === "refresh" ? "refresh" : "sync",
-        cancellable: id !== "refresh",
-        targetCount: nodes.length,
-      }),
+      startOperation(
+        operationId,
+        tFor(zh ? "zh-CN" : "en-US", entry.zh as MsgKey),
+        {
+          // Each command names its host family instead of sharing one wide
+          // "sync" bucket: a checkout that the host bounds at 660 s must not be
+          // watched as a transfer, and a refresh must not inherit that bound.
+          kind: commandFamily(id),
+          cancellable: id !== "refresh",
+          targetCount: nodes.length,
+        },
+      ),
     );
     let affectedPaths: readonly string[] | undefined;
     let feedbackCompleted = false;
@@ -812,7 +872,7 @@ export function CommandBar({
           connectionKey,
           affectedPaths,
         });
-        if (epoch !== generation.current) return;
+        if (epoch !== session.epoch("commandbar")) return;
         if (target.type === "file" && latest.current.targetKey === targetKey) {
           const updated = await resolveSelection(
             nodes,
@@ -820,7 +880,7 @@ export function CommandBar({
             runtime.context.cwd,
           );
           if (
-            epoch === generation.current &&
+            epoch === session.epoch("commandbar") &&
             latest.current.targetKey === targetKey
           )
             onFocus({
@@ -851,12 +911,12 @@ export function CommandBar({
         affectedPaths,
       }).catch(() => undefined);
       if (
-        epoch === generation.current &&
+        epoch === session.epoch("commandbar") &&
         latest.current.targetKey === targetKey
       )
         onFocus({ type: "none" });
       throw new Error(
-        `${String(cause)}${id !== "refresh" ? "\n" + (zh ? "此操作可能已部分执行；失败或取消不会自动回滚，请检查日志和文件状态。" : "This operation may have partially applied. Failure or cancellation does not roll back changes; inspect logs and file state.") : ""}`,
+        `${String(cause)}${id !== "refresh" ? "\n" + t("shell.this.operation.may.have.partially") : ""}`,
       );
     } finally {
       if (!feedbackCompleted) {
@@ -868,6 +928,8 @@ export function CommandBar({
           })
           .catch(() => undefined);
       }
+      session.finish(lease);
+      if (activeLease.current === lease) activeLease.current = undefined;
     }
   }
   useEffect(() => {
@@ -889,7 +951,7 @@ export function CommandBar({
         },
         打开界面设置: action(() => openPage("settings")),
       }))}
-      aria-label={zh ? "地址和操作" : "Address and actions"}
+      aria-label={t("shell.address.and.actions")}
     >
       {dialogs.element}
       <form
@@ -911,12 +973,8 @@ export function CommandBar({
         </span>
         <input
           ref={addressInput}
-          aria-label={zh ? "统一地址栏" : "Address"}
-          placeholder={
-            zh
-              ? "输入本地 / depot 地址，Enter 跳转；粘贴自动跳转"
-              : "Local / depot path · Enter or paste to navigate"
-          }
+          aria-label={t("shell.address")}
+          placeholder={t("shell.local.path.enter")}
           value={address}
           onChange={(e) => {
             navigation.current++;
@@ -939,16 +997,16 @@ export function CommandBar({
         {locating && <LoaderCircle size={15} className="spin" />}
         <button
           type="submit"
-          title={zh ? "跳转" : "Go"}
-          aria-label={zh ? "跳转" : "Go"}
+          title={t("shell.go")}
+          aria-label={t("shell.go")}
           disabled={!ready || !address.trim()}
         >
           <ArrowRight size={16} />
         </button>
         <button
           type="button"
-          title={zh ? "复制当前对象的地址" : "Copy current target address"}
-          aria-label={zh ? "复制地址" : "Copy address"}
+          title={t("shell.copy.current.target.address")}
+          aria-label={t("shell.copy.address")}
           disabled={!targetPath}
           onClick={() =>
             attempt(async () => {
@@ -960,8 +1018,8 @@ export function CommandBar({
         </button>
         <button
           type="button"
-          title={zh ? "粘贴、清理并跳转" : "Paste, clean and navigate"}
-          aria-label={zh ? "粘贴地址" : "Paste address"}
+          title={t("shell.paste.clean.and.navigate")}
+          aria-label={t("shell.paste.address")}
           disabled={!ready}
           onClick={() =>
             attempt(async () => {
@@ -976,15 +1034,14 @@ export function CommandBar({
         <div
           className="global-tools"
           role="toolbar"
-          aria-label={zh ? "对象操作" : "Object actions"}
+          aria-label={t("shell.object.actions")}
         >
           {groups.map((group, index) => (
             <div className="command-group" key={index}>
-              {group.map(({ id, icon: Icon, zh: cn, en }) => {
+              {group.map(({ id, icon: Icon, zh: cnKey }) => {
+                const cn = tFor(zh ? "zh-CN" : "en-US", cnKey as MsgKey);
                 const reason = !ready
-                  ? zh
-                    ? "正在连接"
-                    : "Connecting"
+                  ? t("shell.connecting")
                   : commandReason(
                       id,
                       target,
@@ -999,16 +1056,12 @@ export function CommandBar({
                     title={
                       reason ||
                       (id === "refresh"
-                        ? zh
-                          ? "刷新文件与待提交列表（不会自动同步）"
-                          : "Refresh files and pending lists (does not sync)"
-                        : zh
-                          ? cn
-                          : en)
+                        ? t("shell.refresh.files.and.pending.lists")
+                        : cn)
                     }
                   >
                     <button
-                      aria-label={zh ? cn : en}
+                      aria-label={cn}
                       aria-description={reason}
                       disabled={!!reason}
                       className={
@@ -1019,7 +1072,7 @@ export function CommandBar({
                       onClick={() => attempt(() => execute(id))}
                     >
                       <Icon size={17} />
-                      <span>{zh ? cn : en}</span>
+                      <span>{cn}</span>
                     </button>
                   </span>
                 );
@@ -1034,12 +1087,12 @@ export function CommandBar({
           type="button"
           className="command-settings"
           aria-current={settingsActive ? "page" : undefined}
-          title={zh ? "设置" : "Settings"}
-          aria-label={zh ? "设置" : "Settings"}
+          title={t("shell.settings")}
+          aria-label={t("shell.settings")}
           onClick={() => openPage("settings")}
         >
           <Settings size={17} aria-hidden="true" />
-          <span>{zh ? "设置" : "Settings"}</span>
+          <span>{t("shell.settings")}</span>
         </button>
       </div>
       {(error || notice) && (
@@ -1049,8 +1102,8 @@ export function CommandBar({
               <span className="command-notice-message">{error}</span>
               <button
                 type="button"
-                aria-label={zh ? "关闭错误提示" : "Dismiss error"}
-                title={zh ? "关闭" : "Dismiss"}
+                aria-label={t("shell.dismiss.error")}
+                title={t("shell.dismiss")}
                 onClick={() => setError("")}
               >
                 <X size={14} aria-hidden="true" />
@@ -1062,8 +1115,8 @@ export function CommandBar({
               <span className="command-notice-message">{notice}</span>
               <button
                 type="button"
-                aria-label={zh ? "关闭提示" : "Dismiss notice"}
-                title={zh ? "关闭" : "Dismiss"}
+                aria-label={t("shell.dismiss.notice")}
+                title={t("shell.dismiss")}
                 onClick={() => setNotice("")}
               >
                 <X size={14} aria-hidden="true" />

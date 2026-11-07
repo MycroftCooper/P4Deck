@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { dismissNotice, useUserNotices } from "../../shared/notice";
 
 /** Bottom-center non-blocking notices; replaces modal confirmations for direct writes. */
@@ -13,7 +14,7 @@ export function NoticeHost() {
         >
           <span>{notice.message}</span>
           <button
-            aria-label="关闭提示 / Dismiss"
+            aria-label={t("shell.dismiss")}
             onClick={() => dismissNotice(notice.id)}
           >
             ×

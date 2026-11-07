@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { backend } from "../../../infrastructure/backend";
@@ -80,7 +81,6 @@ export function ManualMergeEditor({
   ): Promise<ManualMergeSession | unknown>;
   cancelOperation?(operationId: string): Promise<unknown>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const copy = messages[zh ? "zh-CN" : "en-US"];
   const [session, setSession] = useState<ManualMergeSession>();
   const [history, setHistory] = useState<string[]>([]);
@@ -290,9 +290,7 @@ export function ManualMergeEditor({
         return;
       }
       if (!value) {
-        setMessage(
-          tr("未收到可识别的校验结果", "No recognizable validation result"),
-        );
+        setMessage(t("files.no.recognizable.validation.result"));
         return;
       }
       setValidation(value);
@@ -341,7 +339,7 @@ export function ManualMergeEditor({
       const lifecycle = lifecycleOf(raw);
       const value = unwrapMergeLegacy<ManualMergeSaveResult>(raw);
       if (!value) {
-        setMessage(tr("未收到可识别的保存结果", "No recognizable save result"));
+        setMessage(t("files.no.recognizable.save.result"));
         return;
       }
       // Save is local content write: only committed CAS digest may render "saved".
@@ -357,7 +355,7 @@ export function ManualMergeEditor({
       setValidation(undefined);
       setMessage(
         lifecycle && !committed
-          ? `${lifecycle.message} · ${tr("本地保存未被权威证实", "local save is not proven")}`
+          ? `${lifecycle.message} · ${t("files.local.save.is.not.proven")}`
           : value.message,
       );
       if (!lifecycle)
@@ -436,7 +434,7 @@ export function ManualMergeEditor({
         setMessage(
           `${lifecycle.message}${
             remaining.length
-              ? ` · ${tr("仍有未解决/未证实", "still unresolved/unproven")}: ${remaining.map((f) => f.depotPath).join(", ")}`
+              ? ` · ${t("files.still.unresolved.unproven")}: ${remaining.map((f) => f.depotPath).join(", ")}`
               : ""
           }`,
         );
@@ -524,15 +522,14 @@ export function ManualMergeEditor({
   if (!session)
     return (
       <DialogNotice error={!!message}>
-        {message ||
-          tr("正在读取权威三方内容…", "Loading authoritative merge inputs…")}
+        {message || t("files.loading.authoritative.merge.inputs")}
       </DialogNotice>
     );
 
   return (
     <section
       className="manual-merge"
-      aria-label={tr("手工合并编辑器", "Manual merge editor")}
+      aria-label={t("files.manual.merge.editor")}
     >
       <div className="workflow-context">
         {session.encoding}
@@ -545,34 +542,34 @@ export function ManualMergeEditor({
           disabled={!current || busy || externalBusy}
           onClick={() => accept("yours")}
         >
-          {tr("采用当前块 Yours", "Accept block Yours")}
+          {t("files.accept.block.yours")}
         </button>
         <button
           disabled={!current || busy || externalBusy}
           onClick={() => accept("theirs")}
         >
-          {tr("采用当前块 Theirs", "Accept block Theirs")}
+          {t("files.accept.block.theirs")}
         </button>
         <button
           disabled={!current || busy || externalBusy}
           onClick={() => accept("both")}
         >
-          {tr("采用当前块 Both", "Accept block Both")}
+          {t("files.accept.block.both")}
         </button>
         <button
           disabled={blockIndex <= 0}
           onClick={() => navigateBlock(blockIndex - 1)}
         >
-          {tr("上一冲突", "Previous conflict")}
+          {t("files.previous.conflict")}
         </button>
         <button
           disabled={blockIndex >= conflicts.length - 1}
           onClick={() => navigateBlock(blockIndex + 1)}
         >
-          {tr("下一冲突", "Next conflict")}
+          {t("files.next.conflict")}
         </button>
         <span role="status">
-          {tr("未解决", "Unresolved")}: {conflicts.length}
+          {t("files.unresolved")}: {conflicts.length}
         </span>
         <button
           disabled={historyIndex <= 0 || busy || externalBusy}
@@ -581,7 +578,7 @@ export function ManualMergeEditor({
             setValidation(undefined);
           }}
         >
-          {tr("撤销", "Undo")}
+          {t("files.undo")}
         </button>
         <button
           disabled={historyIndex >= history.length - 1 || busy || externalBusy}
@@ -590,10 +587,10 @@ export function ManualMergeEditor({
             setValidation(undefined);
           }}
         >
-          {tr("重做", "Redo")}
+          {t("files.redo")}
         </button>
         <label>
-          {tr("搜索结果", "Search result")}
+          {t("files.search.result")}
           <input
             value={search}
             onChange={(event) => {
@@ -606,7 +603,7 @@ export function ManualMergeEditor({
           />
         </label>
         <button disabled={!search} onClick={findNext}>
-          {tr("下一个", "Find next")}
+          {t("files.find.next")}
         </button>
       </div>
       <div className="manual-merge-grid">
@@ -692,7 +689,7 @@ export function ManualMergeEditor({
           disabled={busy || externalBusy || !!saveResult}
           onClick={() => void validate()}
         >
-          {tr("验证待保存结果", "Validate result")}
+          {t("files.validate.result")}
         </button>
         <button
           className="primary"
@@ -701,7 +698,7 @@ export function ManualMergeEditor({
           }
           onClick={() => void save()}
         >
-          {tr("确认原子保存", "Confirm atomic save")}
+          {t("files.confirm.atomic.save")}
         </button>
         {saveResult?.resolveToken && (
           <>
@@ -711,17 +708,14 @@ export function ManualMergeEditor({
                 checked={acknowledge}
                 onChange={(event) => setAcknowledge(event.target.checked)}
               />
-              {tr(
-                "我确认以已编辑结果标记 Resolve",
-                "I confirm marking Resolve with the edited result",
-              )}
+              {t("files.i.marking.resolve")}
             </label>
             <button
               className="primary"
               disabled={busy || externalBusy || !acknowledge}
               onClick={() => void resolve()}
             >
-              {tr("标记为已解决并复核", "Mark resolved and verify")}
+              {t("files.mark.resolved.and.verify")}
             </button>
           </>
         )}
@@ -733,7 +727,7 @@ export function ManualMergeEditor({
       )}
       {saveResult?.backupPath && (
         <p className="workflow-context">
-          {tr("可恢复备份", "Recoverable backup")}: {saveResult.backupPath}
+          {t("files.recoverable.backup")}: {saveResult.backupPath}
         </p>
       )}
       {message && (

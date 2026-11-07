@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useEffect, useRef, useState } from "react";
 import { backend } from "../../../infrastructure/backend";
@@ -99,22 +100,14 @@ export function SelectedFilesSubmitDialog({
       if (!alive.current) return;
       if (!result || result.operationId !== frozen.operationId)
         throw new Error(
-          tr(
-            "结果未知；请检查状态，不要重复创建。",
-            "Outcome unknown; check status without creating again.",
-          ),
+          t("pending.outcome.unknown.check.status.without.creating"),
         );
       setReceipt(result);
       if (action === "claim") {
         if (!activeRef.current)
           throw new Error("Connection changed; continuation stopped");
         if (!validSelectedSubmitGrant(frozen, result))
-          throw new Error(
-            tr(
-              "未获得提交许可，文件保留在新 CL。",
-              "No submission permission; files remain in the new CL.",
-            ),
-          );
+          throw new Error(t("pending.no.files.remain"));
         setHandedOff(true);
         onContinue(result.newChangeId!, frozen.files.length, expected);
       }
@@ -128,16 +121,13 @@ export function SelectedFilesSubmitDialog({
   if (!active && !attempted)
     return (
       <Dialog
-        title={tr("连接已改变", "Connection changed")}
+        title={t("pending.connection.changed")}
         zh={zh}
         onRequestClose={dismiss}
-        footer={<button onClick={dismiss}>{tr("关闭", "Close")}</button>}
+        footer={<button onClick={dismiss}>{t("pending.close")}</button>}
       >
         <DialogNotice>
-          {tr(
-            "请重新选择文件并确认配置；尚未创建或移动。",
-            "Select files and confirm configuration again; nothing was created or moved.",
-          )}
+          {t("pending.select.files.and.confirm.configuration.again")}
         </DialogNotice>
       </Dialog>
     );
@@ -148,8 +138,8 @@ export function SelectedFilesSubmitDialog({
         workspace={expected.connection.client}
         routeLabel={
           expected.customSubmitExecutablePath.trim()
-            ? tr("自定义提交工具", "Custom submit tool")
-            : tr("原生提交确认", "Native submit confirmation")
+            ? t("pending.custom.submit.tool")
+            : t("pending.native.submit.confirmation")
         }
         zh={zh}
         onDismiss={dismiss}
@@ -158,7 +148,7 @@ export function SelectedFilesSubmitDialog({
     );
   return (
     <Dialog
-      title={tr("提交选中文件", "Submit selected files")}
+      title={t("pending.submit.selected.files")}
       zh={zh}
       busy={busy}
       onRequestClose={() => {
@@ -170,7 +160,7 @@ export function SelectedFilesSubmitDialog({
             disabled={busy || !active}
             onClick={() => void perform("status")}
           >
-            {tr("检查状态", "Check status")}
+            {t("pending.check.status")}
           </button>
           <button
             className="primary"
@@ -182,63 +172,44 @@ export function SelectedFilesSubmitDialog({
             }
             onClick={() => void perform("claim")}
           >
-            {tr("继续提交", "Continue to submit")}
+            {t("pending.continue.to.submit")}
           </button>
           <button disabled={busy} onClick={dismiss}>
-            {tr("关闭", "Close")}
+            {t("pending.close")}
           </button>
         </>
       }
     >
       <small>
-        {tr("操作", "Operation")}: {request.current?.operationId}
+        {t("pending.operation")}: {request.current?.operationId}
       </small>
       {!active && (
         <DialogNotice error>
-          {tr(
-            "连接已改变，已停止后继操作。请保留此清单。",
-            "Connection changed; further actions stopped. Keep this file list.",
-          )}
+          {t("pending.connection.changed.further.actions.stopped.keep")}
         </DialogNotice>
       )}
       <p>
         {receipt?.newChangeId
           ? `CL ${receipt.newChangeId}`
-          : tr("新 CL 状态未知", "New CL status unknown")}
+          : t("pending.new.cl.status.unknown")}
       </p>
       <DialogNotice>
         {handedOff
-          ? tr(
-              "已打开提交流程；取消时文件留在新 CL。是否提交以提交结果为准。",
-              "Submission flow opened. Cancelling leaves files in the new CL; consult its result for submission status.",
-            )
-          : tr(
-              "尚未提交。部分移动或未知结果不会继续；关闭后保留新 CL 和已移动文件。",
-              "Not submitted. Partial or unknown moves stop here. Closing preserves the new CL and moved files.",
-            )}
+          ? t("pending.submission.flow.opened.cancelling.leaves.files")
+          : t("pending.not.submitted.partial.or.unknown.moves")}
       </DialogNotice>
       {receipt?.stage === "stopped" && (
-        <DialogNotice error>
-          {tr(
-            "上一次进程已中断：准备过程不会自动恢复，也不会自动用新操作号重试；请核对已移动文件与新 CL 后再决定是否重新开始。",
-            "The previous process was interrupted: the preparation is not resumed and is not retried with a new operation id. Inspect moved files and the new CL before starting again.",
-          )}
-        </DialogNotice>
+        <DialogNotice error>{t("pending.the.was.interrupted")}</DialogNotice>
       )}
       {error && <DialogNotice error>{error}</DialogNotice>}
       {!receipt && (
-        <ul
-          aria-label={tr(
-            "结果未知的选中文件",
-            "Selected files with unknown outcome",
-          )}
-        >
+        <ul aria-label={t("pending.selected.files.with.unknown.outcome")}>
           {files.map((file) => (
             <li key={file.depotPath} style={{ overflowWrap: "anywhere" }}>
               {file.originalChangeId === 0
                 ? "Default"
                 : `CL ${file.originalChangeId}`}{" "}
-              · {file.depotPath} · {tr("未知", "unknown")}
+              · {file.depotPath} · {t("pending.unknown.2")}
             </li>
           ))}
         </ul>

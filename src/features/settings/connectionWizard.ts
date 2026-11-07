@@ -1,4 +1,5 @@
 import type { Backend } from "../../infrastructure/backend/contract";
+import { tFor, type MsgKey } from "../../shared/i18n";
 import { pathKey } from "../files/address";
 import type {
   CliDiscoveryResult,
@@ -24,155 +25,195 @@ const stateCopy: Record<
   }
 > = {
   cliMissing: {
-    zh: ["找不到 P4 CLI", "可重新检测已有安装，或从官方页面获取 P4 CLI。"],
+    zh: [
+      "settings.connectionState.cliMissing.title",
+      "settings.connectionState.cliMissing.detail",
+    ],
+
     en: [
-      "P4 CLI not found",
-      "Check for an existing installation or obtain P4 CLI from the official page.",
+      "settings.connectionState.cliMissing.title",
+      "settings.connectionState.cliMissing.detail",
     ],
     tone: "danger",
   },
   notTested: {
-    zh: ["尚未验证", "连接参数已就绪，但尚未访问服务器。"],
+    zh: [
+      "settings.connectionState.notTested.title",
+      "settings.connectionState.notTested.detail",
+    ],
+
     en: [
-      "Not tested",
-      "The connection is configured but has not contacted the server.",
+      "settings.connectionState.notTested.title",
+      "settings.connectionState.notTested.detail",
     ],
     tone: "neutral",
   },
   disconnected: {
-    zh: ["服务器无响应", "服务器中断了连接；确认服务状态后重试。"],
+    zh: [
+      "settings.connectionState.disconnected.title",
+      "settings.connectionState.disconnected.detail",
+    ],
+
     en: [
-      "Server disconnected",
-      "The server ended the connection. Check its status and retry.",
+      "settings.connectionState.disconnected.title",
+      "settings.connectionState.disconnected.detail",
     ],
     tone: "danger",
   },
   sslUntrusted: {
     zh: [
-      "SSL 服务器尚未信任",
-      "核对下方服务器与指纹；只有明确确认后才会写入 Trust。",
+      "settings.connectionState.sslUntrusted.title",
+      "settings.connectionState.sslUntrusted.detail",
     ],
+
     en: [
-      "SSL server is not trusted",
-      "Verify the server and fingerprint below. Trust is written only after explicit confirmation.",
+      "settings.connectionState.sslUntrusted.title",
+      "settings.connectionState.sslUntrusted.detail",
     ],
     tone: "warning",
   },
   authRequired: {
-    zh: ["需要登录", "连接可达，但当前用户没有有效登录票据。"],
+    zh: [
+      "settings.connectionState.authRequired.title",
+      "settings.connectionState.authRequired.detail",
+    ],
+
     en: [
-      "Login required",
-      "The server is reachable, but this user has no valid login ticket.",
+      "settings.connectionState.authRequired.title",
+      "settings.connectionState.authRequired.detail",
     ],
     tone: "warning",
   },
   connected: {
-    zh: ["已连接并登录", "服务器连接和当前登录票据均已验证。"],
+    zh: [
+      "settings.connectionState.connected.title",
+      "settings.connectionState.connected.detail",
+    ],
+
     en: [
-      "Connected and authenticated",
-      "Server connectivity and the current login ticket are verified.",
+      "settings.connectionState.connected.title",
+      "settings.connectionState.connected.detail",
     ],
     tone: "success",
   },
   ticketExpired: {
-    zh: ["登录票据已过期", "请重新登录；提交后密码会立即从界面内存中清除。"],
+    zh: [
+      "settings.connectionState.ticketExpired.title",
+      "settings.connectionState.ticketExpired.detail",
+    ],
+
     en: [
-      "Login ticket expired",
-      "Log in again. The password is cleared from UI memory immediately after submission.",
+      "settings.connectionState.ticketExpired.title",
+      "settings.connectionState.ticketExpired.detail",
     ],
     tone: "warning",
   },
   networkError: {
     zh: [
-      "无法访问服务器",
-      "检查服务器地址、网络、VPN、Proxy 或 Broker 后重试。",
+      "settings.connectionState.networkError.title",
+      "settings.connectionState.networkError.detail",
     ],
+
     en: [
-      "Server unreachable",
-      "Check the server address, network, VPN, proxy, or broker, then retry.",
+      "settings.connectionState.networkError.title",
+      "settings.connectionState.networkError.detail",
     ],
     tone: "danger",
   },
   permissionDenied: {
     zh: [
-      "权限不足",
-      "服务器拒绝当前身份；请联系管理员检查 protections 或相关策略。",
+      "settings.connectionState.permissionDenied.title",
+      "settings.connectionState.permissionDenied.detail",
     ],
+
     en: [
-      "Permission denied",
-      "The server rejected this identity. Ask an administrator to check protections and policy.",
+      "settings.connectionState.permissionDenied.title",
+      "settings.connectionState.permissionDenied.detail",
     ],
     tone: "danger",
   },
   invalidConfig: {
     zh: [
-      "连接配置无效",
-      "检查必填项、字符集、CLI 路径和凭证文件路径，然后保存并重新验证。",
+      "settings.connectionState.invalidConfig.title",
+      "settings.connectionState.invalidConfig.detail",
     ],
+
     en: [
-      "Invalid connection configuration",
-      "Check required fields, charset, CLI path, and credential-file paths, then save and test again.",
+      "settings.connectionState.invalidConfig.title",
+      "settings.connectionState.invalidConfig.detail",
     ],
     tone: "danger",
   },
   externalAuthRequired: {
     zh: [
-      "需要外部认证",
-      "请按组织流程在浏览器或认证工具中完成 SSO/MFA，然后返回此处检查登录状态。普通密码框不能完成此流程。",
+      "settings.connectionState.externalAuthRequired.title",
+      "settings.connectionState.externalAuthRequired.detail",
     ],
+
     en: [
-      "External authentication required",
-      "Complete your organization's SSO/MFA flow in its browser or authentication tool, then return to check login status. A password form cannot complete this flow.",
+      "settings.connectionState.externalAuthRequired.title",
+      "settings.connectionState.externalAuthRequired.detail",
     ],
     tone: "warning",
   },
   unsupported: {
-    zh: ["当前配置不受支持", "请检查 P4 CLI 与服务器策略，或联系管理员。"],
+    zh: [
+      "settings.connectionState.unsupported.title",
+      "settings.connectionState.unsupported.detail",
+    ],
+
     en: [
-      "Configuration not supported",
-      "Check the P4 CLI and server policy, or contact an administrator.",
+      "settings.connectionState.unsupported.title",
+      "settings.connectionState.unsupported.detail",
     ],
     tone: "danger",
   },
   unknown: {
     zh: [
-      "无法确定连接状态",
-      "连接检查失败，暂时无法识别具体原因。请重试或查看操作日志。",
+      "settings.connectionState.unknown.title",
+      "settings.connectionState.unknown.detail",
     ],
+
     en: [
-      "Connection state unknown",
-      "The connection check failed without a recognized cause. Retry or check the operation log.",
+      "settings.connectionState.unknown.title",
+      "settings.connectionState.unknown.detail",
     ],
     tone: "danger",
   },
 };
 
 const recoveryCopy: Record<RecoveryAction, { zh: string; en: string }> = {
-  none: { zh: "无需恢复操作。", en: "No recovery action is required." },
+  none: {
+    zh: "settings.no.recovery.action.is.required",
+    en: "settings.no.recovery.action.is.required",
+  },
   configureCli: {
-    zh: "配置有效的 P4 CLI 后重新验证。",
-    en: "Configure a valid P4 CLI, then test again.",
+    zh: "settings.configure.a.valid.p4.cli.then",
+    en: "settings.configure.a.valid.p4.cli.then",
   },
   editConfig: {
-    zh: "修正并保存连接参数后重新验证。",
-    en: "Correct and save the connection settings, then test again.",
+    zh: "settings.correct.and.save.the.connection.settings",
+    en: "settings.correct.and.save.the.connection.settings",
   },
   trustServer: {
-    zh: "核对并确认当前 SSL 指纹。",
-    en: "Verify and confirm the current SSL fingerprint.",
+    zh: "settings.verify.and.confirm.the.current.ssl",
+    en: "settings.verify.and.confirm.the.current.ssl",
   },
   login: {
-    zh: "登录或重新登录当前用户。",
-    en: "Log in or re-authenticate the current user.",
+    zh: "settings.log.re.authenticate",
+    en: "settings.log.re.authenticate",
   },
-  retry: { zh: "确认环境后重试。", en: "Check the environment and retry." },
+  retry: {
+    zh: "settings.check.the.environment.and.retry",
+    en: "settings.check.the.environment.and.retry",
+  },
   contactAdmin: {
-    zh: "联系 Helix Core 管理员。",
-    en: "Contact the Helix Core administrator.",
+    zh: "settings.contact.the.helix.core.administrator",
+    en: "settings.contact.the.helix.core.administrator",
   },
   completeExternalAuth: {
-    zh: "在外部完成 SSO/MFA 后检查状态。",
-    en: "Complete SSO/MFA externally, then check status.",
+    zh: "settings.complete.sso.mfa.externally.then.check",
+    en: "settings.complete.sso.mfa.externally.then.check",
   },
 };
 
@@ -181,13 +222,11 @@ export function connectionPresentation(
   zh: boolean,
 ): ConnectionPresentation {
   const copy = stateCopy[status.state];
-  const [title, detail] = zh ? copy.zh : copy.en;
+  const locale = zh ? "zh-CN" : "en-US";
   return {
-    title,
-    detail,
-    recovery: zh
-      ? recoveryCopy[status.recovery].zh
-      : recoveryCopy[status.recovery].en,
+    title: tFor(locale, copy.zh[0] as MsgKey),
+    detail: tFor(locale, copy.zh[1] as MsgKey),
+    recovery: tFor(locale, recoveryCopy[status.recovery].zh as MsgKey),
     tone: copy.tone,
   };
 }

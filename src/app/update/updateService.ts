@@ -1,3 +1,5 @@
+import type { MsgKey } from "../../shared/i18n/catalog.zh";
+import { tFor } from "../../shared/i18n";
 import { notifyFailure, notifyUser } from "../../shared/notice";
 import {
   checkForUpdate,
@@ -68,22 +70,16 @@ function errorText(error: unknown): string {
 }
 
 /** Host failure categories; unknown details keep the generic fallback. */
-const failureReasons: readonly [RegExp, string, string][] = [
+const failureReasons: readonly [RegExp, string][] = [
   [
     /network|connect|timed? ?out|timeout|dns|offline|send request|econn|tls|certificate/i,
-    "无法连接更新服务器；请检查网络后重试。",
-    "Could not reach the update server. Check your network and retry.",
+    "update.cannotReachServer",
   ],
   [
     /permission|denied|access is denied|elevat|privilege|not allowed/i,
-    "系统拒绝安装更新（可能需要管理员权限）；请手动安装。",
-    "The system refused to install the update (administrator rights may be required). Install it manually.",
+    "update.installDenied",
   ],
-  [
-    /no space|disk|write failed|read-only/i,
-    "写入更新文件失败（磁盘空间或权限不足）。",
-    "Writing the update failed (disk space or insufficient permissions).",
-  ],
+  [/no space|disk|write failed|read-only/i, "update.writeFailed"],
 ];
 
 /**
@@ -105,28 +101,28 @@ export function updateFailureText(
   zh: boolean,
 ): string {
   if (scope === "restart")
-    return zh
-      ? "更新已安装，但自动重启失败；请手动重启 P4Deck 完成更新。"
-      : "The update is installed, but the automatic restart failed. Restart P4Deck manually to finish updating.";
+    return tFor(zh ? "zh-CN" : "en-US", "update.the.update.is.installed.but");
   if (verificationFailure.test(error ?? ""))
     return scope === "install"
-      ? zh
-        ? "更新包校验失败，安装已取消；请稍后重试或手动下载安装包。"
-        : "The update package failed verification and installation was cancelled. Retry later or download the installer manually."
-      : zh
-        ? "更新包校验失败；请稍后重试或手动下载安装包。"
-        : "The update package failed verification. Retry later or download the installer manually.";
-  for (const [pattern, cn, en] of failureReasons)
-    if (pattern.test(error ?? "")) return zh ? cn : en;
+      ? tFor(
+          zh ? "zh-CN" : "en-US",
+          "update.the.update.package.failed.verification",
+        )
+      : tFor(
+          zh ? "zh-CN" : "en-US",
+          "update.the.update.package.failed.verification.2",
+        );
+  for (const [pattern, key] of failureReasons)
+    if (pattern.test(error ?? ""))
+      return tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
   if (scope === "check")
-    return zh ? "检查更新失败。" : "The update check failed.";
+    return tFor(zh ? "zh-CN" : "en-US", "update.the.update.check.failed");
   if (scope === "install")
-    return zh
-      ? "安装更新失败；应用仍在当前版本，请重试或手动下载安装包。"
-      : "Installing the update failed; the app still runs the current version. Retry or download the installer manually.";
-  return zh
-    ? "更新下载或安装失败。"
-    : "Downloading or installing the update failed.";
+    return tFor(zh ? "zh-CN" : "en-US", "update.installing.update.failed");
+  return tFor(
+    zh ? "zh-CN" : "en-US",
+    "update.downloading.or.installing.the.update",
+  );
 }
 
 function reportFailure(
@@ -192,13 +188,11 @@ export async function checkForUpdates(
     if (manual) {
       const current = updateStore.getSnapshot().currentVersion;
       notifyUser(
-        zh
-          ? current
-            ? `已是最新版本 v${current}。`
-            : "已是最新版本。"
-          : current
-            ? `You are up to date (v${current}).`
-            : "You are up to date.",
+        current
+          ? tFor(zh ? "zh-CN" : "en-US", "update.alreadyLatestVersion", {
+              version: current,
+            })
+          : tFor(zh ? "zh-CN" : "en-US", "update.alreadyLatest"),
       );
     }
     return;

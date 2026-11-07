@@ -1,12 +1,16 @@
 use crate::{
     app::{
-        confirmation::{ConfirmationStore, ExpiringConfirmation},
+        confirmation::{
+            ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest, ConfirmationTicket,
+            IssuedConfirmation, RecheckVerdict, ReviewSpec, DEFAULT_CONFIRMATION_TTL_MS,
+        },
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
     p4::{
         context::ContextStore,
         rename::{RenameInspection, RenameRepository},
+        runner::MutationGuard,
     },
 };
 use sha2::{Digest, Sha256};
@@ -15,23 +19,7 @@ use std::{
     sync::Arc,
 };
 use tauri::AppHandle;
-use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
-
-const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
-
-#[derive(Clone)]
-struct TokenRecord {
-    target: RenameMoveTargetSnapshot,
-    preview_digest: String,
-    expires_at: i64,
-}
-
-impl ExpiringConfirmation for TokenRecord {
-    fn expires_at(&self) -> i64 {
-        self.expires_at
-    }
-}
 
 struct Evaluation {
     blockers: Vec<RenameMoveIssue>,
@@ -44,9 +32,8 @@ pub struct RenameService {
     repository: RenameRepository,
     contexts: Arc<ContextStore>,
     status_cache: Arc<StatusCache>,
-    tokens: ConfirmationStore<TokenRecord>,
-    confirmation_gate: AsyncMutex<()>,
-    ttl_ms: u64,
+    /// preflight → one-time token → recheck → lane → execute (shared skeleton).
+    tickets: ConfirmationTicket<RenameMoveTargetSnapshot, String>,
 }
 
 impl RenameService {
@@ -55,7 +42,12 @@ impl RenameService {
         contexts: Arc<ContextStore>,
         status_cache: Arc<StatusCache>,
     ) -> Self {
-        Self::with_ttl(repository, contexts, status_cache, DEFAULT_TOKEN_TTL_MS)
+        Self::with_ttl(
+            repository,
+            contexts,
+            status_cache,
+            DEFAULT_CONFIRMATION_TTL_MS,
+        )
     }
 
     pub(crate) fn with_ttl(
@@ -68,14 +60,15 @@ impl RenameService {
             repository,
             contexts,
             status_cache,
-            tokens: ConfirmationStore::default(),
-            confirmation_gate: AsyncMutex::new(()),
-            ttl_ms: ttl_ms.max(1),
+            tickets: ConfirmationTicket::new(ttl_ms),
         }
     }
 
-    pub fn clear_confirmations(&self) {
-        self.tokens.clear();
+    pub async fn clear_confirmations(&self) {
+        // Await the clear so a context switch serialises against any in-flight
+        // confirmation of this family; blocking inside the async runtime would
+        // stall the command that performs the switch.
+        self.tickets.clear().await;
     }
 
     pub async fn preflight(
@@ -127,21 +120,15 @@ impl RenameService {
             &evaluation.warnings,
         );
         let ready = evaluation.blockers.is_empty() && evaluation.target.is_some();
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
-        let token = ready.then(|| {
-            let target = evaluation
-                .target
-                .clone()
-                .expect("ready preview has a target");
-            self.tokens.issue(
-                TokenRecord {
-                    target,
-                    preview_digest: preview_digest.clone(),
-                    expires_at,
-                },
-                now_ms(),
-            )
-        });
+        // `ready` already implies a target; a blocked review issues no token.
+        let (expires_at, token) = evaluation
+            .target
+            .clone()
+            .and_then(|target| self.tickets.issue(ready, target, preview_digest.clone()))
+            .map_or_else(
+                || (self.tickets.planned_expires_at(), None),
+                |(expires_at, token)| (expires_at, Some(token)),
+            );
         let operation_ids = inspection
             .as_ref()
             .map(|value| value.operation_ids.clone())
@@ -165,7 +152,7 @@ impl RenameService {
             preview_digest,
             token,
             expires_at,
-            ttl_ms: self.ttl_ms,
+            ttl_ms: self.tickets.ttl_ms(),
             log_reference: operation_ids.first().cloned(),
             operation_ids,
         }
@@ -176,156 +163,272 @@ impl RenameService {
         confirmation: RenameMoveConfirmation,
         app: Option<&AppHandle>,
     ) -> RenameMoveResult {
-        let _gate = self.confirmation_gate.lock().await;
-        let Some(record) = self.tokens.consume(&confirmation.token) else {
-            return rejected(
-                RenameMoveFailureCode::TokenUnknown,
-                "The rename/move confirmation token is unknown or was already used.",
-                Some(&confirmation.target),
-            );
-        };
-        if record.expires_at <= now_ms() {
-            return rejected(
-                RenameMoveFailureCode::TokenExpired,
-                "The rename/move preview expired. Run preflight again.",
-                Some(&record.target),
-            );
-        }
-        if record.target != confirmation.target
-            || record.preview_digest != confirmation.preview_digest
-        {
-            return rejected(
-                RenameMoveFailureCode::TargetMismatch,
-                "The confirmation does not match the reviewed preview.",
-                Some(&record.target),
-            );
-        }
-        let (context, generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &context,
-            generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected(
-                RenameMoveFailureCode::ContextChanged,
-                "The connection, profile, workspace, or runtime generation changed after preview.",
-                Some(&record.target),
-            );
-        }
-
-        let mutation_guard = self.repository.lock_mutations(&context.server).await;
-        let recheck_request = RenameMovePreflightRequest {
-            source_path: record.target.source.local_path.clone(),
-            target_path: record.target.target.local_path.clone(),
-            target_change_id: record.target.target_change_id,
+        let mut review = RenameReview {
+            service: self,
+            app,
+            reviewed: confirmation.target.clone(),
+            current_operation_id: confirmation
+                .operation_id
+                .clone()
+                .filter(|value| valid_operation_id(value)),
             operation_id: None,
+            evaluated: None,
+            held_lane: None,
         };
-        let reinspection = match self
-            .repository
-            .inspect(
-                &context,
-                &recheck_request,
-                &format!("rename-recheck-{}", Uuid::new_v4()),
-                app,
-            )
-            .await
-        {
-            Ok(value) => value,
-            Err(_) => {
-                return rejected(
-                    RenameMoveFailureCode::PreflightBlocked,
-                    "The source and target could not be revalidated safely.",
-                    Some(&record.target),
-                )
+        // The ticket takes the token, then decides in the established order:
+        // expiry → target/digest → context, then the lane, the re-check,
+        // context and expiry again, then the mutation.
+        let request = ConfirmationRequest::new(&confirmation.token, &confirmation.target)
+            .with_digest(&confirmation.preview_digest);
+        match self.tickets.confirm(request, &mut review).await {
+            Ok(result) => result,
+            Err(refusal) => {
+                let code = refusal.code().unwrap_or(RenameMoveFailureCode::Cancelled);
+                let message = refusal
+                    .message()
+                    .unwrap_or("Rename/move was cancelled before execution.");
+                rejected(code, message, Some(&review.reviewed))
             }
-        };
-        let evaluation = evaluate(
+        }
+    }
+}
+
+/// One rename/move confirmation as the shared ticket sees it.
+///
+/// The ticket owns the decision order; this type supplies only the decisions a
+/// rename makes between the review and the mutation: the fresh inspection, the
+/// blocker/`target_exists` distinction between "source changed" and "target
+/// changed", and the execute call under the mutation lane.
+struct RenameReview<'a> {
+    service: &'a RenameService,
+    app: Option<&'a AppHandle>,
+    /// The reviewed snapshot (the caller's echo until the token is taken).
+    reviewed: RenameMoveTargetSnapshot,
+    current_operation_id: Option<String>,
+    operation_id: Option<String>,
+    /// Outcome of the last re-check: the candidate target and whether the
+    /// destination already existed (which decides TargetChanged vs
+    /// SourceChanged).
+    evaluated: Option<(Option<RenameMoveTargetSnapshot>, bool)>,
+    /// The server write lane taken in `lane()` (before the re-check) and held
+    /// through `execute`.
+    held_lane: Option<MutationGuard>,
+}
+
+impl ReviewSpec for RenameReview<'_> {
+    type Target = RenameMoveTargetSnapshot;
+    type Digest = String;
+    type Recheck = ();
+    type Output = RenameMoveResult;
+    type RefusalCode = RenameMoveFailureCode;
+    type Error = ConfirmRefusal<RenameMoveFailureCode>;
+
+    fn unwrap_error(error: Self::Error) -> ConfirmRefusal<RenameMoveFailureCode> {
+        error
+    }
+
+    fn refusal_code(&self, shared: ConfirmationRefusalCode) -> RenameMoveFailureCode {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => RenameMoveFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::TokenExpired => RenameMoveFailureCode::TokenExpired,
+            ConfirmationRefusalCode::TargetMismatch => RenameMoveFailureCode::TargetMismatch,
+            // Rename/move never requires an acknowledgement.
+            ConfirmationRefusalCode::AcknowledgementRequired => RenameMoveFailureCode::TokenUnknown,
+            ConfirmationRefusalCode::ContextChanged => RenameMoveFailureCode::ContextChanged,
+            // This domain has no separate "now blocked" outcome; it keeps reporting
+            // a blocked re-check as a changed one.
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                self.recheck_changed_code()
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => RenameMoveFailureCode::PreflightBlocked,
+            ConfirmationRefusalCode::Cancelled => RenameMoveFailureCode::Cancelled,
+        }
+    }
+
+    fn refusal_message(&self, shared: ConfirmationRefusalCode) -> &'static str {
+        match shared {
+            ConfirmationRefusalCode::TokenUnknown => {
+                "The rename/move confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::TokenExpired => {
+                "The rename/move preview expired. Run preflight again."
+            }
+            ConfirmationRefusalCode::TargetMismatch => {
+                "The confirmation does not match the reviewed preview."
+            }
+            ConfirmationRefusalCode::AcknowledgementRequired => {
+                "The rename/move confirmation token is unknown or was already used."
+            }
+            ConfirmationRefusalCode::ContextChanged => {
+                "The connection, profile, workspace, or runtime generation changed after preview."
+            }
+            ConfirmationRefusalCode::RecheckBlocked | ConfirmationRefusalCode::RecheckChanged => {
+                match self.recheck_changed_code() {
+                    RenameMoveFailureCode::SourceChanged => {
+                        "The mapped paths or opened source state changed after preview."
+                    }
+                    RenameMoveFailureCode::TargetChanged => {
+                        "The source, target, or changelist changed after preview."
+                    }
+                    _ => "The source, target, or changelist changed after preview.",
+                }
+            }
+            ConfirmationRefusalCode::RecheckUnavailable => {
+                "The source and target could not be revalidated safely."
+            }
+            ConfirmationRefusalCode::Cancelled => "Rename/move was cancelled before execution.",
+        }
+    }
+
+    fn context_current(&self) -> bool {
+        let (context, generation) = self.service.contexts.snapshot();
+        context_matches(
+            &self.reviewed,
             &context,
             generation,
-            self.contexts.active_profile_id(),
-            record.target.target_change_id,
-            &reinspection,
-        );
-        if !evaluation.blockers.is_empty() {
-            let failure = if reinspection.target_exists {
-                RenameMoveFailureCode::TargetChanged
-            } else {
-                RenameMoveFailureCode::SourceChanged
-            };
-            return rejected(
-                failure,
-                "The source, target, or changelist changed after preview.",
-                Some(&record.target),
-            );
-        }
-        let Some(rechecked_target) = evaluation.target else {
-            return rejected(
-                RenameMoveFailureCode::PreflightBlocked,
-                "The rename/move target is no longer valid.",
-                Some(&record.target),
-            );
-        };
-        if rechecked_target != record.target
-            || digest_preview(Some(&rechecked_target), &[], &[]) != record.preview_digest
-        {
-            return rejected(
-                RenameMoveFailureCode::SourceChanged,
-                "The mapped paths or opened source state changed after preview.",
-                Some(&record.target),
-            );
-        }
-        let (latest_context, latest_generation) = self.contexts.snapshot();
-        if !context_matches(
-            &record.target,
-            &latest_context,
-            latest_generation,
-            self.contexts.active_profile_id(),
-        ) {
-            return rejected(
-                RenameMoveFailureCode::ContextChanged,
-                "The runtime context changed during confirmation.",
-                Some(&record.target),
-            );
-        }
-        if record.expires_at <= now_ms() {
-            return rejected(
-                RenameMoveFailureCode::TokenExpired,
-                "The rename/move preview expired while confirmation was waiting or revalidating. Run preflight again.",
-                Some(&record.target),
-            );
-        }
+            self.service.contexts.active_profile_id(),
+        )
+    }
 
-        let operation_id = confirmation
-            .operation_id
-            .filter(|value| valid_operation_id(value))
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let execution = self
-            .repository
-            .execute(
-                &context,
-                &record.target,
-                operation_id.clone(),
-                &mutation_guard,
-                app,
-            )
-            .await;
-        self.status_cache.invalidate(
-            &context.server,
-            &context.user,
-            &context.client,
-            &[
-                record.target.source.local_path.clone(),
-                record.target.target.local_path.clone(),
-            ],
-            &[
-                StatusQueryKind::WorkspaceStatus,
-                StatusQueryKind::Opened,
-                StatusQueryKind::Reconcile,
-            ],
-            InvalidationReason::FileMutation,
+    fn on_reviewed(&mut self, reviewed: &IssuedConfirmation<Self::Target, Self::Digest>) {
+        self.reviewed = reviewed.target.clone();
+    }
+
+    fn lane(
+        &mut self,
+        operation_id: &str,
+    ) -> crate::app::confirmation::BoxFuture<'_, Option<crate::app::confirmation::MutationLane>>
+    {
+        self.operation_id = Some(
+            self.current_operation_id
+                .clone()
+                .unwrap_or_else(|| operation_id.to_string()),
         );
-        execution_result(&record.target, operation_id, execution)
+        Box::pin(async { None })
+    }
+
+    /// Re-inspect source and destination, then evaluate the result the same way
+    /// preflight did. Evaluation problems are reported as the review's changed
+    /// verdict, evaluated targets as the rechecked snapshot.
+    fn recheck(
+        &mut self,
+    ) -> crate::app::confirmation::BoxFuture<'_, Result<Self::Recheck, String>> {
+        Box::pin(async move {
+            let (context, generation) = self.service.contexts.snapshot();
+            let reviewed = self.reviewed.clone();
+            let request = RenameMovePreflightRequest {
+                source_path: reviewed.source.local_path.clone(),
+                target_path: reviewed.target.local_path.clone(),
+                target_change_id: reviewed.target_change_id,
+                operation_id: None,
+            };
+            let inspection = self
+                .service
+                .repository
+                .inspect(
+                    &context,
+                    &request,
+                    &format!("rename-recheck-{}", Uuid::new_v4()),
+                    self.app,
+                )
+                .await?;
+            let evaluation = evaluate(
+                &context,
+                generation,
+                self.service.contexts.active_profile_id(),
+                reviewed.target_change_id,
+                &inspection,
+            );
+            self.evaluated = Some((evaluation.target, inspection.target_exists));
+            Ok(())
+        })
+    }
+
+    fn recheck_verdict(&self, _recheck: &Self::Recheck) -> RecheckVerdict {
+        match &self.evaluated {
+            // The re-check found blockers, or no valid target at all.
+            Some((None, _)) | None => RecheckVerdict::Changed,
+            Some((Some(target), _)) => {
+                let mapped_paths_changed = digest_preview(Some(target), &[], &[])
+                    != digest_preview(Some(&self.reviewed), &[], &[]);
+                if *target != self.reviewed || mapped_paths_changed {
+                    RecheckVerdict::Changed
+                } else {
+                    RecheckVerdict::Unchanged
+                }
+            }
+        }
+    }
+
+    /// The ticket's own mutex: this service keeps no separate confirmation
+    /// gate, and `clear_confirmations` goes through the ticket too, so both
+    /// sides serialise on the same lock.
+    fn gate(&self) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+        self.service.tickets.gate()
+    }
+
+    fn execute<'a>(
+        &'a mut self,
+        _recheck: Self::Recheck,
+        operation_id: String,
+    ) -> crate::app::confirmation::BoxFuture<'a, Result<Self::Output, Self::Error>> {
+        Box::pin(async move {
+            let (context, _) = self.service.contexts.snapshot();
+            let reviewed = self.reviewed.clone();
+            let operation_id = self.operation_id.clone().unwrap_or(operation_id);
+            // `lane()` took the guard before the re-check; if it is missing the
+            // ticket never got that far, and taking a fresh one here keeps the
+            // write serialised anyway.
+            let owned_guard;
+            let guard = match self.held_lane.as_ref() {
+                Some(guard) => guard,
+                None => {
+                    owned_guard = self
+                        .service
+                        .repository
+                        .lock_mutations(&context.server)
+                        .await;
+                    &owned_guard
+                }
+            };
+            let execution = self
+                .service
+                .repository
+                .execute(&context, &reviewed, operation_id.clone(), guard, self.app)
+                .await;
+            self.service.status_cache.invalidate(
+                &context.server,
+                &context.user,
+                &context.client,
+                &[
+                    reviewed.source.local_path.clone(),
+                    reviewed.target.local_path.clone(),
+                ],
+                &[
+                    StatusQueryKind::WorkspaceStatus,
+                    StatusQueryKind::Opened,
+                    StatusQueryKind::Reconcile,
+                ],
+                InvalidationReason::FileMutation,
+            );
+            Ok(execution_result(&reviewed, operation_id, execution))
+        })
+    }
+}
+
+impl RenameReview<'_> {
+    /// Which "changed" code the re-check produces.
+    ///
+    /// A new destination blocker (the target now exists) is TargetChanged, an
+    /// unreachable evaluation target is PreflightBlocked, and everything else is
+    /// a source/plan change.
+    fn recheck_changed_code(&self) -> RenameMoveFailureCode {
+        match self.evaluated {
+            Some((None, target_exists)) if target_exists => RenameMoveFailureCode::TargetChanged,
+            Some((None, _)) => RenameMoveFailureCode::PreflightBlocked,
+            Some((Some(_), _)) => RenameMoveFailureCode::SourceChanged,
+            None => RenameMoveFailureCode::PreflightBlocked,
+        }
     }
 }
 
@@ -669,13 +772,10 @@ fn refresh(
     }
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::confirmation::{ConfirmationStore, IssuedConfirmation};
 
     #[cfg(windows)]
     #[test]
@@ -769,29 +869,14 @@ mod tests {
             target_change_id: 0,
         };
         let token = store.issue(
-            TokenRecord {
-                target: target.clone(),
-                preview_digest: "a".into(),
-                expires_at: 10,
-            },
+            IssuedConfirmation::new(target.clone(), "a".to_string(), 10),
             0,
         );
         assert!(store.consume(&token).is_some());
         assert!(store.consume(&token).is_none());
-        let expired = store.issue(
-            TokenRecord {
-                target,
-                preview_digest: "b".into(),
-                expires_at: 1,
-            },
-            0,
-        );
+        let expired = store.issue(IssuedConfirmation::new(target, "b".to_string(), 1), 0);
         let _fresh = store.issue(
-            TokenRecord {
-                target: mapping_target(),
-                preview_digest: "c".into(),
-                expires_at: 20,
-            },
+            IssuedConfirmation::new(mapping_target(), "c".to_string(), 20),
             2,
         );
         assert!(store.consume(&expired).is_none());

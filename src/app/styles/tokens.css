@@ -13,6 +13,9 @@
     "Microsoft YaHei",
     sans-serif;
   font-synthesis: none;
+  /* Terminal surface -- LIGHT theme value. Do not delete as a "duplicate":
+     :root[data-theme="dark"] below redefines it (@111713) exactly like every
+     other theme-following token (--bg, --panel, --accent, ...). */
   --terminal: #101418;
   color: var(--text);
   background: var(--bg);
@@ -46,6 +49,41 @@
   --overlay-shadow: 0 16px 48px #14271c26;
   --toolbar-tool-size: 49px;
   --toolbar-tool-padding: 5px 8px;
+  /* Terminal palette. Deliberately theme-independent: a terminal keeps its own
+     dark foreground/background in light mode too, so these are NOT aliases of
+     the panel/accent tokens. Values are the historical literals. */
+  --terminal-text: #cbd5d9;
+  --terminal-prompt: #66b6ff;
+  --terminal-border: #30353a;
+  --terminal-control-border: #343a40;
+  --terminal-control-bg: #1c2024;
+  --terminal-control-text: #ddd;
+  /* Solid white used on top of a fixed accent/danger fill (badges, icons on
+     coloured surfaces). Not --on-accent, which flips to dark in dark mode. */
+  --white: #fff;
+  /* Fixed brand colour of the connection indicator dot. */
+  --online: #43b77c;
+  /* Pending resolve badge: fixed white-on-red in both themes. */
+  --badge-danger: #b42338;
+  /* Type scale (RUI-05). Every step keeps its historical px value: this is a
+     naming layer only, so all existing sizes render identically. The root size
+     below stays a literal -- it is the step every other token is relative to. */
+  --font-3xs: 7px;
+  --font-2xs: 8px;
+  --font-xs: 9px;
+  --font-sm: 10px;
+  --font-base: 11px;
+  --font-md: 12px;
+  --font-lg: 13px;
+  --font-xl: 14px;
+  --font-2xl: 15px;
+  --font-3xl: 16px;
+  --font-4xl: 18px;
+  --font-5xl: 20px;
+  --font-6xl: 21px;
+  --font-7xl: 22px;
+  --font-8xl: 24px;
+  --font-9xl: 25px;
   font-size: 13px;
 }
 :root[data-theme="dark"] {
@@ -66,6 +104,8 @@
   --success: #8bccaa;
   --warning: #dcbd79;
   --danger: #ed9990;
+  /* Terminal surface -- DARK theme value. The pairing is the light value in the
+     plain :root block near the top of this file; both are required. */
   --terminal: #111713;
   --shadow: #00000045;
   --overlay-shadow: 0 16px 48px #00000055;

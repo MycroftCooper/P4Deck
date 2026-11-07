@@ -231,6 +231,9 @@ impl SearchRepository {
         })
     }
 
+    /// Job results are no longer offered by the global search UI; kept for
+    /// protocol compatibility until the Job kind is fully retired.
+    #[allow(dead_code)]
     pub async fn jobs(
         &self,
         context: &P4Context,
@@ -426,6 +429,12 @@ impl SearchRepository {
                 break;
             }
             ensure_active()?;
+            // The deep search has a total budget. The loop check above only runs
+            // between batches, so each `p4 describe` must also be narrowed to
+            // whatever budget is left — otherwise one stuck batch spends the
+            // whole family limit and the total overruns by an order of magnitude.
+            // `limit_for_request` keeps the family as a hard ceiling even if this
+            // arithmetic is ever wrong.
             let remaining_ms = SHELF_DEEP_SEARCH_BUDGET_MS
                 .saturating_sub(started.elapsed().as_millis())
                 .max(1) as u64;
@@ -437,7 +446,14 @@ impl SearchRepository {
             ];
             args.extend(chunk.iter().map(|change| change.id.to_string()));
             let result = match self
-                .run_with_timeout(context, operation_id, "describe", args, remaining_ms, app)
+                .run_with_timeout(
+                    context,
+                    operation_id,
+                    "describe",
+                    args,
+                    Some(remaining_ms),
+                    app,
+                )
                 .await
             {
                 Ok(result) => result,
@@ -586,30 +602,35 @@ impl SearchRepository {
         args: Vec<String>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
-        self.run_with_timeout(context, operation_id, command, args, 30_000, app)
+        self.run_with_timeout(context, operation_id, command, args, None, app)
             .await
     }
 
+    /// Runs one `p4` read under the short-read family. `narrowing_ms` can only
+    /// shorten that family, so a caller with a smaller local budget (the shelf
+    /// deep search) still gets a bounded command without a bare millisecond
+    /// literal.
     async fn run_with_timeout(
         &self,
         context: &P4Context,
         operation_id: &str,
         command: &str,
         args: Vec<String>,
-        timeout_ms: u64,
+        narrowing_ms: Option<u64>,
         app: Option<&AppHandle>,
     ) -> Result<OperationResult, String> {
         let result = self
             .runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: Some(operation_id.into()),
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(timeout_ms),
+                    timeout_ms: narrowing_ms,
                     input: None,
                 },
                 app,

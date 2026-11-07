@@ -1,3 +1,4 @@
+import { tFor, type MsgKey } from "../../shared/i18n";
 import type { PageId } from "../panels";
 import type { CommandId } from "../shell/commandPolicy";
 import { getShortcutOverrides, type ShortcutOverrides } from "./keymap";
@@ -53,6 +54,7 @@ export type AppCommandConfirmation = "none" | "stateMachine";
 export interface AppCommandDefinition {
   id: AppCommandId;
   group: AppCommandGroup;
+  /** Catalog key; resolve with tFor. Shared by both locales. */
   zh: string;
   en: string;
   /** Primary, user-editable key binding. */
@@ -84,15 +86,21 @@ function command(
 }
 
 export const appCommands: readonly AppCommandDefinition[] = [
-  command("app.commandPalette", "app", "打开命令面板", "Open Command Palette", {
-    shortcut: "Mod+Shift+P",
-    allowInEditable: true,
-  }),
+  command(
+    "app.commandPalette",
+    "app",
+    "commands.app.commandPalette",
+    "commands.app.commandPalette",
+    {
+      shortcut: "Mod+Shift+P",
+      allowInEditable: true,
+    },
+  ),
   command(
     "connection.manageProfiles",
     "connection",
-    "连接 / 切换 Profile",
-    "Connect / Switch Profile",
+    "commands.connection.manageProfiles",
+    "commands.connection.manageProfiles",
     {
       requires: "mainWindow",
       execution: { kind: "page", page: "settings" },
@@ -101,25 +109,31 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command(
     "view.refresh",
     "navigation",
-    "刷新当前数据",
-    "Refresh Current Data",
+    "commands.view.refresh",
+    "commands.view.refresh",
     {
       shortcut: "Mod+R",
       aliases: ["F5"],
       requires: "runtime",
     },
   ),
-  command("workspace.sync", "changes", "同步所选目标", "Sync Selected Target", {
-    risk: "mutation",
-    confirmation: "stateMachine",
-    requires: "file",
-    execution: { kind: "shell", command: "getLatest" },
-  }),
+  command(
+    "workspace.sync",
+    "changes",
+    "commands.workspace.sync",
+    "commands.workspace.sync",
+    {
+      risk: "mutation",
+      confirmation: "stateMachine",
+      requires: "file",
+      execution: { kind: "shell", command: "getLatest" },
+    },
+  ),
   command(
     "workspace.syncRevision",
     "changes",
-    "同步所选目标到指定版本",
-    "Sync Selected Target to Revision",
+    "commands.workspace.syncRevision",
+    "commands.workspace.syncRevision",
     {
       risk: "mutation",
       confirmation: "stateMachine",
@@ -127,17 +141,23 @@ export const appCommands: readonly AppCommandDefinition[] = [
       execution: { kind: "shell", command: "getRevision" },
     },
   ),
-  command("changelist.submit", "changes", "提交所选 CL", "Submit Selected CL", {
-    risk: "mutation",
-    confirmation: "stateMachine",
-    requires: "pending",
-    execution: { kind: "shell", command: "submit" },
-  }),
+  command(
+    "changelist.submit",
+    "changes",
+    "commands.changelist.submit",
+    "commands.changelist.submit",
+    {
+      risk: "mutation",
+      confirmation: "stateMachine",
+      requires: "pending",
+      execution: { kind: "shell", command: "submit" },
+    },
+  ),
   command(
     "changelist.shelf",
     "changes",
-    "搁置所选文件",
-    "Shelf Selected Files",
+    "commands.changelist.shelf",
+    "commands.changelist.shelf",
     {
       risk: "mutation",
       confirmation: "stateMachine",
@@ -148,8 +168,8 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command(
     "changelist.moveFiles",
     "changes",
-    "移动所选文件到 CL",
-    "Move Selected Files to Changelist",
+    "commands.changelist.moveFiles",
+    "commands.changelist.moveFiles",
     {
       risk: "mutation",
       confirmation: "stateMachine",
@@ -157,41 +177,77 @@ export const appCommands: readonly AppCommandDefinition[] = [
       execution: { kind: "shell", command: "moveFiles" },
     },
   ),
-  command("view.files", "navigation", "打开 Depot 文件", "Open Depot Files", {
-    shortcut: "Mod+9",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "files" },
-  }),
-  command("view.pending", "navigation", "打开待提交", "Open Pending", {
-    shortcut: "Mod+1",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "pending" },
-  }),
-  command("view.submitted", "navigation", "打开已提交", "Open Submitted", {
-    shortcut: "Mod+2",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "submitted" },
-  }),
-  command("view.search", "navigation", "打开全局搜索", "Open Global Search", {
-    shortcut: "Mod+Shift+F",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "search" },
-  }),
-  command("view.workspaces", "navigation", "打开 Workspace", "Open Workspace", {
-    shortcut: "Mod+5",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "workspaces" },
-  }),
-  command("view.streams", "navigation", "打开分支流", "Open Streams", {
-    shortcut: "Mod+7",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "streams" },
-  }),
+  command(
+    "view.files",
+    "navigation",
+    "commands.view.files",
+    "commands.view.files",
+    {
+      shortcut: "Mod+9",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "files" },
+    },
+  ),
+  command(
+    "view.pending",
+    "navigation",
+    "commands.view.pending",
+    "commands.view.pending",
+    {
+      shortcut: "Mod+1",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "pending" },
+    },
+  ),
+  command(
+    "view.submitted",
+    "navigation",
+    "commands.view.submitted",
+    "commands.view.submitted",
+    {
+      shortcut: "Mod+2",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "submitted" },
+    },
+  ),
+  command(
+    "view.search",
+    "navigation",
+    "commands.view.search",
+    "commands.view.search",
+    {
+      shortcut: "Mod+Shift+F",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "search" },
+    },
+  ),
+  command(
+    "view.workspaces",
+    "navigation",
+    "commands.view.workspaces",
+    "commands.view.workspaces",
+    {
+      shortcut: "Mod+5",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "workspaces" },
+    },
+  ),
+  command(
+    "view.streams",
+    "navigation",
+    "commands.view.streams",
+    "commands.view.streams",
+    {
+      shortcut: "Mod+7",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "streams" },
+    },
+  ),
   command(
     "view.streamgraph",
     "navigation",
-    "打开分支流图",
-    "Open Stream Graph",
+    "commands.view.streamgraph",
+    "commands.view.streamgraph",
     {
       shortcut: "Mod+Shift+M",
       requires: "mainWindow",
@@ -201,48 +257,77 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command(
     "view.branchMappings",
     "navigation",
-    "打开分支映射",
-    "Open Branch Mappings",
+    "commands.view.branchMappings",
+    "commands.view.branchMappings",
     {
       shortcut: "Mod+3",
       requires: "mainWindow",
       execution: { kind: "page", page: "branchmappings" },
     },
   ),
-  command("view.diagnostics", "tools", "打开诊断", "Open Diagnostics", {
-    shortcut: "Mod+I",
-    execution: { kind: "tool", tool: "diagnostics" },
-  }),
-  command("file.diff", "file", "打开差异", "Open Diff", {
+  command(
+    "view.diagnostics",
+    "tools",
+    "commands.view.diagnostics",
+    "commands.view.diagnostics",
+    {
+      shortcut: "Mod+I",
+      execution: { kind: "tool", tool: "diagnostics" },
+    },
+  ),
+  command("file.diff", "file", "commands.file.diff", "commands.file.diff", {
     shortcut: "Mod+D",
     aliases: ["Mod+Shift+D"],
     requires: "file",
     execution: { kind: "shell", command: "diff" },
   }),
-  command("file.history", "file", "打开历史记录", "Open History", {
-    shortcut: "Mod+T",
-    requires: "file",
-    execution: { kind: "shell", command: "history" },
-  }),
-  command("file.revgraph", "file", "打开修订图", "Open Rev Graph", {
-    shortcut: "Mod+Shift+R",
-    requires: "file",
-    execution: { kind: "shell", command: "revgraph" },
-  }),
-  command("file.preview", "file", "预览文件", "Preview File", {
-    requires: "file",
-    execution: { kind: "shell", command: "preview" },
-  }),
+  command(
+    "file.history",
+    "file",
+    "commands.file.history",
+    "commands.file.history",
+    {
+      shortcut: "Mod+T",
+      requires: "file",
+      execution: { kind: "shell", command: "history" },
+    },
+  ),
+  command(
+    "file.revgraph",
+    "file",
+    "commands.file.revgraph",
+    "commands.file.revgraph",
+    {
+      shortcut: "Mod+Shift+R",
+      requires: "file",
+      execution: { kind: "shell", command: "revgraph" },
+    },
+  ),
+  command(
+    "file.preview",
+    "file",
+    "commands.file.preview",
+    "commands.file.preview",
+    {
+      requires: "file",
+      execution: { kind: "shell", command: "preview" },
+    },
+  ),
   ...(
     [
-      ["file.rename", "重命名 / 移动", "Rename / Move", "rename"],
-      ["file.lock", "锁定", "Lock", "lock"],
-      ["file.unlock", "解锁", "Unlock", "unlock"],
-      ["file.resolve", "解决冲突", "Resolve", "resolve"],
-      ["file.checkout", "签出", "Checkout", "checkout"],
-      ["file.add", "添加", "Add", "add"],
-      ["file.delete", "标记删除", "Mark for Delete", "delete"],
-      ["file.revert", "还原", "Revert", "revert"],
+      ["file.rename", "commands.file.rename", "commands.file.rename", "rename"],
+      ["file.lock", "commands.file.lock", "commands.file.lock", "lock"],
+      ["file.unlock", "commands.file.unlock", "commands.file.unlock", "unlock"],
+      // Keep each mutating file command on one line: the contract validator
+      // matches this table by `["id", "zh", "en", "shell"]` on a single line,
+      // so a wrapped entry silently drops out of the production catalog.
+      // prettier-ignore
+      ["file.resolve", "commands.file.resolve", "commands.file.resolve", "resolve"],
+      // prettier-ignore
+      ["file.checkout", "commands.file.checkout", "commands.file.checkout", "checkout"],
+      ["file.add", "commands.file.add", "commands.file.add", "add"],
+      ["file.delete", "commands.file.delete", "commands.file.delete", "delete"],
+      ["file.revert", "commands.file.revert", "commands.file.revert", "revert"],
     ] as const
   ).map(([id, zh, en, shellCommand]) =>
     command(id, "changes", zh, en, {
@@ -252,42 +337,72 @@ export const appCommands: readonly AppCommandDefinition[] = [
       execution: { kind: "shell", command: shellCommand },
     }),
   ),
-  command("file.reveal", "file", "在系统中定位", "Reveal in System", {
-    shortcut: "Mod+Shift+S",
-    requires: "file",
-    execution: { kind: "shell", command: "reveal" },
-  }),
-  command("file.openWith", "file", "使用其他软件打开", "Open With…", {
-    requires: "file",
-    execution: { kind: "shell", command: "openWith" },
-  }),
-  command("swarm.open", "navigation", "在 Swarm 中打开", "Open in Swarm", {
-    requires: "swarm",
-  }),
+  command(
+    "file.reveal",
+    "file",
+    "commands.file.reveal",
+    "commands.file.reveal",
+    {
+      shortcut: "Mod+Shift+S",
+      requires: "file",
+      execution: { kind: "shell", command: "reveal" },
+    },
+  ),
+  command(
+    "file.openWith",
+    "file",
+    "commands.file.openWith",
+    "commands.file.openWith",
+    {
+      requires: "file",
+      execution: { kind: "shell", command: "openWith" },
+    },
+  ),
+  command(
+    "swarm.open",
+    "navigation",
+    "commands.swarm.open",
+    "commands.swarm.open",
+    {
+      requires: "swarm",
+    },
+  ),
   command(
     "operation.cancel",
     "app",
-    "取消当前操作",
-    "Cancel Current Operation",
+    "commands.operation.cancel",
+    "commands.operation.cancel",
     {
       execution: { kind: "shell", command: "cancel" },
     },
   ),
-  command("tools.openTerminal", "tools", "打开 Terminal", "Open Terminal", {
-    shortcut: "Mod+Alt+T",
-    allowInEditable: true,
-    requires: "runtime",
-    risk: "sensitive",
-  }),
-  command("tools.openP4Log", "tools", "打开 P4 Log", "Open P4 Log", {
-    shortcut: "Mod+Alt+L",
-    allowInEditable: true,
-  }),
+  command(
+    "tools.openTerminal",
+    "tools",
+    "commands.tools.openTerminal",
+    "commands.tools.openTerminal",
+    {
+      shortcut: "Mod+Alt+T",
+      allowInEditable: true,
+      requires: "runtime",
+      risk: "sensitive",
+    },
+  ),
+  command(
+    "tools.openP4Log",
+    "tools",
+    "commands.tools.openP4Log",
+    "commands.tools.openP4Log",
+    {
+      shortcut: "Mod+Alt+L",
+      allowInEditable: true,
+    },
+  ),
   command(
     "tools.popoutTerminal",
     "tools",
-    "在独立窗口打开 Terminal",
-    "Open Terminal in New Window",
+    "commands.tools.popoutTerminal",
+    "commands.tools.popoutTerminal",
     {
       requires: "mainWindow",
       risk: "sensitive",
@@ -296,22 +411,28 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command(
     "tools.popoutP4Log",
     "tools",
-    "在独立窗口打开 P4 Log",
-    "Open P4 Log in New Window",
+    "commands.tools.popoutP4Log",
+    "commands.tools.popoutP4Log",
     {
       requires: "mainWindow",
     },
   ),
-  command("view.settings", "app", "打开设置", "Open Settings", {
-    shortcut: "Mod+,",
-    requires: "mainWindow",
-    execution: { kind: "page", page: "settings" },
-  }),
+  command(
+    "view.settings",
+    "app",
+    "commands.view.settings",
+    "commands.view.settings",
+    {
+      shortcut: "Mod+,",
+      requires: "mainWindow",
+      execution: { kind: "page", page: "settings" },
+    },
+  ),
   command(
     "navigation.focusAddress",
     "navigation",
-    "跳转到地址栏",
-    "Jump to Address Bar",
+    "commands.navigation.focusAddress",
+    "commands.navigation.focusAddress",
     {
       shortcut: "Alt+L",
       aliases: ["Mod+G"],
@@ -321,14 +442,14 @@ export const appCommands: readonly AppCommandDefinition[] = [
   command(
     "refresh.toggleAuto",
     "app",
-    "暂停 / 恢复自动刷新",
-    "Pause / Resume Auto Refresh",
+    "commands.refresh.toggleAuto",
+    "commands.refresh.toggleAuto",
   ),
   command(
     "panel.dockBack",
     "tools",
-    "停靠回主窗口",
-    "Dock Back to Main Window",
+    "commands.panel.dockBack",
+    "commands.panel.dockBack",
     {
       shortcut: "Mod+Alt+D",
     },
@@ -352,24 +473,24 @@ export function appCommandReason(
   environment: AppCommandEnvironment,
   zh: boolean,
 ): string | undefined {
-  const message = (cn: string, en: string) => (zh ? cn : en);
+  const message = (key: string) => tFor(zh ? "zh-CN" : "en-US", key as MsgKey);
   const definition = appCommands.find((item) => item.id === id)!;
   if (id === "panel.dockBack")
     return environment.detached
       ? undefined
-      : message("当前内容已在主窗口", "Content is already docked");
+      : message("commands.content.is.already.docked");
   if (environment.detached && definition.requires === "mainWindow")
-    return message("当前已在独立窗口", "Already in a separate window");
+    return message("commands.already.in.a.separate.window");
   if (!environment.runtimeReady && definition.requires === "runtime")
-    return message("正在加载连接运行时", "Connection runtime is loading");
+    return message("commands.connection.runtime.is.loading");
   if (!environment.runtimeReady && definition.risk === "mutation")
-    return message("正在加载连接运行时", "Connection runtime is loading");
+    return message("commands.connection.runtime.is.loading");
   if (definition.requires === "connected" && !environment.connected)
-    return message("当前连接不可用", "The current connection is unavailable");
+    return message("commands.the.current.connection.is.unavailable");
   if (environment.busy && definition.risk === "mutation")
-    return message("另一项操作正在执行", "Another operation is running");
+    return message("commands.another.operation.is.running");
   if (definition.requires === "file" && environment.target !== "file")
-    return message("请先选择文件或目录", "Select a file or folder first");
+    return message("commands.select.a.file.or.folder.first");
   if (definition.requires === "swarm" && environment.swarmReason)
     return environment.swarmReason;
   if (
@@ -378,15 +499,9 @@ export function appCommandReason(
       !(environment.pendingId && environment.pendingId > 0) ||
       !(environment.pendingCount && environment.pendingCount > 0))
   )
-    return message(
-      "请选择非空、已编号的待提交 CL",
-      "Select a nonempty numbered pending CL",
-    );
+    return message("commands.select.a.nonempty.numbered.pending.cl");
   if (definition.risk === "mutation" && environment.connected === false)
-    return message(
-      "连接或认证不可用",
-      "Connection or authentication is unavailable",
-    );
+    return message("commands.connection.or.authentication.is.unavailable");
   if (definition.execution?.kind === "shell")
     return environment.shellReasons?.[definition.execution.command];
   return undefined;

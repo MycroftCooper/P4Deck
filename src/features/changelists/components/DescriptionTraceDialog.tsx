@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { formatLocalTime } from "../../../shared/lib/localTime";
 import { ColumnResizer } from "../../../app/context-menu/ColumnResizer";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -149,7 +150,6 @@ function DescriptionTraceContent({
   onClose,
   source,
 }: Props) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const scope = makeReviewScope(runtime, `//change/${changeId}`);
   const key = [
     "target",
@@ -232,7 +232,7 @@ function DescriptionTraceContent({
   async function load(refresh = false) {
     if (active.current) return;
     if (runtime.mode !== "mock" && runtime.connection.state !== "connected") {
-      setError(tr("连接不可用", "Connection unavailable"));
+      setError(t("pending.connection.unavailable"));
       return;
     }
     if (!refresh && snapshot?.complete) return;
@@ -251,10 +251,7 @@ function DescriptionTraceContent({
           Date.parse(detail.time) > Date.parse(to)
         )
           throw new Error(
-            tr(
-              "源CL提交时间无效，无法限定后续查询",
-              "Invalid source submission time; cannot bound the investigation",
-            ),
+            t("pending.invalid.source.submission.time.cannot.bound"),
           );
         previous = {
           description: detail.description,
@@ -291,31 +288,20 @@ function DescriptionTraceContent({
           !Array.isArray(page.items)
         )
           throw new Error(
-            tr(
-              "查询响应不兼容或连接已变化",
-              "Incompatible response or changed connection",
-            ),
+            t("pending.incompatible.response.or.changed.connection"),
           );
         if (
           page.hasMore &&
           (!page.nextCursor || previous.cursors.includes(page.nextCursor))
         )
           throw new Error(
-            tr(
-              "分页游标无效，请刷新调查",
-              "Invalid page cursor; refresh the investigation",
-            ),
+            t("pending.invalid.page.cursor.refresh.the.investigation"),
           );
         const rows = new Map(previous.investigated.map((row) => [row.id, row]));
         for (const row of page.items) {
           const time = Date.parse(row.time);
           if (!Number.isFinite(time))
-            throw new Error(
-              tr(
-                "候选提交时间无效，请刷新核对",
-                "Invalid candidate submission time; refresh to recheck",
-              ),
-            );
+            throw new Error(t("pending.invalid.time.refresh"));
           if (
             time >= Date.parse(previous.from) &&
             time <= Date.parse(previous.to)
@@ -355,7 +341,7 @@ function DescriptionTraceContent({
   }
   return (
     <Dialog
-      title={`${tr("追踪合并去向", "Trace integration destinations")} · CL ${changeId}`}
+      title={`${t("pending.trace.integration.destinations")} · CL ${changeId}`}
       zh={zh}
       source={source}
       onRequestClose={() => {
@@ -373,25 +359,22 @@ function DescriptionTraceContent({
             onClick={() => void load()}
           >
             {snapshot && snapshot.pages > 0
-              ? tr("继续查询（最多10页）", "Continue search (up to 10 pages)")
-              : tr("查询合并去向", "Find destinations")}
+              ? t("pending.continue.search.up.to.10")
+              : t("pending.find.destinations")}
           </button>
           <button disabled={busy} onClick={() => void load(true)}>
-            {tr("刷新调查", "Refresh investigation")}
+            {t("pending.refresh.investigation")}
           </button>
           {busy && (
             <button
               onClick={() => {
                 active.current?.abort();
                 setError(
-                  tr(
-                    "已取消；当前结果可能不完整",
-                    "Cancelled; current results may be incomplete",
-                  ),
+                  t("pending.cancelled.current.results.may.be.incomplete"),
                 );
               }}
             >
-              {tr("取消读取", "Cancel reads")}
+              {t("pending.cancel.reads")}
             </button>
           )}
         </>
@@ -403,49 +386,38 @@ function DescriptionTraceContent({
           <div className="description-trace-toolbar">
             <div
               className="description-trace-summary"
-              title={tr(
-                "按 CI 元数据中的来源 CL 引用链查找直接和间接合并提交",
-                "Direct and indirect submissions linked by CI source CL metadata",
-              )}
+              title={t("pending.direct.submissions.linked")}
             >
-              {tr("CL 引用链", "CL reference chain")}
+              {t("pending.cl.reference.chain")}
             </div>
             <small>
-              {tr("范围", "Range")}:{" "}
+              {t("pending.range")}:{" "}
               {formatLocalTime(snapshot.from, zh ? "zh-CN" : "en-US")} →{" "}
               {formatLocalTime(snapshot.to, zh ? "zh-CN" : "en-US")}
             </small>
             <p role="status">
-              {tr("候选", "Candidates")}: {snapshot.rows.length} ·{" "}
-              {tr("已扫描", "Scanned")}: {snapshot.scanned} ·{" "}
-              {tr("页", "Pages")}: {snapshot.pages} ·{" "}
+              {t("pending.candidates")}: {snapshot.rows.length} ·{" "}
+              {t("pending.scanned")}: {snapshot.scanned} · {t("pending.pages")}:{" "}
+              {snapshot.pages} ·{" "}
               {formatLocalTime(snapshot.readAt, zh ? "zh-CN" : "en-US")}
             </p>
             {(!snapshot.complete || !!error) && (
               <small role="status">
                 {snapshot.limited
-                  ? tr(
-                      "达到本轮上限 · 未完成",
-                      "Query limit reached · Incomplete",
-                    )
-                  : tr("未完成", "Incomplete")}
+                  ? t("pending.query.limit.reached.incomplete")
+                  : t("pending.incomplete")}
               </small>
             )}
           </div>
           {!snapshot.rows.length && (
-            <p>
-              {tr(
-                "已查询范围内未发现CL引用链候选。",
-                "No CL-reference candidates in the queried range.",
-              )}
-            </p>
+            <p>{t("pending.no.reference.candidates")}</p>
           )}
           <div
             ref={scroll}
             className="description-trace-results"
             style={{ overflow: "auto", maxHeight: "50vh" }}
             role="table"
-            aria-label={tr("CL引用链候选", "CL-reference candidates")}
+            aria-label={t("pending.cl.reference.candidates")}
           >
             <div
               role="row"
@@ -457,8 +429,8 @@ function DescriptionTraceContent({
               {[
                 "CL",
                 "Workspace / Client",
-                tr("时间", "Time"),
-                tr("描述", "Description"),
+                t("pending.time"),
+                t("pending.description"),
               ].map((label, index) => (
                 <strong
                   role="columnheader"
@@ -526,7 +498,7 @@ function DescriptionTraceContent({
                             whiteSpace: "pre-wrap",
                           }}
                         >
-                          {row.client || tr("未知", "Unknown")}
+                          {row.client || t("pending.unknown")}
                         </div>
                         <div role="cell">
                           {formatLocalTime(row.time, zh ? "zh-CN" : "en-US")}
@@ -561,8 +533,8 @@ function DescriptionTraceContent({
                             }
                           >
                             {expandedDescriptions.has(row.id)
-                              ? tr("收起描述", "Collapse description")
-                              : tr("展开描述", "Expand description")}
+                              ? t("pending.collapse.description")
+                              : t("pending.expand.description")}
                           </button>
                         </div>
                       </div>

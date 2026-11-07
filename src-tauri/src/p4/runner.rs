@@ -159,13 +159,14 @@ impl P4Runner {
         let result = self
             .run_inner(
                 P4CommandRequest {
+                    bound: super::bounds::IoBound::Bootstrap,
                     operation_id: Some(id.clone()),
                     source: OperationSource::Gui,
                     command: "info".into(),
                     args: vec!["-s".into()],
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(10_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 None,
@@ -668,7 +669,9 @@ impl P4Runner {
             )
             .await
         });
-        let timeout = Duration::from_millis(request.timeout_ms.unwrap_or(120_000).min(600_000));
+        // R9: the family, not a per-call literal, decides the limit. A request
+        // may narrow it but never widen it past what the UI is waiting for.
+        let timeout = Duration::from_millis(request.bound.limit_for_request(request.timeout_ms));
         let (status, was_cancelled) = tokio::select! {
             _ = token.cancelled() => {
                 let _ = child.kill().await;
@@ -1147,6 +1150,7 @@ mod tests {
     #[test]
     fn rejects_password_arguments() {
         let request = P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Other,
             operation_id: None,
             source: OperationSource::Terminal,
             command: "info".into(),
@@ -1169,6 +1173,7 @@ mod tests {
     #[test]
     fn blocks_authentication_commands_from_the_generic_runner() {
         let request = P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Other,
             operation_id: None,
             source: OperationSource::Gui,
             command: "trust".into(),
@@ -1184,6 +1189,7 @@ mod tests {
     #[test]
     fn branch_reads_and_preview_are_read_only_but_branch_writes_are_not() {
         let request = |command: &str, args: &[&str]| P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Other,
             operation_id: None,
             source: OperationSource::Gui,
             command: command.into(),
@@ -1375,6 +1381,7 @@ mod tests {
         let journal = Arc::new(OperationJournal::open(&base.join("journal.sqlite")).unwrap());
         let runner = P4Runner::new(logs.clone(), journal.clone());
         let request = P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Other,
             operation_id: Some("blocked-op".into()),
             source: OperationSource::Terminal,
             command: "TiCkEtS".into(),
@@ -1440,6 +1447,7 @@ mod tests {
     #[test]
     fn change_spec_reads_do_not_block_the_submit_revalidation_lane() {
         let mut request = P4CommandRequest {
+            bound: crate::p4::bounds::IoBound::Other,
             operation_id: None,
             source: OperationSource::Gui,
             command: "change".into(),

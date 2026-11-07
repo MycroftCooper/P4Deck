@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, beforeEach } from "vitest";
 import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import { UndoDialog } from "./UndoDialog";
+import { setLocale } from "../../../shared/i18n";
 const harness = dialogHarness();
 const target = { depotPath: "//depot/f.txt", revision: 17, changelistId: 901 };
 const plan = () => ({
@@ -13,6 +14,11 @@ const plan = () => ({
   messages: ["single-file edit"],
 });
 afterEach(() => vi.restoreAllMocks());
+// Components translate through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
+
 it("does nothing on open or close and cancels a reviewed preview without execution", async () => {
   const preview = vi.spyOn(backend, "previewUndo").mockResolvedValue(plan());
   const confirm = vi.spyOn(backend, "confirmUndo");

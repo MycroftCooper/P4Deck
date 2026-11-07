@@ -1,3 +1,5 @@
+import { t } from "../../../shared/i18n";
+import { localizeBackendError } from "../../../shared/localizeError";
 import {
   useCallback,
   useDeferredValue,
@@ -472,7 +474,7 @@ export function DiffView({
       const targetSide = current?.side ?? "right";
       const reference = targetSide === "left" ? diff?.left : diff?.right;
       const label =
-        targetSide === "left" ? (zh ? "左侧" : "Left") : zh ? "右侧" : "Right";
+        targetSide === "left" ? t("browse.left") : t("browse.right");
       return {
         复制所选文本: copy(selectionText() || current?.text || ""),
         全选当前侧: {
@@ -490,7 +492,7 @@ export function DiffView({
         }),
       };
     },
-    { title: zh ? "Diff 某一侧文本内容" : "Diff side text" },
+    { title: t("browse.diff.side.text") },
   );
 
   const surfaceMenu = menu("V08", () => ({
@@ -549,9 +551,7 @@ export function DiffView({
   const goToLine = () => {
     const number = Number(lineNumber);
     if (!validateLine(side, number)) {
-      setLineError(
-        zh ? "行号不在当前内容中" : "Line is not in the current content",
-      );
+      setLineError(t("browse.lineNotInContent"));
       return;
     }
     setLineError("");
@@ -561,24 +561,14 @@ export function DiffView({
   };
 
   const empty = !path
-    ? zh
-      ? "选择文件，或在上方输入路径。"
-      : "Select a file or enter a path above."
+    ? t("browse.select.a.file.or.enter")
     : loading && !diff
-      ? zh
-        ? "正在加载…"
-        : "Loading…"
+      ? t("browse.loading")
       : error && !diff
-        ? zh
-          ? "加载失败，请重试。"
-          : "Loading failed. Retry."
+        ? t("browse.loading.failed.retry")
         : diff?.identical
-          ? zh
-            ? "两侧内容相同"
-            : "Both sides are identical"
-          : zh
-            ? "没有文本差异"
-            : "No text differences";
+          ? t("browse.both.sides.are.identical")
+          : t("browse.no.text.differences");
 
   const renderable =
     diff !== undefined &&
@@ -592,7 +582,7 @@ export function DiffView({
     <>
       {error && (
         <div role="alert" className="workspace-load-error">
-          {error}
+          {localizeBackendError(error, zh)}
         </div>
       )}
       <section
@@ -629,23 +619,23 @@ export function DiffView({
         <div
           className="diff-toolbar"
           role="group"
-          aria-label={zh ? "差异工具栏" : "Diff tools"}
+          aria-label={t("browse.diff.tools")}
         >
           <div className="diff-tool-group diff-hunk-tools">
             <span className="diff-hunk-count" aria-live="polite">
-              {activeHunk + 1}/{hunkTotal} {zh ? "区块" : "hunks"}
+              {activeHunk + 1}/{hunkTotal} {t("browse.hunks")}
             </span>
             <button
-              aria-label={zh ? "上一个区块" : "Previous hunk"}
-              title={zh ? "上一个区块 (Alt+↑)" : "Previous hunk (Alt+↑)"}
+              aria-label={t("browse.previous.hunk")}
+              title={t("browse.previous.hunk.alt")}
               disabled={!hunks.length}
               onClick={() => jumpHunk(-1)}
             >
               <ArrowUp size={14} />
             </button>
             <button
-              aria-label={zh ? "下一个区块" : "Next hunk"}
-              title={zh ? "下一个区块 (Alt+↓)" : "Next hunk (Alt+↓)"}
+              aria-label={t("browse.next.hunk")}
+              title={t("browse.next.hunk.alt")}
               disabled={!hunks.length}
               onClick={() => jumpHunk(1)}
             >
@@ -657,11 +647,9 @@ export function DiffView({
               <Search size={14} aria-hidden="true" />
               <input
                 ref={searchInput}
-                aria-label={zh ? "查找文本" : "Find text"}
-                placeholder={zh ? "在两侧查找…" : "Find in both sides…"}
-                title={
-                  zh ? "在两侧查找 (Ctrl+F)" : "Find in both sides (Ctrl+F)"
-                }
+                aria-label={t("browse.find.text")}
+                placeholder={t("browse.find.in.both.sides")}
+                title={t("browse.find.in.both.sides.ctrl")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -678,26 +666,24 @@ export function DiffView({
                 : ""}
             </span>
             <button
-              aria-label={zh ? "上一个匹配" : "Previous match"}
-              title={
-                zh ? "上一个匹配 (Shift+Enter)" : "Previous match (Shift+Enter)"
-              }
+              aria-label={t("browse.previous.match")}
+              title={t("browse.previous.match.shift.enter")}
               disabled={!found.matches.length}
               onClick={() => jumpMatch(-1)}
             >
               <ArrowUp size={14} />
             </button>
             <button
-              aria-label={zh ? "下一个匹配" : "Next match"}
-              title={zh ? "下一个匹配 (Enter)" : "Next match (Enter)"}
+              aria-label={t("browse.next.match")}
+              title={t("browse.next.match.enter")}
               disabled={!found.matches.length}
               onClick={() => jumpMatch(1)}
             >
               <ArrowDown size={14} />
             </button>
             <button
-              aria-label={zh ? "清空查找" : "Clear search"}
-              title={zh ? "清空查找 (Esc)" : "Clear search (Esc)"}
+              aria-label={t("browse.clear.search")}
+              title={t("browse.clear.search.esc")}
               disabled={!query}
               onClick={() => {
                 setQuery("");
@@ -715,23 +701,23 @@ export function DiffView({
             }}
           >
             <select
-              aria-label={zh ? "跳转目标侧" : "Jump side"}
+              aria-label={t("browse.jump.side")}
               value={side}
               onChange={(event) => {
                 setSide(event.target.value as DiffSideName);
                 setLineError("");
               }}
             >
-              <option value="left">{zh ? "左侧" : "Left"}</option>
-              <option value="right">{zh ? "右侧" : "Right"}</option>
+              <option value="left">{t("browse.left")}</option>
+              <option value="right">{t("browse.right")}</option>
             </select>
             <input
               className="diff-line-input"
               ref={lineInput}
-              aria-label={zh ? "跳转行号" : "Go to line"}
+              aria-label={t("browse.go.to.line")}
               aria-invalid={!!lineError}
               aria-describedby={lineError ? lineErrorId : undefined}
-              placeholder={zh ? "行号" : "Line"}
+              placeholder={t("browse.line")}
               title="Ctrl+G"
               inputMode="numeric"
               value={lineNumber}
@@ -742,8 +728,8 @@ export function DiffView({
             />
             <button
               type="submit"
-              aria-label={zh ? "跳转到目标行" : "Jump to line"}
-              title={zh ? "跳转到目标行" : "Jump to line"}
+              aria-label={t("browse.jump.to.line")}
+              title={t("browse.jump.to.line")}
               disabled={!lineNumber.trim() || !renderable}
             >
               <CornerDownLeft size={14} />
@@ -765,18 +751,14 @@ export function DiffView({
             </span>
             {(diff?.partial || diff?.truncated) && (
               <span className="diff-partial" title={diff.reason}>
-                {zh ? "部分内容" : "Partial"}
+                {t("browse.partial.2")}
               </span>
             )}
             {displayText && (
               <button
                 className="diff-expand-all-toggle"
-                aria-label={zh ? "展开全部" : "Expand all"}
-                title={
-                  zh
-                    ? "展开全部未改动内容"
-                    : "Expand all unchanged context in this file"
-                }
+                aria-label={t("browse.expand.all")}
+                title={t("browse.expand.unchanged.context")}
                 aria-pressed={expandAll}
                 disabled={!renderable}
                 onClick={() => setExpandAll((value) => !value)}
@@ -789,21 +771,13 @@ export function DiffView({
                 className="diff-structured-toggle"
                 aria-label={
                   partialMode === "patch"
-                    ? zh
-                      ? "结构化视图"
-                      : "Structured view"
-                    : zh
-                      ? "原始补丁视图"
-                      : "Raw patch view"
+                    ? t("browse.structured.view")
+                    : t("browse.raw.patch.view")
                 }
                 title={
                   partialMode === "patch"
-                    ? zh
-                      ? "切换到结构化视图"
-                      : "Switch to the structured view"
-                    : zh
-                      ? "切换到原始补丁视图"
-                      : "Switch to the raw patch view"
+                    ? t("browse.switch.to.the.structured.view")
+                    : t("browse.switch.to.the.raw.patch")
                 }
                 aria-pressed={partialMode === "structured"}
                 disabled={!renderable}
@@ -823,11 +797,11 @@ export function DiffView({
             <div
               className="diff-view-toggle"
               role="group"
-              aria-label={zh ? "差异视图切换" : "Diff view"}
+              aria-label={t("browse.diff.view")}
             >
               <button
-                aria-label={zh ? "并排视图" : "Side-by-side view"}
-                title={zh ? "并排视图" : "Side-by-side view"}
+                aria-label={t("browse.side.by.side.view")}
+                title={t("browse.side.by.side.view")}
                 aria-pressed={view === "split"}
                 disabled={!renderable}
                 onClick={() => setView("split")}
@@ -835,8 +809,8 @@ export function DiffView({
                 <Columns2 size={14} />
               </button>
               <button
-                aria-label={zh ? "统一视图" : "Unified view"}
-                title={zh ? "统一视图" : "Unified view"}
+                aria-label={t("browse.unified.view")}
+                title={t("browse.unified.view")}
                 aria-pressed={view === "unified"}
                 disabled={!renderable}
                 onClick={() => setView("unified")}
@@ -848,14 +822,14 @@ export function DiffView({
         </div>
         <div className="diff-reference-headers">
           <ReferenceSelector
-            label={zh ? "左侧" : "Left"}
+            label={t("browse.left")}
             value={left}
             resolved={diff?.left.label}
             filePath={diff?.left.depotPath}
             onChange={onLeftChange}
           />
           <ReferenceSelector
-            label={zh ? "右侧" : "Right"}
+            label={t("browse.right")}
             value={right}
             resolved={diff?.right.label}
             filePath={diff?.right.depotPath}
@@ -864,10 +838,7 @@ export function DiffView({
         </div>
         {diff?.binary || diff?.unsupported ? (
           <div className="workspace-empty">
-            <strong>
-              {diff.reason ??
-                (zh ? "无法显示文本差异" : "Text diff unavailable")}
-            </strong>
+            <strong>{diff.reason ?? t("browse.text.diff.unavailable")}</strong>
             <div>
               {diff.left.label}: {diff.left.fileType ?? "unknown"} ·{" "}
               {diff.left.size ?? 0} bytes · {diff.left.digest ?? "no digest"}
@@ -881,7 +852,7 @@ export function DiffView({
           <div
             className="diff-body"
             role="region"
-            aria-label={zh ? "差异内容" : "Diff output"}
+            aria-label={t("browse.diff.output")}
             {...v04Menu}
           >
             {fileDiff ? (
@@ -891,9 +862,7 @@ export function DiffView({
                     className="diff-fallback-note diff-patch-view-note"
                     role="note"
                   >
-                    {zh
-                      ? "文件文本不完整，以下为完整原始补丁（含后端 3 行上下文）；折叠上下文无法展开。"
-                      : "File text is incomplete. Showing the full raw patch with the backend's three context lines; collapsed context cannot be expanded."}
+                    {t("browse.file.text.is.incomplete.showing")}
                   </p>
                   <pre className="diff-patch-fallback">{diff.unified}</pre>
                 </div>
@@ -914,9 +883,7 @@ export function DiffView({
             ) : (
               <div className="diff-fallback" role="alert">
                 <p className="diff-fallback-note">
-                  {zh
-                    ? "结构化差异解析失败，以下为原始 patch 预览。"
-                    : "Could not parse the structured diff. Raw patch preview below."}
+                  {t("browse.could.not.parse.the.structured")}
                 </p>
                 <pre className="diff-patch-fallback">{diff.unified}</pre>
               </div>

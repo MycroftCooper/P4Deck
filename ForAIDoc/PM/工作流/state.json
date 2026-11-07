@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-03T12:45:53.585Z",
+  "updatedAt": "2026-11-06T12:39:12.129Z",
   "source": {
     "kind": "migrated",
     "from": "ForAIDoc/PM/Windows本机私用TODO.md",
     "note": "由 state.mjs import 生成；此后 state.json 为唯一真值。verification 由 evidence.mjs 从回执派生。"
   },
   "batch": {
-    "id": "CON06+ACTION-R01",
-    "goal": "只完成 CON06（服务器状态）与 ACTION-R01 全矩阵迁移及必要 QA",
-    "stopCondition": "两项完成 + 联合 QA 通过 → BE 一次性 Apply 到本地原树 → 全员停工",
+    "id": "RUI-0.1.12",
+    "goal": "按用户指令顺序推进 RUI-01→RUI-05（0.1.12 重构收口）",
+    "stopCondition": "RUI-02 与 RUI-01 提交且门禁绿；RUI-03 至少一个切片落地并过测试",
     "devClosedByUser": true,
     "applyMode": "batched",
     "openQuestions": [
@@ -96,9 +96,9 @@
     ]
   },
   "counts": {
-    "main": 56,
-    "archived": 7,
-    "total": 63,
+    "main": 58,
+    "archived": 12,
+    "total": 70,
     "subitems": 32,
     "slices": 7
   },
@@ -634,7 +634,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "文件与版本",
       "scope": "文件与版本：Sync/Get Revision/Edit/Add/Delete/Revert/Reconcile、普通 Lock/Unlock",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -652,11 +652,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:41.602Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:41）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -785,7 +786,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "History",
       "scope": "History：右键 CL 预览/Get/Undo/Diff 与全局差异入口",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -804,11 +805,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:57:39.775Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 12:57:39）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -967,85 +969,6 @@
       "archiveReason": null,
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T11:14:18.235Z"
-    },
-    {
-      "id": "DIFF-01",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "FE",
-      "module": "文件与版本",
-      "scope": "文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0）",
-      "stage": "done",
-      "statusRaw": "已实现待验收",
-      "priority": "P1",
-      "evidence": [
-        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
-        "src/features/browsers/components/DiffView.tsx"
-      ],
-      "note": "用户 2026-10-31 选定整套替换 @pierre/diffs 1.6.2；保留现有工具栏/搜索/hunk 跳转/引用选择/复制/右键/Swarm 与 partial/truncated 语义，渲染改为库的 split/unified + 词级 + 折叠 + Shiki；不引入 WASM/CDN，CSP 默认不变；删自研行渲染与硬配对；补 jsdom mock 与 Playwright 渲染断言；定向 vitest + `pnpm check:web` + build 通过后交用户视觉验收；不改变后端口径（DiffResult/unified+leftText/rightText）",
-      "depsRaw": "QA-01；SAFE-02",
-      "deps": [
-        "QA-01",
-        "SAFE-02"
-      ],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-31T09:46:16.013Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:16）；无 QA/Apply 回执，按一键补登",
-        "humanAcceptedEvidence": null,
-        "humanAcceptedForced": true
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-31T08:22:55.113Z"
-    },
-    {
-      "id": "DIFF-02",
-      "type": "refactor",
-      "typeRaw": "重构与代码优化",
-      "owner": "FE",
-      "module": "文件与版本",
-      "scope": "文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff）",
-      "stage": "done",
-      "statusRaw": "已实现待验收",
-      "priority": "P1",
-      "evidence": [
-        "src/features/browsers/components/DiffView.tsx",
-        "src/features/browsers/diffNavigation.ts"
-      ],
-      "note": "用户 2026-10-31 指定优先；前端已删除 MultiFileDiff/parseDiffFromFile/PatchDiff 生产用法，改为 parsePatchFiles(Rust unified) → FileDiff + loadDiffFiles；100k 行基准 parse 0.15ms vs 旧 diff 90.32ms（≈602×）、heap 81KB vs 14.59MB，hunk 数一致；全量 1550 tests/check:web/build/prettier 绿；真实窗口视觉待验收；证据 `artifacts/evidence/2026-10-31-DIFF-02/验证摘要.md`",
-      "depsRaw": "QA-01；SAFE-02；DIFF-01",
-      "deps": [
-        "QA-01",
-        "SAFE-02",
-        "DIFF-01"
-      ],
-      "archived": false,
-      "migrated": true,
-      "verification": {
-        "qaPassed": null,
-        "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-31T09:46:01.443Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-10-31 09:46:01）；无 QA/Apply 回执，按一键补登",
-        "humanAcceptedEvidence": null,
-        "humanAcceptedForced": true
-      },
-      "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
-      "archiveEvidence": null,
-      "firstSeenAt": "2026-10-31T09:36:30.567Z"
     },
     {
       "id": "MERGE-01",
@@ -1359,7 +1282,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "搜索与分支",
       "scope": "搜索与分支：七类全局搜索、Stream/Shelf 深度搜索",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1377,11 +1300,12 @@
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:48.263Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:48）；无 QA/Apply 回执，按一键补登",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1469,7 +1393,7 @@
       "owner": "FE＋BE（PM拆领取范围）",
       "module": "工具与可靠性",
       "scope": "工具与可靠性：Terminal/P4 Log/Journal/诊断脱敏",
-      "stage": "implemented",
+      "stage": "done",
       "statusRaw": "已实现待验收",
       "priority": "P1",
       "evidence": [
@@ -1488,11 +1412,12 @@
       "verification": {
         "qaPassed": true,
         "applied": true,
-        "humanAccepted": null,
-        "humanAcceptedAt": null,
-        "humanAcceptedBy": null,
-        "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T13:01:44.539Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "用户在看板点击「验收完成」（2026-11-04 13:01:44）",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": false
       },
       "updatedAt": null,
       "archivedAt": null,
@@ -1698,7 +1623,7 @@
       "note": "静态数到190个phase:later；不是190项已承诺任务。选择实际需要的场景再立项，Force Unlock已明确退役不可恢复",
       "depsRaw": "用户范围决定",
       "deps": [],
-      "archived": false,
+      "archived": true,
       "migrated": true,
       "verification": {
         "qaPassed": null,
@@ -1707,12 +1632,16 @@
         "humanAcceptedAt": null,
         "humanAcceptedBy": null,
         "humanAcceptedNote": null,
-        "humanAcceptedEvidence": null
+        "humanAcceptedEvidence": null,
+        "canceled": true,
+        "canceledAt": "2026-11-04T12:56:24.083Z",
+        "canceledBy": "用户",
+        "canceledNote": "用户在看板点击取消（不要求验收）"
       },
       "updatedAt": null,
-      "archivedAt": null,
-      "archivedBy": null,
-      "archiveReason": null,
+      "archivedAt": "2026-11-04T12:56:24.083Z",
+      "archivedBy": "用户",
+      "archiveReason": "用户在看板点击取消（不要求验收）",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
@@ -1937,58 +1866,97 @@
       "firstSeenAt": "2026-10-29T12:07:10.537Z"
     },
     {
-      "id": "CL-06",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "BE调研；后续FE/BE由PM分阶段派单",
-      "module": "CL 工作流",
-      "scope": "CL 工作流：自定义提交工具配置与原提交入口分流",
-      "stage": "done",
-      "statusRaw": "已验收（用户 2026-10-30：公司自定义提交工具验证通过）",
-      "priority": "P1（先调研）",
+      "id": "RUI-01",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "LEAD（协调）＋FE＋BE",
+      "module": "交付",
+      "scope": "交付：补回 0.1.12 丢失的搜索页/预览本地化 UI 改动",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P0",
       "evidence": [
-        "ForAIDoc/PM/并行交接.md"
+        "src/features/search/SearchPage.tsx",
+        "src/features/search/searchModel.ts",
+        "src/app/styles/search.css",
+        "src/features/browsers/components/FilePreviewPage.tsx",
+        "src/shared/localizeError.ts"
       ],
-      "note": "用户要求研究旧P4V待提交CL右键公司入口并接入；BE静态确证customtools.xml调用DevGuardSubmitTool.exe 3.36.1.0、签名Valid，菜单为Custom Tools而非Jobs；工具内部Jobs/退出码/工作目录/认证/default CL仍未知。先只读本机P4V自定义工具配置/相关已安装脚本及官方Custom Tools/Jobs文档，识别customtool/job/其他机制、CL参数/路径/依赖与缺配置降级，再定方案安全边界，最后实现验收。根已核实目标为菜单底部“提交当前CL”，另有查看提交详情/提交选中文件；标准Submit及Remove All Jobs独立存在，不证明Jobs机制。PM直接派发曾遇AbsolutePathBuf错误；根已按PM任务单转交空闲BE，工具确认started，仅只读调研已启动，实施未开始。用户后要求独立研究Agent，独立线程01a1814f-5e59-7699-b5be-f55db37820e5“调研公司提交入口”已创建，BE已自然完成交接，研究员只读续查已完成，PM已读最终报告；S审核通过最小单编号pending CL的mock边界，真实cwd/认证优先级/后台生命周期仍未知。用户明确无文档，PM已给独立研究员R2完成且PM直接审核，未新增运行契约；I1固定参数/路径/连接快照/防重纯mock排既有队列后，真实启动禁用；动态下一步仅询问可回滚独立Windows VM是否可用，不再等待用户提供文档作为唯一前置；不得执行工具或生产验证。仅阶段完成，I未派；mock切片排现有六项后，实际公司工具不执行。禁止启动P4V自动连接、点击入口、执行公司脚本或生产P4查询（包括jobs/info）；配置命令仅作数据，敏感信息脱敏",
-      "depsRaw": "CL-06-R调查→CL-06-S方案→CL-06-I实现验收；FE原队列不打断；公司入口执行需独立安全边界",
+      "note": "2026-11-06 重做完成：FE 5bbe55d（11 文件，SearchPage 8 例含「等待 400ms 零请求 / Enter 恰好一次 / 改输入取消且迟到响应不渲染」硬断言；全量 vitest 1834 绿），LEAD 78014b7 同步 i18n 基线；剩余=用户抽验。原记录： | 2026-11-04 已在 dev 完成并验证（搜索 7→6 类去 Job、去掉 300ms 自动搜索改为点击/Enter、删标题与分割线、结果区铺满、预览/路径错误按语言本地化），但 i18n 分支基于 00052b3 合并回 dev 后这批改动丢失；按当前 t()/catalog 写法重做，验收=6 类、无自动触发、无标题/分割线、预览错误中英双语",
+      "depsRaw": "无",
       "deps": [],
       "archived": false,
       "migrated": true,
       "verification": {
         "qaPassed": null,
         "applied": null,
-        "humanAccepted": true,
-        "humanAcceptedAt": "2026-10-30T14:36:15.046Z",
-        "humanAcceptedBy": "用户",
-        "humanAcceptedNote": "2026-10-30 用户人工验收批次：公司自定义提交工具验证通过（当前批次决议第 1 条）；深度调研/真实工具执行不在本次范围，QA/Apply 回执缺失，force 补登",
-        "humanAcceptedEvidence": "ForAIDoc/PM/工作流/当前批次.md"
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
       },
       "updatedAt": null,
       "archivedAt": null,
       "archivedBy": null,
       "archiveReason": null,
       "archiveEvidence": null,
-      "firstSeenAt": "2026-10-29T12:07:10.537Z"
+      "firstSeenAt": "2026-11-06T07:52:08.035Z"
     },
     {
-      "id": "CL-07",
-      "type": "feature",
-      "typeRaw": "功能需求",
-      "owner": "FE＋BE；QA独立",
-      "module": "CL 工作流",
-      "scope": "CL 工作流：跨多个Pending CL提交选中文件",
+      "id": "RUI-02",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "LEAD（协调）＋FE＋BE",
+      "module": "交付",
+      "scope": "交付：收口 operationSession 与 ipc-surface 进行中工作",
       "stage": "implemented",
-      "statusRaw": "已实现待验收（已合入，待用户本地假P4人工验收）",
-      "priority": "P1高优先，当前项自然收尾后",
+      "statusRaw": "已实现待验收",
+      "priority": "P0",
       "evidence": [
-        "ForAIDoc/PM/并行交接.md"
+        "src/shared/operationSession",
+        "scripts/validate-ipc-surface.mjs"
       ],
-      "note": "跨Default/编号CL选文件，预览并填写描述后新建CL，仅移动选中、核成员后走既有custom/native提交路线；部分失败不提交，取消保留新CL，不自动回退/回移；mock覆盖幂等、身份变化和逐文件恢复事实",
-      "depsRaw": "CL-01；CL-02；CL-06；UI07；用户dev安全写入边界",
+      "note": "2026-11-06 已提交并验证：LEAD 614bce5（ipc-surface + operationSession 模块）、BE 0014ab2（bounds/confirmation 迁移，537 Rust 测试绿）、FE ba6bc10（26 个 src 文件收口，1832 web 测试绿）；vite 排除 node:test 套件后全量门禁干净；剩余=用户抽验。原记录： | 工作树已有未提交改动（43 文件）：operationSession（session/useOperationSession + 14 个对话框迁移）、validate-ipc-surface 静态校验（Rust 命令↔invoke↔Backend↔事件）；验收=ci-fast 与定向测试绿、ipc-surface 进 CI、提交代码并记录",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-03",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE＋BE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：操作会话收敛（取消/代次/迟到隔离统一）",
+      "stage": "partial",
+      "statusRaw": "部分实现",
+      "priority": "P1",
+      "evidence": [
+        "src/shared/operationSession",
+        "src/shared/confirmation/useConfirmationGuard.ts",
+        "src/shared/cache/snapshots.ts"
+      ],
+      "note": "2026-11-06 已迁移 7 页：ResolveDialog（8cb7183）、LogView（a8620a3）、SubmittedPage（8090c34）、DiagnosticsView+OperationJournalView（c8116a5）、ConnectionProfilesCard（91409e4）、SearchPage（c48b7fd）；ChangelistFormDialog（d069ba9）+ SearchPage 安全整数防护（1b63135）；全量 vitest 1851 绿；全仓仅剩 ToolPanel 3 处（已论证排除）；三页论证排除（ToolPanel/StreamGraph/BranchMapping，需「分页会话模型」立项）。通用规则：先清 busy/loading 再 finish；改输入用 finish 而非 abandon；非回显型 requestGeneration 保留原单调 seq。",
+      "depsRaw": "RUI-02",
       "deps": [
-        "CL-01",
-        "CL-02",
-        "CL-06"
+        "RUI-02"
       ],
       "archived": false,
       "migrated": true,
@@ -2006,7 +1974,156 @@
       "archivedBy": null,
       "archiveReason": null,
       "archiveEvidence": null,
-      "firstSeenAt": "2026-10-29T12:07:10.537Z"
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-04",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "重构",
+      "scope": "重构：React 状态复杂度收敛（useState 集中页面转 reducer）",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P1",
+      "evidence": [
+        "src/features/settings/ConnectionProfilesCard.tsx",
+        "src/features/changelists/components/SubmittedPage.tsx",
+        "src/features/search/SearchPage.tsx"
+      ],
+      "note": "前置：RUI-03 剩余两页（ConnectionProfilesCard、SearchPage）完成后再开；三页（ToolPanel/StreamGraph/BranchMapping）已论证排除，其状态收敛需等「分页会话模型」立项。原记录： | 2026-11-06 完成（4 页改 + 1 页论证跳过）：UnshelveDialog 34cfb0d（14→7）、SyncDialog 8dd0872（10→6）、MoveFilesDialog d2caa15（10→7）、ShelfDialog aa48967（9→3），四个文件原测试一行未改全过、全量 vitest 1851 绿；ConnectionProfilesCard 论证不做（155 处单字段散写，reducer 化只是 setter→dispatch 机械替换）。**指标修正**：真正产生收益的是「同一套字段清理/推进规则的重复次数 4→1」，而非 useState 计数；建议后续同类任务以「转移规则重复次数 ≥3 才 reducer 化」为验收指标，本任务结论记为部分达成（降低重复规则、未显著降低字段总数）。 定口径： | 现状 322 处 useState，单文件最多 20 个（ConnectionProfilesCard 20、SubmittedPage 19、BranchMappingsPage 18、SearchPage/FileReviewPage 17）；验收=迁移后状态依赖可枚举、定向组件测试全绿、无行为变化",
+      "depsRaw": "RUI-03",
+      "deps": [
+        "RUI-03"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-05",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "重构",
+      "scope": "重构：CSS 收敛（workbench.css 拆分 + 排版刻度 + token 化）",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P1",
+      "evidence": [
+        "src/app/styles/workbench.css",
+        "src/app/styles/tokens.css"
+      ],
+      "note": "2026-11-06 完成：FE2 2b0609f 按域拆分（workbench 4269→643，798 规则/2412 声明零丢失）+ 391417c 字号 16 token（297/298 映射，逐字节等价）与 13 处色值 token 化；同文件重复块 3 处保留（改动层叠无法证明等价）。后续可选（单独立项、有视觉影响）：字号收敛为 6~8 档。原记录： | 现状 workbench.css 4225 行/81KB、字号 17 种（10/11/12px 占 250 处）、tokens 仅 42 个变量、硬编码色值 109 处；验收=按域拆分、引入排版刻度变量、theme-contrast 与视觉回归通过",
+      "depsRaw": "无",
+      "deps": [],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T07:52:08.036Z"
+    },
+    {
+      "id": "RUI-06",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE＋BE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：分页会话模型（组合层 PagedChain + owner 最小增量）",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P1（RUI-04 之后）",
+      "evidence": [
+        "src/shared/operationSession",
+        "src/features/browsers/components/StreamGraphPage.tsx",
+        "src/features/browsers/components/BranchMappingsPage.tsx",
+        "src/features/tools/ToolPanel.tsx"
+      ],
+      "note": "RUI-03 论证出三页不适合现有「单 channel 单租约」模型：StreamGraph/BranchMapping 是**续期式分页**（loadMore 沿用同一 generation、restore 从快照恢复历史 generation），而 owner 的 start 即 supersede 会打断分页；两页与 ToolPanel 的取消都是**多 id 集合**（activeOperations: Set），owner 单 id 表达不了，硬迁会漏取消。2026-11-06 设计提案已完成（ForAIDoc/Coder/RUI-06-分页会话模型-设计提案.md）：**结论与立项描述相反——owner 不需要改**。Rust 侧核实 requestGeneration 是纯回显+非零校验（SGS 6 处、BMS 12 处无一处相等比较），故契约代次可直接取 lease.epoch、src-tauri 零改动；同代次串行租约与多 id 取消用组合层 PagedChain 表达（8 页零改动）；ToolPanel 属另一问题，拆出 RUI-07。LEAD 裁决采纳方案 B（判据复杂度不换概念数量）。分期：一期模块+StreamGraphPage 试点，二期 BranchMappingsPage。2026-11-06 第 1 期 a 阶段完成（fe 85cd2d0）：新增 `pagedSession.ts`（118 行代码，零依赖）+ 6 个单测（兄弟隔离/settle-cancel/单请求 abandon/死链请求/channel 独立/游标 stall），`session.ts` 纯新增 `cancelLive`+`liveOperationIds` 两个方法（既有语义零改动）；写测试时自查出「只 abort 不取消宿主」的真 bug；generation 用 per-channel 独立单调计数（不用 owner.epoch，避免与 request channel epoch 脱节）。b 阶段完成（fe d5a13d1）：StreamGraphPage 6 个手写 ref 清零（activeOperations/requestToken/requestGeneration/consumedCursors/pendingCursors/session.current），接 paged.open/request/isCurrent + CursorLedger，原 6 例未改全过（含精确 cancel 断言）；实测改动 +122/−107，与 arch 估算 −120/+60 相差近一个数量级（真实原因：估算只算删掉的账本、没算约 20 处成对改写、游标两态→三态、侧栏独立请求边界）；试点中自行发现并修正「侧栏 Stream 用首页 token 判活会被静默丢弃」的非等价点。二期完成（fe 1316dde）：BranchMappingsPage list/detail/preview 三链各持独立 PagedSession、统一从 cancelAll 一处退役，7 个手写 ref 清零，原 8 例未改全过，新增三链同死断言；三条链 cancelBackend 均为 true（已被取代时 id 已发宿主）；实测 +151/−157（净 −6）。**结项：全仓 generation.current 仅剩 ToolPanel 3 处（RUI-07）**。收益性质：StreamGraph 是结构收益（+122/−107 净 +15，不往估算凑），BranchMapping 是取消路径从 5 处散落收敛到 2 个具名入口 + 1 个统一门，非行数收益；arch 估算 −120/+60、−150/+80 均低估近一个数量级（只算删掉的账本、未算约 20 处成对改写、游标两态→三态、侧栏独立请求边界）。验收=三页迁完后全仓无 generation.current 手写判活（ToolPanel 的订阅与终端执行另议），原测试不改全过 + 三类断言",
+      "depsRaw": "RUI-04",
+      "deps": [
+        "RUI-04"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T11:13:08.101Z"
+    },
+    {
+      "id": "RUI-07",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "BE＋FE（PM拆领取范围）",
+      "module": "重构",
+      "scope": "重构：工具面板会话现状的决策记录 + 两处收窄",
+      "stage": "implemented",
+      "statusRaw": "已实现待验收",
+      "priority": "P2（RUI-06 之后）",
+      "evidence": [
+        "src/features/tools/ToolPanel.tsx",
+        "src/features/tools/components/ToolDrawer.tsx"
+      ],
+      "note": "2026-11-06 设计提案完成（ForAIDoc/Coder/RUI-07-订阅式会话-设计提案.md）：**立项三条前提中两条经核实不成立**——(1) 终端取消**现状即单路**（ToolDrawer :107/:120/:440 三入口全受 runningRef 守卫，P2→P3 间实例已销毁，ToolPanel 卸载必带走 ToolDrawer；「双路」是迁移动作才引入的风险）；(2) 订阅无 id/无完成点/无取消语义（cancel_operation(\"\") 在 commands.rs:1292 直接判 unknown），现有 live+subscribeSafely 已覆盖未注册完就卸载/泄漏/注册失败/StrictMode 四种失效，**不进 owner 是正确结论**；(3) temporaryId 经核为纯回显（runner.rs:372-376，仅约束非空≤256，零相等比较）。另发现立项书漏掉的第二宿主 ToolArea.tsx。裁决：RUI-07 定性为「决策记录 + 两处收窄」（钉住 temporaryId 回显契约、取消按钮连点去重），不做 OperationSessionRegistry / SubscriptionScope。待定 Q1：事件跨连接串台（真问题，需一次可交互复现）。2026-11-06 收尾完成：决策记录落档（ForAIDoc/Coder/前端架构与维护约定.md cc29e8e「操作会话的三条边界」「立项描述是待验证的假设」两节）+ 两处收窄（fe 00eb62b：temporaryId 回显契约注释与空回显保留、取消按钮连点只发一次；新增 3 断言，验证过 stash 修复后连点断言会变红，证明断言非摆设）。**待定 Q1：事件跨连接串台**——需可交互复现（开终端→跑长命令→执行中切连接→观察是否混入旧输出），当前无隔离环境，记为待用户人工观察，不假装修复。验收=决策记录落档 + 两处收窄有断言 + 取消仍单路",
+      "depsRaw": "RUI-06",
+      "deps": [
+        "RUI-06"
+      ],
+      "archived": false,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": null,
+        "humanAcceptedAt": null,
+        "humanAcceptedBy": null,
+        "humanAcceptedNote": null,
+        "humanAcceptedEvidence": null
+      },
+      "updatedAt": null,
+      "archivedAt": null,
+      "archivedBy": null,
+      "archiveReason": null,
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-06T11:54:33.540Z"
     },
     {
       "id": "UI-07",
@@ -2434,6 +2551,153 @@
       "archiveReason": "0.1.7/0.1.8/0.1.9 均已发布；0.1.7→0.1.8、0.1.8→0.1.9 两次真机自动升级均通过，5 个子项随 0.1.9 交付",
       "archiveEvidence": null,
       "firstSeenAt": "2026-10-30T12:46:42.375Z"
+    },
+    {
+      "id": "DIFF-01",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 工具重做（整套替换 @pierre/diffs 1.6.2，Apache-2.0）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：真实窗口人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/预研-Diff与合并工具重做.md",
+        "src/features/browsers/components/DiffView.tsx"
+      ],
+      "note": "2026-11-04 用户确认真实窗口视觉验收通过并按人工验收登记归档；关闭范围限本项 UI/渲染替换，不改变后端口径（DiffResult/unified+leftText/rightText），双平台原生矩阵仍不在本项范围",
+      "depsRaw": "—",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.685Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 DIFF-01）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.141Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 DIFF-01 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.981Z"
+    },
+    {
+      "id": "DIFF-02",
+      "type": "refactor",
+      "typeRaw": "重构与代码优化",
+      "owner": "FE",
+      "module": "文件与版本",
+      "scope": "文件与版本：Diff 计算层优化（Rust hunk 直供渲染库，去掉前端二次 diff）",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：真实窗口人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "src/features/browsers/components/DiffView.tsx",
+        "src/features/browsers/diffNavigation.ts"
+      ],
+      "note": "与 DIFF-01 同批人工验收通过；关闭范围限前端计算层（parsePatchFiles→FileDiff+loadDiffFiles），旧基准数据不外推其他规模或设备",
+      "depsRaw": "DIFF-01",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": null,
+        "applied": null,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.792Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 DIFF-02）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.247Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 DIFF-02 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
+    },
+    {
+      "id": "CL-06",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "BE调研；FE/BE由PM分阶段派单",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：自定义提交工具配置与原提交入口分流",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：人工验收收尾通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/并行交接.md",
+        "src-tauri/src/app/custom_submit.rs"
+      ],
+      "note": "2026-11-04 用户确认人工验收收尾通过，按既有 Mock 切片关闭；真实公司工具执行、cwd/认证优先级/后台生命周期仍未验证，仍受安全红线约束",
+      "depsRaw": "—",
+      "deps": [],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.895Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 CL-06）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.346Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 CL-06 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
+    },
+    {
+      "id": "CL-07",
+      "type": "feature",
+      "typeRaw": "功能需求",
+      "owner": "FE＋BE；QA独立",
+      "module": "CL 工作流",
+      "scope": "CL 工作流：跨多个Pending CL提交选中文件",
+      "stage": "done",
+      "statusRaw": "已验收（用户 2026-11-04：本机假 P4 人工验收通过）",
+      "priority": "归档",
+      "evidence": [
+        "ForAIDoc/PM/并行交接.md",
+        "src-tauri/src/app/selected_submit.rs"
+      ],
+      "note": "2026-11-04 用户在本机假 P4 上完成跨 CL 选文件→新建 CL→自定义/原生提交的真实链路人工验收；关闭范围限本项流程，部分失败不回退/不回移语义保持不变",
+      "depsRaw": "CL-01；CL-02；CL-06",
+      "deps": [
+        "CL-01",
+        "CL-02"
+      ],
+      "archived": true,
+      "migrated": true,
+      "verification": {
+        "qaPassed": true,
+        "applied": true,
+        "humanAccepted": true,
+        "humanAcceptedAt": "2026-11-04T12:53:18.994Z",
+        "humanAcceptedBy": "用户",
+        "humanAcceptedNote": "2026-11-04 用户确认人工验收收尾完成（任务 CL-07）；按用户当次指示登记验收，现场无 QA/Apply 回执",
+        "humanAcceptedEvidence": null,
+        "humanAcceptedForced": true
+      },
+      "updatedAt": null,
+      "archivedAt": "2026-11-04T12:53:23.454Z",
+      "archivedBy": "LEAD",
+      "archiveReason": "2026-11-04 用户确认 CL-07 人工验收收尾完成，按人工验收归档",
+      "archiveEvidence": null,
+      "firstSeenAt": "2026-11-04T12:52:49.983Z"
     }
   ],
   "subitems": [

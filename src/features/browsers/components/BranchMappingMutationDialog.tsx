@@ -1,3 +1,4 @@
+import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useUnsavedEditor } from "../../../app/closeGuard";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
@@ -26,6 +27,8 @@ import type {
   BranchViewLine,
   RuntimeInfo,
 } from "../../../shared/contracts";
+import { useTokenExpiry } from "../../../shared/confirmation";
+import { useOperationSession } from "../../../shared/operationSession";
 import { validateBranchDraft, validateBranchView } from "../branchMappingModel";
 
 type Phase = "edit" | "checking" | "review" | "running" | "result";
@@ -92,7 +95,6 @@ export function BranchMappingMutationDialog({
     [30, 80, 150, 150, 90],
     { id: "branch-view-editor", gutter: 48 },
   );
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [draft, setDraft] = useState(() =>
     initialDraft(mode, detail, runtime.context.user),
   );
@@ -110,11 +112,9 @@ export function BranchMappingMutationDialog({
   const [result, setResult] = useState<BranchMutationResult>();
   const [error, setError] = useState("");
   const [acknowledgeDelete, setAcknowledgeDelete] = useState(false);
-  const sequence = useRef(0);
+  const session = useOperationSession();
+  // Latest operation id, so explicit cancel can withdraw the host operation.
   const activeOperation = useRef<string | undefined>(undefined);
-  const mounted = useRef(true);
-  const connection = useRef(connectionKey);
-  connection.current = connectionKey;
   const name = mode === "create" ? (draft?.name ?? "") : (detail?.name ?? "");
   const draftIssues = useMemo(
     () => (draft ? validateBranchDraft(draft) : []),
@@ -131,44 +131,22 @@ export function BranchMappingMutationDialog({
   const editingBlocked = mode === "edit" && detail?.editable !== true;
 
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      sequence.current += 1;
-      if (activeOperation.current)
-        void backend.cancelOperation(activeOperation.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    sequence.current += 1;
-    if (activeOperation.current)
-      void backend.cancelOperation(activeOperation.current);
+    // A connection change withdraws any in-flight lease and drops its review.
+    session.invalidate("preflight");
+    session.invalidate("dispatch");
     activeOperation.current = undefined;
     setError("");
     setPreflight(undefined);
     setResult(undefined);
     setPhase("edit");
-  }, [connectionKey]);
+  }, [connectionKey, session]);
 
-  useEffect(() => {
-    if (phase !== "review" || !preflight) return;
-    const timeout = window.setTimeout(
-      () => {
-        setPreflight(undefined);
-        setAcknowledgeDelete(false);
-        setError(
-          tr(
-            "预检已过期，请重新检查 Branch Mapping。",
-            "The preflight expired; inspect the Branch Mapping again.",
-          ),
-        );
-        setPhase("edit");
-      },
-      Math.min(2147483647, Math.max(0, preflight.expiresAt - Date.now())),
-    );
-    return () => window.clearTimeout(timeout);
-  }, [phase, preflight, zh]);
+  useTokenExpiry(phase === "review" ? preflight?.expiresAt : undefined, () => {
+    setPreflight(undefined);
+    setAcknowledgeDelete(false);
+    setError(t("browse.the.preflight.expired.inspect.the.branch"));
+    setPhase("edit");
+  });
 
   const updateLine = (index: number, value: BranchViewLine) =>
     setDraft((current) =>
@@ -202,10 +180,8 @@ export function BranchMappingMutationDialog({
       lineIssues.length
     )
       return;
-    const seq = ++sequence.current;
-    const expectedConnection = connectionKey;
-    const operationId = crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("preflight");
+    activeOperation.current = lease.operationId;
     setPhase("checking");
     setError("");
     setResult(undefined);
@@ -216,23 +192,19 @@ export function BranchMappingMutationDialog({
         mode,
         name,
         desired: mode === "delete" ? undefined : draft,
-        operationId,
+        operationId: lease.operationId,
       });
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       setPreflight(value);
       setPhase("review");
     } catch (cause) {
-      if (mounted.current && seq === sequence.current) {
+      if (session.isCurrent(lease)) {
         setError(String(cause));
         setPhase("edit");
       }
     } finally {
-      if (seq === sequence.current) activeOperation.current = undefined;
+      if (session.isCurrent(lease)) activeOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
@@ -282,10 +254,8 @@ export function BranchMappingMutationDialog({
       (mode === "delete" && !acknowledgeDelete)
     )
       return;
-    const seq = ++sequence.current;
-    const expectedConnection = connectionKey;
-    const operationId = crypto.randomUUID();
-    activeOperation.current = operationId;
+    const lease = session.start("dispatch");
+    activeOperation.current = lease.operationId;
     setPhase("running");
     setError("");
     let dispatching: ConnectionSnapshot | undefined;
@@ -295,63 +265,54 @@ export function BranchMappingMutationDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       if (!branchConnectionMatchesTarget(preflight.target, dispatching))
         throw new Error(
-          tr(
-            "连接身份与预检目标不一致，未执行 Branch Mapping 变更。",
-            "Connection identity changed; no branch mapping change was dispatched.",
-          ),
+          t("browse.connection.identity.changed.no.branch.mapping"),
         );
       let value = await backend.confirmBranchMappingMutation({
         token: preflight.token,
         target: preflight.target,
         previewDigest: preflight.previewDigest,
         acknowledgeDangerousDelete: mode === "delete" && acknowledgeDelete,
-        operationId,
+        operationId: lease.operationId,
       });
-      if (
-        !mounted.current ||
-        seq !== sequence.current ||
-        connection.current !== expectedConnection
-      )
-        return;
+      if (!session.isCurrent(lease)) return;
       // Unknown may have applied: query the durable receipt once by identity.
       if (value.outcome === "unknown")
-        value = (await recover(operationId, dispatching)) ?? value;
-      if (!mounted.current || seq !== sequence.current) return;
+        value = (await recover(lease.operationId, dispatching)) ?? value;
+      if (!session.isCurrent(lease)) return;
       commit(value);
     } catch (cause) {
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(operationId, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (!mounted.current || seq !== sequence.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         commit(recovered);
         return;
       }
       // Transport failure is unknown, not "not applied"; refresh once and keep
       // the uncertainty explicit.
-      const fallback = unknownBranchMutationResult(operationId, String(cause));
+      const fallback = unknownBranchMutationResult(
+        lease.operationId,
+        String(cause),
+      );
       setError(String(cause));
       setResult(fallback);
       setPhase("result");
       onResult(fallback);
     } finally {
-      if (seq === sequence.current) activeOperation.current = undefined;
+      if (session.isCurrent(lease)) activeOperation.current = undefined;
+      session.finish(lease);
     }
   }
 
   function reset() {
-    sequence.current += 1;
-    if (activeOperation.current)
-      void backend.cancelOperation(activeOperation.current);
+    // Back to edit withdraws whatever the dialog still owns.
+    session.cancel("preflight");
+    session.cancel("dispatch");
     activeOperation.current = undefined;
     setPreflight(undefined);
     setResult(undefined);
@@ -362,10 +323,10 @@ export function BranchMappingMutationDialog({
 
   const title =
     mode === "create"
-      ? tr("创建 Branch Mapping", "Create Branch Mapping")
+      ? t("browse.create.branch.mapping")
       : mode === "edit"
-        ? tr("编辑 Branch Mapping", "Edit Branch Mapping")
-        : tr("删除 Branch Mapping", "Delete Branch Mapping");
+        ? t("browse.edit.branch.mapping")
+        : t("browse.delete.branch.mapping");
   const busy = phase === "checking" || phase === "running";
   const observed = branchObservedSummary(result?.observed);
   const preflightState = busy
@@ -383,10 +344,7 @@ export function BranchMappingMutationDialog({
   return (
     <Dialog
       title={title}
-      description={tr(
-        "所有写入只经专用预检和一次性确认令牌；不会使用 force，也不会执行 integrate。",
-        "Every write uses the dedicated preflight and one-use confirmation token. P4Deck never forces the change or runs integrate here.",
-      )}
+      description={t("browse.every.write.uses.the.dedicated.preflight")}
       source={source}
       zh={zh}
       danger={mode === "delete"}
@@ -400,7 +358,7 @@ export function BranchMappingMutationDialog({
         <>
           {phase === "edit" && (
             <>
-              <button onClick={onDismiss}>{tr("取消", "Cancel")}</button>
+              <button onClick={onDismiss}>{t("browse.cancel")}</button>
               <button
                 className={mode === "delete" ? "danger" : "primary"}
                 data-dialog-autofocus
@@ -412,7 +370,7 @@ export function BranchMappingMutationDialog({
                 }
                 onClick={() => void runPreflight()}
               >
-                {tr("开始预检", "Run preflight")}
+                {t("browse.run.preflight")}
               </button>
             </>
           )}
@@ -423,12 +381,12 @@ export function BranchMappingMutationDialog({
                 backend.cancelOperation(activeOperation.current)
               }
             >
-              {tr("取消预检", "Cancel preflight")}
+              {t("browse.cancel.preflight")}
             </button>
           )}
           {phase === "review" && (
             <>
-              <button onClick={reset}>{tr("返回编辑", "Back to edit")}</button>
+              <button onClick={reset}>{t("browse.back.to.edit")}</button>
               <button
                 className={mode === "delete" ? "danger" : "primary"}
                 disabled={
@@ -441,8 +399,8 @@ export function BranchMappingMutationDialog({
                 onClick={() => void confirm()}
               >
                 {mode === "delete"
-                  ? tr("确认永久删除", "Confirm permanent delete")
-                  : tr("确认保存", "Confirm save")}
+                  ? t("browse.confirm.permanent.delete")
+                  : t("browse.confirm.save")}
               </button>
             </>
           )}
@@ -453,15 +411,15 @@ export function BranchMappingMutationDialog({
                 backend.cancelOperation(activeOperation.current)
               }
             >
-              {tr("取消操作", "Cancel operation")}
+              {t("browse.cancel.operation")}
             </button>
           )}
           {phase === "result" && (
             <>
-              <button onClick={onDismiss}>{tr("关闭", "Close")}</button>
+              <button onClick={onDismiss}>{t("browse.close")}</button>
               {result?.outcome !== "succeeded" && (
                 <button className="primary" onClick={reset}>
-                  {tr("重新预检", "Preflight again")}
+                  {t("browse.preflight.again")}
                 </button>
               )}
             </>
@@ -471,14 +429,11 @@ export function BranchMappingMutationDialog({
     >
       {runtime.mode === "mock" && (
         <DialogNotice>
-          {tr(
-            "Browser Mock：预检与保存均为模拟，不访问真实服务器。",
-            "Browser Mock: preflight and save are simulated; no real server is accessed.",
-          )}
+          {t("browse.browser.mock.preflight.and.save.are")}
         </DialogNotice>
       )}
       <div className="workflow-context">
-        <strong>{name || tr("新 Mapping", "New mapping")}</strong>
+        <strong>{name || t("browse.new.mapping")}</strong>
         {" · "}
         {runtime.context.server} · {runtime.context.user}
       </div>
@@ -486,18 +441,12 @@ export function BranchMappingMutationDialog({
 
       {phase === "edit" && mode === "delete" && (
         <DialogNotice error>
-          {tr(
-            "删除不可撤销。预检会重新读取 Mapping、owner、锁定状态和权限，确认阶段还会执行 TOCTOU 复核。",
-            "Deletion is irreversible. Preflight re-reads the mapping, owner, lock state, and permissions; confirmation repeats the TOCTOU checks.",
-          )}
+          {t("browse.deletion.is.irreversible.preflight.re.reads")}
         </DialogNotice>
       )}
       {editingBlocked && (
         <DialogNotice error>
-          {tr(
-            "该 Mapping 含未知字段、注释或无法往返的 View 行，禁止编辑；详情仍可只读查看。",
-            "This mapping contains unknown fields, comments, or non-round-trippable View lines. Editing is blocked; details remain read-only.",
-          )}
+          {t("browse.this.mapping.contains.unknown.fields.comments")}
         </DialogNotice>
       )}
 
@@ -505,9 +454,9 @@ export function BranchMappingMutationDialog({
         <div className="branch-mutation-editor">
           <div className="branch-mutation-fields">
             <label>
-              <span>{tr("名称", "Name")}</span>
+              <span>{t("browse.name")}</span>
               <input
-                aria-label={tr("Branch Mapping 名称", "Branch Mapping name")}
+                aria-label={t("browse.branch.mapping.name")}
                 value={draft.name}
                 disabled={mode === "edit"}
                 maxLength={128}
@@ -539,7 +488,7 @@ export function BranchMappingMutationDialog({
                   setDraft({ ...draft, locked: event.target.checked })
                 }
               />
-              {tr("锁定 Mapping", "Lock mapping")}
+              {t("browse.lock.mapping")}
             </label>
           </div>
           {draftIssues.map((message) => (
@@ -558,17 +507,17 @@ export function BranchMappingMutationDialog({
                 setDraft({ ...draft, view: [...draft.view, blankLine()] })
               }
             >
-              <Plus size={14} /> {tr("添加行", "Add line")}
+              <Plus size={14} /> {t("browse.add.line")}
             </button>
           </div>
           <div style={{ overflowX: "auto" }}>
             <ResizeHeader
               columns={[
                 "#",
-                tr("模式", "Mode"),
-                tr("来源", "Source"),
-                tr("目标", "Target"),
-                tr("操作", "Actions"),
+                t("browse.mode"),
+                t("browse.source"),
+                t("browse.target"),
+                t("browse.actions"),
               ]}
               resize={tableColumns}
             />
@@ -655,7 +604,7 @@ export function BranchMappingMutationDialog({
       {phase === "review" && preflight && (
         <div className="branch-preflight-review">
           <DialogNotice>
-            {tr("一次性令牌剩余", "One-use token remaining")} ·{" "}
+            {t("browse.one.use.token.remaining")} ·{" "}
             {Math.max(0, Math.ceil((preflight.expiresAt - Date.now()) / 1000))}s
           </DialogNotice>
           <dl>
@@ -689,10 +638,7 @@ export function BranchMappingMutationDialog({
                 checked={acknowledgeDelete}
                 onChange={(event) => setAcknowledgeDelete(event.target.checked)}
               />
-              {tr(
-                "我确认永久删除该 Branch Mapping",
-                "I understand this permanently deletes the Branch Mapping",
-              )}
+              {t("browse.i.permanently.deletes")}
             </label>
           )}
         </div>
@@ -707,13 +653,13 @@ export function BranchMappingMutationDialog({
         >
           <strong>
             {result?.outcome === "succeeded"
-              ? tr("已由服务器回读验证", "Verified by server readback")
+              ? t("browse.verified.by.server.readback")
               : result?.outcome === "unknown"
-                ? tr("结果不确定", "Outcome uncertain")
-                : tr("操作未成功", "Operation did not succeed")}
+                ? t("browse.outcome.uncertain")
+                : t("browse.operation.did.not.succeed")}
           </strong>
           <br />
-          {error || result?.message || tr("未知结果", "Unknown result")}
+          {error || result?.message || t("browse.unknown.result")}
           {result?.failure && (
             <>
               <br />
@@ -723,29 +669,21 @@ export function BranchMappingMutationDialog({
         </DialogNotice>
       )}
       {phase === "result" && result?.outcome === "unknown" && (
-        <DialogNotice error>
-          {tr(
-            "写入可能已应用；已用同一操作号查询持久回执并刷新一次。请先核对 Branch Mapping 列表/详情，不要用新操作号重试。",
-            "The write may have applied. The durable receipt was queried once with the same operation id and views were refreshed; inspect the Branch Mappings list/detail before any retry with a new operation id.",
-          )}
-        </DialogNotice>
+        <DialogNotice error>{t("browse.the.have.applied")}</DialogNotice>
       )}
       {phase === "result" && result?.outcome === "succeeded" && observed && (
         <DialogNotice>
-          {tr("服务器回读：", "Server readback: ")}
-          {observed.name} · {observed.viewLines} {tr("行", "lines")} · Owner{" "}
+          {t("browse.server.readback")}
+          {observed.name} · {observed.viewLines} {t("browse.lines")} · Owner{" "}
           {observed.owner}
-          {observed.locked ? tr(" · 已锁定", " · locked") : ""}
+          {observed.locked ? t("browse.locked") : ""}
           {" · "}
-          {tr(
-            "仍以刷新后的列表/详情为准。",
-            "The refreshed list/detail remains authoritative.",
-          )}
+          {t("browse.the.refreshed.list.detail.remains.authoritative")}
         </DialogNotice>
       )}
       {phase === "result" && result && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")} {result.operationIds.join(", ")}
+          {t("browse.operation")} {result.operationIds.join(", ")}
         </p>
       )}
     </Dialog>

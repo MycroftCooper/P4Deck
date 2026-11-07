@@ -14,7 +14,7 @@ import {
   type MenuEnvironmentValue,
 } from "../../../app/context-menu/environment";
 import { defaultUi } from "../../settings/preferences";
-import { messages } from "../../../shared/i18n";
+import { messages, setLocale } from "../../../shared/i18n";
 import type { PendingFile, RuntimeInfo } from "../../../shared/contracts";
 import { CommandContext } from "../../../app/shell/CommandContext";
 import { PendingFileList } from "./PendingFileList";
@@ -56,6 +56,8 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -182,7 +184,7 @@ it("shows file names before paths, sorts by displayed relative paths, and keeps 
     ".p4ignore",
   ]);
   const first = host.querySelector<HTMLElement>(".pending-file")!;
-  expect(first.querySelector(".pending-file-status")?.textContent).toBe("edit");
+  expect(first.querySelector(".pending-file-status")?.textContent).toBe("Edit");
   expect(first.querySelector(".pending-file-type")?.textContent).toBe(".cs");
   expect(
     first.querySelector(".file-status-icon")?.getAttribute("aria-label"),
@@ -229,7 +231,7 @@ it("marks opened edit rows as needing get latest only when have is behind head",
 
   const behind = rowFor("behind.txt");
   expect(behind.querySelector(".pending-file-status")?.textContent).toBe(
-    "edit · Needs get latest",
+    "Edit · Needs get latest",
   );
   expect(behind.querySelector('[data-badge="outOfDate"]')).not.toBeNull();
   expect(
@@ -239,7 +241,7 @@ it("marks opened edit rows as needing get latest only when have is behind head",
   // Head equals have: synced-to-head row must not claim a stale revision.
   const current = rowFor("current.txt");
   expect(current.querySelector(".pending-file-status")?.textContent).toBe(
-    "edit",
+    "Edit",
   );
   expect(current.querySelector('[data-badge="outOfDate"]')).toBeNull();
   expect(
@@ -249,7 +251,7 @@ it("marks opened edit rows as needing get latest only when have is behind head",
   // Missing head is unknown: never fabricate current/out-of-date.
   const unknown = rowFor("unknown.txt");
   expect(unknown.querySelector(".pending-file-status")?.textContent).toBe(
-    "edit",
+    "Edit",
   );
   expect(unknown.querySelector('[data-badge="outOfDate"]')).toBeNull();
   expect(unknown.querySelector('[data-badge="latest"]')).toBeNull();

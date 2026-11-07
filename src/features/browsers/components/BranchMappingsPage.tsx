@@ -1,3 +1,4 @@
+﻿import { t } from "../../../shared/i18n";
 import { ResizeHeader } from "../../../app/context-menu/ResizeHeader";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
@@ -24,7 +25,6 @@ export function measureBranchMappingRow(element: HTMLElement) {
     branchRowHeights.set(element, Math.max(70, height));
   return branchRowHeights.get(element) ?? 70;
 }
-import type { QueryKey } from "@tanstack/react-query";
 import { backend } from "../../../infrastructure/backend";
 import type {
   BranchImpactDirection,
@@ -44,6 +44,11 @@ import {
   writePagedSnapshot,
 } from "../../../shared/cache/snapshots";
 import { useViewRefresh } from "../../../shared/cache/useViewRefresh";
+import {
+  CursorLedger,
+  PagedSession,
+  type PagedChain,
+} from "../../../shared/operationSession/pagedSession";
 import { BranchMappingMutationDialog } from "./BranchMappingMutationDialog";
 import {
   branchMappingError,
@@ -103,24 +108,43 @@ export function BranchMappingsPage({
     source: HTMLElement | null;
   }>();
   const [clearSelectionOnDismiss, setClearSelectionOnDismiss] = useState(false);
-  const requestGeneration = useRef(0);
-  const listSequence = useRef(0);
-  const detailSequence = useRef(0);
-  const previewSequence = useRef(0);
-  const activeOperations = useRef(new Set<string>());
-  const detailOperation = useRef<string | undefined>(undefined);
-  const previewOperation = useRef<string | undefined>(undefined);
-  const consumedCursors = useRef(new Set<string>());
-  const pendingCursors = useRef(new Set<string>());
-  const listSession = useRef<
-    | {
-        sequence: number;
-        generation: number;
-        query: ListQuery;
-        key: QueryKey;
-      }
-    | undefined
-  >(undefined);
+  /**
+   * Three paged chains: the list, the selected mapping's detail and its impact
+   * preview. They are independent (a new detail must not cancel the list), but
+   * every one of them is retired together when the reviewed context changes,
+   * so no chain can outlive the page or leak a host operation.
+   */
+  const listSession = useMemo(
+    () =>
+      new PagedSession({
+        cancelOperation: (id) =>
+          backend.cancelOperation(id).then(() => undefined),
+        mintOperationId: () => operationId("list"),
+      }),
+    [],
+  );
+  const detailSession = useMemo(
+    () =>
+      new PagedSession({
+        cancelOperation: (id) =>
+          backend.cancelOperation(id).then(() => undefined),
+        mintOperationId: () => operationId("detail"),
+      }),
+    [],
+  );
+  const previewSession = useMemo(
+    () =>
+      new PagedSession({
+        cancelOperation: (id) =>
+          backend.cancelOperation(id).then(() => undefined),
+        mintOperationId: () => operationId("preview"),
+      }),
+    [],
+  );
+  const listChain = useRef<PagedChain | undefined>(undefined);
+  const detailChain = useRef<PagedChain | undefined>(undefined);
+  const previewChain = useRef<PagedChain | undefined>(undefined);
+  const cursors = useMemo(() => new CursorLedger(), []);
   const listRef = useRef<HTMLDivElement>(null);
   const scope = serverScope(runtime);
   const query = useMemo<ListQuery>(
@@ -175,14 +199,37 @@ export function BranchMappingsPage({
     ],
   );
 
+  /**
+   * Retires all three chains together. This is the "double ledger leaks a
+   * cancel" trap: the list, detail and preview are separate accounts, so they
+   * are always closed through this one door.
+   */
   const cancelAll = useCallback(() => {
-    for (const id of activeOperations.current)
-      void backend.cancelOperation(id).catch(() => undefined);
-    activeOperations.current.clear();
-    detailOperation.current = undefined;
-    previewOperation.current = undefined;
-  }, []);
+    listSession.cancelAll();
+    detailSession.cancelAll();
+    previewSession.cancelAll();
+    listChain.current = undefined;
+    detailChain.current = undefined;
+    previewChain.current = undefined;
+    cursors.reset();
+  }, [cursors, detailSession, listSession, previewSession]);
 
+  /**
+   * Retires the detail and its preview. The list is deliberately untouched:
+   * browsing another mapping does not invalidate the page of mappings.
+   */
+  const cancelDetail = useCallback(() => {
+    detailSession.cancelAll();
+    previewSession.cancelAll();
+    detailChain.current = undefined;
+    previewChain.current = undefined;
+  }, [detailSession, previewSession]);
+
+  /** Retires only the impact preview (a new direction, or a new detail). */
+  const cancelPreview = useCallback(() => {
+    previewSession.cancelAll();
+    previewChain.current = undefined;
+  }, [previewSession]);
   const startFresh = useCallback(
     async (preserveSelection: boolean) => {
       if (!remoteReady) {
@@ -190,15 +237,9 @@ export function BranchMappingsPage({
         return;
       }
       cancelAll();
-      detailSequence.current += 1;
-      previewSequence.current += 1;
-      const sequence = ++listSequence.current;
-      const generation = ++requestGeneration.current;
-      const id = operationId("list");
-      listSession.current = { sequence, generation, query, key: listKey };
-      consumedCursors.current.clear();
-      pendingCursors.current.clear();
-      activeOperations.current.add(id);
+      const chain = listSession.open("branch-list");
+      listChain.current = chain;
+      const request = listSession.request(chain);
       setListPhase("loading");
       setListError("");
       setNotice("");
@@ -215,12 +256,12 @@ export function BranchMappingsPage({
       try {
         const result = await backend.queryBranchMappings({
           ...query,
-          operationId: id,
-          requestGeneration: generation,
+          operationId: request.operationId,
+          requestGeneration: request.generation,
         });
         if (
-          sequence !== listSequence.current ||
-          result.requestGeneration !== generation ||
+          !listSession.isCurrent(chain, request) ||
+          result.requestGeneration !== request.generation ||
           !scopeMatches(result.scope)
         )
           return;
@@ -228,7 +269,7 @@ export function BranchMappingsPage({
         setPage(result);
         setListPhase("ready");
       } catch (cause) {
-        if (sequence !== listSequence.current) return;
+        if (!listSession.isCurrent(chain, request)) return;
         const failure = branchMappingError(cause);
         if (failure.code === "cancelled") {
           setListPhase("idle");
@@ -237,34 +278,27 @@ export function BranchMappingsPage({
         setListError(failure.message);
         setListPhase("error");
       } finally {
-        activeOperations.current.delete(id);
+        listSession.settle(request);
       }
     },
-    [cancelAll, listKey, query, remoteReady, scopeMatches],
+    [cancelAll, listKey, listSession, query, remoteReady, scopeMatches],
   );
 
-  /** Shows cached pages and resumes their paging session without P4. */
+  /**
+   * Shows cached pages and resumes their paging session without P4. The cached
+   * requestGeneration only records the chain that produced the page; the next
+   * chain takes a fresh generation of its own.
+   */
   const restore = useCallback(
     (cached: BranchMappingPage) => {
       cancelAll();
-      requestGeneration.current = Math.max(
-        requestGeneration.current,
-        cached.requestGeneration,
-      );
-      listSession.current = {
-        sequence: ++listSequence.current,
-        generation: cached.requestGeneration,
-        query,
-        key: listKey,
-      };
-      consumedCursors.current.clear();
-      pendingCursors.current.clear();
+      listChain.current = listSession.open("branch-list");
       setPage(cached);
       setListPhase("ready");
       setListError("");
       setNotice("");
     },
-    [cancelAll, listKey, query],
+    [cancelAll, listSession],
   );
 
   useEffect(() => {
@@ -302,14 +336,16 @@ export function BranchMappingsPage({
     }
     return () => {
       live = false;
-      listSequence.current += 1;
-      detailSequence.current += 1;
-      previewSequence.current += 1;
+      // Every chain dies with this visit, so no late answer can paint the next.
       cancelAll();
     };
   }, [
     connectionOwner,
+    cursors,
+    detailSession,
     listKey,
+    listSession,
+    previewSession,
     runtime.p4Version,
     remoteReady,
     restore,
@@ -325,58 +361,48 @@ export function BranchMappingsPage({
 
   const loadMore = useCallback(async () => {
     const cursor = page?.nextCursor;
-    const session = listSession.current;
+    const chain = listChain.current;
     if (
       !remoteReady ||
       listPhase === "loading" ||
       listPhase === "loadingMore" ||
       !cursor ||
       !page?.hasMore ||
-      !session ||
-      pendingCursors.current.has(cursor) ||
-      consumedCursors.current.has(cursor)
+      !chain ||
+      !cursors.claim(cursor)
     )
       return;
-    pendingCursors.current.add(cursor);
-    const id = operationId("page");
-    activeOperations.current.add(id);
+    // One more page of the same list chain: same generation, sibling request.
+    const request = listSession.request(chain);
     setListPhase("loadingMore");
     setListError("");
     try {
       const next = await backend.queryBranchMappings({
-        ...session.query,
-        operationId: id,
-        requestGeneration: session.generation,
+        ...query,
+        operationId: request.operationId,
+        requestGeneration: request.generation,
         cursor,
       });
       if (
-        session.sequence !== listSequence.current ||
-        next.requestGeneration !== session.generation ||
+        !listSession.isCurrent(chain, request) ||
+        next.requestGeneration !== request.generation ||
         !scopeMatches(next.scope)
       )
         return;
-      consumedCursors.current.add(cursor);
+      cursors.consume(cursor);
       const nonProgressing =
-        next.hasMore &&
-        (!next.nextCursor ||
-          next.nextCursor === cursor ||
-          consumedCursors.current.has(next.nextCursor));
+        next.hasMore && cursors.isStalled(next.nextCursor, cursor);
       const merged = mergeBranchMappingPages(page, next);
       const value = nonProgressing
         ? { ...merged, hasMore: false, nextCursor: undefined }
         : merged;
-      writePagedSnapshot(session.key, value);
+      writePagedSnapshot(listKey, value);
       setPage(value);
       setListPhase("ready");
       if (nonProgressing)
-        setNotice(
-          tr(
-            "后端返回了未前进的游标；已保留当前列表并停止分页。",
-            "The backend returned a non-progressing cursor; the current list was preserved and paging stopped.",
-          ),
-        );
+        setNotice(t("browse.the.backend.returned.a.non.progressing"));
     } catch (cause) {
-      if (session.sequence !== listSequence.current) return;
+      if (!listSession.isCurrent(chain, request)) return;
       const failure = branchMappingError(cause);
       if (
         failure.code === "invalidCursor" ||
@@ -389,10 +415,22 @@ export function BranchMappingsPage({
       if (failure.code !== "cancelled") setListError(failure.message);
       setListPhase("ready");
     } finally {
-      pendingCursors.current.delete(cursor);
-      activeOperations.current.delete(id);
+      // A settled page may be retried; the request itself is retired.
+      cursors.release(cursor);
+      listSession.settle(request);
     }
-  }, [listPhase, page, remoteReady, scopeMatches, startFresh, tr]);
+  }, [
+    cursors,
+    listKey,
+    listPhase,
+    listSession,
+    page,
+    query,
+    remoteReady,
+    scopeMatches,
+    startFresh,
+    tr,
+  ]);
 
   const loadDetail = useCallback(
     async (name: string) => {
@@ -403,25 +441,12 @@ export function BranchMappingsPage({
         setDetailPhase("idle");
         return;
       }
-      if (detailOperation.current) {
-        activeOperations.current.delete(detailOperation.current);
-        void backend
-          .cancelOperation(detailOperation.current)
-          .catch(() => undefined);
-      }
-      if (previewOperation.current) {
-        activeOperations.current.delete(previewOperation.current);
-        void backend
-          .cancelOperation(previewOperation.current)
-          .catch(() => undefined);
-        previewOperation.current = undefined;
-      }
-      const sequence = ++detailSequence.current;
-      previewSequence.current += 1;
-      const generation = ++requestGeneration.current;
-      const id = operationId("detail");
-      activeOperations.current.add(id);
-      detailOperation.current = id;
+      // A new detail retires the previous detail and its preview, and nothing
+      // else: the list chain keeps paging independently.
+      const chain = detailSession.open("branch-detail");
+      detailChain.current = chain;
+      const request = detailSession.request(chain);
+      if (previewChain.current) cancelPreview();
       setSelectedName(name);
       setDetail(undefined);
       setDetailError("");
@@ -431,59 +456,52 @@ export function BranchMappingsPage({
       setPreviewPhase("idle");
       try {
         const result = await backend.getBranchMappingDetail({
-          operationId: id,
-          requestGeneration: generation,
+          operationId: request.operationId,
+          requestGeneration: request.generation,
           name,
         });
         if (
-          sequence !== detailSequence.current ||
-          result.requestGeneration !== generation ||
+          !detailSession.isCurrent(chain, request) ||
+          result.requestGeneration !== request.generation ||
           !scopeMatches(result.scope)
         )
           return;
         setDetail(result.detail);
         setDetailPhase("ready");
       } catch (cause) {
-        if (sequence !== detailSequence.current) return;
+        if (!detailSession.isCurrent(chain, request)) return;
         const failure = branchMappingError(cause);
         if (failure.code !== "cancelled") setDetailError(failure.message);
         setDetailPhase(failure.code === "cancelled" ? "idle" : "error");
       } finally {
-        activeOperations.current.delete(id);
-        if (detailOperation.current === id) detailOperation.current = undefined;
+        detailSession.settle(request);
       }
     },
-    [remoteReady, scopeMatches],
+    [cancelPreview, detailSession, remoteReady, scopeMatches],
   );
 
   const loadPreview = useCallback(
     async (direction = previewDirection) => {
       if (!selectedName || !remoteReady) return;
-      if (previewOperation.current) {
-        activeOperations.current.delete(previewOperation.current);
-        void backend
-          .cancelOperation(previewOperation.current)
-          .catch(() => undefined);
-      }
-      const sequence = ++previewSequence.current;
-      const generation = ++requestGeneration.current;
-      const id = operationId("preview");
-      activeOperations.current.add(id);
-      previewOperation.current = id;
+      // The preview is a real `integrate -n` run that the host already
+      // accepted, so superseding it must cancel the host operation too.
+      const chain = previewSession.open("branch-preview");
+      previewChain.current = chain;
+      const request = previewSession.request(chain);
       setPreview(undefined);
       setPreviewError("");
       setPreviewPhase("loading");
       try {
         const result = await backend.previewBranchMappingImpact({
-          operationId: id,
-          requestGeneration: generation,
+          operationId: request.operationId,
+          requestGeneration: request.generation,
           name: selectedName,
           direction,
           limit: PREVIEW_LIMIT,
         });
         if (
-          sequence !== previewSequence.current ||
-          result.requestGeneration !== generation ||
+          !previewSession.isCurrent(chain, request) ||
+          result.requestGeneration !== request.generation ||
           result.name !== selectedName ||
           result.direction !== direction
         )
@@ -491,28 +509,20 @@ export function BranchMappingsPage({
         setPreview(result);
         setPreviewPhase("ready");
       } catch (cause) {
-        if (sequence !== previewSequence.current) return;
+        if (!previewSession.isCurrent(chain, request)) return;
         const failure = branchMappingError(cause);
         if (failure.code !== "cancelled") setPreviewError(failure.message);
         setPreviewPhase(failure.code === "cancelled" ? "idle" : "error");
       } finally {
-        activeOperations.current.delete(id);
-        if (previewOperation.current === id)
-          previewOperation.current = undefined;
+        previewSession.settle(request);
       }
     },
-    [previewDirection, remoteReady, selectedName],
+    [previewDirection, previewSession, remoteReady, selectedName],
   );
 
   const cancel = () => {
-    listSequence.current += 1;
-    detailSequence.current += 1;
-    previewSequence.current += 1;
     cancelAll();
-    const cancelled = tr(
-      "请求已取消；可以重试或刷新。",
-      "The request was cancelled; retry or refresh to continue.",
-    );
+    const cancelled = t("browse.the.cancelled.retry");
     setListPhase(page ? "ready" : "error");
     setListError(page ? "" : cancelled);
     if (page?.hasMore)
@@ -521,7 +531,7 @@ export function BranchMappingsPage({
     setDetailError(detail || !selectedName ? "" : cancelled);
     setPreviewPhase(preview ? "ready" : selectedName ? "error" : "idle");
     setPreviewError(preview || !selectedName ? "" : cancelled);
-    setNotice(tr("已取消当前请求。", "Current request was cancelled."));
+    setNotice(t("browse.current.request.was.cancelled"));
   };
 
   const items = page?.items ?? [];
@@ -564,22 +574,7 @@ export function BranchMappingsPage({
     else listRef.current?.focus();
   };
   const closeDetail = () => {
-    detailSequence.current += 1;
-    previewSequence.current += 1;
-    if (detailOperation.current) {
-      activeOperations.current.delete(detailOperation.current);
-      void backend
-        .cancelOperation(detailOperation.current)
-        .catch(() => undefined);
-      detailOperation.current = undefined;
-    }
-    if (previewOperation.current) {
-      activeOperations.current.delete(previewOperation.current);
-      void backend
-        .cancelOperation(previewOperation.current)
-        .catch(() => undefined);
-      previewOperation.current = undefined;
-    }
+    cancelDetail();
     setSelectedName(undefined);
     setDetail(undefined);
     setDetailError("");
@@ -600,7 +595,7 @@ export function BranchMappingsPage({
     return (
       <section className="branch-mappings-page">
         <div className="workspace-empty" role="status">
-          {tr("正在加载连接运行时…", "Loading connection runtime…")}
+          {t("browse.loading.connection.runtime")}
         </div>
       </section>
     );
@@ -608,10 +603,7 @@ export function BranchMappingsPage({
   return (
     <section className="branch-mappings-page">
       <FixedPageHeader
-        description={tr(
-          "查看、预览并通过专用安全状态机维护 Branch Mapping。",
-          "Inspect, preview, and maintain Branch Mappings through dedicated safety workflows.",
-        )}
+        description={t("browse.inspect.preview.and.maintain.branch.mappings")}
       >
         <button
           onClick={(event) => {
@@ -619,7 +611,7 @@ export function BranchMappingsPage({
             setMutation({ mode: "create", source: event.currentTarget });
           }}
         >
-          <Plus size={15} /> {tr("新建", "Create")}
+          <Plus size={15} /> {t("browse.create")}
         </button>
         <button
           disabled={busy || !remoteReady}
@@ -632,7 +624,7 @@ export function BranchMappingsPage({
             size={15}
             className={listPhase === "loading" ? "spin" : ""}
           />
-          {tr("刷新", "Refresh")}
+          {t("browse.refresh")}
         </button>
       </FixedPageHeader>
 
@@ -653,14 +645,11 @@ export function BranchMappingsPage({
         }}
       >
         <label>
-          <span>{tr("名称过滤", "Name filter")}</span>
+          <span>{t("browse.name.filter")}</span>
           <span className="search-field">
             <Search size={15} />
             <input
-              aria-label={tr(
-                "Branch Mapping 名称过滤",
-                "Branch Mapping name filter",
-              )}
+              aria-label={t("browse.branch.mapping.name.filter")}
               value={nameInput}
               maxLength={128}
               onChange={(event) => setNameInput(event.target.value)}
@@ -678,11 +667,11 @@ export function BranchMappingsPage({
           />
         </label>
         <button type="submit" className="secondary">
-          {tr("应用过滤", "Apply filters")}
+          {t("browse.apply.filters")}
         </button>
         {busy && (
           <button type="button" className="secondary" onClick={cancel}>
-            <X size={14} /> {tr("取消", "Cancel")}
+            <X size={14} /> {t("browse.cancel")}
           </button>
         )}
       </form>
@@ -696,22 +685,19 @@ export function BranchMappingsPage({
             {page.items.length} / {page.stats.matchedCount}
           </span>
         )}
-        {page?.partial && <span>{tr("部分结果", "Partial")}</span>}
+        {page?.partial && <span>{t("browse.partial")}</span>}
         {page?.truncated && (
           <span className="status-warning">
-            {tr("达到安全上限", "Safety limit reached")}{" "}
-            {page.stats.safetyLimit}
+            {t("browse.safety.limit.reached")} {page.stats.safetyLimit}
           </span>
         )}
         {!!page?.stats.invalidRecordCount && (
           <span>
-            {tr("无效记录", "Invalid records")}: {page.stats.invalidRecordCount}
+            {t("browse.invalid.records")}: {page.stats.invalidRecordCount}
           </span>
         )}
-        {listPhase === "loading" && <span>{tr("加载中…", "Loading…")}</span>}
-        {listPhase === "loadingMore" && (
-          <span>{tr("继续加载中…", "Loading more…")}</span>
-        )}
+        {listPhase === "loading" && <span>{t("browse.loading")}</span>}
+        {listPhase === "loadingMore" && <span>{t("browse.loading.more")}</span>}
       </div>
       {notice && (
         <div className="branch-mapping-notice" role="status">
@@ -726,7 +712,7 @@ export function BranchMappingsPage({
               listPhase === "error" ? void startFresh(!!page) : void loadMore()
             }
           >
-            {tr("重试", "Retry")}
+            {t("browse.retry")}
           </button>
         </div>
       )}
@@ -736,14 +722,14 @@ export function BranchMappingsPage({
       >
         <section
           className="branch-mapping-list-panel"
-          aria-label={tr("Branch Mapping 列表", "Branch Mapping list panel")}
+          aria-label={t("browse.branch.mapping.list.panel")}
         >
           <div
             ref={listRef}
             className="branch-mapping-list"
             role="listbox"
             tabIndex={0}
-            aria-label={tr("Branch Mapping 列表", "Branch Mappings")}
+            aria-label={t("browse.branch.mappings")}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 closeDetail();
@@ -773,10 +759,7 @@ export function BranchMappingsPage({
           >
             {!items.length && listPhase !== "loading" ? (
               <div className="workspace-empty" role="status">
-                {tr(
-                  "没有匹配的 Branch Mapping。",
-                  "No matching Branch Mappings.",
-                )}
+                {t("browse.no.matching.branch.mappings")}
               </div>
             ) : (
               <div
@@ -806,9 +789,7 @@ export function BranchMappingsPage({
                         onClick={() => void loadDetail(item.name)}
                       >
                         <strong>{item.name}</strong>
-                        <span>
-                          {item.owner || tr("Owner 未知", "Unknown owner")}
-                        </span>
+                        <span>{item.owner || t("browse.unknown.owner")}</span>
                         <small>{item.description || "—"}</small>
                         <span className="branch-mapping-summary-meta">
                           <code>{item.options || "—"}</code>
@@ -832,7 +813,7 @@ export function BranchMappingsPage({
               }
               onClick={() => void loadMore()}
             >
-              <ChevronDown size={14} /> {tr("继续加载", "Load more")}
+              <ChevronDown size={14} /> {t("browse.load.more")}
             </button>
           )}
         </section>
@@ -840,7 +821,7 @@ export function BranchMappingsPage({
         {selectedName && (
           <aside
             className="branch-mapping-detail"
-            aria-label={tr("Branch Mapping 详情", "Branch Mapping details")}
+            aria-label={t("browse.branch.mapping.details")}
             onKeyDown={(event) => {
               if (event.key !== "Escape") return;
               event.preventDefault();
@@ -849,14 +830,11 @@ export function BranchMappingsPage({
           >
             <header>
               <div>
-                <span>{tr("所选 Mapping", "Selected mapping")}</span>
+                <span>{t("browse.selected.mapping")}</span>
                 <h2>{selectedName}</h2>
               </div>
               <button
-                aria-label={tr(
-                  "关闭 Branch Mapping 详情",
-                  "Close Branch Mapping details",
-                )}
+                aria-label={t("browse.close.branch.mapping.details")}
                 onClick={() => {
                   closeDetail();
                 }}
@@ -865,13 +843,13 @@ export function BranchMappingsPage({
               </button>
             </header>
             {detailPhase === "loading" && (
-              <div role="status">{tr("加载详情…", "Loading details…")}</div>
+              <div role="status">{t("browse.loading.details")}</div>
             )}
             {detailError && (
               <div className="workspace-load-error" role="alert">
                 <span>{detailError}</span>
                 <button onClick={() => void loadDetail(selectedName)}>
-                  {tr("重试", "Retry")}
+                  {t("browse.retry")}
                 </button>
               </div>
             )}
@@ -909,9 +887,7 @@ export function BranchMappingsPage({
                 </p>
                 {!!detail.unknownFields.length && (
                   <div className="branch-unknown-fields" role="note">
-                    <strong>
-                      {tr("未知字段（只读）", "Unknown fields (read-only)")}
-                    </strong>
+                    <strong>{t("browse.unknown.fields.read.only")}</strong>
                     {detail.unknownFields.map((field, index) => (
                       <div key={`${field.name}-${index}`}>
                         <code>{field.name}</code>
@@ -923,10 +899,7 @@ export function BranchMappingsPage({
                 {!detail.editable && (
                   <div className="branch-mapping-notice" role="note">
                     <AlertTriangle size={14} />{" "}
-                    {tr(
-                      "含未知或无法往返的字段/View 行，编辑已禁用。",
-                      "Unknown or non-round-trippable fields/View lines are present; editing is disabled.",
-                    )}
+                    {t("browse.unknown.or.non.round.trippable.fields")}
                   </div>
                 )}
                 <div className="branch-detail-actions">
@@ -934,10 +907,7 @@ export function BranchMappingsPage({
                     disabled={!detail.editable}
                     title={
                       !detail.editable
-                        ? tr(
-                            "未知字段阻止安全编辑",
-                            "Unknown fields block safe editing",
-                          )
+                        ? t("browse.unknown.fields.block.safe.editing")
                         : undefined
                     }
                     onClick={(event) => {
@@ -949,7 +919,7 @@ export function BranchMappingsPage({
                       });
                     }}
                   >
-                    <Edit3 size={14} /> {tr("编辑", "Edit")}
+                    <Edit3 size={14} /> {t("browse.edit")}
                   </button>
                   <button
                     className="danger"
@@ -962,7 +932,7 @@ export function BranchMappingsPage({
                       });
                     }}
                   >
-                    <Trash2 size={14} /> {tr("删除", "Delete")}
+                    <Trash2 size={14} /> {t("browse.delete")}
                   </button>
                 </div>
                 <section
@@ -973,10 +943,10 @@ export function BranchMappingsPage({
                   <ResizeHeader
                     columns={[
                       "#",
-                      tr("模式", "Mode"),
-                      tr("来源", "Source"),
+                      t("browse.mode"),
+                      t("browse.source"),
                       "↔",
-                      tr("目标", "Target"),
+                      t("browse.target"),
                     ]}
                     resize={tableColumns}
                   />
@@ -1009,38 +979,25 @@ export function BranchMappingsPage({
 
                 <section
                   className="branch-impact"
-                  aria-label={tr("影响预览", "Impact preview")}
+                  aria-label={t("browse.impact.preview")}
                 >
                   <header>
                     <div>
-                      <h3>{tr("影响预览", "Impact preview")}</h3>
-                      <p>
-                        {tr(
-                          "只运行 integrate -n；不会修改 workspace，也不会打开文件。",
-                          "Runs integrate -n only; it never modifies the workspace or opens files.",
-                        )}
-                      </p>
+                      <h3>{t("browse.impact.preview")}</h3>
+                      <p>{t("browse.runs.integrate.n.only.it.never")}</p>
                     </div>
                     <div
                       className="branch-direction"
                       role="group"
-                      aria-label={tr("预览方向", "Preview direction")}
+                      aria-label={t("browse.preview.direction")}
                     >
                       {(["forward", "reverse"] as const).map((direction) => (
                         <button
                           key={direction}
                           aria-pressed={previewDirection === direction}
                           onClick={() => {
-                            previewSequence.current += 1;
-                            if (previewOperation.current) {
-                              activeOperations.current.delete(
-                                previewOperation.current,
-                              );
-                              void backend
-                                .cancelOperation(previewOperation.current)
-                                .catch(() => undefined);
-                              previewOperation.current = undefined;
-                            }
+                            // Changing direction retires the in-flight preview.
+                            cancelPreview();
                             setPreviewDirection(direction);
                             setPreview(undefined);
                             setPreviewError("");
@@ -1057,14 +1014,14 @@ export function BranchMappingsPage({
                     onClick={() => void loadPreview()}
                   >
                     {previewPhase === "loading"
-                      ? tr("预览中…", "Previewing…")
-                      : tr("运行只读预览", "Run read-only preview")}
+                      ? t("browse.previewing")
+                      : t("browse.run.read.only.preview")}
                   </button>
                   {previewError && (
                     <div className="workspace-load-error" role="alert">
                       <span>{previewError}</span>
                       <button onClick={() => void loadPreview()}>
-                        {tr("重试", "Retry")}
+                        {t("browse.retry")}
                       </button>
                     </div>
                   )}
@@ -1077,11 +1034,8 @@ export function BranchMappingsPage({
                       )}
                       {(preview.partial || preview.truncated) && (
                         <div className="branch-mapping-notice" role="status">
-                          {tr(
-                            "预览为部分或截断结果",
-                            "Preview is partial or truncated",
-                          )}{" "}
-                          · {preview.scannedCount} / {preview.safetyLimit}
+                          {t("browse.preview.is.partial.or.truncated")} ·{" "}
+                          {preview.scannedCount} / {preview.safetyLimit}
                         </div>
                       )}
                       {!!preview.blockers.length && (
@@ -1096,7 +1050,7 @@ export function BranchMappingsPage({
                       )}
                       {!preview.blockers.length && !preview.items.length && (
                         <div className="workspace-empty">
-                          {tr("没有受影响文件。", "No affected files.")}
+                          {t("browse.no.affected.files")}
                         </div>
                       )}
                       {!!preview.items.length && (

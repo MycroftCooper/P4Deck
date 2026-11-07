@@ -31,7 +31,7 @@
   gap: 5px;
 }
 .statusbar .theme-picker select {
-  font-size: 10px;
+  font-size: var(--font-sm);
   max-width: 90px;
 }
 .statusbar .theme-picker svg {
@@ -47,7 +47,7 @@
 .app-version {
   align-self: center;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-base);
   line-height: 1;
   white-space: nowrap;
   user-select: none;
@@ -118,7 +118,7 @@
   color: var(--text);
   background: var(--panel);
   box-shadow: 0 12px 40px var(--shadow);
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .task-list header {
   display: flex;

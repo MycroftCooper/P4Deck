@@ -27,7 +27,7 @@
   min-width: 0;
   gap: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-mapping-query input {
@@ -39,7 +39,7 @@
   width: 100%;
   max-width: none;
   min-height: 35px;
-  font-size: 11px;
+  font-size: var(--font-base);
   color: var(--text);
 }
 
@@ -55,7 +55,7 @@
   min-height: 24px;
   margin-bottom: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-mapping-status > span,
@@ -82,7 +82,7 @@
   border-left: 3px solid var(--warning);
   background: var(--panel-2);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-base);
   overflow-wrap: anywhere;
 }
 
@@ -174,7 +174,7 @@
   min-width: 0;
   gap: 8px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--font-xs);
 }
 
 .branch-mapping-summary-meta code {
@@ -235,7 +235,7 @@
 
 .branch-detail-meta dt {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-detail-meta dd {
@@ -328,7 +328,7 @@
 
 .branch-view-index {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-view-comment {
@@ -339,7 +339,7 @@
 .branch-impact > header p {
   margin: 2px 0 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-direction button[aria-pressed="true"] {
@@ -445,7 +445,7 @@
 .branch-view-line-error {
   grid-column: 3 / -1;
   color: var(--danger);
-  font-size: 10px;
+  font-size: var(--font-sm);
 }
 
 .branch-preflight-review pre {

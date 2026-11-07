@@ -1,3 +1,4 @@
+import { tFor, t } from "../../../shared/i18n";
 import {
   createContext,
   useCallback,
@@ -141,7 +142,6 @@ function ChangeDetailsDialog({
   /** Only offered for a non-submitted CL whose shelved files are listed. */
   onUnshelveIntoNewChange?(detail: SubmittedChangeDetail): void;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [value, setValue] = useState<SubmittedChangeDetail>();
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -154,7 +154,9 @@ function ChangeDetailsDialog({
       if (target.kind === "pending" && target.snapshot)
         return pendingDetail(target.snapshot);
       if (runtime.mode !== "mock" && runtime.connection.state !== "connected")
-        throw new Error(tr("连接不可用", "Connection unavailable"));
+        throw new Error(
+          tFor(zh ? "zh-CN" : "en-US", "pending.connection.unavailable"),
+        );
       if (target.kind === "submitted")
         return backend.getSubmittedChangeDetail({
           changeId: target.changeId,
@@ -182,26 +184,17 @@ function ChangeDetailsDialog({
         cursor = page.nextCursor;
         seen.add(cursor);
       }
-      throw new Error(
-        tr(
-          "未找到此待提交 CL，或结果不完整。",
-          "Pending changelist not found, or results are incomplete.",
-        ),
-      );
+      throw new Error(t("pending.pending.changelist.not.found.or.results"));
     };
     void load()
       .then((detail) => {
         if (!live) return;
         if (detail.changeId !== target.changeId)
-          throw new Error(
-            tr(
-              "返回的 CL 与目标不符",
-              "Returned changelist does not match the target",
-            ),
-          );
+          throw new Error(t("pending.returned.not.match"));
         if (detail.inspectionStatus === "unavailable")
           throw new Error(
-            detail.message || tr("详情不可用", "Details unavailable"),
+            detail.message ||
+              tFor(zh ? "zh-CN" : "en-US", "pending.details.unavailable"),
           );
         setValue(detail);
         // A pending/shelved CL answered through the submitted path must not be
@@ -245,31 +238,28 @@ function ChangeDetailsDialog({
       : "pending";
   const statusLabel =
     statusKind === "submitted"
-      ? tr("已提交", "Submitted")
+      ? tFor(zh ? "zh-CN" : "en-US", "pending.submitted")
       : statusKind === "pending"
-        ? tr("待提交", "Pending")
-        : tr("未知", "Unknown");
+        ? tFor(zh ? "zh-CN" : "en-US", "pending.pending")
+        : tFor(zh ? "zh-CN" : "en-US", "pending.unknown");
   // A CL reached through the submitted path that turns out to be pending only
   // exposes shelved files; the pending snapshot path lists opened files.
   const shelvedFiles = target.kind === "submitted" && !submitted;
   const notice =
     value?.message ||
     (shelvedFiles
-      ? tr(
-          "该 CL 尚未提交，仅能查看搁置(shelved)文件。",
-          "This changelist is not submitted yet; only shelved files are available.",
-        )
+      ? t("pending.this.changelist.is.not.submitted.yet")
       : value?.inspectionStatus === "partial"
-        ? tr("文件列表可能不完整", "File list may be incomplete")
+        ? tFor(zh ? "zh-CN" : "en-US", "pending.file.list.may.be.incomplete")
         : undefined);
   return (
     <Dialog
-      title={`${tr("CL 详情", "Changelist details")} · ${target.changeId || "default"}${
+      title={`${tFor(zh ? "zh-CN" : "en-US", "pending.changelist.details")} · ${target.changeId || "default"}${
         value && value.files.length
           ? ` · ${value.files.length} ${
               shelvedFiles
-                ? tr("个搁置文件", "shelved files")
-                : tr("个文件", "files")
+                ? tFor(zh ? "zh-CN" : "en-US", "pending.shelved.files")
+                : tFor(zh ? "zh-CN" : "en-US", "pending.files")
             }`
           : ""
       }`}
@@ -287,33 +277,32 @@ function ChangeDetailsDialog({
       onRequestClose={onClose}
       footer={
         <button data-dialog-autofocus onClick={onClose}>
-          {tr("关闭", "Close")}
+          {tFor(zh ? "zh-CN" : "en-US", "pending.close")}
         </button>
       }
     >
       <div className="change-details-dialog">
         {runtime.mode === "mock" && (
           <DialogNotice>
-            {tr(
-              "模拟数据 · 未访问真实 P4 Server 或网络",
-              "Simulated data · no real P4 server or network",
-            )}
+            {t("pending.simulated.data.no.real.p4.server")}
           </DialogNotice>
         )}
         {!value && !error && (
-          <DialogNotice>{tr("正在加载…", "Loading…")}</DialogNotice>
+          <DialogNotice>
+            {tFor(zh ? "zh-CN" : "en-US", "pending.loading")}
+          </DialogNotice>
         )}
         {error && (
           <>
             <DialogNotice error>{error}</DialogNotice>
             <button onClick={() => setRetry((v) => v + 1)}>
-              {tr("重试", "Retry")}
+              {tFor(zh ? "zh-CN" : "en-US", "pending.retry")}
             </button>
           </>
         )}
         {target.kind === "pending" && target.snapshot && (
           <DialogNotice>
-            {tr("当前列表快照", "Current list snapshot")}
+            {tFor(zh ? "zh-CN" : "en-US", "pending.current.list.snapshot")}
           </DialogNotice>
         )}
         {value && (
@@ -324,27 +313,28 @@ function ChangeDetailsDialog({
                 <dd>{value.changeId || "default"}</dd>
               </div>
               <div>
-                <dt>{tr("提交人", "User")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.user")}</dt>
                 <dd>{value.user || "—"}</dd>
               </div>
               <div>
-                <dt>{tr("时间", "Time")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.time")}</dt>
                 <dd>{time}</dd>
               </div>
               <div>
-                <dt>{tr("工作区", "Workspace")}</dt>
+                <dt>{tFor(zh ? "zh-CN" : "en-US", "pending.workspace")}</dt>
                 <dd>{value.client || "—"}</dd>
               </div>
             </dl>
-            <h3>{tr("描述", "Description")}</h3>
+            <h3>{tFor(zh ? "zh-CN" : "en-US", "pending.description")}</h3>
             <p className="change-details-description">
-              {value.description || tr("无描述", "No description")}
+              {value.description ||
+                tFor(zh ? "zh-CN" : "en-US", "pending.no.description")}
             </p>
             {notice && <DialogNotice>{notice}</DialogNotice>}
             <h3>
               {shelvedFiles
-                ? tr("搁置文件", "Shelved files")
-                : tr("文件", "Files")}
+                ? tFor(zh ? "zh-CN" : "en-US", "pending.shelved.files.2")
+                : tFor(zh ? "zh-CN" : "en-US", "pending.files.2")}
             </h3>
             {value.files.length ? (
               <div
@@ -359,11 +349,15 @@ function ChangeDetailsDialog({
                 >
                   <thead>
                     <tr>
-                      <th>{tr("文件名称", "File name")}</th>
-                      <th>{tr("路径", "Path")}</th>
-                      <th>{tr("类型", "Type")}</th>
-                      <th>{tr("动作", "Action")}</th>
-                      <th>{tr("版本", "Revision")}</th>
+                      <th>
+                        {tFor(zh ? "zh-CN" : "en-US", "pending.file.name")}
+                      </th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.path")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.type")}</th>
+                      <th>{tFor(zh ? "zh-CN" : "en-US", "pending.action")}</th>
+                      <th>
+                        {tFor(zh ? "zh-CN" : "en-US", "pending.revision")}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -414,8 +408,8 @@ function ChangeDetailsDialog({
             ) : (
               <p>
                 {shelvedFiles
-                  ? tr("该 CL 没有搁置文件", "No shelved files")
-                  : tr("无文件", "No files")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "pending.no.shelved.files")
+                  : tFor(zh ? "zh-CN" : "en-US", "pending.no.files")}
               </p>
             )}
             {shelvedFiles && value.files.length > 0 && (
@@ -423,7 +417,7 @@ function ChangeDetailsDialog({
                 className="secondary"
                 onClick={() => onUnshelveIntoNewChange?.(value)}
               >
-                {tr("Unshelve 到新 CL…", "Unshelve into new CL…")}
+                {tFor(zh ? "zh-CN" : "en-US", "pending.unshelve.into.new.cl")}
               </button>
             )}
           </>

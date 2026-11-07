@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useContextMenu } from "./ContextMenu";
 import { action, copy } from "./bindings";
 import { useMenuEnvironment } from "./environment";
@@ -24,18 +25,18 @@ export function useContentMenu() {
         系统中定位: {
           reason:
             env.runtime.mode === "mock"
-              ? "请在桌面应用中使用 / Desktop app required"
-              : "正在检查本地路径 / Checking local path",
+              ? t("shell.desktop.app.required")
+              : t("shell.checking.local.path"),
         },
         "其他软件打开…": {
           reason:
             env.runtime.mode === "mock"
-              ? "请在桌面应用中使用 / Desktop app required"
-              : "正在检查本地路径 / Checking local path",
+              ? t("shell.desktop.app.required")
+              : t("shell.checking.local.path"),
         },
       }),
       {
-        title: path.split(/[\\/]/).pop() || "内容 / Content",
+        title: path.split(/[\\/]/).pop() || t("shell.content"),
         resolve: async () => {
           if (!path || env.runtime.mode !== "tauri") return {};
           const node = await resolveAddress(
@@ -51,7 +52,7 @@ export function useContentMenu() {
                   path: node.absolutePath,
                   mode: "reveal",
                 }),
-              caps.reveal ? undefined : "本地文件不存在或不在工作区内",
+              caps.reveal ? undefined : t("contextMenu.localFileMissing"),
             ),
             "其他软件打开…": action(
               () =>
@@ -59,7 +60,7 @@ export function useContentMenu() {
                   path: node.absolutePath,
                   mode: "openWith",
                 }),
-              caps.openWith ? undefined : "没有可用的本地文件",
+              caps.openWith ? undefined : t("contextMenu.noLocalFile"),
             ),
           };
         },

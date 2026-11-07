@@ -5,6 +5,11 @@ import type {
   RevisionReference,
   RuntimeInfo,
 } from "../../shared/contracts";
+import { OperationSessionOwner } from "../../shared/operationSession";
+import type {
+  CancelOperation,
+  OperationLease,
+} from "../../shared/operationSession";
 
 export type ReviewRequestKind =
   | "diff"
@@ -31,82 +36,50 @@ export interface ReviewRequestIdentity {
   expandTarget?: string;
 }
 
-export interface ReviewRequestLease {
-  readonly channel: string;
-  readonly identity: string;
-  readonly operationId: string;
-  readonly sequence: number;
-  readonly signal: AbortSignal;
-}
-
-type CancelOperation = (operationId: string) => Promise<void>;
+export type ReviewRequestLease = OperationLease;
 
 /**
  * Owns every in-flight review request. A lease may publish state only while it
  * remains the exact current lease for its channel.
+ *
+ * The cancellation/epoch bookkeeping is the shared operation-session primitive;
+ * this class only binds a review identity to a channel.
  */
 export class ReviewRequestOwner {
-  private sequence = 0;
-  private readonly requests = new Map<
-    string,
-    { lease: ReviewRequestLease; controller: AbortController }
-  >();
+  private readonly session: OperationSessionOwner;
 
   constructor(
-    private readonly cancelOperation: CancelOperation = (operationId) =>
+    cancelOperation: CancelOperation = (operationId) =>
       backend.cancelOperation(operationId).then(() => undefined),
-  ) {}
+  ) {
+    this.session = new OperationSessionOwner({ cancelOperation });
+  }
 
   start(
     channel: string,
     identity: ReviewRequestIdentity,
     cancelBackend = true,
   ): ReviewRequestLease {
-    this.cancel(channel);
-    const controller = new AbortController();
-    const lease: ReviewRequestLease = {
-      channel,
+    return this.session.start(channel, {
       identity: reviewRequestIdentityKey(identity),
-      operationId: crypto.randomUUID(),
-      sequence: ++this.sequence,
-      signal: controller.signal,
-    };
-    controller.signal.addEventListener(
-      "abort",
-      () => {
-        if (cancelBackend)
-          void this.cancelOperation(lease.operationId).catch(() => undefined);
-      },
-      { once: true },
-    );
-    this.requests.set(channel, { lease, controller });
-    return lease;
+      cancelBackend,
+    });
   }
 
   isCurrent(lease: ReviewRequestLease): boolean {
-    const current = this.requests.get(lease.channel)?.lease;
-    return (
-      !lease.signal.aborted &&
-      current?.sequence === lease.sequence &&
-      current.identity === lease.identity
-    );
+    return this.session.isCurrent(lease);
   }
 
   finish(lease: ReviewRequestLease): boolean {
-    if (!this.isCurrent(lease)) return false;
-    this.requests.delete(lease.channel);
-    return true;
+    return this.session.finish(lease);
   }
 
   cancel(channel: string): void {
-    const request = this.requests.get(channel);
-    if (!request) return;
-    this.requests.delete(channel);
-    request.controller.abort();
+    this.session.cancel(channel);
   }
 
   cancelAll(): void {
-    for (const channel of [...this.requests.keys()]) this.cancel(channel);
+    this.session.cancelAll();
   }
 }
 

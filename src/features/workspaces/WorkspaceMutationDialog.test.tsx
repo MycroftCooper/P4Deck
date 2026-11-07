@@ -1,8 +1,9 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, vi } from "vitest";
 import { WorkspaceMutationDialog } from "./WorkspaceMutationDialog";
+import { setLocale } from "../../shared/i18n";
 const backend = vi.hoisted(() => ({
   preflightWorkspaceMutation: vi.fn(),
   confirmWorkspaceMutation: vi.fn(),
@@ -25,6 +26,8 @@ const connectionSnapshot = {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("zh-CN");
   vi.clearAllMocks();
   backend.companySubmitConnectionSnapshot.mockResolvedValue(connectionSnapshot);
 });

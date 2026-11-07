@@ -6193,7 +6193,6 @@ mod tests {
             GlobalSearchKind::PendingChange,
             GlobalSearchKind::WorkspaceFile,
             GlobalSearchKind::DepotFile,
-            GlobalSearchKind::Job,
             GlobalSearchKind::Stream,
             GlobalSearchKind::Shelf,
         ];
@@ -6252,7 +6251,7 @@ mod tests {
         }
         ensure(
             kinds.iter().all(|kind| returned_kinds.contains(kind)),
-            format!("global search pages did not cover all seven kinds: {returned_kinds:?}"),
+            format!("global search pages did not cover all six kinds: {returned_kinds:?}"),
         )?;
         let mut replayed = base.clone();
         replayed.operation_id = "global-search-replay".into();
@@ -6370,7 +6369,7 @@ mod tests {
                     operation_id: "global-search-unicode".into(),
                     request_generation: 111,
                     text: "你好".into(),
-                    kinds: vec![GlobalSearchKind::Job],
+                    kinds: vec![GlobalSearchKind::Shelf],
                     page_size: 20,
                     cursor: None,
                 },
@@ -7542,6 +7541,7 @@ mod tests {
                 ResolvePreflightRequest {
                     depot_paths: vec![B.into()],
                     force: false,
+                    operation_id: None,
                 },
                 None,
             )
@@ -7594,6 +7594,7 @@ mod tests {
                 ResolvePreflightRequest {
                     depot_paths: vec![A.into()],
                     force: false,
+                    operation_id: None,
                 },
                 None,
             )
@@ -8553,13 +8554,14 @@ mod tests {
         let result = runner
             .run(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id: None,
                     source: OperationSource::Gui,
                     command: command.into(),
                     args,
                     context: context.clone(),
                     output_mode,
-                    timeout_ms: Some(60_000),
+                    timeout_ms: None,
                     input,
                 },
                 None,

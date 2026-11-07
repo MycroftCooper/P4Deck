@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { menuCatalog, type MenuObjectId } from "./catalog";
 
 export interface MenuAction {
@@ -42,9 +43,10 @@ export function buildMenu(
         (binding?.run || binding?.children
           ? undefined
           : entry.phase === "later"
-            ? "后续功能：操作流程尚未接通 / Workflow not connected yet"
-            : "当前对象或页面尚不支持此操作 / Unavailable for this target"),
-      danger: /删除|还原|撤销|移除/.test(entry.label),
+            ? t("contextMenu.workflowNotConnected")
+            : t("contextMenu.unavailableForTarget")),
+      // i18n-exempt: classifies labels across both locales.
+      danger: /删除|还原|撤销|移除/.test(entry.label), // i18n-exempt: label classifier
     };
     if (
       entry.phase === "later" &&
@@ -55,7 +57,7 @@ export function buildMenu(
       if (!advanced) {
         advanced = {
           id: object + ":advanced",
-          label: "更多操作（待接入）",
+          label: t("contextMenu.moreActionsPending"),
           children: [],
         };
         result.push(advanced);

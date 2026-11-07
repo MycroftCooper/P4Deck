@@ -1,3 +1,4 @@
+import { t as translate, useIsZh } from "../../../shared/i18n";
 import { submittedTags, matchesSubmittedTags } from "../submittedTags";
 import { isStreamList } from "../../browsers/components/ReadOnlyPages";
 import { useSnapshotQuery } from "../../../shared/cache/useSnapshotQuery";
@@ -13,6 +14,13 @@ import { useWorkspaceList } from "../../workspaces/workspaceList";
 import { SubmittedGoTo } from "./SubmittedGoTo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryKey } from "@tanstack/react-query";
+import {
+  useOperationSession,
+  type OperationLease,
+} from "../../../shared/operationSession";
+
+/** The submitted query channel; `lease.epoch` is the wire `requestGeneration`. */
+const CHAIN = "submitted";
 import { ChangelistPage } from "./ChangelistPage";
 import { SubmittedFilterPanel } from "./SubmittedFilterPanel";
 import { backend } from "../../../infrastructure/backend";
@@ -248,7 +256,7 @@ export function SubmittedPage({
     () =>
       defaultPreset && !draft.users.trim()
         ? {
-            errors: { users: "当前用户不可用 / Current user unavailable" },
+            errors: { users: translate("pending.current.user.unavailable") },
             query: undefined,
           }
         : validateSubmittedFilter(draft, {
@@ -282,8 +290,17 @@ export function SubmittedPage({
   const [error, setError] = useState("");
   const [pageError, setPageError] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
-  const generation = useRef(0);
-  const queryOperation = useRef<string | undefined>(undefined);
+  /**
+   * Every submitted query is a lease on one channel. Starting a lease
+   * supersedes the previous one, so a filter edit, a reconnect or a refresh
+   * retires the chain that was running and its late answer is dropped instead
+   * of repainting the page.
+   */
+  const session = useOperationSession();
+  /** The chain whose pages are shown; load-more reuses its lease. */
+  const chain = useRef<OperationLease | undefined>(undefined);
+  /** True while a query of the live chain is still in flight. */
+  const chainBusy = useRef(false);
   /** The query whose pages are shown; load-more must reuse it with its cursor. */
   const currentQuery = useRef<
     { base: SubmittedBase; key: QueryKey } | undefined
@@ -305,15 +322,19 @@ export function SubmittedPage({
   >(undefined);
   const handledNavigation = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
-  const zh = t.language === "Switch to English";
+  const zh = useIsZh(); // subscribed: re-renders on language switch
 
+  /**
+   * Retires the live chain: a newer query, a filter edit, a reconnect or
+   * unmount all go through here, and the retired lease cancels its backend
+   * operation exactly once.
+   */
   const cancelQuery = useCallback(() => {
-    generation.current++;
-    const operationId = queryOperation.current;
-    queryOperation.current = undefined;
-    if (operationId)
-      void backend.cancelOperation(operationId).catch(() => undefined);
-  }, []);
+    const live = chain.current;
+    chain.current = undefined;
+    chainBusy.current = false;
+    if (live) session.abandon(live);
+  }, [session]);
 
   const applyResults = useCallback((results: SubmittedResults) => {
     changesRef.current = results.changes;
@@ -380,10 +401,17 @@ export function SubmittedPage({
     ): Promise<void> => {
       if (!remoteReady) return;
       cancelQuery();
-      const requestGeneration = generation.current;
+      // One lease per chain: `load-more` continues the live chain with the same
+      // `requestGeneration`, every other caller starts a chain from page one.
+      const lease =
+        append && chain.current ? chain.current : session.start(CHAIN);
+      chain.current = lease;
+      chainBusy.current = true;
+      // `lease.epoch` is stable for the whole chain and changes for a new one,
+      // which is exactly what the backend's echoed `requestGeneration` needs.
+      const requestGeneration = lease.epoch;
+      const operationId = lease.operationId;
       const connectionGeneration = runtime.contextGeneration;
-      const operationId = crypto.randomUUID();
-      queryOperation.current = operationId;
       if (cursor) usedCursors.current.add(cursor);
       if (append) setLoadingMore(true);
       else {
@@ -402,7 +430,7 @@ export function SubmittedPage({
         });
         if (
           !mounted.current ||
-          requestGeneration !== generation.current ||
+          !session.isCurrent(lease) ||
           result.requestGeneration !== requestGeneration
         )
           return;
@@ -439,19 +467,14 @@ export function SubmittedPage({
         applyResults(results);
         if (!append) reconcileSelection(combined);
         if (invalidContinuation)
-          setPageError(
-            zh
-              ? "后端返回了不可继续的游标；已保留当前部分结果。"
-              : "The backend returned a non-progressing cursor; current partial results were preserved.",
-          );
+          setPageError(translate("pending.the.backend.returned.a.non"));
         writePagedSnapshot<SubmittedSnapshot>(key, {
           ...results,
           base,
           generation: connectionGeneration,
         });
       } catch (cause) {
-        if (!mounted.current || requestGeneration !== generation.current)
-          return;
+        if (!mounted.current || !session.isCurrent(lease)) return;
         if (append && canRestartCursor(cause)) {
           // Retain displayed rows, discard the cursor, and retry page one once.
           hasMoreRef.current = false;
@@ -468,9 +491,9 @@ export function SubmittedPage({
           setError(String(cause));
         }
       } finally {
-        if (queryOperation.current === operationId)
-          queryOperation.current = undefined;
-        if (requestGeneration === generation.current) {
+        // Only the chain that is still live may clear the spinners.
+        if (mounted.current && session.isCurrent(lease)) {
+          chainBusy.current = false;
           setLoading(false);
           setLoadingMore(false);
         }
@@ -482,6 +505,7 @@ export function SubmittedPage({
       reconcileSelection,
       remoteReady,
       runtime.contextGeneration,
+      session,
       zh,
     ],
   );
@@ -610,7 +634,7 @@ export function SubmittedPage({
   }, [navigation, applyDefaultDraft]);
 
   const refresh = useCallback(() => {
-    if (!stableQuery || !cacheKey || queryOperation.current) return;
+    if (!stableQuery || !cacheKey || chainBusy.current) return;
     if (defaultPreset) {
       const next = createDefaultSubmittedFilter(
         new Date(),
@@ -670,13 +694,15 @@ export function SubmittedPage({
   }
 
   async function perform(action: ClAction) {
-    const started = generation.current;
+    // An action only refreshes the view it was started in: a filter edit, a
+    // reconnect or unmount in the meantime retires the epoch it captured.
+    const started = session.epoch(CHAIN);
     try {
       const result = await backend.performClAction(action);
       await onOperation(result.warnings);
-      if (mounted.current && started === generation.current) refresh();
+      if (mounted.current && started === session.epoch(CHAIN)) refresh();
     } catch (cause) {
-      if (mounted.current && started === generation.current)
+      if (mounted.current && started === session.epoch(CHAIN))
         setError(String(cause));
     }
   }
@@ -708,25 +734,19 @@ export function SubmittedPage({
             <SubmittedGoTo zh={zh} />
             <button
               className="secondary"
-              title={zh ? "周报提示词" : "Weekly report prompt"}
-              aria-label={zh ? "周报提示词" : "Weekly report prompt"}
+              title={translate("pending.weekly.report.prompt")}
+              aria-label={translate("pending.weekly.report.prompt")}
               onClick={(event) =>
                 setReport({ owner: reportOwner, source: event.currentTarget })
               }
             >
               <FileText size={15} aria-hidden="true" />
-              <span>{zh ? "周报提示词" : "Weekly report prompt"}</span>
+              <span>{translate("pending.weekly.report.prompt")}</span>
             </button>
           </>
         }
         resultSummary={
-          <small
-            title={
-              zh
-                ? "仅筛选已加载记录，可继续加载更多；规则不验证 CI 身份。"
-                : "Filters loaded records; load more to continue. Rules do not verify CI identity."
-            }
-          >
+          <small title={translate("pending.filters.loaded.records.load.more")}>
             {zh
               ? `已加载 ${changes.length} 条中显示 ${visibleChanges.length} 条`
               : `Showing ${visibleChanges.length} of ${changes.length} loaded`}
@@ -738,7 +758,7 @@ export function SubmittedPage({
               tagOptions={tagOptions}
               typeControl={
                 <label className="submitted-filter-field submitted-kind-filter">
-                  <span>{zh ? "提交类型" : "Submission type"}</span>
+                  <span>{translate("pending.submission.type")}</span>
                   <select
                     value={kindFilter}
                     onChange={(event) => (
@@ -750,7 +770,7 @@ export function SubmittedPage({
                       })
                     )}
                   >
-                    <option value="all">{zh ? "全部" : "All"}</option>
+                    <option value="all">{translate("pending.all")}</option>
                     {submissionKinds.map((kind) => (
                       <option key={kind} value={kind}>
                         {submissionKindLabel(kind, zh)}
@@ -794,15 +814,11 @@ export function SubmittedPage({
                 <div className="submitted-error-message">
                   <span>
                     {error.includes("must refer to client")
-                      ? zh
-                        ? "P4 无法识别查询路径。请核对 Depot Path；目录范围应使用 /...。"
-                        : "P4 could not resolve the query path. Check Depot Path; use /... for a directory scope."
-                      : zh
-                        ? "查询失败，请查看技术详情。"
-                        : "Query failed. See technical details."}
+                      ? translate("pending.p4.not.resolve")
+                      : translate("pending.query.failed.see.technical.details")}
                   </span>
                   <details>
-                    <summary>{zh ? "技术详情" : "Technical details"}</summary>
+                    <summary>{translate("pending.technical.details")}</summary>
                     <pre>{error}</pre>
                   </details>
                 </div>

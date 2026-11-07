@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { tFor } from "../../shared/i18n";
+import { useRef, useState } from "react";
 import { useUnsavedEditor } from "../../app/closeGuard";
 import { Dialog, DialogNotice } from "../../app/dialogs/Dialog";
 import { backend } from "../../infrastructure/backend";
+import { useOperationSession } from "../../shared/operationSession";
 import type { ConnectionSnapshot } from "../companySubmit/model";
 import {
   lookupWorkspaceMutationAction,
@@ -44,7 +46,6 @@ export function WorkspaceMutationDialog({
     connection: ConnectionSnapshot;
   }): Promise<WorkspaceMutationActionLookup>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [name, setName] = useState(request.workspace);
   const clearUnsaved = useUnsavedEditor(
     name !== request.workspace ? "dirty" : "clean",
@@ -58,20 +59,14 @@ export function WorkspaceMutationDialog({
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const alive = useRef(true);
+  const session = useOperationSession();
+  // Latest dispatch id, shown in the result and used by explicit cancel.
   const operationId = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-      if (operationId.current)
-        void backend
-          .cancelOperation(operationId.current)
-          .catch(() => undefined);
-    };
-  }, []);
   async function inspect() {
     if (busy) return;
+    // The preflight request carries no operation id, so unmounting only drops
+    // its result locally and never asks the host to cancel anything.
+    const lease = session.start("operation", { cancelBackend: false });
     setBusy(true);
     setError("");
     setResult(undefined);
@@ -80,11 +75,12 @@ export function WorkspaceMutationDialog({
         ...request,
         newName: request.action === "rename" ? name.trim() : undefined,
       });
-      if (alive.current) setPreview(value);
+      if (session.isCurrent(lease)) setPreview(value);
     } catch (e) {
-      if (alive.current) setError(String(e));
+      if (session.isCurrent(lease)) setError(String(e));
     } finally {
-      if (alive.current) setBusy(false);
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
   async function recover(
@@ -122,8 +118,8 @@ export function WorkspaceMutationDialog({
   async function confirm() {
     if (!preview || busy) return;
     if (request.action === "delete" && !acknowledged) return;
-    const id = crypto.randomUUID();
-    operationId.current = id;
+    const lease = session.start("operation");
+    operationId.current = lease.operationId;
     setBusy(true);
     setPreview(undefined);
     setError("");
@@ -132,28 +128,31 @@ export function WorkspaceMutationDialog({
       dispatching = await (
         connectionProvider ?? (() => backend.companySubmitConnectionSnapshot())
       )();
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       if (String(preview.request.expectedGeneration) !== dispatching.generation)
         throw new Error(
-          tr(
-            "连接代际与预检目标不一致，未执行工作区变更。",
-            "Connection generation changed; no workspace mutation was dispatched.",
+          tFor(
+            zh ? "zh-CN" : "en-US",
+            "workspaces.connection.generation.changed.no.workspace.mutation",
           ),
         );
-      let value = await backend.confirmWorkspaceMutation(preview.token, id);
-      if (!alive.current) return;
+      let value = await backend.confirmWorkspaceMutation(
+        preview.token,
+        lease.operationId,
+      );
+      if (!session.isCurrent(lease)) return;
       if (value.outcome === "unknown") {
-        const recovered = await recover(id, dispatching);
+        const recovered = await recover(lease.operationId, dispatching);
         if (recovered) value = recovered;
       }
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       apply(value);
     } catch (cause) {
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       const recovered = dispatching
-        ? await recover(id, dispatching)
+        ? await recover(lease.operationId, dispatching)
         : undefined;
-      if (!alive.current) return;
+      if (!session.isCurrent(lease)) return;
       if (recovered) {
         apply(recovered);
         return;
@@ -163,23 +162,24 @@ export function WorkspaceMutationDialog({
       apply({
         outcome: "unknown",
         failure: message,
-        message: tr(
-          "结果不确定：操作可能已应用。已用同一操作号查询持久回执并刷新；请核对工作区列表，不要用新操作号重试。",
-          "Outcome uncertain: the operation may have applied. The durable receipt was queried with the same operation id and the list was refreshed; inspect the workspace list before any retry with a new id.",
+        message: tFor(
+          zh ? "zh-CN" : "en-US",
+          "workspaces.outcome.uncertain.the.operation.may.have",
         ),
         workspace: preview.request.workspace,
         action: preview.request.action,
         verified: false,
       });
     } finally {
-      if (alive.current) setBusy(false);
+      if (session.isCurrent(lease)) setBusy(false);
+      session.finish(lease);
     }
   }
   const resultVerified =
     result?.outcome === "succeeded" && result.verified === true;
   return (
     <Dialog
-      title={`${request.action === "rename" ? tr("重命名工作区", "Rename Workspace") : tr("删除工作区", "Delete Workspace")} '${request.workspace}'`}
+      title={`${request.action === "rename" ? tFor(zh ? "zh-CN" : "en-US", "workspaces.rename.workspace") : tFor(zh ? "zh-CN" : "en-US", "workspaces.delete.workspace")} '${request.workspace}'`}
       zh={zh}
       busy={busy}
       onRequestClose={() => {
@@ -188,7 +188,7 @@ export function WorkspaceMutationDialog({
       footer={
         <>
           <button disabled={busy} onClick={onClose}>
-            {tr("取消", "Cancel")}
+            {tFor(zh ? "zh-CN" : "en-US", "workspaces.cancel")}
           </button>
           {busy && (
             <button
@@ -196,7 +196,7 @@ export function WorkspaceMutationDialog({
                 void backend.cancelOperation(operationId.current ?? "")
               }
             >
-              {tr("取消操作", "Cancel operation")}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.cancel.operation")}
             </button>
           )}
           {!result && (
@@ -208,15 +208,15 @@ export function WorkspaceMutationDialog({
               onClick={() => void (preview ? confirm() : inspect())}
             >
               {busy
-                ? tr("处理中…", "Working…")
+                ? tFor(zh ? "zh-CN" : "en-US", "workspaces.working")
                 : preview
-                  ? tr("确认执行", "Confirm")
-                  : tr("检查并预览", "Review")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.confirm")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.review")}
             </button>
           )}
           {result && (
             <button className="primary" onClick={onClose}>
-              {tr("关闭", "Close")}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.close")}
             </button>
           )}
         </>
@@ -224,18 +224,18 @@ export function WorkspaceMutationDialog({
     >
       <p>
         {request.action === "delete"
-          ? tr(
-              "仅删除服务器上的工作区定义，不删除本机或 Depot 文件。存在待提交/搁置记录或打开文件时不能删除。",
-              "Delete only the workspace definition; local and depot files remain. Pending/shelved changes or open files block deletion.",
+          ? tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.delete.only.the.workspace.definition.local",
             )
-          : tr(
-              "使用服务器原生重命名，保留工作进度；不采用复制后删除。要求服务器 2022.2+ 且允许此操作。",
-              "Use native server rename preserving work in progress; no copy/delete fallback. Requires Server 2022.2+ and permission.",
+          : tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.use.native.server.rename.preserving.work",
             )}
       </p>
       {request.action === "rename" && !result && (
         <label>
-          {tr("新名称", "New name")}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.new.name")}
           <input
             disabled={busy}
             value={name}
@@ -256,16 +256,16 @@ export function WorkspaceMutationDialog({
             <br />
             Stream: {preview.stream || "—"}
             <br />
-            {tr(
-              "请确认以上目标。执行前会再次检查。",
-              "Confirm this target. It will be revalidated before execution.",
+            {tFor(
+              zh ? "zh-CN" : "en-US",
+              "workspaces.confirm.this.target.it.will.be",
             )}
           </DialogNotice>
           {request.action === "delete" && (
             <DialogNotice error>
-              {tr(
-                "删除工作区定义不可本地撤销；本机与 Depot 文件不受影响。",
-                "Deleting the workspace definition cannot be undone locally; local and depot files are untouched.",
+              {tFor(
+                zh ? "zh-CN" : "en-US",
+                "workspaces.deleting.the.workspace.definition.cannot.be",
               )}
             </DialogNotice>
           )}
@@ -276,19 +276,16 @@ export function WorkspaceMutationDialog({
                 checked={acknowledged}
                 onChange={(event) => setAcknowledged(event.target.checked)}
               />
-              {tr(
-                "我确认永久删除该工作区定义",
-                "I understand this permanently deletes the workspace definition",
-              )}
+              {tFor(zh ? "zh-CN" : "en-US", "workspaces.i.permanently.deletes")}
             </label>
           )}
         </>
       )}
       {busy && !result && (
         <DialogNotice>
-          {tr(
-            "正在执行；关闭保护已启用，取消不会回滚已应用的服务器变更。",
-            "Operation in progress; closing is protected and cancelling does not roll back changes already applied on the server.",
+          {tFor(
+            zh ? "zh-CN" : "en-US",
+            "workspaces.operation.in.progress.closing.is.protected",
           )}
         </DialogNotice>
       )}
@@ -296,10 +293,16 @@ export function WorkspaceMutationDialog({
         <DialogNotice error={!resultVerified}>
           <strong>
             {resultVerified
-              ? tr("已由服务器回读验证", "Verified by server readback")
+              ? tFor(
+                  zh ? "zh-CN" : "en-US",
+                  "workspaces.verified.by.server.readback",
+                )
               : result.outcome === "unknown"
-                ? tr("结果不确定", "Outcome uncertain")
-                : tr("操作未成功", "Operation did not succeed")}
+                ? tFor(zh ? "zh-CN" : "en-US", "workspaces.outcome.uncertain")
+                : tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "workspaces.operation.did.not.succeed",
+                  )}
           </strong>
           <br />
           {result.message}
@@ -313,35 +316,33 @@ export function WorkspaceMutationDialog({
             result.observedExists !== undefined && (
               <>
                 <br />
-                {tr("工作区回读：", "Workspace readback: ")}
+                {tFor(zh ? "zh-CN" : "en-US", "workspaces.workspace.readback")}
                 {result.observedExists
-                  ? tr("仍然存在", "still exists")
-                  : tr("已不存在", "no longer exists")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.still.exists")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.no.longer.exists")}
               </>
             )}
           {request.action === "rename" &&
             result.observedExists !== undefined && (
               <>
                 <br />
-                {tr("旧名称回读：", "Old name readback: ")}
+                {tFor(zh ? "zh-CN" : "en-US", "workspaces.old.name.readback")}
                 {result.observedExists
-                  ? tr("仍然存在", "still exists")
-                  : tr("已不存在", "no longer exists")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "workspaces.still.exists")
+                  : tFor(zh ? "zh-CN" : "en-US", "workspaces.no.longer.exists")}
               </>
             )}
         </DialogNotice>
       )}
       {(result?.outcome === "unknown" || error) && !resultVerified && (
         <DialogNotice error>
-          {tr(
-            "结果不确定时不自动重试、不更换操作号；请先刷新并核对工作区列表。",
-            "Uncertain outcomes are never retried or re-dispatched with a new operation id; refresh and inspect the workspace list first.",
-          )}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.uncertain.never.retried")}
         </DialogNotice>
       )}
       {operationId.current && (
         <p className="workflow-context">
-          {tr("操作记录", "Operation")} {operationId.current}
+          {tFor(zh ? "zh-CN" : "en-US", "workspaces.operation")}{" "}
+          {operationId.current}
         </p>
       )}
       {error && !result && <DialogNotice error>{error}</DialogNotice>}

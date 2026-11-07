@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { SubmittedGoTo } from "./SubmittedGoTo";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, beforeEach } from "vitest";
 import { dialogHarness, dialogButton } from "../../../app/dialogs/testHarness";
 import { backend } from "../../../infrastructure/backend";
 import type {
@@ -15,6 +15,7 @@ import {
   useChangeDetailsDialog,
   type OpenChangeDetails,
 } from "./ChangeDetailsDialog";
+import { setLocale } from "../../../shared/i18n";
 vi.mock("./RevisionFileList", () => ({
   RevisionFileList: ({ files }: { files: { depotPath: string }[] }) => (
     <div data-testid="files">{files.map((f) => f.depotPath).join(" ")}</div>
@@ -67,6 +68,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 afterEach(() => vi.restoreAllMocks());
+// The UI translates through the module-level locale.
+beforeEach(() => {
+  setLocale("zh-CN");
+});
+
 it("reads the exact CL and closing preserves/focuses the original control", async () => {
   const read = vi
     .spyOn(backend, "getSubmittedChangeDetail")

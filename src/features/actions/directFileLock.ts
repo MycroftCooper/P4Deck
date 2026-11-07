@@ -67,8 +67,8 @@ export function startFileLockDirect(
           writeFailureText(
             preflight.blockers.map((item) => item.message).join("; "),
             {
-              zh: "锁定预检未通过，未写入。",
-              en: "Lock preflight blocked; nothing was written.",
+              zh: "actions.lock.preflight.blocked.nothing.was.written",
+              en: "actions.lock.preflight.blocked.nothing.was.written",
             },
           ),
           "error",
@@ -94,12 +94,12 @@ export function startFileLockDirect(
             result.message,
             result.outcome === "partial"
               ? {
-                  zh: "部分文件未完成，本次操作只部分生效。",
-                  en: "Only part of the operation completed; some files were not affected.",
+                  zh: "actions.only.part.of.the.operation.completed",
+                  en: "actions.only.part.of.the.operation.completed",
                 }
               : {
-                  zh: "锁定失败。",
-                  en: "Lock request failed.",
+                  zh: "actions.lock.request.failed",
+                  en: "actions.lock.request.failed",
                 },
           ),
           "error",
@@ -120,8 +120,8 @@ export function startFileLockDirect(
     } catch (error) {
       notifyUser(
         writeFailureText(String(error), {
-          zh: "锁定失败。",
-          en: "Lock request failed.",
+          zh: "actions.lock.request.failed",
+          en: "actions.lock.request.failed",
         }),
         "error",
       );

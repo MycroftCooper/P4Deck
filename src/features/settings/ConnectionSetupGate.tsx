@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -112,7 +113,7 @@ export function ConnectionSetupGate({
         data-tauri-drag-region={mainWindowDrag}
       >
         <h1 data-tauri-drag-region={mainWindowDrag}>
-          P4Deck · {zh ? "连接设置" : "Connection setup"}
+          P4Deck · {t("settings.connection.setup")}
         </h1>
         <div
           className="connection-setup-actions"
@@ -125,7 +126,7 @@ export function ConnectionSetupGate({
                 void requestGuardedClose("application").catch(console.error)
               }
             >
-              {zh ? "退出应用" : "Exit application"}
+              {t("settings.exit.application")}
             </button>
           )}
         </div>
@@ -135,21 +136,15 @@ export function ConnectionSetupGate({
         <div role="alert">
           {displayError}
           <button onClick={() => setRetry((n) => n + 1)}>
-            {zh ? "重新加载配置" : "Reload profiles"}
+            {t("settings.reload.profiles")}
           </button>
         </div>
       )}
       {loading ? (
-        <p role="status">
-          {zh ? "正在加载连接配置…" : "Loading connection profiles…"}
-        </p>
+        <p role="status">{t("settings.loading.connection.profiles")}</p>
       ) : editing ? (
         <>
-          <p role="status">
-            {zh
-              ? "保存连接后，点击“启用连接”完成验证。"
-              : "Save a connection, then activate it to complete verification."}
-          </p>
+          <p role="status">{t("settings.save.a.connection.then.activate")}</p>
           <ConnectionProfilesCard
             runtime={runtime}
             onRuntime={state.applyRuntime}
@@ -165,7 +160,7 @@ export function ConnectionSetupGate({
 }
 
 function SetupPrompt({
-  zh,
+  zh: _zh,
   onConfigure,
 }: {
   zh: boolean;
@@ -188,15 +183,11 @@ function SetupPrompt({
       onCancel={(event) => event.preventDefault()}
     >
       <header className="workflow-dialog-heading">
-        <h2 id="connection-setup-title">
-          {zh ? "请先配置 P4" : "Set up P4 to get started"}
-        </h2>
+        <h2 id="connection-setup-title">{t("settings.set.up.p4.to.get")}</h2>
       </header>
       <div className="workflow-dialog-body">
         <p id="connection-setup-description">
-          {zh
-            ? "还没有生效的 P4 连接。请先前往设置保存并启用连接。"
-            : "No P4 connection is active. Open settings to save and activate a connection."}
+          {t("settings.no.p4.connection.is.active")}
         </p>
       </div>
       <footer className="workflow-dialog-footer">
@@ -206,11 +197,11 @@ function SetupPrompt({
               void requestGuardedClose("application").catch(console.error)
             }
           >
-            {zh ? "退出应用" : "Exit application"}
+            {t("settings.exit.application")}
           </button>
         )}
         <button ref={configureRef} autoFocus onClick={onConfigure}>
-          {zh ? "去配置 P4" : "Configure P4"}
+          {t("settings.configure.p4")}
         </button>
       </footer>
     </dialog>

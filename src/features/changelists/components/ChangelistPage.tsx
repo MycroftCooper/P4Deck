@@ -1,4 +1,5 @@
-﻿import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
+import { t as translate } from "../../../shared/i18n";
+import { DescriptionTraceDialog } from "./DescriptionTraceDialog";
 import { submittedDescriptionParts } from "../submittedTags";
 import { useColumnWidths } from "../../../app/context-menu/useColumnWidths";
 import { classifySubmission, submissionKindLabel } from "../submittedReport";
@@ -278,16 +279,16 @@ export function ChangelistPage(props: Props) {
                 { id: "change", label: "CL" },
                 {
                   id: "submissionKind",
-                  label: env.preferences.zh ? "提交类型" : "Submission type",
+                  label: translate("pending.submission.type"),
                 },
                 {
                   id: "description",
-                  label: env.preferences.zh ? "描述" : "Description",
+                  label: translate("pending.description"),
                 },
                 { id: "user", label: t.user },
                 {
                   id: "workspace",
-                  label: env.preferences.zh ? "工作区" : "Workspace",
+                  label: translate("pending.workspace"),
                 },
                 { id: "time", label: t.time },
               ]}
@@ -309,9 +310,7 @@ export function ChangelistPage(props: Props) {
             props.loading &&
             props.stats.pageCount === 0 ? (
               <div className="empty-state" role="status">
-                {env.preferences.zh
-                  ? "正在查询 Submitted…"
-                  : "Loading submitted changes…"}
+                {translate("pending.loading.submitted.changes")}
               </div>
             ) : null}
             {changes.length === 0 &&
@@ -432,11 +431,7 @@ export function ChangelistPage(props: Props) {
                       className="secondary submitted-expand"
                       aria-expanded={expanded.has(change.id)}
                       aria-label={`${env.preferences.zh ? (expanded.has(change.id) ? "收起文件" : "展开文件") : expanded.has(change.id) ? "Collapse files" : "Expand files"} · CL ${change.id}`}
-                      title={
-                        env.preferences.zh
-                          ? "展开/收起改动文件"
-                          : "Expand/collapse changed files"
-                      }
+                      title={translate("pending.expand.collapse.changed.files")}
                       onClick={(event) => {
                         event.stopPropagation();
                         toggle(change.id);
@@ -482,14 +477,12 @@ export function ChangelistPage(props: Props) {
             </span>
             {props.truncated ? (
               <strong className="submitted-truncated" role="alert">
-                {env.preferences.zh
-                  ? "达到 5,000 条扫描上限，结果可能被截断。"
-                  : "The 5,000-item scan limit was reached; results may be truncated."}
+                {translate("pending.the.5.000.item.scan.limit")}
               </strong>
             ) : null}
             {props.partial && !props.truncated ? (
               <strong className="submitted-partial">
-                {env.preferences.zh ? "当前为部分结果" : "Partial results"}
+                {translate("pending.partial.results")}
               </strong>
             ) : null}
             {props.pageError ? (
@@ -504,16 +497,10 @@ export function ChangelistPage(props: Props) {
                 onClick={props.onLoadMore}
               >
                 {props.loadingMore
-                  ? env.preferences.zh
-                    ? "正在加载…"
-                    : "Loading…"
+                  ? translate("pending.loading")
                   : props.pageError
-                    ? env.preferences.zh
-                      ? "重试加载更多"
-                      : "Retry load more"
-                    : env.preferences.zh
-                      ? "加载更多"
-                      : "Load more"}
+                    ? translate("pending.retry.load.more")
+                    : translate("pending.load.more")}
               </button>
             ) : null}
           </footer>

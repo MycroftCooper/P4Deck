@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { writeClipboardText } from "../../infrastructure/clipboard";
 import type { MenuAction } from "./model";
 
@@ -9,7 +10,7 @@ export const copy = (value?: string | number): MenuAction => ({
   run: () => writeClipboardText(String(value ?? "")),
   reason:
     value === undefined || value === ""
-      ? "没有可复制的内容 / Nothing to copy"
+      ? t("shell.nothing.to.copy")
       : undefined,
 });
 /**

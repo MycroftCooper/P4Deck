@@ -133,8 +133,8 @@ export function startShelveDirect(
         if (!success) {
           notifyUser(
             writeFailureText(result?.message, {
-              zh: "搁置失败。",
-              en: "Shelve failed.",
+              zh: "pending.shelve.failed",
+              en: "pending.shelve.failed",
             }),
             "error",
           );
@@ -143,8 +143,8 @@ export function startShelveDirect(
       } catch (error) {
         notifyUser(
           writeFailureText(String(error), {
-            zh: "搁置失败。",
-            en: "Shelve failed.",
+            zh: "pending.shelve.failed",
+            en: "pending.shelve.failed",
           }),
           "error",
         );

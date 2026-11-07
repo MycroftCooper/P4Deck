@@ -1,4 +1,6 @@
 pub mod branches;
+// R9: the single source of every command time limit (see bounds.rs).
+pub mod bounds;
 pub mod changelists;
 pub mod connection;
 pub mod connection_setup;

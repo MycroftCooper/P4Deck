@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { hasResourceConflict } from "../actions/resourceOverlap";
 import type { FrontendOperationLog } from "../../infrastructure/backend/frontendOperationLog";
 import type {
@@ -132,9 +133,7 @@ export function startDeleteShelf(
         });
       try {
         if (!same())
-          throw Error(
-            "连接已变化，未删除 / Connection changed; nothing deleted",
-          );
+          throw Error(t("pending.connection.changed.nothing.deleted"));
         code = "transportError";
         const check = await dependencies.check({
           changeId: snapshot.changeId,
@@ -155,9 +154,7 @@ export function startDeleteShelf(
           JSON.stringify([...target.depotPaths].sort()) !==
             JSON.stringify(snapshot.paths)
         )
-          throw Error(
-            "预检身份或范围已变化，未删除 / Preflight identity or scope changed; nothing deleted",
-          );
+          throw Error(t("pending.preflight.identity.or.scope.changed.nothing"));
         code = check.expiresAt <= Date.now() ? "expired" : "preflightBlocked";
         if (
           !check.ready ||
@@ -168,7 +165,7 @@ export function startDeleteShelf(
         )
           throw Error(
             check.blockers.map((b) => b.message).join(" · ") ||
-              "预检未通过或已过期，未删除 / Preflight blocked or expired; nothing deleted",
+              t("pending.preflight.blocked.or.expired.nothing.deleted"),
           );
         code = "transportError";
         if (dependencies.connection) {

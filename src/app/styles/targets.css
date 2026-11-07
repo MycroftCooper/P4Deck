@@ -20,7 +20,7 @@
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  font-size: 11px;
+  font-size: var(--font-base);
   flex-shrink: 0;
 }
 .target-controls > .target-page-title {
@@ -30,7 +30,7 @@
   flex: 0 0 auto;
   overflow: visible;
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--font-xl);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -64,7 +64,7 @@
   white-space: nowrap;
   color: var(--muted);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .target-controls .target-path-input {
   flex: 1;
@@ -130,7 +130,7 @@
   background: transparent;
   color: var(--text);
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--font-md);
 }
 .target-refresh-slot {
   display: contents;
@@ -300,7 +300,7 @@
   border-radius: 5px;
   background: var(--panel);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-md);
   line-height: 1.5;
 }
 

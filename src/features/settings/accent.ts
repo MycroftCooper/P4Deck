@@ -1,10 +1,10 @@
 export const defaultAccent = "#15785b";
 export const accentPresets = [
-  { color: defaultAccent, zh: "绿色", en: "Green" },
-  { color: "#2563eb", zh: "蓝色", en: "Blue" },
-  { color: "#7c3aed", zh: "紫色", en: "Purple" },
-  { color: "#be185d", zh: "玫红", en: "Rose" },
-  { color: "#b45309", zh: "琥珀", en: "Amber" },
+  { color: defaultAccent, zh: "settings.green", en: "settings.green" },
+  { color: "#2563eb", zh: "settings.blue", en: "settings.blue" },
+  { color: "#7c3aed", zh: "settings.purple", en: "settings.purple" },
+  { color: "#be185d", zh: "settings.rose", en: "settings.rose" },
+  { color: "#b45309", zh: "settings.amber", en: "settings.amber" },
 ];
 export function normalizeAccent(value: unknown): string | undefined {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)

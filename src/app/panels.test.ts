@@ -147,6 +147,30 @@ it("localizes fixed and multi-instance page titles using the current locale", ()
   expect(pageLabels(true).submitted).toBe("已提交");
   expect(pageLabels(true).diff).toBe("差异");
 });
+it("resolves every page title to translated text, never to a raw catalog key", () => {
+  for (const zh of [true, false]) {
+    const labels = pageLabels(zh);
+    for (const id of pageIds) {
+      const label = labels[id];
+      expect(label.trim(), `${id} label must not be empty`).not.toBe("");
+      // A dotted label is an unresolved key such as "shell.search": exactly the
+      // regression that showed raw keys in the activity bar and page headers.
+      expect(label, `${id} must be translated, not a key`).not.toContain(".");
+      // Falling back to the id itself is the other way a title goes untranslated.
+      expect(label, `${id} must not fall back to its id`).not.toBe(id);
+    }
+  }
+});
+it("translates the pages that regressed to raw keys in the activity bar", () => {
+  expect(pageLabels(true).search).toBe("搜索");
+  expect(pageLabels(false).search).toBe("Search");
+  expect(pageLabels(true).streamgraph).toBe("分支流图");
+  expect(pageLabels(true).branchmappings).toBe("分支映射");
+  expect(pageLabels(true).p4log).toBe("P4 日志");
+  expect(pageLabels(true).shelf).toBe("搁置详情");
+  expect(pageLabels(true).settings).toBe("设置");
+  expect(pageLabels(true).preview).toBe("文件预览");
+});
 it("retains valid persisted revision pairs and rejects malformed operands", () => {
   expect(
     normalizePanelTarget({

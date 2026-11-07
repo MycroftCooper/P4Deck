@@ -1,3 +1,4 @@
+import { tFor, t } from "../../shared/i18n";
 import { useRef, useState } from "react";
 import { FolderOpen, ScrollText, Trash2 } from "lucide-react";
 import { backend } from "../../infrastructure/backend";
@@ -67,15 +68,10 @@ export function LogSettingsCard({
                   `日志已清空（回读确认剩余 ${remaining} 条）；后续日志将继续写入。`,
                   `Logs cleared (readback confirms ${remaining} remaining); new logs will continue to be recorded.`,
                 )
-              : tr("已清空模拟日志。", "Simulated logs cleared."),
+              : tFor(zh ? "zh-CN" : "en-US", "settings.simulated.logs.cleared"),
           );
         } else {
-          setError(
-            tr(
-              "清理结果不确定：回读仍有条目或读取失败。已用同一操作号查询持久回执；请先核对日志页，不要换新操作号重试。",
-              "Clear outcome uncertain: the readback still has entries or failed. The durable receipt was queried with the same operation id; inspect the log page before any retry with a new id.",
-            ),
-          );
+          setError(t("settings.clear.outcome.uncertain.the.readback.still"));
         }
       }
     } catch (cause) {
@@ -88,14 +84,9 @@ export function LogSettingsCard({
     <section className="settings-card log-settings-card">
       <h2>
         <ScrollText size={18} />
-        {tr("日志", "Logs")}
+        {tFor(zh ? "zh-CN" : "en-US", "settings.logs")}
       </h2>
-      <p>
-        {tr(
-          "每次启动创建新日志文件，日志面板只显示本次运行的记录。历史日志保留在磁盘上，启动时不会读取。",
-          "Each launch creates a new log file. The log panel shows only this session; previous files remain on disk and are never loaded at startup.",
-        )}
-      </p>
+      <p>{t("settings.each.launch.creates.a.new.log")}</p>
       <div className="settings-actions">
         <button
           className="secondary"
@@ -103,7 +94,7 @@ export function LogSettingsCard({
           onClick={() => void run("open")}
         >
           <FolderOpen size={16} />
-          {tr("打开日志文件夹", "Open log folder")}
+          {tFor(zh ? "zh-CN" : "en-US", "settings.open.log.folder")}
         </button>
         <button
           className="danger"
@@ -116,15 +107,12 @@ export function LogSettingsCard({
           }}
         >
           <Trash2 size={16} />
-          {tr("删除全部日志", "Delete all logs")}
+          {tFor(zh ? "zh-CN" : "en-US", "settings.delete.all.logs")}
         </button>
       </div>
       {!native && (
         <p className="muted">
-          {tr(
-            "浏览器演示仅清理模拟日志；打开日志文件夹需使用桌面端。",
-            "Browser demo clears simulated logs only. Opening the log folder requires the desktop app.",
-          )}
+          {t("settings.browser.demo.clears.simulated.logs.only")}
         </p>
       )}
       {message && <p role="status">{message}</p>}
@@ -133,7 +121,7 @@ export function LogSettingsCard({
         <Dialog
           zh={zh}
           danger
-          title={tr("删除全部日志？", "Delete all logs?")}
+          title={tFor(zh ? "zh-CN" : "en-US", "settings.delete.all.logs.2")}
           source={source.current}
           busy={!!busy}
           onRequestClose={() => {
@@ -147,7 +135,7 @@ export function LogSettingsCard({
                 disabled={!!busy}
                 onClick={() => setConfirm(false)}
               >
-                {tr("取消", "Cancel")}
+                {tFor(zh ? "zh-CN" : "en-US", "settings.cancel")}
               </button>
               <button
                 className="danger"
@@ -155,18 +143,13 @@ export function LogSettingsCard({
                 onClick={() => void run("delete")}
               >
                 {busy === "delete"
-                  ? tr("正在删除…", "Deleting…")
-                  : tr("确认删除", "Confirm deletion")}
+                  ? tFor(zh ? "zh-CN" : "en-US", "settings.deleting")
+                  : tFor(zh ? "zh-CN" : "en-US", "settings.confirm.deletion")}
               </button>
             </>
           }
         >
-          <p>
-            {tr(
-              "将删除当前及历史日志，包括旧版日志数据库。连接设置会保留，后续新日志将继续写入。",
-              "Deletes current and historical logs, including the legacy log database. Connection settings are preserved, and new logs will continue to be recorded.",
-            )}
-          </p>
+          <p>{t("settings.deletes.current.and.historical.logs.including")}</p>
           {error && <p role="alert">{error}</p>}
         </Dialog>
       )}

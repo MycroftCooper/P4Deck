@@ -31,12 +31,20 @@ pub(crate) fn clean(result: &OperationResult) -> bool {
                 .as_deref()
                 .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
                 .is_some_and(|v| {
+                    // P4 `-Mj` reports benign no-op diagnostics at severity 2
+                    // (E_WARN): `file(s) not opened in that changelist`, `no such
+                    // file(s)`, `file(s) not in client view`. A whole-changelist
+                    // revert (`p4 revert -c <CL> //...`) always emits the former
+                    // for every workspace file outside that CL, and a repeat
+                    // revert of an already-empty CL emits it too; neither is a
+                    // failure. Only severity >= 3 (failed/fatal) or an explicit
+                    // `code:"error"` marks the write as not clean.
                     v["code"] == "error"
                         || v["severity"]
                             .as_i64()
                             .or_else(|| v["severity"].as_str().and_then(|s| s.parse().ok()))
                             .unwrap_or(0)
-                            >= 2
+                            >= 3
                 })
         })
 }
@@ -212,5 +220,36 @@ mod tests {
             .outcome,
             WorkflowOutcome::Unknown
         );
+    }
+    #[test]
+    fn benign_noop_warning_does_not_fail_a_whole_changelist_revert() {
+        // `p4 revert -c <CL> //...` emits `file(s) not opened in that changelist`
+        // (generic 17, severity 2) for every workspace file outside that CL, and
+        // a repeat revert of an already-empty CL emits it too. That warning must
+        // not turn an otherwise-clean revert into an unknown/blocked outcome.
+        let warning = serde_json::json!({
+            "data": "//... - file(s) not opened in that changelist.\n",
+            "generic": 17,
+            "severity": 2,
+        });
+        let r = result(
+            &request(1),
+            Ok(op(vec![warning])),
+            Ok(op(vec![serde_json::json!({"depotFile": "//fixture/f0"})])),
+        );
+        assert_eq!(r.outcome, WorkflowOutcome::Succeeded);
+        assert_eq!(r.files[0].state, WorkflowFileState::Succeeded);
+        assert!(r.failure.is_none());
+    }
+    #[test]
+    fn severity_three_error_still_fails_revert() {
+        let error = serde_json::json!({"severity": 3, "data": "denied"});
+        let r = result(
+            &request(1),
+            Ok(op(vec![error])),
+            Ok(op(vec![serde_json::json!({"depotFile": "//fixture/f0"})])),
+        );
+        assert_eq!(r.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(r.files[0].state, WorkflowFileState::Unknown);
     }
 }

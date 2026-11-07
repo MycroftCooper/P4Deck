@@ -177,13 +177,16 @@ impl SubmitRepository {
             .runner
             .run_with_mutation_guard(
                 P4CommandRequest {
+                    // `p4 submit` uploads an entire changelist: a mutation
+                    // whose payload can be large.
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id: Some(operation_id),
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,
@@ -228,13 +231,14 @@ impl SubmitRepository {
         self.runner
             .run_with_progress(
                 P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Command,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),
                     args: invocation.args,
                     context: context.clone(),
                     output_mode: OutputMode::JsonLines,
-                    timeout_ms: Some(600_000),
+                    timeout_ms: None,
                     input: None,
                 },
                 app,

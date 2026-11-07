@@ -1,3 +1,4 @@
+import { isCopyCommandLabel } from "../../app/context-menu/copyMenu";
 import type { CommandId } from "../../app/shell/commandPolicy";
 import { fileMenuCommands } from "../../app/context-menu/fileMenuCommands";
 import type { FileAction, WorkspaceNode } from "../../shared/contracts";
@@ -87,12 +88,7 @@ export function resolveFileMenu(
   options: Parameters<typeof resolveCommand>[1] = {},
 ): ActionResolution | undefined {
   if (!executable) return undefined;
-  if (
-    label.startsWith("复制 › ") ||
-    label === "复制工作区根路径" ||
-    label === "复制 Depot 路径"
-  )
-    return platform;
+  if (isCopyCommandLabel(label)) return platform;
   const command = fileMenuCommands[label];
   return command ? resolveCommand(command, options) : undefined;
 }

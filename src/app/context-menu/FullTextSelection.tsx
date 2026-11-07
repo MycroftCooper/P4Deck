@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -57,7 +58,7 @@ function TextDialog({
       ref={dialog}
       className="menu-text-dialog"
       onCancel={close}
-      aria-label="选择完整文本 / Select full text"
+      aria-label={t("shell.select.full.text")}
     >
       <header>
         完整文本（只读） / Full text (read-only)
@@ -67,7 +68,7 @@ function TextDialog({
         ref={input}
         readOnly
         value={text}
-        aria-label="完整文本 / Full text"
+        aria-label={t("shell.full.text")}
       />
       <p>Ctrl/Cmd+C 复制 · Escape 关闭。包含虚拟列表未渲染的内容。</p>
     </dialog>,

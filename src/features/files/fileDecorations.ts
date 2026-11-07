@@ -1,3 +1,4 @@
+import { tFor, type MsgKey } from "../../shared/i18n";
 import type { FileState, WorkspaceFileStatus } from "../../shared/contracts";
 
 export type FileBadgeId =
@@ -92,36 +93,36 @@ export interface FileDecorationFacts {
   status?: WorkspaceFileStatus;
 }
 const labels: Record<FileBadgeId, [string, string, string]> = {
-  add: ["待添加", "Open for add", "+"],
-  edit: ["已签出编辑", "Open for edit", "✓"],
-  delete: ["待删除", "Open for delete", "×"],
-  "move/add": ["移动目标", "Move target", "↗"],
-  "move/delete": ["移动源", "Move source", "↙"],
-  branch: ["待分支", "Open for branch", "⑂"],
-  integrate: ["待集成", "Open for integrate", "⇄"],
-  latest: ["已同步到最新修订", "Synced to head", "●"],
-  outOfDate: ["版本落后", "Older revision", "↓"],
-  notSynced: ["未同步到本地", "Not synced", "↓"],
-  missing: ["本地文件缺失", "Local file missing", "?"],
-  untracked: ["未跟踪", "Untracked", "?"],
-  ignored: ["已忽略", "Ignored", "−"],
-  resolve: ["需要 Resolve", "Needs resolve", "!"],
-  resolved: ["已解决", "Resolved", "✓"],
-  modified: ["本地内容已修改", "Locally modified", "●"],
-  locked: ["已锁定", "Locked", "L"],
-  globalLock: ["全局锁定", "Globally locked", "L"],
-  exclusive: ["独占签出", "Exclusive checkout", "L"],
-  unmapped: ["未映射到当前工作区", "Not mapped", "∅"],
-  depotDeleted: ["Depot 中已删除", "Deleted in depot", "×"],
-  shelf: ["搁置副本", "Shelved copy", "S"],
-  imported: ["流导入／父流共享", "Imported / shared from parent stream", "↘"],
-  ditto: ["映射到多个目录", "Ditto mapped", "≡"],
-  placeholder: ["占位文件，内容未下载", "Metadata-only placeholder", "⋯"],
-  symlink: ["符号链接", "Symbolic link", "↗"],
-  unknown: ["状态未知", "Status unknown", "?"],
-  stale: ["状态缓存已过期", "Stale status", "◷"],
-  error: ["状态查询失败", "Status query failed", "!"],
-  loading: ["正在查询状态", "Loading status", "⋯"],
+  add: ["files.add.2", "files.add.2", "+"],
+  edit: ["files.edit", "files.edit", "✓"],
+  delete: ["files.delete.2", "files.delete.2", "×"],
+  "move/add": ["files.move.add", "files.move.add", "↗"],
+  "move/delete": ["files.move.delete", "files.move.delete", "↙"],
+  branch: ["files.branch", "files.branch", "⑂"],
+  integrate: ["files.integrate", "files.integrate", "⇄"],
+  latest: ["files.latest", "files.latest", "●"],
+  outOfDate: ["files.outOfDate", "files.outOfDate", "↓"],
+  notSynced: ["files.notSynced", "files.notSynced", "↓"],
+  missing: ["files.missing", "files.missing", "?"],
+  untracked: ["files.untracked.2", "files.untracked.2", "?"],
+  ignored: ["files.ignored.2", "files.ignored.2", "−"],
+  resolve: ["files.resolve", "files.resolve", "!"],
+  resolved: ["files.resolved", "files.resolved", "✓"],
+  modified: ["files.modified", "files.modified", "●"],
+  locked: ["files.locked", "files.locked", "L"],
+  globalLock: ["files.globalLock", "files.globalLock", "L"],
+  exclusive: ["files.exclusive", "files.exclusive", "L"],
+  unmapped: ["files.unmapped", "files.unmapped", "∅"],
+  depotDeleted: ["files.depotDeleted", "files.depotDeleted", "×"],
+  shelf: ["files.shelf", "files.shelf", "S"],
+  imported: ["files.imported", "files.imported", "↘"],
+  ditto: ["files.ditto", "files.ditto", "≡"],
+  placeholder: ["files.placeholder", "files.placeholder", "⋯"],
+  symlink: ["files.symlink", "files.symlink", "↗"],
+  unknown: ["files.unknown.2", "files.unknown.2", "?"],
+  stale: ["files.stale", "files.stale", "◷"],
+  error: ["files.error", "files.error", "!"],
+  loading: ["files.loading.2", "files.loading.2", "⋯"],
 };
 const actions = new Set([
   "add",
@@ -258,17 +259,13 @@ function priority(b: FileBadge) {
 export function fileBadgeLabel(badge: FileBadge, zh: boolean): string {
   const owner =
     badge.owner === "self"
-      ? zh
-        ? "我："
-        : "You: "
+      ? tFor(zh ? "zh-CN" : "en-US", "files.you")
       : badge.owner === "other"
-        ? zh
-          ? "其他工作区／用户："
-          : "Other workspace/user: "
+        ? tFor(zh ? "zh-CN" : "en-US", "files.other.workspace.user")
         : "";
   return (
     owner +
-    labels[badge.id][zh ? 0 : 1] +
+    tFor(zh ? "zh-CN" : "en-US", labels[badge.id][0] as MsgKey) +
     (badge.detail ? ` (${badge.detail})` : "")
   );
 }

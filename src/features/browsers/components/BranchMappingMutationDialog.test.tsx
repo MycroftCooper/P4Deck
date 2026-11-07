@@ -8,6 +8,7 @@ import type {
   RuntimeInfo,
 } from "../../../shared/contracts";
 import { BranchMappingMutationDialog } from "./BranchMappingMutationDialog";
+import { setLocale } from "../../../shared/i18n";
 
 const backend = vi.hoisted(() => ({
   preflightBranchMappingMutation: vi.fn(),
@@ -92,6 +93,8 @@ async function input(label: string, value: string) {
 }
 
 beforeEach(() => {
+  // Components translate through the module-level locale.
+  setLocale("en-US");
   backend.preflightBranchMappingMutation.mockReset();
   backend.confirmBranchMappingMutation.mockReset();
   backend.cancelOperation.mockReset().mockResolvedValue(undefined);

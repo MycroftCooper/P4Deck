@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { useState } from "react";
 import { CompanySubmitPreview } from "./CompanySubmitPreview";
 import {
@@ -22,7 +23,7 @@ export function CompanySubmitPreparation({
   return (
     <section>
       <label>
-        {zh ? "自定义提交工具本机 .exe 绝对路径" : "Local absolute .exe path"}
+        {t("companySubmit.local.absolute.exe.path")}
         <input
           value={executablePath}
           onChange={(e) => setExecutablePath(e.target.value)}
@@ -34,17 +35,15 @@ export function CompanySubmitPreparation({
         disabled={state.status === "loading"}
         onClick={() => void refresh()}
       >
-        {zh ? "重新读取连接身份" : "Refresh connection identity"}
+        {t("companySubmit.refresh.connection.identity")}
       </button>
       {state.status === "loading" ? (
         <p role="status">
-          {zh ? "正在读取宿主连接身份…" : "Reading host connection identity…"}
+          {t("companySubmit.reading.host.connection.identity")}
         </p>
       ) : state.status === "error" ? (
         <p role="alert">
-          {zh
-            ? "无法取得有效连接身份，真实启动保持禁用。"
-            : "Connection identity unavailable; real launch remains disabled."}
+          {t("companySubmit.connection.identity.unavailable.real.launch")}
         </p>
       ) : (
         <CompanySubmitPreview
@@ -59,9 +58,7 @@ export function CompanySubmitPreparation({
       )}
       {state.status !== "ready" && (
         <button type="button" disabled>
-          {zh
-            ? "启动自定义提交工具（禁用）"
-            : "Launch custom submit tool (disabled)"}
+          {t("companySubmit.launch.custom.submit.tool.disabled")}
         </button>
       )}
     </section>

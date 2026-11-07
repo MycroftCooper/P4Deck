@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-import { expect, it } from "vitest";
+import { expect, it, beforeEach } from "vitest";
 import { dialogHarness } from "../../../app/dialogs/testHarness";
 import { FileStatusIcon } from "./FileStatusIcon";
+import { setLocale } from "../../../shared/i18n";
 
 const view = dialogHarness();
+// The UI translates through the module-level locale.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("limits visible badges while preserving every status in accessible text", async () => {
   await view.render(
     <FileStatusIcon

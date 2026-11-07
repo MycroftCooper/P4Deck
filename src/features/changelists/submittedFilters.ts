@@ -1,4 +1,5 @@
-﻿import type { ClQuery } from "../../shared/contracts";
+import { t } from "../../shared/i18n";
+import type { ClQuery } from "../../shared/contracts";
 import { submissionKinds, type SubmissionKind } from "./submittedReport";
 import { storage } from "../../shared/lib/storage";
 
@@ -91,14 +92,14 @@ export function validateSubmittedFilter(
   const errors: SubmittedFilterValidation["errors"] = {};
   const keyword = draft.keyword.trim();
   if (byteLength(keyword) > 512 || keyword.includes("\0"))
-    errors.keyword = "最多 512 字符 / Maximum 512 characters";
+    errors.keyword = t("pending.maximum.512.characters");
   const user = draft.users.trim();
   if (
     /[,;\r\n]/.test(draft.users) ||
     /\s|[\u0000-\u001f\u007f]/.test(user) ||
     byteLength(user) > 1024
   )
-    errors.users = "请输入单一用户名 / Enter one username";
+    errors.users = t("pending.enter.one.username");
   const users = user ? [user] : [];
   const clients: string[] = [];
   const streams = [
@@ -110,8 +111,7 @@ export function validateSubmittedFilter(
     ),
   ].sort();
   if (draft.currentStreamOnly && !context.stream)
-    errors.currentStreamOnly =
-      "当前 Stream 不可用 / Current stream unavailable";
+    errors.currentStreamOnly = t("pending.current.stream.unavailable");
   if (
     streams.length > 16 ||
     streams.some(
@@ -122,8 +122,7 @@ export function validateSubmittedFilter(
         stream.includes("..."),
     )
   )
-    errors.streams =
-      "请选择有效 Stream（最多16项） / Select valid streams (maximum 16)";
+    errors.streams = t("pending.select.valid.streams.maximum.16");
   const depotPath = optionalTrimmed(draft.depotPath);
   if (
     depotPath &&
@@ -131,8 +130,7 @@ export function validateSubmittedFilter(
       byteLength(depotPath) > 4096 ||
       /[\r\n\0@#]/.test(depotPath))
   )
-    errors.depotPath =
-      "请输入有效的 //depot 路径（不可含 @ 或 #） / Enter a valid //depot path without @ or #";
+    errors.depotPath = t("pending.depot.path.without");
   if (
     depotPath &&
     streams.length &&
@@ -144,22 +142,20 @@ export function validateSubmittedFilter(
           stream.startsWith(depotPath.slice(0, -3))),
     )
   )
-    errors.depotPath =
-      "Depot Path 与所选 Stream 无交集 / Depot path does not intersect selected streams";
+    errors.depotPath = t("pending.depot.path.does.not.intersect.selected");
   const fromDate = new Date(draft.from);
   const toDate = new Date(draft.to);
   if (!draft.from || !Number.isFinite(fromDate.getTime()))
-    errors.from = "请输入有效起始时间 / Enter a valid start time";
+    errors.from = t("pending.enter.a.valid.start.time");
   if (!draft.to || !Number.isFinite(toDate.getTime()))
-    errors.to = "请输入有效结束时间 / Enter a valid end time";
+    errors.to = t("pending.enter.a.valid.end.time");
   if (!errors.from && !errors.to && fromDate > toDate)
-    errors.to =
-      "结束时间不得早于起始时间 / End time must not be before start time";
+    errors.to = t("pending.end.time.must.not.be.before");
   if (
     draft.submissionKind !== "all" &&
     !submissionKinds.includes(draft.submissionKind)
   )
-    errors.submissionKind = "无效提交类型 / Invalid submission type";
+    errors.submissionKind = t("pending.invalid.submission.type");
   if (Object.keys(errors).length) return { errors };
   return {
     errors,

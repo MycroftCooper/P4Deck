@@ -34,6 +34,8 @@
 
 当前已具备真实 Server 验收环境；BE-002R、BE-003、BE-004a、BE-004b、BE-008 已分别完成单文件 Rename/Move、Submit、Pending、Shelf/Unshelve/Resolve 与 Submitted 详情/可靠合并分类。BE-008Q 已完成 Submitted 组合查询和稳定游标。BE-008G 已完成全局搜索五类生产闭环；BE-016 已在同一搜索栈补齐 Stream/Shelf 深度搜索后端与共享契约，后续七类前端筛选/导航也已完成。BE-010 已完成基础 Stream 切换；BE-011 已完成文件 Lock/Unlock 与 `+l` 独占状态的强类型安全闭环；BE-013 已完成 Stream Graph 前后端闭环；BE-014 后端安全闭环与后续 FE-23 Branch Mapping 前端页面均已完成。BE-015/FE-24 已按产品决定移除：P4Deck 不提供管理员强制解锁 API、Mock 或 UI；此类操作由管理员在应用外处理。
 
+**已抽公共骨架（2026-11-05）**：同步、Submit、Shelf/Unshelve/Resolve/Move、Branch Mapping、Stream 切换、Rename/Move、文件 Lock/Unlock、连接自建 User/Workspace 这九组受控写操作（含 Undo 预览与手工合并保存/已解决两个记录）原先各自手写“预检 → 一次性 token → 生成代次复核 → mutation lane → 结构化结果”，现已收敛到 `src-tauri/src/app/confirmation.rs` 的 `ConfirmationTicket<T, D>` + `ReviewSpec`；拒绝词表统一为八项 `ConfirmationRefusalCode`，各业务保留原 `*FailureCode`/错误枚举与文案（线协议不变），工作流中需要一条共享判定映射出不同业务码的 Shelf/Unshelve/Resolve/Move 保留各自重查判定。证据：`cargo test --manifest-path src-tauri/Cargo.toml --lib` 535 项通过、0 失败、6 项默认 ignored（含 15 项新增 `confirmation::ticket_tests`），`cargo fmt --check`、`cargo clippy --all-targets -D warnings` 通过，`pnpm ci:quick` 13/13 全绿。该批改动以保持既有线上字段与错误码为目标；提交前经独立只读审查发现并修复了若干重构期回归（Sync 复核新增阻断曾被并成 `PreviewChanged`、Stream 复核不可用丢失 p4 诊断与 operationId、Branch/Connection 复现根 operation id 重复生成、多个服务 `gate()` 曾返回每次新建的互斥锁），修复后 535 项单测、`cargo fmt --check`、Clippy 与 `pnpm ci:quick` 全部通过。原生 UI 与真实 Server 回归不在本次证据范围。
+
 ### BE-012 — 文本三方手工合并（DONE：Windows localhost；原生 UI/macOS 待验）
 
 - `open/validate/confirm save/confirm resolve` 窄协议绑定 active profile、完整 Context/generation、Workspace/depot/local path、官方 resolve base/source revision、resolve record、size/mtime/SHA-256、encoding/BOM 与结果 digest。`resolve -n -o` tagged 字段和 `p4 print -o` 是权威来源，不猜 have/head。

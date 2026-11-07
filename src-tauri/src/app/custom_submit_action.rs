@@ -138,6 +138,26 @@ pub fn is_terminal(session: &Session) -> bool {
     session.state != State::Started
 }
 
+/// Persist the terminal projection so a finished tool never leaves the durable
+/// receipt in `running`.
+///
+/// Called by the parent-exit watcher the moment it observes the tool exit, and
+/// idempotently again by the `custom_submit_status` command: the receipt store
+/// only accepts a `running` row, so the second settle is a harmless no-op and
+/// the first one wins the durable result.
+pub fn settle(
+    journal: &crate::persistence::operation_journal::OperationJournal,
+    session: &Session,
+) -> bool {
+    if !is_terminal(session) {
+        return false;
+    }
+    let Ok(value) = serde_json::to_value(project(session, Some(session.request_id.clone()))) else {
+        return false;
+    };
+    journal.finish_action(&session.request_id, &value).is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +219,47 @@ mod tests {
         assert!(!is_terminal(&session(State::Started, None, None)));
         assert!(is_terminal(&session(State::NotStarted, None, None)));
         assert!(is_terminal(&session(State::OutcomeUnknown, None, None)));
+    }
+
+    #[test]
+    fn terminal_session_settles_its_receipt_once() {
+        let base = std::env::temp_dir().join(format!(
+            "p4deck-custom-submit-settle-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        let journal = crate::persistence::operation_journal::OperationJournal::open(
+            &base.join("operations.sqlite"),
+        )
+        .unwrap();
+        // Production reserves the receipt before launching the tool; settle only
+        // completes an existing `running` row.
+        journal
+            .reserve_action(
+                KIND_CUSTOM_SUBMIT,
+                "11111111-1111-4111-8111-111111111111",
+                &crate::app::company_submit::ConnectionSnapshot {
+                    profile_id: "profile".into(),
+                    generation: "1".into(),
+                    server: "ssl:fixture:1666".into(),
+                    user: "user".into(),
+                    client: "client".into(),
+                },
+                &serde_json::json!({ "changeId": "41" }),
+            )
+            .unwrap();
+        // A live tool leaves the durable receipt in `running`.
+        assert!(!settle(&journal, &session(State::Started, None, None)));
+        let ended = session(
+            State::OutcomeUnknown,
+            Some(0),
+            Some("submissionAndChildLifetimeUnknown"),
+        );
+        assert!(settle(&journal, &ended));
+        // The receipt store only accepts a `running` row, so a second observer
+        // (status polling or a duplicate exit notification) is a no-op.
+        assert!(!settle(&journal, &ended));
+        drop(journal);
+        std::fs::remove_dir_all(base).unwrap();
     }
 }

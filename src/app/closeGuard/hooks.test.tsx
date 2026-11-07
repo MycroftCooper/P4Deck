@@ -10,18 +10,6 @@ import {
 } from "./index";
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke }));
-const events = vi.hoisted(() => ({
-  handler: undefined as
-    | undefined
-    | ((event: { payload: { generation: string; probeId: string } }) => void),
-  stop: vi.fn(),
-}));
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(async (_name, handler) => {
-    events.handler = handler;
-    return events.stop;
-  }),
-}));
 it("registers synchronous editor state, tolerates StrictMode, and protects unexpected remount", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   closeState.setReady(true);
@@ -79,7 +67,33 @@ it.each(["window", "application"] as const)(
   },
 );
 
-it("uses the exact register/report/probe IPC shape without a caller-supplied window label", async () => {
+it("marks the shell ready without an invented host handshake", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  invoke.mockClear();
+  const { closeState, useCloseGuardReady } = await import("./index");
+  closeState.setReady(false);
+  const host = document.createElement("div"),
+    root = createRoot(host);
+  function Shell() {
+    useCloseGuardReady();
+    return <div className="app-shell" />;
+  }
+  try {
+    await act(async () => root.render(<Shell />));
+    expect(closeState.snapshot()).toBe("clean");
+    // Readiness is local state: no command backs this hook, so none is sent.
+    expect(invoke).not.toHaveBeenCalled();
+    // The cleanup effect owns readiness, so unmounting must clear it again.
+    await act(async () => root.unmount());
+    expect(closeState.snapshot()).toBe("unknown");
+  } finally {
+    await act(async () => root.unmount());
+    closeState.setReady(false);
+    vi.unstubAllGlobals();
+  }
+});
+
+it("uses the exact register/report IPC shape without a caller-supplied window label", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   invoke.mockClear();
   invoke.mockImplementation(async (command) =>
@@ -96,9 +110,7 @@ it("uses the exact register/report/probe IPC shape without a caller-supplied win
   try {
     await act(async () => root.render(<Bridge />));
     expect(invoke).toHaveBeenCalledWith("close_guard_register");
-    await act(async () =>
-      events.handler!({ payload: { generation: "42", probeId: "probe-1" } }),
-    );
+    await act(async () => closeState.setReady(true));
     const report = invoke.mock.calls.at(-1)!;
     expect(report[0]).toBe("close_guard_report");
     expect(Object.keys(report[1]).sort()).toEqual([
@@ -108,14 +120,14 @@ it("uses the exact register/report/probe IPC shape without a caller-supplied win
       "sequence",
       "state",
     ]);
+    // No inbound probe channel exists, so every report is an unprompted push.
     expect(report[1]).toMatchObject({
       generation: "42",
-      probeId: "probe-1",
-      state: "unknown",
+      probeId: null,
+      state: "clean",
     });
   } finally {
     await act(async () => root.unmount());
     vi.unstubAllGlobals();
   }
-  expect(events.stop).toHaveBeenCalled();
 });

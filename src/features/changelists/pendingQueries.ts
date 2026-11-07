@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { backend } from "../../infrastructure/backend";
 import type {
   PendingChange,
@@ -92,9 +93,7 @@ export async function queryAllPendingChanges(
       page.stats.truncatedBySafetyLimit ||
       (page.hasMore && (!page.nextCursor || cursors.has(page.nextCursor)))
     )
-      throw new Error(
-        "待提交 CL 列表不完整，请刷新后重试 / Pending changelists are incomplete; refresh and retry",
-      );
+      throw new Error(t("pending.pending.incomplete.refresh"));
     if (!page.hasMore || !page.nextCursor) break;
     cursors.add(page.nextCursor);
     page = await backend.queryPendingChanges(

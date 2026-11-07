@@ -1,3 +1,4 @@
+import { t } from "../../shared/i18n";
 import { ColumnResizer } from "./ColumnResizer";
 import type { useColumnWidths } from "./useColumnWidths";
 import { useContextMenu } from "./ContextMenu";
@@ -15,24 +16,23 @@ export function tableMenuBindings(
   column?: MenuColumn,
 ): MenuBindings {
   const sortReason = column
-    ? `${column.label}：排序尚未接通 / Sorting not connected`
-    : "请在具体列标题上打开；排序尚未接通 / Choose a column; sorting not connected";
+    ? t("contextMenu.sortingNotConnected", { column: column.label })
+    : t("shell.choose.a.column.sorting.not.connected");
   return {
     按此列升序: { reason: sortReason },
     按此列降序: { reason: sortReason },
-    清除排序: { reason: "当前表格尚未启用排序 / Sorting not enabled" },
+    清除排序: { reason: t("shell.sorting.not.enabled") },
     "显示列 › 各可选列": {
       children: columns.map((value) => ({
         id: `T08:column:${value.id}`,
         label: value.label,
         checked: true,
-        reason:
-          "当前固定显示；列配置尚未接通 / Currently visible; column configuration not connected",
+        reason: t("shell.currently.visible.column.configuration.not.connected"),
       })),
     },
-    重置列宽: { reason: "当前使用固定列宽 / Fixed column widths" },
+    重置列宽: { reason: t("shell.fixed.column.widths") },
     重置表格布局: {
-      reason: "当前使用默认布局 / Default layout already in use",
+      reason: t("shell.default.layout.already.in.use"),
     },
   };
 }
@@ -55,7 +55,7 @@ export function TableHeader({
       tabIndex={0}
       {...menu("T08", () => ({
         ...tableMenuBindings(columns),
-        ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+        ...(resize ? { 重置列宽: { run: resize.reset } } : {}), // i18n-exempt: inventory label
       }))}
     >
       {columns.map((column, index) => (
@@ -66,7 +66,7 @@ export function TableHeader({
             "T08",
             () => ({
               ...tableMenuBindings(columns, column),
-              ...(resize ? { 重置列宽: { run: resize.reset } } : {}),
+              ...(resize ? { 重置列宽: { run: resize.reset } } : {}), // i18n-exempt: inventory label
             }),
             {
               title: column.label,

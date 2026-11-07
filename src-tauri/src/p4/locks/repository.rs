@@ -178,13 +178,15 @@ fn request(
     operation_id: String,
 ) -> P4CommandRequest {
     P4CommandRequest {
+        // lock/unlock are mutations: they may wait on another user's lock.
+        bound: crate::p4::bounds::IoBound::Command,
         operation_id: Some(operation_id),
         source: OperationSource::Gui,
         command: invocation.command.into(),
         args: invocation.args.clone(),
         context: context.clone(),
         output_mode: OutputMode::JsonLines,
-        timeout_ms: Some(120_000),
+        timeout_ms: None,
         input: None,
     }
 }

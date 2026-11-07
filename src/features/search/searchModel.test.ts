@@ -9,26 +9,28 @@ import {
 
 const item = (identity: string): GlobalSearchItem => ({
   identity,
-  kind: "job",
+  kind: "submittedChange",
   title: identity,
   summary: identity,
-  target: { type: "job", jobId: identity },
+  target: { type: "submittedChange", changeId: 1 },
   matchedFields: ["title"],
   highlights: [],
   rank: 1,
 });
 
 describe("global search model", () => {
-  it("keeps the canonical seven-kind order used by filters and empty-kind backend defaults", () => {
+  it("lists the six navigable kinds in the canonical filter order and never asks for jobs", () => {
     expect(GLOBAL_SEARCH_KINDS).toEqual([
       "submittedChange",
       "pendingChange",
       "workspaceFile",
       "depotFile",
-      "job",
       "stream",
       "shelf",
     ]);
+    // A job has no details page, so requesting one would only yield dead rows.
+    expect(GLOBAL_SEARCH_KINDS).not.toContain("job");
+    expect(GLOBAL_SEARCH_KINDS).toHaveLength(6);
   });
   it("normalizes Unicode whitespace and rejects empty, control, and overlong input", () => {
     expect(validateSearchText("  你好\u3000[asset]  ")).toEqual({

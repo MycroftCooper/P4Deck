@@ -1,3 +1,4 @@
+import { t, tFor } from "../../shared/i18n";
 import { Download, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { currentAppVersion } from "../../app/update/updaterClient";
@@ -41,47 +42,60 @@ export function UpdateSettingsCard({
   const percent = updateProgress(snapshot);
   const running = version ?? snapshot.currentVersion;
   const status = !native
-    ? tr(
-        "仅桌面版支持自动更新。",
-        "Automatic updates are available in the desktop app only.",
-      )
+    ? t("settings.automatic.are.available")
     : snapshot.phase === "checking"
-      ? tr("正在检查更新…", "Checking for updates…")
+      ? t("settings.checking.for.updates")
       : snapshot.phase === "available"
-        ? tr(
-            `有新版本 v${snapshot.version}（当前 v${snapshot.currentVersion}）。`,
-            `Version v${snapshot.version} is available (current: v${snapshot.currentVersion}).`,
+        ? tFor(
+            zh ? "zh-CN" : "en-US",
+            "update.version.v.is.available.current.v",
+            { p1: snapshot.version ?? "", p2: snapshot.currentVersion ?? "" },
           )
         : snapshot.phase === "downloading"
           ? percent === undefined
-            ? tr("正在下载更新…", "Downloading the update…")
-            : tr(
-                `正在下载更新 ${percent}%。`,
-                `Downloading the update (${percent}%).`,
-              )
+            ? t("settings.downloading.the.update")
+            : tFor(zh ? "zh-CN" : "en-US", "update.downloading.the.update", {
+                p1: percent ?? "",
+              })
           : snapshot.phase === "installing"
-            ? tr("正在安装更新…", "Installing the update…")
+            ? t("settings.installing.the.update")
             : snapshot.phase === "ready"
               ? snapshot.applied
-                ? tr(
-                    `更新 v${snapshot.version} 已安装，正在等待重启。`,
-                    `Version v${snapshot.version} is installed and waiting for a restart.`,
+                ? tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "update.version.v.is.installed.and.waiting",
+                    { p1: snapshot.version ?? "" },
                   )
-                : tr(
-                    `更新 v${snapshot.version} 已下载，确认安装并重启后生效。`,
-                    `Version v${snapshot.version} is downloaded. Confirm install and restart to apply it.`,
+                : tFor(
+                    zh ? "zh-CN" : "en-US",
+                    "update.version.v.is.downloaded.confirm.install",
+                    { p1: snapshot.version ?? "" },
                   )
               : snapshot.phase === "restarting"
-                ? tr("正在重启…", "Restarting…")
+                ? t("settings.restarting")
                 : snapshot.phase === "error"
                   ? snapshot.applied
-                    ? tr(
-                        `更新已安装，但重启失败：${updateFailureText(snapshot.error, snapshot.errorScope ?? "restart", zh)}`,
-                        `The update is installed but the restart failed: ${updateFailureText(snapshot.error, snapshot.errorScope ?? "restart", zh)}`,
+                    ? tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "update.installedPendingRestart",
+                        {
+                          p1: updateFailureText(
+                            snapshot.error,
+                            snapshot.errorScope ?? "restart",
+                            zh,
+                          ),
+                        },
                       )
-                    : tr(
-                        `上次更新失败：${updateFailureText(snapshot.error, snapshot.errorScope ?? "check", zh)}`,
-                        `The last update failed: ${updateFailureText(snapshot.error, snapshot.errorScope ?? "check", zh)}`,
+                    : tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "update.the.last.update.failed",
+                        {
+                          p1: updateFailureText(
+                            snapshot.error,
+                            snapshot.errorScope ?? "check",
+                            zh,
+                          ),
+                        },
                       )
                   : tr(
                       `当前版本 ${running ? `v${running}` : "未知"}。`,
@@ -91,7 +105,7 @@ export function UpdateSettingsCard({
     <section className="settings-card">
       <h2>
         <Download size={18} />
-        {tr("更新", "Updates")}
+        {t("settings.updates")}
       </h2>
       <p
         className={`update-settings-status ${snapshot.phase === "error" ? "is-error" : ""}`}
@@ -108,16 +122,11 @@ export function UpdateSettingsCard({
         >
           <RefreshCw size={14} aria-hidden="true" />
           {snapshot.phase === "checking"
-            ? tr("正在检查…", "Checking…")
-            : tr("检查更新", "Check for updates")}
+            ? t("settings.checking.3")
+            : t("settings.check.for.updates")}
         </button>
       </div>
-      <p>
-        {tr(
-          "桌面版启动时及每 6 小时自动检查，有新版本时标题栏会提示。首个包含自动更新的版本需要手动安装一次，之后的版本才能自动升级。",
-          "The desktop app checks at startup and every six hours; the titlebar announces new versions. The first build that includes automatic updates must be installed manually once; later versions update themselves.",
-        )}
-      </p>
+      <p>{t("settings.the.desktop.app.checks.at.startup")}</p>
     </section>
   );
 }

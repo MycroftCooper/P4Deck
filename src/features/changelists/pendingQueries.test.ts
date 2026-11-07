@@ -1,4 +1,5 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { setLocale } from "../../shared/i18n";
+import { afterEach, expect, it, vi, beforeEach } from "vitest";
 import { backend } from "../../infrastructure/backend";
 import type { PendingChange, PendingChangePage } from "../../shared/contracts";
 import {
@@ -18,6 +19,11 @@ const change = (id: number): PendingChange => ({
   files: [],
   shelvedFiles: [],
 });
+// This suite asserts English copy; align the module resolver.
+beforeEach(() => {
+  setLocale("en-US");
+});
+
 it("searches cached pending CL metadata and files, excluding Jobs", () => {
   const cached = [
     {
