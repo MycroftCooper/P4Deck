@@ -16,6 +16,7 @@ export function TaskList({
   error,
   id,
   zh,
+  now,
 }: {
   tasks: ActiveTask[];
   id: string;
@@ -27,9 +28,45 @@ export function TaskList({
   cancelling: ReadonlySet<string>;
   error: string;
   zh: boolean;
+  /** Clock injected by the footer's 1s ticker so the elapsed label re-renders. */
+  now?: number;
 }) {
   const menu = useContextMenu();
   const [selected, setSelected] = useState<string>();
+  const locale = zh ? "zh-CN" : "en-US";
+  /** Backend task labels are "p4 <command> <args>". */
+  const syncTask = (label: string) => /^p4\s+sync\b/i.test(label.trim());
+  const elapsedSeconds = (startedAt: number) =>
+    Math.max(0, Math.floor(((now ?? Date.now()) - startedAt) / 1000));
+  /**
+   * Row detail: real counts first, then the sync processed-file approximation,
+   * then a legacy percent; the elapsed label is always appended.
+   */
+  const detailLine = (task: ActiveTask) => {
+    const counts =
+      task.current !== undefined && (task.total ?? 0) > 0
+        ? `${task.current}/${task.total}`
+        : undefined;
+    const processed =
+      counts === undefined && syncTask(task.label) && task.lines > 0
+        ? tFor(locale, "shell.sync.files.processed", { count: task.lines })
+        : undefined;
+    const percent =
+      counts === undefined &&
+      processed === undefined &&
+      task.progress !== undefined
+        ? `${Math.round(task.progress)}%`
+        : undefined;
+    const parts = [counts, processed, percent].filter((part): part is string =>
+      Boolean(part),
+    );
+    parts.push(
+      tFor(locale, "shell.task.elapsed.seconds", {
+        seconds: elapsedSeconds(task.startedAt),
+      }),
+    );
+    return parts.map((part) => ` · ${part}`).join("");
+  };
   return (
     <section
       id={id}
@@ -78,9 +115,7 @@ export function TaskList({
               {task.phase === "queued"
                 ? tFor(zh ? "zh-CN" : "en-US", "shell.queued")
                 : tFor(zh ? "zh-CN" : "en-US", "shell.running")}
-              {task.progress !== undefined
-                ? ` · ${Math.round(task.progress)}%`
-                : ""}
+              {detailLine(task)}
             </small>
             <progress
               aria-label={`${task.label} ${tFor(zh ? "zh-CN" : "en-US", "shell.progress")}`}

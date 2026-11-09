@@ -38,8 +38,21 @@ it("routes log and cancel actions to the explicit task, not an aggregate or the 
           <TaskList
             id="tasks"
             tasks={[
-              { id: "first", label: "first", phase: "running", progress: 20 },
-              { id: "second", label: "second", phase: "queued" },
+              {
+                id: "first",
+                label: "first",
+                phase: "running",
+                progress: 20,
+                lines: 0,
+                startedAt: Date.now(),
+              },
+              {
+                id: "second",
+                label: "second",
+                phase: "queued",
+                lines: 0,
+                startedAt: Date.now(),
+              },
             ]}
             cancelling={new Set()}
             error=""

@@ -508,6 +508,9 @@ export function CommandBar({
             paths: [...paths],
             revision,
             operationId,
+            // The preview already counted the transfer, so the host can report a
+            // real total. Nothing to report stays absent instead of a fake zero.
+            ...(affected > 0 ? { expectedFiles: affected } : {}),
           });
           if (result.outcome === "succeeded") failed = false;
           else failure = new Error(result.message);

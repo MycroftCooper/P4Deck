@@ -660,6 +660,8 @@ export const en: Catalog & Record<MsgKey, string> = {
     "Writing the update failed (disk space or insufficient permissions).",
   "update.alreadyLatestVersion": "You are up to date (v{version}).",
   "update.alreadyLatest": "You are up to date.",
+  "update.changelog.title": "Changelog",
+  "update.changelog.close": "Close",
   "files.address.enterOnePath": "Enter one file or folder path",
   "files.address.encodeUrl": "Encode # and ? in file URLs",
   "files.address.filePathsOnly": "File paths only",
@@ -3111,7 +3113,13 @@ export const en: Catalog & Record<MsgKey, string> = {
   "settings.type": "Type",
   "settings.unbound": "Unbound",
   "settings.unknown": "Unknown",
+  "settings.current.version": "Current version {p1}.",
+  "settings.current.version.unknown": "Current version unknown.",
   "settings.updates": "Updates",
+  "settings.updates.view.changelog": "View changelog",
+  "settings.updates.open.product.page": "Open product page",
+  "settings.updates.open.wiki": "Open wiki",
+  "settings.updates.open.failed": "Could not open the link. Please try again.",
   "settings.use.in.connection.settings": "Use in connection settings",
   "settings.use.this.connection": "Use this connection",
   "settings.user": "User",
@@ -3223,6 +3231,9 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.smooth": "Smooth",
   "shell.some.files.may.have.changed":
     "Some files may have changed. Failure or cancellation does not roll back completed changes; refresh and inspect the logs.",
+  "shell.sync.files.processed":
+    "{count, one: # file processed, other: # files processed}",
+  "shell.task.elapsed.seconds": "{seconds}s elapsed",
   "shell.the.connection.is.not.ready":
     "The connection is not ready or the status is unavailable, so a manual check is unavailable.",
   "shell.the.operation.did.not.return":

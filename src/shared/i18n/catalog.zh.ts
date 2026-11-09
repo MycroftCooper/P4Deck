@@ -611,6 +611,8 @@ export const zh = {
   "update.writeFailed": "写入更新文件失败（磁盘空间或权限不足）。",
   "update.alreadyLatestVersion": "已是最新版本 v{version}。",
   "update.alreadyLatest": "已是最新版本。",
+  "update.changelog.title": "更新日志",
+  "update.changelog.close": "关闭",
   "files.address.enterOnePath":
     "请输入单个文件或目录地址 / Enter one file or folder path",
   "files.address.encodeUrl":
@@ -2926,7 +2928,13 @@ export const zh = {
   "settings.type": "类型",
   "settings.unbound": "未绑定",
   "settings.unknown": "未知",
+  "settings.current.version": "当前版本 {p1}。",
+  "settings.current.version.unknown": "当前版本 未知。",
   "settings.updates": "更新",
+  "settings.updates.view.changelog": "查看更新日志",
+  "settings.updates.open.product.page": "打开产品主页",
+  "settings.updates.open.wiki": "打开使用文档",
+  "settings.updates.open.failed": "无法打开链接，请稍后重试。",
   "settings.use.in.connection.settings": "填入连接设置",
   "settings.use.this.connection": "使用此连接",
   "settings.user": "用户",
@@ -3033,6 +3041,8 @@ export const zh = {
   "shell.smooth": "流畅",
   "shell.some.files.may.have.changed":
     "部分文件可能已改变。取消或失败不会回滚已完成部分，请刷新并检查日志。",
+  "shell.sync.files.processed": "已处理 {count} 个文件",
+  "shell.task.elapsed.seconds": "已用时 {seconds}s",
   "shell.the.connection.is.not.ready":
     "当前连接未就绪或状态暂不可用，无法手动检查。",
   "shell.the.operation.did.not.return":
