@@ -801,10 +801,16 @@
   align-items: start;
   margin-top: 22px;
 }
-.settings-nav {
+/* Sticky belongs to the grid item, not the inner `.settings-nav`: a sticky box
+   only travels inside its containing block, and the old wrapper was exactly as
+   tall as the nav, so the nav scrolled away with the page. */
+.settings-nav-shell {
   position: sticky;
   top: 12px;
   align-self: start;
+  min-width: 0;
+}
+.settings-nav {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -946,8 +952,10 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
-  .settings-nav {
+  .settings-nav-shell {
     position: static;
+  }
+  .settings-nav {
     flex-direction: row;
     max-height: none;
     overflow-x: auto;

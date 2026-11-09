@@ -133,6 +133,7 @@ export const tauriBackend: Backend = {
   resolvePath: (request) => invoke("resolve_path", { request }),
   openLocalPath: (request) => invoke("open_local_path", { request }),
   openSwarmLink: (request) => invoke("open_swarm_link", { request }),
+  openExternalUrl: (url) => invoke("open_external_url", { url }),
   localPathCapabilities: (path) => invoke("local_path_capabilities", { path }),
   performFileAction: (request, connection) =>
     invoke("perform_file_action", {

@@ -3202,6 +3202,12 @@ export const mockBackend: Backend = {
   async openSwarmLink() {
     throw new Error("Native Swarm opening is unavailable in the browser demo.");
   },
+  async openExternalUrl(url: string) {
+    // The browser demo has no host allowlist; the real allowlist is in Rust.
+    if (typeof window !== "undefined" && typeof window.open === "function") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  },
   async localPathCapabilities() {
     return { reveal: false, openWith: false };
   },

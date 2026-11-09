@@ -51,6 +51,11 @@ const EXEMPT_FILES = [
   // it is not in the production bundle. Its copy targets the developer running
   // the audit, not a user; translating it buys nothing and adds maintenance.
   "src/app/context-menu/MenuAuditPage.tsx",
+  // Bundled release notes: the same Chinese text that is published in each
+  // update manifest and shown verbatim by the in-app changelog. It is
+  // historical release data (not translatable UI copy); localizing it would
+  // fork the published record from what users see in the updater.
+  "src/app/update/changelog.ts",
 ];
 
 /**

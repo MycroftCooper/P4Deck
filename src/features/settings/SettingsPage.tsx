@@ -242,6 +242,7 @@ export function SettingsPage({
       ></FixedPageHeader>
       <div className="settings-layout">
         <div
+          className="settings-nav-shell"
           ref={(node) => {
             navRef.current = node;
           }}
@@ -496,6 +497,7 @@ export function SettingsPage({
                     value={locale}
                     onChange={(event) => onLocale(event.target.value as Locale)}
                   >
+                    {/* i18n-exempt: a language endonym is shown in its own language, not translated copy. */}
                     <option value="zh-CN">简体中文</option>
                     <option value="en-US">English</option>
                   </select>
