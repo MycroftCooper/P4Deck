@@ -1,5 +1,7 @@
 # P4Deck
 
+[项目主页](https://mycroftcooper.github.io/P4Deck/) · [中文 Wiki](https://mycroftcooper.github.io/P4Deck/wiki/) · [下载 Windows 体验版](https://github.com/MycroftCooper/P4Deck/releases/latest)
+
 P4Deck 是一个面向 Windows 和 macOS 的现代 Helix Core 桌面客户端，专注于快速、清晰地完成 Workspace、文件状态、Changelist、Diff、Sync 和 Submit 工作流。
 
 核心目标是让 P4 后台操作永不拖卡前端，在超大 CL 和文件列表下依然流畅；通过缓存与请求治理降低服务器负载，并以现代 UI、低资源占用和 Windows/macOS 一致体验作为长期约束。完整定义见 [项目立项书](ForAIDoc/PM/项目立项书.md#核心目标)。
@@ -123,6 +125,8 @@ pnpm check             # TypeScript + Cargo，需要完整桌面环境
 - 紧急修复：从 `release` 拉 `hotfix/*`，修完先合回 `dev`，再走正常发布；不要在 release 上直改。
 
 ## 文档
+
+官网和中文 Wiki 放在 [`docs/`](docs/)，由 GitHub Pages 从 `dev` 分支的 `/docs` 发布，无需构建。修改后可运行 `py -m http.server 8080 --directory docs`（macOS 用 `python3`），打开 <http://localhost:8080/> 本地预览。页面资源使用相对路径，兼容 GitHub Pages 的 `/P4Deck/` 路径。视觉参考 [awesome-design-md](https://github.com/VoltAgent/awesome-design-md) 中的 [Linear](https://getdesign.md/linear.app/design-md) 与 [Mintlify](https://getdesign.md/mintlify/design-md)。
 
 - [项目文档入口](ForAIDoc/README.md)
 - [项目状态总览](ForAIDoc/PM/项目状态总览.md)
