@@ -59,12 +59,60 @@ if (showcase) {
     const tab = tabForHash();
     if (!tab) return;
     selectShowcase(tab);
-    document.getElementById(tab.getAttribute("aria-controls")).scrollIntoView();
+    showcase.scrollIntoView();
   }
   selectShowcase(tabForHash() ?? tabs[0]);
   tabList.hidden = false;
   window.addEventListener("hashchange", showHashPanel);
   if (tabForHash()) requestAnimationFrame(showHashPanel);
+}
+
+const screenshotDialog = document.querySelector("[data-shot-dialog]");
+if (showcase && screenshotDialog) {
+  const dialogBody = screenshotDialog.querySelector("[data-shot-dialog-body]");
+  const dialogTitle = screenshotDialog.querySelector("h3");
+  const original = screenshotDialog.querySelector("[data-shot-original]");
+  for (const link of showcase.querySelectorAll("[data-shot-open]")) {
+    const img = link.querySelector("img");
+    function imageUnavailable() {
+      link.dataset.unavailable = "";
+      link.querySelector(".shot-fallback").hidden = false;
+    }
+    img.addEventListener("error", imageUnavailable);
+    if (img.complete && !img.naturalWidth) imageUnavailable();
+    link.addEventListener("click", (event) => {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        link.hasAttribute("data-unavailable") ||
+        typeof screenshotDialog.showModal !== "function"
+      )
+        return;
+      event.preventDefault();
+      const figure = link.closest("figure");
+      dialogTitle.textContent = figure
+        .querySelector(".shot-header")
+        .innerText.replace(/\s+/g, " · ");
+      const enlarged = document.createElement("div");
+      enlarged.className = "shot-image shot-enlarged";
+      for (const child of link.querySelectorAll("img, .shot-marker")) {
+        enlarged.append(child.cloneNode(true));
+      }
+      enlarged.querySelector("img").loading = "eager";
+      dialogBody.className = `screenshot-dialog-body ${figure.classList.contains("shot-p4v") ? "shot-p4v" : "shot-p4deck"}`;
+      dialogBody.replaceChildren(
+        enlarged,
+        figure.querySelector(".shot-notes").cloneNode(true),
+      );
+      original.href = link.href;
+      screenshotDialog.showModal();
+    });
+  }
+  screenshotDialog.addEventListener("close", () =>
+    dialogBody.replaceChildren(),
+  );
 }
 
 const wikiQuery = document.getElementById("wiki-query");
