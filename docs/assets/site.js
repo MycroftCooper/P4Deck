@@ -13,6 +13,60 @@ for (const button of previewButtons) {
   });
 }
 
+const showcase = document.querySelector("[data-showcase]");
+if (showcase) {
+  const tabList = showcase.querySelector("[data-showcase-tabs]");
+  const tabs = [...tabList.querySelectorAll('[role="tab"]')];
+  const panels = [...showcase.querySelectorAll("[data-showcase-panel]")];
+
+  function selectShowcase(tab, updateUrl = false) {
+    const target = tab.getAttribute("aria-controls");
+    for (const item of tabs) {
+      item.setAttribute("aria-selected", String(item === tab));
+      item.tabIndex = item === tab ? 0 : -1;
+    }
+    for (const panel of panels) panel.hidden = panel.id !== target;
+    if (updateUrl) window.history.replaceState(null, "", `#${target}`);
+  }
+
+  function tabForHash() {
+    return tabs.find(
+      (tab) => `#${tab.getAttribute("aria-controls")}` === window.location.hash,
+    );
+  }
+
+  for (const panel of panels) {
+    panel.setAttribute("role", "tabpanel");
+  }
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => selectShowcase(tab, true));
+    tab.addEventListener("keydown", (event) => {
+      const index = tabs.indexOf(tab);
+      const next = {
+        ArrowLeft: index - 1,
+        ArrowRight: index + 1,
+        Home: 0,
+        End: tabs.length - 1,
+      }[event.key];
+      if (next === undefined) return;
+      event.preventDefault();
+      const target = tabs[(next + tabs.length) % tabs.length];
+      selectShowcase(target, true);
+      target.focus();
+    });
+  }
+  function showHashPanel() {
+    const tab = tabForHash();
+    if (!tab) return;
+    selectShowcase(tab);
+    document.getElementById(tab.getAttribute("aria-controls")).scrollIntoView();
+  }
+  selectShowcase(tabForHash() ?? tabs[0]);
+  tabList.hidden = false;
+  window.addEventListener("hashchange", showHashPanel);
+  if (tabForHash()) requestAnimationFrame(showHashPanel);
+}
+
 const wikiQuery = document.getElementById("wiki-query");
 const wikiResults = document.getElementById("wiki-results");
 const wikiStatus = document.getElementById("wiki-search-status");

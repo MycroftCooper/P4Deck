@@ -2,3 +2,4 @@
 *.js text eol=lf
 # Pages needs the file itself when publishing directly from a branch.
 assets/mark.png -filter -diff -merge -text
+assets/ui/*.png -filter -diff -merge -text

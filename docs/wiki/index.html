@@ -45,8 +45,9 @@
           <p>日常工作</p>
           <a href="#workspace">工作区、同步和对账</a
           ><a href="#changelists">Pending、搁置与提交</a
-          ><a href="#review">Diff、历史与分支</a><a href="#search">搜索与定位</a
-          ><a href="#submitted">Submitted 与周报</a>
+          ><a href="#review">Diff、预览与历史</a><a href="#search">搜索与定位</a
+          ><a href="#submitted">提交类型与周报</a
+          ><a href="#trace">追踪合并去向</a>
           <p>进阶和排错</p>
           <a href="#responsiveness">缓存与乐观更新</a
           ><a href="#tools">终端、日志与操作记录</a
@@ -81,9 +82,10 @@
             ><a href="#first-submit">第一次提交</a
             ><a href="#workspace">工作区、同步和对账</a
             ><a href="#changelists">Pending、搁置与提交</a
-            ><a href="#review">Diff、历史与分支</a
+            ><a href="#review">Diff、预览与历史</a
             ><a href="#search">搜索与定位</a
-            ><a href="#submitted">Submitted 与周报</a
+            ><a href="#submitted">提交类型与周报</a
+            ><a href="#trace">追踪合并去向</a
             ><a href="#responsiveness">缓存与乐观更新</a
             ><a href="#tools">终端、日志与操作记录</a
             ><a href="#p4vfs">P4VFS 虚拟工作区</a
@@ -271,10 +273,14 @@
               把改动副本放在服务器，方便审查或接力。打开「查看搁置内容」预览；需要应用时选「Unshelve
               到 CL」，核对目标 Workspace、CL 和文件。
             </li>
-            <li>
-              <strong>处理冲突。</strong> 若预检提示需要
-              Resolve，先看涉及的文件和版本，选择适当策略，再复查差异。手工文本合并仍在验收；需要时可按团队已有的
-              P4V/P4Merge 流程处理。
+            <li id="resolve">
+              <strong>解决文件合并（Resolve）。</strong> 对需要 Resolve
+              的文件打开「解决文件合并」。左侧选文件，右侧核对
+              Base（共同基线）、Depot
+              来源和本地目标。若界面标为可自动合并且无剩余冲突，可接受自动合并；保留来源或保留本地会舍弃另一侧的独有修改。需要手工处理时可打开已安装的
+              P4Merge，处理后再核对差异和提交预检。<a href="../#ui-resolve"
+                >查看示例界面</a
+              >。
             </li>
           </ul>
         </section>
@@ -282,11 +288,11 @@
         <section
           id="review"
           class="doc-chapter"
-          data-keywords="对比 diff history revision graph stream branch mapping 分支流 修订图 历史"
+          data-keywords="对比 diff history revision graph stream branch mapping 分支流 修订图 历史 文件预览 Excel XLSX XLSM CSV TSV 图片"
           aria-labelledby="review-title"
         >
           <span class="kicker">06 / 审查改动</span>
-          <h2 id="review-title">Diff、文件历史与分支</h2>
+          <h2 id="review-title">Diff、文件预览与历史</h2>
           <ul class="guide-list">
             <li>
               <strong>看本地改了什么。</strong> 从工作区或 Pending
@@ -298,6 +304,15 @@
               <strong>找出哪次提交改的。</strong>
               右键文件打开「文件历史」，点修订看对应
               CL。选中两条修订后用「比较所选修订」；想了解分支间的修订关系，打开「修订图」。
+            </li>
+            <li id="file-preview">
+              <strong>打开文件预览。</strong>
+              选中本地工作区中的文件，点工具栏的「文件预览」。可以查看文本、常见图片及
+              CSV、TSV、XLSX、XLSM 表格；Excel
+              文件可切换工作表。大文件可能只显示一部分，以界面提示为准。<a
+                href="../#ui-preview"
+                >查看示例界面</a
+              >。
             </li>
             <li>
               <strong>看 Stream 和映射。</strong> 在「分支流」查看 Stream
@@ -336,21 +351,51 @@
           aria-labelledby="submitted-title"
         >
           <span class="kicker">08 / 提交记录</span>
-          <h2 id="submitted-title">从 Submitted 到周报</h2>
+          <h2 id="submitted-title">按提交类型筛选，再整理周报</h2>
           <ol class="steps">
             <li>
               打开「变更列表 → Submitted」。按用户、日期、Depot 路径或 Stream
               收窄范围。选多个 Stream 时，匹配其中任意一个即可。
             </li>
             <li>
-              展开 CL 查看文件与描述。若用提交类型降噪，把疑似 CI
-              和自动生成分类当线索；它们来自规则判断，不能证明提交者身份。
+              用「提交类型」切换<strong>普通提交</strong>、<strong
+                >CI 合并</strong
+              >、<strong>自动生成</strong>或全部。整理日常工作时先看普通提交，排查流水线时单独看后两类。分类按提交描述规则判断，不能证明提交者身份。<a
+                href="../#ui-submitted"
+                >查看筛选界面</a
+              >。
             </li>
             <li>
               点「生成周报提示词」，选一个用户和日期区间。生成后先检查条目与 CL
               引用；若界面提示部分结果，补查后再使用。提示词在本地生成，由你决定是否复制和分享。
             </li>
           </ol>
+        </section>
+
+        <section
+          id="trace"
+          class="doc-chapter"
+          data-keywords="追踪合并去向 合入 CI 来源 CL 直接 间接 合并链 路径 Workspace Client"
+          aria-labelledby="trace-title"
+        >
+          <span class="kicker">进阶 / 合并去向</span>
+          <h2 id="trace-title">从源 CL 追踪后续合并</h2>
+          <ol class="steps">
+            <li>
+              在「已提交」找到要追踪的源
+              CL，右键点「追踪合并去向」，再点「查询合并去向」。
+            </li>
+            <li>
+              查看命中的 CL、时间、描述和每条合并记录自己的 Workspace /
+              Client。比如 CL 18441 引用了源 CL 18428，而 CL 18456 又引用了
+              18441，两条合并都能找到。
+            </li>
+            <li>
+              如果结果标为不完整，可继续查询。这项功能依赖可识别的 CI 来源 CL
+              元数据；没有结果不代表没有合入，也不代表目标现在仍包含那次改动。
+            </li>
+          </ol>
+          <p><a href="../#ui-trace">查看两跳追踪示例 →</a></p>
         </section>
 
         <section

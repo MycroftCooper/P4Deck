@@ -26,8 +26,8 @@
           />P4Deck<span class="brand-dot">.</span></a
         >
         <nav class="main-nav" aria-label="主导航">
-          <a href="#features">功能</a><a href="#compare">对比 P4V</a
-          ><a href="wiki/">Wiki</a>
+          <a href="#showcase">界面</a><a href="#features">功能</a
+          ><a href="#compare">对比 P4V</a><a href="wiki/">Wiki</a>
         </nav>
         <a
           class="button button-small button-quiet header-github"
@@ -251,14 +251,15 @@
             <span>工作场景</span><span>P4V</span><span>P4Deck <i>✳</i></span>
           </div>
           <div class="compare-row">
-            <h3><span>01</span> 只提交这几个文件</h3>
+            <h3><span>01</span> 从历史里看改动</h3>
             <p>
-              <span class="mobile-label">P4V</span>可以提交单个 CL
-              或选择文件，也能先在 CL 之间整理文件。
+              <span class="mobile-label">P4V</span>可以从文件历史调用 Diff
+              工具，新版也提供内置 Diff Summary。
             </p>
             <p>
-              <span class="mobile-label">P4Deck</span>直接跨多个 Pending CL
-              勾选文件，复核后用新 CL 提交本次选择。
+              <span class="mobile-label">P4Deck</span
+              >选中两个修订，直接在工作台打开 Diff
+              标签。未改行可以折叠，想看上下文再展开。
             </p>
           </div>
           <div class="compare-row">
@@ -268,8 +269,9 @@
               和已保存的筛选条件查看提交记录。
             </p>
             <p>
-              <span class="mobile-label">P4Deck</span>按多个 Stream
-              筛选，识别疑似自动提交，还能按用户和日期在本地生成周报提示词。
+              <span class="mobile-label">P4Deck</span>在 Submitted
+              切换普通提交、CI
+              合并和自动生成，还能按用户和日期在本地生成周报提示词。
             </p>
           </div>
           <div class="compare-row">
@@ -292,6 +294,9 @@
             href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/using.filters.html"
             >筛选</a
           >、<a
+            href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/diff-summary.html"
+            >Diff Summary</a
+          >、<a
             href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/configuring.preferences.server.html"
             >性能设置</a
           >。
@@ -300,12 +305,314 @@
 
       <section
         class="section section-band"
-        id="features"
-        aria-labelledby="features-title"
+        id="showcase"
+        aria-labelledby="showcase-title"
       >
         <div class="wrap">
           <div class="section-head">
-            <span class="kicker">02 / 核心功能</span>
+            <span class="kicker">02 / 界面实拍</span>
+            <h2 id="showcase-title">
+              看改动，也看它<br class="wide-only" />合到了哪里。
+            </h2>
+            <p>
+              打开 Diff、搜索文件、预览内容，或沿着一次提交查看后续合并。以下是
+              P4Deck 界面，截图使用示例数据。
+            </p>
+          </div>
+          <div class="showcase-highlights">
+            <a href="#ui-submitted"
+              ><span class="kicker">SUBMITTED / 提交类型</span
+              ><strong
+                >把日常提交和自动提交分开看
+                <span aria-hidden="true">↗</span></strong
+              ><span>在已提交页面按普通提交、CI 合并或自动生成筛选。</span></a
+            >
+            <a href="#ui-trace"
+              ><span class="kicker">INTEGRATION / 合并去向</span
+              ><strong
+                >从源 CL 查到后续合并 <span aria-hidden="true">↗</span></strong
+              ><span
+                >沿 CI 的来源 CL 引用找到直接或间接合并，核对各条记录的
+                Workspace。</span
+              ></a
+            >
+          </div>
+          <div class="showcase" data-showcase>
+            <div
+              class="showcase-tabs"
+              data-showcase-tabs
+              hidden
+              role="tablist"
+              aria-label="P4Deck 界面"
+            >
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-diff"
+                aria-controls="ui-diff"
+                aria-selected="true"
+              >
+                Diff
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-search"
+                aria-controls="ui-search"
+                aria-selected="false"
+              >
+                全局搜索
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-preview"
+                aria-controls="ui-preview"
+                aria-selected="false"
+              >
+                文件预览
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-resolve"
+                aria-controls="ui-resolve"
+                aria-selected="false"
+              >
+                冲突解决
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-submitted"
+                aria-controls="ui-submitted"
+                aria-selected="false"
+              >
+                提交类型
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-trace"
+                aria-controls="ui-trace"
+                aria-selected="false"
+              >
+                合并去向
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-report"
+                aria-controls="ui-report"
+                aria-selected="false"
+              >
+                周报提示词
+              </button>
+            </div>
+
+            <article
+              class="showcase-panel"
+              id="ui-diff"
+              data-showcase-panel
+              aria-labelledby="ui-title-diff"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">DIFF / 审查改动</span>
+                <h3 id="ui-title-diff">先看改动，再展开上下文</h3>
+                <p>
+                  在同一个工作台对照本地和仓库修订。折叠未改行，快速在差异块之间跳转；需要时也可以从文件历史选择两个修订来比较。
+                </p>
+                <a href="wiki/#review">Diff 使用指南 →</a>
+              </div>
+              <figure>
+                <a href="assets/ui/diff.png" aria-label="查看 Diff 原图"
+                  ><img
+                    src="assets/ui/diff.png"
+                    alt="P4Deck Diff：双栏对照 Have 版本与工作区，突出行内差异，折叠 25 行未修改内容"
+                    width="1280"
+                    height="800"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-search"
+              data-showcase-panel
+              aria-labelledby="ui-title-search"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">SEARCH / 快速定位</span>
+                <h3 id="ui-title-search">一个输入框，找六类对象</h3>
+                <p>
+                  按关键词找 Pending、Submitted、工作区文件、Depot 文件、Stream
+                  和
+                  Shelf。按类别打开结果；达到搜索范围上限时，界面会标出结果不完整。
+                </p>
+                <a href="wiki/#search">搜索使用指南 →</a>
+              </div>
+              <figure>
+                <a href="assets/ui/search.png" aria-label="查看全局搜索原图"
+                  ><img
+                    src="assets/ui/search.png"
+                    alt="P4Deck 全局搜索：同一关键词同时查询 Pending 和 Shelf，按类别显示结果"
+                    loading="lazy"
+                    width="1400"
+                    height="1000"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-preview"
+              data-showcase-panel
+              aria-labelledby="ui-title-preview"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">PREVIEW / 文件预览</span>
+                <h3 id="ui-title-preview">在工作台直接看文件内容</h3>
+                <p>
+                  选中文件就能预览文本、常见图片或表格。CSV、TSV 和 Excel
+                  工作簿可以按表格查看，Excel 预览还能切换工作表。
+                </p>
+                <a href="wiki/#file-preview">文件预览指南 →</a>
+              </div>
+              <figure>
+                <a href="assets/ui/preview.png" aria-label="查看文件预览原图"
+                  ><img
+                    src="assets/ui/preview.png"
+                    alt="P4Deck 文件预览以表格显示 Excel 示例数据，并提供工作表切换"
+                    loading="lazy"
+                    width="1300"
+                    height="690"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-resolve"
+              data-showcase-panel
+              aria-labelledby="ui-title-resolve"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">RESOLVE / 冲突解决</span>
+                <h3 id="ui-title-resolve">先看清三方版本，再决定怎么合</h3>
+                <p>
+                  左侧列出待处理文件。右侧分开展示共同基线、Depot
+                  来源、本地目标和冲突块。没有剩余冲突时可接受自动合并，也可以保留一侧，或打开已安装的
+                  P4Merge 手工处理。
+                </p>
+                <a href="wiki/#resolve">解决文件合并指南 →</a>
+              </div>
+              <figure>
+                <a
+                  href="assets/ui/resolve.png"
+                  aria-label="查看解决文件合并原图"
+                  ><img
+                    src="assets/ui/resolve.png"
+                    alt="解决文件合并界面，左侧待处理文件，右侧共同基线、Depot 来源、本地目标、合并结果及操作"
+                    loading="lazy"
+                    width="1120"
+                    height="778"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-submitted"
+              data-showcase-panel
+              aria-labelledby="ui-title-submitted"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">SUBMITTED / 提交类型</span>
+                <h3 id="ui-title-submitted">只看你关心的提交类型</h3>
+                <p>
+                  已提交列表可以在<strong>普通提交</strong>、<strong
+                    >CI 合并</strong
+                  >与<strong>自动生成</strong>之间切换。想回顾本周工作就看普通提交，想排查流水线就切到
+                  CI 合并。分类来自提交描述规则。
+                </p>
+                <a href="wiki/#submitted">提交类型与筛选指南 →</a>
+              </div>
+              <figure>
+                <a
+                  href="assets/ui/submitted.png"
+                  aria-label="查看已提交筛选原图"
+                  ><img
+                    src="assets/ui/submitted.png"
+                    alt="P4Deck 已提交页面，展示普通提交、CI 合并和自动生成三类记录"
+                    loading="lazy"
+                    width="1440"
+                    height="1120"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-trace"
+              data-showcase-panel
+              aria-labelledby="ui-title-trace"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">TRACE / 合并去向</span>
+                <h3 id="ui-title-trace">一条 CL，追到后续的合并提交</h3>
+                <p class="trace-example">
+                  <code>CL 18428 → CL 18441 → CL 18456</code>
+                </p>
+                <p>
+                  在 Submitted 里右键源 CL，选「追踪合并去向」。P4Deck 沿 CI
+                  描述中的来源 CL 引用查找直接和间接合并，列出命中的 CL 与各自的
+                  Workspace。没有可识别的引用时，不能据此判断是否已合入。
+                </p>
+                <a href="wiki/#trace">合并去向追踪指南 →</a>
+              </div>
+              <figure>
+                <a href="assets/ui/trace.png" aria-label="查看追踪合并去向原图"
+                  ><img
+                    src="assets/ui/trace.png"
+                    alt="追踪合并去向界面，列出源 CL 的后续合并提交及各自的 Workspace"
+                    loading="lazy"
+                    width="1100"
+                    height="458"
+                /></a>
+              </figure>
+            </article>
+            <article
+              class="showcase-panel showcase-portrait"
+              id="ui-report"
+              data-showcase-panel
+              aria-labelledby="ui-title-report"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">REPORT / 周报提示词</span>
+                <h3 id="ui-title-report">从真实提交记录整理周报</h3>
+                <p>
+                  按用户和日期选范围，默认只整理普通提交。提示词在本地生成，保留
+                  CL 编号，确认后可以一键复制。
+                </p>
+                <a href="wiki/#submitted">周报使用指南 →</a>
+              </div>
+              <figure>
+                <a href="assets/ui/report.png" aria-label="查看周报提示词原图"
+                  ><img
+                    src="assets/ui/report.png"
+                    alt="周报提示词窗口，显示用户、日期范围、提交类型和带 CL 编号的结果"
+                    loading="lazy"
+                    width="620"
+                    height="774"
+                /></a>
+              </figure>
+            </article>
+          </div>
+          <p class="source-note">
+            截图展示开发版界面，具体可用功能以安装版本为准。
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="wrap">
+          <div class="section-head">
+            <span class="kicker">03 / 核心功能</span>
             <h2 id="features-title">
               从同步到提交，<br class="wide-only" />每一步都有落点。
             </h2>
@@ -358,9 +665,10 @@
             <a class="feature" href="wiki/#submitted"
               ><span class="feature-icon" aria-hidden="true">▤</span
               ><span class="feature-index">05</span>
-              <h3>提交记录与周报</h3>
+              <h3>提交分类、合并去向与周报</h3>
               <p>
-                组合筛选 Submitted、查看 CL 详情，生成带 CL 引用的周报提示词。
+                区分普通提交、CI 合并和自动生成，追踪后续合并，再生成带 CL
+                引用的周报提示词。
               </p>
               <span class="feature-link">打开指南 →</span></a
             >
@@ -381,7 +689,7 @@
       <section class="section wrap" aria-labelledby="start-title">
         <div class="start-panel">
           <div>
-            <span class="kicker">03 / 第一次打开 P4Deck</span>
+            <span class="kicker">04 / 第一次打开 P4Deck</span>
             <h2 id="start-title">从第一次连接开始。</h2>
             <p>
               准备 Server、User 和 Workspace，按指南走一遍：连接 → 同步 → Diff →
