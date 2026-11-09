@@ -1243,6 +1243,8 @@ mod tests {
                     kind: EventKind::Stdout,
                     message: Some(message.into()),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: String::new(),
                 }],
             };
@@ -1344,7 +1346,7 @@ mod tests {
                 return Err("inspection unknown".into());
             }
             let changes = self.changes.lock().clone();
-            let facts=changes.iter().flat_map(|c|c.files.iter().filter(|f|r.files.iter().any(|s|s.depot_path==f.depot_path)).map(move|f|serde_json::json!({"depotFile":f.depot_path,"action":f.action,"change":if c.id==0{"default".to_string()}else{c.id.to_string()}}))).map(|v|OperationEvent{operation_id:"mock".into(),kind:EventKind::Stdout,message:Some(v.to_string()),progress:None,timestamp:String::new()}).collect::<Vec<_>>();
+            let facts=changes.iter().flat_map(|c|c.files.iter().filter(|f|r.files.iter().any(|s|s.depot_path==f.depot_path)).map(move|f|serde_json::json!({"depotFile":f.depot_path,"action":f.action,"change":if c.id==0{"default".to_string()}else{c.id.to_string()}}))).map(|v|OperationEvent{operation_id:"mock".into(),kind:EventKind::Stdout,message:Some(v.to_string()),progress:None,progress_current:None,progress_total:None,timestamp:String::new()}).collect::<Vec<_>>();
             Ok(crate::p4::workflows::MoveInspection {
                 changes,
                 facts: crate::p4::workflows::parser::file_facts(&facts),
@@ -1437,6 +1439,8 @@ mod tests {
                 kind: EventKind::Stdout,
                 message: Some("{\"severity\":3}".into()),
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: String::new(),
             }],
         };

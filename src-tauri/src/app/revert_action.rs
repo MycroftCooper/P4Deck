@@ -114,6 +114,8 @@ mod tests {
                     kind: EventKind::Stdout,
                     message: Some(v.to_string()),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: String::new(),
                 })
                 .collect(),

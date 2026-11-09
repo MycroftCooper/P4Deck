@@ -812,6 +812,8 @@ mod tests {
                 kind: crate::domain::EventKind::Stdout,
                 message: Some("not-json".into()),
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: "now".into(),
             }],
         };

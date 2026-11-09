@@ -263,6 +263,8 @@ mod tests {
                     message: Some(v.to_string()),
                     timestamp: String::new(),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                 })
                 .collect(),
         }

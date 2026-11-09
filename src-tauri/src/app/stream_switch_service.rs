@@ -1662,6 +1662,8 @@ mod tests {
                 kind: EventKind::Stderr,
                 message: Some("No file(s) to reconcile.".into()),
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: String::new(),
             }],
         };

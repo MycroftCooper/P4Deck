@@ -1996,6 +1996,7 @@ mod tests {
                     force: false,
                     parallel_threads: None,
                     operation_id: None,
+                    expected_files: None,
                 },
                 None,
             )
@@ -8510,6 +8511,7 @@ mod tests {
             force,
             parallel_threads: None,
             operation_id: None,
+            expected_files: None,
         }
     }
 

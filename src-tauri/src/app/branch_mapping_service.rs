@@ -1567,6 +1567,8 @@ mod tests {
                 kind: EventKind::Stderr,
                 message: Some("Protections table denies permission".into()),
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: "2026-10-10T00:00:00Z".into(),
             }],
             duration_ms: 1,

@@ -413,6 +413,8 @@ mod tests {
                 kind,
                 message: Some(message.into()),
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: String::new(),
             }],
         };

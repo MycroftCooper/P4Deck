@@ -33,6 +33,10 @@ const MAX_P4_DETAIL_CHARS: usize = 512;
 /// A failed mapping preflight lists at most this many offending targets.
 const MAX_REPORTED_UNMAPPED_PATHS: usize = 5;
 
+/// Upper bound for a caller-provided expected file count; a larger value is
+/// treated as unknown instead of stretching the progress bar over nonsense.
+const MAX_EXPECTED_FILES: usize = 1_000_000;
+
 /// What a sync review binds next to its target snapshot.
 ///
 /// The digest is the preview content digest; the reviewed paths/counts ride
@@ -169,6 +173,9 @@ impl SyncService {
     ) -> SyncResult {
         let (context, _) = self.contexts.snapshot();
         let (args, input) = execution_arguments(target);
+        // The reviewed plan is the only count the confirm path has; progress is
+        // reported only when the preview actually saw work to do.
+        let expected_files = review.counts.added + review.counts.updated + review.counts.deleted;
         let execution = self
             .runner
             .run_with_mutation_guard_and_input(
@@ -184,7 +191,7 @@ impl SyncService {
                     input: None,
                 },
                 app,
-                Some(review.counts.added + review.counts.updated + review.counts.deleted),
+                (expected_files > 0).then_some(expected_files),
                 input,
                 guard,
             )
@@ -312,6 +319,18 @@ impl SyncService {
         request: SyncPreviewRequest,
         app: Option<&AppHandle>,
     ) -> SyncResult {
+        self.sync_latest_with_events(request, app).await.0
+    }
+
+    /// Same work as [`Self::sync_latest`], but also hands back the runner events
+    /// of the real transfer so the progress contract can be asserted without an
+    /// `AppHandle` (the runner only emits UI events when one is attached).
+    async fn sync_latest_with_events(
+        &self,
+        request: SyncPreviewRequest,
+        app: Option<&AppHandle>,
+    ) -> (SyncResult, Vec<OperationEvent>) {
+        let progress_total = progress_total_from_expected(request.expected_files);
         let (context, generation) = self.contexts.snapshot();
         let latest = SyncPreviewRequest {
             paths: request.paths.clone(),
@@ -322,28 +341,34 @@ impl SyncService {
             force: false,
             parallel_threads: request.parallel_threads,
             operation_id: request.operation_id.clone(),
+            expected_files: None,
         };
         let target = match target_snapshot(&context, generation, &latest) {
             Ok(target) => target,
             Err(message) => {
-                return SyncResult {
-                    outcome: SyncOutcome::Failed,
-                    failure: Some(SyncFailureCode::CommandFailure),
-                    message: format!("Get Latest was rejected before running p4 sync: {message}"),
-                    operation_id: None,
-                    log_reference: None,
-                    affected_paths: request.paths,
-                    counts: SyncPlanCounts::default(),
-                    refresh_workspace: true,
-                    refresh_depot: true,
-                };
+                return (
+                    SyncResult {
+                        outcome: SyncOutcome::Failed,
+                        failure: Some(SyncFailureCode::CommandFailure),
+                        message: format!(
+                            "Get Latest was rejected before running p4 sync: {message}"
+                        ),
+                        operation_id: None,
+                        log_reference: None,
+                        affected_paths: request.paths,
+                        counts: SyncPlanCounts::default(),
+                        refresh_workspace: true,
+                        refresh_depot: true,
+                    },
+                    Vec::new(),
+                );
             }
         };
 
         let operation_id = valid_operation_id(request.operation_id)
             .unwrap_or_else(|| format!("sync-latest-{}", Uuid::new_v4()));
         if let Err(failure) = self.where_preflight(&context, &target, app).await {
-            return failure;
+            return (failure, Vec::new());
         }
         let (args, input) = execution_arguments(&target);
         let mutation_guard = self.runner.lock_mutations(&context.server).await;
@@ -362,12 +387,16 @@ impl SyncService {
                     input: None,
                 },
                 app,
-                None,
+                progress_total,
                 input,
                 &mutation_guard,
             )
             .await;
 
+        let sync_events = execution
+            .as_ref()
+            .map(|operation| operation.events.clone())
+            .unwrap_or_default();
         let paths = target.paths.clone();
         self.status_cache.invalidate(
             &context.server,
@@ -382,23 +411,26 @@ impl SyncService {
             InvalidationReason::FileMutation,
         );
 
-        match execution {
+        let result = match execution {
             Ok(operation) if operation.exit_code == 0 => {
                 // A zero exit code is not proof of a clean sync: p4 2023.1 can
                 // emit warning/error records (severity >= 2) and still exit 0.
                 if let Some(detail) = sync_warning_detail(&operation) {
                     let failure = classify_failure(&detail);
-                    return SyncResult {
-                        outcome: SyncOutcome::Failed,
-                        failure: Some(failure),
-                        message: failure_message_with_detail(failure, &detail),
-                        operation_id: Some(operation_id.clone()),
-                        log_reference: Some(operation_id),
-                        affected_paths: paths.clone(),
-                        counts: SyncPlanCounts::default(),
-                        refresh_workspace: true,
-                        refresh_depot: true,
-                    };
+                    return (
+                        SyncResult {
+                            outcome: SyncOutcome::Failed,
+                            failure: Some(failure),
+                            message: failure_message_with_detail(failure, &detail),
+                            operation_id: Some(operation_id.clone()),
+                            log_reference: Some(operation_id),
+                            affected_paths: paths.clone(),
+                            counts: SyncPlanCounts::default(),
+                            refresh_workspace: true,
+                            refresh_depot: true,
+                        },
+                        sync_events,
+                    );
                 }
                 SyncResult {
                     outcome: SyncOutcome::Succeeded,
@@ -467,7 +499,8 @@ impl SyncService {
                     refresh_depot: true,
                 }
             }
-        }
+        };
+        (result, sync_events)
     }
 
     /// Read-only `p4 where` mapping preflight for the one-click Get Latest path.
@@ -483,11 +516,22 @@ impl SyncService {
         target: &SyncTargetSnapshot,
         app: Option<&AppHandle>,
     ) -> Result<(), SyncResult> {
+        // `p4 where` answers for a concrete file or subdirectory but refuses the
+        // client root itself ("must refer to client"). A target that is the
+        // workspace root is inside the client view by construction, so it is not
+        // queried: a whole-workspace Get Latest skips the preflight instead of
+        // being blocked by a question p4 cannot answer.
+        let workspace_root = workspace_root_key(context);
         let expected = target
             .paths
             .iter()
-            .map(|path| strip_recursive_suffix(path).to_owned())
+            .map(|path| strip_recursive_suffix(path))
+            .filter(|path| compare_path(path) != workspace_root)
+            .map(str::to_owned)
             .collect::<Vec<_>>();
+        if expected.is_empty() {
+            return Ok(());
+        }
         let operation_id = format!("sync-where-{}", Uuid::new_v4());
         let (args, input) = append_or_stream(Vec::new(), expected.clone());
         let execution = self
@@ -1096,7 +1140,10 @@ fn normalize_sync_path(context: &P4Context, value: &str) -> Result<String, Strin
     if !checked.starts_with(&root) {
         return Err("Sync target escapes the current workspace root.".into());
     }
-    let mut result = checked.to_string_lossy().to_string();
+    // `canonicalize()` produces a verbatim Windows path; `p4 where` and `p4
+    // sync` reject that form as "not under client's root", so p4 gets the
+    // plain DOS/UNC syntax while the escape check above keeps the canonical one.
+    let mut result = plain_local_path(checked.to_string_lossy().as_ref());
     if recursive {
         result.push_str("/...");
     }
@@ -1191,6 +1238,28 @@ fn compare_path(path: &str) -> String {
         path.strip_prefix("//?/").unwrap_or(&path).to_owned()
     };
     path.trim_end_matches('/').to_ascii_lowercase()
+}
+
+/// P4 accepts ordinary DOS/UNC paths but not the verbatim (`\\?\`) form that
+/// `std::fs::canonicalize` returns on Windows: it reports such an argument as
+/// "not under client's root". Everything after the canonicalize boundary hands
+/// p4 this plain syntax.
+fn plain_local_path(path: &str) -> String {
+    match path.strip_prefix(r"\\?\UNC\") {
+        Some(unc) => format!(r"\\{unc}"),
+        None => path.strip_prefix(r"\\?\").unwrap_or(path).to_owned(),
+    }
+}
+
+/// Comparison key for the workspace root, canonicalized the same way as a sync
+/// target so a root target is recognized regardless of short/long path form.
+fn workspace_root_key(context: &P4Context) -> String {
+    let cwd = context.cwd.as_deref().unwrap_or_default();
+    let resolved = Path::new(cwd)
+        .canonicalize()
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| cwd.to_owned());
+    compare_path(&resolved)
 }
 
 fn preflight_failure(
@@ -1861,6 +1930,12 @@ fn valid_operation_id(value: Option<String>) -> Option<String> {
     value.filter(|value| !value.trim().is_empty() && value.len() <= 256)
 }
 
+/// A caller-provided expected file count becomes the progress denominator only
+/// when it is a plausible positive count; anything else leaves progress open.
+fn progress_total_from_expected(expected_files: Option<usize>) -> Option<usize> {
+    expected_files.filter(|expected| (1..=MAX_EXPECTED_FILES).contains(expected))
+}
+
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
@@ -1932,6 +2007,8 @@ mod tests {
                             .into(),
                     ),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: String::new(),
                 },
                 OperationEvent {
@@ -1939,6 +2016,8 @@ mod tests {
                     kind: EventKind::Stderr,
                     message: Some("//depot/b.txt - can't clobber writable file".into()),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: String::new(),
                 },
             ],
@@ -1985,6 +2064,8 @@ mod tests {
                     kind: EventKind::Stdout,
                     message: Some((*line).into()),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: String::new(),
                 })
                 .collect(),
@@ -2047,6 +2128,29 @@ mod tests {
             r"\\?\UNC\server\share\file.txt",
             r"\\server\share\file.txt"
         ));
+    }
+
+    #[test]
+    fn normalized_local_targets_never_keep_the_windows_verbatim_prefix() {
+        // `canonicalize()` returns `\\?\...` on Windows while p4 rejects that
+        // form ("Path '...' is not under client's root"), so local targets must
+        // cross into plain DOS syntax before they reach `p4 where` / `p4 sync`.
+        let directory = std::env::temp_dir()
+            .join(format!("p4deck-sync-normalize-{}", Uuid::new_v4()))
+            .join("Folder");
+        std::fs::create_dir_all(&directory).unwrap();
+        let context = P4Context {
+            cwd: Some(std::env::temp_dir().to_string_lossy().into_owned()),
+            ..P4Context::default()
+        };
+        let plain = normalize_sync_path(&context, &directory.to_string_lossy()).unwrap();
+        assert!(!plain.contains(r"\\?\"), "{plain}");
+        assert!(plain.ends_with("Folder"), "{plain}");
+        let recursive =
+            normalize_sync_path(&context, &format!("{}/...", directory.to_string_lossy())).unwrap();
+        assert!(!recursive.contains(r"\\?\"), "{recursive}");
+        assert!(recursive.ends_with("/..."), "{recursive}");
+        let _ = std::fs::remove_dir_all(directory.parent().unwrap());
     }
 
     use crate::persistence::{log_store::LogStore, operation_journal::OperationJournal};
@@ -2138,18 +2242,35 @@ mod tests {
         where_result: (i32, Option<&str>),
         sync_result: (i32, Option<&str>),
     ) -> PathBuf {
+        let (sync_exit, sync_stdout) = sync_result;
+        let sync_lines = sync_stdout.into_iter().collect::<Vec<_>>();
+        fake_p4_with_where_lines(directory, where_result, sync_exit, &sync_lines)
+    }
+
+    /// Same fake as [`fake_p4_with_where`], but the real sync prints one record
+    /// per transferred file, which is what the runner turns into progress.
+    fn fake_p4_with_where_lines(
+        directory: &Path,
+        where_result: (i32, Option<&str>),
+        sync_exit: i32,
+        sync_stdout: &[&str],
+    ) -> PathBuf {
         let calls = directory.join("calls.txt");
         let (where_exit, where_stdout) = where_result;
-        let (sync_exit, sync_stdout) = sync_result;
         #[cfg(windows)]
         {
             let executable = directory.join("fake-p4.cmd");
-            let echo = |line: &str| match line.strip_prefix("stderr:") {
-                Some(text) => format!("echo {text} 1>&2\r\n"),
-                None => format!("echo {line}\r\n"),
-            };
-            let sync_echo = sync_stdout.map(echo).unwrap_or_default();
-            let where_echo = where_stdout.map(echo).unwrap_or_default();
+            fn echo_line(line: &str) -> String {
+                match line.strip_prefix("stderr:") {
+                    Some(text) => format!("echo {text} 1>&2\r\n"),
+                    None => format!("echo {line}\r\n"),
+                }
+            }
+            let mut sync_echo = String::new();
+            for line in sync_stdout {
+                sync_echo.push_str(&echo_line(line));
+            }
+            let where_echo = where_stdout.map(echo_line).unwrap_or_default();
             let script = format!(
                 "@echo off\r\necho %*>>\"{}\"\r\necho %* | findstr /C:\" where \" >nul\r\nif not errorlevel 1 goto p4deckwhere\r\n{sync_echo}exit /b {sync_exit}\r\n:p4deckwhere\r\n{where_echo}exit /b {where_exit}\r\n",
                 calls.display()
@@ -2161,12 +2282,17 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             let executable = directory.join("fake-p4");
-            let echo = |line: &str| match line.strip_prefix("stderr:") {
-                Some(text) => format!("printf '%s\\n' '{text}' >&2\n"),
-                None => format!("printf '%s\\n' '{line}'\n"),
-            };
-            let sync_echo = sync_stdout.map(echo).unwrap_or_default();
-            let where_echo = where_stdout.map(echo).unwrap_or_default();
+            fn echo_line(line: &str) -> String {
+                match line.strip_prefix("stderr:") {
+                    Some(text) => format!("printf '%s\\n' '{text}' >&2\n"),
+                    None => format!("printf '%s\\n' '{line}'\n"),
+                }
+            }
+            let mut sync_echo = String::new();
+            for line in sync_stdout {
+                sync_echo.push_str(&echo_line(line));
+            }
+            let where_echo = where_stdout.map(echo_line).unwrap_or_default();
             let script = format!(
                 "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"{}\"\ncase \" $* \" in\n  *\" where \"*) {where_echo}exit {where_exit};;\nesac\n{sync_echo}exit {sync_exit}\n",
                 calls.display()
@@ -2228,6 +2354,7 @@ mod tests {
             force: false,
             parallel_threads: None,
             operation_id: Some("get-latest-test".into()),
+            expected_files: None,
         }
     }
 
@@ -2297,6 +2424,201 @@ mod tests {
                 .copied(),
             Some(1)
         );
+    }
+
+    #[test]
+    fn expected_file_counts_outside_the_supported_range_are_ignored() {
+        assert_eq!(progress_total_from_expected(None), None);
+        assert_eq!(progress_total_from_expected(Some(0)), None);
+        assert_eq!(progress_total_from_expected(Some(1)), Some(1));
+        assert_eq!(
+            progress_total_from_expected(Some(MAX_EXPECTED_FILES)),
+            Some(MAX_EXPECTED_FILES)
+        );
+        assert_eq!(
+            progress_total_from_expected(Some(MAX_EXPECTED_FILES + 1)),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_latest_reports_file_progress_counts_for_expected_files() {
+        let harness = latest_harness("progress-counts", |directory| {
+            fake_p4_with_where_lines(
+                directory,
+                (0, Some(WHERE_MAPPED)),
+                0,
+                &[
+                    r#"{"depotFile":"//depot/main/a","action":"updated"}"#,
+                    r#"{"depotFile":"//depot/main/b","action":"added"}"#,
+                    r#"{"depotFile":"//depot/main/c","action":"updated"}"#,
+                ],
+            )
+        });
+        let mut request = latest_request();
+        request.expected_files = Some(3);
+        let (result, events) = harness.service.sync_latest_with_events(request, None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Succeeded, "{}", result.message);
+        let progress = events
+            .iter()
+            .filter(|event| event.kind == EventKind::Progress)
+            .collect::<Vec<_>>();
+        assert_eq!(progress.len(), 3, "{events:?}");
+        assert!(
+            progress.iter().all(|event| event.progress_total == Some(3)),
+            "{events:?}"
+        );
+        assert_eq!(
+            progress
+                .iter()
+                .filter_map(|event| event.progress_current)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        let percents = progress
+            .iter()
+            .filter_map(|event| event.progress)
+            .collect::<Vec<_>>();
+        assert!(percents.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[tokio::test]
+    async fn sync_latest_ignores_unusable_expected_file_counts() {
+        for (label, expected_files) in [
+            ("unset", None),
+            ("zero", Some(0)),
+            ("oversized", Some(MAX_EXPECTED_FILES + 1)),
+        ] {
+            let harness = latest_harness(label, |directory| {
+                fake_p4_with_where_lines(
+                    directory,
+                    (0, Some(WHERE_MAPPED)),
+                    0,
+                    &[
+                        r#"{"depotFile":"//depot/main/a","action":"updated"}"#,
+                        r#"{"depotFile":"//depot/main/b","action":"updated"}"#,
+                    ],
+                )
+            });
+            let mut request = latest_request();
+            request.expected_files = expected_files;
+            let (result, events) = harness.service.sync_latest_with_events(request, None).await;
+
+            assert_eq!(
+                result.outcome,
+                SyncOutcome::Succeeded,
+                "{label}: {}",
+                result.message
+            );
+            assert!(
+                events.iter().any(|event| event.kind == EventKind::Stdout),
+                "{label}: {events:?}"
+            );
+            assert!(
+                events.iter().all(|event| event.kind != EventKind::Progress),
+                "{label}: {events:?}"
+            );
+        }
+    }
+
+    /// Request that targets the workspace root itself, e.g. the F05
+    /// "Get Latest for the entire workspace" entry (root node -> `root/...`).
+    fn root_latest_request(directory: &Path) -> SyncPreviewRequest {
+        SyncPreviewRequest {
+            paths: vec![format!("{}/...", directory.to_string_lossy())],
+            revision: SyncRevisionSpec {
+                kind: SyncRevisionKind::Head,
+                value: None,
+            },
+            force: false,
+            parallel_threads: None,
+            operation_id: Some("get-latest-root-test".into()),
+            expected_files: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn sync_latest_does_not_probe_where_for_a_whole_workspace_target() {
+        // A real `p4 where <client-root>` fails with "must refer to client",
+        // which used to block "Get Latest for the entire workspace". The root
+        // is mapped by construction, so the probe is skipped instead.
+        let harness = latest_harness("whole-workspace", |directory| {
+            fake_p4_with_where(
+                directory,
+                (
+                    1,
+                    Some(r#"stderr:{"data":"E:\\work - must refer to client.","severity":3}"#),
+                ),
+                (
+                    0,
+                    Some(r#"{"depotFile":"//depot/main/a","action":"updated"}"#),
+                ),
+            )
+        });
+        let result = harness
+            .service
+            .sync_latest(root_latest_request(&harness.directory), None)
+            .await;
+
+        assert_eq!(result.outcome, SyncOutcome::Succeeded, "{}", result.message);
+        let calls = recorded_calls(&harness.directory);
+        assert_eq!(
+            calls.len(),
+            1,
+            "the whole-workspace sync must not ask p4 where about the root: {calls:?}"
+        );
+        assert!(calls[0].contains(" sync "), "{calls:?}");
+        assert!(!calls[0].contains(" where "), "{calls:?}");
+        assert!(!calls[0].contains(r"\\?\"), "{calls:?}");
+    }
+
+    #[tokio::test]
+    async fn local_targets_reach_p4_in_plain_syntax_for_probe_and_sync() {
+        // Both commands used to receive `\\?\C:\...` from `canonicalize()`, which
+        // p4 answers with "Path '...' is not under client's root".
+        let harness = latest_harness("plain-local", |directory| {
+            let target = directory.join("Sub");
+            std::fs::create_dir_all(&target).unwrap();
+            let mapped = serde_json::json!({
+                "clientFile": "//main/Sub",
+                "depotFile": "//depot/Sub",
+                "path": target.canonicalize().unwrap().to_string_lossy(),
+            })
+            .to_string();
+            fake_p4_with_where(directory, (0, Some(&mapped)), (0, None))
+        });
+        let target = harness.directory.join("Sub");
+        let request = SyncPreviewRequest {
+            paths: vec![target.to_string_lossy().into_owned()],
+            revision: SyncRevisionSpec {
+                kind: SyncRevisionKind::Head,
+                value: None,
+            },
+            force: false,
+            parallel_threads: None,
+            operation_id: Some("get-latest-local-test".into()),
+            expected_files: None,
+        };
+        let result = harness.service.sync_latest(request, None).await;
+
+        assert_eq!(result.outcome, SyncOutcome::Succeeded, "{}", result.message);
+        let canonical = target.canonicalize().unwrap();
+        let plain = plain_local_path(&canonical.to_string_lossy());
+        let calls = recorded_calls(&harness.directory);
+        assert_eq!(calls.len(), 2, "{calls:?}");
+        let where_call = calls
+            .iter()
+            .find(|line| line.contains(" where "))
+            .expect("where preflight must run for a concrete local target");
+        assert!(!where_call.contains(r"\\?\"), "{where_call}");
+        assert!(where_call.contains(plain.as_str()), "{where_call}");
+        let sync_call = calls
+            .iter()
+            .find(|line| line.contains(" sync "))
+            .expect("the sync must run");
+        assert!(!sync_call.contains(r"\\?\"), "{sync_call}");
+        assert!(sync_call.contains(plain.as_str()), "{sync_call}");
     }
 
     #[tokio::test]
