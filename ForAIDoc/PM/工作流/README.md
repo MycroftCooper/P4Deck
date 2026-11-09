@@ -96,6 +96,12 @@ artifacts/evidence/agile-<n>/
 
 不许推进：manifest 未冻结、QA 未绑定、原树漂移、用户未确认 dev 关闭、夹带未验切片。
 
+**发布正文必须是中英双语（GitHub release + 应用内更新日志）**：
+
+- 模板 [发布说明模板](发布说明模板.md)；填好后放 `artifacts/release-notes-<version>.md`，用 `node scripts/validate-release-notes.mjs --version <version> <file>` 校验，再以 `--notes-file` 传给 `scripts/publish-update.mjs`。GitHub 正文中文在上、英文折叠在 `<details>`；缺任一语言发布会直接拒绝。`latest.json` 的 `notes` 继续取中文段。
+- 应用内「设置 → 更新 → 查看更新日志」的数据在 `src/app/update/changelog.ts`，每个版本中英各一组条目；`pnpm validate:changelog` 已进入 `ci:quick`/`ci:local`，版本号涨了却没有条目会直接失败。
+- 只补已发布 release 的正文：`node scripts/update-release-notes.mjs --version x.y.z --notes-file <file>`（先 `--dry-run`；需要 `GITHUB_TOKEN` 或已存 git 凭据），不动资产与签名。
+
 ## 3. 门禁分层
 
 | 层 | 命令 | 能证明什么 | 适用通道 |
