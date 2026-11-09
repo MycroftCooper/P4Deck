@@ -1,11 +1,13 @@
 import { t } from "../../shared/i18n";
-import { releasesNewestFirst } from "../../app/update/changelog";
+import { notesFor, releasesNewestFirst } from "../../app/update/changelog";
 import { Dialog } from "../../app/dialogs/Dialog";
 import "./changelog.css";
 
 /**
  * Local release history for Settings -> Updates. It reads the bundled data and
- * never touches the update service, so it works in the browser demo too.
+ * never touches the update service, so it works in the browser demo too. The
+ * bullets follow the application locale; a release that is still missing a
+ * translation falls back to the other language instead of rendering nothing.
  */
 export function ChangelogDialog({
   zh,
@@ -15,6 +17,7 @@ export function ChangelogDialog({
   onClose(): void;
 }) {
   const releases = releasesNewestFirst();
+  const locale = zh ? "zh-CN" : "en-US";
   return (
     <Dialog
       title={t("update.changelog.title")}
@@ -36,7 +39,7 @@ export function ChangelogDialog({
               )}
             </h3>
             <ul>
-              {release.notes.map((note, index) => (
+              {notesFor(release, locale).map((note, index) => (
                 <li key={index}>{note}</li>
               ))}
             </ul>

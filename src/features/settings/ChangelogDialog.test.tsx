@@ -7,14 +7,26 @@ import { ChangelogDialog } from "./ChangelogDialog";
 
 /**
  * Deliberately mis-ordered fixtures: the dialog must delegate the ordering to
- * `releasesNewestFirst` instead of trusting the source order.
+ * `releasesNewestFirst` instead of trusting the source order. Every release
+ * carries both languages so the locale choice can be asserted.
  */
 const data = vi.hoisted(() => ({
   calls: [] as unknown[],
   releases: [
-    { version: "0.1.7", notes: ["first release"] },
-    { version: "0.1.12", date: "2026-11-07", notes: ["newest change"] },
-    { version: "0.1.11", date: "2026-11-04", notes: ["middle change"] },
+    {
+      version: "0.1.7",
+      notes: { zh: ["首个版本"], en: ["first release"] },
+    },
+    {
+      version: "0.1.12",
+      date: "2026-11-07",
+      notes: { zh: ["最新改动"], en: ["newest change"] },
+    },
+    {
+      version: "0.1.11",
+      date: "2026-11-04",
+      notes: { zh: ["中间改动"], en: ["middle change"] },
+    },
   ],
 }));
 
@@ -33,6 +45,11 @@ vi.mock("../../app/update/changelog", async (importOriginal) => {
 
 const h = dialogHarness();
 const close = vi.fn();
+
+const bulletTexts = () =>
+  [...document.querySelectorAll("dialog .changelog-release li")].map(
+    (note) => note.textContent,
+  );
 
 beforeEach(() => {
   setLocale("en-US");
@@ -59,11 +76,18 @@ it("lists every release newest first with notes and only known dates", async () 
       time.getAttribute("datetime"),
     ),
   ).toEqual(["2026-11-07", "2026-11-04"]);
-  expect(
-    [...document.querySelectorAll("dialog .changelog-release li")].map(
-      (note) => note.textContent,
-    ),
-  ).toEqual(["newest change", "middle change", "first release"]);
+  expect(bulletTexts()).toEqual([
+    "newest change",
+    "middle change",
+    "first release",
+  ]);
+});
+
+it("renders the Chinese changelog when the application locale is Chinese", async () => {
+  setLocale("zh-CN");
+  await h.render(<ChangelogDialog zh onClose={close} />);
+  expect(document.querySelector("dialog h2")?.textContent).toBe("更新日志");
+  expect(bulletTexts()).toEqual(["最新改动", "中间改动", "首个版本"]);
 });
 
 it("closes from the footer button", async () => {
