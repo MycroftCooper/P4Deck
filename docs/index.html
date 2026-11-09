@@ -384,6 +384,15 @@
               <button
                 type="button"
                 role="tab"
+                id="ui-tab-pending"
+                aria-controls="ui-pending"
+                aria-selected="false"
+              >
+                待提交 CL
+              </button>
+              <button
+                type="button"
+                role="tab"
                 id="ui-tab-submitted"
                 aria-controls="ui-submitted"
                 aria-selected="false"
@@ -1006,6 +1015,207 @@
                           <p>
                             没有剩余冲突时可接受结果；也可保留一侧或打开
                             P4Merge。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-pending"
+              data-showcase-panel
+              aria-labelledby="ui-title-pending"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">PENDING / 待提交 CL</span>
+                <h3 id="ui-title-pending">看清每个 CL 装了哪些文件</h3>
+                <p>
+                  P4V 上方是待提交列表，下方可查看所选 CL 的详情和差异。P4Deck
+                  把文件、搁置记录和提交、还原、搁置等常用操作放在各自的 CL
+                  卡片里。
+                </p>
+                <a href="wiki/#changelists">待提交 CL 使用指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Pending · Diff Summary</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4merge-diff-summary_624x799.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 待提交标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4merge-diff-summary_624x799.png"
+                      alt="P4V 待提交页：上方展开 Default CL 和文件，下方显示 Diff Summary"
+                      width="624"
+                      height="799"
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 25%; --y: 3%"
+                      >1</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 22%; --y: 7.6%"
+                      >2</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 8%; --y: 18.7%"
+                      >3</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 26%; --y: 96.6%"
+                      >4</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>Pending 入口</strong>
+                          <p>从 View → Pending Changelists 打开待提交标签。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>筛选 CL</strong>
+                          <p>展开 Filter，按用户、工作区等条件缩小范围。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>展开 CL 文件</strong>
+                          <p>
+                            点 CL
+                            左侧箭头展开文件；提交等操作可从工具栏或右键菜单进入。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">4</span>
+                        <div>
+                          <strong>下方差异摘要</strong>
+                          <p>在详情区切到 Diff Summary，查看所选文件的改动。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/diff-summary.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>待提交 · CL 卡片</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/pending.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 待提交标注"
+                  >
+                    <img
+                      src="assets/ui/pending.png"
+                      alt="P4Deck 待提交页：展开 CL 31821，分别列出待提交文件和已搁置文件，CL 标题行提供常用操作"
+                      width="1280"
+                      height="850"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 80.1%; --y: 13.1%"
+                      >1</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 42%; --y: 29.8%"
+                      >2</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 78.2%; --y: 42.4%"
+                      >3</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 26.5%; --y: 67%"
+                      >4</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>待提交入口</strong>
+                          <p>
+                            点工具栏的「待提交」，在工作台打开 Pending 标签。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>筛选和排序</strong>
+                          <p>
+                            按 CL
+                            编号、描述或文件路径筛选已缓存的列表，右侧可切换编号排序。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>CL 行内操作</strong>
+                          <p>
+                            在对应 CL
+                            的标题行提交、还原未更改文件或搁置，无需先打开详情。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">4</span>
+                        <div>
+                          <strong>区分待提交和已搁置</strong>
+                          <p>
+                            同一卡片内分区查看两类文件，也能按文件状态和类型筛选。
                           </p>
                         </div>
                       </li>
