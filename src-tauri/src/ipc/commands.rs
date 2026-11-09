@@ -3378,6 +3378,18 @@ pub async fn open_swarm_link(
 }
 
 #[tauri::command]
+pub async fn open_external_url(
+    _admission: crate::close_guard::Admission,
+    url: String,
+) -> Result<(), String> {
+    // The allowlist lives in the host; the renderer names a URL but cannot pick
+    // an arbitrary one, an executable, or command-line arguments.
+    tauri::async_runtime::spawn_blocking(move || crate::app::url_open::open(&url))
+        .await
+        .map_err(|_| "The link opener did not complete.".to_string())?
+}
+
+#[tauri::command]
 pub async fn local_path_capabilities(
     _admission: crate::close_guard::Admission,
     path: String,

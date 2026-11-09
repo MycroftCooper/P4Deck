@@ -27,6 +27,7 @@ pub mod swarm_open;
 pub mod sync_service;
 pub mod system_open;
 pub mod undo_service;
+pub mod url_open;
 pub mod vfs_service;
 pub mod workflow_service;
 
@@ -38,4 +39,5 @@ pub mod local_action;
 pub(crate) mod local_io_action;
 pub(crate) mod merge_resolve_action;
 pub(crate) mod pending_cl_action;
+pub(crate) mod platform_open;
 pub(crate) mod revert_action;
