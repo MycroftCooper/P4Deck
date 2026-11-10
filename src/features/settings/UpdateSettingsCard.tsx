@@ -17,12 +17,9 @@ import {
   useUpdateSnapshot,
 } from "../../app/update/updateStore";
 import { backend } from "../../infrastructure/backend";
+import { PRODUCT_PAGE_URL, WIKI_URL } from "../../shared/productSite";
 import { ChangelogDialog } from "./ChangelogDialog";
 import "../../app/update/update.css";
-
-/** Host-allowlisted product pages (see the Rust `open_external_url` allowlist). */
-const PRODUCT_PAGE_URL = "https://mycroftcooper.github.io/P4Deck/";
-const WIKI_URL = "https://mycroftcooper.github.io/P4Deck/wiki/";
 
 /**
  * Manual update entry in Settings. It mirrors the titlebar state, so a check
