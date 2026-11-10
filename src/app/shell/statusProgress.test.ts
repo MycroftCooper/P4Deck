@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import {
   diskMetrics,
   progressSummary,
+  taskPercent,
   updateProgress,
   type ActiveOperations,
 } from "./statusProgress";
@@ -176,4 +177,40 @@ it("derives startedAt from the event timestamp and falls back to now", () => {
     Date.parse("2025-12-31T23:59:50.000Z"),
   );
   expect(active.get("untimed")?.startedAt).toBe(Date.now());
+});
+
+it("derives the bar percentage from countable work when no percent arrives", () => {
+  expect(taskPercent({ current: 3, total: 4 })).toBe(75);
+  expect(taskPercent({ current: 0, total: 4 })).toBe(0);
+  expect(taskPercent({ current: 5, total: 4 })).toBe(100);
+  // An explicit percent is authoritative, and both sources stay clamped.
+  expect(taskPercent({ progress: 42, current: 1, total: 4 })).toBe(42);
+  expect(taskPercent({ progress: 240 })).toBe(100);
+  expect(taskPercent({ progress: -5 })).toBe(0);
+});
+
+it("leaves the bar indeterminate when there is no usable total", () => {
+  expect(taskPercent({ current: 3 })).toBeUndefined();
+  expect(taskPercent({ current: 3, total: 0 })).toBeUndefined();
+  expect(taskPercent({ current: 3, total: -2 })).toBeUndefined();
+  expect(taskPercent({})).toBeUndefined();
+  expect(taskPercent({ progress: Number.NaN })).toBeUndefined();
+});
+
+it("summarises countable operations with their derived percentages", () => {
+  const active: ActiveOperations = new Map();
+  updateProgress(active, {
+    operationId: "s",
+    type: "started",
+    message: "p4 sync",
+    timestamp: "",
+  });
+  updateProgress(active, {
+    operationId: "s",
+    type: "progress",
+    progressCurrent: 2,
+    progressTotal: 8,
+    timestamp: "",
+  });
+  expect(progressSummary(active.values())).toEqual({ count: 1, percent: 25 });
 });

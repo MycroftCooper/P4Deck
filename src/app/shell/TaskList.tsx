@@ -4,6 +4,7 @@ import { Square } from "lucide-react";
 import { useContextMenu } from "../context-menu/ContextMenu";
 import { action, copy } from "../context-menu/bindings";
 import type { ActiveTask } from "./statusProgress";
+import { taskPercent } from "./statusProgress";
 
 export function TaskList({
   tasks,
@@ -120,7 +121,9 @@ export function TaskList({
             <progress
               aria-label={`${task.label} ${tFor(zh ? "zh-CN" : "en-US", "shell.progress")}`}
               max={100}
-              value={task.progress}
+              // Countable work derives a percentage; without any total the bar
+              // stays indeterminate (no value attribute) instead of showing 0%.
+              value={taskPercent(task)}
             />
           </button>
           <button

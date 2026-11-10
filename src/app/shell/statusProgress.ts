@@ -28,6 +28,31 @@ export interface ActiveTask {
   startedAt: number;
 }
 export type ActiveOperations = Map<string, ActiveTask>;
+/** Clamp one percentage into 0–100; keeps NaN/infinity out of the bar. */
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, value));
+}
+/**
+ * The percentage to render for one task. An explicit percent wins; when the
+ * backend only reports countable work (current/total, e.g. sync or submit)
+ * derive it, because a bar that ignores those counts stays indeterminate even
+ * though the operation is measurable. `undefined` means there is no usable
+ * total yet, so callers render an indeterminate bar instead of a fake 0%.
+ */
+export function taskPercent(
+  task: Pick<ActiveTask, "progress" | "current" | "total">,
+): number | undefined {
+  if (Number.isFinite(task.progress)) return clampPercent(task.progress!);
+  const total = task.total;
+  if (
+    Number.isFinite(task.current) &&
+    Number.isFinite(total) &&
+    (total ?? 0) > 0
+  ) {
+    return clampPercent(((task.current ?? 0) / total!) * 100);
+  }
+  return undefined;
+}
 /** Epoch ms of the event, falling back to now for a missing/invalid timestamp. */
 function eventTime(event: OperationEvent) {
   const parsed = Date.parse(event.timestamp);
@@ -72,16 +97,13 @@ export function updateProgress(
   const next = { ...task };
   // Percent stays monotonic: a reordered event must not make the bar jump back.
   if (hasPercent)
-    next.progress = Math.max(
-      task.progress ?? 0,
-      Math.min(100, Math.max(0, percent!)),
-    );
+    next.progress = Math.max(task.progress ?? 0, clampPercent(percent!));
   if (hasCurrent) next.current = Math.max(0, progressCurrent!);
   if (hasTotal) next.total = Math.max(0, progressTotal!);
   active.set(event.operationId, next);
 }
 export function progressSummary(tasks: Iterable<ActiveTask>) {
-  const values = [...tasks].map((task) => task.progress);
+  const values = [...tasks].map(taskPercent);
   return {
     count: values.length,
     percent:
