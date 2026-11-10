@@ -22,8 +22,20 @@
 //   node scripts/publish-update.mjs --skip-build     # reuse existing bundle + publish
 //
 // Options:
-//   --notes <text>              release notes (also the "notes" field of latest.json)
-//   --notes-file <path>         read release notes from a text file
+//   --notes <text>              single-language release notes (legacy; also the
+//                               "notes" field of latest.json)
+//   --notes-file <path>         read release notes from a UTF-8 file. This is the
+//                               supported path and it must be bilingual:
+//                                 # P4Deck <version>
+//                                 ## 中文
+//                                 - ...
+//                                 ## English
+//                                 - ...
+//                               GitHub gets both languages (Chinese first, English
+//                               inside a <details> block); latest.json keeps the
+//                               Chinese section for the in-app update prompt.
+//                               Validate the file with
+//                               `node scripts/validate-release-notes.mjs <file>`.
 //   --repo <owner/name>         release repo (default: derived from the updater endpoint)
 //   --bundle-dir <path>         directory holding the built NSIS artifacts (default: target/release/bundle/nsis)
 //   --offline-webview2          build with the ~215MB offline WebView2 installer
@@ -69,6 +81,12 @@ import {
   repoRoot,
   sha256File,
 } from "./lib.mjs";
+import {
+  buildReleaseBody,
+  manifestNotes,
+  parseBilingualNotes,
+  validateBilingualNotes,
+} from "./release-notes.mjs";
 
 export const PRODUCT = "P4Deck";
 export const RELEASE_NOTES_DEFAULT = "";
@@ -724,7 +742,7 @@ export async function publishRelease({
   version,
   tag,
   assets,
-  notes,
+  body: releaseBody,
   replace = false,
   confirm = false,
   log = (message) => process.stderr.write(`${message}\n`),
@@ -758,7 +776,7 @@ export async function publishRelease({
     repo,
     tag,
     name: `${PRODUCT} ${version}`,
-    body: notes ?? "",
+    body: releaseBody ?? "",
   });
   log(`draft release ${tag} created (id ${draft.id}); uploading assets`);
 
@@ -1029,6 +1047,9 @@ async function main() {
   }
 
   let collected;
+  // The GitHub release body; a bilingual notes file becomes both languages,
+  // while latest.json keeps the Chinese section (see collectAssets below).
+  let releaseBody = RELEASE_NOTES_DEFAULT;
   let signatureInfo;
   try {
     mkdirSync(outputDir, { recursive: true });
@@ -1056,21 +1077,43 @@ async function main() {
         `the updater payload was signed for version ${signatureInfo.signedVersion}, but the app version is ${version}.`,
       );
     }
-    const notes =
+    const notesText =
       args.notes ??
       (args.notesFile
         ? readFileSync(path.resolve(args.notesFile), "utf8").trim()
         : RELEASE_NOTES_DEFAULT);
     if (!process.env.P4DECK_ALLOW_NOTES_QUERY) {
-      assertNotesNotMojibake(notes);
+      assertNotesNotMojibake(notesText);
     }
+    // A notes file must be bilingual: the release page shows both languages and
+    // latest.json keeps the Chinese section. `--notes` stays single-language for
+    // quick local experiments only.
+    let bilingualNotes = null;
+    if (args.notesFile) {
+      bilingualNotes = parseBilingualNotes(notesText);
+      const problems = validateBilingualNotes(bilingualNotes);
+      if (problems.length > 0) {
+        throw new Error(
+          `release notes file ${args.notesFile} is not publishable:\n- ${problems.join("\n- ")}\n` +
+            "Add the missing `## 中文` / `## English` sections, or run `node scripts/validate-release-notes.mjs <file>`.",
+        );
+      }
+    } else if (notesText) {
+      log(
+        "--notes is single-language; pass --notes-file with `## 中文` and `## English` for a bilingual release page",
+      );
+    }
+    const manifestNoteText = bilingualNotes
+      ? manifestNotes(bilingualNotes)
+      : notesText;
+    releaseBody = bilingualNotes ? buildReleaseBody(bilingualNotes) : notesText;
     collected = await collectAssets({
       plan,
       version,
       repo,
       tag,
       outputDir,
-      notes,
+      notes: manifestNoteText,
     });
     // Re-verify the copied payload + signature pair, exactly what latest.json will serve.
     const copiedLatest = readFileSync(collected.latestPath, "utf8");
@@ -1160,7 +1203,7 @@ async function main() {
       version,
       tag,
       assets: collected.assets,
-      notes: collected.latest.notes,
+      body: releaseBody,
       replace: args.replace,
       confirm: args.confirm,
       log,

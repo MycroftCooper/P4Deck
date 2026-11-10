@@ -2,6 +2,7 @@ mod app;
 mod close_guard;
 mod domain;
 mod ipc;
+mod local_path;
 mod p4;
 mod persistence;
 mod security;
@@ -285,6 +286,7 @@ pub fn run() {
             ipc::commands::resolve_path,
             ipc::commands::open_local_path,
             ipc::commands::open_swarm_link,
+            ipc::commands::open_external_url,
             ipc::commands::local_path_capabilities,
             ipc::commands::perform_file_action,
             ipc::commands::confirm_revert_action,

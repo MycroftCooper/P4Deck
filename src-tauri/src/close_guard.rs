@@ -476,9 +476,10 @@ mod tests {
         let commands: Vec<_> = source.split("#[tauri::command]").skip(1).collect();
         // 115 previous business commands + MERGE-01 external merge
         // (detect_external_merge_tool, run_external_merge) + GETLATEST-DIRECT
-        // (sync_latest) + RESOLVE-STATS (resolve_stats). Every command must keep
-        // taking `_admission`; never bypass the host admission check.
-        assert_eq!(commands.len(), 119);
+        // (sync_latest) + RESOLVE-STATS (resolve_stats) + SETTINGS-ABOUT
+        // (open_external_url). Every command must keep taking `_admission`;
+        // never bypass the host admission check.
+        assert_eq!(commands.len(), 120);
         for command in commands {
             let signature = command.split('{').next().unwrap();
             assert!(

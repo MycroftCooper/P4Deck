@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="P4Deck 中文 Wiki：配置 P4 CLI 和 Workspace，练习第一次提交，再学习对账、差异、搁置、查询和故障排查。"
+    />
+    <meta name="theme-color" content="#f8f9f6" />
+    <title>P4Deck Wiki · 从安装到第一次提交</title>
+    <link rel="icon" href="../assets/mark.png" type="image/png" />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <script src="../assets/site.js" defer></script>
+  </head>
+  <body class="wiki">
+    <a class="skip" href="#main">跳到正文</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="../" aria-label="P4Deck 首页"
+          ><img
+            src="../assets/mark.png"
+            alt=""
+            width="33"
+            height="33"
+          />P4Deck<span class="brand-dot">.</span></a
+        >
+        <nav class="main-nav" aria-label="主导航">
+          <a href="../#features">功能</a><a href="../#compare">对比 P4V</a
+          ><a href="./" aria-current="page">Wiki</a>
+        </nav>
+        <a
+          class="button button-small button-quiet header-github"
+          href="https://github.com/MycroftCooper/P4Deck"
+          >GitHub <span aria-hidden="true">↗</span></a
+        >
+      </div>
+    </header>
+    <div class="wrap docs-layout">
+      <aside class="docs-side">
+        <nav aria-label="Wiki 章节" class="docs-nav">
+          <p>上手</p>
+          <a href="#quickstart">快速上手</a><a href="#connect">连接和登录</a
+          ><a href="#first-submit">第一次提交</a>
+          <p>日常工作</p>
+          <a href="#workspace">工作区、同步和对账</a
+          ><a href="#changelists">Pending、搁置与提交</a
+          ><a href="#review">Diff、预览与历史</a><a href="#search">搜索与定位</a
+          ><a href="#submitted">提交类型与周报</a
+          ><a href="#trace">追踪合并去向</a>
+          <p>进阶和排错</p>
+          <a href="#responsiveness">缓存与乐观更新</a
+          ><a href="#tools">终端、日志与操作记录</a
+          ><a href="#p4vfs">P4VFS 虚拟工作区</a
+          ><a href="#troubleshoot">常见问题</a>
+        </nav>
+      </aside>
+      <main id="main" class="docs-main">
+        <div class="docs-intro">
+          <span class="kicker">P4DECK WIKI / 中文指南</span>
+          <h1>从安装到<br class="narrow-only" />第一次提交。</h1>
+          <p>
+            第一次用 Perforce？从这里开始。已有 P4V 工作区？可以沿用原来的
+            Server、User 和 Workspace，直接从连接开始。
+          </p>
+        </div>
+        <div class="docs-search" hidden>
+          <label for="wiki-query">搜索 Wiki</label
+          ><input
+            type="search"
+            id="wiki-query"
+            placeholder="例如：找不到 CLI、搁置、缓存"
+            autocomplete="off"
+          />
+          <ul id="wiki-results" hidden></ul>
+          <p id="wiki-search-status" class="sr-only" role="status"></p>
+        </div>
+        <details class="mobile-toc">
+          <summary>Wiki 目录</summary>
+          <nav aria-label="移动端 Wiki 章节">
+            <a href="#quickstart">快速上手</a><a href="#connect">连接和登录</a
+            ><a href="#first-submit">第一次提交</a
+            ><a href="#workspace">工作区、同步和对账</a
+            ><a href="#changelists">Pending、搁置与提交</a
+            ><a href="#review">Diff、预览与历史</a
+            ><a href="#search">搜索与定位</a
+            ><a href="#submitted">提交类型与周报</a
+            ><a href="#trace">追踪合并去向</a
+            ><a href="#responsiveness">缓存与乐观更新</a
+            ><a href="#tools">终端、日志与操作记录</a
+            ><a href="#p4vfs">P4VFS 虚拟工作区</a
+            ><a href="#troubleshoot">常见问题</a>
+          </nav>
+        </details>
+
+        <section
+          id="quickstart"
+          class="doc-chapter"
+          data-keywords="下载 安装 Windows macOS WebView2 CLI PATH p4.exe 版本"
+          aria-labelledby="quickstart-title"
+        >
+          <span class="kicker">01 / 快速上手</span>
+          <h2 id="quickstart-title">先准备三样东西</h2>
+          <ol class="steps">
+            <li>
+              <strong>装 P4Deck。</strong> 去
+              <a href="https://github.com/MycroftCooper/P4Deck/releases/latest"
+                >最新 Release</a
+              >
+              的 Assets，下载 Windows x64 的
+              <code>*-setup.exe</code> 并安装。默认安装器可能需要联网补装
+              WebView2。公开可下载的平台以 Releases 为准。
+            </li>
+            <li>
+              <strong>确认电脑上有官方 P4 CLI。</strong> 在 PowerShell 运行
+              <code>p4 -V</code>。如果找不到命令，安装
+              <a href="https://www.perforce.com/downloads"
+                >Perforce 官方 P4 CLI</a
+              >（项目要求 2023.1 或更新版本）；再到 P4Deck
+              的连接设置点「重新检测 CLI」，或指定 <code>p4.exe</code> 路径。
+            </li>
+            <li>
+              <strong>向团队拿连接信息。</strong> 你需要服务器地址、P4
+              用户名，以及分配给你这台电脑的 Workspace 名称。已有 P4V
+              的话，可以在它的连接信息里核对；不确定时问管理员。
+            </li>
+          </ol>
+          <div class="callout">
+            <strong>三个词先认清。</strong> Depot
+            是服务器上的版本仓库；Workspace
+            决定哪些仓库路径映射到哪个本地目录；Changelist（CL）是一批一起管理或提交的文件改动。
+          </div>
+        </section>
+
+        <section
+          id="connect"
+          class="doc-chapter"
+          data-keywords="配置 认证 SSL Trust P4PORT P4USER P4CLIENT charset ticket Profile"
+          aria-labelledby="connect-title"
+        >
+          <span class="kicker">02 / 连接设置</span>
+          <h2 id="connect-title">把现有连接带进 P4Deck</h2>
+          <p>
+            首次启动按引导进入「连接设置」；之后也能从「设置」打开。选择已有配置，或点「新建连接」。
+          </p>
+          <dl class="field-list">
+            <dt>Server / P4PORT</dt>
+            <dd>
+              照抄团队给你的主机和端口。示例：<code>ssl:p4.example.com:1666</code>。如果团队给的地址有
+              <code>ssl:</code>，不要删掉。
+            </dd>
+            <dt>User / P4USER</dt>
+            <dd>填你的 Perforce 用户名。它可能和公司邮箱或电脑登录名不同。</dd>
+            <dt>Workspace / P4CLIENT</dt>
+            <dd>
+              选已分配给本机的 Workspace，并核对解析出的
+              Root（本地根目录）。填工作区名称，而不是目录路径。
+            </dd>
+            <dt>字符集、Tickets、Trust</dt>
+            <dd>
+              沿用已有客户端配置或团队要求；只有团队用了自定义路径时再填。不要把密码或票据内容当作路径。
+            </dd>
+          </dl>
+          <ol class="steps">
+            <li>
+              点「验证这些设置」。如提示 SSL
+              指纹未受信，先通过团队可信渠道核对，再选「信任此精确指纹」。
+            </li>
+            <li>
+              如提示需要登录，使用连接设置里的「登录」。若服务器要求外部 SSO 或
+              MFA，按团队指定流程完成认证，再回应用重新验证。
+            </li>
+            <li>
+              保存连接。若未启用，点「使用此连接」。看到「已连接并登录」后，打开「工作区」，核对当前名称、Root
+              和文件列表。
+            </li>
+          </ol>
+        </section>
+
+        <section
+          id="first-submit"
+          class="doc-chapter"
+          data-keywords="新手 教程 签出 编辑 修改 提交 submit checkout"
+          aria-labelledby="first-submit-title"
+        >
+          <span class="kicker">03 / 第一次提交</span>
+          <h2 id="first-submit-title">用一个测试文件走完整流程</h2>
+          <p>
+            选团队允许写入的测试 Workspace
+            和一份已纳入版本管理的文本文件。刚接触 Perforce
+            时，先练习单文件提交。
+          </p>
+          <ol class="steps">
+            <li>
+              <strong>获取最新。</strong>
+              在「工作区」找到文件，右键「获取最新」，核对文件路径和版本后执行。同步完成后再编辑。
+            </li>
+            <li>
+              <strong>签出并修改。</strong> 右键「签出」，选择目标 Pending
+              CL（也可用 Default）。在编辑器里改一小处并保存。
+            </li>
+            <li>
+              <strong>看 Diff。</strong> 右键「与 have 版本比较」。<code
+                >have</code
+              >
+              指当前工作区已同步的修订。确认差异只包含你刚做的修改。
+            </li>
+            <li>
+              <strong>提交。</strong> 进入「变更列表 →
+              Pending」，选该文件并点「提交选中文件」。填写描述，检查文件清单和预检提示，再确认提交。
+            </li>
+            <li>
+              <strong>确认结果。</strong> 等操作显示完成，去 Submitted 用返回的
+              CL 编号核对。若状态未知，先查记录和日志，再决定是否重试。
+            </li>
+          </ol>
+        </section>
+
+        <section
+          id="workspace"
+          class="doc-chapter"
+          data-keywords="切换 工作区 depot sync get latest revision reconcile 对账 下载 删除 签出 lock"
+          aria-labelledby="workspace-title"
+        >
+          <span class="kicker">04 / 文件管理</span>
+          <h2 id="workspace-title">工作区、同步和对账</h2>
+          <ul class="guide-list">
+            <li>
+              <strong>找文件。</strong>
+              「工作区」看本地映射范围；「仓库」看服务器上你有权访问的
+              Depot。切换 Workspace 后，先确认名称、Root 和 Stream。
+            </li>
+            <li>
+              <strong>同步最新或指定修订。</strong>
+              在文件或目录上右键「获取最新」；要某个历史版本，从文件历史选择修订再获取。同步目录前核对是否递归及影响范围。
+            </li>
+            <li>
+              <strong>签出、添加、删除或还原。</strong>
+              在文件右键菜单选对应操作；新文件用「添加到
+              P4」。还原可能丢弃本地改动，确认前先看差异。锁定/解锁受服务器权限和文件类型限制。
+            </li>
+            <li>
+              <strong>补记本地修改。</strong> 如果你在 P4
+              外面新增、修改或删除了文件，右键选「对账」，先看预检列出的增、改、删，再勾选想加入
+              CL 的文件。首次尽量对小目录操作。
+            </li>
+          </ul>
+        </section>
+
+        <section
+          id="changelists"
+          class="doc-chapter"
+          data-keywords="CL Changelist 待提交 Default shelf shelve unshelve resolve 搁置 移动 合并 冲突"
+          aria-labelledby="changelists-title"
+        >
+          <span class="kicker">05 / 变更列表</span>
+          <h2 id="changelists-title">整理、搁置和提交</h2>
+          <ul class="guide-list">
+            <li>
+              <strong>整理 Pending。</strong> 展开 CL
+              查看文件。用右键菜单或拖放，把文件移到另一个 Pending CL；Default
+              是还没有分配到编号 CL 的那组改动。
+            </li>
+            <li>
+              <strong>只提交选中的文件。</strong> 展开多个 Pending
+              CL，勾选要交的文件，选「提交选中文件」。对跨 CL
+              的选择，按提示填写新的编号 CL
+              描述，复核清单，再提交。其他文件留在各自的 CL。
+            </li>
+            <li>
+              <strong>先搁置再取回。</strong> 在编号 Pending CL
+              或所选文件上选「搁置」。Shelf
+              把改动副本放在服务器，方便审查或接力。打开「查看搁置内容」预览；需要应用时选「Unshelve
+              到 CL」，核对目标 Workspace、CL 和文件。
+            </li>
+            <li id="resolve">
+              <strong>解决文件合并（Resolve）。</strong> 对需要 Resolve
+              的文件打开「解决文件合并」。左侧选文件，右侧核对
+              Base（共同基线）、Depot
+              来源和本地目标。若界面标为可自动合并且无剩余冲突，可接受自动合并；保留来源或保留本地会舍弃另一侧的独有修改。需要手工处理时可打开已安装的
+              P4Merge，处理后再核对差异和提交预检。<a href="../#ui-resolve"
+                >查看示例界面</a
+              >。
+            </li>
+          </ul>
+        </section>
+
+        <section
+          id="review"
+          class="doc-chapter"
+          data-keywords="对比 diff history revision graph stream branch mapping 分支流 修订图 历史 文件预览 Excel XLSX XLSM CSV TSV 图片"
+          aria-labelledby="review-title"
+        >
+          <span class="kicker">06 / 审查改动</span>
+          <h2 id="review-title">Diff、文件预览与历史</h2>
+          <ul class="guide-list">
+            <li>
+              <strong>看本地改了什么。</strong> 从工作区或 Pending
+              的文件菜单进入 Diff。对比
+              <code>have</code>
+              版本适合提交前检查；如需其他基线，用「与其他文件/版本比较」。
+            </li>
+            <li>
+              <strong>找出哪次提交改的。</strong>
+              右键文件打开「文件历史」，点修订看对应
+              CL。选中两条修订后用「比较所选修订」；想了解分支间的修订关系，打开「修订图」。
+            </li>
+            <li id="file-preview">
+              <strong>打开文件预览。</strong>
+              选中本地工作区中的文件，点工具栏的「文件预览」。可以查看文本、常见图片及
+              CSV、TSV、XLSX、XLSM 表格；Excel
+              文件可切换工作表。大文件可能只显示一部分，以界面提示为准。<a
+                href="../#ui-preview"
+                >查看示例界面</a
+              >。
+            </li>
+            <li>
+              <strong>看 Stream 和映射。</strong> 在「分支流」查看 Stream
+              列表，或打开只读 Stream Graph 查看拓扑。切换 Stream 前核对当前
+              Workspace 和 Pending 文件。用 Branch Mapping
+              查看映射的源、目标与方向。
+            </li>
+          </ul>
+        </section>
+
+        <section
+          id="search"
+          class="doc-chapter"
+          data-keywords="全局搜索 搜索结果 文件名 路径 转到 CL search"
+          aria-labelledby="search-title"
+        >
+          <span class="kicker">07 / 快速定位</span>
+          <h2 id="search-title">找文件、CL、Stream 或 Shelf</h2>
+          <ol class="steps">
+            <li>打开「搜索」，输入文件名、Depot 路径片段或 CL 编号等线索。</li>
+            <li>
+              选结果类型：工作区文件、仓库文件、Pending CL、Submitted CL、Stream
+              或 Shelf。按回车或点「搜索」。
+            </li>
+            <li>
+              打开匹配结果看详情。如果已知 Submitted 编号，也可以在 Submitted
+              中用「转到 CL」，无需重设当前筛选。
+            </li>
+          </ol>
+        </section>
+
+        <section
+          id="submitted"
+          class="doc-chapter"
+          data-keywords="已提交 筛选 Stream 预设 周报 prompt CI 自动提交"
+          aria-labelledby="submitted-title"
+        >
+          <span class="kicker">08 / 提交记录</span>
+          <h2 id="submitted-title">按提交类型筛选，再整理周报</h2>
+          <ol class="steps">
+            <li>
+              打开「变更列表 → Submitted」。按用户、日期、Depot 路径或 Stream
+              收窄范围。选多个 Stream 时，匹配其中任意一个即可。
+            </li>
+            <li>
+              用「提交类型」切换<strong>普通提交</strong>、<strong
+                >CI 合并</strong
+              >、<strong>自动生成</strong>或全部。整理日常工作时先看普通提交，排查流水线时单独看后两类。分类按提交描述规则判断，不能证明提交者身份。<a
+                href="../#ui-submitted"
+                >查看筛选界面</a
+              >。
+            </li>
+            <li>
+              点「生成周报提示词」，选一个用户和日期区间。生成后先检查条目与 CL
+              引用；若界面提示部分结果，补查后再使用。提示词在本地生成，由你决定是否复制和分享。
+            </li>
+          </ol>
+        </section>
+
+        <section
+          id="trace"
+          class="doc-chapter"
+          data-keywords="追踪合并去向 合入 CI 来源 CL 直接 间接 合并链 路径 Workspace Client"
+          aria-labelledby="trace-title"
+        >
+          <span class="kicker">进阶 / 合并去向</span>
+          <h2 id="trace-title">从源 CL 追踪后续合并</h2>
+          <ol class="steps">
+            <li>
+              在「已提交」找到要追踪的源
+              CL，右键点「追踪合并去向」，再点「查询合并去向」。
+            </li>
+            <li>
+              查看命中的 CL、时间、描述和每条合并记录自己的 Workspace /
+              Client。比如 CL 18441 引用了源 CL 18428，而 CL 18456 又引用了
+              18441，两条合并都能找到。
+            </li>
+            <li>
+              如果结果标为不完整，可继续查询。这项功能依赖可识别的 CI 来源 CL
+              元数据；没有结果不代表没有合入，也不代表目标现在仍包含那次改动。
+            </li>
+          </ol>
+          <p><a href="../#ui-trace">查看两跳追踪示例 →</a></p>
+        </section>
+
+        <section
+          id="responsiveness"
+          class="doc-chapter"
+          data-keywords="前后端分离 异步 后台 卡死 服务器无响应 离线 缓存 快照 乐观更新 刷新"
+          aria-labelledby="responsiveness-title"
+        >
+          <span class="kicker">09 / 等待服务器时</span>
+          <h2 id="responsiveness-title">界面有响应时，还能做什么？</h2>
+          <ul class="guide-list">
+            <li>
+              <strong>先看已有数据。</strong> 等待 P4
+              时可以切回已打开的页面。Pending 和 Submitted
+              等视图会优先使用对应连接或查询的本地缓存；首次查询、缓存不存在或需要更新时仍会访问服务器。
+            </li>
+            <li>
+              <strong>区分缓存和最新状态。</strong>
+              缓存可能落后于队友的修改。重新连上后，提交前用页面的刷新功能核对重要数据。完全离线时只能查看本机已有的内容，不能提交或获取新修订。
+            </li>
+            <li>
+              <strong>区分界面反馈和确认结果。</strong> 移动 Pending
+              文件时，文件可能马上出现在目标
+              CL；这是乐观更新，后台确认后会校正。同步和提交要等实际结果；若显示失败、部分成功或未知，到操作记录核对后再处理。
+            </li>
+          </ul>
+        </section>
+
+        <section
+          id="tools"
+          class="doc-chapter"
+          data-keywords="P4 Log Terminal 命令行 operation journal 诊断 备份 日志"
+          aria-labelledby="tools-title"
+        >
+          <span class="kicker">10 / 工具区</span>
+          <h2 id="tools-title">终端、P4 Log 与操作记录</h2>
+          <ul class="guide-list">
+            <li>
+              <strong>Terminal：</strong> 从底部工具区打开，先核对 Server、User
+              和 Workspace。可用 <code>p4 info</code> 查看上下文。它用于 P4
+              命令，认证操作请回连接设置。
+            </li>
+            <li>
+              <strong>P4 Log：</strong>
+              操作失败时从底部打开日志，按命令、级别或操作定位错误。分享诊断信息前仍要检查是否含项目路径等内部信息。
+            </li>
+            <li>
+              <strong>操作记录：</strong>
+              查看正在执行、成功、失败或状态不明的任务；操作未确认完成时先查记录，避免重复提交。
+            </li>
+          </ul>
+        </section>
+
+        <section
+          id="p4vfs"
+          class="doc-chapter"
+          data-keywords="P4VFS altsync P4ALTSYNC 虚拟同步 按需下载"
+          aria-labelledby="p4vfs-title"
+        >
+          <span class="kicker">11 / 可选配置</span>
+          <h2 id="p4vfs-title">Windows 上的 P4VFS 虚拟工作区</h2>
+          <p>
+            第一次用 Perforce 建议先选标准同步。若团队已经部署 P4VFS，先确认
+            Windows 客户端已安装 P4VFS、应用进程可读到
+            <code>P4ALTSYNC</code>，且 Server 和 P4 CLI 都支持
+            <code>altsync</code>（至少 2023.1）。
+          </p>
+          <p>
+            「新建 Workspace」时选「P4VFS 虚拟同步」，保存后在 Workspace
+            页检查就绪状态，再照常同步。实际内容由 P4VFS 按需下载。现有标准
+            Workspace 不支持在 P4Deck 内原地转换。
+          </p>
+        </section>
+
+        <section
+          id="troubleshoot"
+          class="doc-chapter"
+          data-keywords="FAQ 常见问题 错误 登录 连接失败 找不到文件 超时 VPN Ticket"
+          aria-labelledby="troubleshoot-title"
+        >
+          <span class="kicker">12 / 常见问题</span>
+          <h2 id="troubleshoot-title">遇到问题，先查这里</h2>
+          <details>
+            <summary>提示找不到 P4 CLI</summary>
+            <p>
+              用 <code>p4 -V</code> 确认是否安装。装好后点「重新检测
+              CLI」，必要时重启 P4Deck 或在连接设置手动选 <code>p4.exe</code>。
+            </p>
+          </details>
+          <details>
+            <summary>服务器无响应或登录过期</summary>
+            <p>
+              确认网络或 VPN、Server 地址和
+              <code>ssl:</code> 前缀。票据过期就从连接设置重新登录；SSO/MFA
+              用团队规定的方式。若网络正常仍报错，到 P4 Log 找对应命令和提示。
+            </p>
+          </details>
+          <details>
+            <summary>仓库有文件，工作区里却没有</summary>
+            <p>
+              先确认当前 Workspace 的 Root、Stream
+              和映射是否包含该路径，且你有权限；映射正确也需要同步文件才能在本地磁盘看到它。
+            </p>
+          </details>
+          <details>
+            <summary>提交被拦截，或者结果不确定</summary>
+            <p>
+              核对描述、文件清单、权限与冲突。收到部分成功、超时或未知结果时，用返回的
+              CL 或操作记录核对服务器结果，再决定怎么处理剩余文件。
+            </p>
+          </details>
+        </section>
+        <div class="docs-end">
+          <a href="../">← 回到 P4Deck 首页</a
+          ><a href="https://github.com/MycroftCooper/P4Deck/issues"
+            >反馈文档问题 ↗</a
+          >
+        </div>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <a class="brand" href="../"
+          ><img
+            src="../assets/mark.png"
+            alt=""
+            width="29"
+            height="29"
+          />P4Deck<span class="brand-dot">.</span></a
+        ><span>独立的 Perforce 桌面客户端</span>
+        <div>
+          <a href="../">首页</a
+          ><a href="https://github.com/MycroftCooper/P4Deck/releases"
+            >Releases ↗</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

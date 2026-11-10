@@ -1,0 +1,1820 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="P4Deck 是面向日常 Perforce 工作流的桌面客户端。P4 命令后台执行，数据优先读本地缓存，支持乐观更新。从安装、连接到第一次提交快速上手。"
+    />
+    <meta name="theme-color" content="#10101a" />
+    <title>P4Deck · 给 Perforce 日常工作的桌面客户端</title>
+    <link rel="icon" href="assets/mark.png" type="image/png" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script src="assets/site.js" defer></script>
+  </head>
+  <body class="landing">
+    <a class="skip" href="#main">跳到正文</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="./" aria-label="P4Deck 首页"
+          ><img
+            src="assets/mark.png"
+            alt=""
+            width="33"
+            height="33"
+          />P4Deck<span class="brand-dot">.</span></a
+        >
+        <nav class="main-nav" aria-label="主导航">
+          <a href="#showcase">界面</a><a href="#features">功能</a
+          ><a href="#compare">对比 P4V</a><a href="wiki/">Wiki</a>
+        </nav>
+        <a
+          class="button button-small button-quiet header-github"
+          href="https://github.com/MycroftCooper/P4Deck"
+          >GitHub <span aria-hidden="true">↗</span></a
+        >
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap hero-inner">
+          <div class="hero-copy">
+            <div class="eyebrow">
+              <span class="signal" aria-hidden="true"></span> PERFORCE
+              桌面客户端 <span class="eyebrow-rule"></span> WINDOWS 体验版
+            </div>
+            <h1 id="hero-title">P4 服务器卡住，<br /><em>界面照常用。</em></h1>
+            <p>
+              P4Deck 把界面和 P4
+              命令分开。服务器慢或暂时无响应时，你仍可切页、查看已有数据和检查任务进度。能从本地读，就少向服务器查一次。
+            </p>
+            <div class="actions">
+              <a
+                class="button button-primary"
+                href="https://github.com/MycroftCooper/P4Deck/releases/latest"
+                >下载 Windows 体验版 <span aria-hidden="true">↗</span></a
+              ><a class="button button-quiet" href="wiki/#quickstart"
+                >快速上手 <span aria-hidden="true">→</span></a
+              >
+            </div>
+          </div>
+          <figure class="product-figure" aria-labelledby="preview-caption">
+            <div class="preview-toolbar">
+              <figcaption id="preview-caption">
+                <span class="signal" aria-hidden="true"></span> 工作流预览
+                <span class="preview-label">/ 示例数据</span>
+              </figcaption>
+              <div class="preview-tabs" aria-label="切换预览场景">
+                <button
+                  type="button"
+                  data-preview="waiting"
+                  aria-controls="preview-waiting"
+                  aria-pressed="true"
+                >
+                  后台执行</button
+                ><button
+                  type="button"
+                  data-preview="cache"
+                  aria-controls="preview-cache"
+                  aria-pressed="false"
+                >
+                  本地缓存</button
+                ><button
+                  type="button"
+                  data-preview="pending"
+                  aria-controls="preview-pending"
+                  aria-pressed="false"
+                >
+                  乐观更新
+                </button>
+              </div>
+            </div>
+            <div class="mock-window">
+              <div class="mock-title">
+                <span class="mock-lights" aria-hidden="true"
+                  ><i></i><i></i><i></i></span
+                ><span class="mock-workspace">//depot/game/main</span
+                ><span class="mock-online">P4DECK</span>
+              </div>
+              <div class="mock-grid">
+                <div class="mock-sidebar" aria-hidden="true">
+                  <span class="mock-side-label">WORKSPACE</span
+                  ><span><i>◇</i> 工作区</span><span><i>▱</i> 仓库</span
+                  ><span class="mock-selected"><i>≡</i> 变更列表</span
+                  ><span><i>◷</i> 历史记录</span><span><i>⑂</i> 分支流</span>
+                </div>
+                <div class="mock-content">
+                  <div id="preview-waiting" data-panel="waiting">
+                    <div class="mock-heading">
+                      <div>
+                        <span>WORKSPACE / 本地视图</span
+                        ><strong>浏览工作区</strong>
+                      </div>
+                      <span class="mock-chip">界面可用</span>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span>◇ &nbsp; SceneLoader.cs</span><small>#15</small>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span>◇ &nbsp; LoadScreen.prefab</span><small>#08</small>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span>◇ &nbsp; AssetIndex.json</span><small>#21</small>
+                    </div>
+                    <div class="mock-task">
+                      <span class="task-ring" aria-hidden="true"></span>
+                      <div>
+                        <b>正在等待 P4 服务器响应</b
+                        ><code>p4 sync //depot/game/main/...</code>
+                      </div>
+                      <span>后台任务</span>
+                    </div>
+                  </div>
+                  <div id="preview-cache" data-panel="cache" hidden>
+                    <div class="mock-heading">
+                      <div>
+                        <span>SUBMITTED CHANGELISTS</span
+                        ><strong>已提交变更</strong>
+                      </div>
+                      <span class="mock-chip">本地快照</span>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span><b>#18451</b> &nbsp; 修复载入界面闪烁</span
+                      ><small>普通提交</small>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span><b>#18427</b> &nbsp; 合并资源配置</span
+                      ><small>疑似 CI</small>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span><b>#18398</b> &nbsp; 更新资源清单</span
+                      ><small>自动生成</small>
+                    </div>
+                    <div class="mock-task">
+                      <span class="task-ring cached" aria-hidden="true"></span>
+                      <div>
+                        <b>复用已有查询结果</b><code>有效缓存可直接使用</code>
+                      </div>
+                      <span>本地读取</span>
+                    </div>
+                  </div>
+                  <div id="preview-pending" data-panel="pending" hidden>
+                    <div class="mock-heading">
+                      <div>
+                        <span>PENDING CHANGELISTS</span
+                        ><strong>待提交变更</strong>
+                      </div>
+                      <span class="mock-chip">等待确认</span>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span>▾ &nbsp;<b>#18432</b> &nbsp; 修整场景加载</span
+                      ><small>来源 CL</small>
+                    </div>
+                    <div class="mock-row mock-cl">
+                      <span>▾ &nbsp;<b>#18439</b> &nbsp; 整理资源索引</span
+                      ><small>目标 CL</small>
+                    </div>
+                    <div class="mock-row mock-file">
+                      <span><i>→</i> SceneLoader.cs</span
+                      ><small>暂显于此</small>
+                    </div>
+                    <div class="mock-task">
+                      <span class="task-ring" aria-hidden="true"></span>
+                      <div>
+                        <b>先显示移动后的文件位置</b
+                        ><code>收到服务器结果后校准</code>
+                      </div>
+                      <span>乐观更新</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </figure>
+        </div>
+        <div class="wrap hero-foot">
+          <span
+            >前后端分离 <span aria-hidden="true">/</span> 缓存优先
+            <span aria-hidden="true">/</span> 乐观更新</span
+          ><a href="#compare">了解区别 <span aria-hidden="true">↓</span></a>
+        </div>
+      </section>
+
+      <section
+        class="section wrap"
+        id="compare"
+        aria-labelledby="compare-title"
+      >
+        <div class="section-head">
+          <span class="kicker">01 / 为什么用 P4Deck</span>
+          <h2 id="compare-title">
+            同一个 Perforce，<br class="wide-only" />少等几次响应。
+          </h2>
+          <p>
+            如果你用 P4V 遇到过服务器迟迟不回、窗口显示「未响应」，这就是 P4Deck
+            想解决的问题。等待服务器的任务留在后台，本地还能做的事照常做。
+          </p>
+        </div>
+        <div class="principles" aria-label="P4Deck 的三项设计">
+          <article>
+            <span class="kicker">01 / ASYNC</span>
+            <h3>前后端分离</h3>
+            <p>
+              React 界面独立运行，桌面端的 Rust 后台异步调用官方
+              <code>p4</code>
+              CLI。同步或查询等待服务器时，界面仍能切页、浏览已有内容和查看日志。
+            </p>
+          </article>
+          <article>
+            <span class="kicker">02 / CACHE FIRST</span>
+            <h3>先查本地缓存</h3>
+            <p>
+              Pending 和 Submitted
+              等页面先复用已有快照。有效缓存可直接读；数据过期或主动刷新时再查服务器，避免切回页面就重复请求。
+            </p>
+          </article>
+          <article>
+            <span class="kicker">03 / OPTIMISTIC UI</span>
+            <h3>先反馈，再核对</h3>
+            <p>
+              移动文件到另一个 Pending CL
+              时，界面先显示新位置，后台再核对真实结果。失败会校正；同步、提交等操作要等结果确认才显示成功。
+            </p>
+          </article>
+        </div>
+        <p class="source-note">
+          <a href="wiki/#responsiveness">了解服务器无响应时还能做什么 →</a>
+        </p>
+        <div class="comparison">
+          <div class="compare-row compare-header" aria-hidden="true">
+            <span>工作场景</span><span>P4V</span><span>P4Deck <i>✳</i></span>
+          </div>
+          <div class="compare-row">
+            <h3><span>01</span> 从历史里看改动</h3>
+            <p>
+              <span class="mobile-label">P4V</span>可以从文件历史调用 Diff
+              工具，新版也提供内置 Diff Summary。
+            </p>
+            <p>
+              <span class="mobile-label">P4Deck</span
+              >选中两个修订，直接在工作台打开 Diff
+              标签。未改行可以折叠，想看上下文再展开。
+            </p>
+          </div>
+          <div class="compare-row">
+            <h3><span>02</span> 找出这周做了什么</h3>
+            <p>
+              <span class="mobile-label">P4V</span>通过 Submitted
+              和已保存的筛选条件查看提交记录。
+            </p>
+            <p>
+              <span class="mobile-label">P4Deck</span>在 Submitted
+              切换普通提交、CI
+              合并和自动生成，还能按用户和日期在本地生成周报提示词。
+            </p>
+          </div>
+          <div class="compare-row">
+            <h3><span>03</span> 浏览很大的文件列表</h3>
+            <p>
+              <span class="mobile-label">P4V</span
+              >可调节文件列表上限；部分对话框超过上限会使用纯文本列表。
+            </p>
+            <p>
+              <span class="mobile-label">P4Deck</span
+              >大列表只渲染可见区域附近的行，滚动时再加载和渲染需要显示的内容。
+            </p>
+          </div>
+        </div>
+        <p class="source-note">
+          对比聚焦日常操作。P4V 参考：<a
+            href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/files.submit.html"
+            >提交</a
+          >、<a
+            href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/using.filters.html"
+            >筛选</a
+          >、<a
+            href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/diff-summary.html"
+            >Diff Summary</a
+          >、<a
+            href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/configuring.preferences.server.html"
+            >性能设置</a
+          >。
+        </p>
+      </section>
+
+      <section
+        class="section section-band"
+        id="showcase"
+        aria-labelledby="showcase-title"
+      >
+        <div class="wrap">
+          <div class="section-head">
+            <span class="kicker">02 / P4V 与 P4Deck</span>
+            <h2 id="showcase-title">
+              看改动，也看它<br class="wide-only" />合到了哪里。
+            </h2>
+            <p>
+              左边是 P4V 或配套的 P4Merge，右边是
+              P4Deck。按图上编号看操作入口和差别，点击任一截图可放大标注。
+            </p>
+          </div>
+          <div class="showcase-highlights">
+            <a href="#ui-submitted"
+              ><span class="kicker">SUBMITTED / 提交类型</span
+              ><strong
+                >把日常提交和自动提交分开看
+                <span aria-hidden="true">↗</span></strong
+              ><span>在已提交页面按普通提交、CI 合并或自动生成筛选。</span></a
+            >
+            <a href="#ui-trace"
+              ><span class="kicker">INTEGRATION / 合并去向</span
+              ><strong
+                >从源 CL 查到后续合并 <span aria-hidden="true">↗</span></strong
+              ><span
+                >沿 CI 的来源 CL 引用找到直接或间接合并，核对各条记录的
+                Workspace。</span
+              ></a
+            >
+          </div>
+          <div class="showcase" data-showcase>
+            <div
+              class="showcase-tabs"
+              data-showcase-tabs
+              hidden
+              role="tablist"
+              aria-label="P4Deck 界面"
+            >
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-diff"
+                aria-controls="ui-diff"
+                aria-selected="true"
+              >
+                Diff
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-search"
+                aria-controls="ui-search"
+                aria-selected="false"
+              >
+                全局搜索
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-preview"
+                aria-controls="ui-preview"
+                aria-selected="false"
+              >
+                文件预览
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-resolve"
+                aria-controls="ui-resolve"
+                aria-selected="false"
+              >
+                冲突解决
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-pending"
+                aria-controls="ui-pending"
+                aria-selected="false"
+              >
+                待提交 CL
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-submitted"
+                aria-controls="ui-submitted"
+                aria-selected="false"
+              >
+                提交类型
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-trace"
+                aria-controls="ui-trace"
+                aria-selected="false"
+              >
+                合并去向
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ui-tab-report"
+                aria-controls="ui-report"
+                aria-selected="false"
+              >
+                周报提示词
+              </button>
+            </div>
+
+            <article
+              class="showcase-panel"
+              id="ui-diff"
+              data-showcase-panel
+              aria-labelledby="ui-title-diff"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">DIFF / 审查改动</span>
+                <h3 id="ui-title-diff">先看改动，再展开上下文</h3>
+                <p>
+                  在同一个工作台对照本地和仓库修订。折叠未改行，快速在差异块之间跳转；需要时也可以从文件历史选择两个修订来比较。
+                </p>
+                <a href="wiki/#review">Diff 使用指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V / P4Merge</strong><span>配套 Diff 工具</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4merge/2026.3/Content/Resources/Images/p4v-merge-diff-syntax-highlight.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V / P4Merge 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4merge/2026.3/Content/Resources/Images/p4v-merge-diff-syntax-highlight.png"
+                      alt="P4V / P4Merge：配套 Diff 工具"
+                      width="767"
+                      height="252"
+                      referrerpolicy="no-referrer"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 32.3%; --y: 8%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 68.5%; --y: 8%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>差异导航</strong>
+                          <p>
+                            在 P4V 选中文件或修订并调用 Diff 后，P4Merge
+                            用工具栏箭头跳转改动。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>语法高亮</strong>
+                          <p>配套工具也能切换语法高亮，查看两份文件的差异。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4merge/current/Content/P4Merge/diff-merge.text_diff.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/diff.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/diff.png"
+                      alt="P4Deck Diff：双栏对照 Have 版本与工作区，突出行内差异，折叠 25 行未修改内容"
+                      width="1280"
+                      height="800"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 42.4%; --y: 13.3%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 48.9%; --y: 36.6%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 20.5%; --y: 65.4%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>工作台 Diff</strong>
+                          <p>
+                            从工具栏打开差异，也可在文件历史选中两条修订后打开。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>版本选择</strong>
+                          <p>直接在同一页选择两侧版本。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>折叠上下文</strong>
+                          <p>保留改动附近的行，点击可展开未修改的内容。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-search"
+              data-showcase-panel
+              aria-labelledby="ui-title-search"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">SEARCH / 快速定位</span>
+                <h3 id="ui-title-search">一个输入框，找六类对象</h3>
+                <p>
+                  按关键词找 Pending、Submitted、工作区文件、Depot 文件、Stream
+                  和
+                  Shelf。按类别打开结果；达到搜索范围上限时，界面会标出结果不完整。
+                </p>
+                <a href="wiki/#search">搜索使用指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Find File</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-find-file-tab.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-find-file-tab.png"
+                      alt="P4V：Find File"
+                      width="562"
+                      height="307"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 8.5%; --y: 6%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 44%; --y: 23%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>查找入口</strong>
+                          <p>从 Search → Find File 打开文件查找页。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>文件范围与条件</strong>
+                          <p>
+                            选 Depot 或工作区路径，可按名称、提交日期或 CL
+                            缩小范围。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/using.filters.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/search.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/search.png"
+                      alt="P4Deck 全局搜索：同一关键词同时查询 Pending 和 Shelf，按类别显示结果"
+                      loading="lazy"
+                      width="1400"
+                      height="1000"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 74.7%; --y: 10.9%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 39%; --y: 35.9%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 23%; --y: 74.5%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>搜索入口</strong>
+                          <p>点工具栏的 Search，进入全局搜索。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>六类对象共用查询</strong>
+                          <p>勾选要查的类别，例如 Pending 和 Shelf。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>按类查看结果</strong>
+                          <p>可以直接打开搁置结果；未扫完的类别有提示。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-preview"
+              data-showcase-panel
+              aria-labelledby="ui-title-preview"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">PREVIEW / 文件预览</span>
+                <h3 id="ui-title-preview">在工作台直接看文件内容</h3>
+                <p>
+                  选中文件就能预览文本、常见图片或表格。CSV、TSV 和 Excel
+                  工作簿可以按表格查看，Excel 预览还能切换工作表。
+                </p>
+                <a href="wiki/#file-preview">文件预览指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Repo History 示例</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v_graph-repo-history.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v_graph-repo-history.png"
+                      alt="P4V：Repo History 示例"
+                      width="768"
+                      height="305"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 46%; --y: 7.1%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 53.5%; --y: 64%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>文件历史</strong>
+                          <p>
+                            选文件后打开 History。图中展示的是 P4V 的 Repo
+                            History 界面。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>Preview 页签</strong>
+                          <p>
+                            选修订后在详情区切到 Preview，查看该修订的文件内容。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/files.history.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/preview.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/preview.png"
+                      alt="P4Deck 文件预览以表格显示 Excel 示例数据，并提供工作表切换"
+                      loading="lazy"
+                      width="1300"
+                      height="690"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 16.6%; --y: 16.4%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 54%; --y: 26.4%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>工作表入口</strong>
+                          <p>
+                            从工作区工具栏的「文件预览」打开工作簿，图中下拉框可切换工作表。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>表格视图</strong>
+                          <p>按行列查看数据，并可冻结表头。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-resolve"
+              data-showcase-panel
+              aria-labelledby="ui-title-resolve"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">RESOLVE / 冲突解决</span>
+                <h3 id="ui-title-resolve">先看清三方版本，再决定怎么合</h3>
+                <p>
+                  左侧列出待处理文件。右侧分开展示共同基线、Depot
+                  来源、本地目标和冲突块。没有剩余冲突时可接受自动合并，也可以保留一侧，或打开已安装的
+                  P4Merge
+                  手工处理。左图是有剩余冲突的样例，右图是可自动合并的样例。
+                </p>
+                <a href="wiki/#resolve">解决文件合并指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Resolve 对话框</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-resolve-dialog-interactive-resolve.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-resolve-dialog-interactive-resolve.png"
+                      alt="P4V：Resolve 对话框"
+                      width="757"
+                      height="700"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 21%; --y: 27.5%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 21%; --y: 59%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 91.4%; --y: 91.8%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>待解决文件</strong>
+                          <p>右键 Resolve 后在文件表中选要处理的项。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>建议操作与基线</strong>
+                          <p>同一处查看基线、来源、目标和冲突数。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>Run Merge Tool</strong>
+                          <p>
+                            从 Resolve
+                            底部打开外部合并工具，也可接受来源、目标或合并结果。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/branches.resolve.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/resolve.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/resolve.png"
+                      alt="解决文件合并界面，左侧待处理文件，右侧共同基线、Depot 来源、本地目标、合并结果及操作"
+                      loading="lazy"
+                      width="1120"
+                      height="778"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 10.3%; --y: 22.5%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 54%; --y: 42%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 90%; --y: 67.9%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>待处理文件</strong>
+                          <p>
+                            在「解决文件合并」左侧选择文件，先看是否可自动合并。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>三方版本卡片</strong>
+                          <p>
+                            分开看共同基线、Depot 来源、本地目标及各自的差异块。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>接受自动合并</strong>
+                          <p>
+                            没有剩余冲突时可接受结果；也可保留一侧或打开
+                            P4Merge。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-pending"
+              data-showcase-panel
+              aria-labelledby="ui-title-pending"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">PENDING / 待提交 CL</span>
+                <h3 id="ui-title-pending">看清每个 CL 装了哪些文件</h3>
+                <p>
+                  P4V 上方是待提交列表，下方可查看所选 CL 的详情和差异。P4Deck
+                  把文件、搁置记录和提交、还原、搁置等常用操作放在各自的 CL
+                  卡片里。
+                </p>
+                <a href="wiki/#changelists">待提交 CL 使用指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Pending · Diff Summary</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4merge-diff-summary_624x799.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 待提交标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4merge-diff-summary_624x799.png"
+                      alt="P4V 待提交页：上方展开 Default CL 和文件，下方显示 Diff Summary"
+                      width="624"
+                      height="799"
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 25%; --y: 3%"
+                      >1</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 22%; --y: 7.6%"
+                      >2</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 8%; --y: 18.7%"
+                      >3</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 26%; --y: 96.6%"
+                      >4</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>Pending 入口</strong>
+                          <p>从 View → Pending Changelists 打开待提交标签。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>筛选 CL</strong>
+                          <p>展开 Filter，按用户、工作区等条件缩小范围。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>展开 CL 文件</strong>
+                          <p>
+                            点 CL
+                            左侧箭头展开文件；提交等操作可从工具栏或右键菜单进入。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">4</span>
+                        <div>
+                          <strong>下方差异摘要</strong>
+                          <p>在详情区切到 Diff Summary，查看所选文件的改动。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/diff-summary.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>待提交 · CL 卡片</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/pending.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 待提交标注"
+                  >
+                    <img
+                      src="assets/ui/pending.png"
+                      alt="P4Deck 待提交页：展开 CL 31821，分别列出待提交文件和已搁置文件，CL 标题行提供常用操作"
+                      width="1280"
+                      height="850"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 80.1%; --y: 13.1%"
+                      >1</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 42%; --y: 29.8%"
+                      >2</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 78.2%; --y: 42.4%"
+                      >3</span
+                    >
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 26.5%; --y: 67%"
+                      >4</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>待提交入口</strong>
+                          <p>
+                            点工具栏的「待提交」，在工作台打开 Pending 标签。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>筛选和排序</strong>
+                          <p>
+                            按 CL
+                            编号、描述或文件路径筛选已缓存的列表，右侧可切换编号排序。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>CL 行内操作</strong>
+                          <p>
+                            在对应 CL
+                            的标题行提交、还原未更改文件或搁置，无需先打开详情。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">4</span>
+                        <div>
+                          <strong>区分待提交和已搁置</strong>
+                          <p>
+                            同一卡片内分区查看两类文件，也能按文件状态和类型筛选。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-submitted"
+              data-showcase-panel
+              aria-labelledby="ui-title-submitted"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">SUBMITTED / 提交类型</span>
+                <h3 id="ui-title-submitted">只看你关心的提交类型</h3>
+                <p>
+                  已提交列表可以在<strong>普通提交</strong>、<strong
+                    >CI 合并</strong
+                  >与<strong>自动生成</strong>之间切换。想回顾本周工作就看普通提交，想排查流水线就切到
+                  CI 合并。分类来自提交描述规则。
+                </p>
+                <a href="wiki/#submitted">提交类型与筛选指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Submitted 筛选</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-filters_814x179.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-filters_814x179.png"
+                      alt="P4V：Submitted 筛选"
+                      width="814"
+                      height="179"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 33.4%; --y: 15%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 27.9%; --y: 72%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>Submitted 入口</strong>
+                          <p>切到 Submitted 标签后展开筛选。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>常用筛选条件</strong>
+                          <p>
+                            按 User、Workspace 等条件查提交，可保存常用筛选。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/using.filters.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/submitted.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/submitted.png"
+                      alt="P4Deck 已提交页面，展示普通提交、CI 合并和自动生成三类记录"
+                      loading="lazy"
+                      width="1440"
+                      height="1120"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 86.1%; --y: 9.4%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 27.8%; --y: 31.2%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 30%; --y: 57%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>已提交入口</strong>
+                          <p>进入「已提交」并展开组合筛选。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>提交类型下拉框</strong>
+                          <p>切换全部、普通提交、CI 合并或自动生成。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>提交类型列</strong>
+                          <p>
+                            逐条查看类型。它依据提交描述判断，不能验证提交者身份。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-trace"
+              data-showcase-panel
+              aria-labelledby="ui-title-trace"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">TRACE / 合并去向</span>
+                <h3 id="ui-title-trace">一条 CL，追到后续的合并提交</h3>
+                <p class="trace-example">
+                  <code>CL 18428 → CL 18441 → CL 18456</code>
+                </p>
+                <p>
+                  在 Submitted 里右键源 CL，选「追踪合并去向」。P4Deck 沿 CI
+                  描述中的来源 CL 引用查找直接和间接合并，列出命中的 CL 与各自的
+                  Workspace。没有可识别的引用时，不能据此判断是否已合入。
+                </p>
+                <a href="wiki/#trace">合并去向追踪指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>Revision Graph · 文件修订</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://www.perforce.com/sites/default/files/2024-12/image-screenshot-p4v-branch-and-revision-history-v2.jpg"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://www.perforce.com/sites/default/files/2024-12/image-screenshot-p4v-branch-and-revision-history-v2.jpg"
+                      alt="P4V：Revision Graph · 文件修订"
+                      width="1197"
+                      height="768"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 58%; --y: 34%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 8.3%; --y: 56.2%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>选中文件修订</strong>
+                          <p>
+                            从文件或修订打开 Revision
+                            Graph，沿图上的连线查看文件集成关系。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>Integrations</strong>
+                          <p>
+                            选择节点后，在此查看文件修订的 Sources 和 Targets。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://www.perforce.com/products/p4/p4v-visual-client"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/trace.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/trace.png"
+                      alt="追踪合并去向界面，列出源 CL 的后续合并提交及各自的 Workspace"
+                      loading="lazy"
+                      width="1100"
+                      height="458"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 19.9%; --y: 8.2%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 26.5%; --y: 46%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>从源 CL 出发</strong>
+                          <p>
+                            在 Submitted 右键源 CL →
+                            追踪合并去向；标题显示当前源 CL。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>查看合并记录的 Workspace</strong>
+                          <p>
+                            按 CI 描述里的来源 CL
+                            引用，列出直接与间接命中的合并提交。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+            <article
+              class="showcase-panel"
+              id="ui-report"
+              data-showcase-panel
+              aria-labelledby="ui-title-report"
+            >
+              <div class="showcase-copy">
+                <span class="kicker">REPORT / 周报提示词</span>
+                <h3 id="ui-title-report">从真实提交记录整理周报</h3>
+                <p>
+                  按用户和日期选范围，默认只整理普通提交。提示词在本地生成，保留
+                  CL 编号，确认后可以一键复制。
+                </p>
+                <a href="wiki/#submitted">周报使用指南 →</a>
+              </div>
+              <div class="shot-pair">
+                <figure class="comparison-shot shot-p4v">
+                  <div class="shot-header">
+                    <strong>P4V</strong><span>相关起点 · Submitted</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-filters_814x179.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4V 标注"
+                  >
+                    <img
+                      src="https://help.perforce.com/helix-core/server-apps/p4v/2026.3/Content/Resources/Images/p4v-filters_814x179.png"
+                      alt="P4V：相关起点 · Submitted"
+                      width="814"
+                      height="179"
+                      referrerpolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 33.4%; --y: 15%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 27.9%; --y: 72%"
+                      >2</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>查看提交记录</strong>
+                          <p>进入 Submitted，再按用户等条件查记录。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>组合筛选</strong>
+                          <p>
+                            这张图展示的是查提交的起点，不是生成周报的界面。
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <a
+                      class="shot-source"
+                      href="https://help.perforce.com/helix-core/server-apps/p4v/current/Content/P4V/files.submit.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >来源：Perforce 官方说明 ↗</a
+                    >
+                  </figcaption>
+                </figure>
+                <figure class="comparison-shot shot-p4deck">
+                  <div class="shot-header">
+                    <strong>P4Deck</strong><span>开发版界面</span>
+                  </div>
+                  <a
+                    class="shot-image"
+                    href="assets/ui/report.png"
+                    data-shot-open
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="放大查看 P4Deck 标注"
+                  >
+                    <img
+                      src="assets/ui/report.png"
+                      alt="周报提示词窗口，显示用户、日期范围、提交类型和带 CL 编号的结果"
+                      loading="lazy"
+                      width="620"
+                      height="774"
+                    />
+                    <span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 36.5%; --y: 5%"
+                      >1</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 50%; --y: 27.5%"
+                      >2</span
+                    ><span
+                      class="shot-marker"
+                      aria-hidden="true"
+                      style="--x: 87.4%; --y: 95.6%"
+                      >3</span
+                    >
+                    <span class="shot-fallback" hidden
+                      >原图暂未加载，点此打开原图 ↗</span
+                    >
+                  </a>
+                  <figcaption>
+                    <ol class="shot-notes">
+                      <li>
+                        <span class="shot-number" aria-hidden="true">1</span>
+                        <div>
+                          <strong>打开周报提示词</strong>
+                          <p>在「已提交」工具栏点「周报提示词」。</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">2</span>
+                        <div>
+                          <strong>确定整理范围</strong>
+                          <p>
+                            按用户、日期和提交类型生成，默认只整理普通提交。
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span class="shot-number" aria-hidden="true">3</span>
+                        <div>
+                          <strong>复制提示词</strong>
+                          <p>本地整理后保留 CL 引用，确认内容再复制。</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <span class="shot-source">P4Deck · 示例数据</span>
+                  </figcaption>
+                </figure>
+              </div>
+            </article>
+          </div>
+          <dialog
+            class="screenshot-dialog"
+            data-shot-dialog
+            aria-labelledby="screenshot-dialog-title"
+          >
+            <header>
+              <h3 id="screenshot-dialog-title">界面标注</h3>
+              <form method="dialog">
+                <button class="button button-quiet button-small" autofocus>
+                  关闭
+                </button>
+              </form>
+            </header>
+            <div class="screenshot-dialog-body" data-shot-dialog-body></div>
+            <footer>
+              <a data-shot-original target="_blank" rel="noopener noreferrer"
+                >打开原图 ↗</a
+              >
+            </footer>
+          </dialog>
+          <p class="source-note">
+            P4V 图片来自 Perforce 官方资料；P4Deck
+            截图使用示例数据。两侧的示例和版本可能不同。
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="wrap">
+          <div class="section-head">
+            <span class="kicker">03 / 核心功能</span>
+            <h2 id="features-title">
+              从同步到提交，<br class="wide-only" />每一步都有落点。
+            </h2>
+            <p>
+              继续使用熟悉的 Workspace、Depot 和
+              Changelist。遇到不熟悉的操作，点进 Wiki 跟着做一遍。
+            </p>
+          </div>
+          <div class="feature-grid">
+            <a class="feature" href="wiki/#workspace"
+              ><span class="feature-icon" aria-hidden="true">⇅</span
+              ><span class="feature-index">01</span>
+              <h3>工作区与同步</h3>
+              <p>
+                切换 Workspace、浏览
+                Depot、同步最新或指定版本，对账检查本地增改删。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+            <a class="feature" href="wiki/#changelists"
+              ><span class="feature-icon" aria-hidden="true">≡</span
+              ><span class="feature-index">02</span>
+              <h3>Changelist 与搁置</h3>
+              <p>
+                整理 Pending、跨 CL 提交选中文件，或先 Shelve，之后再 Unshelve
+                取回。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+            <a class="feature" href="wiki/#review"
+              ><span class="feature-icon" aria-hidden="true">±</span
+              ><span class="feature-index">03</span>
+              <h3>差异、历史与分支</h3>
+              <p>
+                对照本地与仓库版本、查看历史修订和版本图，浏览 Stream Graph 与
+                Branch Mapping。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+            <a class="feature" href="wiki/#search"
+              ><span class="feature-icon" aria-hidden="true">⌕</span
+              ><span class="feature-index">04</span>
+              <h3>全局搜索与定位</h3>
+              <p>
+                从同一个入口找工作区或仓库文件、Pending 或 Submitted CL、Stream
+                和 Shelf。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+            <a class="feature" href="wiki/#submitted"
+              ><span class="feature-icon" aria-hidden="true">▤</span
+              ><span class="feature-index">05</span>
+              <h3>提交分类、合并去向与周报</h3>
+              <p>
+                区分普通提交、CI 合并和自动生成，追踪后续合并，再生成带 CL
+                引用的周报提示词。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+            <a class="feature" href="wiki/#tools"
+              ><span class="feature-icon feature-mono" aria-hidden="true"
+                >&gt;_</span
+              ><span class="feature-index">06</span>
+              <h3>终端与诊断</h3>
+              <p>
+                在当前连接上下文执行 P4 命令，用 P4 Log 和操作记录定位报错。
+              </p>
+              <span class="feature-link">打开指南 →</span></a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="section wrap" aria-labelledby="start-title">
+        <div class="start-panel">
+          <div>
+            <span class="kicker">04 / 第一次打开 P4Deck</span>
+            <h2 id="start-title">从第一次连接开始。</h2>
+            <p>
+              准备 Server、User 和 Workspace，按指南走一遍：连接 → 同步 → Diff →
+              提交。第一次练习建议用测试 Workspace。
+            </p>
+          </div>
+          <a class="button button-primary" href="wiki/#quickstart"
+            >阅读新手指南 <span aria-hidden="true">→</span></a
+          >
+        </div>
+        <p class="release-note">
+          <span class="signal" aria-hidden="true"></span>
+          当前为早期体验阶段。公开安装包以 Releases 为准；部分流程仍在验收。
+        </p>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <a class="brand" href="./"
+          ><img
+            src="assets/mark.png"
+            alt=""
+            width="29"
+            height="29"
+          />P4Deck<span class="brand-dot">.</span></a
+        ><span>独立的 Perforce 桌面客户端</span>
+        <div>
+          <a href="wiki/">Wiki</a
+          ><a href="https://github.com/MycroftCooper/P4Deck/issues"
+            >反馈问题 ↗</a
+          >
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -697,6 +697,8 @@ fn event(message: String) -> OperationEvent {
         kind: EventKind::Stdout,
         message: Some(message),
         progress: None,
+        progress_current: None,
+        progress_total: None,
         timestamp: "2026-10-09T00:00:00Z".into(),
     }
 }

@@ -241,6 +241,7 @@ it("Get Latest previews in the background and syncs a single changed file direct
     paths: ["//fixture/a"],
     revision: { kind: "head", value: "" },
     operationId,
+    expectedFiles: 1,
   });
 });
 
@@ -288,6 +289,21 @@ it("Get Latest opens the safe-sync dialog one changed file above the threshold",
   expect(errorNotice()).toBe("");
 });
 
+it("Get Latest omits expectedFiles when the preview has no affected files", async () => {
+  deps.previewSync.mockResolvedValue(
+    planWithCounts({ added: 0, updated: 0, deleted: 0 }),
+  );
+  await mount();
+  await run("getLatest");
+  const operationId = deps.previewSync.mock.calls[0][0].operationId as string;
+  expect(deps.syncLatest).toHaveBeenCalledExactlyOnceWith({
+    paths: ["//fixture/a"],
+    revision: { kind: "head", value: "" },
+    operationId,
+  });
+  expect(deps.syncLatest.mock.calls[0][0]).not.toHaveProperty("expectedFiles");
+});
+
 it("Get Latest syncs a single deletion directly", async () => {
   deps.previewSync.mockResolvedValue(
     previewPlan({
@@ -304,6 +320,22 @@ it("Get Latest syncs a single deletion directly", async () => {
   await mount();
   await run("getLatest");
   expect(deps.syncLatest).toHaveBeenCalledTimes(1);
+  expect(deps.syncLatest).toHaveBeenCalledWith(
+    expect.objectContaining({ expectedFiles: 1 }),
+  );
+  expect(deps.open).not.toHaveBeenCalled();
+});
+
+it("Get Latest sums added, updated and deleted as expectedFiles", async () => {
+  deps.previewSync.mockResolvedValue(
+    planWithCounts({ added: 2, updated: 3, deleted: 4 }),
+  );
+  await mount();
+  await run("getLatest");
+  expect(deps.syncLatest).toHaveBeenCalledTimes(1);
+  expect(deps.syncLatest).toHaveBeenCalledWith(
+    expect.objectContaining({ expectedFiles: 9 }),
+  );
   expect(deps.open).not.toHaveBeenCalled();
 });
 

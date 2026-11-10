@@ -533,6 +533,8 @@ mod tests {
             kind: EventKind::Stdout,
             message: Some(message.into()),
             progress: None,
+            progress_current: None,
+            progress_total: None,
             timestamp: "now".into(),
         }
     }

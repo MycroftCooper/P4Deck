@@ -3,6 +3,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -33,6 +34,7 @@ import {
 import { pageIcons } from "../pageIcons";
 import { detachedPage, type DockHandle, type DockProps } from "./types";
 import { DiffPathInput } from "./DiffPathInput";
+import { rememberScrollElement, restorePanelScroll } from "./scrollMemory";
 export const RenderContext = createContext<DockProps["render"]>(() => null);
 export const PopoutContext = createContext<(panel: IDockviewPanel) => void>(
   () => undefined,
@@ -100,6 +102,57 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
       subscription.dispose();
     };
   }, [props.api]);
+  // Dockview detaches an inactive page's DOM; re-attaching it resets every
+  // scroll container even though the React tree survives. Track the offsets of
+  // the scrolled elements and restore them when the tab becomes visible again.
+  const [pageRoot, setPageRoot] = useState<HTMLDivElement | null>(null);
+  const visible = useRef(false);
+  useEffect(() => {
+    const root = pageRoot;
+    if (!root) return;
+    const panelId = props.api.id;
+    visible.current = !!props.api.isVisible;
+    const onScroll = (event: Event) => {
+      // Ignore events fired while hidden: a re-attached element reports 0 and
+      // must not overwrite the position we are about to restore.
+      if (!visible.current) return;
+      const target = event.target;
+      if (target instanceof HTMLElement)
+        rememberScrollElement(panelId, root, target);
+    };
+    root.addEventListener("scroll", onScroll, true);
+    return () => root.removeEventListener("scroll", onScroll, true);
+  }, [pageRoot, props.api]);
+  useEffect(() => {
+    const panelId = props.api.id;
+    let frame = 0;
+    let attempts = 0;
+    const cancelRestore = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+    };
+    const restore = () => {
+      const root = pageRoot;
+      if (!root || !props.api.isVisible) return;
+      // A virtualized list can clamp the first write until its spacer has its
+      // final height, so retry a few frames instead of losing the offset.
+      if (restorePanelScroll(panelId, root) || attempts >= 12) return;
+      attempts += 1;
+      frame = requestAnimationFrame(restore);
+    };
+    visible.current = !!props.api.isVisible;
+    if (props.api.isVisible) restore();
+    const subscription = props.api.onDidVisibilityChange(() => {
+      visible.current = !!props.api.isVisible;
+      cancelRestore();
+      attempts = 0;
+      if (props.api.isVisible) restore();
+    });
+    return () => {
+      cancelRestore();
+      subscription.dispose();
+    };
+  }, [pageRoot, props.api]);
   const zh = useContext(LanguageContext);
   const render = useContext(RenderContext),
     open = useContext(OpenContext),
@@ -113,7 +166,10 @@ function Page(props: IDockviewPanelProps<PanelTarget>) {
   // Global pages with a compact title bar; their actions portal into it.
   const titled = !!kind && !isMultiPage(kind);
   return (
-    <div className={`dock-page${titled ? " fixed-page" : ""}`}>
+    <div
+      ref={setPageRoot}
+      className={`dock-page${titled ? " fixed-page" : ""}`}
+    >
       {kind && (isMultiPage(kind) || titled) && (
         <div
           ref={titled ? setHeaderActions : undefined}

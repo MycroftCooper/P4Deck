@@ -28,6 +28,7 @@ import type { WorkspaceNode } from "../../../shared/contracts";
 import type { messages } from "../../../shared/i18n";
 import { depotNodeAsWorkspaceNode } from "../fileListModel";
 import { nodeNeedsSync } from "../fileActions";
+import { backend } from "../../../infrastructure/backend";
 
 type T = (typeof messages)[keyof typeof messages];
 export function FileWorkbench({
@@ -56,6 +57,26 @@ export function FileWorkbench({
 }) {
   const isDepot = !!directory?.startsWith("//");
   const env = useMenuEnvironment();
+  /**
+   * Double-click opens the file with the application registered for its type.
+   * Depot-only or missing local files keep the in-app preview fallback so a
+   * double-click always does something useful.
+   */
+  const openWithDefaultApp = async (node: WorkspaceNode) => {
+    if (isDepot || env.runtime.mode !== "tauri") {
+      onOpenReview("preview", node);
+      return;
+    }
+    try {
+      const capabilities = await backend.localPathCapabilities(
+        node.absolutePath,
+      );
+      if (!capabilities.openWith) throw new Error("No local file");
+      await backend.openLocalPath({ path: node.absolutePath, mode: "open" });
+    } catch {
+      onOpenReview("preview", node);
+    }
+  };
   const local = useWorkspaceFiles(
     connectionKey,
     canListWorkspace(env.runtime) && !isDepot,
@@ -247,7 +268,7 @@ export function FileWorkbench({
                     }}
                     onClick={(event) => selection.choose(node, event)}
                     onDoubleClick={() => {
-                      if (node.kind === "file") onOpenReview("preview", node);
+                      if (node.kind === "file") void openWithDefaultApp(node);
                       else onNavigate(node);
                     }}
                     {...fileMenu(

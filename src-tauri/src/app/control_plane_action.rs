@@ -81,7 +81,7 @@ pub fn file_facts(path: &Path) -> ControlPlaneArtifact {
     }
     let Ok(bytes) = std::fs::read(path) else {
         return ControlPlaneArtifact {
-            path: Some(path.to_string_lossy().into_owned()),
+            path: Some(crate::local_path::plain_path(path)),
             file_name: path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned()),

@@ -1,13 +1,16 @@
 import type { PendingFile, P4Context } from "../../shared/contracts";
+import { plainLocalPath } from "../../shared/lib/plainPath";
 
 /** Display mapped paths without changing the depot identity used by operations. */
 export function pendingFilePath(file: PendingFile, context: P4Context): string {
-  const path = file.clientPath?.replace(/\\/g, "/");
+  const path = plainLocalPath(file.clientPath ?? "").replace(/\\/g, "/");
   if (!path) return file.depotPath;
   const clientPrefix = `//${context.client}/`;
   if (context.client && path.startsWith(clientPrefix))
     return path.slice(clientPrefix.length) || file.depotPath;
-  const root = context.cwd?.replace(/\\/g, "/").replace(/\/+$/, "");
+  const root = context.cwd
+    ? plainLocalPath(context.cwd).replace(/\\/g, "/").replace(/\/+$/, "")
+    : undefined;
   if (
     context.cwd &&
     root !== undefined &&

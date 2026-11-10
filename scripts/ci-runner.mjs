@@ -179,6 +179,7 @@ const webSteps = [
   ),
   nodeStep("ipc-surface", "contracts", "scripts/validate-ipc-surface.mjs"),
   nodeStep("version-consistency", "versions", "scripts/validate-versions.mjs"),
+  nodeStep("changelog", "versions", "scripts/validate-changelog.mjs"),
   nodeStep("i18n-literals", "i18n", "scripts/validate-no-cjk-literals.mjs"),
   nodeStep("i18n-key-quality", "i18n", "scripts/validate-i18n-key-quality.mjs"),
   nodeStep("ci-step-result-tests", "node-test", "--test", [
@@ -186,6 +187,12 @@ const webSteps = [
   ]),
   nodeStep("version-tests", "node-test", "--test", [
     "scripts/validate-versions.test.mjs",
+  ]),
+  nodeStep("changelog-tests", "node-test", "--test", [
+    "scripts/validate-changelog.test.mjs",
+  ]),
+  nodeStep("release-notes-tests", "node-test", "--test", [
+    "scripts/release-notes.test.mjs",
   ]),
   nodeStep("ipc-surface-tests", "node-test", "--test", [
     "scripts/validate-ipc-surface.test.mjs",

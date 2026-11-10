@@ -217,6 +217,8 @@ export interface Backend {
   logout(request: AuthenticationRequest): Promise<ConnectionStatus>;
   openLocalPath(request: OpenLocalPathRequest): Promise<void>;
   openSwarmLink(request: OpenSwarmLinkRequest): Promise<void>;
+  /** Open an allowlisted product-site page (About card links). */
+  openExternalUrl(url: string): Promise<void>;
   localPathCapabilities(
     path: string,
   ): Promise<import("../../shared/contracts").LocalPathCapabilities>;

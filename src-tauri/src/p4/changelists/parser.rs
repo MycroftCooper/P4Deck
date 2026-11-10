@@ -723,6 +723,8 @@ mod tests {
             kind: crate::domain::EventKind::Stdout,
             message: Some(message.into()),
             progress: None,
+            progress_current: None,
+            progress_total: None,
             timestamp: "now".into(),
         }
     }
@@ -960,6 +962,8 @@ mod tests {
                     .into(),
             ),
             progress: None,
+            progress_current: None,
+            progress_total: None,
             timestamp: "now".into(),
         }];
         let parsed = parse_opened_files(&events);

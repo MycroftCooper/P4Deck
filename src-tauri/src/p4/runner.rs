@@ -527,6 +527,7 @@ impl P4Runner {
                             JournalState::Cancelled,
                             Some(OperationFailureKind::Cancelled),
                         );
+                        emit_terminal(app, &operation_id, EventKind::Cancelled);
                         return Err(error);
                     }
                 },
@@ -541,6 +542,7 @@ impl P4Runner {
                     JournalState::Cancelled,
                     Some(OperationFailureKind::Cancelled),
                 );
+                emit_terminal(app, &operation_id, EventKind::Cancelled);
                 return Err(error);
             }
         };
@@ -564,8 +566,13 @@ impl P4Runner {
                 command.args(["-C", charset]);
             }
         }
-        if let Some(cwd) = &request.context.cwd {
-            command.args(["-d", cwd]);
+        if let Some(cwd) = request
+            .context
+            .cwd
+            .as_deref()
+            .map(crate::local_path::plain_local_path)
+        {
+            command.args(["-d", &cwd]);
         }
         if matches!(request.output_mode, OutputMode::JsonLines) {
             command.args(["-ztag", "-Mj"]);
@@ -596,6 +603,7 @@ impl P4Runner {
                 JournalState::Cancelled,
                 Some(OperationFailureKind::Cancelled),
             );
+            emit_terminal(app, &operation_id, EventKind::Cancelled);
             return Err(RunnerError::Cancelled);
         };
         let mut child = match spawn_result {
@@ -607,6 +615,7 @@ impl P4Runner {
                     JournalState::Failed,
                     Some(OperationFailureKind::CommandFailure),
                 );
+                emit_terminal(app, &operation_id, EventKind::Completed);
                 return Err(RunnerError::Launch(error));
             }
         };
@@ -619,6 +628,7 @@ impl P4Runner {
                 JournalState::Failed,
                 Some(OperationFailureKind::CommandFailure),
             );
+            emit_terminal(app, &operation_id, EventKind::Completed);
             return Err(RunnerError::Launch(error));
         }
         let stdin_input = argument_input
@@ -626,8 +636,23 @@ impl P4Runner {
             .or_else(|| request.input.clone());
         if let Some(input) = &stdin_input {
             if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(input.as_bytes()).await?;
-                stdin.shutdown().await?;
+                let written = async {
+                    stdin.write_all(input.as_bytes()).await?;
+                    stdin.shutdown().await
+                }
+                .await;
+                if let Err(error) = written {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    self.operations.lock().remove(&operation_id);
+                    let _ = self.journal.finish(
+                        &operation_id,
+                        JournalState::Failed,
+                        Some(OperationFailureKind::CommandFailure),
+                    );
+                    emit_terminal(app, &operation_id, EventKind::Completed);
+                    return Err(RunnerError::Launch(error));
+                }
             }
         }
         let stdout = child.stdout.take().expect("stdout piped");
@@ -703,13 +728,38 @@ impl P4Runner {
                             manual: manual_scope.is_some(),
                         });
                     }
+                    emit_terminal(app, &operation_id, EventKind::Completed);
                     return Err(RunnerError::Timeout);
                 }
             }
         };
         let execution_ms = execution_started.elapsed().as_millis() as u64;
-        let stdout_events = stdout_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
-        let stderr_events = stderr_task.await.unwrap_or_else(|_| Ok(Vec::new()))?;
+        let stdout_events = match stdout_task.await.unwrap_or_else(|_| Ok(Vec::new())) {
+            Ok(events) => events,
+            Err(error) => {
+                self.operations.lock().remove(&operation_id);
+                let _ = self.journal.finish(
+                    &operation_id,
+                    JournalState::Failed,
+                    Some(OperationFailureKind::CommandFailure),
+                );
+                emit_terminal(app, &operation_id, EventKind::Completed);
+                return Err(RunnerError::Launch(error));
+            }
+        };
+        let stderr_events = match stderr_task.await.unwrap_or_else(|_| Ok(Vec::new())) {
+            Ok(events) => events,
+            Err(error) => {
+                self.operations.lock().remove(&operation_id);
+                let _ = self.journal.finish(
+                    &operation_id,
+                    JournalState::Failed,
+                    Some(OperationFailureKind::CommandFailure),
+                );
+                emit_terminal(app, &operation_id, EventKind::Completed);
+                return Err(RunnerError::Launch(error));
+            }
+        };
         let stdout_text = event_text(&stdout_events);
         let stderr_text = event_text(&stderr_events);
         events.extend(stdout_events);
@@ -964,12 +1014,16 @@ impl ProgressReporter {
         if percent <= previous {
             return None;
         }
-        let value = event_with_progress(
+        let mut value = event_with_progress(
             &self.operation_id,
             EventKind::Progress,
             None,
             Some(percent as f32),
         );
+        // The count is what the panel renders ("25/1000"); the percent curve
+        // stays the same monotonic 2..95 summary of the same work.
+        value.progress_current = Some(seen as u64);
+        value.progress_total = Some(self.expected as u64);
         emit(self.app.as_ref(), &value);
         Some(value)
     }
@@ -1132,6 +1186,8 @@ fn event_with_progress(
         kind,
         message: message.map(|value| security::redact_text(&value)),
         progress,
+        progress_current: None,
+        progress_total: None,
         timestamp: Utc::now().to_rfc3339(),
     }
 }
@@ -1140,6 +1196,15 @@ fn emit(app: Option<&AppHandle>, event: &OperationEvent) {
     if let Some(app) = app {
         let _ = app.emit("operation-event", event);
     }
+}
+
+/// Ends the UI's view of an operation that stops before it can report an exit
+/// status (queue cancellation, launch failure, broken stdin, timeout, stream
+/// failure). The task list only drops an operation on a terminal
+/// `completed`/`cancelled` event, so a silent early return would leave a
+/// "running" row behind for the rest of the session.
+fn emit_terminal(app: Option<&AppHandle>, operation_id: &str, kind: EventKind) {
+    emit(app, &event_with_progress(operation_id, kind, None, None));
 }
 #[cfg(test)]
 mod tests {
@@ -1478,6 +1543,34 @@ mod tests {
         assert_eq!(reporter.next_event().unwrap().progress, Some(48.0));
         assert_eq!(reporter.next_event().unwrap().progress, Some(95.0));
         assert!(reporter.next_event().is_none());
+    }
+
+    #[test]
+    fn progress_events_carry_completed_and_expected_work_item_counts() {
+        let reporter = ProgressReporter::new(3, "op-2", None);
+        let events = (0..4)
+            .filter_map(|_| reporter.next_event())
+            .collect::<Vec<_>>();
+        let currents = events
+            .iter()
+            .map(|event| event.progress_current.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(currents, vec![1, 2, 3]);
+        assert!(events.iter().all(|event| event.progress_total == Some(3)));
+        assert!(events.iter().all(|event| event.kind == EventKind::Progress));
+        let percents = events
+            .iter()
+            .map(|event| event.progress.unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(percents, vec![33.0, 64.0, 95.0]);
+        assert!(percents.windows(2).all(|pair| pair[0] < pair[1]));
+        // The wire shape the panel reads: camelCase names, absent when unknown.
+        let value = serde_json::to_value(&events[0]).unwrap();
+        assert_eq!(value["progressCurrent"], 1);
+        assert_eq!(value["progressTotal"], 3);
+        let plain = serde_json::to_value(event("op-2", EventKind::Stdout, None)).unwrap();
+        assert!(plain.get("progressCurrent").is_none(), "{plain}");
+        assert!(plain.get("progressTotal").is_none(), "{plain}");
     }
 
     #[test]

@@ -39,6 +39,8 @@ export default defineConfig(({ mode }) => ({
       "scripts/validate-versions.test.mjs",
       // node:test suites; run by `node --test` from the CI runner instead.
       "scripts/validate-ipc-surface.test.mjs",
+      "scripts/release-notes.test.mjs",
+      "scripts/validate-changelog.test.mjs",
       "tests/browser/**",
       // artifacts/evidence 会收进候选 overlay（含 *.test.tsx 源文件快照），不能被当成真实测试执行。
       "artifacts/**",

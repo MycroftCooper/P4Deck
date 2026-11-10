@@ -480,7 +480,7 @@ impl ConnectionService {
         let candidate = workspace_candidate_from_spec(&spec);
         let mut info_context = context.clone();
         info_context.client = spec.name.clone();
-        info_context.cwd = Some(candidate.root.clone());
+        info_context.cwd = Some(crate::local_path::plain_local_path(&candidate.root));
         let (runtime, _) = self
             .setup
             .inspect_workspace_runtime(&info_context, &format!("{operation_root}:info"), app)
@@ -638,7 +638,10 @@ fn resolve_server_workspace(
     }
     let mut resolved = context.clone();
     resolved.client = spec.name.clone();
-    resolved.cwd = Some(canonical.to_string_lossy().into_owned());
+    // Prefer p4's own Client Root spelling over the canonicalized one: p4 echoes
+    // this spelling in `clientFile`/`where`, and mixing the two breaks the
+    // relative-path and cache-key comparisons downstream.
+    resolved.cwd = Some(crate::local_path::plain_local_path(&runtime.client_root));
     Ok(resolved)
 }
 

@@ -29,9 +29,18 @@ async function send(
   type: OperationEvent["type"],
   message?: string,
   progress?: number,
+  counts?: { current?: number; total?: number },
 ) {
   await act(async () => {
-    publish({ operationId, type, message, progress, timestamp: "" });
+    publish({
+      operationId,
+      type,
+      message,
+      progress,
+      progressCurrent: counts?.current,
+      progressTotal: counts?.total,
+      timestamp: "",
+    });
     await vi.advanceTimersByTimeAsync(100);
   });
 }
@@ -99,6 +108,38 @@ it("opens while idle and shows P4 idle again when the last task finishes", async
   expect(trigger().disabled).toBe(false);
   expect(cancelAll()).toBeNull();
   expect(host.querySelector(".task-list")?.textContent).toContain("P4 空闲");
+});
+
+it("shows unit counts, processed sync files and a second-by-second elapsed label", async () => {
+  await render();
+  await act(async () => trigger().click());
+  const row = (label: string) =>
+    [...host.querySelectorAll<HTMLElement>(".task-row")].find(
+      (item) => item.querySelector("strong")?.textContent === label,
+    )!;
+  const detail = (label: string) =>
+    row(label).querySelector("small")!.textContent!;
+  const bar = (label: string) =>
+    row(label).querySelector<HTMLProgressElement>("progress")!;
+  await send("sync", "started", "p4 sync //depot/...", undefined, {
+    total: 1000,
+  });
+  await send("sync", "progress", undefined, 2, { current: 25, total: 1000 });
+  expect(detail("p4 sync //depot/...")).toContain("25/1000");
+  expect(detail("p4 sync //depot/...")).toContain("已用时 0s");
+  // The bar keeps the reported percent; it is never invented.
+  expect(bar("p4 sync //depot/...").getAttribute("value")).toBe("2");
+  // Elapsed re-renders once per second without any new operation event.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(detail("p4 sync //depot/...")).toMatch(/已用时 [12]s/);
+  // A sync command without a known total falls back to the processed-file count.
+  await send("fetch", "started", "p4 sync -q //depot/...");
+  for (const line of ["a", "b", "c"])
+    await send("fetch", "stdout", `//depot/${line}.txt#2 - updating`);
+  expect(detail("p4 sync -q //depot/...")).toContain("已处理 3 个文件");
+  expect(bar("p4 sync -q //depot/...").getAttribute("value")).toBeNull();
 });
 
 it("cancels exactly the selected task and waits for a terminal event before removing it", async () => {

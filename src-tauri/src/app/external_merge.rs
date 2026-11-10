@@ -239,10 +239,19 @@ pub fn argument_order<'a>(
 /// Build the child process with an argument array only: no shell, no extra
 /// P4Merge switches, and no inherited stdio.
 pub fn build_command(executable: &Path, paths: &[PathBuf; 4], working_dir: &Path) -> Command {
-    let mut command = Command::new(executable);
-    command.args(argument_order(&paths[0], &paths[1], &paths[2], &paths[3]));
+    // P4Merge is a separate process: it must not receive the verbatim `\\?\`
+    // form that canonicalize() produced for the staging files.
+    let normalized: [PathBuf; 4] =
+        std::array::from_fn(|index| PathBuf::from(crate::local_path::plain_path(&paths[index])));
+    let mut command = Command::new(PathBuf::from(crate::local_path::plain_path(executable)));
+    command.args(argument_order(
+        &normalized[0],
+        &normalized[1],
+        &normalized[2],
+        &normalized[3],
+    ));
     command
-        .current_dir(working_dir)
+        .current_dir(PathBuf::from(crate::local_path::plain_path(working_dir)))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -405,6 +414,29 @@ fn wait_for_exit(child: &mut Child) -> WaitOutcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strips_verbatim_paths_before_launching_p4merge() {
+        let root = Path::new(r"\\?\C:\Synthetic\merge");
+        let paths = [
+            root.join("base.txt"),
+            root.join("theirs.txt"),
+            root.join("yours.txt"),
+            root.join("result.txt"),
+        ];
+        let command = build_command(Path::new(r"\\?\C:\tools\p4merge.exe"), &paths, root);
+        let program = command.get_program().to_string_lossy().into_owned();
+        assert!(!program.contains(r"\\?\"), "{program}");
+        let args = command
+            .get_args()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(!args.iter().any(|arg| arg.contains(r"\\?\")), "{args:?}");
+        assert!(
+            args.contains(&crate::local_path::plain_path(&paths[0])),
+            "{args:?}"
+        );
+    }
 
     fn temp_dir(label: &str) -> PathBuf {
         let dir =

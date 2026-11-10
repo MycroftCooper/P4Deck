@@ -806,6 +806,10 @@ export interface OperationEvent {
     | "cancelled";
   message?: string;
   progress?: number;
+  /** Completed units when the command reports countable work (files, bytes…). */
+  progressCurrent?: number;
+  /** Total units for the same countable work; absent when the total is unknown. */
+  progressTotal?: number;
   timestamp: string;
 }
 export interface DiskUsage {
@@ -1317,7 +1321,7 @@ export interface WorkspaceListing {
   cacheFreshness: "fresh" | "stale" | "offlineFallback" | "local";
 }
 
-export type OpenLocalPathMode = "reveal" | "openWith";
+export type OpenLocalPathMode = "reveal" | "open" | "openWith";
 export interface LocalPathCapabilities {
   reveal: boolean;
   openWith: boolean;
@@ -1665,6 +1669,8 @@ export interface SyncPreviewRequest {
   revision: SyncRevisionSpec;
   force?: boolean;
   parallelThreads?: number;
+  /** Preview-reported file count, so a later sync can expose a real total. */
+  expectedFiles?: number;
   operationId?: string;
 }
 

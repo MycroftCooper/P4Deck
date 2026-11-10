@@ -365,6 +365,7 @@ impl FileService {
             operation_prefix,
             app,
         } = request;
+        let mut resolve_preview_error: Option<String> = None;
         let fstat = self
             .run_status(
                 context,
@@ -400,16 +401,28 @@ impl FileService {
                 app,
             )
             .await?;
-        let resolve = self
-            .run_status(
+        let resolve = match self
+            .run_status_preview(
                 context,
                 "resolve",
                 vec!["-n".into(), "-N".into(), filespec.into()],
                 status_operation_id(operation_prefix, "resolve"),
-                true,
                 app,
             )
-            .await?;
+            .await
+        {
+            Ok(resolve) => Some(resolve),
+            // The resolve preview only upgrades the fstat-derived state to
+            // "conflicted"; it is an optional enrichment. When the p4 client is
+            // busy (another P4 tool holding the workspace) it can stall for
+            // minutes, so it runs under the short read bound and degrades to
+            // "resolve state unknown in this snapshot" instead of failing the
+            // whole directory listing and retrying the same scan.
+            Err(error) => {
+                resolve_preview_error = Some(error);
+                None
+            }
+        };
         let reconcile_filespec = local_child_filespec(directory);
         let reconcile = self
             .run_status(
@@ -432,12 +445,18 @@ impl FileService {
         let mut snapshot = status_snapshot(
             &fstat,
             &opened,
-            &resolve,
+            resolve.as_ref(),
             &reconcile,
             local_entries,
             local_truncated,
             local_errors,
         );
+        if let Some(message) = resolve_preview_error {
+            snapshot.errors.push(WorkspaceStatusError {
+                source: WorkspaceStatusSource::ResolvePreview,
+                message,
+            });
+        }
         let known = snapshot
             .files
             .iter()
@@ -602,8 +621,7 @@ impl FileService {
                 absolute_path: local.clone(),
                 relative_path: local
                     .as_ref()
-                    .and_then(|path| Path::new(path).strip_prefix(&root).ok())
-                    .map(|path| path.to_string_lossy().to_string()),
+                    .and_then(|path| plain_relative(&root, Path::new(path))),
                 depot_path: Some(input.into()),
                 reason: local
                     .is_none()
@@ -620,7 +638,7 @@ impl FileService {
                 "relative"
             }
             .into(),
-            absolute_path: candidate.as_ref().map(|p| p.to_string_lossy().to_string()),
+            absolute_path: candidate.as_ref().map(|p| display_path(p)),
             relative_path: candidate
                 .as_ref()
                 .and_then(|p| p.strip_prefix(&root).ok())
@@ -1585,6 +1603,34 @@ impl FileService {
         .await
     }
 
+    /// A read-only enrichment inside a larger listing. Unlike [`Self::run_status`]
+    /// it uses the short read family: these previews are optional, so a slow or
+    /// client-locked p4 must report quickly instead of holding the listing (and
+    /// the progress row) for the whole long-read bound.
+    async fn run_status_preview(
+        &self,
+        context: &P4Context,
+        command: &str,
+        args: Vec<String>,
+        operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        self.run_mode(
+            context,
+            command,
+            args,
+            RunOptions {
+                output_mode: OutputMode::JsonLines,
+                bound: crate::p4::bounds::IoBound::Read,
+                operation_id,
+                progress_total: None,
+                argument_input: None,
+            },
+            app,
+        )
+        .await
+    }
+
     async fn run_mode(
         &self,
         context: &P4Context,
@@ -2215,6 +2261,8 @@ fn emit_progress(app: Option<&AppHandle>, operation_id: &str, kind: EventKind, p
             kind,
             message: None,
             progress: Some(progress),
+            progress_current: None,
+            progress_total: None,
             timestamp: Utc::now().to_rfc3339(),
         },
     );
@@ -2241,7 +2289,7 @@ struct LocalDirectoryScan {
 fn status_snapshot(
     fstat: &OperationResult,
     opened: &OperationResult,
-    resolve: &OperationResult,
+    resolve: Option<&OperationResult>,
     reconcile: &OperationResult,
     local_entries: &[LocalEntry],
     local_truncated: bool,
@@ -2356,27 +2404,29 @@ fn status_snapshot(
         files.insert(key, cached);
     }
 
-    for path in parse_resolve_targets(resolve) {
-        let key = if Path::new(&path).is_absolute() {
-            Some(local_path_key(&path))
-        } else {
-            client_paths
-                .get(&path)
-                .or_else(|| depot_paths.get(&path))
-                .cloned()
-        };
-        let Some(key) = key else {
-            continue;
-        };
-        let Some(status) = files.get_mut(&key) else {
-            continue;
-        };
-        status.resolve = WorkspaceResolveState::Unresolved;
-        status.evidence.push(WorkspaceStatusEvidence {
-            source: WorkspaceStatusSource::ResolvePreview,
-            summary: "Resolve preview reports unresolved integration work".into(),
-        });
-        status.status = FileStatusKind::Conflicted;
+    if let Some(resolve) = resolve {
+        for path in parse_resolve_targets(resolve) {
+            let key = if Path::new(&path).is_absolute() {
+                Some(local_path_key(&path))
+            } else {
+                client_paths
+                    .get(&path)
+                    .or_else(|| depot_paths.get(&path))
+                    .cloned()
+            };
+            let Some(key) = key else {
+                continue;
+            };
+            let Some(status) = files.get_mut(&key) else {
+                continue;
+            };
+            status.resolve = WorkspaceResolveState::Unresolved;
+            status.evidence.push(WorkspaceStatusEvidence {
+                source: WorkspaceStatusSource::ResolvePreview,
+                summary: "Resolve preview reports unresolved integration work".into(),
+            });
+            status.status = FileStatusKind::Conflicted;
+        }
     }
 
     for value in json_values(opened) {
@@ -2521,25 +2571,27 @@ fn status_snapshot(
 
     let mut errors = command_errors(fstat, WorkspaceStatusSource::Fstat);
     errors.extend(command_errors(opened, WorkspaceStatusSource::Opened));
-    errors.extend(command_errors(
-        resolve,
-        WorkspaceStatusSource::ResolvePreview,
-    ));
+    if let Some(resolve) = resolve {
+        errors.extend(command_errors(
+            resolve,
+            WorkspaceStatusSource::ResolvePreview,
+        ));
+    }
     errors.extend(command_errors(
         reconcile,
         WorkspaceStatusSource::ReconcilePreview,
     ));
     errors.extend_from_slice(local_errors);
+    let mut operation_ids = vec![fstat.operation_id.clone(), opened.operation_id.clone()];
+    if let Some(resolve) = resolve {
+        operation_ids.push(resolve.operation_id.clone());
+    }
+    operation_ids.push(reconcile.operation_id.clone());
     StatusSnapshot {
         files: files.into_values().collect(),
         freshness: CacheFreshness::Fresh,
         errors,
-        operation_ids: vec![
-            fstat.operation_id.clone(),
-            opened.operation_id.clone(),
-            resolve.operation_id.clone(),
-            reconcile.operation_id.clone(),
-        ],
+        operation_ids,
         truncated: local_truncated || fstat_count > FileService::WORKSPACE_LIST_SAFETY_LIMIT,
     }
 }
@@ -2552,7 +2604,7 @@ pub(crate) fn fstat_status_snapshot(result: &OperationResult) -> StatusSnapshot 
         events: Vec::new(),
         duration_ms: 0,
     };
-    let mut snapshot = status_snapshot(result, &empty, &empty, &empty, &[], false, &[]);
+    let mut snapshot = status_snapshot(result, &empty, None, &empty, &[], false, &[]);
     snapshot
         .files
         .sort_by_key(|status| local_path_key(&status.path));
@@ -3073,10 +3125,9 @@ fn workspace_node(
         return Some(node);
     }
     let path = Path::new(&cached.path);
-    let display_root = display_path(root);
-    let relative = path.strip_prefix(Path::new(&display_root)).ok()?;
+    let relative = plain_relative(root, path)?;
     // A directory listing only returns direct children even when a server emits a broader row.
-    if relative.components().count() == 0 {
+    if relative.is_empty() {
         return None;
     }
     status.local = WorkspaceLocalState::Missing;
@@ -3096,7 +3147,7 @@ fn workspace_node(
             .to_string(),
         kind: "file".into(),
         absolute_path,
-        relative_path: relative.to_string_lossy().to_string(),
+        relative_path: relative,
         depot_path: cached.depot_path.clone(),
         state: primary_state_name(status.primary).into(),
         revision: cached.have_revision,
@@ -3302,11 +3353,30 @@ fn canonical_root(context: &P4Context) -> Result<PathBuf, String> {
     root.canonicalize().map_err(|error| error.to_string())
 }
 fn display_path(path: &Path) -> String {
-    let value = path.to_string_lossy();
-    if let Some(value) = value.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{value}")
+    crate::local_path::plain_path(path)
+}
+
+/// Relative path from the workspace Root when `path` lives inside it. Both sides
+/// are compared in plain syntax, with separator and (on Windows) case folding,
+/// because p4 echoes the Client Root spelling while local scans may carry a
+/// canonicalized one.
+fn plain_relative(root: &Path, path: &Path) -> Option<String> {
+    let root = display_path(root);
+    let path = display_path(path);
+    let root = root.trim_end_matches(['\\', '/']);
+    let head = path.get(..root.len())?;
+    let fold = |value: &str| value.replace('/', "\\");
+    let same = if cfg!(windows) {
+        fold(head).eq_ignore_ascii_case(&fold(root))
     } else {
-        value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
+        fold(head) == fold(root)
+    };
+    if !same {
+        return None;
+    }
+    match path.as_bytes().get(root.len()) {
+        Some(b'\\') | Some(b'/') => Some(path[root.len() + 1..].to_owned()),
+        _ => None,
     }
 }
 fn local_path_key(path: &str) -> String {
@@ -3408,6 +3478,8 @@ mod tests {
                     kind: EventKind::Stdout,
                     message: Some((*message).into()),
                     progress: None,
+                    progress_current: None,
+                    progress_total: None,
                     timestamp: "2026-10-09T00:00:00Z".into(),
                 })
                 .collect(),
@@ -3484,7 +3556,7 @@ mod tests {
             has_children: false,
             local_state: WorkspaceLocalState::Present,
         }];
-        let snapshot = status_snapshot(&fstat, &empty, &empty, &reconcile, &local, false, &[]);
+        let snapshot = status_snapshot(&fstat, &empty, None, &reconcile, &local, false, &[]);
         assert_eq!(snapshot.files.len(), 1);
         assert_eq!(snapshot.files[0].status, FileStatusKind::ReconcileCandidate);
         assert_eq!(
@@ -3504,7 +3576,7 @@ mod tests {
             ],
         );
         let empty = operation("empty", &[]);
-        let snapshot = status_snapshot(&fstat, &empty, &empty, &empty, &[], false, &[]);
+        let snapshot = status_snapshot(&fstat, &empty, None, &empty, &[], false, &[]);
         let by_name = |name: &str| {
             snapshot
                 .files
@@ -3518,6 +3590,24 @@ mod tests {
         );
         assert_ne!(by_name("resolved.txt").status, FileStatusKind::Conflicted);
         assert_eq!(by_name("clean.txt").resolve, WorkspaceResolveState::None);
+    }
+
+    #[test]
+    fn fstat_unresolved_records_keep_conflicts_when_the_preview_is_unavailable() {
+        // `resolve -n` is an optional enrichment: when it times out under the
+        // short read bound (busy client/workspace) the listing must still mark
+        // the conflict from fstat's own unresolved count.
+        let fstat = operation(
+            "fstat",
+            &[
+                r#"{"path":"C:/ws/conflict.txt","clientFile":"C:/ws/conflict.txt","depotFile":"//depot/conflict.txt","haveRev":"2","headRev":"3","action":"integrate","unresolved":"1","resolved":"0"}"#,
+            ],
+        );
+        let empty = operation("empty", &[]);
+        let snapshot = status_snapshot(&fstat, &empty, None, &empty, &[], false, &[]);
+        assert_eq!(snapshot.files.len(), 1);
+        assert_eq!(snapshot.files[0].resolve, WorkspaceResolveState::Unresolved);
+        assert_eq!(snapshot.files[0].status, FileStatusKind::Conflicted);
     }
 
     #[test]
@@ -3753,6 +3843,8 @@ mod tests {
                 kind: EventKind::Cancelled,
                 message: None,
                 progress: None,
+                progress_current: None,
+                progress_total: None,
                 timestamp: String::new(),
             }],
             duration_ms: 1,
@@ -3874,6 +3966,27 @@ mod tests {
         assert_eq!(
             display_path(Path::new(r"\\?\UNC\server\share\file.txt")),
             r"\\server\share\file.txt"
+        );
+    }
+
+    #[test]
+    fn relative_paths_tolerate_verbatim_and_case_differences() {
+        let root = Path::new(r"\\?\D:\Workspace\Main");
+        assert_eq!(
+            plain_relative(root, Path::new(r"d:\workspace\main\Sub\File.txt")),
+            Some(r"Sub\File.txt".to_string())
+        );
+        assert_eq!(plain_relative(root, root), None);
+        assert_eq!(
+            plain_relative(root, Path::new(r"E:\Elsewhere\File.txt")),
+            None
+        );
+        assert_eq!(
+            plain_relative(
+                Path::new(r"D:/Workspace/Main/"),
+                Path::new(r"D:\Workspace\Main\a.txt")
+            ),
+            Some("a.txt".to_string())
         );
     }
 }

@@ -8,11 +8,13 @@ import {
   CloseAllContext,
   LanguageContext,
   OpenContext,
+  RenderContext,
   FixedPageHeader,
   PageHeaderActionsContext,
 } from "./chrome";
 import { isMultiPage, pageIds, pageLabels } from "../panels";
 import { setLocale } from "../../shared/i18n";
+import { clearPanelScroll } from "./scrollMemory";
 
 // Test only the shared chrome: never mount a page, mapping query or backend.
 vi.mock("./DiffPathInput", () => ({
@@ -200,4 +202,63 @@ it("keeps Close all last in the tab actions and preserves its disabled state", a
   await render(true);
   await act(async () => button.click());
   expect(run).toHaveBeenCalledTimes(1);
+});
+
+it("restores a docked page's scroll position after a tab switch", async () => {
+  clearPanelScroll("pending--scroll");
+  // Run animation frames immediately so the page mounts its content.
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  const Page = components.page;
+  const visibilityListeners: Array<() => void> = [];
+  const api = {
+    id: "pending--scroll",
+    isVisible: true,
+    isActive: true,
+    updateParameters: vi.fn(),
+    onDidActiveChange: () => ({ dispose() {} }),
+    onDidVisibilityChange: (listener: () => void) => {
+      visibilityListeners.push(listener);
+      return { dispose() {} };
+    },
+  };
+  const props = {
+    api,
+    params: { target: "fixture", locked: false },
+  } as unknown as ComponentProps<typeof Page>;
+  const scrollBody = () => <div className="scroll-body" />;
+  await act(async () =>
+    root.render(
+      <LanguageContext.Provider value={true}>
+        <OpenContext.Provider value={() => undefined}>
+          <RenderContext.Provider value={scrollBody}>
+            <Page {...props} />
+          </RenderContext.Provider>
+        </OpenContext.Provider>
+      </LanguageContext.Provider>,
+    ),
+  );
+  const body = host.querySelector<HTMLDivElement>(".scroll-body")!;
+  expect(body).not.toBeNull();
+  body.scrollTop = 140;
+  await act(async () => {
+    body.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  // Dockview detaches the page while another tab is active: the browser drops
+  // the offset, and events fired during that time must not overwrite the memory.
+  api.isVisible = false;
+  await act(async () => {
+    for (const listener of visibilityListeners) listener();
+    body.scrollTop = 0;
+    body.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  api.isVisible = true;
+  await act(async () => {
+    for (const listener of visibilityListeners) listener();
+  });
+  expect(body.scrollTop).toBe(140);
 });

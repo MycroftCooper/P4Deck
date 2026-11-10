@@ -68,6 +68,8 @@ export function StatusBar({
   const menu = useContextMenu();
   const [tasksOpen, setTasksOpen] = useState(false);
   const [tasks, setTasks] = useState<ActiveTask[]>([]);
+  // Clock for the task panel's elapsed label; the 1s ticker below advances it.
+  const [now, setNow] = useState(() => Date.now());
   const active = useRef<ActiveOperations>(new Map());
   const pending = useRef(new Set<string>());
   const [cancelling, setCancelling] = useState<ReadonlySet<string>>(new Set());
@@ -82,6 +84,7 @@ export function StatusBar({
   const statusId = useId();
   const [statusOpen, setStatusOpen] = useState(false);
   const progress = progressSummary(tasks);
+  const hasTasks = tasks.length > 0;
   const closeTasks = () => {
     setTasksOpen(false);
     trigger.current?.focus();
@@ -115,6 +118,7 @@ export function StatusBar({
               "queued",
               "started",
               "progress",
+              "stdout",
               "completed",
               "cancelled",
             ].includes(event.type)
@@ -139,6 +143,14 @@ export function StatusBar({
       clearTimeout(timer);
     };
   }, []);
+  useEffect(() => {
+    if (!hasTasks) return;
+    // Elapsed labels read the clock, so tick once per second while tasks exist;
+    // without it the label would freeze between operation events.
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hasTasks]);
   useEffect(() => {
     if (!tasksOpen) return;
     operations.current
@@ -261,7 +273,7 @@ export function StatusBar({
           aria-expanded={tasksOpen}
           aria-controls={tasksOpen ? tasksId : undefined}
           onClick={() => setTasksOpen((value) => !value)}
-          {...menu("U06", () => ({ 打开日志栏: action(() => onOpenLogs()) }))}
+          {...menu("U06", () => ({ "U06-01": action(() => onOpenLogs()) }))}
           title={t("shell.p4.progress.concurrent.operations.averaged")}
         >
           <span>
@@ -298,6 +310,7 @@ export function StatusBar({
           <TaskList
             id={tasksId}
             tasks={tasks}
+            now={now}
             onClose={closeTasks}
             onLogs={onOpenLogs}
             onCancel={cancelTask}

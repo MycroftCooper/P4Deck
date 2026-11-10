@@ -14,6 +14,7 @@ import {
   type RevisionComparison,
 } from "../panels";
 import { storage } from "../../shared/lib/storage";
+import { plainLocalPath } from "../../shared/lib/plainPath";
 import { deferredTask } from "../../shared/lib/deferredTask";
 import { detachedPage, type DockProps, type DockHandle } from "./types";
 import { readFloatingPanels, type FloatingPanelRecord } from "./floatingPanels";
@@ -191,8 +192,15 @@ export function useDockController(props: DockProps) {
       if (event.key === "p4deck.fileSelection" && event.newValue) {
         try {
           const value = JSON.parse(event.newValue);
+          // Values persisted by older builds may carry the verbatim `\\?\`
+          // prefix; never replay them into targets or labels.
           if (typeof value.path === "string")
-            follow(value.path, value.localPath);
+            follow(
+              plainLocalPath(value.path),
+              typeof value.localPath === "string"
+                ? plainLocalPath(value.localPath)
+                : undefined,
+            );
         } catch {
           /* Ignore invalid state. */
         }

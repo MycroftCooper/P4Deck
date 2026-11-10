@@ -1,0 +1,41 @@
+/* Release history shown in the Updates card. One block per release so dates and
+   notes stay visually grouped; the shared dialog shell owns the frame. */
+.changelog-releases {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.changelog-release {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-2);
+}
+.changelog-release h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.changelog-release time {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.changelog-release ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.changelog-release li::marker {
+  color: var(--muted);
+}

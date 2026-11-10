@@ -1,5 +1,11 @@
 import { t, tFor } from "../../shared/i18n";
-import { Download, RefreshCw } from "lucide-react";
+import {
+  BookOpen,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  ScrollText,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { currentAppVersion } from "../../app/update/updaterClient";
 import {
@@ -10,11 +16,16 @@ import {
   updateProgress,
   useUpdateSnapshot,
 } from "../../app/update/updateStore";
+import { backend } from "../../infrastructure/backend";
+import { PRODUCT_PAGE_URL, WIKI_URL } from "../../shared/productSite";
+import { ChangelogDialog } from "./ChangelogDialog";
 import "../../app/update/update.css";
 
 /**
  * Manual update entry in Settings. It mirrors the titlebar state, so a check
- * started here and a download started from the titlebar stay coherent.
+ * started here and a download started from the titlebar stay coherent. The
+ * changelog and the published product/wiki pages live here too instead of in a
+ * separate About module.
  */
 export function UpdateSettingsCard({
   zh,
@@ -23,9 +34,19 @@ export function UpdateSettingsCard({
   zh: boolean;
   native: boolean;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const snapshot = useUpdateSnapshot();
   const [version, setVersion] = useState<string>();
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const [linkFailed, setLinkFailed] = useState(false);
+  const openLink = async (url: string) => {
+    setLinkFailed(false);
+    try {
+      await backend.openExternalUrl(url);
+    } catch {
+      // A rejected open (host allowlist or missing shell) must stay visible.
+      setLinkFailed(true);
+    }
+  };
   useEffect(() => {
     if (!native) return;
     let active = true;
@@ -97,36 +118,67 @@ export function UpdateSettingsCard({
                           ),
                         },
                       )
-                  : tr(
-                      `当前版本 ${running ? `v${running}` : "未知"}。`,
-                      `Current version ${running ? `v${running}` : "unknown"}.`,
-                    );
+                  : running
+                    ? tFor(zh ? "zh-CN" : "en-US", "settings.current.version", {
+                        p1: `v${running}`,
+                      })
+                    : tFor(
+                        zh ? "zh-CN" : "en-US",
+                        "settings.current.version.unknown",
+                      );
   return (
-    <section className="settings-card">
-      <h2>
-        <Download size={18} />
-        {t("settings.updates")}
-      </h2>
-      <p
-        className={`update-settings-status ${snapshot.phase === "error" ? "is-error" : ""}`}
-      >
-        {status}
-      </p>
-      <div className="settings-actions">
-        <button
-          className="secondary"
-          disabled={
-            !native || busy || snapshot.phase === "ready" || snapshot.applied
-          }
-          onClick={() => void checkForUpdates({ manual: true, zh })}
+    <>
+      <section className="settings-card">
+        <h2>
+          <Download size={18} />
+          {t("settings.updates")}
+        </h2>
+        <p
+          className={`update-settings-status ${snapshot.phase === "error" ? "is-error" : ""}`}
         >
-          <RefreshCw size={14} aria-hidden="true" />
-          {snapshot.phase === "checking"
-            ? t("settings.checking.3")
-            : t("settings.check.for.updates")}
-        </button>
-      </div>
-      <p>{t("settings.the.desktop.app.checks.at.startup")}</p>
-    </section>
+          {status}
+        </p>
+        <div className="settings-actions">
+          <button
+            className="secondary"
+            disabled={
+              !native || busy || snapshot.phase === "ready" || snapshot.applied
+            }
+            onClick={() => void checkForUpdates({ manual: true, zh })}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            {snapshot.phase === "checking"
+              ? t("settings.checking.3")
+              : t("settings.check.for.updates")}
+          </button>
+          {/* The changelog is bundled data: no host call, so it also works in
+              the browser demo where update checks are unavailable. */}
+          <button className="secondary" onClick={() => setChangelogOpen(true)}>
+            <ScrollText size={14} aria-hidden="true" />
+            {t("settings.updates.view.changelog")}
+          </button>
+          <button
+            className="secondary"
+            onClick={() => void openLink(PRODUCT_PAGE_URL)}
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+            {t("settings.updates.open.product.page")}
+          </button>
+          <button className="secondary" onClick={() => void openLink(WIKI_URL)}>
+            <BookOpen size={14} aria-hidden="true" />
+            {t("settings.updates.open.wiki")}
+          </button>
+        </div>
+        {linkFailed && (
+          <div className="settings-notice" role="alert">
+            {t("settings.updates.open.failed")}
+          </div>
+        )}
+        <p>{t("settings.the.desktop.app.checks.at.startup")}</p>
+      </section>
+      {changelogOpen && (
+        <ChangelogDialog zh={zh} onClose={() => setChangelogOpen(false)} />
+      )}
+    </>
   );
 }

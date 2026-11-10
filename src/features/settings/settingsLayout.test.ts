@@ -19,7 +19,10 @@ describe("settings layout css (UI-14)", () => {
     expect(css).toMatch(
       /\.settings-layout\s*\{[^}]*grid-template-columns:\s*168px\s+minmax\(0,\s*1fr\)/s,
     );
-    expect(css).toMatch(/\.settings-nav\s*\{[^}]*position:\s*sticky/s);
+    // Sticky lives on the grid item; a sticky inner nav would stay inside a
+    // wrapper exactly as tall as itself and scroll away with the page.
+    expect(css).toMatch(/\.settings-nav-shell\s*\{[^}]*position:\s*sticky/s);
+    expect(css).not.toMatch(/\.settings-nav\s*\{[^}]*position:\s*sticky/s);
     expect(css).toMatch(
       /\.settings-section--wide\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s,
     );

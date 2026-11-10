@@ -156,6 +156,13 @@ pub struct OperationEvent {
     pub kind: EventKind,
     pub message: Option<String>,
     pub progress: Option<f32>,
+    /// Completed work items reported so far, present only when the caller knew
+    /// an expected total for the operation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_current: Option<u64>,
+    /// Expected work items for the operation, absent when the total is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_total: Option<u64>,
     pub timestamp: String,
 }
 
@@ -2189,6 +2196,10 @@ pub struct SyncPreviewRequest {
     pub parallel_threads: Option<u8>,
     #[serde(default)]
     pub operation_id: Option<String>,
+    /// Expected number of files a Get Latest transfer will process, used only
+    /// for progress reporting; older callers omit it.
+    #[serde(default)]
+    pub expected_files: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

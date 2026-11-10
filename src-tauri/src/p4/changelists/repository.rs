@@ -527,7 +527,7 @@ impl ChangelistRepository {
             };
             // Text mode: `resolve -n` prints plain <path> - merging lines, not marshal JSON.
             if let Ok(result) = self
-                .run_mode(
+                .run_preview(
                     &context,
                     resolve_invocation,
                     child_operation("resolve-preview"),
@@ -918,6 +918,41 @@ impl ChangelistRepository {
                     // delete, move files in/out. Mutations may wait on the
                     // server, so this is the widest interactive family.
                     bound: crate::p4::bounds::IoBound::Command,
+                    operation_id,
+                    source: OperationSource::Gui,
+                    command: invocation.command.into(),
+                    args: invocation.args,
+                    context: context.clone(),
+                    output_mode,
+                    timeout_ms: None,
+                    input: invocation.input,
+                },
+                app,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        ensure_success(&result)?;
+        Ok(result)
+    }
+
+    /// A best-effort enrichment inside a larger changelist read: the conflict
+    /// preview (`resolve -n`) must not inherit the interactive command bound.
+    /// When another P4 tool holds the client workspace this preview can stall
+    /// for minutes, so it fails fast under the short read bound and the list is
+    /// still returned without the resolve flags.
+    async fn run_preview(
+        &self,
+        context: &P4Context,
+        invocation: command::P4Invocation,
+        operation_id: Option<String>,
+        output_mode: OutputMode,
+        app: Option<&AppHandle>,
+    ) -> Result<OperationResult, String> {
+        let result = self
+            .runner
+            .run(
+                P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::Read,
                     operation_id,
                     source: OperationSource::Gui,
                     command: invocation.command.into(),

@@ -135,10 +135,15 @@ pub async fn workspace_disk_usage(
         .ok_or("Workspace directory is not configured")?;
     tauri::async_runtime::spawn_blocking(move || {
         let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
+        // The canonical form is verbatim (`\\?\E:\...`); the frontend tooltip must
+        // not render or copy that prefix.
+        let display = crate::local_path::plain_path(&path);
         let total = fs2::total_space(&path).map_err(|e| e.to_string())?;
         let available = fs2::available_space(&path).map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "path": path.to_string_lossy(), "total": total, "available": available }))
-    }).await.map_err(|e| e.to_string())?
+        Ok(serde_json::json!({ "path": display, "total": total, "available": available }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -3375,6 +3380,18 @@ pub async fn open_swarm_link(
     tauri::async_runtime::spawn_blocking(move || crate::app::swarm_open::open(&base, &request))
         .await
         .map_err(|_| "The Swarm opener did not complete.".to_string())?
+}
+
+#[tauri::command]
+pub async fn open_external_url(
+    _admission: crate::close_guard::Admission,
+    url: String,
+) -> Result<(), String> {
+    // The allowlist lives in the host; the renderer names a URL but cannot pick
+    // an arbitrary one, an executable, or command-line arguments.
+    tauri::async_runtime::spawn_blocking(move || crate::app::url_open::open(&url))
+        .await
+        .map_err(|_| "The link opener did not complete.".to_string())?
 }
 
 #[tauri::command]
