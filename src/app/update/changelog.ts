@@ -48,6 +48,38 @@ export function notesFor(
 
 export const CHANGELOG: readonly ChangelogRelease[] = [
   {
+    version: "0.1.13",
+    date: "2026-11-10",
+    notes: {
+      zh: [
+        "获取最新显示真实进度：预览文件数随确认下传，任务面板显示「x/y」与「已处理 N 个文件」，并每秒刷新「已用时」",
+        "任务面板的进度条可从计数推导百分比；没有可用总数时保持不确定态，不再显示假的 0%",
+        "取消、超时或启动失败的任务立即从任务面板消失，不再残留",
+        "设置 → 更新新增「查看更新日志」，内置 0.1.7–0.1.12 中英文发布记录",
+        "新增「打开产品主页 / 打开使用文档」，链接经 host 白名单校验，被拒绝时原地提示",
+        "双击工作区或待提交文件可用系统默认程序打开；仅 depot / 搁置 / 本地不存在时回退应用内预览",
+        "修复 Windows 长路径前缀（\\\\?\\）泄漏到 p4 参数、已保存连接、界面标签、剪贴板和外部工具的问题；旧连接配置加载时自动修正",
+        "修复设置页左侧导航滚动后不再吸顶",
+        "切换标签页后恢复原来的滚动位置",
+        "同步与列表更稳健：工作区根不再被 p4 where 预检误挡，目录列表的 resolve 预检超时会降级而不是整页失败",
+        "内部：产品页 / Wiki 地址改为单一清单（前端与 host 共用同一文件），发布说明支持中英双语并新增校验门禁",
+      ],
+      en: [
+        "Get Latest shows real progress: the previewed file count travels with the confirmation, the task panel shows x/y and the processed-file count, and the elapsed time ticks every second",
+        "The task panel's progress bar derives a percentage from countable work; without a usable total it stays indeterminate instead of showing a fake 0%",
+        "Cancelled, timed-out or failed-to-start tasks leave the task panel immediately instead of lingering",
+        "Settings → Updates now includes a bundled changelog with 0.1.7–0.1.12 in Chinese and English",
+        "New Open product page / Open wiki actions; links go through the host allowlist and a rejected open is reported inline",
+        "Double-clicking a workspace or pending file opens it with the OS default app; depot-only, shelved or missing files fall back to the in-app preview",
+        "Fixed Windows long-path prefixes leaking into p4 arguments, saved connections, UI labels, the clipboard and external tools; legacy connection profiles are corrected on load",
+        "Fixed the settings navigation not staying sticky after scrolling",
+        "Switching tabs restores the previous scroll position",
+        "Sync and listings are more robust: the workspace root is no longer blocked by the p4 where preflight, and a directory-listing resolve timeout degrades instead of failing the page",
+        "Internal: product/wiki URLs come from one shared manifest used by both the renderer and the host, and release notes are bilingual with a validation gate",
+      ],
+    },
+  },
+  {
     version: "0.1.12",
     date: "2026-11-07",
     notes: {
