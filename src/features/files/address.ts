@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n";
 import type { P4Context } from "../../shared/contracts";
+import { plainLocalPath } from "../../shared/lib/plainPath";
 
 /** Clipboard input is data, never a shell command or a P4 filespec. */
 export function cleanAddress(text: string): string {
@@ -97,7 +98,7 @@ export function completeFileAddress(
   if (!unc) cleanAddress(path);
   const clientPrefix = `//${context.client}/`;
   if (!unc && context.client && path.startsWith(clientPrefix) && context.cwd) {
-    path = `${context.cwd.replace(/[\\/]+$/, "")}/${path.slice(clientPrefix.length)}`;
+    path = `${plainLocalPath(context.cwd).replace(/[\\/]+$/, "")}/${path.slice(clientPrefix.length)}`;
     unc = path.startsWith("\\\\");
     path = path.replaceAll("\\", "/");
   } else if (
@@ -108,7 +109,7 @@ export function completeFileAddress(
   ) {
     if (!context.cwd)
       throw new Error(t("files.address.configureWorkspaceRoot"));
-    path = `${context.cwd.replace(/[\\/]+$/, "")}/${path.replace(/^\/+/, "")}`;
+    path = `${plainLocalPath(context.cwd).replace(/[\\/]+$/, "")}/${path.replace(/^\/+/, "")}`;
     unc = path.startsWith("\\\\");
     path = path.replaceAll("\\", "/");
   }

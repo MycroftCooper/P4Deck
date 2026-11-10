@@ -70,10 +70,11 @@ impl Platform for System {
         })
     }
     fn spawn(&self, plan: &LaunchPlan) -> Result<Box<dyn Process>, &'static str> {
-        let mut command = Command::new(&plan.executable);
+        // The tool is a separate process and must not see verbatim `\\?\` paths.
+        let mut command = Command::new(crate::local_path::plain_local_path(&plan.executable));
         command
             .args(&plan.argv)
-            .current_dir(&plan.cwd)
+            .current_dir(crate::local_path::plain_local_path(&plan.cwd))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());

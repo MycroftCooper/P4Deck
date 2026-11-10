@@ -98,7 +98,7 @@ const BASELINE = new Set([
   "src/features/changelists/components/UnshelveDialog.tsx:620",
   "src/features/changelists/moveOptimism.ts:238",
   "src/features/companySubmit/CompanySubmitDialog.tsx:22",
-  "src/features/files/components/FileWorkbench.tsx:333",
+  "src/features/files/components/FileWorkbench.tsx:354",
   "src/features/files/components/SyncDialog.tsx:468",
   "src/features/search/SearchPage.tsx:769",
   "src/features/search/SearchPage.tsx:770",

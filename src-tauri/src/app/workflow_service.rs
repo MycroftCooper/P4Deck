@@ -1455,7 +1455,7 @@ impl WorkflowService {
             active_profile_id: active_profile_id.clone(),
             target,
             depot_path: paths[0].clone(),
-            local_path: local_path.to_string_lossy().into_owned(),
+            local_path: crate::local_path::plain_path(&local_path),
             base_source: ManualMergeSource {
                 depot_path: base.0,
                 revision: base.1,
@@ -1760,7 +1760,7 @@ impl WorkflowService {
                     .into()
             },
             result_digest: record.digest.result_digest,
-            backup_path: Some(saved.backup_path.to_string_lossy().into_owned()),
+            backup_path: Some(crate::local_path::plain_path(&saved.backup_path)),
             resolve_token: Some(resolve_token),
             resolve_expires_at,
             operation_id,

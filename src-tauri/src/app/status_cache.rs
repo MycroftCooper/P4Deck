@@ -384,7 +384,10 @@ impl StatusCache {
 }
 
 pub fn normalize_path(path: &str) -> String {
-    let mut normalized = path.trim().replace('\\', "/");
+    // Keys and invalidation prefixes must never keep the verbatim `\\?\` form.
+    let mut normalized = crate::local_path::plain_local_path(path)
+        .trim()
+        .replace('\\', "/");
     let depot = normalized.starts_with("//");
     let absolute = normalized.starts_with('/');
     let mut body = normalized.trim_start_matches('/').to_owned();

@@ -135,10 +135,15 @@ pub async fn workspace_disk_usage(
         .ok_or("Workspace directory is not configured")?;
     tauri::async_runtime::spawn_blocking(move || {
         let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
+        // The canonical form is verbatim (`\\?\E:\...`); the frontend tooltip must
+        // not render or copy that prefix.
+        let display = crate::local_path::plain_path(&path);
         let total = fs2::total_space(&path).map_err(|e| e.to_string())?;
         let available = fs2::available_space(&path).map_err(|e| e.to_string())?;
-        Ok(serde_json::json!({ "path": path.to_string_lossy(), "total": total, "available": available }))
-    }).await.map_err(|e| e.to_string())?
+        Ok(serde_json::json!({ "path": display, "total": total, "available": available }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

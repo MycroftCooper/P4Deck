@@ -643,18 +643,13 @@ fn path_starts_with(path: &Path, root: &Path) -> bool {
             return false;
         }
         let normalize = |path: &Path| {
-            let path = path
-                .to_string_lossy()
-                .replace('/', "\\")
-                .to_ascii_lowercase();
             // canonicalize() returns verbatim Windows roots, while p4 where
             // returns ordinary DOS/UNC paths for the same workspace.
-            let path = if let Some(unc) = path.strip_prefix(r"\\?\unc\") {
-                format!(r"\\{unc}")
-            } else {
-                path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
-            };
-            path.trim_end_matches('\\').to_owned()
+            crate::local_path::plain_path(path)
+                .replace('/', "\\")
+                .to_ascii_lowercase()
+                .trim_end_matches('\\')
+                .to_owned()
         };
         let path = normalize(path);
         let root = normalize(root);

@@ -288,7 +288,10 @@ fn row_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<OperationRecord> {
     Ok(OperationRecord {
         operation_id: row.get(0)?,
         connection_id: row.get(1)?,
-        workspace: sanitize_redacted(&row.get::<_, String>(2)?, 128),
+        workspace: sanitize_redacted(
+            &crate::local_path::plain_local_path(&row.get::<_, String>(2)?),
+            128,
+        ),
         source: if row.get::<_, String>(3)? == "terminal" {
             OperationSource::Terminal
         } else {

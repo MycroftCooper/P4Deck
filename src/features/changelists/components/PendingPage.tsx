@@ -104,6 +104,8 @@ import { useMenuEnvironment } from "../../../app/context-menu/environment";
 import type { WorkflowRefreshDetail } from "../workflowRefresh";
 import { swarmMenuAction } from "../../swarm/SwarmAction";
 import { pendingFilePath } from "../pendingFilePath";
+import { resolveAddress } from "../../files/resolveAddress";
+import type { PendingFile } from "../../../shared/contracts";
 import { filterPendingChanges } from "../pendingQueries";
 import { connectionPresentation } from "../../settings/connectionWizard";
 import { PageHeaderActionsContext } from "../../../app/docking/chrome";
@@ -643,6 +645,20 @@ export function PendingPage({
     });
   };
   const error = pending.error;
+  /** Double-click: open the local file with the app registered for its type. */
+  const openLocalFile = async (file: PendingFile) => {
+    if (!file.clientPath) return;
+    try {
+      const node = await resolveAddress(
+        file.clientPath,
+        connectionKey,
+        menuEnvironment.runtime.context.cwd,
+      );
+      await backend.openLocalPath({ path: node.absolutePath, mode: "open" });
+    } catch (cause) {
+      setError(String(cause));
+    }
+  };
   useEffect(() => {
     if (!pending.error) return;
     const id = crypto.randomUUID();
@@ -1766,6 +1782,7 @@ export function PendingPage({
                         }
                         changeId={change.id}
                         refresh={reload}
+                        onOpenFile={(file) => void openLocalFile(file)}
                         onMove={(paths) => openMove(change.id, paths)}
                         onDragFiles={(paths, event) =>
                           beginDrag(change.id, paths, event)

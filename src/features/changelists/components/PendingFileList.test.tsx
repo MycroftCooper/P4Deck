@@ -91,6 +91,7 @@ async function renderTable(
   changeId = 42,
   shelf = false,
   onShelf = vi.fn(),
+  onOpenFile = vi.fn(),
 ) {
   await act(async () =>
     root.render(
@@ -104,6 +105,7 @@ async function renderTable(
               changeId={changeId}
               refresh={vi.fn()}
               onDragFiles={drag}
+              onOpenFile={onOpenFile}
             />
           </CommandContext.Provider>
         </MenuEnvironment.Provider>
@@ -195,6 +197,29 @@ it("shows file names before paths, sorts by displayed relative paths, and keeps 
   const event = new Event("dragstart", { bubbles: true });
   await act(async () => first.dispatchEvent(event));
   expect(drag.mock.calls[0][0]).toEqual(["//depot/aaa.cs"]);
+});
+
+it("opens a workspace file with the default app on double-click", async () => {
+  const open = vi.fn();
+  await renderTable(tableFiles, vi.fn(), vi.fn(), 42, false, vi.fn(), open);
+  const row = host.querySelector<HTMLElement>(".pending-file")!;
+  await act(async () => {
+    row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open.mock.calls[0][0]).toMatchObject({
+    clientPath: expect.any(String),
+  });
+});
+
+it("does not open shelved rows whose local copy is not writable", async () => {
+  const open = vi.fn();
+  await renderTable(tableFiles, vi.fn(), vi.fn(), 42, true, vi.fn(), open);
+  const row = host.querySelector<HTMLElement>(".pending-file")!;
+  await act(async () => {
+    row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+  expect(open).not.toHaveBeenCalled();
 });
 
 it("marks opened edit rows as needing get latest only when have is behind head", async () => {

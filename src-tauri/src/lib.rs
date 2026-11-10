@@ -2,6 +2,7 @@ mod app;
 mod close_guard;
 mod domain;
 mod ipc;
+mod local_path;
 mod p4;
 mod persistence;
 mod security;

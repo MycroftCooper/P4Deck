@@ -33,6 +33,7 @@ export function PendingFileList({
   onMove,
   onShelf,
   onInspect,
+  onOpenFile,
   onDragFiles,
   onDragEnd,
   sharedSelection,
@@ -66,6 +67,7 @@ export function PendingFileList({
     source?: HTMLElement,
   ): void;
   onInspect?(path: string, fresh?: boolean): void;
+  onOpenFile?(file: PendingFile): void;
   onDragFiles?(paths: string[], event: DragEvent<HTMLElement>): void;
   onDragEnd?(): void;
 }) {
@@ -671,6 +673,11 @@ export function PendingFileList({
                   }}
                   onClick={(event) => {
                     focusSelection(node, selection.selectTargets(node, event));
+                  }}
+                  onDoubleClick={() => {
+                    // Shelved rows have no writable local copy; double-click only
+                    // opens workspace files with the app registered for the type.
+                    if (!shelf) onOpenFile?.(file);
                   }}
                 >
                   <div role="gridcell">

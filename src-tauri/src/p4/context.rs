@@ -537,15 +537,20 @@ fn load_document(
             ));
         }
         let mut document = document;
+        let mut changed = false;
         if document.schema_version == PREVIOUS_CONNECTION_SCHEMA_VERSION {
             for profile in &mut document.profiles {
                 profile.context = normalize_context(profile.context.clone())?;
             }
             document.schema_version = CONNECTION_SCHEMA_VERSION;
-            validate_document(&document)?;
+            changed = true;
+        }
+        if normalize_document_paths(&mut document) {
+            changed = true;
+        }
+        validate_document(&document)?;
+        if changed {
             persist_document(path, &document)?;
-        } else {
-            validate_document(&document)?;
         }
         // An explicitly disconnected store must stay disconnected after restart.
         let runtime = active_context(&document).unwrap_or_default();
@@ -740,6 +745,24 @@ fn normalize_context(mut context: P4Context) -> Result<P4Context, ConnectionProf
     context.server = context.server.trim().to_owned();
     context.user = context.user.trim().to_owned();
     context.client = context.client.trim().to_owned();
+    // A canonicalize() result (`\\?\E:\...`) must never be persisted: p4 rejects
+    // the verbatim form in arguments and the UI would show or copy it verbatim.
+    if let Some(cwd) = context.cwd.as_deref() {
+        context.cwd = Some(crate::local_path::plain_local_path(cwd));
+    }
+    // These paths are handed to processes (p4 executable) or p4 env variables.
+    for value in [
+        &mut context.executable,
+        &mut context.trust_path,
+        &mut context.tickets_path,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        *value = crate::local_path::plain_local_path(value);
+    }
+    context.custom_submit_executable_path =
+        crate::local_path::plain_local_path(&context.custom_submit_executable_path);
     context.swarm_base_url = context
         .swarm_base_url
         .as_deref()
@@ -751,6 +774,23 @@ fn normalize_context(mut context: P4Context) -> Result<P4Context, ConnectionProf
     validate_persisted_context(&context)
         .map_err(|message| profile_error(ConnectionProfileErrorCode::InvalidInput, message))?;
     Ok(context)
+}
+
+/// Rewrites verbatim paths persisted before the normalization existed.
+/// Returns true when the document changed and must be written back.
+fn normalize_document_paths(document: &mut PersistedProfiles) -> bool {
+    let mut changed = false;
+    for profile in &mut document.profiles {
+        let Some(cwd) = profile.context.cwd.clone() else {
+            continue;
+        };
+        let plain = crate::local_path::plain_local_path(&cwd);
+        if plain != cwd {
+            profile.context.cwd = Some(plain);
+            changed = true;
+        }
+    }
+    changed
 }
 
 fn unique_default_name(document: &PersistedProfiles) -> String {
@@ -1086,6 +1126,44 @@ mod tests {
     #[test]
     fn environment_context_never_guesses_the_process_directory_as_workspace_root() {
         assert!(environment_context().cwd.is_none());
+    }
+
+    #[test]
+    fn verbatim_workspace_roots_are_normalized_on_create_and_load() {
+        let verbatim = P4Context {
+            cwd: Some(r"\\?\E:\Project\Work".into()),
+            ..configured("verbatim")
+        };
+        let normalized = normalize_context(verbatim.clone()).unwrap();
+        assert_eq!(normalized.cwd.as_deref(), Some(r"E:\Project\Work"));
+        assert!(!serde_json::to_string(&normalized)
+            .unwrap()
+            .contains(r"\\?\"));
+
+        // A store written by an older build heals on load instead of leaking the
+        // prefix into p4 arguments and the UI.
+        let directory = directory();
+        std::fs::create_dir_all(&directory).unwrap();
+        let id = "00000000-0000-4000-8000-000000000002";
+        let document = PersistedProfiles {
+            schema_version: CONNECTION_SCHEMA_VERSION,
+            revision: 1,
+            active_profile_id: Some(id.into()),
+            profiles: vec![ConnectionProfile {
+                id: id.into(),
+                name: "Legacy verbatim".into(),
+                context: verbatim,
+            }],
+        };
+        let path = directory.join("connection.json");
+        std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        let store = ContextStore::load(&directory).unwrap();
+        let (runtime, _) = store.snapshot();
+        assert_eq!(runtime.cwd.as_deref(), Some(r"E:\Project\Work"));
+        let persisted = std::fs::read_to_string(&path).unwrap();
+        assert!(!persisted.contains(r"\\?\"), "{persisted}");
+        assert!(persisted.contains(r"E:\\Project\\Work"), "{persisted}");
+        std::fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]

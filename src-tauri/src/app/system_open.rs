@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 #[serde(rename_all = "camelCase")]
 pub enum OpenLocalPathMode {
     Reveal,
+    /// Open with the application associated with the file's type.
+    Open,
     OpenWith,
 }
 
@@ -90,6 +92,8 @@ pub fn open(root: &Path, request: OpenLocalPathRequest) -> Result<(), String> {
     platform_open(&validated.path, validated.mode)
 }
 
+use crate::local_path::plain_local_path;
+
 /// Opens an app-owned directory; callers supply no frontend path or arguments.
 pub fn open_log_directory(path: &Path) -> Result<(), String> {
     let path = path.canonicalize().map_err(|error| error.to_string())?;
@@ -100,7 +104,7 @@ pub fn open_log_directory(path: &Path) -> Result<(), String> {
     {
         use std::os::windows::process::CommandExt;
         std::process::Command::new("explorer.exe")
-            .arg(path)
+            .arg(plain_local_path(&path.to_string_lossy()))
             .creation_flags(0x08000000)
             .spawn()
             .map_err(|error| error.to_string())?;
@@ -133,6 +137,7 @@ fn platform_open(path: &Path, mode: OpenLocalPathMode) -> Result<(), String> {
         OpenLocalPathMode::Reveal => {
             command.arg("-R");
         }
+        OpenLocalPathMode::Open => {}
         OpenLocalPathMode::OpenWith => {
             // The script is static. The OS chooser returns the application and the target path is
             // passed separately to `open`; neither value is evaluated by a shell.
@@ -169,20 +174,41 @@ fn platform_open(path: &Path, mode: OpenLocalPathMode) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn platform_open(path: &Path, mode: OpenLocalPathMode) -> Result<(), String> {
-    use std::{
-        ffi::c_void,
-        os::windows::{ffi::OsStrExt, process::CommandExt},
-        ptr,
-    };
+    use std::{ffi::c_void, iter, os::windows::process::CommandExt, ptr};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
+    // Shell APIs (and the Open With dialog in particular) reject the verbatim
+    // `\\?\` form produced by `canonicalize()` with E_INVALIDARG.
+    let display = plain_local_path(&path.to_string_lossy());
     if mode == OpenLocalPathMode::Reveal {
         // Fixed executable and a single argument; no shell or command-string evaluation occurs.
         std::process::Command::new("explorer.exe")
-            .arg(format!("/select,{}", path.display()))
+            .arg(format!("/select,{display}"))
             .creation_flags(0x08000000)
             .spawn()
             .map_err(|error| error.to_string())?;
         return Ok(());
+    }
+    let file: Vec<u16> = display.encode_utf16().chain(iter::once(0)).collect();
+    if mode == OpenLocalPathMode::Open {
+        // The `open` verb resolves the association registered for the file type.
+        let operation: Vec<u16> = "open".encode_utf16().chain(iter::once(0)).collect();
+        let opened = unsafe {
+            ShellExecuteW(
+                ptr::null_mut(),
+                operation.as_ptr(),
+                file.as_ptr(),
+                ptr::null(),
+                ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        return if opened as isize > 32 {
+            Ok(())
+        } else {
+            Err("No application is registered for this file type.".into())
+        };
     }
 
     #[repr(C)]
@@ -204,7 +230,6 @@ fn platform_open(path: &Path, mode: OpenLocalPathMode) -> Result<(), String> {
         fn co_uninitialize();
     }
 
-    let file: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
     let info = OpenAsInfo {
         file: file.as_ptr(),
         class: ptr::null(),
@@ -311,6 +336,47 @@ mod tests {
         assert!(!removed.reveal && !removed.open_with);
     }
 
+    #[test]
+    fn open_mode_accepts_files_and_directories() {
+        let fixture = Fixture::new();
+        for path in [&fixture.file, &fixture.directory] {
+            assert!(validate_request(
+                &fixture.root,
+                &fixture.request(path, OpenLocalPathMode::Open)
+            )
+            .is_ok());
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn opens_with_plain_paths_only() {
+        // The verbatim form is rejected by SHOpenWithDialog with E_INVALIDARG, so
+        // every Windows shell call receives the normalized path.
+        assert_eq!(
+            plain_local_path(r"\\?\C:\work\file.txt"),
+            r"C:\work\file.txt"
+        );
+        assert_eq!(
+            plain_local_path(r"\\?\UNC\server\share\file.txt"),
+            r"\\server\share\file.txt"
+        );
+        assert_eq!(plain_local_path(r"C:\work\file.txt"), r"C:\work\file.txt");
+    }
+
+    #[test]
+    fn deserializes_the_default_open_mode() {
+        let request: OpenLocalPathRequest = serde_json::from_value(serde_json::json!({
+            "path": "C:/workspace/file.txt",
+            "mode": "open"
+        }))
+        .unwrap();
+        assert_eq!(request.mode, OpenLocalPathMode::Open);
+        assert_eq!(
+            serde_json::to_value(OpenLocalPathMode::Open).unwrap(),
+            "open"
+        );
+    }
     #[test]
     fn open_with_accepts_files_but_rejects_directories() {
         let fixture = Fixture::new();

@@ -1321,7 +1321,7 @@ export interface WorkspaceListing {
   cacheFreshness: "fresh" | "stale" | "offlineFallback" | "local";
 }
 
-export type OpenLocalPathMode = "reveal" | "openWith";
+export type OpenLocalPathMode = "reveal" | "open" | "openWith";
 export interface LocalPathCapabilities {
   reveal: boolean;
   openWith: boolean;

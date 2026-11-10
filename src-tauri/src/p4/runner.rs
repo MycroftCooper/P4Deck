@@ -566,8 +566,13 @@ impl P4Runner {
                 command.args(["-C", charset]);
             }
         }
-        if let Some(cwd) = &request.context.cwd {
-            command.args(["-d", cwd]);
+        if let Some(cwd) = request
+            .context
+            .cwd
+            .as_deref()
+            .map(crate::local_path::plain_local_path)
+        {
+            command.args(["-d", &cwd]);
         }
         if matches!(request.output_mode, OutputMode::JsonLines) {
             command.args(["-ztag", "-Mj"]);

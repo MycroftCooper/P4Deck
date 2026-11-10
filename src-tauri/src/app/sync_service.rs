@@ -8,6 +8,7 @@ use crate::{
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
+    local_path::plain_local_path,
     p4::{
         connection::classify_connection_error,
         context::ContextStore,
@@ -1238,17 +1239,6 @@ fn compare_path(path: &str) -> String {
         path.strip_prefix("//?/").unwrap_or(&path).to_owned()
     };
     path.trim_end_matches('/').to_ascii_lowercase()
-}
-
-/// P4 accepts ordinary DOS/UNC paths but not the verbatim (`\\?\`) form that
-/// `std::fs::canonicalize` returns on Windows: it reports such an argument as
-/// "not under client's root". Everything after the canonicalize boundary hands
-/// p4 this plain syntax.
-fn plain_local_path(path: &str) -> String {
-    match path.strip_prefix(r"\\?\UNC\") {
-        Some(unc) => format!(r"\\{unc}"),
-        None => path.strip_prefix(r"\\?\").unwrap_or(path).to_owned(),
-    }
 }
 
 /// Comparison key for the workspace root, canonicalized the same way as a sync

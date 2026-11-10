@@ -621,8 +621,7 @@ impl FileService {
                 absolute_path: local.clone(),
                 relative_path: local
                     .as_ref()
-                    .and_then(|path| Path::new(path).strip_prefix(&root).ok())
-                    .map(|path| path.to_string_lossy().to_string()),
+                    .and_then(|path| plain_relative(&root, Path::new(path))),
                 depot_path: Some(input.into()),
                 reason: local
                     .is_none()
@@ -639,7 +638,7 @@ impl FileService {
                 "relative"
             }
             .into(),
-            absolute_path: candidate.as_ref().map(|p| p.to_string_lossy().to_string()),
+            absolute_path: candidate.as_ref().map(|p| display_path(p)),
             relative_path: candidate
                 .as_ref()
                 .and_then(|p| p.strip_prefix(&root).ok())
@@ -3126,10 +3125,9 @@ fn workspace_node(
         return Some(node);
     }
     let path = Path::new(&cached.path);
-    let display_root = display_path(root);
-    let relative = path.strip_prefix(Path::new(&display_root)).ok()?;
+    let relative = plain_relative(root, path)?;
     // A directory listing only returns direct children even when a server emits a broader row.
-    if relative.components().count() == 0 {
+    if relative.is_empty() {
         return None;
     }
     status.local = WorkspaceLocalState::Missing;
@@ -3149,7 +3147,7 @@ fn workspace_node(
             .to_string(),
         kind: "file".into(),
         absolute_path,
-        relative_path: relative.to_string_lossy().to_string(),
+        relative_path: relative,
         depot_path: cached.depot_path.clone(),
         state: primary_state_name(status.primary).into(),
         revision: cached.have_revision,
@@ -3355,11 +3353,30 @@ fn canonical_root(context: &P4Context) -> Result<PathBuf, String> {
     root.canonicalize().map_err(|error| error.to_string())
 }
 fn display_path(path: &Path) -> String {
-    let value = path.to_string_lossy();
-    if let Some(value) = value.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{value}")
+    crate::local_path::plain_path(path)
+}
+
+/// Relative path from the workspace Root when `path` lives inside it. Both sides
+/// are compared in plain syntax, with separator and (on Windows) case folding,
+/// because p4 echoes the Client Root spelling while local scans may carry a
+/// canonicalized one.
+fn plain_relative(root: &Path, path: &Path) -> Option<String> {
+    let root = display_path(root);
+    let path = display_path(path);
+    let root = root.trim_end_matches(['\\', '/']);
+    let head = path.get(..root.len())?;
+    let fold = |value: &str| value.replace('/', "\\");
+    let same = if cfg!(windows) {
+        fold(head).eq_ignore_ascii_case(&fold(root))
     } else {
-        value.strip_prefix(r"\\?\").unwrap_or(&value).to_owned()
+        fold(head) == fold(root)
+    };
+    if !same {
+        return None;
+    }
+    match path.as_bytes().get(root.len()) {
+        Some(b'\\') | Some(b'/') => Some(path[root.len() + 1..].to_owned()),
+        _ => None,
     }
 }
 fn local_path_key(path: &str) -> String {
@@ -3949,6 +3966,27 @@ mod tests {
         assert_eq!(
             display_path(Path::new(r"\\?\UNC\server\share\file.txt")),
             r"\\server\share\file.txt"
+        );
+    }
+
+    #[test]
+    fn relative_paths_tolerate_verbatim_and_case_differences() {
+        let root = Path::new(r"\\?\D:\Workspace\Main");
+        assert_eq!(
+            plain_relative(root, Path::new(r"d:\workspace\main\Sub\File.txt")),
+            Some(r"Sub\File.txt".to_string())
+        );
+        assert_eq!(plain_relative(root, root), None);
+        assert_eq!(
+            plain_relative(root, Path::new(r"E:\Elsewhere\File.txt")),
+            None
+        );
+        assert_eq!(
+            plain_relative(
+                Path::new(r"D:/Workspace/Main/"),
+                Path::new(r"D:\Workspace\Main\a.txt")
+            ),
+            Some("a.txt".to_string())
         );
     }
 }

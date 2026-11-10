@@ -265,8 +265,13 @@ fn append_context(command: &mut Command, context: &P4Context) {
         command.args(["-c", &context.client]);
     }
     command.args(["-C", charset]);
-    if let Some(cwd) = context.cwd.as_deref().filter(|value| !value.is_empty()) {
-        command.args(["-d", cwd]);
+    if let Some(cwd) = context
+        .cwd
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(crate::local_path::plain_local_path)
+    {
+        command.args(["-d", &cwd]);
     }
     if let Some(path) = &context.trust_path {
         command.env("P4TRUST", path);
@@ -538,6 +543,28 @@ fn status(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passes_a_plain_workspace_root_to_p4() {
+        let mut command = Command::new("p4");
+        let context = P4Context {
+            server: "ssl:test:1666".into(),
+            user: "tester".into(),
+            cwd: Some(r"\\?\E:\Work\Main".into()),
+            ..Default::default()
+        };
+        append_context(&mut command, &context);
+        let args = command
+            .as_std()
+            .get_args()
+            .map(|value| value.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(!args.iter().any(|arg| arg.contains(r"\\?\")), "{args:?}");
+        assert!(
+            args.windows(2).any(|pair| pair == ["-d", r"E:\Work\Main"]),
+            "{args:?}"
+        );
+    }
 
     #[test]
     fn standard_cli_discovery_is_bounded_and_does_not_execute() {
