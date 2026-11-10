@@ -14,7 +14,8 @@ const emptyNotes = { zh: [], en: [] };
 
 describe("changelog history", () => {
   it("lists releases from the newest version to the oldest", () => {
-    expect(versions(releasesNewestFirst())).toEqual(
+    const ordered = versions(releasesNewestFirst());
+    expect(ordered).toEqual(
       versions(CHANGELOG)
         .slice()
         .sort((left, right) => {
@@ -23,7 +24,19 @@ describe("changelog history", () => {
           return b[0] - a[0] || b[1] - a[1] || b[2] - a[2];
         }),
     );
-    expect(versions(releasesNewestFirst())[0]).toBe("0.1.12");
+    // Strictly descending, so the assertion cannot pass on a flat list and does
+    // not need a hardcoded "current version" edit on every release.
+    const parts = ordered.map((version) => version.split(".").map(Number));
+    for (let index = 1; index < parts.length; index += 1) {
+      const previous = parts[index - 1];
+      const current = parts[index];
+      const length = Math.max(previous.length, current.length);
+      let difference = 0;
+      for (let part = 0; part < length && difference === 0; part += 1) {
+        difference = (previous[part] ?? 0) - (current[part] ?? 0);
+      }
+      expect(difference).toBeGreaterThan(0);
+    }
   });
 
   it("sorts a mis-ordered source array by semantic version, not by text", () => {
