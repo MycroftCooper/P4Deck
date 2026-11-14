@@ -859,6 +859,12 @@
   flex: none;
   color: var(--muted);
 }
+.submitted-files-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+}
 .submitted-change-files:has(.submitted-files-count) .revision-file-list {
   flex: 1;
   height: auto;

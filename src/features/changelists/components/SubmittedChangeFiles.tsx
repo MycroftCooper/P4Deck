@@ -6,16 +6,21 @@ import {
   useState,
   type RefObject,
 } from "react";
+import { ArrowDownToLine } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
 import type {
   RuntimeInfo,
   SubmittedChangeDetail,
 } from "../../../shared/contracts";
+import { invalidateData } from "../../../shared/cache/dataEffects";
+import { commandActions } from "../../../app/commands/actionCatalog";
+import { SyncDialog } from "../../files/components/SyncDialog";
 import { RevisionFileList } from "./RevisionFileList";
 
 export function SubmittedChangeFiles({
   changeId,
   scope,
+  connectionKey,
   cache,
   runtime,
   zh,
@@ -24,6 +29,7 @@ export function SubmittedChangeFiles({
 }: {
   changeId: number;
   scope: string;
+  connectionKey: string;
   cache: Map<number, SubmittedChangeDetail>;
   runtime: RuntimeInfo;
   zh: boolean;
@@ -49,6 +55,10 @@ export function SubmittedChangeFiles({
   const [detail, setDetail] = useState(() => cache.get(changeId));
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [syncRequest, setSyncRequest] = useState<{
+    paths: string[];
+    source: HTMLElement;
+  }>();
   useEffect(() => {
     let live = true;
     const cached = cache.get(changeId);
@@ -123,6 +133,26 @@ export function SubmittedChangeFiles({
               {detail.message || t("pending.file.list.may.be.incomplete")}
             </p>
           )}
+          {detail.files.length > 0 && (
+            <div className="submitted-files-actions">
+              <button
+                className="secondary"
+                onClick={(event) =>
+                  setSyncRequest({
+                    paths: [
+                      ...new Set(detail.files.map((file) => file.depotPath)),
+                    ],
+                    source: event.currentTarget,
+                  })
+                }
+              >
+                <ArrowDownToLine size={15} aria-hidden="true" />
+                <span>
+                  {tFor(zh ? "zh-CN" : "en-US", "pending.sync.to.cl.revision")}
+                </span>
+              </button>
+            </div>
+          )}
           {detail.files.length ? (
             <RevisionFileList
               files={detail.files.map((file) => ({ ...file, changeId }))}
@@ -138,6 +168,27 @@ export function SubmittedChangeFiles({
             </p>
           )}
         </>
+      )}
+      {syncRequest && (
+        <SyncDialog
+          request={{
+            nodes: [],
+            revisionMode: "change",
+            fixedChange: changeId,
+            paths: syncRequest.paths,
+            scopeLabel: `CL ${changeId}`,
+            source: syncRequest.source,
+          }}
+          connectionKey={connectionKey}
+          demo={runtime.mode === "mock"}
+          zh={zh}
+          onDismiss={() => setSyncRequest(undefined)}
+          onRefresh={() =>
+            void invalidateData(commandActions.getLatest.effects, {
+              connectionKey,
+            }).catch(() => undefined)
+          }
+        />
       )}
     </section>
   );

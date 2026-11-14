@@ -366,7 +366,7 @@
 }
 .sync-counts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 8px;
 }
 .sync-counts span {
@@ -374,6 +374,48 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
   background: var(--hover);
+}
+.sync-stats {
+  display: grid;
+  gap: 8px;
+}
+.sync-stats-line {
+  margin: 0;
+  font-size: var(--font-md);
+  font-variant-numeric: tabular-nums;
+}
+.sync-progress {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.sync-progress-count {
+  margin: 0;
+  font-size: var(--font-2xl);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sync-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sync-progress-bar progress {
+  flex: 1 1 auto;
+  height: 10px;
+  accent-color: var(--accent);
+}
+.sync-progress-percent {
+  min-width: 3.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sync-progress-meta {
+  margin: 0;
+  font-size: var(--font-md);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .workflow-field-hint {
   color: var(--muted);

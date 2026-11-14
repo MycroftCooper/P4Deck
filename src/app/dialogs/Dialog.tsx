@@ -13,6 +13,8 @@ export interface DialogProps {
   footer: ReactNode;
   /** Omit the footer bar entirely (e.g. a dialog that only has per-row actions). */
   hideFooter?: boolean;
+  /** Hide the title-bar close control (e.g. a progress dialog that must run). */
+  hideClose?: boolean;
   onRequestClose(): void;
   source?: HTMLElement | null;
   busy?: boolean;
@@ -28,6 +30,7 @@ export function Dialog({
   children,
   footer,
   hideFooter = false,
+  hideClose = false,
   onRequestClose,
   source,
   busy = false,
@@ -100,15 +103,17 @@ export function Dialog({
           </div>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
-        <button
-          type="button"
-          className="workflow-dialog-close"
-          disabled={busy}
-          onClick={onRequestClose}
-          aria-label={t("dialogs.close.dialog")}
-        >
-          <X size={18} />
-        </button>
+        {hideClose ? null : (
+          <button
+            type="button"
+            className="workflow-dialog-close"
+            disabled={busy}
+            onClick={onRequestClose}
+            aria-label={t("dialogs.close.dialog")}
+          >
+            <X size={18} />
+          </button>
+        )}
       </header>
       <div
         className="workflow-dialog-body"

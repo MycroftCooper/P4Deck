@@ -44,7 +44,8 @@ export type AppCommandId =
   | "view.settings"
   | "refresh.toggleAuto"
   | "panel.dockBack"
-  | "navigation.focusAddress";
+  | "navigation.focusAddress"
+  | "navigation.focusSubmitted";
 
 export type AppCommandGroup =
   "app" | "connection" | "changes" | "navigation" | "file" | "tools";
@@ -435,7 +436,16 @@ export const appCommands: readonly AppCommandDefinition[] = [
     "commands.navigation.focusAddress",
     {
       shortcut: "Alt+L",
-      aliases: ["Mod+G"],
+      requires: "mainWindow",
+    },
+  ),
+  command(
+    "navigation.focusSubmitted",
+    "navigation",
+    "commands.navigation.focusSubmitted",
+    "commands.navigation.focusSubmitted",
+    {
+      shortcut: "Mod+G",
       requires: "mainWindow",
     },
   ),

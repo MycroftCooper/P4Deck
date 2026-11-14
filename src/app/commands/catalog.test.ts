@@ -143,7 +143,7 @@ describe("application command catalog", () => {
     ["S", { ctrlKey: true, shiftKey: true }, "file.reveal"],
     ["I", { ctrlKey: true }, "view.diagnostics"],
     ["l", { altKey: true }, "navigation.focusAddress"],
-    ["g", { ctrlKey: true }, "navigation.focusAddress"],
+    ["g", { ctrlKey: true }, "navigation.focusSubmitted"],
     // Existing seven shortcuts are unchanged (regression).
     ["R", { ctrlKey: true }, "view.refresh"],
     ["P", { ctrlKey: true, shiftKey: true }, "app.commandPalette"],
@@ -179,7 +179,7 @@ describe("application command catalog", () => {
     ["S", { metaKey: true, shiftKey: true }, "file.reveal"],
     ["I", { metaKey: true }, "view.diagnostics"],
     ["l", { altKey: true }, "navigation.focusAddress"],
-    ["g", { metaKey: true }, "navigation.focusAddress"],
+    ["g", { metaKey: true }, "navigation.focusSubmitted"],
     ["R", { metaKey: true }, "view.refresh"],
   ];
 
@@ -217,7 +217,12 @@ describe("application command catalog", () => {
       commandShortcuts(
         appCommands.find((item) => item.id === "navigation.focusAddress")!,
       ),
-    ).toEqual(["Alt+L", "Mod+G"]);
+    ).toEqual(["Alt+L"]);
+    expect(
+      commandShortcuts(
+        appCommands.find((item) => item.id === "navigation.focusSubmitted")!,
+      ),
+    ).toEqual(["Mod+G"]);
     expect(
       commandShortcuts(appCommands.find((item) => item.id === "file.diff")!),
     ).toEqual(["Mod+D", "Mod+Shift+D"]);

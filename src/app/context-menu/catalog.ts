@@ -381,11 +381,6 @@ export const menuCatalog = {
     title: "单个本地目录：工作区侧栏、Files",
     items: [
       {
-        id: "F03-01",
-        label: "浏览此目录",
-        phase: "initial",
-      },
-      {
         id: "F03-02",
         label: "在文件页中显示",
         phase: "initial",
@@ -510,11 +505,6 @@ export const menuCatalog = {
   F04: {
     title: "单个 Depot 目录",
     items: [
-      {
-        id: "F04-01",
-        label: "浏览此目录",
-        phase: "initial",
-      },
       {
         id: "F04-02",
         label: "在文件页中显示",

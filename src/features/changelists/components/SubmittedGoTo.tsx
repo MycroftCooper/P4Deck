@@ -1,7 +1,8 @@
 import { t } from "../../../shared/i18n";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Hash } from "lucide-react";
 import { parseChangeNumber } from "../submittedFilters";
+import { onSubmittedClFocus, takeSubmittedClFocus } from "../submittedFocus";
 import { useChangeDetails } from "./ChangeDetailsDialog";
 
 export function SubmittedGoTo({ zh: _zh }: { zh: boolean }) {
@@ -10,6 +11,17 @@ export function SubmittedGoTo({ zh: _zh }: { zh: boolean }) {
   const [invalid, setInvalid] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const label = t("pending.go.to.cl");
+  useEffect(() => {
+    const focus = () => {
+      takeSubmittedClFocus();
+      input.current?.focus();
+      input.current?.select();
+    };
+    const dispose = onSubmittedClFocus(focus);
+    // The dock can mount this page after Ctrl+G was pressed.
+    if (takeSubmittedClFocus()) focus();
+    return dispose;
+  }, []);
   return (
     <form
       className="submitted-go-to diff-path-field"
