@@ -448,6 +448,7 @@ export function ChangelistPage(props: Props) {
                         key={`${props.expansionScope}:${change.id}`}
                         changeId={change.id}
                         scope={props.expansionScope}
+                        connectionKey={env.connectionKey}
                         cache={fileCache.current.entries}
                         runtime={env.runtime}
                         zh={env.preferences.zh}

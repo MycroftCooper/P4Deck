@@ -186,7 +186,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.tag.with.label": "Tag with label",
   "contextMenu.show.in.files": "Show in Files",
   "contextMenu.find.in.streams": "Find in streams",
-  "contextMenu.browse.folder": "Browse folder",
   "contextMenu.add.untracked.files": "Add untracked files",
   "contextMenu.search.this.folder": "Search this folder",
   "contextMenu.refresh.folder": "Refresh folder",
@@ -1039,18 +1038,53 @@ export const en: Catalog & Record<MsgKey, string> = {
     "The preview expired; request a fresh server preview.",
   "files.browser.mock.preview.and.result.are":
     "Browser Mock: preview and result are simulated; no server or files are accessed.",
-  "files.a.real.p4.sync.n.preview":
-    "A real p4 sync -n preview must be reviewed before execution.",
   "files.force.re.sync.high.risk.requires":
-    "Force re-sync (high risk; requires a second acknowledgement after preview)",
+    "Force re-sync (high risk; may overwrite writable local files)",
   "files.force.current.files":
     "Force re-transfers current files and may expose writable/clobber risks. It is never enabled by default.",
-  "files.preview.inspect.blockers":
-    "Preview is partial; inspect blockers and logs.",
-  "files.i.real.preview":
-    "I reviewed the real preview and explicitly confirm forced sync again.",
-  "files.executing.the.confirmed.sync.cancellation.does":
-    "Executing the confirmed sync. Cancellation does not roll back transferred files.",
+  "files.revision.pinning.risk":
+    "Files in scope will be synced to revision {p1}; uncommitted local changes may be overwritten.",
+  "files.sync.change.risk":
+    "Files in this CL will be synced to their revision at CL #{p1}: changes submitted after it are reverted, and files deleted in that CL are removed locally.",
+  "files.sync.target.invalid":
+    "The sync target is invalid. Check the scope or revision.",
+  "files.sync.progress.title": "Sync progress",
+  "files.sync.progress.copying": "Copying {p1} of {p2} file(s)",
+  "files.sync.progress.starting": "Starting sync…",
+  "files.sync.progress.stop": "Stop",
+  "files.sync.stats.counting": "Counting affected files…",
+  "files.sync.stats.total":
+    "{count, one: # file will be affected, other: # files will be affected}",
+  "files.sync.stats.nothing": "No files need updating",
+  "files.sync.stats.failed":
+    "The impact could not be counted and no confirmation ticket is available. Try again.",
+  "files.sync.confirm.unavailable":
+    "Could not obtain a sync confirmation ticket. Try again.",
+  "files.sync.stats.updated": "{count} updated",
+  "files.sync.stats.added": "{count} added",
+  "files.sync.stats.deleted": "{count} deleted",
+  "files.sync.warning.invalidTarget":
+    "The sync target is invalid; nothing will run.",
+  "files.sync.warning.notInClient":
+    "Some paths are outside the current workspace view.",
+  "files.sync.warning.writableClobber":
+    "Local writable files may be overwritten.",
+  "files.sync.warning.openedFile":
+    "Files you have open locally are in this scope.",
+  "files.sync.warning.unresolvedFile":
+    "Files with unresolved merges or integrations are in this scope.",
+  "files.sync.warning.permissionDenied":
+    "Some files may not be writable with your permissions.",
+  "files.sync.warning.diskSpace": "Free disk space may be insufficient.",
+  "files.sync.warning.offline": "The connection is offline.",
+  "files.sync.warning.serverUnreachable": "The P4 server is unreachable.",
+  "files.sync.warning.authExpired": "Your login expired; authenticate again.",
+  "files.sync.warning.forceOverwrite":
+    "Force re-transfers and overwrites local files.",
+  "files.sync.warning.previewFailed":
+    "Could not count the affected files; the sync still runs after you confirm.",
+  "files.sync.warning.inspectionUnknown":
+    "The state of locally opened files could not be inspected.",
   "pending.sort.switch.descending": "Sort descending",
   "pending.sort.switch.ascending": "Sort ascending",
   "pending.fileState.add": "Add",
@@ -1748,6 +1782,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "commands.tools.popoutP4Log": "Open P4 Log in New Window",
   "commands.view.settings": "Open Settings",
   "commands.navigation.focusAddress": "Jump to Address Bar",
+  "commands.navigation.focusSubmitted": "Jump to Submitted CL",
   "commands.refresh.toggleAuto": "Pause / Resume Auto Refresh",
   "commands.panel.dockBack": "Dock Back to Main Window",
   "settings.delete.profile": "Delete {name}",
@@ -2363,7 +2398,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.accept.block.both": "Accept block Both",
   "files.accept.block.theirs": "Accept block Theirs",
   "files.accept.block.yours": "Accept block Yours",
-  "files.add": "Add",
   "files.added": "Added",
   "files.after.auto.merge": "After auto-merge",
   "files.already.satisfied": "already satisfied",
@@ -2373,7 +2407,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.as.of.date": "As of date (@)",
   "files.as.of.date.2": "As of date",
   "files.auto.mergeable": "Auto-mergeable",
-  "files.back": "Back",
   "files.base": "Base",
   "files.base.revision": "Base revision",
   "files.before.auto.merge": "Before auto-merge",
@@ -2383,9 +2416,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.cancel": "Cancel",
   "files.cancel.operation": "Cancel operation",
   "files.cancel.remaining": "Cancel remaining",
-  "files.cancel.sync": "Cancel sync",
   "files.case.only.risk": "Case-only risk",
-  "files.change.counts": "Change counts",
   "files.changelist.description": "Changelist description",
   "files.changelist.number": "Changelist number",
   "files.check.again": "Check again",
@@ -2408,7 +2439,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.conflict.state.unknown": "Conflict state unknown",
   "files.conflict.without.depotpath": "conflict without depotPath",
   "files.conflicted": "Conflicted",
-  "files.conflicts": "Conflicts",
   "files.conflicts.blockers.are.not.arrays":
     "conflicts/blockers are not arrays",
   "files.conflicts.pending": "Conflicts pending",
@@ -2418,7 +2448,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.date": "Date",
   "files.decision": "Decision",
   "files.default.pending.changelist": "Default pending changelist",
-  "files.delete": "Delete",
   "files.deleted": "Deleted",
   "files.depot.file": "Depot file",
   "files.destination.path": "Destination path",
@@ -2522,11 +2551,9 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.preflight.log": "Preflight log",
   "files.preflight.result": "Preflight result",
   "files.preview": "Preview",
-  "files.preview.again": "Preview again",
   "files.preview.and.review": "Preview and review",
   "files.preview.target.differs.or.expired":
     "Preview target differs or expired",
-  "files.previewing": "Previewing…",
   "files.previous.conflict": "Previous conflict",
   "files.reading.conflicts": "Reading conflicts…",
   "files.reading.the.p4.snapshot": "Reading the P4 snapshot…",
@@ -2534,7 +2561,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.recoverable.backup": "Recoverable backup",
   "files.redo": "Redo",
   "files.rename.move": "Rename / move",
-  "files.representative.files": "Representative files",
   "files.resolve.awaits.attention": "Resolve awaits attention",
   "files.resolve.files": "Resolve files",
   "files.resolve.needs.attention": "Resolve needs attention",
@@ -2562,7 +2588,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.strategy.not.approved": "Strategy is not approved by backend.",
   "files.sync.scope": "Sync scope",
   "files.sync.scope.2": "Sync scope",
-  "files.target": "Target",
   "files.target.changelist": "Target changelist",
   "files.target.cl": "Target CL",
   "files.target.depot": "Target depot",
@@ -2583,13 +2608,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "files.unlock.files": "Unlock files",
   "files.unresolved": "Unresolved",
   "files.untracked": "Untracked",
-  "files.up.to.date": "Up to date",
-  "files.update": "Update",
   "files.user": "User",
   "files.valid": "valid",
   "files.validate.result": "Validate result",
   "files.value": "Value",
-  "files.warnings": "Warnings",
   "files.will.run": "will run",
   "files.workspace.files": "Workspace files",
   "files.workspace.unavailable.cannot.locate.target":
@@ -2709,6 +2731,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "pending.full.file.record.coverage": "Full file record coverage",
   "pending.generate.weekly.report.prompt": "Generate weekly report prompt",
   "pending.go.to.cl": "Go to CL",
+  "pending.sync.to.cl.revision": "Get this CL revision…",
   "pending.incomplete": "Incomplete",
   "pending.incomplete.2": "Incomplete: ",
   "pending.incomplete.results": "Incomplete results.",

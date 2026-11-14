@@ -147,8 +147,30 @@ const mockSyncTokens = new Map<
     digest: string;
     expiresAt: number;
     counts: import("../../shared/contracts").SyncPlanCounts;
+    /** Armed stale token: the confirmation rejects it so a retry can be tested. */
+    stale?: boolean;
   }
 >();
+/**
+ * Simulated sync-plan scenarios a test (or a demo) can select. The real host
+ * timing failures cannot be produced deterministically, so the count-only
+ * preview can be told to fail or to hand out one stale token.
+ */
+export type MockSyncPreviewScenario = "normal" | "countFailed" | "staleToken";
+let mockSyncPreviewScenario: MockSyncPreviewScenario = "normal";
+
+/** Select the simulated sync-preview behavior; the stale-token arm is one-shot. */
+export function setMockSyncPreviewScenario(
+  scenario: MockSyncPreviewScenario = "normal",
+) {
+  mockSyncPreviewScenario = scenario;
+}
+
+function consumeMockSyncScenario(): MockSyncPreviewScenario {
+  const scenario = mockSyncPreviewScenario;
+  if (scenario === "staleToken") mockSyncPreviewScenario = "normal";
+  return scenario;
+}
 const mockRenameTokens = new Map<
   string,
   {
@@ -3679,6 +3701,8 @@ export const mockBackend: Backend = {
     throw new Error("Demo backend cannot execute revision Undo.");
   },
   async previewSync(request) {
+    const scenario = consumeMockSyncScenario();
+    const countFailed = scenario === "countFailed";
     const operationId = request.operationId ?? crypto.randomUUID();
     const target: import("../../shared/contracts").SyncTargetSnapshot = {
       server: mockContext.server,
@@ -3690,42 +3714,84 @@ export const mockBackend: Backend = {
       revision: request.revision,
       force: request.force ?? false,
       parallelThreads: request.parallelThreads,
+      skipPreflight: request.skipPreflight ?? false,
     };
-    const entries = target.paths.map((path, index) => ({
-      kind: index % 3 === 2 ? ("added" as const) : ("updated" as const),
-      depotPath: path.startsWith("//") ? path : undefined,
-      clientPath: path.startsWith("//") ? undefined : path,
-      revision: 2,
-      message:
-        "Browser Mock only: simulated sync preview; no real P4 server was accessed.",
-    }));
-    const counts = {
-      added: entries.filter((entry) => entry.kind === "added").length,
-      updated: entries.filter((entry) => entry.kind === "updated").length,
-      deleted: 0,
-      upToDate: 0,
-      warnings: target.force ? 1 : 0,
-      conflicts: 0,
-    };
-    const warnings: import("../../shared/contracts").SyncIssue[] = target.force
+    const entries =
+      target.skipPreflight || countFailed
+        ? []
+        : target.paths.map((path, index) => ({
+            kind: index % 3 === 2 ? ("added" as const) : ("updated" as const),
+            depotPath: path.startsWith("//") ? path : undefined,
+            clientPath: path.startsWith("//") ? undefined : path,
+            revision: 2,
+            message:
+              "Browser Mock only: simulated sync preview; no real P4 server was accessed.",
+          }));
+    const warnings: import("../../shared/contracts").SyncIssue[] = countFailed
       ? [
           {
-            code: "forceOverwrite",
+            // The real host reports a failed count-only `p4 sync -n` as a plan
+            // with zero counts plus this advisory; the dialog localises it by code.
+            code: "previewFailed",
             message:
-              "Browser Mock only: force risk is simulated and requires explicit acknowledgement.",
+              "Browser Mock only: the count-only p4 sync -n failed; the affected-file count is unknown.",
             paths: target.paths,
           },
         ]
-      : [];
+      : target.skipPreflight
+        ? [
+            {
+              code: "inspectionUnknown",
+              message:
+                "Browser Mock only: locally opened files were not inspected for this confirmation.",
+              paths: target.paths,
+            },
+          ]
+        : target.force
+          ? [
+              {
+                code: "forceOverwrite",
+                message:
+                  "Browser Mock only: force risk is simulated and requires explicit acknowledgement.",
+                paths: target.paths,
+              },
+            ]
+          : [];
+    // Skipping the preflight still runs one count-only `p4 sync -n` on the host,
+    // so the confirmation shows real numbers instead of a synthetic all-zero plan.
+    const added = countFailed
+      ? 0
+      : target.skipPreflight
+        ? target.paths.filter((_, index) => index % 3 === 2).length
+        : entries.filter((entry) => entry.kind === "added").length;
+    const updated = countFailed
+      ? 0
+      : target.skipPreflight
+        ? target.paths.length - added
+        : entries.filter((entry) => entry.kind === "updated").length;
+    const counts = {
+      added,
+      updated,
+      deleted: 0,
+      upToDate: 0,
+      warnings: warnings.length,
+      conflicts: 0,
+    };
     const digest = mockDigest(JSON.stringify({ target, entries, warnings }));
     const token = crypto.randomUUID();
     const expiresAt = Date.now() + 120_000;
-    mockSyncTokens.set(token, { target, digest, expiresAt, counts });
+    mockSyncTokens.set(token, {
+      target,
+      digest,
+      expiresAt,
+      counts,
+      stale: scenario === "staleToken",
+    });
     emitMockLog(
       "info",
       "gui",
       "p4 sync -n (simulated)",
-      `${entries.length} simulated path(s).`,
+      `${target.paths.length} simulated path(s).`,
       operationId,
       1,
     );
@@ -3770,6 +3836,11 @@ export const mockBackend: Backend = {
       refreshDepot: true,
     });
     if (!record) return reject("tokenUnknown", "Unknown or consumed token.");
+    if (record.stale)
+      return reject(
+        "previewChanged",
+        "The simulated preview went stale; count the sync again.",
+      );
     if (record.expiresAt <= Date.now())
       return reject("tokenExpired", "The simulated preview expired.");
     if (JSON.stringify(record.target) !== JSON.stringify(confirmation.target))
@@ -3781,7 +3852,11 @@ export const mockBackend: Backend = {
       record.target.client !== mockContext.client
     )
       return reject("contextChanged", "The connection changed.");
-    if (record.target.force && !confirmation.acknowledgeForce)
+    if (
+      record.target.force &&
+      !record.target.skipPreflight &&
+      !confirmation.acknowledgeForce
+    )
       return reject(
         "forceAcknowledgementRequired",
         "Forced sync requires explicit acknowledgement.",

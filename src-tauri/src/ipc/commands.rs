@@ -2062,7 +2062,8 @@ pub async fn confirm_rename_move(
         }
     }
     let legacy = state.rename.confirm(confirmation.clone(), Some(&app)).await;
-    let mut facts = Vec::new();
+    let mut facts = crate::app::local_io_action::RecheckFacts::default();
+    let mut opened = crate::app::action_evidence::OpenedEvidence::default();
     if let Some(id) = operation_id.as_deref() {
         let paths = vec![
             confirmation.target.source.depot_path.clone(),
@@ -2079,11 +2080,15 @@ pub async fn confirm_rename_move(
         {
             facts = bounded;
         }
+        if let Some(raw) = run_opened_query(&state.runner, &context, &paths, id, &app).await {
+            opened = crate::app::action_evidence::opened_evidence(&raw);
+        }
     }
     let result = crate::app::local_io_action::project_rename(
         operation_id.clone(),
         &legacy,
-        &facts,
+        &facts.facts,
+        &opened,
         &confirmation.target.source.depot_path,
         &confirmation.target.target.depot_path,
     );
@@ -2161,7 +2166,8 @@ pub async fn confirm_sync(
     let paths = confirmation.target.paths.clone();
     let proof = crate::app::local_io_action::sync_revision_proof(&confirmation.target.revision);
     let legacy = state.sync.confirm(confirmation.clone(), Some(&app)).await;
-    let mut facts = Vec::new();
+    let mut facts = crate::app::local_io_action::RecheckFacts::default();
+    let mut opened = crate::app::action_evidence::OpenedEvidence::default();
     if let Some(id) = operation_id.as_deref() {
         if let Ok(bounded) = crate::app::local_io_action::recheck_facts(
             &state.runner,
@@ -2174,11 +2180,15 @@ pub async fn confirm_sync(
         {
             facts = bounded;
         }
+        if let Some(raw) = run_opened_query(&state.runner, &context, &paths, id, &app).await {
+            opened = crate::app::action_evidence::opened_evidence(&raw);
+        }
     }
     let result = crate::app::local_io_action::project_sync(
         operation_id.clone(),
         &legacy,
         &facts,
+        &opened,
         &paths,
         proof,
     );
@@ -3539,6 +3549,7 @@ pub async fn confirm_undo(
     }
     let legacy = state.undo.confirm(confirmation.clone(), Some(&app)).await;
     let mut facts = Vec::new();
+    let mut opened = crate::app::action_evidence::OpenedEvidence::default();
     if let Some(id) = operation_id.as_deref() {
         let paths = vec![confirmation.target.depot_path.clone()];
         if let Ok(bounded) = crate::app::local_io_action::recheck_facts(
@@ -3550,13 +3561,17 @@ pub async fn confirm_undo(
         )
         .await
         {
-            facts = bounded;
+            facts = bounded.facts;
+        }
+        if let Some(raw) = run_opened_query(&state.runner, &context, &paths, id, &app).await {
+            opened = crate::app::action_evidence::opened_evidence(&raw);
         }
     }
     let result = crate::app::local_io_action::project_undo(
         operation_id.clone(),
         legacy,
         &facts,
+        &opened,
         &confirmation.target.depot_path,
         confirmation.target.changelist_id as i64,
     );
@@ -3834,6 +3849,37 @@ pub fn workflow_action_lookup(
     state.journal.action_lookup(&request)
 }
 
+/// Read-only `p4 opened -Mj` over exact paths: post-write proof of which paths
+/// are still open and which are explicitly closed (depot records may be absent).
+async fn run_opened_query(
+    runner: &crate::p4::runner::P4Runner,
+    context: &crate::domain::P4Context,
+    paths: &[String],
+    operation_id: &str,
+    app: &AppHandle,
+) -> Option<crate::domain::OperationResult> {
+    let query = crate::p4::workflows::command::opened(paths).ok()?;
+    runner
+        .run_with_progress(
+            P4CommandRequest {
+                bound: crate::p4::bounds::IoBound::ReadLong,
+                operation_id: Some(format!("{operation_id}:opened")),
+                source: OperationSource::Gui,
+                command: query.command.into(),
+                args: query.args,
+                context: context.clone(),
+                output_mode: OutputMode::JsonLines,
+                timeout_ms: None,
+                input: None,
+            },
+            Some(app),
+            None,
+            query.argument_input,
+        )
+        .await
+        .ok()
+}
+
 #[tauri::command]
 pub async fn confirm_revert_action(
     _admission: crate::close_guard::Admission,
@@ -3958,9 +4004,18 @@ pub async fn confirm_revert_action(
             .await
             .map_err(|e| e.to_string())
     };
+    // Post-state opened evidence: a plain fstat has no record for a locally
+    // added file that a revert just removed, so the opened list is what proves
+    // those paths are no longer open (instead of surfacing them as uncertain).
+    let opened = run_opened_query(&state.runner, &context, &request.paths, &id, &app).await;
     let evidence = before.as_ref().zip(after.as_ref());
-    let result =
-        crate::app::revert_action::result_with_retention(&request, write, observed, evidence);
+    let result = crate::app::revert_action::result_with_retention(
+        &request,
+        write,
+        observed,
+        evidence,
+        opened.as_ref(),
+    );
     state.files.invalidate_status(
         &context,
         &request.paths,

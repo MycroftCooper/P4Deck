@@ -48,7 +48,6 @@ const labelKeys: Record<string, string> = {
   打标签: "contextMenu.tag.with.label",
   在文件页中显示: "contextMenu.show.in.files",
   "在 Streams 中查找": "contextMenu.find.in.streams",
-  浏览此目录: "contextMenu.browse.folder",
   添加未跟踪文件: "contextMenu.add.untracked.files",
   在此目录搜索: "contextMenu.search.this.folder",
   刷新目录: "contextMenu.refresh.folder",

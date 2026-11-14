@@ -1672,6 +1672,13 @@ export interface SyncPreviewRequest {
   /** Preview-reported file count, so a later sync can expose a real total. */
   expectedFiles?: number;
   operationId?: string;
+  /**
+   * Skips the opened-file inspection/blocker preflight, but the host still runs
+   * one count-only `p4 sync -n` so the plan carries a real total. Safety signals
+   * become advisory warnings, so the dialog can act as a plain risk
+   * confirmation.
+   */
+  skipPreflight?: boolean;
 }
 
 export type SyncChangeKind =
@@ -1716,6 +1723,7 @@ export interface SyncTargetSnapshot {
   revision: SyncRevisionSpec;
   force: boolean;
   parallelThreads?: number;
+  skipPreflight?: boolean;
 }
 
 export interface SyncPlanCounts {

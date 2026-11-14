@@ -59,7 +59,7 @@
 | Ctrl+Shift+F | Find File | **已覆盖** | `view.search` 现为 Mod+Shift+F，与 P4V 一致 |
 | Ctrl+F | Find（当前视图内查找） | 不迁移（阶段 2） | P4Deck 无全局 in-place find；保留浏览器/WebView 原生查找，后续可加“聚焦当前列表筛选”命令 |
 | Alt+L | Jump to Address Bar（Windows；官方默认） | **迁移（新增）** | `navigation.focusAddress`（新增命令，聚焦统一地址栏） |
-| Ctrl+G | Go To（跳转到 spec） | **迁移（新增，近似）** | 同一命令 `navigation.focusAddress` 作为别名；P4Deck 地址栏当前主要解析路径，CL/标签号跳转属后续增强（语义近似，文档标注） |
+| Ctrl+G | Go To（跳转到 spec） | **迁移（新增）** | 新命令 `navigation.focusSubmitted`：打开“已提交”页并聚焦“转到 CL”输入框（按 CL 号跳转） |
 
 ### 2.3 文件查看（只读）
 
@@ -119,10 +119,10 @@
 | 14 | Ctrl+Shift+S | `file.reveal` | 已有命令 | 补键位 | 只读；浏览器“另存为”冲突；桌面才可用（本地系统能力检查仍生效） |
 | 15 | Ctrl+I | `view.diagnostics` | 已有命令 | 补键位 | 只读 |
 | 16 | Alt+L | `navigation.focusAddress` | **需新增命令** | 新增命令（聚焦地址栏）+ 键位 | 只读；不改变当前选择对象（与《统一地址与对象工具栏》一致） |
-| 17 | Ctrl+G | `navigation.focusAddress` | 同上 | 增加别名（近似 Go To） | 近似：地址栏解析路径；CL/标签 spec 跳转后续增强 |
+| 17 | Ctrl+G | `navigation.focusSubmitted` | **需新增命令** | 新增命令 + 键位 | 打开已提交页并聚焦“转到 CL”输入框；不再作为地址栏别名 |
 | 18 | Ctrl+E/Ctrl+S/Ctrl+Shift+G/Ctrl+R/Ctrl+L/Ctrl+U | 对应 mutation 命令 | 已有命令 | **不绑定**（见 §2.4 与 §7 D1） | 防止误触写操作；保留确认/预检入口 |
 
-合计：迁移 17 项（含 2 组别名），新增命令 4 个（`view.files`、`view.branchMappings`、`view.streamgraph`、`navigation.focusAddress`），命令总数 37 → 41；已绑定快捷键 7 → 约 22 条（含别名）。
+合计：迁移 17 项（含 2 组别名），新增命令 5 个（`view.files`、`view.branchMappings`、`view.streamgraph`、`navigation.focusAddress`、`navigation.focusSubmitted`），命令总数 37 → 42；已绑定快捷键 7 → 约 22 条（含别名）。
 
 ## 4. 现有 7 个快捷键回归清单（阶段 2 必须保持）
 
@@ -178,14 +178,15 @@ P4Deck 主目标是 Tauri 桌面（WebView2）；Web 演示仅用于开发/QA。
 
 ## 6. 阶段 2 实现建议（供批准）
 
-1. **数据模型**：`AppCommandDefinition` 保留 `shortcut?: string` 作为主键位（Settings 可编辑/持久化对象），新增 `aliases?: readonly string[]`（默认别名，只读展示；不参与用户编辑，参与冲突检测与分发）。这样既满足 P4V 双键位（F5/Ctrl+R、Ctrl+D/Ctrl+Shift+D、Alt+L/Ctrl+G），又不改变命令面板与后续 Settings 的“当前键”单值语义。
-2. **新增命令**（4 个，`requires:"mainWindow"`，page 执行）：
+1. **数据模型**：`AppCommandDefinition` 保留 `shortcut?: string` 作为主键位（Settings 可编辑/持久化对象），新增 `aliases?: readonly string[]`（默认别名，只读展示；不参与用户编辑，参与冲突检测与分发）。这样既满足 P4V 双键位（F5/Ctrl+R、Ctrl+D/Ctrl+Shift+D），又不改变命令面板与后续 Settings 的“当前键”单值语义。
+2. **新增命令**（5 个，`requires:"mainWindow"`；`view.*` 三项 page 执行，`navigation.*` 两项走事件/状态分发）：
    - `view.files` → `{ kind: "page", page: "files" }`
    - `view.branchMappings` → `{ kind: "page", page: "branchmappings" }`
    - `view.streamgraph` → `{ kind: "page", page: "streamgraph" }`
    - `navigation.focusAddress` → App.tsx 内 `window.dispatchEvent(new Event("p4deck:focus-address"))`；CommandBar 监听并 `focus()`/`select()` 地址输入框（与现有 `p4deck:open-settings` 事件模式一致；不改 CommandId union，不动写操作）。
+   - `navigation.focusSubmitted` → 独立命令（Ctrl+G）：App.tsx 内 `openPage("submitted")` 并聚焦“转到 CL”输入框；不再作为地址栏别名。
 3. **分发**：`commandForShortcut` 匹配 `shortcut` + `aliases`，其余逻辑（平台修饰键过滤、editable 保护、返回唯一 ID）不变；`shortcutConflicts` 同时检查主键位与别名，返回可读冲突串。
-4. **文档同步**：更新 `ForAIDoc/Designer/统一Action刷新与通知.md`（命令数 37→41、快捷键列 + mutation 说明），否则 `validate:frontend-contracts` 会因“Action documentation omits production commands”失败（脚本按反引号 ID 校验，不改脚本）。
+4. **文档同步**：更新 `ForAIDoc/Designer/统一Action刷新与通知.md`（命令数 37→42、快捷键列 + mutation 说明），否则 `validate:frontend-contracts` 会因“Action documentation omits production commands”失败（脚本按反引号 ID 校验，不改脚本）。
 5. **测试**：
    - `catalog.test.ts`：新增每个 P4V 键位的解析断言（Windows/Mac 各一遍）、别名解析、编辑焦点保护、跨平台冲突为空、mutation 仍无 `shortcut`/`aliases`；保留现有 Windows/macOS/编辑框用例。
    - `App` 分发：用现有 App 测试（或新增最小用例）证明按键 → `executeAppCommand` → 目标 page/shell 命令；mutation 命令（若未来绑定）仍进 CommandBar 状态机。
@@ -198,7 +199,7 @@ P4Deck 主目标是 Tauri 桌面（WebView2）；Web 演示仅用于开发/QA。
 - **D1（关键）**：P4V 的写操作键位（Ctrl+E 签出、Ctrl+S 提交、Ctrl+Shift+G 获取最新、Ctrl+R 还原、Ctrl+L/U 锁/解锁）是否要绑定？
   - **建议 A（默认，本文档按此规格）**：不绑定，保持《统一Action刷新与通知》“mutation 不分配直接快捷键”口径；原因：误触写操作风险、与既有测试/doclint 一致、P4Deck 已有确认链。
   - 备选 B：绑定但必须证明仍走原确认对话框（`executeAppCommand` → `CommandBar.executeCommand`）。若选 B，需要改设计文档口径与 `catalog.test.ts` 断言，属于安全口径变更，需 Lead 明确批准后再实施。
-- **D2**：`Ctrl+G` 作为地址栏别名（近似 P4V “Go To spec”）。若要求严格语义，可暂不绑 Ctrl+G，只保留 Alt+L；CL 号跳转待地址栏增强。
+- **D2**：`Ctrl+G` 现在对应独立命令 `navigation.focusSubmitted`（打开已提交页并聚焦“转到 CL”输入框）；`Alt+L` 仍只聚焦地址栏。
 - **D3**：`view.refresh` 主键位保留 Ctrl+R（不回归）且只加 F5 别名，是否符合“P4V 对齐”预期。
 - **D4**：浏览器/Web 演示模式下保留键被抢占，验收只认 Windows Tauri 桌面（是/否）。
 

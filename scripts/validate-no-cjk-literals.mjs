@@ -70,7 +70,7 @@ const EXEMPT_FILES = [
  * Keep this list shrinking. It is a schedule, not a permission.
  */
 const BASELINE = new Set([
-  "src/app/App.tsx:513",
+  "src/app/App.tsx:521",
   "src/app/DockWorkspace.tsx:37",
   "src/app/DockWorkspace.tsx:38",
   "src/app/DockWorkspace.tsx:47",
@@ -83,14 +83,14 @@ const BASELINE = new Set([
   "src/app/context-menu/FullTextSelection.tsx:65",
   "src/app/context-menu/FullTextSelection.tsx:73",
   "src/app/context-menu/copyMenu.ts:33",
-  "src/app/context-menu/labels.ts:401",
+  "src/app/context-menu/labels.ts:400",
   "src/app/shell/StatusBar.tsx:264",
   "src/features/browsers/components/DiffView.tsx:392",
   "src/features/browsers/components/DiffView.tsx:483",
   "src/features/browsers/components/StreamGraphPage.tsx:592",
   "src/features/changelists/components/ChangelistFormDialog.tsx:110",
   "src/features/changelists/components/ChangelistPage.tsx:433",
-  "src/features/changelists/components/ChangelistPage.tsx:475",
+  "src/features/changelists/components/ChangelistPage.tsx:476",
   "src/features/changelists/components/IntegrationTraceDialog.tsx:301",
   "src/features/changelists/components/RevisionFileList.tsx:223",
   "src/features/changelists/components/SelectedFilesSubmitDialog.tsx:228",

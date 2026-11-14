@@ -128,12 +128,7 @@ export function useFileMenu() {
           env.preferences.zh,
         ),
       );
-      for (const label of [
-        "浏览此目录",
-        "浏览此 Depot",
-        "在文件页中显示",
-        "在所在目录显示",
-      ])
+      for (const label of ["浏览此 Depot", "在文件页中显示", "在所在目录显示"])
         bindings[label] = action(
           () => env.navigate(node),
           node.absolutePath || node.depotPath

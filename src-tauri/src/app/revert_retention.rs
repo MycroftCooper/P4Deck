@@ -292,6 +292,7 @@ mod tests {
             Ok(op(vec![])),
             Ok(op(vec![row()])),
             Some((&a, &b)),
+            None,
         );
         assert_eq!(r.outcome, WorkflowOutcome::Succeeded);
         assert_eq!(r.files[0].state, WorkflowFileState::Retained);
@@ -311,6 +312,7 @@ mod tests {
                 serde_json::json!({"depotFile":"//fixture/b"}),
             ])),
             Some((&a, &b)),
+            None,
         );
         assert_eq!(r.outcome, WorkflowOutcome::Succeeded);
         assert_eq!(r.files[0].state, WorkflowFileState::Retained);
@@ -323,7 +325,14 @@ mod tests {
         let mut q = request();
         q.action = FileAction::Revert;
         assert_eq!(
-            result_with_retention(&q, Ok(op(vec![])), Ok(op(vec![row()])), Some((&a, &b))).outcome,
+            result_with_retention(
+                &q,
+                Ok(op(vec![])),
+                Ok(op(vec![row()])),
+                Some((&a, &b)),
+                None
+            )
+            .outcome,
             WorkflowOutcome::Unknown
         );
         q.action = FileAction::RevertUnchanged;
@@ -332,7 +341,8 @@ mod tests {
                 &q,
                 Ok(op(vec![])),
                 Err("read failed".into()),
-                Some((&a, &b))
+                Some((&a, &b)),
+                None
             )
             .outcome,
             WorkflowOutcome::Unknown
@@ -342,7 +352,8 @@ mod tests {
                 &q,
                 Err("cancelled".into()),
                 Ok(op(vec![row()])),
-                Some((&a, &b))
+                Some((&a, &b)),
+                None
             )
             .outcome,
             WorkflowOutcome::Unknown

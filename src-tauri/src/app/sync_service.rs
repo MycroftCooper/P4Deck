@@ -127,10 +127,82 @@ impl SyncService {
                 )
             }
         };
-        let evaluation = self
-            .inspect(&context, &target, request.operation_id, app)
-            .await;
+        let evaluation = if target.skip_preflight {
+            // Count-only: one silent `p4 sync -n` gives the real total so the
+            // progress bar can show "x of y"; no blockers are produced.
+            self.count_preview(&context, &target, request.operation_id, app)
+                .await
+        } else {
+            self.inspect(&context, &target, request.operation_id, app)
+                .await
+        };
         self.plan_from_evaluation(target, evaluation)
+    }
+
+    /// `p4 sync -n` used only for its file counts (no inspection, no blockers).
+    async fn count_preview(
+        &self,
+        context: &P4Context,
+        target: &SyncTargetSnapshot,
+        requested_operation_id: Option<String>,
+        app: Option<&AppHandle>,
+    ) -> Evaluation {
+        let operation_id = valid_operation_id(requested_operation_id)
+            .unwrap_or_else(|| format!("sync-count-{}", Uuid::new_v4()));
+        let (args, input) = preview_arguments(target);
+        let result = self
+            .runner
+            .run_with_progress(
+                P4CommandRequest {
+                    bound: crate::p4::bounds::IoBound::ReadLong,
+                    operation_id: Some(operation_id.clone()),
+                    source: OperationSource::Gui,
+                    command: "sync".into(),
+                    args,
+                    context: context.clone(),
+                    output_mode: OutputMode::JsonLines,
+                    timeout_ms: None,
+                    input: None,
+                },
+                app,
+                None,
+                input,
+            )
+            .await;
+        let (mut evaluation, count_failed) = match result {
+            Ok(result) => (evaluate_preview(&result), false),
+            Err(_) => (
+                Evaluation {
+                    entries: Vec::new(),
+                    counts: SyncPlanCounts::default(),
+                    blockers: Vec::new(),
+                    warnings: Vec::new(),
+                    partial: false,
+                    operation_ids: Vec::new(),
+                },
+                true,
+            ),
+        };
+        evaluation.operation_ids.push(operation_id);
+        // Counts and entries stay; every safety signal becomes an advisory
+        // warning because the dialog is the explicit risk confirmation.
+        evaluation.blockers.clear();
+        evaluation.partial = false;
+        evaluation.warnings = risk_warnings(target);
+        if count_failed {
+            // Zeroed counts must not read as "0 affected files": `PreviewFailed`
+            // is a code the dialog can localize apart from the generic risks.
+            evaluation.warnings.push(issue(
+                SyncIssueCode::PreviewFailed,
+                "The affected file count could not be computed because the counting preview failed; confirming still runs the sync.",
+                target.paths.clone(),
+            ));
+        }
+        evaluation.counts.warnings = evaluation.warnings.len();
+        // Only the counts are needed (progress total); the representative list
+        // stays bounded so a 100k-file scope does not cross the IPC boundary.
+        evaluation.entries.truncate(MAX_REPRESENTATIVE_ENTRIES);
+        evaluation
     }
 
     pub async fn confirm(
@@ -225,10 +297,31 @@ impl SyncService {
                 // records (severity >= 2); never report those as a clean sync.
                 if let Some(detail) = sync_warning_detail(&operation) {
                     let failure = classify_failure(&detail);
+                    let unresolved = text_needs_resolve(&detail);
                     return SyncResult {
-                        outcome: SyncOutcome::Failed,
+                        outcome: if unresolved {
+                            SyncOutcome::Partial
+                        } else {
+                            SyncOutcome::Failed
+                        },
                         failure: Some(failure),
-                        message: failure_message_with_detail(failure, &detail),
+                        message: incomplete_sync_message(failure, &detail, unresolved),
+                        operation_id: Some(operation_id.clone()),
+                        log_reference: Some(operation_id),
+                        affected_paths: paths.clone(),
+                        counts: counts.clone(),
+                        refresh_workspace: true,
+                        refresh_depot: true,
+                    };
+                }
+                // `p4 sync -f` still leaves already-opened paths untouched; that
+                // is a known partial result, not a failed sync.
+                let skipped = skipped_opened_lines(&operation);
+                if !skipped.is_empty() {
+                    return SyncResult {
+                        outcome: SyncOutcome::Partial,
+                        failure: None,
+                        message: skipped_opened_message(&skipped),
                         operation_id: Some(operation_id.clone()),
                         log_reference: Some(operation_id),
                         affected_paths: paths.clone(),
@@ -265,6 +358,7 @@ impl SyncService {
                 } else {
                     classify_failure(&text)
                 };
+                let unresolved = !cancelled && text_needs_resolve(&text);
                 SyncResult {
                     outcome: if cancelled {
                         SyncOutcome::Cancelled
@@ -276,7 +370,7 @@ impl SyncService {
                         SyncOutcome::Failed
                     },
                     failure: Some(failure),
-                    message: failure_message_with_detail(failure, &text),
+                    message: incomplete_sync_message(failure, &text, unresolved),
                     operation_id: Some(operation_id.clone()),
                     log_reference: Some(operation_id),
                     affected_paths: paths,
@@ -343,6 +437,7 @@ impl SyncService {
             parallel_threads: request.parallel_threads,
             operation_id: request.operation_id.clone(),
             expected_files: None,
+            skip_preflight: false,
         };
         let target = match target_snapshot(&context, generation, &latest) {
             Ok(target) => target,
@@ -423,6 +518,23 @@ impl SyncService {
                             outcome: SyncOutcome::Failed,
                             failure: Some(failure),
                             message: failure_message_with_detail(failure, &detail),
+                            operation_id: Some(operation_id.clone()),
+                            log_reference: Some(operation_id),
+                            affected_paths: paths.clone(),
+                            counts: SyncPlanCounts::default(),
+                            refresh_workspace: true,
+                            refresh_depot: true,
+                        },
+                        sync_events,
+                    );
+                }
+                let skipped = skipped_opened_lines(&operation);
+                if !skipped.is_empty() {
+                    return (
+                        SyncResult {
+                            outcome: SyncOutcome::Partial,
+                            failure: None,
+                            message: skipped_opened_message(&skipped),
                             operation_id: Some(operation_id.clone()),
                             log_reference: Some(operation_id),
                             affected_paths: paths.clone(),
@@ -657,6 +769,9 @@ impl SyncService {
         requested_operation_id: Option<String>,
         app: Option<&AppHandle>,
     ) -> Evaluation {
+        if target.skip_preflight {
+            return risk_evaluation(target);
+        }
         let operation_id = valid_operation_id(requested_operation_id)
             .unwrap_or_else(|| format!("sync-preview-{}", Uuid::new_v4()));
         let (args, input) = preview_arguments(target);
@@ -742,19 +857,131 @@ impl SyncService {
             ));
             evaluation.counts.warnings += 1;
         }
-        if evaluation.partial
-            && !evaluation
-                .blockers
-                .iter()
-                .any(|item| item.code == SyncIssueCode::InspectionUnknown)
-        {
-            evaluation.blockers.push(issue(
-                SyncIssueCode::InspectionUnknown,
-                "The server preview or safety inspection was partial; sync cannot be confirmed safely.",
-                target.paths.clone(),
-            ));
+        apply_partial_risk(&mut evaluation, target);
+        if target.force {
+            downgrade_force_advisories(&mut evaluation);
         }
         evaluation
+    }
+}
+
+/// Advisory blockers describe a risk the user can consciously accept for a
+/// forced sync (overwriting writable files, keeping unresolved records, or an
+/// incomplete server plan). The force acknowledgement is that acceptance, so
+/// they become warnings; connection, permission, disk and server failures stay
+/// hard blockers.
+fn downgrade_force_advisories(evaluation: &mut Evaluation) {
+    let mut kept = Vec::new();
+    for mut blocker in evaluation.blockers.drain(..) {
+        if matches!(
+            blocker.code,
+            SyncIssueCode::WritableClobber
+                | SyncIssueCode::InspectionUnknown
+                | SyncIssueCode::UnresolvedFile
+        ) {
+            blocker.message = format!(
+                "{} Forced sync continues after your acknowledgement.",
+                blocker.message
+            );
+            evaluation.warnings.push(blocker);
+            evaluation.counts.warnings += 1;
+        } else {
+            kept.push(blocker);
+        }
+    }
+    evaluation.blockers = kept;
+}
+
+/// A review that intentionally skipped the server preview: no `p4 sync -n` and
+/// no fstat inspection ran, so there are no counts or blockers - only the risks
+/// the user is about to accept on a confirmation dialog.
+fn risk_evaluation(target: &SyncTargetSnapshot) -> Evaluation {
+    let warnings = risk_warnings(target);
+    Evaluation {
+        entries: Vec::new(),
+        counts: SyncPlanCounts {
+            warnings: warnings.len(),
+            ..SyncPlanCounts::default()
+        },
+        blockers: Vec::new(),
+        warnings,
+        partial: false,
+        operation_ids: Vec::new(),
+    }
+}
+
+/// Risks a skipped-preflight confirmation is asking the user to accept.
+fn risk_warnings(target: &SyncTargetSnapshot) -> Vec<SyncIssue> {
+    let mut warnings = Vec::new();
+    if target.revision.kind != SyncRevisionKind::Head {
+        warnings.push(issue(
+            SyncIssueCode::InspectionUnknown,
+            format!(
+                "The workspace files will be pinned to revision {}; local modifications in this scope may be overwritten.",
+                revision_expression(&target.revision)
+            ),
+            target.paths.clone(),
+        ));
+    }
+    if target.force {
+        warnings.push(issue(
+            SyncIssueCode::ForceOverwrite,
+            "Forced sync re-transfers current files and may overwrite writable local modifications.",
+            target.paths.clone(),
+        ));
+    }
+    warnings.push(issue(
+        SyncIssueCode::InspectionUnknown,
+        "A counting preview (p4 sync -n) ran for this request: only the affected file count was computed, and no per-file safety inspection was performed. Review the target scope before confirming.",
+        Vec::new(),
+    ));
+    warnings
+}
+
+fn revision_expression(revision: &SyncRevisionSpec) -> String {
+    let value = revision.value.as_deref().unwrap_or_default();
+    match revision.kind {
+        SyncRevisionKind::Head => "#head".into(),
+        SyncRevisionKind::Revision => format!("#{value}"),
+        SyncRevisionKind::Change => format!("@{value}"),
+        SyncRevisionKind::Date => format!("@{value}"),
+        SyncRevisionKind::Label => format!("@{value}"),
+    }
+}
+
+/// A partial preview is a hard stop for an ordinary sync: without the complete
+/// server plan the confirmation would not describe what executes. A forced sync
+/// is different intent - it re-fetches head for the whole scope regardless of
+/// the plan - so the explicit force acknowledgement is enough; the missing plan
+/// stays visible as a warning and any writable-clobber blocker still applies.
+fn apply_partial_risk(evaluation: &mut Evaluation, target: &SyncTargetSnapshot) {
+    if !evaluation.partial
+        || evaluation
+            .blockers
+            .iter()
+            .any(|item| item.code == SyncIssueCode::InspectionUnknown)
+    {
+        return;
+    }
+    if target.force {
+        if !evaluation
+            .warnings
+            .iter()
+            .any(|item| item.code == SyncIssueCode::InspectionUnknown)
+        {
+            evaluation.warnings.push(issue(
+                SyncIssueCode::InspectionUnknown,
+                "The server preview or safety inspection was partial; the forced sync continues without a complete plan. Review the warnings and the operation log.",
+                target.paths.clone(),
+            ));
+            evaluation.counts.warnings += 1;
+        }
+    } else {
+        evaluation.blockers.push(issue(
+            SyncIssueCode::InspectionUnknown,
+            "The server preview or safety inspection was partial; sync cannot be confirmed safely.",
+            target.paths.clone(),
+        ));
     }
 }
 
@@ -875,7 +1102,13 @@ impl<'a> ReviewSpec for SyncReviewSpec<'a> {
         &self,
         reviewed: &IssuedConfirmation<Self::Target, Self::Digest>,
     ) -> Acknowledgement {
-        Acknowledgement::required(reviewed.target.force, false)
+        // A skipped-preflight review is already the explicit risk confirmation,
+        // so force does not need a second acknowledgement there. The classic
+        // preview flow keeps requiring it.
+        Acknowledgement::required(
+            reviewed.target.force && !reviewed.target.skip_preflight,
+            false,
+        )
     }
 
     fn context_current(&self) -> bool {
@@ -1044,6 +1277,7 @@ fn target_snapshot(
         revision: request.revision.clone(),
         force: request.force,
         parallel_threads: request.parallel_threads,
+        skip_preflight: request.skip_preflight,
     })
 }
 
@@ -1062,6 +1296,7 @@ fn fallback_target(
         revision: request.revision,
         force: request.force,
         parallel_threads: request.parallel_threads,
+        skip_preflight: request.skip_preflight,
     }
 }
 
@@ -1080,6 +1315,7 @@ fn context_target(
         revision: target.revision.clone(),
         force: target.force,
         parallel_threads: target.parallel_threads,
+        skip_preflight: target.skip_preflight,
     }
 }
 
@@ -1618,15 +1854,22 @@ fn writable_change_paths(entries: &[SyncPlanEntry]) -> Vec<String> {
 }
 
 fn digest(target: &SyncTargetSnapshot, evaluation: &Evaluation) -> String {
-    let bytes = serde_json::to_vec(&serde_json::json!({
-        "target": target,
-        "entries": evaluation.entries,
-        "counts": evaluation.counts,
-        "blockers": evaluation.blockers,
-        "warnings": evaluation.warnings,
-        "partial": evaluation.partial,
-    }))
-    .expect("sync preview digest input is serializable");
+    // A skipped-preflight review is confirmed by its target alone: the confirm
+    // re-check deliberately does not repeat the counting `p4 sync -n`, so its
+    // evaluation is empty and must still match the reviewed digest.
+    let input = if target.skip_preflight {
+        serde_json::json!({ "target": target })
+    } else {
+        serde_json::json!({
+            "target": target,
+            "entries": evaluation.entries,
+            "counts": evaluation.counts,
+            "blockers": evaluation.blockers,
+            "warnings": evaluation.warnings,
+            "partial": evaluation.partial,
+        })
+    };
+    let bytes = serde_json::to_vec(&input).expect("sync preview digest input is serializable");
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -1766,6 +2009,19 @@ fn failure_message_with_detail(failure: SyncFailureCode, detail: &str) -> String
     }
 }
 
+/// A partial sync where p4 refused files with pending resolves: say what to do
+/// instead of only echoing `must resolve ... before submitting`.
+fn incomplete_sync_message(failure: SyncFailureCode, detail: &str, unresolved: bool) -> String {
+    let base = failure_message_with_detail(failure, detail);
+    if unresolved {
+        format!(
+            "Some files were left unchanged because Perforce does not overwrite files that are already opened or need a resolve. Resolve or revert them, then retry. {base}"
+        )
+    } else {
+        base
+    }
+}
+
 /// Redacts and caps p4 output while keeping the head of the actionable text.
 fn bounded_detail(text: &str) -> String {
     let redacted = crate::security::redact_text(text);
@@ -1862,13 +2118,59 @@ fn contains_failure_text(text: &str) -> bool {
         "must refer to client",
         "not under client",
         "clobber writable",
-        "must resolve",
         "permission denied",
         "no space",
         "disk full",
     ]
     .iter()
     .any(|needle| lower.contains(needle))
+}
+
+/// True when p4 refused a path because it is opened (or needs a resolve) and
+/// therefore left it unchanged. This is a known skip for `-f`, not a write error.
+fn text_needs_resolve(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("must resolve")
+        || lower.contains("unresolved")
+        || lower.contains("is opened and not being changed")
+}
+
+/// Per-file diagnostics proving p4 skipped an already-opened path on sync.
+fn skipped_opened_lines(result: &OperationResult) -> Vec<String> {
+    let mut lines = Vec::new();
+    for event in &result.events {
+        if !matches!(event.kind, EventKind::Stdout | EventKind::Stderr) {
+            continue;
+        }
+        let Some(message) = event.message.as_deref() else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(message.trim()) else {
+            continue;
+        };
+        let Some(data) = string(&value, "data") else {
+            continue;
+        };
+        let data = data.trim();
+        if data.contains("is opened and not being changed")
+            || (data.contains("must resolve") && data.contains("before submitting"))
+        {
+            lines.push(data.to_owned());
+        }
+    }
+    lines
+}
+
+fn skipped_opened_message(lines: &[String]) -> String {
+    let count = lines
+        .iter()
+        .filter(|line| line.contains("is opened and not being changed"))
+        .count()
+        .max(1);
+    let detail = bounded_detail(&lines.join("\n"));
+    format!(
+        "{count} opened file(s) were left unchanged: Perforce does not overwrite opened files. Resolve or revert them, then retry. {detail}"
+    )
 }
 
 fn rejected(
@@ -1948,7 +2250,117 @@ mod tests {
             },
             force,
             parallel_threads: Some(2),
+            skip_preflight: false,
         }
+    }
+
+    fn partial_evaluation() -> Evaluation {
+        Evaluation {
+            entries: Vec::new(),
+            counts: SyncPlanCounts::default(),
+            blockers: Vec::new(),
+            warnings: Vec::new(),
+            partial: true,
+            operation_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn forced_sync_may_run_on_a_partial_preview_after_its_acknowledgement() {
+        let mut evaluation = partial_evaluation();
+        apply_partial_risk(&mut evaluation, &target(true));
+        assert!(evaluation.blockers.is_empty(), "{:?}", evaluation.blockers);
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.code == SyncIssueCode::InspectionUnknown));
+    }
+
+    #[test]
+    fn ordinary_sync_still_blocks_a_partial_preview() {
+        let mut evaluation = partial_evaluation();
+        apply_partial_risk(&mut evaluation, &target(false));
+        assert_eq!(evaluation.blockers.len(), 1);
+        assert_eq!(
+            evaluation.blockers[0].code,
+            SyncIssueCode::InspectionUnknown
+        );
+    }
+
+    #[test]
+    fn forced_sync_does_not_repeat_an_inspection_warning() {
+        let mut evaluation = partial_evaluation();
+        evaluation.warnings.push(issue(
+            SyncIssueCode::InspectionUnknown,
+            "partial",
+            Vec::new(),
+        ));
+        let before = evaluation.warnings.len();
+        apply_partial_risk(&mut evaluation, &target(true));
+        assert_eq!(evaluation.warnings.len(), before);
+    }
+
+    #[test]
+    fn forced_sync_downgrades_advisory_blockers_but_keeps_hard_failures() {
+        let mut evaluation = partial_evaluation();
+        evaluation.partial = false;
+        evaluation.blockers.push(issue(
+            SyncIssueCode::WritableClobber,
+            "Previewed files are writable locally.",
+            Vec::new(),
+        ));
+        evaluation.blockers.push(issue(
+            SyncIssueCode::UnresolvedFile,
+            "Files in the sync scope have unresolved integration records.",
+            Vec::new(),
+        ));
+        evaluation.blockers.push(issue(
+            SyncIssueCode::PermissionDenied,
+            "Permission denied",
+            Vec::new(),
+        ));
+        downgrade_force_advisories(&mut evaluation);
+        assert_eq!(evaluation.blockers.len(), 1);
+        assert_eq!(evaluation.blockers[0].code, SyncIssueCode::PermissionDenied);
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.code == SyncIssueCode::WritableClobber
+                && item.message.contains("Forced sync continues")));
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.code == SyncIssueCode::UnresolvedFile));
+    }
+
+    #[test]
+    fn skipped_preflight_reports_risks_without_blocking_the_token() {
+        let mut forced = target(true);
+        forced.skip_preflight = true;
+        let evaluation = risk_evaluation(&forced);
+        assert!(evaluation.blockers.is_empty());
+        assert!(evaluation.entries.is_empty());
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.code == SyncIssueCode::ForceOverwrite));
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.message.contains("counting preview")));
+
+        let mut revision = target(false);
+        revision.skip_preflight = true;
+        revision.revision = SyncRevisionSpec {
+            kind: SyncRevisionKind::Revision,
+            value: Some("42".into()),
+        };
+        let evaluation = risk_evaluation(&revision);
+        assert!(evaluation.blockers.is_empty());
+        assert!(evaluation
+            .warnings
+            .iter()
+            .any(|item| item.message.contains("#42")));
     }
 
     #[test]
@@ -2102,6 +2514,43 @@ mod tests {
         assert_eq!(
             bounded.trim_end_matches('…').chars().count(),
             MAX_P4_DETAIL_CHARS
+        );
+    }
+
+    #[test]
+    fn unresolved_sync_failure_tells_the_user_to_resolve_first() {
+        let detail = "//depot/main/a.txt - must resolve #10 before submitting";
+        assert!(text_needs_resolve(detail));
+        let message = incomplete_sync_message(SyncFailureCode::CommandFailure, detail, true);
+        assert!(
+            message.contains("Resolve or revert them, then retry"),
+            "{message}"
+        );
+        assert!(message.contains("must resolve"), "{message}");
+        let plain = incomplete_sync_message(SyncFailureCode::CommandFailure, "denied", false);
+        assert!(!plain.contains("already opened"), "{plain}");
+    }
+
+    #[test]
+    fn opened_files_skipped_by_force_sync_are_a_partial_result() {
+        // Real `p4 sync -f` output: opened paths are reported as "is opened and
+        // not being changed" plus a "must resolve" note while other files update.
+        let sync = operation_result(
+            0,
+            &[
+                r#"{"data":"//depot/main/a.txt#10 - is opened and not being changed","level":0}"#,
+                r#"{"data":"//depot/main/a.txt - must resolve #10 before submitting","level":1}"#,
+                r#"{"action":"updated","depotFile":"//depot/main/b.txt","rev":"8"}"#,
+            ],
+        );
+        assert_eq!(sync_warning_detail(&sync), None);
+        let skipped = skipped_opened_lines(&sync);
+        assert_eq!(skipped.len(), 2);
+        let message = skipped_opened_message(&skipped);
+        assert!(message.contains("1 opened file(s)"), "{message}");
+        assert!(
+            message.contains("does not overwrite opened files"),
+            "{message}"
         );
     }
 
@@ -2345,6 +2794,7 @@ mod tests {
             parallel_threads: None,
             operation_id: Some("get-latest-test".into()),
             expected_files: None,
+            skip_preflight: false,
         }
     }
 
@@ -2525,6 +2975,7 @@ mod tests {
             parallel_threads: None,
             operation_id: Some("get-latest-root-test".into()),
             expected_files: None,
+            skip_preflight: false,
         }
     }
 
@@ -2589,6 +3040,7 @@ mod tests {
             parallel_threads: None,
             operation_id: Some("get-latest-local-test".into()),
             expected_files: None,
+            skip_preflight: false,
         };
         let result = harness.service.sync_latest(request, None).await;
 

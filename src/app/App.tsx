@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { SelectionContext } from "../features/files/SelectionContext";
+import { requestSubmittedClFocus } from "../features/changelists/submittedFocus";
 import { ResourceExplorer } from "../features/files/components/ResourceExplorer";
 import { resolveAddress } from "../features/files/resolveAddress";
 import { ToolArea, type ToolHandle } from "../features/tools/ToolArea";
@@ -384,6 +385,10 @@ function ConnectedApp({
         case "navigation.focusAddress":
           window.dispatchEvent(new Event("p4deck:focus-address"));
           break;
+        case "navigation.focusSubmitted":
+          openPage("submitted");
+          requestSubmittedClFocus();
+          break;
         case "view.refresh":
           void autoRefresh.refreshNow();
           break;
@@ -439,6 +444,9 @@ function ConnectedApp({
   );
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // A focused surface (e.g. the diff "go to line" field) may already have
+      // consumed the chord; do not run the global command a second time.
+      if (event.defaultPrevented) return;
       const id = commandForShortcut(event);
       if (!id) return;
       event.preventDefault();

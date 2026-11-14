@@ -2,7 +2,7 @@
 
 ## Action 目录
 
-`src/app/commands/catalog.ts` 是 41 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的“已保存连接”区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
+`src/app/commands/catalog.ts` 是 42 个生产命令的单一目录，供命令面板、前端快捷键和执行策略共同使用。Windows 原生顶栏菜单已按本人验收反馈移除：连接管理由 Settings 中现有的“已保存连接”区承担，Changes/Navigate/View 不再重复侧栏、页面和普通操作。写操作的 `execution.kind=shell` 只调用既有 `CommandBar`，因此目标校验、对话框、preflight、一次性 token、确认、取消和代次检查不会被命令面板或快捷键绕过。`pnpm validate:frontend-contracts` 自动校验 `AppCommandId` union、生产定义和本清单完整一致，并继续校验设计菜单、右键注册表与验收台账。
 
 | 分组 | 稳定 ID | 动作 | Windows / Linux | macOS | 风险 / 确认 |
 | --- | --- | --- | --- | --- | --- |
@@ -22,7 +22,8 @@
 | Navigation | `view.workspaces` | Workspace | Ctrl+5 | Cmd+5 | 只读导航；切换仍走验证/CAS |
 | Navigation | `view.streams` | Streams | Ctrl+7 | Cmd+7 | 只读导航；切换动作仍走验证/CAS |
 | Navigation | `view.streamgraph` | Stream Graph | Ctrl+Shift+M | Cmd+Shift+M | 只读导航 |
-| Navigation | `navigation.focusAddress` | 跳转到地址栏 | Alt+L（别名 Ctrl+G） | Option+L（别名 Cmd+G） | 只读；仅聚焦统一地址栏，不改变当前对象 |
+| Navigation | `navigation.focusAddress` | 跳转到地址栏 | Alt+L | Option+L | 只读；仅聚焦统一地址栏，不改变当前对象 |
+| Navigation | `navigation.focusSubmitted` | 跳转到已提交 CL | Ctrl+G | Cmd+G | 只读；打开已提交页并聚焦“转到 CL”输入框 |
 | Tools | `view.diagnostics` | Diagnostics | Ctrl+I | Cmd+I | 只读 |
 | File | `file.diff` | Diff | Ctrl+D（别名 Ctrl+Shift+D） | Cmd+D（别名 Cmd+Shift+D） | 只读；要求适用的单文件上下文 |
 | File | `file.history` / `file.revgraph` / `file.preview` | 文件查看工具 | Ctrl+T / Ctrl+Shift+R / — | Cmd+T / Cmd+Shift+R / — | 只读；要求适用的单文件上下文 |

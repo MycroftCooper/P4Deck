@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { Dialog, DialogNotice } from "../../../app/dialogs/Dialog";
+import { ArrowDownToLine } from "lucide-react";
 import { backend } from "../../../infrastructure/backend";
 import type {
   PendingChange,
@@ -16,6 +17,9 @@ import type {
 } from "../../../shared/contracts";
 import { ResizableTable } from "../../../app/context-menu/ResizableTable";
 import { FileStatusIcon } from "../../files/components/FileStatusIcon";
+import { invalidateData } from "../../../shared/cache/dataEffects";
+import { commandActions } from "../../../app/commands/actionCatalog";
+import { SyncDialog } from "../../files/components/SyncDialog";
 import { UnshelveDialog } from "./UnshelveDialog";
 export type ChangeDetailsTarget =
   | {
@@ -99,6 +103,7 @@ export function useChangeDetailsDialog(
             target={request.target}
             source={request.source}
             runtime={runtime}
+            connectionKey={connectionKey}
             zh={zh}
             onUnshelveIntoNewChange={openUnshelve}
             onClose={() => setRequest(undefined)}
@@ -130,6 +135,7 @@ function ChangeDetailsDialog({
   target,
   source,
   runtime,
+  connectionKey,
   zh,
   onClose,
   onUnshelveIntoNewChange,
@@ -137,6 +143,7 @@ function ChangeDetailsDialog({
   target: ChangeDetailsTarget;
   source: HTMLElement | null;
   runtime: RuntimeInfo;
+  connectionKey: string;
   zh: boolean;
   onClose(): void;
   /** Only offered for a non-submitted CL whose shelved files are listed. */
@@ -145,6 +152,10 @@ function ChangeDetailsDialog({
   const [value, setValue] = useState<SubmittedChangeDetail>();
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const [syncRequest, setSyncRequest] = useState<{
+    paths: string[];
+    source: HTMLElement;
+  }>();
   useEffect(() => {
     let live = true;
     const operationId = crypto.randomUUID();
@@ -420,9 +431,52 @@ function ChangeDetailsDialog({
                 {tFor(zh ? "zh-CN" : "en-US", "pending.unshelve.into.new.cl")}
               </button>
             )}
+            {target.kind === "submitted" &&
+              !shelvedFiles &&
+              value.files.length > 0 && (
+                <button
+                  className="secondary"
+                  onClick={(event) =>
+                    setSyncRequest({
+                      paths: [
+                        ...new Set(
+                          value.files
+                            .map((file) => file.depotPath)
+                            .filter((path) => path.length > 0),
+                        ),
+                      ],
+                      source: event.currentTarget,
+                    })
+                  }
+                >
+                  <ArrowDownToLine size={15} aria-hidden="true" />
+                  {tFor(zh ? "zh-CN" : "en-US", "pending.sync.to.cl.revision")}
+                </button>
+              )}
           </>
         )}
       </div>
+      {syncRequest && (
+        <SyncDialog
+          request={{
+            nodes: [],
+            revisionMode: "change",
+            fixedChange: target.changeId,
+            paths: syncRequest.paths,
+            scopeLabel: `CL ${target.changeId}`,
+            source: syncRequest.source,
+          }}
+          connectionKey={connectionKey}
+          demo={runtime.mode === "mock"}
+          zh={zh}
+          onDismiss={() => setSyncRequest(undefined)}
+          onRefresh={() =>
+            void invalidateData(commandActions.getLatest.effects, {
+              connectionKey,
+            }).catch(() => undefined)
+          }
+        />
+      )}
     </Dialog>
   );
 }

@@ -31,6 +31,7 @@ pub mod url_open;
 pub mod vfs_service;
 pub mod workflow_service;
 
+pub(crate) mod action_evidence;
 pub(crate) mod control_plane_action;
 pub(crate) mod custom_submit_action;
 pub(crate) mod frontend_log;

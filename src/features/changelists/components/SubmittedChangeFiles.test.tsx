@@ -46,9 +46,23 @@ beforeEach(() => {
     "ResizeObserver",
     class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     },
   );
+  // jsdom has no modal dialog implementation; the sync dialog is real here.
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = true;
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -69,6 +83,7 @@ async function show() {
       <SubmittedChangeFiles
         changeId={1}
         scope="mock:1"
+        connectionKey="mock-connection"
         cache={cache}
         runtime={runtime}
         zh
@@ -108,3 +123,17 @@ it.each([
     expect(backend.getSubmittedChangeDetail).toHaveBeenCalledTimes(1);
   },
 );
+it("offers syncing this CL's files to the CL revision", async () => {
+  backend.getSubmittedChangeDetail.mockResolvedValue(detail("complete", 2));
+  await show();
+  await act(async () => {
+    await Promise.resolve();
+  });
+  const button = [...host.querySelectorAll("button")].find((item) =>
+    item.textContent?.includes("拉取到此 CL 版本"),
+  );
+  expect(button).toBeTruthy();
+  await act(async () => button!.click());
+  expect(document.body.textContent).toContain("CL #1");
+  expect(document.body.textContent).toContain("2 个目标");
+});

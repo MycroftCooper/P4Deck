@@ -48,6 +48,34 @@ export function notesFor(
 
 export const CHANGELOG: readonly ChangelogRelease[] = [
   {
+    version: "0.1.14",
+    date: "2026-11-14",
+    notes: {
+      zh: [
+        "同步改为一次确认：获取最新（超过阈值）、获取指定版本与强制重新同步不再先展示服务器预览，确认后直接执行；执行中显示已处理文件数与百分比，每秒刷新已用时，可随时停止",
+        "同步成功后对话框自动关闭；失败或取消时保留对话框并显示原因，可一键重试",
+        "已提交 CL 支持整单拉取：展开的 CL 文件列表与 CL 详情新增「拉取到此 CL 版本…」，并提示之后的提交会被回退、该 CL 中删除的文件会从本地移除",
+        "同步风险提示更明确：强制同步、按版本或按 CL 固定同步都会提示可能覆盖本地未提交修改",
+        "Ctrl+G（macOS 上 Cmd+G）改为跳转到已提交 CL：打开已提交页并聚焦「转到 CL」输入框；Alt+L 仍聚焦地址栏，Diff 视图内 Ctrl+G 仍用于跳行",
+        "右键菜单去重：本地目录与 Depot 目录菜单移除重复的「浏览此目录」，「在文件页中显示」保留为唯一入口",
+        "操作结果判定更准：还原、撤销、重命名/移动与同步完成后补充核对服务器已打开文件列表，被还原的本地新增文件、被同步删除的文件、刚移动的文件不再误报「结果未确认」，也不再挡住下一次写操作",
+        "同步部分完成时按真实结果上报：p4 因文件已打开或需要 resolve 跳过时显示「部分完成」并提示先 resolve 或还原，不再整体报失败；revert -a 有意保留的文件标注为「已保留」",
+        "内部：同步确认契约新增 skipPreflight（风险确认 + 计数预览），host 与 mock 对齐；新增本地化文案与测试",
+      ],
+      en: [
+        "Sync now asks for confirmation once: Get Latest above the threshold, Get Revision and force re-sync no longer show a server preview first; a running sync shows the processed file count and percentage, ticks elapsed time every second, and can be stopped",
+        "The sync dialog closes itself on success; failures and cancellations keep it open with the reason and a Retry button",
+        "Submitted changelists can be fetched as a whole: an expanded CL's file list and the CL details dialog offer Get this CL revision…, warning that later submissions are reverted and files deleted in that CL are removed locally",
+        "Clearer sync risk notices: force sync and revision- or CL-pinned sync warn that local uncommitted changes may be overwritten",
+        "Ctrl+G (Cmd+G on macOS) now jumps to Submitted CL, opening the Submitted page and focusing the Go to CL field; Alt+L still focuses the address bar and Ctrl+G inside the Diff view still jumps to a line",
+        "Context menu cleanup: the duplicate Browse folder entry is gone from the local and Depot directory menus; Show in Files remains the single entry",
+        "Post-action verification is more accurate: revert, undo, rename/move and sync cross-check the server's opened-file list, so a reverted locally added file, a file the sync removed, or a freshly moved pending file no longer reports unconfirmed or blocks the next action",
+        "Partially completed syncs are reported as such: when p4 skips files that are already opened or need a resolve, the result is partial with a resolve-or-revert hint instead of a failure; files that revert -a deliberately keeps open are reported as retained",
+        "Internal: the sync confirmation contract gains skipPreflight (risk confirmation plus a counting preview) across host and mock, with new localized strings and tests",
+      ],
+    },
+  },
+  {
     version: "0.1.13",
     date: "2026-11-10",
     notes: {
