@@ -1997,6 +1997,7 @@ mod tests {
                     parallel_threads: None,
                     operation_id: None,
                     expected_files: None,
+                    skip_preflight: false,
                 },
                 None,
             )
@@ -8512,6 +8513,7 @@ mod tests {
             parallel_threads: None,
             operation_id: None,
             expected_files: None,
+            skip_preflight: false,
         }
     }
 

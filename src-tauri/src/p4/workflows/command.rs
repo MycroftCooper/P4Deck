@@ -32,6 +32,12 @@ pub fn fstat(paths: &[String], shelved_change: Option<i64>) -> Result<Invocation
     scoped("fstat", args, paths)
 }
 
+/// Opened-state evidence for exact paths; `-Mj` records which paths are still
+/// open and reports the rest as "file(s) not opened on this client".
+pub fn opened(paths: &[String]) -> Result<Invocation, String> {
+    scoped("opened", Vec::new(), paths)
+}
+
 pub fn describe_shelf(change: i64) -> Result<Invocation, String> {
     ensure_numbered(change)?;
     Ok(Invocation {

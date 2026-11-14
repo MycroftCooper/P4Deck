@@ -2200,6 +2200,10 @@ pub struct SyncPreviewRequest {
     /// for progress reporting; older callers omit it.
     #[serde(default)]
     pub expected_files: Option<usize>,
+    /// The caller only needs the confirmation token: skip `p4 sync -n` and the
+    /// fstat inspection, report the target scope as a risk warning instead.
+    #[serde(default)]
+    pub skip_preflight: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -2266,6 +2270,10 @@ pub struct SyncTargetSnapshot {
     pub force: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parallel_threads: Option<u8>,
+    /// Persisted in the confirmation target so the confirm re-check uses the
+    /// same skipped-preflight mode as the review the user acknowledged.
+    #[serde(default)]
+    pub skip_preflight: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

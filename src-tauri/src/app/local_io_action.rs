@@ -10,6 +10,7 @@
 //!   receipts are never replayed (caller must query `workflow_action_lookup`)
 //! - per-file authority comes from fstat facts, never from `affectedPaths`
 //! - unknown stays unknown (no automatic retry, no "not applied" claim)
+use crate::app::action_evidence::{self, OpenedEvidence};
 use crate::domain::*;
 use crate::p4::runner::P4Runner;
 use crate::p4::workflows::{command as workflow_command, parser};
@@ -20,6 +21,29 @@ pub const KIND_SYNC_REVISION: &str = "syncRevision";
 pub const KIND_UNDO_CHANGE: &str = "undoChange";
 
 const RECHECK_FIELDS: &str = "depotFile,clientFile,action,change,haveRev,headRev,fileType,digest";
+
+/// Bounded `p4 fstat` recheck. `read_failed` says the read itself is
+/// untrustworthy (runner/transport event, a `severity >= 3` diagnostic, or a
+/// fatal exit status); a trustworthy read with no fact for a path means the path
+/// has no depot record (a locally added or just-removed file), which is
+/// evidence, not a read failure. A benign `no such file(s)` answer is a
+/// `severity: 2` diagnostic that may still exit non-zero, so the exit code alone
+/// never decides this.
+pub struct RecheckFacts {
+    pub facts: Vec<parser::WorkflowFileFact>,
+    pub read_failed: bool,
+}
+
+impl Default for RecheckFacts {
+    /// No recheck was performed: a value that was never read must not be
+    /// treated as evidence.
+    fn default() -> Self {
+        Self {
+            facts: Vec::new(),
+            read_failed: true,
+        }
+    }
+}
 
 /// Response for the three migrated confirm commands. The legacy typed result is
 /// preserved verbatim under `legacy` so FE can migrate incrementally.
@@ -61,7 +85,7 @@ pub async fn recheck_facts(
     depot_paths: &[String],
     operation_id: &str,
     app: Option<&tauri::AppHandle>,
-) -> Result<Vec<parser::WorkflowFileFact>, String> {
+) -> Result<RecheckFacts, String> {
     let mut paths = depot_paths.to_vec();
     paths.sort();
     paths.dedup();
@@ -88,7 +112,10 @@ pub async fn recheck_facts(
         .run_with_progress(request, app, None, query.argument_input)
         .await
         .map_err(|error| error.to_string())?;
-    Ok(parser::file_facts(&result.events))
+    Ok(RecheckFacts {
+        read_failed: action_evidence::read_failed(&result),
+        facts: parser::file_facts(&result.events),
+    })
 }
 
 fn legacy_value<T: Serialize>(value: &T) -> serde_json::Value {
@@ -146,6 +173,7 @@ pub fn project_rename(
     operation_id: Option<String>,
     legacy: &RenameMoveResult,
     facts: &[parser::WorkflowFileFact],
+    opened: &OpenedEvidence,
     source_depot: &str,
     target_depot: &str,
 ) -> LocalIoActionResult {
@@ -155,14 +183,21 @@ pub fn project_rename(
     if operation_id.is_some() {
         let target_fact = facts.iter().find(|fact| fact.depot_path == target_depot);
         let source_fact = facts.iter().find(|fact| fact.depot_path == source_depot);
-        let target_state = if legacy_ok && target_fact.is_some() {
+        // A moved target is a pending branch/move-add that has no depot record
+        // yet; the opened list proves it exists, a bare fstat would call it
+        // unknown and block the next write.
+        let target_state = if legacy_ok
+            && (target_fact.is_some()
+                || action_evidence::opened_with(opened, target_depot, &["move", "add", "branch"]))
+        {
             WorkflowFileState::Succeeded
         } else {
             WorkflowFileState::Unknown
         };
         let source_state = if legacy_ok
-            && source_fact
+            && (source_fact
                 .is_some_and(|fact| fact.action.contains("move") || fact.action.contains("delete"))
+                || action_evidence::opened_with(opened, source_depot, &["move", "delete"]))
         {
             WorkflowFileState::Succeeded
         } else {
@@ -240,7 +275,8 @@ fn sync_fact_proves(fact: &parser::WorkflowFileFact, proof: SyncRevisionProof) -
 pub fn project_sync(
     operation_id: Option<String>,
     legacy: &SyncResult,
-    facts: &[parser::WorkflowFileFact],
+    facts: &RecheckFacts,
+    opened: &OpenedEvidence,
     paths: &[String],
     proof: SyncRevisionProof,
 ) -> LocalIoActionResult {
@@ -249,15 +285,25 @@ pub fn project_sync(
     if operation_id.is_some() {
         for path in paths {
             let matching: Vec<&parser::WorkflowFileFact> = facts
+                .facts
                 .iter()
                 .filter(|fact| fact.depot_path == *path)
                 .collect();
+            // A file removed by the sync has no fstat record at the requested
+            // revision, and a real `p4 opened <path>` answers it with empty
+            // output: that successful empty answer proves the path is no longer
+            // open, so a clean sync that deleted it is success, not unknown.
+            // The proof is only usable when the fstat read itself was
+            // trustworthy and had no record for the path: a stale have/head fact
+            // means the sync did not take effect and must stay Unknown.
             let state = if matches!(
                 legacy_outcome,
                 WorkflowOutcome::Succeeded | WorkflowOutcome::Partial
             ) && proof != SyncRevisionProof::Unprovable
-                && matching.len() == 1
-                && sync_fact_proves(matching[0], proof)
+                && ((matching.len() == 1 && sync_fact_proves(matching[0], proof))
+                    || (matching.is_empty()
+                        && !facts.read_failed
+                        && action_evidence::proves_unopened(opened, paths, path)))
             {
                 WorkflowFileState::Succeeded
             } else {
@@ -307,6 +353,7 @@ pub fn project_undo(
     operation_id: Option<String>,
     legacy: Result<OperationResult, String>,
     facts: &[parser::WorkflowFileFact],
+    opened: &OpenedEvidence,
     depot_path: &str,
     changelist_id: i64,
 ) -> LocalIoActionResult {
@@ -338,9 +385,25 @@ pub fn project_undo(
             .iter()
             .filter(|fact| fact.depot_path == depot_path)
             .collect();
+        // Undo can restore a deleted file as a pending add/branch, which fstat
+        // cannot see; the opened list carries the same action/change evidence.
+        // An untrustworthy opened read (connection failure, real error
+        // diagnostic) proves nothing, and an empty answer says only that the
+        // path is not open - not that undo reopened it in the target CL.
+        let in_target_change = |fact: &parser::WorkflowFileFact| {
+            if changelist_id == 0 {
+                fact.change_id.is_none()
+            } else {
+                fact.change_id == Some(changelist_id)
+            }
+        };
         let state = if legacy_outcome == WorkflowOutcome::Succeeded
-            && matching.len() == 1
-            && matching[0].change_id == Some(changelist_id)
+            && ((matching.len() == 1 && in_target_change(matching[0]))
+                || (!opened.read_failed
+                    && opened
+                        .opened
+                        .iter()
+                        .any(|fact| fact.depot_path == depot_path && in_target_change(fact))))
         {
             WorkflowFileState::Succeeded
         } else {
@@ -437,11 +500,93 @@ mod tests {
         }
     }
 
+    fn event(kind: crate::domain::EventKind, message: &str) -> OperationEvent {
+        OperationEvent {
+            operation_id: "fixture".into(),
+            kind,
+            message: Some(message.into()),
+            progress: None,
+            progress_current: None,
+            progress_total: None,
+            timestamp: String::new(),
+        }
+    }
+
+    /// One real `p4 -ztag -Mj` run: JSON records on stdout, plus stderr lines
+    /// (connection/transport failures are the only diagnostics that leave
+    /// stdout).
+    fn stream(rows: Vec<serde_json::Value>, stderr: &[&str], exit_code: i32) -> OperationResult {
+        let mut events = rows
+            .into_iter()
+            .map(|row| event(crate::domain::EventKind::Stdout, &row.to_string()))
+            .collect::<Vec<_>>();
+        events.extend(
+            stderr
+                .iter()
+                .map(|line| event(crate::domain::EventKind::Stderr, line)),
+        );
+        op(events, exit_code)
+    }
+
+    /// Real `-ztag -Mj` benign diagnostic for a path with no depot record:
+    /// single-line JSON on stdout, no `code` key, `severity: 2`,
+    /// `severityformat:"warning"` (measured on P4/NTX64 2026.1).
+    fn no_such_file(path: &str) -> serde_json::Value {
+        serde_json::json!({
+            "code0": 554768759,
+            "data": format!("{path} - no such file(s).\n"),
+            "fmt0": "[%argc% - no|No] such file(s).",
+            "generic": 17,
+            "severity": 2,
+            "severityformat": "warning",
+        })
+    }
+
+    /// Real `-ztag -Mj` failure diagnostic (auth/permission): stdout JSON with
+    /// `severity: 3` and no `code` key.
+    fn severity_error(message: &str) -> serde_json::Value {
+        serde_json::json!({
+            "code0": 554768759,
+            "data": format!("{message}\n"),
+            "fmt0": "%msg%",
+            "generic": 17,
+            "severity": 3,
+            "severityformat": "error",
+        })
+    }
+
+    fn recheck(facts: Vec<parser::WorkflowFileFact>) -> RecheckFacts {
+        RecheckFacts {
+            facts,
+            read_failed: false,
+        }
+    }
+
+    /// The production recheck path: facts and read trust are both derived from
+    /// the same real result, exactly as `recheck_facts` does it.
+    fn recheck_from(result: &OperationResult) -> RecheckFacts {
+        RecheckFacts {
+            facts: parser::file_facts(&result.events),
+            read_failed: action_evidence::read_failed(result),
+        }
+    }
+
+    fn opened_evidence(rows: Vec<serde_json::Value>) -> OpenedEvidence {
+        action_evidence::opened_evidence(&stream(rows, &[], 0))
+    }
+
     #[test]
     fn rename_requires_facts_and_never_claims_success_from_result_alone() {
         let id = Some("11111111-1111-4111-8111-111111111111".to_owned());
         let legacy = rename_legacy("succeeded");
-        let none = project_rename(id.clone(), &legacy, &[], "//fixture/src", "//fixture/dst");
+        let none = project_rename(
+            id.clone(),
+            &legacy,
+            &[],
+            &OpenedEvidence::default(),
+            "//fixture/src",
+            "//fixture/dst",
+        );
         assert_eq!(none.outcome, WorkflowOutcome::Unknown);
         assert_eq!(none.state, "unknown");
         assert!(none
@@ -453,6 +598,7 @@ mod tests {
             id.clone(),
             &legacy,
             &[fact("//fixture/dst", "move/add", Some(41), None, None)],
+            &OpenedEvidence::default(),
             "//fixture/src",
             "//fixture/dst",
         );
@@ -465,6 +611,7 @@ mod tests {
                 fact("//fixture/dst", "move/add", Some(41), None, None),
                 fact("//fixture/src", "move/delete", Some(41), None, None),
             ],
+            &OpenedEvidence::default(),
             "//fixture/src",
             "//fixture/dst",
         );
@@ -479,6 +626,7 @@ mod tests {
             Some("11111111-1111-4111-8111-111111111111".into()),
             &rename_legacy("rejected"),
             &[],
+            &OpenedEvidence::default(),
             "//fixture/src",
             "//fixture/dst",
         );
@@ -497,7 +645,8 @@ mod tests {
         let proven = project_sync(
             id,
             &legacy,
-            &[fact("//fixture/a", "", None, Some(7), Some(7))],
+            &recheck(vec![fact("//fixture/a", "", None, Some(7), Some(7))]),
+            &OpenedEvidence::default(),
             &paths,
             SyncRevisionProof::Head,
         );
@@ -508,7 +657,14 @@ mod tests {
         let opened = project_sync(
             None,
             &legacy,
-            &[fact("//fixture/a", "edit", Some(41), Some(7), Some(7))],
+            &recheck(vec![fact(
+                "//fixture/a",
+                "edit",
+                Some(41),
+                Some(7),
+                Some(7),
+            )]),
+            &OpenedEvidence::default(),
             &paths,
             SyncRevisionProof::Head,
         );
@@ -519,7 +675,8 @@ mod tests {
         let mismatched = project_sync(
             Some("11111111-1111-4111-8111-111111111111".into()),
             &legacy,
-            &[fact("//fixture/a", "", None, Some(6), Some(7))],
+            &recheck(vec![fact("//fixture/a", "", None, Some(6), Some(7))]),
+            &OpenedEvidence::default(),
             &["//fixture/a".to_owned()],
             SyncRevisionProof::Revision(7),
         );
@@ -534,6 +691,7 @@ mod tests {
             id,
             Ok(clean.clone()),
             &[fact("//fixture/a", "edit", Some(41), None, None)],
+            &OpenedEvidence::default(),
             "//fixture/a",
             41,
         );
@@ -542,6 +700,7 @@ mod tests {
             Some("11111111-1111-4111-8111-111111111111".into()),
             Ok(clean),
             &[fact("//fixture/a", "edit", Some(42), None, None)],
+            &OpenedEvidence::default(),
             "//fixture/a",
             41,
         );
@@ -550,10 +709,196 @@ mod tests {
             Some("11111111-1111-4111-8111-111111111111".into()),
             Err("timeout".into()),
             &[],
+            &OpenedEvidence::default(),
             "//fixture/a",
             41,
         );
         assert_eq!(failed.outcome, WorkflowOutcome::Unknown);
         assert_eq!(failed.state, "unknown");
+    }
+
+    #[test]
+    fn rename_accepts_a_pending_move_target_from_the_opened_list() {
+        // A moved target is a pending move/add with no depot record: fstat has no
+        // fact, and treating that as unknown used to block the next write.
+        let opened = opened_evidence(vec![
+            serde_json::json!({"depotFile": "//fixture/dst", "action": "move/add", "change": "41"}),
+            serde_json::json!({"depotFile": "//fixture/src", "action": "move/delete", "change": "41"}),
+        ]);
+        let result = project_rename(
+            Some("11111111-1111-4111-8111-111111111111".into()),
+            &rename_legacy("succeeded"),
+            &[],
+            &opened,
+            "//fixture/src",
+            "//fixture/dst",
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded);
+        assert!(result
+            .files
+            .iter()
+            .all(|file| file.state == WorkflowFileState::Succeeded));
+    }
+
+    #[test]
+    fn sync_accepts_a_file_removed_at_the_requested_revision() {
+        // Measured: a real `p4 opened <path>` answers a path that is not open
+        // with empty output and exit 0. That successful empty answer - not a
+        // "not opened" message - is what proves the sync removed the file.
+        let opened = opened_evidence(vec![]);
+        assert!(!opened.read_failed);
+        let result = project_sync(
+            Some("11111111-1111-4111-8111-111111111111".into()),
+            &sync_legacy("succeeded"),
+            &recheck(vec![]),
+            &opened,
+            &["//fixture/gone".to_owned()],
+            SyncRevisionProof::Head,
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded);
+        assert_eq!(result.files[0].state, WorkflowFileState::Succeeded);
+    }
+
+    #[test]
+    fn sync_trusts_a_benign_fstat_answer_and_an_empty_opened_answer() {
+        // Regression for the silent failure this task fixes: the fstat gap answer
+        // is a benign severity-2 record (`severityformat:"warning"`) and the
+        // opened answer is empty. Neither may be read as a failed read, whatever
+        // exit status p4 reports for them (0 and 1 both occur in the field).
+        for exit_code in [0, 1] {
+            let facts = recheck_from(&stream(
+                vec![no_such_file("//fixture/gone")],
+                &[],
+                exit_code,
+            ));
+            assert!(!facts.read_failed, "benign answer, exit {exit_code}");
+            assert!(facts.facts.is_empty());
+            let opened = action_evidence::opened_evidence(&stream(vec![], &[], exit_code));
+            assert!(!opened.read_failed);
+            let result = project_sync(
+                Some("11111111-1111-4111-8111-111111111111".into()),
+                &sync_legacy("succeeded"),
+                &facts,
+                &opened,
+                &["//fixture/gone".to_owned()],
+                SyncRevisionProof::Head,
+            );
+            assert_eq!(
+                result.outcome,
+                WorkflowOutcome::Succeeded,
+                "exit {exit_code} is a benign answer, not a read failure"
+            );
+            assert_eq!(result.files[0].state, WorkflowFileState::Succeeded);
+        }
+    }
+
+    #[test]
+    fn sync_read_failures_never_project_success() {
+        let opened = opened_evidence(vec![]);
+        let paths = vec!["//fixture/gone".to_owned()];
+        let id = Some("11111111-1111-4111-8111-111111111111".to_owned());
+        let failures = [
+            // Connection failure: the only diagnostics that reach stderr.
+            recheck_from(&stream(
+                vec![],
+                &["Connect to server failed; check $P4PORT."],
+                1,
+            )),
+            // Real auth failure: a severity-3 record on stdout.
+            recheck_from(&stream(
+                vec![severity_error("Access for user 'fixture' denied.")],
+                &[],
+                1,
+            )),
+            // Fatal exit status with no diagnostic at all.
+            recheck_from(&stream(vec![], &[], 2)),
+        ];
+        for facts in &failures {
+            assert!(facts.read_failed);
+            let result = project_sync(
+                id.clone(),
+                &sync_legacy("succeeded"),
+                facts,
+                &opened,
+                &paths,
+                SyncRevisionProof::Head,
+            );
+            assert_eq!(result.outcome, WorkflowOutcome::Unknown);
+            assert_eq!(result.files[0].state, WorkflowFileState::Unknown);
+        }
+        // A failed opened read is not evidence either, even with a clean fstat
+        // read: an unread answer must not be mistaken for an empty one.
+        let failed_opened = action_evidence::opened_evidence(&stream(
+            vec![],
+            &["Connect to server failed; check $P4PORT."],
+            1,
+        ));
+        assert!(failed_opened.read_failed);
+        let result = project_sync(
+            id,
+            &sync_legacy("succeeded"),
+            &recheck(vec![]),
+            &failed_opened,
+            &paths,
+            SyncRevisionProof::Head,
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(result.files[0].state, WorkflowFileState::Unknown);
+    }
+
+    #[test]
+    fn sync_does_not_treat_a_still_open_path_as_synced() {
+        // An opened record refutes the "no record means removed" proof.
+        let opened = opened_evidence(vec![serde_json::json!({
+            "depotFile": "//fixture/gone",
+            "action": "edit",
+            "change": "41",
+        })]);
+        let result = project_sync(
+            Some("11111111-1111-4111-8111-111111111111".into()),
+            &sync_legacy("succeeded"),
+            &recheck(vec![]),
+            &opened,
+            &["//fixture/gone".to_owned()],
+            SyncRevisionProof::Head,
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(result.files[0].state, WorkflowFileState::Unknown);
+    }
+
+    #[test]
+    fn sync_keeps_a_stale_revision_unknown_even_when_the_file_is_not_open() {
+        // "Not open" must never mask a have/head mismatch: the sync did not take
+        // effect, so the stale fact - not the opened answer - decides.
+        let opened = opened_evidence(vec![]);
+        let result = project_sync(
+            Some("11111111-1111-4111-8111-111111111111".into()),
+            &sync_legacy("succeeded"),
+            &recheck(vec![fact("//fixture/a", "", None, Some(6), Some(7))]),
+            &opened,
+            &["//fixture/a".to_owned()],
+            SyncRevisionProof::Head,
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Unknown);
+        assert_eq!(result.files[0].state, WorkflowFileState::Unknown);
+    }
+
+    #[test]
+    fn undo_accepts_a_reopened_path_from_the_opened_list() {
+        let opened = opened_evidence(vec![serde_json::json!({
+            "depotFile": "//fixture/a",
+            "action": "edit",
+            "change": "41",
+        })]);
+        let result = project_undo(
+            Some("11111111-1111-4111-8111-111111111111".into()),
+            Ok(op(vec![], 0)),
+            &[],
+            &opened,
+            "//fixture/a",
+            41,
+        );
+        assert_eq!(result.outcome, WorkflowOutcome::Succeeded);
+        assert_eq!(result.files[0].state, WorkflowFileState::Succeeded);
     }
 }
