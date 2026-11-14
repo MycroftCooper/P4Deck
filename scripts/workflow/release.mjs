@@ -8,7 +8,7 @@
 //   - 只能在 dev 上发起（--from 可覆盖）；工作树必须干净（--allow-dirty 可覆盖）
 //   - 必须有通过且不早于最后一次 dev 提交的 ci:quick 证据（--skip-gate 可覆盖）
 //   - release 是发布线（主分支）：只接受本次 merge（--no-ff），不直接提交
-//   - --apply 后自行 git push origin dev release --follow-tags
+//   - 不推送：--apply 只做本地 merge + tag，需自行 git push origin dev release --follow-tags
 import { spawnSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
