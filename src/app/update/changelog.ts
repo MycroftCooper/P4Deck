@@ -52,7 +52,7 @@ export const CHANGELOG: readonly ChangelogRelease[] = [
     date: "2026-11-14",
     notes: {
       zh: [
-        "同步改为一次确认：获取最新（超过阈值）、获取指定版本与强制重新同步不再先展示服务器预览，确认后直接执行；执行中显示已处理文件数与百分比，每秒刷新已用时，可随时停止",
+        "同步改为一次确认：确认框打开即显示将影响的文件数与风险提示；获取最新（超过阈值）、获取指定版本与强制重新同步不再先展示服务器预览，确认后直接执行；执行中显示已处理文件数与百分比，每秒刷新已用时，可随时停止",
         "同步成功后对话框自动关闭；失败或取消时保留对话框并显示原因，可一键重试",
         "已提交 CL 支持整单拉取：展开的 CL 文件列表与 CL 详情新增「拉取到此 CL 版本…」，并提示之后的提交会被回退、该 CL 中删除的文件会从本地移除",
         "同步风险提示更明确：强制同步、按版本或按 CL 固定同步都会提示可能覆盖本地未提交修改",
@@ -63,7 +63,7 @@ export const CHANGELOG: readonly ChangelogRelease[] = [
         "内部：同步确认契约新增 skipPreflight（风险确认 + 计数预览），host 与 mock 对齐；新增本地化文案与测试",
       ],
       en: [
-        "Sync now asks for confirmation once: Get Latest above the threshold, Get Revision and force re-sync no longer show a server preview first; a running sync shows the processed file count and percentage, ticks elapsed time every second, and can be stopped",
+        "Sync now asks for confirmation once: the confirmation shows the affected file count and risk notices as it opens; Get Latest above the threshold, Get Revision and force re-sync no longer show a server preview first, and a running sync shows the processed file count and percentage, ticks elapsed time every second, and can be stopped",
         "The sync dialog closes itself on success; failures and cancellations keep it open with the reason and a Retry button",
         "Submitted changelists can be fetched as a whole: an expanded CL's file list and the CL details dialog offer Get this CL revision…, warning that later submissions are reverted and files deleted in that CL are removed locally",
         "Clearer sync risk notices: force sync and revision- or CL-pinned sync warn that local uncommitted changes may be overwritten",
