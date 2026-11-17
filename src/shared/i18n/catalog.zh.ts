@@ -3069,6 +3069,7 @@ export const zh = {
   "shell.updated": "更新于",
   "shell.waiting.for.system.dialog": "等待系统窗口",
   "shell.window.action.failed": "窗控操作失败",
+  "shell.window.controls": "窗口控制",
   "swarm.configure.swarm": "配置 Swarm…",
   "swarm.open.in.swarm": "在 Swarm 中打开",
   "swarm.swarm.was.not.opened.safely":

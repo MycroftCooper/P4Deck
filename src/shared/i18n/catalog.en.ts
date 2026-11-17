@@ -3271,6 +3271,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.updated": "Updated",
   "shell.waiting.for.system.dialog": "Waiting for system dialog",
   "shell.window.action.failed": "Window action failed",
+  "shell.window.controls": "Window controls",
   "swarm.configure.swarm": "Configure Swarm…",
   "swarm.open.in.swarm": "Open in Swarm",
   "swarm.swarm.was.not.opened.safely":
