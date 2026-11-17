@@ -279,7 +279,18 @@ try {
   const saved = JSON.parse(
     localStorage.getItem("p4deck.mockConnection") ?? "null",
   );
-  if (saved?.server && saved?.user && saved?.client) mockContext = saved;
+  if (saved?.server && saved?.user && saved?.client) {
+    mockContext = saved;
+    // Keep the seeded active profile in step with the saved connection. The
+    // setup gate compares the active profile's context with the runtime context,
+    // so a saved connection that only replaced the context looked like "no active
+    // connection" and blocked the app behind the first-run guide.
+    mockProfiles = mockProfiles.map((profile) =>
+      profile.id === mockActiveProfileId
+        ? { ...profile, context: { ...saved } }
+        : profile,
+    );
+  }
 } catch {
   /* Defaults. */
 }
