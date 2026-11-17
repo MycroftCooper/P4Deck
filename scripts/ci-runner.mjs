@@ -161,6 +161,25 @@ const nodeStep = (name, kind, script, args = [], group = "web") => ({
   args: [script, ...args],
 });
 
+const PLAYWRIGHT_CLI = "node_modules/@playwright/test/cli.js";
+/**
+ * Playwright owns its own web server (`pnpm dev` on 127.0.0.1:1420) and reuses a
+ * running one outside CI, so these steps need no server management here.
+ */
+const browserStep = (name, targets, extraArgs = [], group = "serial") => ({
+  name,
+  kind: "playwright",
+  group,
+  command: process.execPath,
+  args: [
+    PLAYWRIGHT_CLI,
+    "test",
+    ...(Array.isArray(targets) ? targets : [targets]),
+    "--reporter=line",
+    ...extraArgs,
+  ],
+});
+
 const childEnvironment = { ...process.env };
 for (const secretName of [
   "P4PASSWD",
@@ -209,6 +228,18 @@ const webSteps = [
   pnpmStep("web-format", "prettier", "format:check", "web"),
   pnpmStep("web-check", "tsc", "check:web", "web"),
   pnpmStep("web-test", "vitest", "test:web:ci", "web"),
+  // A small smoke slice runs on every quick gate so a broken shell is caught
+  // before the freeze; the full suite runs on the delivery gate below.
+  browserStep(
+    "browser-smoke",
+    [
+      "tests/browser/page-smoke.spec.ts",
+      "tests/browser/workspace-switcher.spec.ts",
+      "tests/browser/sidebar-resize.spec.ts",
+    ],
+    ["--workers=1"],
+    "web",
+  ),
 ];
 
 const rustSteps = [
@@ -280,6 +311,9 @@ if (mode === "local") {
       [],
       "serial",
     ),
+    // The whole browser suite runs on the delivery gate: it is the only check
+    // that sees a real DOM, and leaving it out is how it rotted for eleven days.
+    browserStep("browser-e2e", "tests/browser", ["--workers=2"], "serial"),
     pnpmStep("web-performance", "perf", "test:perf", "serial"),
     pnpmStep("backend-performance", "perf", "test:perf:backend", "serial"),
   ];
