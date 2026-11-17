@@ -1,4 +1,4 @@
-import { historyDiffTarget } from "./commandPolicy";
+import { fileComparePair, historyDiffTarget } from "./commandPolicy";
 import { expect, it } from "vitest";
 import type { WorkspaceNode } from "../../shared/contracts";
 import {
@@ -364,4 +364,62 @@ it("routes exactly two historical revisions in ascending order and disables muta
       commandReason("diff", { ...target, revisions }, false, false, true),
     ).toBeTruthy();
   }
+});
+
+const compareNode = (
+  depotPath: string | undefined,
+  revision: number | undefined,
+  kind: WorkspaceNode["kind"] = "file",
+): WorkspaceNode => ({
+  id: depotPath ?? "?",
+  name: (depotPath ?? "?").split("/").pop() ?? "?",
+  absolutePath: "/work/file",
+  relativePath: "file",
+  depotPath,
+  kind,
+  state: "controlled",
+  headRevision: revision,
+});
+
+it("compares exactly two deposited files and keeps the sides stable", () => {
+  const b = compareNode("//depot/b.txt", 3);
+  const a = compareNode("//depot/a.txt", 17);
+  const target: CommandTarget = { type: "file", node: b, nodes: [b, a] };
+  expect(fileComparePair(target)).toEqual({
+    left: { path: "//depot/a.txt", revision: 17 },
+    right: { path: "//depot/b.txt", revision: 3 },
+  });
+  expect(commandReason("diff", target, false, false, true)).toBeUndefined();
+  // Reversing the selection order must not swap the displayed sides.
+  expect(fileComparePair({ type: "file", node: a, nodes: [a, b] })).toEqual(
+    fileComparePair(target),
+  );
+});
+
+it("refuses a two-file comparison without exact depot revisions", () => {
+  const good = compareNode("//depot/a.txt", 17);
+  const cases: WorkspaceNode[][] = [
+    [good, compareNode("//depot/b.txt", undefined)],
+    [good, compareNode("local/relative.txt", 3)],
+    [good, compareNode("//depot/b#3", 3)],
+    [good, compareNode("//depot/...", 3)],
+    [good, compareNode("//depot/b.txt", 0)],
+    [good, compareNode("//depot/a.txt", 17)],
+    [good, compareNode("//depot/b.txt", 3, "directory")],
+    [good, compareNode("//depot/b.txt", 3), compareNode("//depot/c.txt", 4)],
+  ];
+  for (const nodes of cases) {
+    const target: CommandTarget = { type: "file", node: nodes[0], nodes };
+    expect(fileComparePair(target)).toBeUndefined();
+    expect(commandReason("diff", target, false, false, true)).toBeTruthy();
+  }
+  expect(
+    commandReason(
+      "history",
+      { type: "file", node: good, nodes: [good, good, good] },
+      false,
+      false,
+      true,
+    ),
+  ).toBeTruthy();
 });

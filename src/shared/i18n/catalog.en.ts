@@ -1614,6 +1614,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.select.a.nonempty.numbered.pending.cl":
     "Select a nonempty numbered pending CL (submits the whole CL)",
   "shell.select.a.file.or.folder.first": "Select a file or folder first",
+  "shell.compare.needs.two.deposited.files":
+    "Comparing needs exactly two deposited files, each with a depot path and revision",
   "shell.select.a.single.target.for.this":
     "Select a single target for this operation",
   "shell.target.path.is.unknown": "Target path is unknown",

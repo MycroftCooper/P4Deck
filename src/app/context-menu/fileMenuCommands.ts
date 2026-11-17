@@ -49,4 +49,5 @@ export const fileMenuCommands: Readonly<Record<string, CommandId>> = {
   "还原（含递归）…": "revert",
   "标记删除所选文件…": "delete",
   "还原所选文件…": "revert",
+  "比较这两个文件…": "diff",
 };

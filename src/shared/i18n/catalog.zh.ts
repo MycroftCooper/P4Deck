@@ -1491,6 +1491,8 @@ export const zh = {
   "shell.select.a.nonempty.numbered.pending.cl":
     "请选择非空、已编号的待提交 CL（提交整个 CL）",
   "shell.select.a.file.or.folder.first": "请先选择文件或目录",
+  "shell.compare.needs.two.deposited.files":
+    "比较需要恰好两个已入库文件（各自有 Depot 路径和修订号）",
   "shell.select.a.single.target.for.this": "此操作需要仅选择一个目标",
   "shell.target.path.is.unknown": "目标路径尚未确定",
   "shell.lock.explicit.files": "锁操作仅支持显式文件，不递归目录",

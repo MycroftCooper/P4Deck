@@ -174,3 +174,15 @@ it("translates every menu label in the inventory without Chinese fallback", () =
         /[\u3400-\u9fff]/,
       );
 });
+
+it("offers the two-file comparison inline instead of in the pending group", () => {
+  expect(fileMenuCommands["比较这两个文件…"]).toBe("diff");
+  const items = buildMenu("F07", { "比较这两个文件…": { run: () => {} } });
+  expect(
+    items.some((item) => item.label === "比较这两个文件…" && item.run),
+  ).toBe(true);
+  const advanced = items.find((item) => item.label === "更多操作（待接入）");
+  expect(
+    advanced?.children?.some((item) => item.label === "比较这两个文件…"),
+  ).toBe(false);
+});

@@ -558,6 +558,13 @@ function ConnectedApp({
                     onHistoryDiff={(path, left, right) =>
                       dockRef.current?.open("diff", path, true, { left, right })
                     }
+                    onCompareFiles={(left, right) =>
+                      dockRef.current?.open("diff", left.path, true, {
+                        left: left.revision,
+                        right: right.revision,
+                        rightPath: right.path,
+                      })
+                    }
                     onReview={openReview}
                   />
                   {error && (

@@ -62,6 +62,43 @@ export function historyDiffTarget(target: CommandTarget) {
   const [left, right] = [...target.revisions].sort((a, b) => a - b);
   return { path: target.path, left, right };
 }
+/**
+ * Two selected files can be compared side by side when both have an exact depot
+ * identity and a positive revision. The host rejects anything else explicitly
+ * (`DiffRequest::validate_explicit_pair`), so the same rules are checked here and
+ * a rejected pair gets a reason instead of a failed request.
+ */
+export function fileComparePair(target: CommandTarget) {
+  if (target.type !== "file") return undefined;
+  const nodes = target.nodes ?? [target.node];
+  if (nodes.length !== 2) return undefined;
+  const sides = nodes.map((node) => {
+    const revision = node.headRevision ?? node.revision;
+    const path = node.depotPath;
+    if (
+      node.kind !== "file" ||
+      node.state === "missing" ||
+      !path ||
+      path.length <= 2 ||
+      !path.startsWith("//") ||
+      /[#@*\r\n\0]/.test(path) ||
+      path.includes("...") ||
+      !Number.isSafeInteger(revision) ||
+      !revision ||
+      revision <= 0
+    )
+      return undefined;
+    return { path, revision: revision as number };
+  });
+  const [first, second] = sides;
+  if (!first || !second) return undefined;
+  if (first.path === second.path && first.revision === second.revision)
+    return undefined;
+  // Keep the sides stable so the same pair always opens the same way round.
+  return first.path <= second.path
+    ? { left: first, right: second }
+    : { left: second, right: first };
+}
 /** Identity for stale-response guards; derived from the explicit execution snapshot. */
 export function commandTargetKey(target: CommandTarget): string {
   if (target.type === "history")
@@ -118,10 +155,18 @@ export function commandReason(
   const { node } = target;
   const nodes = target.nodes ?? [node];
   if (nodes.length > 1) {
+    // A diff of exactly two deposited files is a supported comparison, not a
+    // multi-target write; everything else still needs a single target.
+    if (id === "diff")
+      return fileComparePair(target)
+        ? undefined
+        : tFor(
+            zh ? "zh-CN" : "en-US",
+            "shell.compare.needs.two.deposited.files",
+          );
     if (
       [
         "preview",
-        "diff",
         "history",
         "revgraph",
         "reveal",
