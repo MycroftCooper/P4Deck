@@ -871,6 +871,44 @@ export const mockBackend: Backend = {
       client: mockContext.client,
     };
   },
+  async confirmRevertAction(request, connection) {
+    // Same contract as the host: the connection snapshot must still match the
+    // active one, and the result reports one entry per requested path.
+    if (
+      !connection ||
+      connection.profileId !== mockActiveProfileId ||
+      connection.generation !== mockContextGeneration.toString()
+    )
+      throw new Error("connectionChanged");
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const paths = [...new Set(request.paths ?? [])].sort();
+    emitMockLog(
+      "info",
+      "gui",
+      `p4 ${request.action ?? "revert"}`,
+      "Browser Mock only: revert was simulated.",
+      operationId,
+      10,
+    );
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: revert was simulated. No real files or P4 server were changed.",
+      operationIds: [operationId],
+      logReference: operationId,
+      files: paths.map((depotPath) => ({
+        depotPath,
+        state: "succeeded" as const,
+        message: "simulated",
+      })),
+      refresh: {
+        pendingChanges: true,
+        workspaceStatus: true,
+        depotPaths: paths,
+        reason: "Browser Mock: refresh the simulated workspace.",
+      },
+    };
+  },
   async createConfigBackup(payload) {
     // S4j2: new shape { request, operationId? }; old flat shape stays legacy/no receipt.
     const wrapped =
