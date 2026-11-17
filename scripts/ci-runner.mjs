@@ -194,6 +194,12 @@ const webSteps = [
   nodeStep("release-notes-tests", "node-test", "--test", [
     "scripts/release-notes.test.mjs",
   ]),
+  nodeStep("bump-version-tests", "node-test", "--test", [
+    "scripts/bump-version.test.mjs",
+  ]),
+  nodeStep("publish-update-tests", "node-test", "--test", [
+    "scripts/publish-update.test.mjs",
+  ]),
   nodeStep("ipc-surface-tests", "node-test", "--test", [
     "scripts/validate-ipc-surface.test.mjs",
   ]),
