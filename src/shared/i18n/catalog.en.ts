@@ -172,7 +172,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.move.to.cl": "Move to CL",
   "contextMenu.revert.unchanged.files": "Revert unchanged files",
   "contextMenu.resolve.conflicts": "Resolve conflicts",
-  "contextMenu.change.filetype": "Change filetype",
   "contextMenu.lock.file": "Lock file",
   "contextMenu.unlock.file": "Unlock file",
   "contextMenu.rename.move": "Rename / move",

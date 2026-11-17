@@ -134,11 +134,6 @@ export const menuCatalog = {
         phase: "later",
       },
       {
-        id: "F01-25",
-        label: "更改文件类型…",
-        phase: "later",
-      },
-      {
         id: "F01-26",
         label: "锁定文件",
         phase: "initial",
@@ -312,11 +307,6 @@ export const menuCatalog = {
       {
         id: "F02-23",
         label: "解决冲突…",
-        phase: "later",
-      },
-      {
-        id: "F02-24",
-        label: "更改文件类型…",
         phase: "later",
       },
       {
@@ -821,11 +811,6 @@ export const menuCatalog = {
         phase: "later",
       },
       {
-        id: "F07-16",
-        label: "更改文件类型…",
-        phase: "later",
-      },
-      {
         id: "F07-17",
         label: "锁定",
         phase: "initial",
@@ -1254,11 +1239,6 @@ export const menuCatalog = {
         phase: "later",
       },
       {
-        id: "C04-21",
-        label: "更改文件类型…",
-        phase: "later",
-      },
-      {
         id: "C04-22",
         label: "锁定文件",
         phase: "initial",
@@ -1327,11 +1307,6 @@ export const menuCatalog = {
       {
         id: "C05-11",
         label: "解决冲突…",
-        phase: "later",
-      },
-      {
-        id: "C05-12",
-        label: "更改文件类型…",
         phase: "later",
       },
       {

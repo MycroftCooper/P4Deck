@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import { menuLabel } from "./labels";
 import { menuCatalog, type MenuObjectId } from "./catalog";
 import { buildMenu, clampMenu, type MenuItem } from "./model";
+import { fileMenuCommands } from "./fileMenuCommands";
 
 const leaves = (items: MenuItem[]): MenuItem[] =>
   items.flatMap((item) => (item.children ? leaves(item.children) : [item]));
@@ -115,6 +116,17 @@ it("shares a single copy submenu and groups pending workflows without dropping I
   expect(
     items.find((item) => item.label === "更多操作（待接入）")?.children?.length,
   ).toBeGreaterThan(10);
+});
+it("wires revert-unchanged as a top-level file command", () => {
+  expect(fileMenuCommands["还原未修改文件"]).toBe("revertUnchanged");
+  const items = buildMenu("F07", { 还原未修改文件: { run: () => {} } });
+  expect(
+    items.some((item) => item.label === "还原未修改文件" && item.run),
+  ).toBe(true);
+  const advanced = items.find((item) => item.label === "更多操作（待接入）");
+  expect(
+    advanced?.children?.some((item) => item.label === "还原未修改文件"),
+  ).toBe(false);
 });
 it("preserves explicitly bound callbacks and unavailable reasons", () => {
   let path = "a";

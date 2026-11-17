@@ -169,7 +169,6 @@ export const zh = {
   "contextMenu.move.to.cl": "移到 CL",
   "contextMenu.revert.unchanged.files": "还原未修改文件",
   "contextMenu.resolve.conflicts": "解决冲突",
-  "contextMenu.change.filetype": "更改文件类型",
   "contextMenu.lock.file": "锁定文件",
   "contextMenu.unlock.file": "解锁文件",
   "contextMenu.rename.move": "重命名/移动",
