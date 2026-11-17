@@ -133,6 +133,10 @@ button {
   cursor: pointer;
   border-radius: 4px;
 }
+/* Carries the `tree` role for the pinned root row without adding a grid track. */
+.tree-root-group {
+  display: contents;
+}
 .tree-root:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

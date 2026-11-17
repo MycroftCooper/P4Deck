@@ -372,54 +372,64 @@ export function ResourceExplorer({
           placeholder={translate("files.filter.expanded.files.and.folders")}
         />
       </label>
+      {/* The root row is pinned above the virtual list, so it cannot be a child of
+          the `role="tree"` that owns the rows. Give it its own single-node tree;
+          an orphaned treeitem fails `aria-required-parent`. `display: contents`
+          keeps it out of the sidebar's grid layout. */}
       <div
-        className={`tree-root${rootSelected ? " selected" : ""}`}
-        tabIndex={0}
-        role="treeitem"
-        aria-level={1}
-        aria-selected={rootSelected}
-        aria-expanded={mode === "workspace" ? rootOpen[mode] : undefined}
-        {...rootMenu}
-        onClick={(event) => {
-          if ((event.target as Element).closest(".tree-toggle")) return;
-          selectRoot();
-        }}
-        onKeyDown={(event) => {
-          rootMenu.onKeyDown(event);
-          if (event.defaultPrevented) return;
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            selectRoot();
-          } else if (event.key === "ArrowRight") {
-            event.preventDefault();
-            cancelReveal();
-            setRootOpen((old) => ({ ...old, [mode]: true }));
-          } else if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            cancelReveal();
-            setRootOpen((old) => ({ ...old, [mode]: false }));
-          } else if (event.key === "Escape") {
-            cancelReveal();
-          }
-        }}
+        className="tree-root-group"
+        role="tree"
+        aria-label={mode === "depot" ? "Depot" : t.workspaceTree}
       >
-        <button
-          className="tree-toggle"
-          aria-label={`${rootOpen[mode] ? translate("files.collapse") : translate("files.expand")} ${root.name}`}
-          aria-expanded={rootOpen[mode]}
+        <div
+          className={`tree-root${rootSelected ? " selected" : ""}`}
+          tabIndex={0}
+          role="treeitem"
+          aria-level={1}
+          aria-selected={rootSelected}
+          aria-expanded={mode === "workspace" ? rootOpen[mode] : undefined}
+          {...rootMenu}
           onClick={(event) => {
-            event.stopPropagation();
-            cancelReveal();
-            setRootOpen((old) => ({ ...old, [mode]: !old[mode] }));
+            if ((event.target as Element).closest(".tree-toggle")) return;
+            selectRoot();
+          }}
+          onKeyDown={(event) => {
+            rootMenu.onKeyDown(event);
+            if (event.defaultPrevented) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectRoot();
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              cancelReveal();
+              setRootOpen((old) => ({ ...old, [mode]: true }));
+            } else if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              cancelReveal();
+              setRootOpen((old) => ({ ...old, [mode]: false }));
+            } else if (event.key === "Escape") {
+              cancelReveal();
+            }
           }}
         >
-          <ChevronRight
-            size={12}
-            className={rootOpen[mode] ? "tree-chevron-open" : ""}
-          />
-        </button>
-        {rootOpen[mode] ? <FolderOpen size={15} /> : <Folder size={15} />}
-        <strong title={root.name}>{root.name}</strong>
+          <button
+            className="tree-toggle"
+            aria-label={`${rootOpen[mode] ? translate("files.collapse") : translate("files.expand")} ${root.name}`}
+            aria-expanded={rootOpen[mode]}
+            onClick={(event) => {
+              event.stopPropagation();
+              cancelReveal();
+              setRootOpen((old) => ({ ...old, [mode]: !old[mode] }));
+            }}
+          >
+            <ChevronRight
+              size={12}
+              className={rootOpen[mode] ? "tree-chevron-open" : ""}
+            />
+          </button>
+          {rootOpen[mode] ? <FolderOpen size={15} /> : <Folder size={15} />}
+          <strong title={root.name}>{root.name}</strong>
+        </div>
       </div>
       <div className="tree-content">
         {(notice || tree.root.error || tree.root.warning) && (
