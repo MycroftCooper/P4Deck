@@ -15,6 +15,8 @@ pub mod external_merge;
 pub mod file_lock_service;
 pub mod file_service;
 pub mod manual_merge;
+/// Shared operation-id rule; every mutation service validates through it.
+pub(crate) mod operation_id;
 pub mod preview;
 pub mod rename_service;
 pub mod search_service;

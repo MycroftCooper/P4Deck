@@ -5,6 +5,7 @@ use crate::{
             ConfirmationRequest, ConfirmationTicket, IssuedConfirmation, MutationLane,
             RecheckVerdict, ReviewSpec,
         },
+        operation_id::{resolve_operation_id, resolve_operation_prefix},
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -127,14 +128,34 @@ impl SyncService {
                 )
             }
         };
+        // The caller's id roots every `p4 sync -n` / count command, so a cancel
+        // with the id the frontend sent reaches them. An id the caller supplied
+        // but we cannot use is refused instead of being swapped for another one.
+        let operation_id = match resolve_operation_prefix(
+            request.operation_id.as_deref(),
+            if target.skip_preflight {
+                "sync-count"
+            } else {
+                "sync-preview"
+            },
+        ) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return blocked_plan(
+                    target,
+                    SyncIssueCode::InvalidTarget,
+                    error.to_string(),
+                    self.tokens.ttl_ms(),
+                );
+            }
+        };
         let evaluation = if target.skip_preflight {
             // Count-only: one silent `p4 sync -n` gives the real total so the
             // progress bar can show "x of y"; no blockers are produced.
-            self.count_preview(&context, &target, request.operation_id, app)
+            self.count_preview(&context, &target, &operation_id, app)
                 .await
         } else {
-            self.inspect(&context, &target, request.operation_id, app)
-                .await
+            self.inspect(&context, &target, &operation_id, app).await
         };
         self.plan_from_evaluation(target, evaluation)
     }
@@ -144,18 +165,16 @@ impl SyncService {
         &self,
         context: &P4Context,
         target: &SyncTargetSnapshot,
-        requested_operation_id: Option<String>,
+        operation_id: &str,
         app: Option<&AppHandle>,
     ) -> Evaluation {
-        let operation_id = valid_operation_id(requested_operation_id)
-            .unwrap_or_else(|| format!("sync-count-{}", Uuid::new_v4()));
         let (args, input) = preview_arguments(target);
         let result = self
             .runner
             .run_with_progress(
                 P4CommandRequest {
                     bound: crate::p4::bounds::IoBound::ReadLong,
-                    operation_id: Some(operation_id.clone()),
+                    operation_id: Some(operation_id.to_owned()),
                     source: OperationSource::Gui,
                     command: "sync".into(),
                     args,
@@ -183,7 +202,7 @@ impl SyncService {
                 true,
             ),
         };
-        evaluation.operation_ids.push(operation_id);
+        evaluation.operation_ids.push(operation_id.to_owned());
         // Counts and entries stay; every safety signal becomes an advisory
         // warning because the dialog is the explicit risk confirmation.
         evaluation.blockers.clear();
@@ -210,10 +229,24 @@ impl SyncService {
         confirmation: SyncConfirmRequest,
         app: Option<&AppHandle>,
     ) -> SyncResult {
+        // The write must run under the id the frontend will cancel with. A
+        // supplied-but-invalid id is refused here, before the token is consumed,
+        // instead of being replaced by a generated one.
+        let operation_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    SyncFailureCode::PreflightBlocked,
+                    error.to_string(),
+                    Vec::new(),
+                    SyncPlanCounts::default(),
+                );
+            }
+        };
         let mut spec = SyncReviewSpec {
             service: self,
             app,
-            requested_operation_id: confirmation.operation_id.clone(),
+            requested_operation_id: Some(operation_id),
             reviewed: None,
             rechecked_paths: Vec::new(),
             rechecked_counts: SyncPlanCounts::default(),
@@ -461,8 +494,28 @@ impl SyncService {
             }
         };
 
-        let operation_id = valid_operation_id(request.operation_id)
-            .unwrap_or_else(|| format!("sync-latest-{}", Uuid::new_v4()));
+        let operation_id = match resolve_operation_id(request.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            // `cancelOperation` uses the id the caller sent; a generated one
+            // would leave the running `p4 sync` unreachable, so a supplied but
+            // unusable id fails the request instead of being replaced.
+            Err(error) => {
+                return (
+                    SyncResult {
+                        outcome: SyncOutcome::Failed,
+                        failure: Some(SyncFailureCode::PreflightBlocked),
+                        message: error.to_string(),
+                        operation_id: None,
+                        log_reference: None,
+                        affected_paths: request.paths,
+                        counts: SyncPlanCounts::default(),
+                        refresh_workspace: true,
+                        refresh_depot: true,
+                    },
+                    Vec::new(),
+                );
+            }
+        };
         if let Err(failure) = self.where_preflight(&context, &target, app).await {
             return (failure, Vec::new());
         }
@@ -766,14 +819,12 @@ impl SyncService {
         &self,
         context: &P4Context,
         target: &SyncTargetSnapshot,
-        requested_operation_id: Option<String>,
+        operation_id: &str,
         app: Option<&AppHandle>,
     ) -> Evaluation {
         if target.skip_preflight {
             return risk_evaluation(target);
         }
-        let operation_id = valid_operation_id(requested_operation_id)
-            .unwrap_or_else(|| format!("sync-preview-{}", Uuid::new_v4()));
         let (args, input) = preview_arguments(target);
         let result = self
             .runner
@@ -783,7 +834,7 @@ impl SyncService {
                     // so it shares the long-read family rather than the full
                     // transfer bound of the real sync.
                     bound: crate::p4::bounds::IoBound::ReadLong,
-                    operation_id: Some(operation_id.clone()),
+                    operation_id: Some(operation_id.to_owned()),
                     source: OperationSource::Gui,
                     command: "sync".into(),
                     args,
@@ -801,7 +852,7 @@ impl SyncService {
             Ok(result) => evaluate_preview(&result),
             Err(error) => evaluation_error(error.to_string()),
         };
-        evaluation.operation_ids.push(operation_id);
+        evaluation.operation_ids.push(operation_id.to_owned());
         let inspection_id = format!("sync-inspect-{}", Uuid::new_v4());
         let (inspection_args, inspection_input) = inspection_arguments(target);
         if let Ok(inspection) = self
@@ -1031,8 +1082,10 @@ impl SyncReviewSpec<'_> {
     }
 
     fn operation_id(&self) -> String {
-        valid_operation_id(self.requested_operation_id.clone())
-            .unwrap_or_else(|| format!("sync-{}", Uuid::new_v4()))
+        // `confirm` resolves the caller's id (or mints one) before the shared
+        // sequence runs, so this only hands that id back; it never invents a
+        // replacement for an id the caller supplied.
+        self.requested_operation_id.clone().unwrap_or_default()
     }
 }
 
@@ -1151,9 +1204,12 @@ impl<'a> ReviewSpec for SyncReviewSpec<'a> {
                 .clone()
                 .ok_or_else(|| "The sync review is unavailable.".to_string())?;
             let (context, _) = self.service.contexts.snapshot();
+            // The re-check runs under the same attempted id, so a cancel with the
+            // caller's id reaches the re-check too.
+            let recheck_id = format!("{}:recheck", self.operation_id());
             let evaluation = self
                 .service
-                .inspect(&context, &reviewed.target, None, self.app)
+                .inspect(&context, &reviewed.target, &recheck_id, self.app)
                 .await;
             // Capture the refreshed plan here: refusals decided by the verdict
             // after this point report it, exactly as the hand-written flow did.
@@ -2216,10 +2272,6 @@ fn event_text(result: &OperationResult) -> String {
         .filter_map(|event| event.message.as_deref())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn valid_operation_id(value: Option<String>) -> Option<String> {
-    value.filter(|value| !value.trim().is_empty() && value.len() <= 256)
 }
 
 /// A caller-provided expected file count becomes the progress denominator only

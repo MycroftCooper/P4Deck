@@ -4,6 +4,7 @@ use crate::{
             ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest, ConfirmationTicket,
             IssuedConfirmation, RecheckVerdict, ReviewSpec, DEFAULT_CONFIRMATION_TTL_MS,
         },
+        operation_id::{accept_operation_id, resolve_operation_prefix},
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -78,7 +79,34 @@ impl RenameService {
     ) -> RenameMovePreflight {
         let (context, generation) = self.contexts.snapshot();
         let profile_id = self.contexts.active_profile_id();
-        let prefix = safe_operation_prefix(request.operation_id.as_deref(), "rename-preflight");
+        // The caller's id roots the inspection commands so `cancelOperation`
+        // with the id the frontend sent reaches them; a supplied-but-invalid id
+        // is refused instead of being replaced.
+        let prefix =
+            match resolve_operation_prefix(request.operation_id.as_deref(), "rename-preflight") {
+                Ok(prefix) => prefix,
+                Err(error) => {
+                    return RenameMovePreflight {
+                        ready: false,
+                        source: None,
+                        target: None,
+                        source_state: None,
+                        target_change_id: request.target_change_id,
+                        target_change_valid: false,
+                        target_exists: false,
+                        case_only_risk: false,
+                        blockers: vec![issue(RenameMoveIssueCode::InvalidPath, error.to_string())],
+                        warnings: Vec::new(),
+                        target_snapshot: None,
+                        preview_digest: String::new(),
+                        token: None,
+                        expires_at: self.tickets.planned_expires_at(),
+                        ttl_ms: self.tickets.ttl_ms(),
+                        operation_ids: Vec::new(),
+                        log_reference: None,
+                    };
+                }
+            };
         let inspection = self
             .repository
             .inspect(&context, &request, &prefix, app)
@@ -163,14 +191,23 @@ impl RenameService {
         confirmation: RenameMoveConfirmation,
         app: Option<&AppHandle>,
     ) -> RenameMoveResult {
+        // The ticket's group root and the reported id come from the caller; an
+        // id it supplied but we cannot use is refused instead of being replaced.
+        let current_operation_id = match accept_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    RenameMoveFailureCode::PreflightBlocked,
+                    error.to_string(),
+                    Some(&confirmation.target),
+                );
+            }
+        };
         let mut review = RenameReview {
             service: self,
             app,
             reviewed: confirmation.target.clone(),
-            current_operation_id: confirmation
-                .operation_id
-                .clone()
-                .filter(|value| valid_operation_id(value)),
+            current_operation_id,
             operation_id: None,
             evaluated: None,
             held_lane: None,
@@ -701,21 +738,6 @@ fn issue(code: RenameMoveIssueCode, message: impl Into<String>) -> RenameMoveIss
         code,
         message: message.into(),
     }
-}
-
-fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
-    value
-        .filter(|value| valid_operation_id(value))
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("{fallback}-{}", Uuid::new_v4()))
-}
-
-fn valid_operation_id(value: &str) -> bool {
-    !value.trim().is_empty()
-        && value.len() <= 128
-        && value
-            .chars()
-            .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
 }
 
 fn rejected(
