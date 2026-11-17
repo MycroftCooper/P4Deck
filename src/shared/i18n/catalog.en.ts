@@ -718,6 +718,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.reload.app": "Reload app",
   "shell.checking.folder": "Checking folder",
   "shell.select.full.text": "Select full text",
+  "shell.full.text.readonly": "Full text (read-only)",
+  "shell.full.text.hint":
+    "Ctrl/Cmd+C copies · Escape closes. Includes rows the virtual list has not rendered.",
+  "browse.diff.content": "Diff content",
   "shell.full.text": "Full text",
   "workspaces.unable.workspaces.retry":
     "Unable to load workspaces. Retry or check your login in Connection settings.",
@@ -1746,6 +1750,13 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.absolutePath": "Local path",
   "search.depotPath": "Depot path",
   "search.streamPath": "Stream path",
+  "search.partial.failed": "{count} categories failed; results are incomplete.",
+  "search.partial.incomplete":
+    "Results are incomplete because a category hit its scan limit or returned partial data.",
+  "search.job": "Job",
+  "search.jobId": "Job ID",
+  "search.stream": "Stream",
+  "search.shelf": "Shelf",
   "search.name": "Name",
   "search.owner": "Owner",
   "search.type": "Type",

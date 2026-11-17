@@ -52,41 +52,42 @@ const KIND_ICON: Record<GlobalSearchKind, typeof File> = {
   shelf: Hash,
 };
 
+// One catalog key per category. The old [singular, plural] pairs carried a plural
+// that was never rendered and two bare English literals that bypassed the catalog.
+const KIND_LABEL: Record<GlobalSearchKind, MsgKey> = {
+  submittedChange: "search.submittedChange",
+  pendingChange: "search.pendingChange",
+  workspaceFile: "search.workspaceFile",
+  depotFile: "search.depotFile",
+  job: "search.job",
+  stream: "search.stream",
+  shelf: "search.shelf",
+};
 function kindLabel(kind: GlobalSearchKind, zh: boolean): string {
-  const labels: Record<GlobalSearchKind, [string, string]> = {
-    submittedChange: ["search.submittedChange", "search.submittedChange"],
-    pendingChange: ["search.pendingChange", "search.pendingChange"],
-    workspaceFile: ["search.workspaceFile", "search.workspaceFile"],
-    depotFile: ["search.depotFile", "search.depotFile"],
-    job: ["Job", "Jobs"],
-    stream: ["Stream", "Streams"],
-    shelf: ["Shelf", "Shelves"],
-  };
-  return tFor(zh ? "zh-CN" : "en-US", labels[kind][0] as MsgKey);
+  return tFor(zh ? "zh-CN" : "en-US", KIND_LABEL[kind]);
 }
 function fieldLabel(field: string, zh: boolean): string {
-  const labels: Record<string, [string, string]> = {
-    title: ["search.title", "search.title"],
-    summary: ["search.summary", "search.summary"],
-    description: ["search.description", "search.description"],
-    user: ["search.user", "search.user"],
-    client: ["search.client", "search.client"],
-    jobs: ["Job", "Jobs"],
-    jobId: ["Job ID", "Job ID"],
-    status: ["search.status", "search.status"],
-    absolutePath: ["search.absolutePath", "search.absolutePath"],
-    depotPath: ["search.depotPath", "search.depotPath"],
-    streamPath: ["search.streamPath", "search.streamPath"],
-    name: ["search.name", "search.name"],
-    owner: ["search.owner", "search.owner"],
-    type: ["search.type", "search.type"],
-    parent: ["search.parent", "search.parent"],
-    changeId: ["search.changeId", "search.changeId"],
-    time: ["search.time", "search.time"],
+  const labels: Record<string, MsgKey> = {
+    title: "search.title",
+    summary: "search.summary",
+    description: "search.description",
+    user: "search.user",
+    client: "search.client",
+    jobs: "search.job",
+    jobId: "search.jobId",
+    status: "search.status",
+    absolutePath: "search.absolutePath",
+    depotPath: "search.depotPath",
+    streamPath: "search.streamPath",
+    name: "search.name",
+    owner: "search.owner",
+    type: "search.type",
+    parent: "search.parent",
+    changeId: "search.changeId",
+    time: "search.time",
   };
-  return labels[field]
-    ? tFor(zh ? "zh-CN" : "en-US", labels[field][0] as MsgKey)
-    : field;
+  const key = labels[field];
+  return key ? tFor(zh ? "zh-CN" : "en-US", key) : field;
 }
 
 function HighlightedText({
@@ -307,7 +308,6 @@ export function SearchPage({
   runtimeMode: "mock" | "tauri";
   onNavigate(target: GlobalSearchTarget): Promise<void>;
 }) {
-  const tr = (cn: string, en: string) => (zh ? cn : en);
   const [draft, setDraft] = useState("");
   const [kinds, setKinds] = useState<GlobalSearchKind[]>([
     ...GLOBAL_SEARCH_KINDS,
@@ -764,14 +764,9 @@ export function SearchPage({
           {partial ? (
             <div className="search-partial" role="status">
               <AlertTriangle size={15} />
-              {tr(
-                failures
-                  ? `${failures} 个类别失败，当前结果不完整。`
-                  : "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
-                failures
-                  ? `${failures} categories failed; results are incomplete.`
-                  : "Results are incomplete because a category hit its scan limit or returned partial data.",
-              )}
+              {failures
+                ? t("search.partial.failed", { count: failures })
+                : t("search.partial.incomplete")}
             </div>
           ) : null}
 

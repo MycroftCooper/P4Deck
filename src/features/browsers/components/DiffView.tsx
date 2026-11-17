@@ -471,7 +471,7 @@ export function DiffView({
         // Keyboard users need a focusable scroll region for the virtualizer.
         scrollRoot.tabIndex = 0;
         scrollRoot.setAttribute("role", "region");
-        scrollRoot.setAttribute("aria-label", "Diff content / 差异内容");
+        scrollRoot.setAttribute("aria-label", t("browse.diff.content"));
       }
       if (phase === "unmount") {
         node.removeEventListener("contextmenu", onMenu);

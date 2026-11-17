@@ -672,6 +672,10 @@ export const zh = {
   "shell.reload.app": "重新加载应用",
   "shell.checking.folder": "正在检查目录",
   "shell.select.full.text": "选择完整文本",
+  "shell.full.text.readonly": "完整文本（只读）",
+  "shell.full.text.hint":
+    "Ctrl/Cmd+C 复制 · Escape 关闭。包含虚拟列表未渲染的内容。",
+  "browse.diff.content": "差异内容",
   "shell.full.text": "完整文本",
   "workspaces.unable.workspaces.retry":
     "无法加载 Workspace，请刷新重试或在连接设置中检查登录状态。",
@@ -1612,6 +1616,13 @@ export const zh = {
   "search.absolutePath": "本地路径",
   "search.depotPath": "Depot 路径",
   "search.streamPath": "Stream 路径",
+  "search.partial.failed": "{count} 个类别失败，当前结果不完整。",
+  "search.partial.incomplete":
+    "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
+  "search.job": "Job",
+  "search.jobId": "Job ID",
+  "search.stream": "Stream",
+  "search.shelf": "Shelf",
   "search.name": "名称",
   "search.owner": "所有者",
   "search.type": "类型",
