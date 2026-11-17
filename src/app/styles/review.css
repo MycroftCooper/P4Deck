@@ -336,6 +336,14 @@
   }
 }
 @container diff (max-width: 520px) {
+  /* The line tools need ~160px but the middle track of the 760px layout can be
+     narrower than that, so the group used to overflow leftwards and sit on top
+     of the hunk buttons, making them unclickable. Give it a full row instead. */
+  .diff-line-tools {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: start;
+  }
   .diff-pane-header {
     grid-template-columns: minmax(0, 1fr) 4rem;
     padding-inline: 6px;
