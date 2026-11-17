@@ -68,6 +68,19 @@ if (packageVersion !== version) {
   fail(`版本不一致：package.json=${packageVersion}，--version=${version}。先跑 pnpm validate:versions 并同步版本。`);
 }
 
+// 发布说明必须在打 tag 之前就位：tag 一旦推送，空说明只能靠重建 tag 修正。
+const notesFile = path.join(ROOT, "ForAIDoc", "PM", "releases", `v${version}.md`);
+const notesPresent = await stat(notesFile).then(
+  () => true,
+  () => false,
+);
+if (!notesPresent) {
+  fail(
+    `缺少发布说明 ${path.relative(ROOT, notesFile)}。\n` +
+      `先写好双语说明，再用 pnpm release:bump --version ${version} --notes-file <该文件> 生成更新日志。`,
+  );
+}
+
 const dirty = git(["status", "--porcelain"]).stdout;
 if (dirty && !allowDirty) {
   fail(`工作树不干净（${dirty.split(/\r?\n/).length} 项）。先提交或 stash；确需发布用 --allow-dirty。`);

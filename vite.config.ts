@@ -41,6 +41,8 @@ export default defineConfig(({ mode }) => ({
       "scripts/validate-ipc-surface.test.mjs",
       "scripts/release-notes.test.mjs",
       "scripts/validate-changelog.test.mjs",
+      "scripts/bump-version.test.mjs",
+      "scripts/publish-update.test.mjs",
       "tests/browser/**",
       // artifacts/evidence 会收进候选 overlay（含 *.test.tsx 源文件快照），不能被当成真实测试执行。
       "artifacts/**",
