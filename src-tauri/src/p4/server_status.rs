@@ -6,6 +6,9 @@ use std::collections::VecDeque;
 pub const TTL: u64 = 60_000;
 const MIN_SAMPLES: usize = 5;
 const MAX_SAMPLES: usize = 8;
+/// A single response slower than this is already worth surfacing as "slow":
+/// user actions visibly wait, even before five samples establish a median.
+const SLOW_RESPONSE_MS: u64 = 800;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -37,6 +40,8 @@ pub struct Snapshot {
     pub connection: &'static str,
     pub access: &'static str,
     pub quality: &'static str,
+    /// The server recently rejected commands with its concurrency limit.
+    pub busy: bool,
     pub sample_count: usize,
     /// Most recent completed remote request duration, independent of bucketed samples.
     pub last_elapsed_ms: Option<u64>,
@@ -51,6 +56,8 @@ pub enum Outcome {
     Permission,
     Network,
     Timeout,
+    /// Server-side rejection such as `maximum of N simultaneous commands`.
+    Busy,
     Other,
 }
 #[derive(Default)]
@@ -107,6 +114,7 @@ pub struct Store {
     last: Option<Snapshot>,
     connection_source: Option<&'static str>,
     last_timing: Option<(u64, u64)>,
+    busy_at: Option<u64>,
 }
 impl Store {
     pub fn select(&mut self, scope: Scope) {
@@ -117,6 +125,7 @@ impl Store {
             self.access = None;
             self.buckets = Default::default();
             self.last_timing = None;
+            self.busy_at = None;
         }
     }
     pub fn observe(
@@ -133,7 +142,11 @@ impl Store {
         }
         if matches!(
             outcome,
-            Outcome::Success | Outcome::Login | Outcome::Permission | Outcome::Network
+            Outcome::Success
+                | Outcome::Login
+                | Outcome::Permission
+                | Outcome::Network
+                | Outcome::Busy
         ) {
             self.connection_source = Some("passive");
         }
@@ -142,6 +155,9 @@ impl Store {
                 self.connection = Some((now, "reachable"))
             }
             Outcome::Network => self.connection = Some((now, "failed")),
+            // The server answered: connectivity is fine, it is just refusing
+            // work because its command-concurrency cap is reached.
+            Outcome::Busy => self.busy_at = Some(now),
             _ => {}
         }
 
@@ -162,6 +178,7 @@ impl Store {
         let ever = self.connection.is_some()
             || self.access.is_some()
             || self.last_timing.is_some()
+            || self.busy_at.is_some()
             || self
                 .buckets
                 .iter()
@@ -173,6 +190,7 @@ impl Store {
             |f: Option<(u64, &'static str)>| f.filter(|(at, _)| now.saturating_sub(*at) < TTL);
         let connection = fresh(self.connection);
         let access = fresh(self.access);
+        let busy = self.busy_at.is_some_and(|at| now.saturating_sub(at) < TTL);
         let last_timing = self
             .last_timing
             .filter(|(at, _)| now.saturating_sub(*at) < TTL);
@@ -185,18 +203,33 @@ impl Store {
         if let Some((at, _)) = last_timing {
             times.push(at);
         }
+        if busy {
+            if let Some(at) = self.busy_at {
+                times.push(at);
+            }
+        }
         for b in &self.buckets {
             sample_count += b.samples.len();
             times.extend(b.samples.iter().map(|(at, _)| *at));
             times.extend(b.timeouts.iter().copied());
             let q = if b.timeouts.len() >= 3 {
                 "persistentTimeout"
-            } else {
+            } else if b.timeouts.is_empty() {
                 b.quality.unwrap_or("unknown")
+            } else {
+                // A single timeout already means the server is not answering
+                // promptly; only three in the window escalate to "persistent".
+                "slow"
             };
             if rank(q) > rank(quality) {
                 quality = q;
             }
+        }
+        // The latest request alone can prove a slow server (e.g. one 888ms
+        // response) without waiting for the five-sample median.
+        if last_timing.is_some_and(|(_, ms)| ms >= SLOW_RESPONSE_MS) && rank(quality) < rank("slow")
+        {
+            quality = "slow";
         }
         let conn = connection.map_or("unknown", |(_, v)| v);
         let access = access.map_or("unknown", |(_, v)| v);
@@ -204,6 +237,7 @@ impl Store {
             ("failed", _, _) => "networkFailure",
             (_, "loginRequired", _) => "loginRequired",
             (_, "permissionDenied", _) => "permissionDenied",
+            _ if busy => "serverBusy",
             (_, _, "persistentTimeout") => "repeatedTimeout",
             (_, _, "slow") => "slowResponses",
             (_, _, "smooth") => "normalResponses",
@@ -220,6 +254,7 @@ impl Store {
             connection: conn,
             access,
             quality,
+            busy,
             sample_count,
             last_elapsed_ms: last_timing.map(|(_, ms)| ms),
             reason_code: reason,
@@ -397,6 +432,15 @@ pub fn bucket(request: &P4CommandRequest, argument_input: bool) -> Option<usize>
     }
     None
 }
+/// P4 server concurrency protection: the server is reachable but refuses work.
+pub fn is_busy_text(text: &str) -> bool {
+    let t = text.to_ascii_lowercase();
+    (t.contains("maximum of") && t.contains("simultaneous commands"))
+        || t.contains("try again later when the load is lower")
+        || t.contains("server is too busy")
+        || t.contains("attempted to exceed")
+}
+
 pub fn outcome(exit: i32, text: &str) -> Outcome {
     let t = text
         .chars()
@@ -420,6 +464,9 @@ pub fn outcome(exit: i32, text: &str) -> Outcome {
             && (t.contains("connection refused") || t.contains("no such host"))
     {
         return Outcome::Network;
+    }
+    if is_busy_text(&t) {
+        return Outcome::Busy;
     }
     if exit == 0 {
         Outcome::Success
@@ -614,7 +661,8 @@ mod tests {
         s.observe(&k, 1, 1, None, Outcome::Permission, false);
         s.observe(&k, 2, 10000, Some(1), Outcome::Timeout, false);
         assert_eq!(s.snapshot(k.clone(), 3).connection, "reachable");
-        assert_eq!(s.snapshot(k.clone(), 3).quality, "unknown");
+        // One timeout is already "slow"; only three escalate to "persistentTimeout".
+        assert_eq!(s.snapshot(k.clone(), 3).quality, "slow");
         s.observe(&k, 4, 10000, Some(1), Outcome::Timeout, false);
         s.observe(&k, 5, 10000, Some(1), Outcome::Timeout, false);
         s.observe(&k, 6, 2, None, Outcome::Success, false);
@@ -719,5 +767,39 @@ mod tests {
         assert_eq!(gate.reserve("request-1").err(), Some("duplicate"));
         assert!(gate.reserve("request-2").is_ok());
         assert_eq!(gate.reserve("bad id").err(), Some("invalidRequest"));
+    }
+    #[test]
+    fn busy_rejection_is_visible_without_losing_connectivity() {
+        let mut s = Store::default();
+        let k = scope(1);
+        s.select(k.clone());
+        s.observe(&k, 10, 5, None, Outcome::Success, true);
+        s.observe(&k, 20, 5, None, Outcome::Busy, false);
+        let r = s.snapshot(k.clone(), 21);
+        assert!(r.busy);
+        assert_eq!(r.connection, "reachable");
+        assert_eq!(r.reason_code, "serverBusy");
+        assert!(!s.snapshot(k, 20 + TTL + 1).busy);
+    }
+    #[test]
+    fn classifies_server_concurrency_limit_as_busy() {
+        let text = r#"{"data":"Request failed: this server is configured to run a maximum of 2500 simultaneous commands. Please try again later when the load is lower.\n","severity":3}"#;
+        assert_eq!(outcome(1, text), Outcome::Busy);
+        assert!(is_busy_text("try again later when the load is lower"));
+        assert_eq!(outcome(0, "normal"), Outcome::Success);
+    }
+    #[test]
+    fn one_late_response_immediately_reads_slow() {
+        let mut s = Store::default();
+        let k = scope(1);
+        s.select(k.clone());
+        // No five-sample median yet: a single 888ms response must still show slow.
+        s.observe(&k, 10, 888, None, Outcome::Success, true);
+        let r = s.snapshot(k.clone(), 11);
+        assert_eq!(r.quality, "slow");
+        assert_eq!(r.last_elapsed_ms, Some(888));
+        // A fast response clears the warning again (median still unavailable).
+        s.observe(&k, 12, 120, None, Outcome::Success, true);
+        assert_eq!(s.snapshot(k, 13).quality, "unknown");
     }
 }

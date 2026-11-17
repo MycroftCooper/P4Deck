@@ -75,6 +75,14 @@ it("timeout quality does not rewrite the independent connection dimension", () =
   expect(view.icon).toBe("timeout");
   expect(view.rows[0].value).toBe("Reachable");
 });
+it("reports a busy server without claiming a connectivity failure", () => {
+  const view = passiveStatusPresentation({ ...healthy, busy: true }, false);
+  expect(view.icon).toBe("busy");
+  expect(view.tone).toBe("danger");
+  expect(view.rows[0].value).toBe("Reachable");
+  expect(view.rows.some((row) => row.value.includes("Busy"))).toBe(true);
+  expect(view.title).toContain("retry automatically");
+});
 it.each([false, true])(
   "three localized rows, accessible icon and passive limitation (zh=%s)",
   (zh) => {

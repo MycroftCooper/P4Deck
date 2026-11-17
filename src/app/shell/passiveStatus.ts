@@ -4,6 +4,8 @@ export interface PassiveStatusView {
   connection: "unknown" | "reachable" | "failed";
   access: "unknown" | "ok" | "loginRequired" | "permissionDenied";
   quality: "unknown" | "smooth" | "slow" | "persistentTimeout";
+  /** The server recently rejected commands because its concurrency cap was hit. */
+  busy?: boolean;
   fresh: boolean;
   connectionSource?: "unknown" | "passive" | "manual";
   /** Observed response samples (bucketed); used only to explain an unknown quality row. */
@@ -26,7 +28,8 @@ export type PassiveStatusIcon =
   | "login"
   | "permission"
   | "failed"
-  | "timeout";
+  | "timeout"
+  | "busy";
 /** Only present host facts: no latency thresholds or inference from operation progress. */
 export function passiveStatusPresentation(
   input: PassiveStatusView | undefined,
@@ -41,13 +44,15 @@ export function passiveStatusPresentation(
         ? "login"
         : s.access === "permissionDenied"
           ? "permission"
-          : s.quality === "persistentTimeout"
-            ? "timeout"
-            : s.quality === "slow"
-              ? "slow"
-              : s.connection === "reachable"
-                ? "healthy"
-                : "unknown";
+          : s.busy
+            ? "busy"
+            : s.quality === "persistentTimeout"
+              ? "timeout"
+              : s.quality === "slow"
+                ? "slow"
+                : s.connection === "reachable"
+                  ? "healthy"
+                  : "unknown";
   const unknown = tFor(zh ? "zh-CN" : "en-US", "shell.no.recent.samples");
   const connection = {
     unknown,
@@ -100,6 +105,14 @@ export function passiveStatusPresentation(
       label: tFor(zh ? "zh-CN" : "en-US", "shell.login.permissions"),
       value: access,
     },
+    ...(s.busy
+      ? [
+          {
+            label: tFor(zh ? "zh-CN" : "en-US", "shell.server"),
+            value: tFor(zh ? "zh-CN" : "en-US", "shell.server.busy"),
+          },
+        ]
+      : []),
     {
       label: tFor(zh ? "zh-CN" : "en-US", "shell.local.response"),
       value: quality,
@@ -112,13 +125,14 @@ export function passiveStatusPresentation(
     ) +
     (s.connectionSource === "manual"
       ? tFor(zh ? "zh-CN" : "en-US", "shell.connection.from.manual.check")
-      : "");
+      : "") +
+    (s.busy ? tFor(zh ? "zh-CN" : "en-US", "shell.server.busy.note") : "");
   return {
     icon,
     tone:
       icon === "healthy"
         ? "success"
-        : icon === "failed" || icon === "timeout"
+        : icon === "failed" || icon === "timeout" || icon === "busy"
           ? "danger"
           : icon === "unknown"
             ? "muted"

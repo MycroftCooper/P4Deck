@@ -3181,6 +3181,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.completed": "Completed",
   "shell.connecting": "Connecting",
   "shell.connection": "Connection",
+  "shell.server": "Server",
+  "shell.server.busy": "Busy (concurrency cap)",
+  "shell.server.busy.note":
+    " Read-only requests retry automatically while the server is busy.",
   "shell.connection.changed.select.the.target":
     "Connection changed; select the target again",
   "shell.connection.failed": "Connection failed",

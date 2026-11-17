@@ -73,7 +73,13 @@ pub fn record(store: &LogStore, r: Request) -> Receipt {
     let entry = LogEntry {
         id: format!("frontend-{}", r.event_id),
         timestamp: chrono::Utc::now().to_rfc3339(),
-        level: LogLevel::Error,
+        // A background refresh failure is noisy but not an application error;
+        // keep it visible without painting the log red.
+        level: if r.code == "refreshFailed" {
+            LogLevel::Warning
+        } else {
+            LogLevel::Error
+        },
         operation_id: r.operation_id,
         source: OperationSource::Gui,
         server: String::new(),

@@ -83,7 +83,8 @@ export function validServerStatus(s: ServerStatusSnapshot) {
     ) &&
     ["unknown", "reachable", "failed"].includes(s.connection) &&
     ["unknown", "ok", "loginRequired", "permissionDenied"].includes(s.access) &&
-    ["unknown", "smooth", "slow", "persistentTimeout"].includes(s.quality)
+    ["unknown", "smooth", "slow", "persistentTimeout"].includes(s.quality) &&
+    (s.busy === undefined || typeof s.busy === "boolean")
   );
 }
 export interface ServerStatusState {
@@ -112,6 +113,7 @@ export function createServerStatusController(
               connection: snapshot.connection,
               access: snapshot.access,
               quality: snapshot.quality,
+              busy: snapshot.busy === true,
               connectionSource: snapshot.connectionSource,
               samples: snapshot.sampleCount,
               observedAt: snapshot.observedAt,
