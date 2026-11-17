@@ -381,6 +381,28 @@ it("defaults to the classic context view with expandable collapsed regions", asy
   expect(expandAll.getAttribute("aria-pressed")).toBe("false");
 });
 
+it("keeps every rendered row on its own grid track", async () => {
+  await render(bigResult());
+  expect(await waitFor(() => contextRows() > 0)).toBe(true);
+  const shadow = container()!.shadowRoot!;
+  const codes = [...shadow.querySelectorAll("[data-code]")];
+  expect(codes.length).toBeGreaterThan(0);
+  // The split panes are CSS subgrids: the renderer binds each column to the
+  // row tracks with `grid-row: span N`. WebView2 kept the stale single-track
+  // layout, stacking all rows on one line, so DiffView re-asserts the spans.
+  for (const code of codes) {
+    const gutter = code.querySelector<HTMLElement>("[data-gutter]");
+    const content = code.querySelector<HTMLElement>("[data-content]");
+    const rows = Math.max(
+      gutter?.children.length ?? 0,
+      content?.children.length ?? 0,
+    );
+    expect(rows).toBeGreaterThan(1);
+    expect(gutter?.style.gridRow).toBe(`span ${rows}`);
+    expect(content?.style.gridRow).toBe(`span ${rows}`);
+  }
+});
+
 it("expands all unchanged context on demand and restores the default", async () => {
   await render(bigResult());
   expect(await waitFor(() => shadowText().includes("line 40 changed"))).toBe(
