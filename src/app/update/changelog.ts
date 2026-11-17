@@ -48,6 +48,26 @@ export function notesFor(
 
 export const CHANGELOG: readonly ChangelogRelease[] = [
   {
+    version: "0.1.15",
+    date: "2026-11-17",
+    notes: {
+      zh: [
+        "服务器繁忙不再误判为断线：触发 Helix Core 命令并发上限时，状态栏显示「繁忙（并发上限）」并保持「可达」，只读查询自动重试两次（1 秒、3 秒退避），写操作不重试；繁忙输出只记为警告，不再弹诊断告警或刷红日志",
+        "响应慢更早可见：单次超时或单次响应超过 800 毫秒即显示为「响应较慢」，不必等满 5 个样本；后台刷新失败记为警告",
+        "修复 Diff 打开即「全部折叠」：WebView2 保留旧的表格行轨道会让所有行叠在同一条线上；现在每次渲染后按列内行数重建轨道，折叠策略不变",
+        "右键菜单移除「更改文件类型…」（F01、F02、F07、C04、C05 五个对象）；「还原未修改文件」改为直接可点击的顶级命令",
+        "内部：任务入口文档迁移到 Agent Team Kit，旧工作流与 TODO 转为只读追溯",
+      ],
+      en: [
+        "A busy server is no longer mistaken for a connection failure: when the Helix Core command-concurrency cap is hit, the status bar shows Busy (concurrency cap) while staying Reachable, read-only queries retry twice with backoff, write operations never retry, and busy output is logged as a warning instead of raising a diagnostic alert or painting the log red",
+        "Slow responses show up sooner: a single timeout or one response above 800 ms already reads as slow without waiting for five samples; background refresh failures log as warnings",
+        "Fixed the diff opening entirely folded: WebView2 kept the stale table row tracks so every row stacked on one line; the tracks are now rebuilt after each render while the folding policy stays the same",
+        "Change filetype is removed from the context menu (F01, F02, F07, C04 and C05); Revert unchanged files is now a top-level command that runs directly",
+        "Internal: the task-entry docs move to Agent Team Kit and the old workflow and TODO pages become read-only history",
+      ],
+    },
+  },
+  {
     version: "0.1.14",
     date: "2026-11-14",
     notes: {
