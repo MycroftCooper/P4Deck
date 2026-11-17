@@ -69,6 +69,15 @@ export function ConnectionSetupGate({
   })();
   const known = useRef(new Set<string>());
   const initialized = useRef(false);
+  // What the gate showed last time, and which profile it was showing. Re-reading
+  // the profiles after a context change is asynchronous, and a workspace switch
+  // keeps the active profile while changing the context — so the identity key is
+  // new even though the connection did not change. Without this the whole
+  // application unmounted on every switch (focus fell to the body and the setup
+  // guide flashed). Hold the previous decision while re-verifying; a genuinely
+  // inactive connection still resolves to the guide once the profiles arrive.
+  const decided = useRef<"app" | "setup" | undefined>(undefined);
+  const lastProfileId = useRef(runtime.activeProfileId);
   useEffect(() => {
     if (runtime.p4Version === "loading") return;
     let live = true;
@@ -94,15 +103,27 @@ export function ConnectionSetupGate({
   const ready =
     runtime.p4Version !== "loading" && snapshot?.binding === binding;
   const key = ready ? activeSetupKey(runtime, snapshot.profiles) : "";
+  const sameProfile =
+    !!runtime.activeProfileId &&
+    runtime.activeProfileId === lastProfileId.current;
+  lastProfileId.current = runtime.activeProfileId;
   if (
     key &&
     (known.current.has(key) || runtime.connection.state === "connected")
   ) {
     known.current.add(key);
+    decided.current = "app";
     return children;
   }
   const displayError = error || state.error;
   const loading = !ready && !displayError;
+  // Same profile, still verifying: the context moved (a workspace switch) but the
+  // connection did not, so keep the application mounted instead of rebuilding it.
+  if (decided.current === "app" && (loading || sameProfile)) {
+    if (key) known.current.add(key);
+    return children;
+  }
+  decided.current = "setup";
   return (
     <section
       className="connection-setup"
