@@ -229,7 +229,9 @@ const webSteps = [
   pnpmStep("web-check", "tsc", "check:web", "web"),
   pnpmStep("web-test", "vitest", "test:web:ci", "web"),
   // A small smoke slice runs on every quick gate so a broken shell is caught
-  // before the freeze; the full suite runs on the delivery gate below.
+  // before the freeze; the full suite runs on the delivery gate below. It runs
+  // after the parallel groups because a browser competes for the CPU that the
+  // 100k-file virtualisation test needs.
   browserStep(
     "browser-smoke",
     [
@@ -238,7 +240,7 @@ const webSteps = [
       "tests/browser/sidebar-resize.spec.ts",
     ],
     ["--workers=1"],
-    "web",
+    "serial",
   ),
 ];
 
