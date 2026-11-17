@@ -60,6 +60,24 @@ export function reviewStaleTime(
   return CACHE_POLICY.target.staleTime;
 }
 
+/**
+ * How long the cached review survives after its page closes. A revision-to-revision
+ * diff is content addressed, so it keeps the immutable lifetime instead of the
+ * shorter target one; without declaring this the cache fell back to the `target`
+ * default and evicted revision diffs three times too early.
+ */
+export function reviewGcTime(
+  kind: ReviewKind,
+  left: RevisionReference,
+  right: RevisionReference,
+) {
+  return kind === "diff" &&
+    left.kind === "revision" &&
+    right.kind === "revision"
+    ? CACHE_POLICY.immutable.gcTime
+    : CACHE_POLICY.target.gcTime;
+}
+
 export function FileReviewPage({
   kind,
   comparison,
@@ -154,6 +172,7 @@ export function FileReviewPage({
     [primaryOwner, kind, runtime.mode],
   );
   const staleTime = reviewStaleTime(kind, leftReference, rightReference);
+  const gcTime = reviewGcTime(kind, leftReference, rightReference);
   const refreshSeen = useRef(refresh);
   useEffect(() => {
     setInvestigationOpen(false);
@@ -274,7 +293,12 @@ export function FileReviewPage({
       .then((result) => {
         if (!requests.isCurrent(lease) || currentOwner.current !== primaryOwner)
           return;
-        if (kind === "diff") writeSnapshot(key, result);
+        if (kind === "diff") {
+          // Declare the lifetime for this exact review key so a content-addressed
+          // diff keeps the immutable one instead of the target default.
+          appCache.setQueryDefaults(key, { gcTime });
+          writeSnapshot(key, result);
+        }
         setSnapshotTime(
           appCache.getQueryState(key)?.dataUpdatedAt ?? Date.now(),
         );
