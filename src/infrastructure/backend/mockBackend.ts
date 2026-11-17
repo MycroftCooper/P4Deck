@@ -3311,6 +3311,14 @@ export const mockBackend: Backend = {
         durationMs: 120,
         events: [event("completed", 100)],
       },
+      // The host answers every dispatched command with this envelope; without it
+      // the frontend has to treat the outcome as unknown, which kept the file
+      // action ledger open and silently swallowed the next write on the same path.
+      execution: {
+        operationId,
+        outcome: "commandCompleted",
+        perFileEvidence: "notCollected",
+      },
       affectedPaths: request.paths,
       message: `${request.action} completed in Mock Backend.`,
     };
