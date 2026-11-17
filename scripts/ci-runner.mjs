@@ -313,7 +313,7 @@ if (mode === "local") {
     ),
     // The whole browser suite runs on the delivery gate: it is the only check
     // that sees a real DOM, and leaving it out is how it rotted for eleven days.
-    browserStep("browser-e2e", "tests/browser", ["--workers=2"], "serial"),
+    browserStep("browser-e2e", "tests/browser", ["--workers=1"], "serial"),
     pnpmStep("web-performance", "perf", "test:perf", "serial"),
     pnpmStep("backend-performance", "perf", "test:perf:backend", "serial"),
   ];

@@ -9,6 +9,11 @@ export default defineConfig({
   workers: 2,
   retries: 0,
   reporter: "list",
+  // The dev server cold-starts Vite and the mock backend; under load a page can
+  // take several seconds to paint, so a 5s default assertion timeout reported
+  // slow boots as failures. Test-level timeouts stay generous for long flows.
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   webServer: {
     command: "pnpm dev --host 127.0.0.1",
     url: "http://127.0.0.1:1420",
