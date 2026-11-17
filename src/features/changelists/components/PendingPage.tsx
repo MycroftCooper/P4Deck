@@ -631,7 +631,12 @@ export function PendingPage({
   const mounted = useRef(true);
   const activeChangeId = useRef<number | undefined>(undefined);
   const restoreVirtualFocus = useRef(false);
+  // Operation failures used to be logged only, which left a failed shelf, move,
+  // revert or refresh completely silent on screen (the alert's `error` branch was
+  // unreachable). Keep the local message as well: it is what the page shows.
+  const [operationError, setOperationError] = useState("");
   const setError = (message: string) => {
+    setOperationError(message);
     if (!message) return;
     const id = crypto.randomUUID();
     void recordFrontendOperationLog({
@@ -644,7 +649,7 @@ export function PendingPage({
       targetCount: 0,
     });
   };
-  const error = pending.error;
+  const error = operationError || pending.error;
   /** Double-click: open the local file with the app registered for its type. */
   const openLocalFile = async (file: PendingFile) => {
     if (!file.clientPath) return;
@@ -1354,7 +1359,7 @@ export function PendingPage({
             : translate("pending.cl.descending")}
         </button>
       </div>
-      {(authenticationRequired || connectionProblem) && (
+      {(error || authenticationRequired || connectionProblem) && (
         <div
           role="alert"
           className={`workspace-load-error${connectionProblem || authenticationRequired ? " pending-connection-status" : ""}`}
