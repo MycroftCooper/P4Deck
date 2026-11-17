@@ -26,9 +26,12 @@ for (const width of [1280, 390]) {
     });
     await page.goto("/#/settings");
     const card = page.locator(".log-settings-card");
-    await card.scrollIntoViewIfNeeded();
+    // The section heading lives on the collapsible SettingsSection wrapper; the
+    // card's own h2 is intentionally hidden (settings.css).
+    const section = page.locator('[data-settings-section="logs"]');
+    await section.scrollIntoViewIfNeeded();
     await expect(
-      card.getByRole("heading", { name: "Logs", exact: true }),
+      section.getByRole("heading", { name: "Logs", exact: true }),
     ).toBeVisible();
     await expect(
       card.getByRole("button", { name: "Open log folder" }),

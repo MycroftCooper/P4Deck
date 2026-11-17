@@ -38,7 +38,7 @@ for (const width of [1280, 390]) {
           : connected;
       Object.assign(window, { authRecovery: state });
     });
-    const activity = page.getByRole("navigation", { name: "Activity bar" });
+    const activity = page.locator(".activity-bar");
     await activity.getByRole("button", { name: /^Pending/ }).click();
     const alert = page.locator(".pending-page [role=alert]");
     await expect(alert).toContainText("Sign in again in connection settings");

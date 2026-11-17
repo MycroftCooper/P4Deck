@@ -41,7 +41,7 @@ test("diff paths stay workspace-relative and normalize pasted paths without quer
     };
     location.hash = "#/diff";
   });
-  const path = page.getByRole("textbox", { name: "Diff 文件路径" });
+  const path = page.getByRole("textbox", { name: "Diff file path" });
   const readCounts = () =>
     page.evaluate(() => {
       const state = (window as any).diffPathReads;
@@ -64,7 +64,9 @@ test("diff paths stay workspace-relative and normalize pasted paths without quer
   await path.press("Enter");
   await expect(path).toHaveValue("Assets/Code/Example.cs");
   await expect(path).toHaveAttribute("title", depot);
-  await expect(page.locator(".diff-side-line").first()).toBeVisible();
+  await expect(
+    page.locator(".diff-renderer [data-line]").first(),
+  ).toBeVisible();
   const beforeTyping = await readCounts();
   await path.press("Enter"); // Reaccepting the relative display keeps depot identity.
   await path.fill("Assets/Code/Other.cs");
@@ -118,9 +120,11 @@ test("diff paths stay workspace-relative and normalize pasted paths without quer
   await path.press("Escape");
   await expect(page.locator(".diff-path-error")).toHaveCount(0);
   const followSelection = page.locator(".target-controls > button").first();
-  await expect(followSelection).toHaveAccessibleName("Follow selection");
+  await expect(followSelection).toHaveAccessibleName(
+    /^Following file selection/,
+  );
   await followSelection.click();
-  await expect(followSelection).toHaveAccessibleName("Target locked");
+  await expect(followSelection).toHaveAccessibleName(/^Target locked/);
   await expect(path).toBeDisabled();
   const pageTitle = page.locator(".target-page-title");
   await expect(pageTitle).toHaveText("Diff");

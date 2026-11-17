@@ -51,10 +51,8 @@ test("390px shell, navigation, command palette, settings, search and pending sta
   await page.goto("/#/files");
   await expect(page.locator(".app-shell")).toBeVisible();
   await assertNoPageOverflow(page, "shell");
-  await expect(
-    page.getByRole("navigation", { name: "Activity bar" }),
-  ).toBeVisible();
-  const activityBar = page.getByRole("navigation", { name: "Activity bar" });
+  await expect(page.locator(".activity-bar")).toBeVisible();
+  const activityBar = page.locator(".activity-bar");
   await expect(
     activityBar.getByRole("button", { name: /^Terminal/ }),
   ).toHaveCount(0);
@@ -201,7 +199,7 @@ test("representative app, palette, settings, search and pending surfaces pass ax
     await expect(page.locator(".route-view")).toContainText(destination);
     await assertAxe(page, destination);
   }
-  const activityBar = page.getByRole("navigation", { name: "Activity bar" });
+  const activityBar = page.locator(".activity-bar");
   await activityBar.getByRole("button", { name: /^Streams/ }).click();
   await expect(page.locator(".route-view h1")).toHaveText("Streams");
   await page.getByRole("button", { name: "Open Stream Graph" }).click();
@@ -218,22 +216,26 @@ test("representative app, palette, settings, search and pending surfaces pass ax
   await assertAxe(page, "Branch Mappings");
 });
 
-test("Global Search exposes seven filters and navigates Stream and Shelf results at 390px", async ({
+test("Global Search exposes six filters and navigates Stream and Shelf results at 390px", async ({
   page,
 }) => {
   await page.goto("/#/search");
   const search = page.getByRole("textbox", { name: "Search query" });
   const categories = page.getByRole("group", { name: "Categories" });
-  await expect(categories.getByRole("checkbox")).toHaveCount(7);
+  // Jobs are deliberately not offered: there is no Job details page, so the
+  // Global Search kind list is the six openable categories.
+  await expect(categories.getByRole("checkbox")).toHaveCount(6);
   await expect(
-    categories.getByRole("checkbox", { name: "Streams" }),
+    categories.getByRole("checkbox", { name: "Stream" }),
   ).toBeChecked();
   await expect(
-    categories.getByRole("checkbox", { name: "Shelves" }),
+    categories.getByRole("checkbox", { name: "Shelf" }),
   ).toBeChecked();
-  await assertNoPageOverflow(page, "seven-kind Global Search");
+  await assertNoPageOverflow(page, "six-kind Global Search");
 
   await search.fill("Atlas Mainline");
+  // Queries only start on submit; typing alone never reads P4.
+  await search.press("Enter");
   const streamResult = page.getByRole("button", { name: /Atlas Mainline/ });
   await expect(streamResult).toContainText("Path: //atlas/main");
   await streamResult.press("Enter");
@@ -252,11 +254,11 @@ test("Global Search exposes seven filters and navigates Stream and Shelf results
     "Pending",
     "Workspace files",
     "Depot files",
-    "Jobs",
-    "Streams",
+    "Stream",
   ])
     await categories.getByRole("checkbox", { name }).uncheck();
   await search.fill("Render pipeline cache improvements");
+  await search.press("Enter");
   const shelfResult = page.getByRole("button", { name: /Shelf 31821/ });
   await expect(shelfResult).toContainText("Numbered CL: 31821");
   await expect(page.getByText(/Shelf deep search is bounded/)).toBeVisible();
@@ -264,7 +266,7 @@ test("Global Search exposes seven filters and navigates Stream and Shelf results
     "Browser Mock simulated shelf detail candidate limit reached",
   );
   await assertNoPageOverflow(page, "bounded Shelf search result");
-  await assertAxe(page, "seven-kind Global Search results");
+  await assertAxe(page, "six-kind Global Search results");
   await shelfResult.press("Enter");
   await expect(page.locator(".route-view h1")).toHaveText("Shelf CL 31821");
   await expect(page.locator(".shelf-detail-page")).toContainText(
@@ -312,7 +314,7 @@ test("Branch Mapping simulated create, edit, preview and delete stay safe and ke
   await dialog
     .getByLabel("View line 1 target")
     .fill(`//atlas/${mappingName}/...`);
-  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog.getByRole("button", { name: "Run preflight" }).click();
   await dialog.getByRole("button", { name: "Confirm save" }).click();
   await expect(dialog).toContainText("Verified by server");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
@@ -323,7 +325,7 @@ test("Branch Mapping simulated create, edit, preview and delete stay safe and ke
   await dialog
     .getByLabel("Description")
     .fill("updated in browser safety fixture");
-  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog.getByRole("button", { name: "Run preflight" }).click();
   await dialog.getByRole("button", { name: "Confirm save" }).click();
   await expect(dialog).toContainText("Verified by server");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
@@ -331,7 +333,7 @@ test("Branch Mapping simulated create, edit, preview and delete stay safe and ke
 
   await detail.getByRole("button", { name: "Delete", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Delete Branch Mapping" });
-  await dialog.getByRole("button", { name: "Preflight and review" }).click();
+  await dialog.getByRole("button", { name: "Run preflight" }).click();
   await dialog
     .getByLabel("I understand this permanently deletes the Branch Mapping")
     .check();

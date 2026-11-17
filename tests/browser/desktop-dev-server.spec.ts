@@ -72,7 +72,9 @@ test("desktop frontend opens again with the same browser storage and connects HM
     );
   });
   await page.goto(origin);
-  await expect(page.locator(".file-workbench")).toBeVisible();
+  // Desktop mode compiles out the browser mock backend (__P4DECK_DESKTOP__), so
+  // a plain Chromium without Tauri legitimately stops at the connection gate.
+  await expect(page.locator(".connection-setup")).toBeVisible();
   await expect(page.locator(".startup-recovery")).toBeHidden();
   await expect
     .poll(() => hmrMessages.some((message) => message.includes('"connected"')))
@@ -82,7 +84,7 @@ test("desktop frontend opens again with the same browser storage and connects HM
     localStorage.setItem("p4deck.dev-test", "retained"),
   );
   await page.reload();
-  await expect(page.locator(".file-workbench")).toBeVisible();
+  await expect(page.locator(".connection-setup")).toBeVisible();
   await expect(page.locator(".startup-recovery")).toBeHidden();
   expect(
     await page.evaluate(() => localStorage.getItem("p4deck.dev-test")),

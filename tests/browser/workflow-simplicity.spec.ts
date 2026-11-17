@@ -63,57 +63,35 @@ async function setup(page: Page) {
         refreshedChanges: [created],
       };
     };
-    backend.preflightMoveFiles = async (request: any) => {
-      Object.assign(window, { moveCheck: request });
-      return {
-        ready: true,
-        token: "move-token",
-        expiresAt: Date.now() + 60000,
-        ttlMs: 60000,
-        target: {
-          kind: "move",
-          server: runtime.context.server,
-          user: runtime.context.user,
-          client: runtime.context.client,
-          workspace: runtime.context.cwd,
-          contextGeneration: 0,
-          targetChangeId: request.targetChangeId,
-          depotPaths: request.depotPaths,
-        },
-        files: [],
-        blockers: [],
-        warnings: [],
-        contentDigest: "test",
-        operationIds: [],
-      };
-    };
-    backend.confirmMoveFiles = async (request: any) => {
+    // A drop now dispatches through the selected-move host call; the separate
+    // preflight/confirm pair this spec used to mock no longer exists.
+    backend.selectedMoveExecute = async (request: any) => {
       Object.assign(window, { moveExecution: request });
       changes[1].files.push(changes[0].files.shift()!);
       return {
-        outcome: "succeeded",
-        message: "Moved file",
-        operationIds: [request.operationId],
-        files: [
-          {
-            depotPath: "//depot/simplicity.txt",
-            state: "succeeded",
-            message: "Moved",
-          },
-        ],
-        affectedChanges: [310, 320],
-        refreshedChanges: structuredClone(changes),
-        refresh: {
-          pendingChanges: true,
-          workspaceStatus: true,
-          depotPaths: ["//depot/simplicity.txt"],
-          reason: "move",
+        execution: {
+          schemaVersion: 1,
+          payloadDigest: "a".repeat(64),
+          revision: "1",
+          executionState: "settled",
+          outcome: "verified",
+          dispatchState: "possible",
+          recoveryRequired: false,
         },
+        operationId: request.operationId,
+        targetCreationUnknown: false,
+        targetChangeId: 320,
+        stage: "completed",
+        files: request.files.map((file: any) => ({
+          ...file,
+          state: "moved" as const,
+        })),
+        message: "Moved file",
       };
     };
   });
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   await expect(page.locator('[data-pending-change="310"]')).toBeVisible();
@@ -162,14 +140,18 @@ test("dropping into another CL moves immediately with no modal or layout banner"
   await expect
     .poll(() => page.evaluate(() => !!(window as any).moveExecution))
     .toBe(true);
-  expect(await page.evaluate(() => (window as any).moveCheck)).toMatchObject({
-    targetChangeId: 320,
-    depotPaths: ["//depot/simplicity.txt"],
-  });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).moveExecution))
+    .toMatchObject({
+      target: { kind: "existing", changeId: 320 },
+      files: [{ depotPath: "//depot/simplicity.txt", sourceChangeId: 310 }],
+    });
   expect(await page.evaluate(() => (window as any).dialogsOpened)).toBe(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(source.locator(".pending-file")).toHaveCount(0);
-  await destination.locator("header").click();
+  // A successful drop auto-expands the destination changelist, so the moved row
+  // is already visible without another toggle.
+  await expect(destination.locator(".pending-body")).toBeVisible();
   await expect(destination.locator(".pending-file")).toHaveCount(1);
   expect((await page.locator(".pending-query-bar").boundingBox())!.y).toBe(top);
   await expect(page.locator(".pending-page > .workspace-notice")).toHaveCount(
@@ -177,75 +159,80 @@ test("dropping into another CL moves immediately with no modal or layout banner"
   );
 });
 
-test("operation spinner, completion and error stay in a fixed toolbar slot", async ({
+test("operation progress, completion and failure stay in the footer slot", async ({
   page,
 }) => {
   await setup(page);
+  // The old "view operations" button in the command toolbar is gone: operation
+  // progress now lives in the footer's P4 status slot, and failures stay inside
+  // that slot's task panel. Neither may move the toolbar or the Pending query
+  // bar while an operation changes state.
+  const status = page.locator(".p4-status");
+  const center = page.locator(".command-center");
+  const queryBar = page.locator(".pending-query-bar");
+  const taskList = page.getByRole("dialog", { name: "P4 tasks" });
+  await expect(status).toContainText("P4 idle");
+  const centerHeight = (await center.boundingBox())!.height;
+  const queryTop = (await queryBar.boundingBox())!.y;
+  const idleStatusHeight = (await status.boundingBox())!.height;
+  await page.clock.install({ time: new Date("2026-10-20T08:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-20T08:00:01Z"));
+  const startCommand = (operationId: string) =>
+    page.evaluate(async (id: string) => {
+      const path = "/src/infrastructure/backend/index.ts";
+      const { backend } = await import(path);
+      const context = (await backend.runtimeInfo()).context;
+      void backend.runP4({
+        operationId: id,
+        command: "info",
+        args: [],
+        context,
+        source: "terminal",
+        outputMode: "text",
+      });
+    }, operationId);
+  await startCommand("footer-slot-running");
+  await page.clock.runFor(120);
+  await expect(status).toContainText("running");
+  // The slot keeps its box while the operation runs.
+  expect((await status.boundingBox())!.height).toBeCloseTo(idleStatusHeight, 0);
+  expect((await center.boundingBox())!.height).toBe(centerHeight);
+  expect((await queryBar.boundingBox())!.y).toBe(queryTop);
+  await status.click();
+  await expect(taskList).toBeVisible();
+  await expect(taskList.locator(".task-row")).toHaveCount(1);
+  await expect(
+    taskList.getByRole("progressbar", { name: "p4 info progress" }),
+  ).toHaveCount(1);
+  // Completion returns the footer to idle without any layout shift.
+  await page.clock.runFor(300);
+  await expect(taskList.locator(".task-row")).toHaveCount(0);
+  await expect(taskList).toContainText("P4 idle");
+  await expect(status).toContainText("P4 idle");
+  expect((await center.boundingBox())!.height).toBe(centerHeight);
+  expect((await queryBar.boundingBox())!.y).toBe(queryTop);
+  // A failed cancellation is reported in the same slot instead of a transient
+  // toolbar banner.
   await page.evaluate(async () => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
-    const readPending = backend.queryPendingChanges.bind(backend);
-    let holdRefresh = true;
-    backend.queryPendingChanges = async (query: any) => {
-      if (holdRefresh)
-        await new Promise<void>((resolve) => {
-          Object.assign(window, { releaseMutationRefresh: resolve });
-        });
-      holdRefresh = false;
-      return readPending(query);
+    backend.cancelOperation = async () => {
+      throw new Error("Cancel transport failed");
     };
-    backend.performFileAction = (request: any) =>
-      new Promise((resolve, reject) => {
-        Object.assign(window, {
-          finishAction: (fail: boolean) =>
-            fail
-              ? reject(new Error("Fixture failure"))
-              : resolve({
-                  operationId: request.operationId,
-                  exitCode: 0,
-                  durationMs: 1,
-                  events: [],
-                }),
-        });
-      });
   });
-  const action = page.getByRole("button", {
-    name: "Revert unchanged CL 310",
-    exact: true,
-  });
-  const center = page.locator(".command-center");
-  const height = (await center.boundingBox())!.height;
-  const top = (await page.locator(".pending-query-bar").boundingBox())!.y;
-  await action.click();
-  await expect(
-    page.getByRole("button", {
-      name: "Operation in progress, view operations",
-    }),
-  ).toBeVisible();
-  expect((await center.boundingBox())!.height).toBe(height);
-  await page.evaluate(() => (window as any).finishAction(false));
-  await expect(
-    page.getByRole("button", { name: "Operation completed, view operations" }),
-  ).toBeVisible();
-  expect((await center.boundingBox())!.height).toBe(height);
-  // P4 has confirmed the mutation, but its Pending cache refresh is still
-  // deliberately blocked above. Completion feedback must not wait for it.
-  await expect
-    .poll(() =>
-      page.evaluate(() => typeof (window as any).releaseMutationRefresh),
-    )
-    .toBe("function");
-  await page.evaluate(() => (window as any).releaseMutationRefresh());
-  await action.click();
-  await page.evaluate(() => (window as any).finishAction(true));
-  await expect(
-    page.getByRole("button", { name: "Operation failed, view operations" }),
-  ).toBeVisible();
-  expect((await center.boundingBox())!.height).toBe(height);
-  expect((await page.locator(".pending-query-bar").boundingBox())!.y).toBe(top);
-  await expect(page.locator(".command-feedback")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Operation failed, view operations" })
+  await startCommand("footer-slot-failed");
+  await page.clock.runFor(120);
+  await expect(taskList.locator(".task-row")).toHaveCount(1);
+  await taskList
+    .getByRole("button", {
+      name: "Cancel task: p4 info (footer-slot-failed)",
+      exact: true,
+    })
     .click();
-  await expect(page.locator(".tool-drawer.expanded")).toBeVisible();
+  await expect(taskList.getByRole("alert")).toContainText(
+    "Cancellation failed",
+  );
+  expect((await center.boundingBox())!.height).toBe(centerHeight);
+  expect((await queryBar.boundingBox())!.y).toBe(queryTop);
+  await page.clock.resume();
 });

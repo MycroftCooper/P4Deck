@@ -17,6 +17,9 @@ for (const width of [1280, 390]) {
       const { backend } = await import(path);
       const writeCount = window as unknown as { pendingWrites: number };
       writeCount.pendingWrites = 0;
+      // Only a confirmed dialog may use these write entry points; the one-click
+      // shelf is a direct write with its own stubbed recorder below, so it must
+      // never fall back to these APIs either.
       const unexpectedWrite = async () => {
         writeCount.pendingWrites++;
         throw new Error("Opening header actions must not execute a write");
@@ -61,10 +64,16 @@ for (const width of [1280, 390]) {
       });
     });
     await page
-      .getByRole("navigation", { name: "Activity bar" })
+      .locator(".activity-bar")
       .getByRole("button", { name: /^Pending/ })
       .click();
-    await page.locator('[data-pending-change="20261"]').click();
+    // The CL title is the stable expand target: the trailing header buttons stop
+    // their own clicks, so clicking the header center is ambiguous on narrow
+    // widths where the description collapses.
+    await page
+      .locator('[data-pending-change="20261"]')
+      .locator("strong")
+      .click();
     const table = page.getByRole("grid", { name: "Opened files", exact: true });
     await expect(table).toBeVisible();
     await expect(table.getByRole("columnheader")).toHaveCount(5);
@@ -125,9 +134,10 @@ for (const width of [1280, 390]) {
       table.locator("..").locator(".pending-file-tools"),
     ).toHaveCount(0);
     const headers = table.getByRole("columnheader");
+    // Resizer names are bilingual ("调整列宽 / Resize File path"): match the
+    // English suffix because the Chinese prefix is intentionally shared.
     const resize = table.getByRole("separator", {
-      name: "Resize File path column",
-      exact: true,
+      name: "Resize File path",
     });
     const before = await headers.nth(2).boundingBox();
     await resize.scrollIntoViewIfNeeded();
@@ -160,8 +170,7 @@ for (const width of [1280, 390]) {
       [4, "Type"],
     ] as const) {
       const columnHandle = table.getByRole("separator", {
-        name: `Resize ${name} column`,
-        exact: true,
+        name: `Resize ${name}`,
       });
       const previous = (await headers.nth(index).boundingBox())!.width;
       await columnHandle.focus();
@@ -237,24 +246,54 @@ for (const width of [1280, 390]) {
       .getByRole("button", { name: "Cancel", exact: true })
       .click();
     await expect(table).toBeVisible();
+    // One-click "Shelve all" is a direct host write now: the review dialog and
+    // the FE preflight were removed, so the whole CL must arrive in the request.
+    await page.evaluate(async () => {
+      const path = "/src/infrastructure/backend/index.ts";
+      const { backend } = await import(path);
+      backend.shelveFiles = async (request: any) => {
+        Object.assign(window, { shelfRequest: request });
+        return {
+          outcome: "succeeded",
+          message: "Shelved",
+          operationIds: request.operationId ? [request.operationId] : [],
+          files: request.depotPaths.map((depotPath: string) => ({
+            depotPath,
+            state: "succeeded",
+            message: "Shelved",
+          })),
+          refresh: {
+            pendingChanges: true,
+            workspaceStatus: true,
+            depotPaths: request.depotPaths,
+            reason: "shelve",
+          },
+        };
+      };
+    });
     await actions
       .getByRole("button", { name: "Shelve all CL 20261", exact: true })
       .click();
-    const shelfDialog = page.getByRole("dialog", {
-      name: "Shelve files",
-      exact: true,
-    });
-    await expect(shelfDialog.getByRole("listitem")).toHaveCount(4);
-    await expect(shelfDialog.getByRole("listitem")).toHaveText([
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { shelfRequest?: unknown }).shelfRequest,
+        ),
+      )
+      .toMatchObject({ changeId: 20261, replace: false });
+    expect(
+      await page.evaluate(
+        () =>
+          (window as unknown as { shelfRequest: { depotPaths: string[] } })
+            .shelfRequest.depotPaths,
+      ),
+    ).toEqual([
       "//depot/root/.p4ignore",
       "//depot/root/Assets/z2.mat",
       "//depot/root/Scripts/z10.CS",
       "//depot/root/Scripts/z2.cs",
     ]);
-    await shelfDialog
-      .getByRole("button", { name: "Close dialog", exact: true })
-      .click();
-    await expect(table).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(
       await page.evaluate(
         () => (window as unknown as { pendingWrites: number }).pendingWrites,
@@ -302,20 +341,29 @@ for (const width of [1280, 390]) {
     await page.screenshot({
       path: testInfo.outputPath("pending-file-table.png"),
     });
+    // Revert now dispatches through the host command, not through
+    // backend.performFileAction. revertPort is the app's own execution seam, so
+    // observing it keeps the request contract (whole CL, action, ids) intact.
     await page.evaluate(async () => {
-      const path = "/src/infrastructure/backend/index.ts";
-      const { backend } = await import(path);
-      backend.performFileAction = async (request: unknown) => {
+      const path = "/src/features/actions/revertTask.ts";
+      const { revertPort } = await import(path);
+      revertPort.execute = async (request: any) => {
         Object.assign(window, { unchangedRequest: request });
         return {
-          operation: {
-            operationId: "unchanged",
-            exitCode: 0,
-            durationMs: 1,
-            events: [],
-          },
-          affectedPaths: [],
+          outcome: "succeeded",
           message: "Unchanged files reverted",
+          operationIds: [request.operationId],
+          files: request.paths.map((depotPath: string) => ({
+            depotPath,
+            state: "succeeded",
+            message: "Reverted",
+          })),
+          refresh: {
+            pendingChanges: true,
+            workspaceStatus: true,
+            depotPaths: request.paths,
+            reason: "revert",
+          },
         };
       };
     });
@@ -343,19 +391,25 @@ for (const width of [1280, 390]) {
       .getByRole("button", { name: "Clear filters" })
       .click();
     await page.evaluate(async () => {
-      const path = "/src/infrastructure/backend/index.ts";
-      const { backend } = await import(path);
-      backend.performFileAction = async (request: unknown) => {
+      const path = "/src/features/actions/revertTask.ts";
+      const { revertPort } = await import(path);
+      revertPort.execute = async (request: any) => {
         Object.assign(window, { wholeRevertRequest: request });
         return {
-          operation: {
-            operationId: "whole-revert",
-            exitCode: 0,
-            durationMs: 1,
-            events: [],
-          },
-          affectedPaths: [],
+          outcome: "succeeded",
           message: "Whole changelist reverted",
+          operationIds: [request.operationId],
+          files: request.paths.map((depotPath: string) => ({
+            depotPath,
+            state: "succeeded",
+            message: "Reverted",
+          })),
+          refresh: {
+            pendingChanges: true,
+            workspaceStatus: true,
+            depotPaths: request.paths,
+            reason: "revert",
+          },
         };
       };
     });

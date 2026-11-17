@@ -53,7 +53,7 @@ for (const width of [1280, 390]) {
       });
     });
     await page
-      .getByRole("navigation", { name: "Activity bar" })
+      .locator(".activity-bar")
       .getByRole("button", { name: /^Pending/ })
       .click();
 
@@ -103,8 +103,10 @@ for (const width of [1280, 390]) {
     await toggle(0);
     await expectSeparated(0, 200);
     await header(200).scrollIntoViewIfNeeded();
+    // The shelf heading toggle is labelled through the catalog
+    // (pending.collapse.shelved.files / pending.expand.shelved.files).
     await card(200)
-      .getByRole("button", { name: "展开/折叠搁置文件 / Toggle shelved files" })
+      .getByRole("button", { name: "Collapse shelved files in CL 200" })
       .click();
     await expect(card(200).getByRole("grid")).toHaveCount(1);
     await expectSeparated(200, 199);

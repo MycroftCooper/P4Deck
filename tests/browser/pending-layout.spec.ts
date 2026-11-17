@@ -52,7 +52,7 @@ for (const width of [1280, 390]) {
       });
     });
     await page
-      .getByRole("navigation", { name: "Activity bar" })
+      .locator(".activity-bar")
       .getByRole("button", { name: /^Pending/ })
       .click();
     const header = page.locator('[data-pending-change="11208940"]');
@@ -72,19 +72,37 @@ for (const width of [1280, 390]) {
       const rect = element.getBoundingClientRect();
       return {
         height: rect.height,
-        inside: [...element.children].every((child) => {
-          const box = child.getBoundingClientRect();
-          return (
-            box.left >= rect.left &&
-            box.right <= rect.right &&
-            box.bottom <= rect.bottom
-          );
-        }),
+        // Every header cell must stay inside the card, including the trailing
+        // "Open CL menu" button; a child that escapes the header is clipped by
+        // .pending-card's overflow and can no longer be clicked.
+        outside: [...element.children]
+          .filter((child) => {
+            const box = child.getBoundingClientRect();
+            return !(
+              box.left >= rect.left &&
+              box.right <= rect.right &&
+              box.bottom <= rect.bottom
+            );
+          })
+          .map((child) => {
+            const box = child.getBoundingClientRect();
+            return {
+              label:
+                child.getAttribute("aria-label") ??
+                child.textContent?.trim().slice(0, 20) ??
+                child.tagName,
+              left: Math.round(box.left),
+              right: Math.round(box.right),
+              headerRight: Math.round(rect.right),
+            };
+          }),
       };
     });
-    expect(geometry.inside).toBe(true);
+    expect(geometry.outside).toEqual([]);
     expect(geometry.height).toBeLessThan(100);
-    await header.click();
+    // The CL title is the stable header label; the trailing header buttons stop
+    // their own clicks, so expand through the title instead of the header center.
+    await header.locator("strong").click();
     const paths = page.locator(".pending-file-path");
     await expect(paths).toHaveText([
       "Assets/Editor/AreaCollectorZone.cs",
@@ -94,9 +112,10 @@ for (const width of [1280, 390]) {
       "title",
       "Assets/Editor/AreaCollectorZone.cs",
     );
+    // The resizer's accessible name is bilingual ("调整列宽 / Resize File path"),
+    // so match the shared English suffix instead of the old English-only label.
     const pathResize = page.getByRole("separator", {
-      name: "Resize File path column",
-      exact: true,
+      name: "Resize File path",
     });
     await pathResize.focus();
     await pathResize.press("Home");

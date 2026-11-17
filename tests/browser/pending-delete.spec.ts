@@ -63,7 +63,7 @@ test("empty CL deletes with one click while nonempty CL stays protected", async 
     };
   });
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   const empty = page.locator('[data-pending-change="223"]');

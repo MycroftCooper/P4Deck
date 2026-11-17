@@ -58,12 +58,14 @@ for (const width of [1280, 390]) {
       Object.assign(window, { refreshPreservation: state });
     });
     await page
-      .getByRole("navigation", { name: "Activity bar" })
+      .locator(".activity-bar")
       .getByRole("button", { name: /^Pending/ })
       .click();
     const header = page.locator('[data-pending-change="202"]');
     await expect(header).toContainText("Original visible change");
-    await header.click();
+    // Expand through the CL title: the trailing header buttons stop their own
+    // clicks, so a header-center click is ambiguous at narrow widths.
+    await header.locator("strong").click();
     const body = page.locator(".pending-body");
     await expect(body).toContainText("retained.txt");
     await page.evaluate(() =>
@@ -119,6 +121,9 @@ for (const width of [1280, 390]) {
     );
     await expect(header).toContainText("Updated visible change");
     await expect(body).toBeVisible();
+    // The failure reason must stay visible: PendingPage used to render it in its
+    // role="alert" block. It currently only renders that block for connection or
+    // authentication problems, so the refresh error is never shown.
     await expect(page.locator(".pending-page")).toContainText(
       "Refresh unavailable",
     );

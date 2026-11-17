@@ -56,8 +56,10 @@ for (const width of [1280, 390]) {
             .getByRole("button", { name: "New CL", exact: true }),
         ).toHaveCount(0);
       }
+      // The page navigation moved into the command toolbar and keeps its text
+      // labels at every width (the toolbar scrolls horizontally instead).
       if (width === 390)
-        await expect(page.locator(".activity-text").first()).toBeHidden();
+        await expect(page.locator(".activity-text").first()).toBeVisible();
       if (kind === "submitted") {
         const controls = active.locator(".page-title-controls");
         await expect(controls.locator("h1")).toHaveText(labels[kind]);
@@ -70,20 +72,22 @@ for (const width of [1280, 390]) {
         ).toHaveCount(0);
       }
       if (kind === "history") {
-        await active
-          .getByRole("textbox", { name: "Depot path" })
-          .fill("//atlas/main/Source/render.ts");
-        await active.getByRole("button", { name: "Show history" }).click();
+        // History loads from the dock target bar; there is no separate submit.
+        const depot = active.getByRole("textbox", { name: "Depot path" });
+        await depot.fill("//atlas/main/Source/render.ts");
+        await depot.press("Enter");
         await expect(active.locator(".workspace-row").first()).toBeVisible();
       }
       if (kind === "diff" || kind === "revgraph") {
         const path = active.getByRole("textbox", {
-          name: kind === "diff" ? "Diff 文件路径" : "Rev Graph 文件路径",
+          name: kind === "diff" ? "Diff file path" : "Revision graph file path",
         });
         await path.fill("//atlas/main/Source/render.ts");
         await path.press("Enter");
         if (kind === "diff")
-          await expect(active.locator(".diff-side-line").first()).toBeVisible();
+          await expect(
+            active.locator(".diff-renderer [data-line]").first(),
+          ).toBeVisible();
         else
           await expect(
             active.locator('svg g[role="button"]').first(),
