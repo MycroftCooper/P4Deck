@@ -63,7 +63,7 @@ test("a fresh launch without a hash opens Files instead of the last restored tab
     localStorage.setItem("p4deck.leftOpen", "false");
   });
   await page.goto("/");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await expect(page).toHaveURL(/#\/files$/);
 });
 

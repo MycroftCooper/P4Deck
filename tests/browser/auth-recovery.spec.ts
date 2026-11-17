@@ -10,7 +10,7 @@ for (const width of [1280, 390]) {
       localStorage.setItem("p4deck.leftOpen", "false");
     });
     await page.goto("/#/files");
-    await expect(page.locator(".file-workbench h1")).toBeVisible();
+    await expect(page.locator(".file-workbench .file-table")).toBeVisible();
     await page.evaluate(async () => {
       const path = "/src/infrastructure/backend/index.ts";
       const { backend } = await import(path);

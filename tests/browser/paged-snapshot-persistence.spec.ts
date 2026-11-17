@@ -140,7 +140,7 @@ for (const view of views) {
       localStorage.setItem("p4deck.ui", JSON.stringify({ autoRefresh: false }));
     });
     await page.goto("/#/files");
-    await expect(page.locator(".file-workbench h1")).toBeVisible();
+    await expect(page.locator(".file-workbench .file-table")).toBeVisible();
     await installBackend(page, view, false);
     await visit(page, view);
     const panel = page.locator(view.root);
@@ -184,7 +184,7 @@ for (const view of views) {
     await page.goto("/#/files");
     // A hash change alone keeps the JS heap; reload must destroy appCache.
     await page.reload();
-    await expect(page.locator(".file-workbench h1")).toBeVisible();
+    await expect(page.locator(".file-workbench .file-table")).toBeVisible();
     expect(
       await page.evaluate(() => (window as any).pagedTest),
     ).toBeUndefined();

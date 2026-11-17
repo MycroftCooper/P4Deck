@@ -11,7 +11,7 @@ async function prepare(page: Page, numbered = true) {
     );
   });
   await page.goto("/#/files");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async (hasNumbered) => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
