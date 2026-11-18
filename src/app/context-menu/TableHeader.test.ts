@@ -17,5 +17,7 @@ it("expands actual columns with stable IDs instead of a placeholder", () => {
   expect(
     display.children?.every((item) => item.checked && item.reason && !item.run),
   ).toBe(true);
-  expect(items[0].reason).toContain("Revision");
+  // Sorting and layout items are still unconnected, so they are not offered: the
+  // menu lists the column inventory only.
+  expect(items.map((item) => item.label)).toEqual(["显示列"]);
 });

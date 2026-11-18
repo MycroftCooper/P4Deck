@@ -98,24 +98,49 @@ it.each([
 });
 
 for (const object of Object.keys(menuCatalog) as MenuObjectId[]) {
-  it(`${object}: exposes all planned leaves with explicit unavailable reasons until bound`, () => {
+  it(`${object}: renders bound leaves and explains initial ones, never the unwired backlog`, () => {
     const items = leaves(buildMenu(object));
-    expect(items.map((item) => item.id).sort()).toEqual(
-      menuCatalog[object].items.map((item) => item.id).sort(),
-    );
+    const rendered = new Set(items.map((item) => item.id));
+    for (const entry of menuCatalog[object].items) {
+      // Initial items are part of the shipped menu: they either run or say why
+      // this target cannot use them. Later items are backlog and are not shown
+      // until a page binds something runnable.
+      expect(rendered.has(entry.id), entry.id).toBe(entry.phase === "initial");
+    }
+    for (const item of items) expect(item.run, item.id).toBeUndefined();
     for (const item of items) {
-      expect(item.reason, item.id).toBeTruthy();
-      expect(item.run, item.id).toBeUndefined();
+      const entry = menuCatalog[object].items.find(
+        (value) => value.id === item.id,
+      );
+      if (entry?.phase === "initial") expect(item.reason, item.id).toBeTruthy();
     }
   });
 }
 
-it("shares a single copy submenu and groups pending workflows without dropping IDs", () => {
+it("never groups the unwired backlog into a pending submenu", () => {
+  for (const object of Object.keys(menuCatalog) as MenuObjectId[]) {
+    const items = buildMenu(object);
+    expect(
+      items.some((item) => item.label === "更多操作（待接入）"),
+      object,
+    ).toBe(false);
+    expect(
+      items.some((item) => item.id === `${object}:advanced`),
+      object,
+    ).toBe(false);
+  }
+});
+
+it("shows a pending item again as soon as a page binds it", () => {
+  const unbound = leaves(buildMenu("F01"));
+  expect(unbound.some((item) => item.label === "对账…")).toBe(false);
+  const bound = leaves(buildMenu("F01", { "对账…": { run: () => {} } }));
+  expect(bound.some((item) => item.label === "对账…" && item.run)).toBe(true);
+});
+
+it("shares a single copy submenu", () => {
   const items = buildMenu("F01");
   expect(items.find((item) => item.label === "复制")?.children).toHaveLength(4);
-  expect(
-    items.find((item) => item.label === "更多操作（待接入）")?.children?.length,
-  ).toBeGreaterThan(10);
 });
 it("wires revert-unchanged as a top-level file command", () => {
   expect(fileMenuCommands["还原未修改文件"]).toBe("revertUnchanged");
@@ -123,10 +148,6 @@ it("wires revert-unchanged as a top-level file command", () => {
   expect(
     items.some((item) => item.label === "还原未修改文件" && item.run),
   ).toBe(true);
-  const advanced = items.find((item) => item.label === "更多操作（待接入）");
-  expect(
-    advanced?.children?.some((item) => item.label === "还原未修改文件"),
-  ).toBe(false);
 });
 it("preserves explicitly bound callbacks and unavailable reasons", () => {
   let path = "a";
@@ -175,14 +196,12 @@ it("translates every menu label in the inventory without Chinese fallback", () =
       );
 });
 
-it("offers the two-file comparison inline instead of in the pending group", () => {
+it("offers the two-file comparison inline as a normal entry", () => {
   expect(fileMenuCommands["比较这两个文件…"]).toBe("diff");
   const items = buildMenu("F07", { "比较这两个文件…": { run: () => {} } });
   expect(
     items.some((item) => item.label === "比较这两个文件…" && item.run),
   ).toBe(true);
-  const advanced = items.find((item) => item.label === "更多操作（待接入）");
-  expect(
-    advanced?.children?.some((item) => item.label === "比较这两个文件…"),
-  ).toBe(false);
+  // Nothing is collected into a pending submenu any more.
+  expect(items.some((item) => item.label === "更多操作（待接入）")).toBe(false);
 });

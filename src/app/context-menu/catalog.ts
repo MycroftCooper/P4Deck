@@ -114,11 +114,6 @@ export const menuCatalog = {
         phase: "initial",
       },
       {
-        id: "F01-21",
-        label: "签出并用其他软件打开…",
-        phase: "later",
-      },
-      {
         id: "F01-22",
         label: "移到 CL…",
         phase: "later",
@@ -176,11 +171,6 @@ export const menuCatalog = {
       {
         id: "F01-34",
         label: "创建分支…",
-        phase: "later",
-      },
-      {
-        id: "F01-35",
-        label: "撤销已提交变更…",
         phase: "later",
       },
       {
@@ -290,11 +280,6 @@ export const menuCatalog = {
         phase: "initial",
       },
       {
-        id: "F02-20",
-        label: "签出并用其他软件打开…",
-        phase: "later",
-      },
-      {
         id: "F02-21",
         label: "移到 CL…",
         phase: "later",
@@ -357,11 +342,6 @@ export const menuCatalog = {
       {
         id: "F02-34",
         label: "打标签…",
-        phase: "later",
-      },
-      {
-        id: "F02-35",
-        label: "在 Streams 中查找…",
         phase: "later",
       },
       { id: "F02-36", label: "搁置此文件…", phase: "later" },
@@ -950,11 +930,6 @@ export const menuCatalog = {
         label: "在当前目录搜索",
         phase: "initial",
       },
-      {
-        id: "F09-07",
-        label: "在当前目录打开命令行",
-        phase: "later",
-      },
     ],
   },
   F10: {
@@ -1016,11 +991,6 @@ export const menuCatalog = {
         phase: "later",
       },
       {
-        id: "C01-08",
-        label: "还原整个 Default CL…",
-        phase: "later",
-      },
-      {
         id: "C01-09",
         label: "还原未修改文件",
         phase: "later",
@@ -1076,11 +1046,6 @@ export const menuCatalog = {
         phase: "later",
       },
       {
-        id: "C02-10",
-        label: "还原整个 CL…",
-        phase: "later",
-      },
-      {
         id: "C02-11",
         label: "还原未修改文件",
         phase: "later",
@@ -1125,11 +1090,6 @@ export const menuCatalog = {
         id: "C03-05",
         label: "刷新",
         phase: "initial",
-      },
-      {
-        id: "C03-06",
-        label: "查看其搁置内容",
-        phase: "later",
       },
       { id: "C03-07", label: "在 Swarm 中打开", phase: "initial" },
     ],
@@ -1481,16 +1441,6 @@ export const menuCatalog = {
         label: "查看此 CL 的差异",
         phase: "later",
       },
-      {
-        id: "C09-06",
-        label: "同步工作区到此 CL…",
-        phase: "later",
-      },
-      {
-        id: "C09-07",
-        label: "撤销此 CL…",
-        phase: "later",
-      },
       { id: "C09-08", label: "在 Swarm 中打开", phase: "initial" },
     ],
   },
@@ -1719,11 +1669,6 @@ export const menuCatalog = {
         label: "复制所选修订标识",
         phase: "initial",
       },
-      {
-        id: "V02-02",
-        label: "比较所选修订",
-        phase: "later",
-      },
     ],
   },
   V03: {
@@ -1831,11 +1776,6 @@ export const menuCatalog = {
         phase: "initial",
       },
       {
-        id: "V06-06",
-        label: "复制图片",
-        phase: "later",
-      },
-      {
         id: "V06-07",
         label: "图片另存为…",
         phase: "later",
@@ -1934,107 +1874,107 @@ export const menuCatalog = {
       {
         id: "S01-01",
         label: "文件预览",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-02",
         label: "在新页签中预览",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-03",
         label: "其他软件打开…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-04",
         label: "系统中定位",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-05",
         label: "获取最新",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-06",
         label: "获取指定版本…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-07",
         label: "签出…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-08",
         label: "添加到 P4…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-09",
         label: "标记删除…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-10",
         label: "还原…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-11",
         label: "与 have 版本比较",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-12",
         label: "文件历史",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-13",
         label: "修订图",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-14",
         label: "在所在目录显示",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-15",
         label: "在工作区中定位",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-16",
         label: "在 Depot 中定位",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-17",
         label: "复制 › 文件名",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-18",
         label: "复制 › 本地路径",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-19",
         label: "复制 › 相对路径",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-20",
         label: "复制 › Depot 路径",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S01-21",
         label: "刷新状态",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },
@@ -2044,57 +1984,57 @@ export const menuCatalog = {
       {
         id: "S02-01",
         label: "获取最新…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-02",
         label: "获取指定版本…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-03",
         label: "签出…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-04",
         label: "添加到 P4…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-05",
         label: "标记删除…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-06",
         label: "还原…",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-07",
         label: "复制 › 文件名列表",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-08",
         label: "复制 › 本地路径列表",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-09",
         label: "复制 › 相对路径列表",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-10",
         label: "复制 › Depot 路径列表",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S02-11",
         label: "刷新状态",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },
@@ -2104,22 +2044,22 @@ export const menuCatalog = {
       {
         id: "S03-01",
         label: "打开 CL 详情",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S03-02",
         label: "复制 CL 编号",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S03-03",
         label: "复制描述",
-        phase: "later",
+        phase: "initial",
       },
       {
         id: "S03-04",
         label: "刷新此结果",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },
@@ -2159,7 +2099,7 @@ export const menuCatalog = {
       {
         id: "S05-04",
         label: "重新执行搜索",
-        phase: "later",
+        phase: "initial",
       },
     ],
   },
@@ -2630,16 +2570,6 @@ export const menuCatalog = {
         label: "复制详细信息",
         phase: "initial",
       },
-      {
-        id: "U02-03",
-        label: "按此操作筛选",
-        phase: "later",
-      },
-      {
-        id: "U02-04",
-        label: "导出此操作日志…",
-        phase: "later",
-      },
     ],
   },
   U03: {
@@ -2649,11 +2579,6 @@ export const menuCatalog = {
         id: "U03-01",
         label: "复制所选日志",
         phase: "initial",
-      },
-      {
-        id: "U03-02",
-        label: "导出所选日志…",
-        phase: "later",
       },
     ],
   },
@@ -2679,11 +2604,6 @@ export const menuCatalog = {
         id: "U04-04",
         label: "清空显示",
         phase: "initial",
-      },
-      {
-        id: "U04-05",
-        label: "导出当前筛选日志…",
-        phase: "later",
       },
     ],
   },
@@ -2719,11 +2639,6 @@ export const menuCatalog = {
         id: "U06-01",
         label: "打开日志栏",
         phase: "initial",
-      },
-      {
-        id: "U06-02",
-        label: "查看任务列表",
-        phase: "later",
       },
     ],
   },
