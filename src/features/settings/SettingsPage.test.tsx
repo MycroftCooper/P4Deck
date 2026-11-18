@@ -263,6 +263,21 @@ async function waitForResolvedRoot(expected?: string) {
   if (expected) expect(rootStatus?.textContent).toContain(expected);
 }
 
+/**
+ * Wait until the page shows `expected`. Panels settle over several async steps
+ * (profile document, root resolution, CLI discovery), so asserting on the first
+ * flush after a re-render is a race: under parallel load the earlier step wins.
+ */
+async function waitForText(expected: string) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (host.textContent?.includes(expected)) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+  }
+  expect(host.textContent).toContain(expected);
+}
+
 beforeEach(() => {
   // Components translate through the module-level locale.
   setLocale("zh-CN");
@@ -1588,7 +1603,7 @@ it("requires exact fingerprint confirmation and provides external-auth guidance"
     confirmed: true,
   });
   await render(runtime(status("externalAuthRequired")));
-  expect(host.textContent).toContain("不会用普通密码框伪装完成外部认证");
+  await waitForText("不会用普通密码框伪装完成外部认证");
   expect(host.querySelector('input[type="password"]')).toBeNull();
 });
 
