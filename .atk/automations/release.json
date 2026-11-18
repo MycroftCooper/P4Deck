@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "id": "release",
+  "name": "P4Deck 发版",
+  "description": "先核对版本、双语说明和源码条件，再执行 ci:local 和签名构建。默认仅本地产物；真实发布使用预先准备的 release 分支/已推送标签，不自动提交、合并或推送。",
+  "trigger": {
+    "type": "manual"
+  },
+  "parameters": {
+    "realPublish": {
+      "type": "boolean",
+      "title": "是否真实发版",
+      "description": "false：签名构建和本地发布产物，不上传。true：上传并发布到 GitHub Releases。",
+      "default": false
+    },
+    "allowDirty": {
+      "type": "boolean",
+      "title": "本地预演允许未提交改动",
+      "description": "仅 realPublish=false 时可开启；真实发版始终要求干净工作区。",
+      "default": false
+    }
+  },
+  "steps": [
+    {
+      "id": "preflight",
+      "name": "发布前置条件",
+      "cli": "node",
+      "args": [
+        "scripts/atk-ci.mjs",
+        "--task",
+        "release-preflight",
+        "--real-publish",
+        "${params.realPublish}",
+        "--allow-dirty",
+        "${params.allowDirty}"
+      ],
+      "cwd": ".",
+      "timeoutMs": 60000,
+      "exports": [
+        {
+          "id": "result",
+          "path": "${step.dir}/output/result.json",
+          "kind": "file",
+          "required": true
+        },
+        {
+          "id": "plan",
+          "path": "${step.dir}/output/release-plan.json",
+          "kind": "file",
+          "required": false
+        }
+      ],
+      "result": {
+        "protocol": "atk-ci-result/v1",
+        "exportId": "result"
+      }
+    },
+    {
+      "id": "checks",
+      "name": "发布前完整检查",
+      "cli": "node",
+      "args": [
+        "scripts/atk-ci.mjs",
+        "--task",
+        "release-check",
+        "--real-publish",
+        "${params.realPublish}",
+        "--allow-dirty",
+        "${params.allowDirty}"
+      ],
+      "cwd": ".",
+      "timeoutMs": 7200000,
+      "exports": [
+        {
+          "id": "result",
+          "path": "${step.dir}/output/result.json",
+          "kind": "file",
+          "required": true
+        },
+        {
+          "id": "ci",
+          "path": "${step.dir}/output/ci",
+          "kind": "directory",
+          "required": true
+        }
+      ],
+      "result": {
+        "protocol": "atk-ci-result/v1",
+        "exportId": "result"
+      }
+    },
+    {
+      "id": "publish",
+      "name": "签名构建与发布",
+      "cli": "node",
+      "args": [
+        "scripts/atk-ci.mjs",
+        "--task",
+        "release",
+        "--real-publish",
+        "${params.realPublish}",
+        "--allow-dirty",
+        "${params.allowDirty}"
+      ],
+      "cwd": ".",
+      "timeoutMs": 7200000,
+      "exports": [
+        {
+          "id": "result",
+          "path": "${step.dir}/output/result.json",
+          "kind": "file",
+          "required": true
+        },
+        {
+          "id": "release",
+          "path": "${step.dir}/output/release",
+          "kind": "directory",
+          "required": true
+        }
+      ],
+      "result": {
+        "protocol": "atk-ci-result/v1",
+        "exportId": "result"
+      }
+    }
+  ]
+}
