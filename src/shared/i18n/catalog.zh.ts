@@ -560,7 +560,6 @@ export const zh = {
   "tools.unreadErrors": "{count} 个未查看的新错误",
   "contextMenu.workflowNotConnected": "后续功能：操作流程尚未接通",
   "contextMenu.unavailableForTarget": "当前对象或页面尚不支持此操作",
-  "contextMenu.moreActionsPending": "更多操作（待接入）",
   "contextMenu.sortingNotConnected": "{column}：排序尚未接通",
   "settings.backup.omittedKeys": "；已排除 {count} 个临时/敏感键",
   "settings.backup.verified":
@@ -2736,6 +2735,8 @@ export const zh = {
   "search.loading": "加载中…",
   "search.loading.more.results": "正在加载更多结果。",
   "search.matched": "匹配：",
+  "search.menu.change.description.missing":
+    "此结果没有可复制的 CL 描述，请打开 CL 详情后复制。",
   "search.no.destination.page": " · 暂无可用详情页",
   "search.no.job.details.page.exists": "尚无 Job 详情页，无法导航。",
   "search.no.matches.in.this.category": "此类别没有匹配项。",

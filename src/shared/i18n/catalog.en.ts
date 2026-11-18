@@ -604,7 +604,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.unreadErrors": "{count} new unread errors",
   "contextMenu.workflowNotConnected": "Workflow not connected yet",
   "contextMenu.unavailableForTarget": "Unavailable for this target",
-  "contextMenu.moreActionsPending": "More actions (pending)",
   "contextMenu.sortingNotConnected": "{column}: sorting not connected",
   "settings.backup.omittedKeys":
     "; {count} transient or sensitive keys omitted",
@@ -2927,6 +2926,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.loading": "Loading…",
   "search.loading.more.results": "Loading more results.",
   "search.matched": "Matched: ",
+  "search.menu.change.description.missing":
+    "This result carries no CL description to copy; open the CL details and copy it there.",
   "search.no.destination.page": " · no destination page",
   "search.no.job.details.page.exists":
     "No Job details page exists yet; navigation is unavailable.",

@@ -11,9 +11,29 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { backend } from "../../infrastructure/backend";
+import { useMenuEnvironment } from "../../app/context-menu/environment";
+import { useRecordSelection } from "../../app/context-menu/useRecordSelection";
+import { CommandExecutionContext } from "../../app/shell/CommandContext";
+import {
+  changelistSearchResultId,
+  fileResultNodes,
+  isFileSearchResult,
+  searchResultNode,
+  useSearchMenus,
+  type RowMenuProps,
+  type SearchMenuDeps,
+} from "./searchMenu";
 import {
   useOperationSession,
   type OperationLease,
@@ -143,12 +163,16 @@ function VirtualSearchResults({
   items,
   zh,
   navigationBusy,
-  onOpen,
+  rowMenu,
+  isSelected,
+  onSelect,
 }: {
   items: GlobalSearchItem[];
   zh: boolean;
   navigationBusy?: string;
-  onOpen(item: GlobalSearchItem): Promise<void>;
+  rowMenu(item: GlobalSearchItem): RowMenuProps | undefined;
+  isSelected(item: GlobalSearchItem): boolean;
+  onSelect(item: GlobalSearchItem, event: ReactMouseEvent): void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -223,6 +247,8 @@ function VirtualSearchResults({
         {rows.map((row) => {
           const item = items[row.index];
           const Icon = KIND_ICON[item.kind];
+          const menu = rowMenu(item);
+          const selected = isSelected(item);
           return (
             <div
               key={item.identity}
@@ -236,12 +262,16 @@ function VirtualSearchResults({
             >
               <button
                 data-search-index={row.index}
-                className="search-result-row"
+                className={
+                  selected ? "search-result-row selected" : "search-result-row"
+                }
                 disabled={navigationBusy === item.identity}
+                aria-pressed={selected}
                 title={tFor(zh ? "zh-CN" : "en-US", "search.open", {
                   p1: item.title,
                 })}
-                onClick={() => void onOpen(item)}
+                {...menu}
+                onClick={(event) => onSelect(item, event)}
               >
                 <Icon size={16} />
                 <span className="search-result-copy">
@@ -326,6 +356,11 @@ export function SearchPage({
   const [categoryLoading, setCategoryLoading] = useState<GlobalSearchKind>();
   const [navigationBusy, setNavigationBusy] = useState<string>();
   const [navigationNotice, setNavigationNotice] = useState("");
+  /** Bumped per submitted query so a new result set starts with no selection. */
+  const [searchRound, setSearchRound] = useState(0);
+  const env = useMenuEnvironment();
+  const executeCommand = useContext(CommandExecutionContext);
+  const menus = useSearchMenus();
 
   /**
    * One lease per search session, on a single channel. Submitting starts a
@@ -522,6 +557,7 @@ export function SearchPage({
       const lease = session.start(SEARCH);
       currentSession.current = lease;
       resetResults();
+      setSearchRound((round) => round + 1);
       const checked = validateSearchText(value);
       if (!checked.valid || !selectedKinds.length) {
         current.current = undefined;
@@ -583,6 +619,15 @@ export function SearchPage({
       })),
     [facets, items, kindSignature],
   );
+  /**
+   * Multi-select over the visible result set. The keys are search identities, so
+   * a row keeps its selection across a category retry; a new query starts clean.
+   */
+  const selection = useRecordSelection(
+    items,
+    (item) => item.identity,
+    `search:${searchRound}`,
+  );
   const totalMatched = facets.reduce(
     (sum, facet) => sum + facet.matchedCount,
     0,
@@ -629,6 +674,69 @@ export function SearchPage({
     } finally {
       setNavigationBusy(undefined);
     }
+  };
+
+  /** Re-run the accepted query, not whatever the draft happens to contain. */
+  const rerunSearch = () => {
+    const query = current.current;
+    if (query) startSession(query.text, query.kinds);
+    else submit();
+  };
+  /**
+   * Re-read one category. It always issues a request: a silently skipped refresh
+   * would look like a successful one.
+   */
+  const rerunCategory = (kind: GlobalSearchKind) => {
+    const query = current.current;
+    const lease = currentSession.current;
+    if (!query || !lease) {
+      rerunSearch();
+      return;
+    }
+    void execute(lease, query.text, [kind], undefined, "category");
+  };
+
+  /**
+   * Menu targets are snapshotted here, from the row that was right-clicked (or
+   * the selection it belongs to). Nothing in a binding reads page-level state at
+   * run time, so a later selection change cannot redirect an action.
+   */
+  const menuDeps: SearchMenuDeps = {
+    execute: (id, target, source) => executeCommand(id, target, source),
+    env,
+    native: env.runtime.mode === "tauri",
+    zh,
+    commandBusy: env.commandBusy,
+    openItem: (item) => void openItem(item),
+    rerunSearch,
+    rerunCategory,
+    selectAll: () => selection.all(),
+    clearSelection: () => selection.clear(),
+    queryText: () => current.current?.text ?? draft,
+  };
+
+  const rowMenu = (item: GlobalSearchItem): RowMenuProps | undefined => {
+    const withRow = selection.targets(item);
+    if (isFileSearchResult(item)) {
+      const primary = searchResultNode(item, env.runtime.context.cwd);
+      const nodes = fileResultNodes(withRow, env.runtime.context.cwd);
+      if (primary && nodes.length)
+        return menus.fileRow(nodes, primary, menuDeps, () =>
+          selection.context(item),
+        );
+    }
+    if (changelistSearchResultId(item) !== undefined)
+      return menus.changelistRow(item, menuDeps);
+    if (item.target.type === "stream") return menus.streamRow(item, menuDeps);
+    // Job rows are not listed, so every rendered row is covered above.
+    return undefined;
+  };
+
+  const selectResult = (item: GlobalSearchItem, event: ReactMouseEvent) => {
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    selection.select(item, event);
+    // A modifier click only changes the selection; a plain click opens the row.
+    if (!additive) void openItem(item);
   };
 
   return (
@@ -735,6 +843,9 @@ export function SearchPage({
           className="search-card search-results"
           aria-label={t("search.search.results")}
           aria-busy={phase === "loading" || loadingMore}
+          {...(phase === "ready" && items.length
+            ? menus.blankArea(menuDeps)
+            : {})}
         >
           <div className="search-results-heading">
             <div>
@@ -864,7 +975,9 @@ export function SearchPage({
                         items={groupItems}
                         zh={zh}
                         navigationBusy={navigationBusy}
-                        onOpen={openItem}
+                        rowMenu={rowMenu}
+                        isSelected={selection.isSelected}
+                        onSelect={selectResult}
                       />
                     ) : !facet?.error ? (
                       <p className="search-group-empty">
