@@ -279,7 +279,18 @@ try {
   const saved = JSON.parse(
     localStorage.getItem("p4deck.mockConnection") ?? "null",
   );
-  if (saved?.server && saved?.user && saved?.client) mockContext = saved;
+  if (saved?.server && saved?.user && saved?.client) {
+    mockContext = saved;
+    // Keep the seeded active profile in step with the saved connection. The
+    // setup gate compares the active profile's context with the runtime context,
+    // so a saved connection that only replaced the context looked like "no active
+    // connection" and blocked the app behind the first-run guide.
+    mockProfiles = mockProfiles.map((profile) =>
+      profile.id === mockActiveProfileId
+        ? { ...profile, context: { ...saved } }
+        : profile,
+    );
+  }
 } catch {
   /* Defaults. */
 }
@@ -858,6 +869,44 @@ export const mockBackend: Backend = {
       server: mockContext.server,
       user: mockContext.user,
       client: mockContext.client,
+    };
+  },
+  async confirmRevertAction(request, connection) {
+    // Same contract as the host: the connection snapshot must still match the
+    // active one, and the result reports one entry per requested path.
+    if (
+      !connection ||
+      connection.profileId !== mockActiveProfileId ||
+      connection.generation !== mockContextGeneration.toString()
+    )
+      throw new Error("connectionChanged");
+    const operationId = request.operationId ?? crypto.randomUUID();
+    const paths = [...new Set(request.paths ?? [])].sort();
+    emitMockLog(
+      "info",
+      "gui",
+      `p4 ${request.action ?? "revert"}`,
+      "Browser Mock only: revert was simulated.",
+      operationId,
+      10,
+    );
+    return {
+      outcome: "succeeded",
+      message:
+        "Browser Mock only: revert was simulated. No real files or P4 server were changed.",
+      operationIds: [operationId],
+      logReference: operationId,
+      files: paths.map((depotPath) => ({
+        depotPath,
+        state: "succeeded" as const,
+        message: "simulated",
+      })),
+      refresh: {
+        pendingChanges: true,
+        workspaceStatus: true,
+        depotPaths: paths,
+        reason: "Browser Mock: refresh the simulated workspace.",
+      },
     };
   },
   async createConfigBackup(payload) {
@@ -3299,6 +3348,14 @@ export const mockBackend: Backend = {
         exitCode: 0,
         durationMs: 120,
         events: [event("completed", 100)],
+      },
+      // The host answers every dispatched command with this envelope; without it
+      // the frontend has to treat the outcome as unknown, which kept the file
+      // action ledger open and silently swallowed the next write on the same path.
+      execution: {
+        operationId,
+        outcome: "commandCompleted",
+        perFileEvidence: "notCollected",
       },
       affectedPaths: request.paths,
       message: `${request.action} completed in Mock Backend.`,

@@ -1,5 +1,16 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/** Resolve a theme token the same way the palette probe above does. */
+const resolvedToken = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = `var(${name})`;
+    const value = getComputedStyle(probe).color;
+    probe.remove();
+    return value;
+  }, token);
 
 for (const theme of ["light", "dark"] as const) {
   test(`dropdown pickers follow the ${theme} app palette and keep keyboard selection`, async ({
@@ -102,13 +113,13 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expect(themeSelect.locator("option").first()).toHaveCSS(
       "color",
-      "rgb(225, 234, 229)",
+      await resolvedToken(page, "--text"),
     );
     await page.emulateMedia({ colorScheme: "light" });
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(themeSelect.locator("option").first()).toHaveCSS(
       "color",
-      "rgb(35, 53, 45)",
+      await resolvedToken(page, "--text"),
     );
   });
 }
@@ -121,7 +132,10 @@ test("Submitted trigger content is centered with trailing arrows", async ({
   await page.setContent(
     `<div class="submitted-filters"><div class="submitted-filter-field"><select><option>Ordinary submission</option></select></div><div class="submitted-saved-filters"><div class="submitted-preset-group"><select><option>My changes</option></select></div></div><details class="submitted-stream-picker"><summary><span>All streams</span><svg width="14" height="14"></svg></summary></details></div>`,
   );
-  for (const name of ["tokens", "workbench", "dropdowns"]) {
+  // The Submitted filter triggers are styled by submitted.css (30px triggers,
+  // centered content, space-between); loading only the shared sheets measured
+  // the unstyled default instead of the real controls.
+  for (const name of ["tokens", "workbench", "dropdowns", "submitted"]) {
     await page.addStyleTag({
       content: readFileSync(`src/app/styles/${name}.css`, "utf8"),
     });

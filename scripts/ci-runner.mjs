@@ -92,8 +92,12 @@ if (!Number.isFinite(settings.timeoutMs) || settings.timeoutMs <= 0) {
   process.exit(2);
 }
 
-const summaryFile = path.resolve("artifacts", "ci", `${mode}-latest.json`);
-const logsDir = path.resolve("artifacts", "ci", "logs", mode);
+const reportRoot = path.resolve(
+  process.env.P4DECK_CI_OUTPUT_DIR || "artifacts/ci",
+);
+const summaryFile = path.join(reportRoot, `${mode}-latest.json`);
+const logsDir = path.join(reportRoot, "logs", mode);
+const atkProgress = Boolean(process.env.ATK_RUN_ID && process.env.ATK_STEP_ID);
 const showProgress = Boolean(process.stdout.isTTY) && !settings.json;
 
 function writeSummary(summary) {
@@ -161,6 +165,25 @@ const nodeStep = (name, kind, script, args = [], group = "web") => ({
   args: [script, ...args],
 });
 
+const PLAYWRIGHT_CLI = "node_modules/@playwright/test/cli.js";
+/**
+ * Playwright owns its own web server (`pnpm dev` on 127.0.0.1:1420) and reuses a
+ * running one outside CI, so these steps need no server management here.
+ */
+const browserStep = (name, targets, extraArgs = [], group = "serial") => ({
+  name,
+  kind: "playwright",
+  group,
+  command: process.execPath,
+  args: [
+    PLAYWRIGHT_CLI,
+    "test",
+    ...(Array.isArray(targets) ? targets : [targets]),
+    "--reporter=line",
+    ...extraArgs,
+  ],
+});
+
 const childEnvironment = { ...process.env };
 for (const secretName of [
   "P4PASSWD",
@@ -194,6 +217,15 @@ const webSteps = [
   nodeStep("release-notes-tests", "node-test", "--test", [
     "scripts/release-notes.test.mjs",
   ]),
+  nodeStep("bump-version-tests", "node-test", "--test", [
+    "scripts/bump-version.test.mjs",
+  ]),
+  nodeStep("publish-update-tests", "node-test", "--test", [
+    "scripts/publish-update.test.mjs",
+  ]),
+  nodeStep("atk-ci-tests", "node-test", "--test", [
+    "scripts/atk-ci.node-test.mjs",
+  ]),
   nodeStep("ipc-surface-tests", "node-test", "--test", [
     "scripts/validate-ipc-surface.test.mjs",
   ]),
@@ -203,6 +235,20 @@ const webSteps = [
   pnpmStep("web-format", "prettier", "format:check", "web"),
   pnpmStep("web-check", "tsc", "check:web", "web"),
   pnpmStep("web-test", "vitest", "test:web:ci", "web"),
+  // A small smoke slice runs on every quick gate so a broken shell is caught
+  // before the freeze; the full suite runs on the delivery gate below. It runs
+  // after the parallel groups because a browser competes for the CPU that the
+  // 100k-file virtualisation test needs.
+  browserStep(
+    "browser-smoke",
+    [
+      "tests/browser/page-smoke.spec.ts",
+      "tests/browser/workspace-switcher.spec.ts",
+      "tests/browser/sidebar-resize.spec.ts",
+    ],
+    ["--workers=1"],
+    "serial",
+  ),
 ];
 
 const rustSteps = [
@@ -274,6 +320,10 @@ if (mode === "local") {
       [],
       "serial",
     ),
+    // The whole browser suite runs on the delivery gate: it is the only check
+    // that sees a real DOM, and leaving it out is how it rotted for eleven days.
+    // One worker keeps timings predictable on a shared machine.
+    browserStep("browser-e2e", "tests/browser", ["--workers=1"], "serial"),
     pnpmStep("web-performance", "perf", "test:perf", "serial"),
     pnpmStep("backend-performance", "perf", "test:perf:backend", "serial"),
   ];
@@ -309,11 +359,35 @@ if (mode === "local") {
 
 const start = Date.now();
 if (!settings.verbose) {
+  const relativeLogs = path.relative(reportRoot, logsDir);
+  if (
+    !relativeLogs ||
+    relativeLogs.startsWith("..") ||
+    path.isAbsolute(relativeLogs)
+  )
+    throw new Error("CI log directory escapes the selected report root");
   rmSync(logsDir, { recursive: true, force: true });
   mkdirSync(logsDir, { recursive: true });
 }
 
 const results = new Array(plan.length);
+const activeChecks = new Set();
+function reportAtkProgress() {
+  if (!atkProgress) return;
+  process.stdout.write(
+    "::atk::" +
+      JSON.stringify({
+        schemaVersion: 1,
+        type: "progress",
+        percent: Math.floor(
+          (results.filter(Boolean).length / plan.length) * 100,
+        ),
+        current: [...activeChecks].join(", ") || `ci:${mode}`,
+        message: `${results.filter(Boolean).length}/${plan.length} checks completed`,
+      }) +
+      "\n",
+  );
+}
 
 function killTree(child) {
   if (!child.pid) return;
@@ -362,7 +436,7 @@ function spawnStep(step) {
         timedOut,
       });
     });
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       clearTimeout(timer);
       resolve({
         exitCode: timedOut ? 124 : signal ? 128 : (code ?? 1),
@@ -513,6 +587,8 @@ function reportResult(result) {
 }
 
 async function runStep(step, index) {
+  activeChecks.add(step.name);
+  reportAtkProgress();
   if (showProgress) process.stdout.write(`» ${step.name}\n`);
   const startedAt = new Date().toISOString();
   const started = Date.now();
@@ -565,6 +641,8 @@ async function runStep(step, index) {
     timedOut: raw.timedOut,
   };
   results[index] = result;
+  activeChecks.delete(step.name);
+  reportAtkProgress();
   reportResult(result);
   return result;
 }

@@ -553,7 +553,10 @@ it("restores an optimistically deleted empty CL when the P4 request fails", asyn
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
   expect(host.querySelector('[data-pending-change="202"]')).toBeTruthy();
-  expect(host.querySelector('[role="alert"]')).toBeNull();
+  // The failure is shown and logged; hiding it left the delete silently undone.
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "delete failed",
+  );
   expect(recordFrontendOperationLog).toHaveBeenCalledWith(
     expect.objectContaining({ code: "operationFailed" }),
   );
@@ -632,7 +635,7 @@ it("keeps expanded rows during a refresh, coalesces automatic reads, and retains
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
   expect(host.textContent).toContain("Updated target");
-  expect(host.textContent).not.toContain("Refresh unavailable");
+  expect(host.textContent).toContain("Refresh unavailable");
   expect(recordFrontendOperationLog).toHaveBeenCalledWith(
     expect.objectContaining({ phase: "refresh", code: "refreshFailed" }),
   );

@@ -36,6 +36,9 @@
 //                               Chinese section for the in-app update prompt.
 //                               Validate the file with
 //                               `node scripts/validate-release-notes.mjs <file>`.
+//                               Notes are mandatory: when neither this nor --notes
+//                               is given, ForAIDoc/PM/releases/v<version>.md is
+//                               used, and publishing stops if no notes exist.
 //   --repo <owner/name>         release repo (default: derived from the updater endpoint)
 //   --bundle-dir <path>         directory holding the built NSIS artifacts (default: target/release/bundle/nsis)
 //   --offline-webview2          build with the ~215MB offline WebView2 installer
@@ -116,6 +119,37 @@ export function assertNotesNotMojibake(notes) {
     );
   }
 }
+/**
+ * Locate the release notes that will be published. Notes are mandatory: `--notes`
+ * wins, then an explicit `--notes-file`, then the committed
+ * `ForAIDoc/PM/releases/v<version>.md`. Having none is an error, because an empty
+ * body has shipped before and leaves the in-app update prompt blank; correcting it
+ * afterwards means editing an already published release.
+ */
+export function resolveReleaseNotes({
+  notes,
+  notesFile,
+  defaultNotesFile,
+  readText = (file) => readFileSync(file, "utf8"),
+  exists = existsSync,
+}) {
+  const inline = typeof notes === "string" ? notes.trim() : "";
+  if (inline.length > 0) return { text: inline, path: undefined };
+  const file =
+    notesFile ?? (exists(defaultNotesFile) ? defaultNotesFile : undefined);
+  if (!file) {
+    throw new Error(
+      `no release notes: pass --notes-file <file>, or add ${defaultNotesFile}. ` +
+        "A release with an empty body leaves the update prompt blank and cannot be corrected without editing the published release.",
+    );
+  }
+  const text = readText(file).trim();
+  if (text.length === 0) {
+    throw new Error(`release notes file ${file} is empty`);
+  }
+  return { text, path: file };
+}
+
 const DEFAULT_KEY_DIR = ".p4deck";
 const DEFAULT_API_URL = "https://api.github.com";
 const NSIS_BUNDLE_DIR = path.join(
@@ -1077,11 +1111,21 @@ async function main() {
         `the updater payload was signed for version ${signatureInfo.signedVersion}, but the app version is ${version}.`,
       );
     }
-    const notesText =
-      args.notes ??
-      (args.notesFile
-        ? readFileSync(path.resolve(args.notesFile), "utf8").trim()
-        : RELEASE_NOTES_DEFAULT);
+    // Release notes are mandatory: the GitHub page and the in-app update prompt
+    // both read them, and an empty body has shipped before. The committed copy
+    // under ForAIDoc/PM/releases/ is preferred over the ignored artifacts/.
+    const { text: notesText, path: notesPath } = resolveReleaseNotes({
+      notes: args.notes,
+      notesFile: args.notesFile,
+      defaultNotesFile: path.join(
+        repoRoot,
+        "ForAIDoc",
+        "PM",
+        "releases",
+        `v${version}.md`,
+      ),
+      readText: (file) => readFileSync(path.resolve(file), "utf8"),
+    });
     if (!process.env.P4DECK_ALLOW_NOTES_QUERY) {
       assertNotesNotMojibake(notesText);
     }
@@ -1089,16 +1133,16 @@ async function main() {
     // latest.json keeps the Chinese section. `--notes` stays single-language for
     // quick local experiments only.
     let bilingualNotes = null;
-    if (args.notesFile) {
+    if (notesPath) {
       bilingualNotes = parseBilingualNotes(notesText);
       const problems = validateBilingualNotes(bilingualNotes);
       if (problems.length > 0) {
         throw new Error(
-          `release notes file ${args.notesFile} is not publishable:\n- ${problems.join("\n- ")}\n` +
+          `release notes file ${notesPath} is not publishable:\n- ${problems.join("\n- ")}\n` +
             "Add the missing `## 中文` / `## English` sections, or run `node scripts/validate-release-notes.mjs <file>`.",
         );
       }
-    } else if (notesText) {
+    } else {
       log(
         "--notes is single-language; pass --notes-file with `## 中文` and `## English` for a bilingual release page",
       );

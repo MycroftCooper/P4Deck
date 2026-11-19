@@ -583,9 +583,36 @@ export function ReadOnlyPage({
       )}
       {kind === "history" ? (
         refreshSlot ? (
-          createPortal(refreshButton, refreshSlot)
+          createPortal(
+            <>
+              {/* Comparing two revisions of one file was only reachable from the
+                  row context menu; the same pair belongs on the page itself. */}
+              {selectedHistory.length === 2 &&
+                historyDiffPair(selectedHistory) && (
+                  <button
+                    title={t("browse.compareSelectedInNewTab")}
+                    onClick={() => compareHistory(selectedHistory)}
+                  >
+                    {t("browse.compare.selected.revisions")}
+                  </button>
+                )}
+              {refreshButton}
+            </>,
+            refreshSlot,
+          )
         ) : (
-          refreshButton
+          <div className="section-title-actions">
+            {selectedHistory.length === 2 &&
+              historyDiffPair(selectedHistory) && (
+                <button
+                  title={t("browse.compareSelectedInNewTab")}
+                  onClick={() => compareHistory(selectedHistory)}
+                >
+                  {t("browse.compare.selected.revisions")}
+                </button>
+              )}
+            {refreshButton}
+          </div>
         )
       ) : (
         <FixedPageHeader

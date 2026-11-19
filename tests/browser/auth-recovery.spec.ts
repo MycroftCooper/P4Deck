@@ -10,7 +10,7 @@ for (const width of [1280, 390]) {
       localStorage.setItem("p4deck.leftOpen", "false");
     });
     await page.goto("/#/files");
-    await expect(page.locator(".file-workbench h1")).toBeVisible();
+    await expect(page.locator(".file-workbench .file-table")).toBeVisible();
     await page.evaluate(async () => {
       const path = "/src/infrastructure/backend/index.ts";
       const { backend } = await import(path);
@@ -38,7 +38,7 @@ for (const width of [1280, 390]) {
           : connected;
       Object.assign(window, { authRecovery: state });
     });
-    const activity = page.getByRole("navigation", { name: "Activity bar" });
+    const activity = page.locator(".activity-bar");
     await activity.getByRole("button", { name: /^Pending/ }).click();
     const alert = page.locator(".pending-page [role=alert]");
     await expect(alert).toContainText("Sign in again in connection settings");

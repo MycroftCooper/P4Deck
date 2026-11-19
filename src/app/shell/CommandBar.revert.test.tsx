@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
   connection: vi.fn(),
   invalidate: vi.fn(),
   listWorkspaceChildren: vi.fn(),
+  confirmRevert: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: api.invoke,
@@ -32,6 +33,7 @@ vi.mock("../../infrastructure/backend", () => ({
     performFileAction: api.old,
     companySubmitConnectionSnapshot: api.connection,
     listWorkspaceChildren: api.listWorkspaceChildren,
+    confirmRevertAction: api.confirmRevert,
     subscribeOperationEvents: async () => () => {},
   },
 }));
@@ -123,10 +125,10 @@ it.each([
       cacheFreshness: "fresh",
     });
     let finish!: (v: WorkflowResult) => void;
-    api.invoke.mockImplementation((command: string) =>
-      command === "confirm_revert_action"
-        ? new Promise((r) => (finish = r))
-        : Promise.resolve("recorded"),
+    // Revert is a backend write now; the raw invoke only serves the receipt lookup.
+    api.invoke.mockImplementation(() => Promise.resolve("recorded"));
+    api.confirmRevert.mockImplementation(
+      () => new Promise((r) => (finish = r)),
     );
     api.connection.mockResolvedValue({
       profileId: "p",
@@ -137,6 +139,7 @@ it.each([
     });
     api.confirm.mockResolvedValue(!cancel);
     api.invoke.mockClear();
+    api.confirmRevert.mockClear();
     api.old.mockClear();
     api.invalidate.mockClear();
     let handler: ((id: CommandId, target?: CommandTarget) => void) | undefined;
@@ -178,7 +181,7 @@ it.each([
     });
     expect(api.confirm).toHaveBeenCalled();
     if (cancel) {
-      expect(api.invoke).not.toHaveBeenCalled();
+      expect(api.confirmRevert).not.toHaveBeenCalled();
       expect(document.querySelector('[data-testid="files"]')!.textContent).toBe(
         "//fixture/a",
       );
@@ -189,11 +192,9 @@ it.each([
     );
     expect(api.old).not.toHaveBeenCalled();
     expect(api.invalidate).not.toHaveBeenCalled();
-    expect(api.invoke).toHaveBeenCalledWith(
-      "confirm_revert_action",
-      expect.objectContaining({
-        request: expect.objectContaining({ paths: ["//fixture/a"] }),
-      }),
+    expect(api.confirmRevert).toHaveBeenCalledWith(
+      expect.objectContaining({ paths: ["//fixture/a"] }),
+      expect.anything(),
     );
     await act(async () => {
       finish({

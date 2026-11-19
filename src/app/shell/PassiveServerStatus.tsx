@@ -3,6 +3,7 @@ import {
   Circle,
   CircleCheck,
   Clock,
+  Hourglass,
   KeyRound,
   ShieldAlert,
   Unplug,
@@ -21,6 +22,7 @@ const icons = {
   permission: ShieldAlert,
   failed: Unplug,
   timeout: TimerOff,
+  busy: Hourglass,
 };
 export function PassiveServerStatusIcon({
   status,

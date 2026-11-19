@@ -1,7 +1,11 @@
 use crate::{
-    app::confirmation::{
-        Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest,
-        ConfirmationTicket, IssuedConfirmation, MutationLane, RecheckVerdict, ReviewSpec,
+    app::{
+        confirmation::{
+            Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode,
+            ConfirmationRequest, ConfirmationTicket, IssuedConfirmation, MutationLane,
+            RecheckVerdict, ReviewSpec,
+        },
+        operation_id::{is_valid_operation_id, resolve_operation_prefix},
     },
     domain::*,
     p4::{
@@ -361,7 +365,30 @@ impl BranchMappingService {
         request: BranchMutationPreflightRequest,
         app: Option<&AppHandle>,
     ) -> BranchMutationPreflight {
-        let operation_id = safe_operation_id(request.operation_id.as_deref(), "branch-preflight");
+        // The caller's id owns the inspection commands and the write group, so
+        // `cancelOperation` with the id the frontend sent reaches them. A
+        // supplied-but-invalid id is refused instead of being replaced.
+        let operation_id =
+            match resolve_operation_prefix(request.operation_id.as_deref(), "branch-preflight") {
+                Ok(operation_id) => operation_id,
+                Err(error) => {
+                    return BranchMutationPreflight {
+                        ready: false,
+                        mode: request.mode,
+                        name: request.name,
+                        current: None,
+                        desired: request.desired,
+                        blockers: vec![issue(BranchIssueCode::InvalidInput, error.to_string())],
+                        warnings: Vec::new(),
+                        target: None,
+                        preview_digest: String::new(),
+                        token: None,
+                        expires_at: now_i64(),
+                        ttl_ms: self.tokens.ttl_ms(),
+                        operation_ids: Vec::new(),
+                    };
+                }
+            };
         let (context, generation) = self.contexts.snapshot();
         let profile = self.contexts.active_profile_id();
         if let Err(error) = self.ensure_active(&operation_id, &context, generation, &profile) {
@@ -500,6 +527,17 @@ impl BranchMappingService {
                 confirmation.acknowledge_dangerous_delete,
             ),
         };
+        let root_id =
+            match resolve_operation_prefix(confirmation.operation_id.as_deref(), "branch-mutation")
+            {
+                Ok(root_id) => root_id,
+                Err(error) => {
+                    return rejected(
+                        BranchMutationFailureCode::PreflightChanged,
+                        error.to_string(),
+                    );
+                }
+            };
         let mut spec = BranchReviewSpec {
             service: self,
             admitted,
@@ -508,7 +546,7 @@ impl BranchMappingService {
             recheck_operation_ids: Vec::new(),
             // Minted once for the whole attempt and reused by `lane`, the
             // re-check, the write and the verification.
-            root_id: safe_operation_id(confirmation.operation_id.as_deref(), "branch-mutation"),
+            root_id,
             echoed_target: Some(confirmation.target.clone()),
         };
         match self.tokens.confirm(request, &mut spec).await {
@@ -1200,7 +1238,7 @@ fn validate_request_identity(
     operation_id: &str,
     request_generation: u64,
 ) -> Result<(), BranchMappingRequestError> {
-    if request_generation == 0 || !valid_operation_id(operation_id) {
+    if request_generation == 0 || !is_valid_operation_id(operation_id) {
         return Err(request_error(
             BranchMappingRequestErrorCode::InvalidQuery,
             "A valid operation ID and positive request generation are required.",
@@ -1444,21 +1482,6 @@ fn digest<T: Serialize>(value: &T) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
-}
-
-fn valid_operation_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | ':')
-        })
-}
-
-fn safe_operation_id(value: Option<&str>, prefix: &str) -> String {
-    value
-        .filter(|value| valid_operation_id(value))
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("{prefix}-{}", Uuid::new_v4()))
 }
 
 fn now_u64() -> u64 {

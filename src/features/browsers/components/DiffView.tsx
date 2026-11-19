@@ -104,6 +104,45 @@ function normalizeDiffContent(text: string) {
   return text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
 }
 
+/**
+ * Keep the diff rows laid out instead of overlapping in one strip.
+ *
+ * @pierre/diffs renders each column as a CSS `subgrid` and binds it to the row
+ * tracks with an inline `grid-row: span N`. WebView2 (the desktop shell) can
+ * keep the first subgrid layout after the diff DOM is inserted or resized, so
+ * every row collapses onto the same track — the panes then look "all folded"
+ * even though the hunk rows are in the DOM. When the resolved track count is
+ * smaller than the rows the renderer put in the column, re-asserting the spans
+ * forces the engine to rebuild the row tracks.
+ */
+function repairDiffGrid(node: HTMLElement) {
+  const shadow = node.shadowRoot;
+  if (!shadow) return;
+  for (const code of shadow.querySelectorAll<HTMLElement>("[data-code]")) {
+    const columns = [
+      code.querySelector<HTMLElement>("[data-gutter]"),
+      code.querySelector<HTMLElement>("[data-content]"),
+    ];
+    const rowCount = Math.max(
+      ...columns.map((column) => column?.children.length ?? 0),
+    );
+    if (rowCount <= 0) continue;
+    const tracks = getComputedStyle(code)
+      .gridTemplateRows.split(/\s+/)
+      .filter(Boolean).length;
+    if (tracks >= rowCount) continue;
+    const span = `span ${rowCount}`;
+    for (const column of columns) {
+      if (!column) continue;
+      // Write through a different value first: re-applying the same string can
+      // be a no-op and leave the stale subgrid layout in place.
+      column.style.gridRow = "span 1";
+      void column.offsetHeight;
+      column.style.gridRow = span;
+    }
+  }
+}
+
 function useResolvedTheme() {
   const [theme, setTheme] = useState<DiffTheme>(resolvedTheme);
   useEffect(() => {
@@ -378,28 +417,72 @@ export function DiffView({
     if (row) setSide(sideOfRow(row) === "left" ? "left" : "right");
   }, []);
 
+  // Rows can settle on the wrong track when the first render happens before the
+  // page has been laid out; repair both synchronously and once after paint, and
+  // again whenever the diff surface is resized (the dock animates its panels).
+  const gridRepairFrame = useRef<number | null>(null);
+  const gridObserver = useRef<ResizeObserver | null>(null);
+  const scheduleGridRepair = useCallback((node: HTMLElement) => {
+    repairDiffGrid(node);
+    if (typeof requestAnimationFrame !== "function") return;
+    if (gridRepairFrame.current !== null)
+      cancelAnimationFrame(gridRepairFrame.current);
+    gridRepairFrame.current = requestAnimationFrame(() => {
+      gridRepairFrame.current = null;
+      repairDiffGrid(node);
+    });
+  }, []);
+  const watchDiffGrid = useCallback((node: HTMLElement) => {
+    if (typeof ResizeObserver !== "function") return;
+    gridObserver.current ??= new ResizeObserver(() => {
+      const current = hostRef.current;
+      if (current) repairDiffGrid(current);
+    });
+    const observer = gridObserver.current;
+    observer.disconnect();
+    observer.observe(node);
+    const scrollRoot = node.closest<HTMLElement>(".diff-scroll-root");
+    if (scrollRoot) observer.observe(scrollRoot);
+  }, []);
+  useEffect(
+    () => () => {
+      if (gridRepairFrame.current !== null)
+        cancelAnimationFrame(gridRepairFrame.current);
+      gridObserver.current?.disconnect();
+      gridObserver.current = null;
+    },
+    [],
+  );
+
   const postRender = useCallback(
     (node: HTMLElement, instance: FileDiffInstance, phase: PostRenderPhase) => {
       hostRef.current = node;
       instanceRef.current = instance as ScrollInstance;
       const shadow = node.shadowRoot;
-      if (shadow) applySearchHighlights(shadow, searchStateRef.current);
+      if (shadow) {
+        applySearchHighlights(shadow, searchStateRef.current);
+        if (phase !== "unmount") {
+          scheduleGridRepair(node);
+          watchDiffGrid(node);
+        }
+      }
       const scrollRoot = node.closest<HTMLElement>(".diff-scroll-root");
       if (scrollRoot) {
         // Keyboard users need a focusable scroll region for the virtualizer.
         scrollRoot.tabIndex = 0;
         scrollRoot.setAttribute("role", "region");
-        scrollRoot.setAttribute("aria-label", "Diff content / 差异内容");
+        scrollRoot.setAttribute("aria-label", t("browse.diff.content"));
       }
       if (phase === "unmount") {
         node.removeEventListener("contextmenu", onMenu);
         node.removeEventListener("pointerdown", onPointerDown);
+        gridObserver.current?.disconnect();
         if (hostRef.current === node) hostRef.current = undefined;
         if (instanceRef.current === (instance as ScrollInstance))
           instanceRef.current = undefined;
       }
     },
-    [onMenu, onPointerDown],
+    [onMenu, onPointerDown, scheduleGridRepair, watchDiffGrid],
   );
 
   useEffect(() => {

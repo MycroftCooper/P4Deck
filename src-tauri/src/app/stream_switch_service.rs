@@ -1,7 +1,11 @@
 use crate::{
-    app::confirmation::{
-        Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest,
-        ConfirmationTicket, IssuedConfirmation, MutationLane, RecheckVerdict, ReviewSpec,
+    app::{
+        confirmation::{
+            Acknowledgement, BoxFuture, ConfirmRefusal, ConfirmationRefusalCode,
+            ConfirmationRequest, ConfirmationTicket, IssuedConfirmation, MutationLane,
+            RecheckVerdict, ReviewSpec,
+        },
+        operation_id::{resolve_operation_id, resolve_operation_prefix},
     },
     domain::*,
     p4::{context::ContextStore, runner::MutationGuard, runner::P4Runner},
@@ -11,7 +15,6 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path, sync::Arc};
 use tauri::AppHandle;
 use tokio::sync::Mutex as AsyncMutex;
-use uuid::Uuid;
 
 const DEFAULT_TOKEN_TTL_MS: u64 = 120_000;
 const MAX_REPORTED_PATHS: usize = 100;
@@ -85,8 +88,25 @@ impl StreamSwitchService {
     ) -> StreamSwitchPreflight {
         let (context, generation) = self.contexts.snapshot();
         let profile_id = self.contexts.active_profile_id();
-        let operation_id = valid_operation_id(request.operation_id.clone())
-            .unwrap_or_else(|| format!("stream-preflight-{}", Uuid::new_v4()));
+        // The caller's id roots every inspection command so `cancelOperation`
+        // with the id the frontend sent reaches them; an id it supplied but we
+        // cannot use is refused instead of being swapped for another one.
+        let operation_id =
+            match resolve_operation_prefix(request.operation_id.as_deref(), "stream-preflight") {
+                Ok(operation_id) => operation_id,
+                Err(error) => {
+                    return blocked_preflight(
+                        request,
+                        issue(
+                            StreamSwitchIssueCode::InvalidTarget,
+                            error.to_string(),
+                            Vec::new(),
+                        ),
+                        self.ticket.ttl_ms(),
+                        Vec::new(),
+                    );
+                }
+            };
         let group = self.runner.begin_operation_group(operation_id.clone());
         let target_input = match validate_stream_path(&request.target_stream) {
             Ok(value) => value,
@@ -205,6 +225,15 @@ impl StreamSwitchService {
         admitted: Option<&MutationGuard>,
         app: Option<&AppHandle>,
     ) -> StreamSwitchResult {
+        // Resolve the caller's id before the shared sequence runs: the same id
+        // must reach the re-check log, the write log and the result, and a
+        // supplied-but-invalid id must be refused, never replaced.
+        let operation_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(StreamSwitchFailureCode::PreflightBlocked, error.to_string());
+            }
+        };
         let request = ConfirmationRequest {
             token: &confirmation.token,
             target: &confirmation.target,
@@ -215,7 +244,7 @@ impl StreamSwitchService {
             service: self.clone(),
             admitted,
             app,
-            requested_operation_id: confirmation.operation_id,
+            requested_operation_id: Some(operation_id),
             reviewed: None,
             recheck_operation_ids: Vec::new(),
             echoed_target: Some(confirmation.target.clone()),
@@ -898,8 +927,9 @@ impl StreamSwitchReviewSpec<'_> {
         if let Some(id) = self.attempt_operation_id.as_ref() {
             return id.clone();
         }
-        let id = valid_operation_id(self.requested_operation_id.clone())
-            .unwrap_or_else(|| format!("stream-switch-{}", Uuid::new_v4()));
+        // `confirm_inner` resolved the caller's id (or minted one) before the
+        // shared sequence started, so this only reuses it.
+        let id = self.requested_operation_id.clone().unwrap_or_default();
         self.attempt_operation_id = Some(id.clone());
         id
     }
@@ -1634,12 +1664,6 @@ fn refresh(reason: impl Into<String>) -> StreamSwitchRefreshAdvice {
         depot: true,
         reason: reason.into(),
     }
-}
-
-fn valid_operation_id(value: Option<String>) -> Option<String> {
-    value.filter(|value| {
-        !value.trim().is_empty() && value.len() <= 256 && !value.chars().any(char::is_control)
-    })
 }
 
 fn now_ms() -> i64 {

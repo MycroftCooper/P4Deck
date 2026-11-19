@@ -32,15 +32,30 @@ for (const width of [1280, 390]) {
         }),
       );
     });
-    const controls = page.getByRole("group", { name: "窗口控制" });
+    // WindowControls renders a plain flex container: the three buttons are
+    // labelled through the shared catalog ("最小化" / "最大化" / "关闭窗口"),
+    // but the container itself has no role/accessible name, so scope by class.
+    const controls = page.locator(".window-controls");
     await expect(controls).toBeVisible();
-    await expect(page.locator(".topbar")).toHaveCSS("app-region", "drag");
+    // Dragging is routed by Tauri's `data-tauri-drag-region` handler: the header
+    // opts its whole subtree in with "deep", while the workspace picker and the
+    // window buttons opt out with "false". CSS `-webkit-app-region` only carves
+    // out the no-drag islands.
+    await expect(page.locator(".topbar")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "deep",
+    );
+    await expect(page.locator(".topbar .connection-picker")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "false",
+    );
     await expect(page.locator(".topbar .connection")).toHaveCSS(
       "app-region",
       "no-drag",
     );
+    await expect(controls).toHaveAttribute("data-tauri-drag-region", "false");
     await expect(controls).toHaveCSS("app-region", "no-drag");
-    await expect(page.locator("[data-tauri-drag-region]")).toHaveCount(0);
+    await expect(controls.getByRole("button")).toHaveCount(3);
     const picker = (await page.locator(".topbar .connection").boundingBox())!;
     const buttons = (await controls.boundingBox())!;
     expect(buttons.x).toBeGreaterThanOrEqual(picker.x + picker.width);
@@ -52,11 +67,13 @@ for (const width of [1280, 390]) {
     const calls = await page.evaluate(
       () => (window as unknown as { titlebarCalls: string[] }).titlebarCalls,
     );
+    // Closing goes through the guarded-close command so unsaved work can prompt;
+    // it no longer calls `plugin:window|close` directly.
     expect(calls).toEqual(
       expect.arrayContaining([
         "plugin:window|minimize",
         "plugin:window|toggle_maximize",
-        "plugin:window|close",
+        "close_guard_request",
       ]),
     );
     await page

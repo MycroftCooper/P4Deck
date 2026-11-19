@@ -4,6 +4,7 @@ use crate::{
             ConfirmRefusal, ConfirmationRefusalCode, ConfirmationRequest, ConfirmationTicket,
             IssuedConfirmation, RecheckVerdict, ReviewSpec, DEFAULT_CONFIRMATION_TTL_MS,
         },
+        operation_id::{accept_operation_id, resolve_operation_prefix},
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -68,7 +69,41 @@ impl FileLockService {
     ) -> FileLockPreflight {
         let (context, generation) = self.contexts.snapshot();
         let profile_id = self.contexts.active_profile_id();
-        let prefix = safe_operation_prefix(request.operation_id.as_deref(), "lock-preflight");
+        // The caller's id roots the inspection commands so `cancelOperation`
+        // with the id the frontend sent reaches them; a supplied-but-invalid id
+        // is refused instead of being replaced.
+        let prefix =
+            match resolve_operation_prefix(request.operation_id.as_deref(), "lock-preflight") {
+                Ok(prefix) => prefix,
+                Err(error) => {
+                    return FileLockPreflight {
+                        ready: false,
+                        operation: request.operation,
+                        files: Vec::new(),
+                        counts: FileLockCounts {
+                            requested: request.paths.len(),
+                            applicable: 0,
+                            already_satisfied: 0,
+                            blocked: 0,
+                            exclusive: 0,
+                        },
+                        blockers: vec![issue(
+                            FileLockIssueCode::InvalidTarget,
+                            FileLockIssueCertainty::Confirmed,
+                            error.to_string(),
+                            request.paths.clone(),
+                        )],
+                        warnings: Vec::new(),
+                        target_snapshot: None,
+                        state_digest: digest(None),
+                        token: None,
+                        expires_at: self.tickets.planned_expires_at(),
+                        ttl_ms: self.tickets.ttl_ms(),
+                        operation_ids: Vec::new(),
+                        log_reference: None,
+                    };
+                }
+            };
         let inspected = self
             .repository
             .inspect(&context, request.operation, &request.paths, &prefix, app)
@@ -199,13 +234,23 @@ impl FileLockService {
         guard: &MutationGuard,
         app: Option<&AppHandle>,
     ) -> FileLockResult {
+        // The caller's id is the journal group root shared by the re-check, the
+        // write and the result; a supplied-but-invalid id is refused instead of
+        // being replaced behind the caller's back.
+        let current_operation_id = match accept_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    FileLockFailureCode::PreflightBlocked,
+                    &error.to_string(),
+                    Some(&confirmation.target),
+                );
+            }
+        };
         let mut review = LockReview {
             service: self,
             reviewed_echo: confirmation.target.clone(),
-            current_operation_id: confirmation
-                .operation_id
-                .clone()
-                .filter(|value| valid_operation_id(value)),
+            current_operation_id,
             operation_id: None,
             held_group: None,
             guard,
@@ -817,15 +862,6 @@ fn digest(target: Option<&FileLockTargetSnapshot>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     format!("{:x}", hasher.finalize())
-}
-fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
-    value
-        .filter(|value| valid_operation_id(value))
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("{fallback}-{}", Uuid::new_v4()))
-}
-fn valid_operation_id(value: &str) -> bool {
-    !value.trim().is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 fn context_matches(
     target: &FileLockTargetSnapshot,

@@ -11,7 +11,7 @@ test("Pending searches and sorts its complete cache without a P4 request", async
     localStorage.removeItem("p4deck.pending-filter.v1");
   });
   await page.goto("/#/files");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async () => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
@@ -54,7 +54,7 @@ test("Pending searches and sorts its complete cache without a P4 request", async
     };
   });
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   await expect(page.locator("[data-pending-change]")).toHaveCount(2);
@@ -79,7 +79,15 @@ test("Pending searches and sorts its complete cache without a P4 request", async
   await expect(page.locator('[data-pending-change="100"]')).toBeVisible();
   await search.press("Backspace");
   await search.fill("");
-  await page.getByLabel("Pending sort", { exact: true }).selectOption("oldest");
+  // Sorting is now a toggle button (aria-pressed) instead of a <select>;
+  // clicking an unpressed "newest" state switches to ascending/oldest.
+  const sortButton = page.getByRole("button", {
+    name: "Toggle ascending/descending CL number",
+    exact: true,
+  });
+  await expect(sortButton).toHaveAttribute("aria-pressed", "false");
+  await sortButton.click();
+  await expect(sortButton).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("[data-pending-change]").first()).toHaveAttribute(
     "data-pending-change",
     "100",
@@ -106,7 +114,7 @@ test("Pending searches and sorts its complete cache without a P4 request", async
     .locator(".dv-default-tab-action")
     .click();
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   await expect(page.locator("[data-pending-change]")).toHaveCount(2);
@@ -122,7 +130,7 @@ test("Pending searches and sorts its complete cache without a P4 request", async
   });
   await page.goto("/#/files");
   await page.reload();
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async () => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
@@ -133,7 +141,7 @@ test("Pending searches and sorts its complete cache without a P4 request", async
     };
   });
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   await expect(page.locator('[data-pending-change="200"]')).toContainText(
@@ -150,6 +158,9 @@ test("Pending searches and sorts its complete cache without a P4 request", async
       }),
     ),
   );
+  // The refresh failure must be visible while the cached rows stay usable:
+  // PendingPage only renders its role="alert" block for connection or
+  // authentication problems, so the query error itself is never shown.
   await expect(page.locator(".pending-page [role=alert]")).toContainText(
     "Server deliberately unavailable",
   );

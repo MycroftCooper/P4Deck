@@ -354,6 +354,9 @@
 .search-page .search-result-row:last-child {
   border-bottom: 0;
 }
+.search-page .search-result-row.selected {
+  background: var(--accent-soft);
+}
 .search-result-copy {
   display: grid;
   min-width: 0;

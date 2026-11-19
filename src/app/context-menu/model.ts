@@ -34,6 +34,13 @@ export function buildMenu(
   for (const entry of menuCatalog[object].items) {
     const binding = bindings[entry.id] ?? bindings[entry.label];
     if (binding?.hidden) continue;
+    // A menu lists what the user can do right now, not what the product might do
+    // one day. Inventory items that no page binds are not rendered at all: they
+    // used to sit in a "more actions (not connected)" submenu that looked like
+    // ninety features and did nothing. The backlog lives in
+    // ForAIDoc/Designer/右键菜单待实现清单.md and stays reviewable there.
+    if (entry.phase === "later" && !binding?.run && !binding?.children)
+      continue;
     const item: MenuItem = {
       ...binding,
       id: entry.id,
@@ -48,23 +55,6 @@ export function buildMenu(
       // i18n-exempt: classifies labels across both locales.
       danger: /删除|还原|撤销|移除/.test(entry.label), // i18n-exempt: label classifier
     };
-    if (
-      entry.phase === "later" &&
-      !binding?.run &&
-      menuCatalog[object].items.some((value) => value.phase === "initial")
-    ) {
-      let advanced = result.find((value) => value.id === object + ":advanced");
-      if (!advanced) {
-        advanced = {
-          id: object + ":advanced",
-          label: t("contextMenu.moreActionsPending"),
-          children: [],
-        };
-        result.push(advanced);
-      }
-      advanced.children!.push(item);
-      continue;
-    }
     if (binding?.children) {
       // The inventory names the dynamic leaf (e.g. target group), but the
       // visible parent should only say "Move to group".

@@ -172,7 +172,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "contextMenu.move.to.cl": "Move to CL",
   "contextMenu.revert.unchanged.files": "Revert unchanged files",
   "contextMenu.resolve.conflicts": "Resolve conflicts",
-  "contextMenu.change.filetype": "Change filetype",
   "contextMenu.lock.file": "Lock file",
   "contextMenu.unlock.file": "Unlock file",
   "contextMenu.rename.move": "Rename / move",
@@ -605,7 +604,6 @@ export const en: Catalog & Record<MsgKey, string> = {
   "tools.unreadErrors": "{count} new unread errors",
   "contextMenu.workflowNotConnected": "Workflow not connected yet",
   "contextMenu.unavailableForTarget": "Unavailable for this target",
-  "contextMenu.moreActionsPending": "More actions (pending)",
   "contextMenu.sortingNotConnected": "{column}: sorting not connected",
   "settings.backup.omittedKeys":
     "; {count} transient or sensitive keys omitted",
@@ -719,6 +717,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.reload.app": "Reload app",
   "shell.checking.folder": "Checking folder",
   "shell.select.full.text": "Select full text",
+  "shell.full.text.readonly": "Full text (read-only)",
+  "shell.full.text.hint":
+    "Ctrl/Cmd+C copies · Escape closes. Includes rows the virtual list has not rendered.",
+  "browse.diff.content": "Diff content",
   "shell.full.text": "Full text",
   "workspaces.unable.workspaces.retry":
     "Unable to load workspaces. Retry or check your login in Connection settings.",
@@ -1615,6 +1617,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.select.a.nonempty.numbered.pending.cl":
     "Select a nonempty numbered pending CL (submits the whole CL)",
   "shell.select.a.file.or.folder.first": "Select a file or folder first",
+  "shell.compare.needs.two.deposited.files":
+    "Comparing needs exactly two deposited files, each with a depot path and revision",
   "shell.select.a.single.target.for.this":
     "Select a single target for this operation",
   "shell.target.path.is.unknown": "Target path is unknown",
@@ -1745,6 +1749,13 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.absolutePath": "Local path",
   "search.depotPath": "Depot path",
   "search.streamPath": "Stream path",
+  "search.partial.failed": "{count} categories failed; results are incomplete.",
+  "search.partial.incomplete":
+    "Results are incomplete because a category hit its scan limit or returned partial data.",
+  "search.job": "Job",
+  "search.jobId": "Job ID",
+  "search.stream": "Stream",
+  "search.shelf": "Shelf",
   "search.name": "Name",
   "search.owner": "Owner",
   "search.type": "Type",
@@ -2915,6 +2926,8 @@ export const en: Catalog & Record<MsgKey, string> = {
   "search.loading": "Loading…",
   "search.loading.more.results": "Loading more results.",
   "search.matched": "Matched: ",
+  "search.menu.change.description.missing":
+    "This result carries no CL description to copy; open the CL details and copy it there.",
   "search.no.destination.page": " · no destination page",
   "search.no.job.details.page.exists":
     "No Job details page exists yet; navigation is unavailable.",
@@ -3181,6 +3194,10 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.completed": "Completed",
   "shell.connecting": "Connecting",
   "shell.connection": "Connection",
+  "shell.server": "Server",
+  "shell.server.busy": "Busy (concurrency cap)",
+  "shell.server.busy.note":
+    " Read-only requests retry automatically while the server is busy.",
   "shell.connection.changed.select.the.target":
     "Connection changed; select the target again",
   "shell.connection.failed": "Connection failed",
@@ -3268,6 +3285,7 @@ export const en: Catalog & Record<MsgKey, string> = {
   "shell.updated": "Updated",
   "shell.waiting.for.system.dialog": "Waiting for system dialog",
   "shell.window.action.failed": "Window action failed",
+  "shell.window.controls": "Window controls",
   "swarm.configure.swarm": "Configure Swarm…",
   "swarm.open.in.swarm": "Open in Swarm",
   "swarm.swarm.was.not.opened.safely":

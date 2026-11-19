@@ -44,6 +44,8 @@ export function WindowControls({ zh }: { zh: boolean }) {
   return (
     <div
       className="window-controls"
+      role="group"
+      aria-label={tFor(zh ? "zh-CN" : "en-US", "shell.window.controls")}
       data-tauri-drag-region="false"
       data-window-chrome-controls="ready"
       data-window-chrome-ready="true"

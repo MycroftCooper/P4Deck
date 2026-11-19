@@ -175,6 +175,15 @@ export interface Backend {
   companySubmitConnectionSnapshot(): Promise<
     import("../../features/companySubmit/model").ConnectionSnapshot
   >;
+  /**
+   * Revert is a workflow write with a durable receipt, so it belongs on the
+   * backend like every other write. Calling `invoke` directly from the renderer
+   * left the browser mock build unable to revert at all.
+   */
+  confirmRevertAction(
+    request: FileActionRequest,
+    connection: import("../../features/companySubmit/model").ConnectionSnapshot,
+  ): Promise<import("../../shared/contracts").WorkflowResult>;
   createConfigBackup(
     request: import("../../shared/contracts").BackupCreateActionRequest,
   ): Promise<import("../../shared/contracts").ControlPlaneActionResult>;

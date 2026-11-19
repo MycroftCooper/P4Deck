@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "smoke",
+  "name": "P4Deck 冒烟",
+  "description": "执行现有 ci:quick，显示内部检查进度并逐次归档报告和日志；不启动 P4 fixture、不发布。",
+  "trigger": {
+    "type": "manual"
+  },
+  "parameters": {},
+  "steps": [
+    {
+      "id": "smoke",
+      "name": "本地冒烟检查",
+      "cli": "node",
+      "args": [
+        "scripts/atk-ci.mjs",
+        "--task",
+        "smoke"
+      ],
+      "cwd": ".",
+      "timeoutMs": 7200000,
+      "exports": [
+        {
+          "id": "result",
+          "path": "${step.dir}/output/result.json",
+          "kind": "file",
+          "required": true
+        },
+        {
+          "id": "ci",
+          "path": "${step.dir}/output/ci",
+          "kind": "directory",
+          "required": true
+        }
+      ],
+      "result": {
+        "protocol": "atk-ci-result/v1",
+        "exportId": "result"
+      }
+    }
+  ]
+}

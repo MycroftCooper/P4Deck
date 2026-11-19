@@ -1,5 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+/**
+ * The pinned root row is a `treeitem` inside its own single-node `role="tree"`
+ * wrapper (`.tree-root-group`), so `.resource-explorer` scoped treeitems also
+ * match that root. Assertions about folder contents go through the row tree
+ * (`.tree-list`) so they keep counting only the rows `useResourceTree` returns.
+ */
+const treeRows = (sidebar: Locator) =>
+  sidebar.locator(".tree-list").getByRole("treeitem");
 
 async function prepare(page: Page) {
   await page.setViewportSize({ width: 1280, height: 844 });
@@ -177,13 +186,11 @@ for (const mode of ["workspace", "depot"] as const) {
     await expect(assets).toBeVisible();
     await expect(scripts).toBeVisible();
     await expect(player).toBeVisible();
-    await expect(sidebar.getByRole("treeitem")).toHaveCount(
-      mode === "workspace" ? 3 : 4,
-    );
+    await expect(treeRows(sidebar)).toHaveCount(mode === "workspace" ? 3 : 4);
     await sidebar
       .getByRole("textbox", { name: "Filter resource files" })
       .fill("");
-    expect(await sidebar.getByRole("treeitem").count()).toBeLessThan(50);
+    expect(await treeRows(sidebar).count()).toBeLessThan(50);
     const axe = await new AxeBuilder({ page })
       .include(".resource-explorer")
       .analyze();
@@ -224,7 +231,9 @@ test("branch errors retry independently, empty folders remain explicit and mode 
   await sidebar
     .getByRole("button", { name: "Collapse atlas-dev-fm", exact: true })
     .click();
-  await expect(sidebar.getByRole("treeitem")).toHaveCount(0);
+  await expect(treeRows(sidebar)).toHaveCount(0);
+  // Collapsing the root only hides its contents; the pinned root row stays.
+  await expect(sidebar.locator(".tree-root")).toBeVisible();
   await sidebar
     .getByRole("button", { name: "Expand atlas-dev-fm", exact: true })
     .click();
@@ -289,23 +298,20 @@ test("workspace local and status reads start together, and local children render
     sidebar.getByRole("treeitem", { name: "Textures", exact: true }),
   ).toBeVisible();
   expect(
-    await page.evaluate(
-      () =>
-        {
-          const state = (
-            window as unknown as {
-              localFirstTree: {
-                localFinished: boolean;
-                statusStarted: boolean;
-              };
-            }
-          ).localFirstTree;
-          return {
-            localFinished: state.localFinished,
-            statusStarted: state.statusStarted,
+    await page.evaluate(() => {
+      const state = (
+        window as unknown as {
+          localFirstTree: {
+            localFinished: boolean;
+            statusStarted: boolean;
           };
-        },
-    ),
+        }
+      ).localFirstTree;
+      return {
+        localFinished: state.localFinished,
+        statusStarted: state.statusStarted,
+      };
+    }),
   ).toEqual({ localFinished: true, statusStarted: true });
   await expect(
     sidebar.getByRole("treeitem", { name: "loading", exact: true }),

@@ -11,7 +11,7 @@ async function prepare(page: Page, numbered = true) {
     );
   });
   await page.goto("/#/files");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async (hasNumbered) => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
@@ -67,6 +67,14 @@ async function prepare(page: Page, numbered = true) {
     backend.performFileAction = async (request: any) => {
       state.writes.push(request);
       return {
+        // The host reports the execution envelope; without it the action stays
+        // "unknown" and a second write on the same path would be treated as an
+        // unreconciled claim.
+        execution: {
+          operationId: request.operationId,
+          outcome: "commandCompleted",
+          perFileEvidence: "notCollected",
+        },
         operation: {
           operationId: request.operationId,
           exitCode: 0,
@@ -201,10 +209,8 @@ test("always Default is persisted, skips the picker and can be turned off in Set
   expect(await page.evaluate(() => (window as any).checkoutFixture.reads)).toBe(
     reads,
   );
-  await page
-    .getByRole("navigation", { name: "Activity bar" })
-    .getByRole("button", { name: "Settings", exact: true })
-    .click();
+  // Settings is anchored in the command bar, not in the page navigation.
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page
     .getByRole("combobox", {
       name: "Always check out to Default CL",
@@ -217,7 +223,7 @@ test("always Default is persisted, skips the picker and can be turned off in Set
     ),
   ).toBe(false);
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Files/ })
     .click();
   await page
@@ -252,9 +258,11 @@ test("only Default checks out directly and a query failure never falls back to D
   });
   await expect(checkout).toBeEnabled();
   await checkout.click();
-  await expect(
-    page.getByRole("button", { name: "Operation failed, view operations" }),
-  ).toBeVisible();
+  // The failure surfaces in the command bar's error notice; the footer's P4
+  // entry is the task panel now, so there is no "view operations" button.
+  await expect(page.locator(".command-notice-error")).toContainText(
+    "Checkout CL query unavailable",
+  );
   expect(
     await page.evaluate(() => (window as any).checkoutFixture.writes.length),
   ).toBe(1);

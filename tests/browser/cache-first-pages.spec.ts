@@ -72,7 +72,7 @@ test("persisted pages stay visible without P4 reads during connection verificati
         backend[method] = (async (...args: any[]) => {
           state.reads.push(method);
           return original(...args);
-        }) as typeof backend[typeof method];
+        }) as (typeof backend)[typeof method];
       }
       Object.assign(window, { cacheFirstStartup: state });
     });

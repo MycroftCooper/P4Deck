@@ -9,7 +9,13 @@ import type {
   RevisionGraph,
   RuntimeInfo,
 } from "../../../shared/contracts";
-import { FileReviewPage, type ReviewKind } from "./FileReviewPage";
+import {
+  FileReviewPage,
+  reviewGcTime,
+  reviewStaleTime,
+  type ReviewKind,
+} from "./FileReviewPage";
+import { CACHE_POLICY } from "../../../shared/cache/policy";
 import { PageRefreshSlotContext } from "../../../app/docking/chrome";
 import { setLocale } from "../../../shared/i18n";
 
@@ -627,5 +633,23 @@ it("does not present a failed graph request as zero revisions", async () => {
   );
   expect(host.querySelector(".review-toolbar")?.textContent).not.toContain(
     "0 revisions",
+  );
+});
+
+it("keeps a revision-pair diff for the immutable lifetime and everything else for the target one", () => {
+  const revision = { kind: "revision", revision: 7 } as const;
+  const workspace = { kind: "workspace" } as const;
+  expect(reviewGcTime("diff", revision, revision)).toBe(
+    CACHE_POLICY.immutable.gcTime,
+  );
+  expect(reviewGcTime("diff", workspace, revision)).toBe(
+    CACHE_POLICY.target.gcTime,
+  );
+  expect(reviewGcTime("revgraph", revision, revision)).toBe(
+    CACHE_POLICY.target.gcTime,
+  );
+  // A content-addressed diff is also treated as never stale by the view itself.
+  expect(reviewStaleTime("diff", revision, revision)).toBe(
+    CACHE_POLICY.immutable.staleTime,
   );
 });

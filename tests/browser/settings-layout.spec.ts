@@ -38,20 +38,24 @@ for (const width of [1280, 390]) {
       path: test.info().outputPath("saved-connections.png"),
     });
 
-    const refresh = page
-      .locator(".settings-card")
-      .filter({ has: page.getByRole("heading", { name: "刷新与通知" }) });
+    // The "刷新与通知" heading belongs to the collapsible SettingsSection, not to
+    // the card inside it, so anchor on the section by its stable id.
+    const refresh = page.locator('[data-settings-section="refresh"]');
     await refresh.scrollIntoViewIfNeeded();
-    const interval = (await refresh.getByRole("spinbutton").boundingBox())!;
+    // The section now holds two number inputs; the interval is the first one.
+    const interval = (await refresh
+      .getByRole("spinbutton")
+      .first()
+      .boundingBox())!;
     const notifications = (await refresh
       .getByRole("combobox", { name: "桌面通知", exact: true })
       .boundingBox())!;
     const scope = (await refresh
       .getByRole("combobox", { name: "通知范围", exact: true })
       .boundingBox())!;
+    // Compare the bell icon with the label that actually contains it.
     const label = (await refresh
-      .locator(".settings-field-label")
-      .nth(1)
+      .locator(".settings-field-label:has(svg)")
       .boundingBox())!;
     const icon = (await refresh
       .locator(".settings-field-label svg")
@@ -60,8 +64,10 @@ for (const width of [1280, 390]) {
       Math.abs(icon.y + icon.height / 2 - label.y - label.height / 2),
     ).toBeLessThan(1);
     if (width === 1280) {
+      // The refresh grid has three columns, so interval + threshold +
+      // notifications share the first row while the scope select wraps below.
       expect(Math.abs(interval.y - notifications.y)).toBeLessThan(1);
-      expect(Math.abs(interval.y - scope.y)).toBeLessThan(1);
+      expect(scope.y).toBeGreaterThan(interval.y + interval.height);
     } else {
       expect(notifications.y).toBeGreaterThan(interval.y + interval.height);
       expect(scope.y).toBeGreaterThan(notifications.y + notifications.height);

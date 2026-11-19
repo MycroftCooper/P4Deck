@@ -369,22 +369,53 @@ impl P4Runner {
         progress_total: Option<usize>,
         argument_input: Option<Vec<String>>,
     ) -> Result<OperationResult, RunnerError> {
-        let id = request
+        let base_id = request
             .operation_id
             .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-        request.operation_id = Some(id.clone());
-        let result = self
-            .run_inner(request, app, progress_total, argument_input, false, None)
-            .await;
-        if result.is_err() {
-            if let Some(token) = self.operations.lock().remove(&id) {
-                token.cancel();
+        // Read-only queries may be safely retried when the server momentarily
+        // refuses work because of its command-concurrency cap. Mutations never
+        // reach this method and are never retried.
+        let retryable = is_read_only(&request.command)
+            || (matches!(request.command.as_str(), "resolve" | "reconcile")
+                && request.args.iter().any(|argument| argument == "-n"));
+        let mut attempt = 0usize;
+        loop {
+            let id = if attempt == 0 {
+                base_id.clone()
+            } else {
+                format!("{base_id}:retry{attempt}")
+            };
+            request.operation_id = Some(id.clone());
+            let result = self
+                .run_inner(
+                    request.clone(),
+                    app,
+                    progress_total,
+                    argument_input.clone(),
+                    false,
+                    None,
+                )
+                .await;
+            if attempt < 2 && retryable && result.as_ref().is_ok_and(operation_server_busy) {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(if attempt == 1 {
+                    1_000
+                } else {
+                    3_000
+                }))
+                .await;
+                continue;
             }
-            // Spawn/timeout/read errors must also finish the global progress indicator.
-            emit(app, &event(&id, EventKind::Completed, Some("-1".into())));
+            if result.is_err() {
+                if let Some(token) = self.operations.lock().remove(&id) {
+                    token.cancel();
+                }
+                // Spawn/timeout/read errors must also finish the global progress indicator.
+                emit(app, &event(&id, EventKind::Completed, Some("-1".into())));
+            }
+            return result;
         }
-        result
     }
 
     pub async fn lock_mutations(&self, server: &str) -> MutationGuard {
@@ -816,7 +847,7 @@ impl P4Runner {
             duration_ms: Some(duration_ms),
             repeat_count: 1,
         });
-        if emits_diagnostic_alert(&level) {
+        if emits_diagnostic_alert(&level, &stderr_text) {
             if let Some(app) = app {
                 let _ = app.emit(
                     "diagnostic-alert",
@@ -912,6 +943,10 @@ fn timeout_failure(read_only: bool) -> OperationFailureKind {
 fn log_level(was_cancelled: bool, exit_code: i32, stderr_text: &str) -> LogLevel {
     if was_cancelled {
         LogLevel::Cancelled
+    } else if exit_code != 0 && crate::p4::server_status::is_busy_text(stderr_text) {
+        // The server is reachable but over its command-concurrency cap; keep it
+        // out of the red error stream (the status icon reports the outage).
+        LogLevel::Warning
     } else if exit_code != 0 {
         LogLevel::Error
     } else if !stderr_text.is_empty() {
@@ -923,8 +958,24 @@ fn log_level(was_cancelled: bool, exit_code: i32, stderr_text: &str) -> LogLevel
 
 /// Diagnostics alerts are reserved for real problems; a cancelled command must not raise
 /// an alert or count as an error in the log.
-fn emits_diagnostic_alert(level: &LogLevel) -> bool {
+fn emits_diagnostic_alert(level: &LogLevel, stderr_text: &str) -> bool {
     matches!(level, LogLevel::Warning | LogLevel::Error)
+        && !crate::p4::server_status::is_busy_text(stderr_text)
+}
+
+/// True when the server refused a read-only command because of its
+/// command-concurrency cap (safe to retry with backoff).
+fn operation_server_busy(result: &OperationResult) -> bool {
+    result.exit_code != 0
+        && result.events.iter().any(|event| {
+            matches!(
+                event.kind,
+                EventKind::Stderr | EventKind::Error | EventKind::Stdout
+            ) && event
+                .message
+                .as_deref()
+                .is_some_and(crate::p4::server_status::is_busy_text)
+        })
 }
 
 fn apply_credential_environment(command: &mut Command, context: &P4Context) {
@@ -1663,11 +1714,19 @@ mod tests {
     }
 
     #[test]
+    fn server_busy_rejections_are_warnings_without_alerts() {
+        let busy = "Request failed: this server is configured to run a maximum of 2500 simultaneous commands. Please try again later when the load is lower.";
+        assert_eq!(log_level(false, 1, busy), LogLevel::Warning);
+        assert!(!emits_diagnostic_alert(&LogLevel::Warning, busy));
+        assert!(emits_diagnostic_alert(&LogLevel::Warning, "boom"));
+    }
+
+    #[test]
     fn cancelled_operations_do_not_raise_diagnostic_alerts() {
-        assert!(!emits_diagnostic_alert(&LogLevel::Cancelled));
-        assert!(!emits_diagnostic_alert(&LogLevel::Info));
-        assert!(emits_diagnostic_alert(&LogLevel::Warning));
-        assert!(emits_diagnostic_alert(&LogLevel::Error));
+        assert!(!emits_diagnostic_alert(&LogLevel::Cancelled, ""));
+        assert!(!emits_diagnostic_alert(&LogLevel::Info, ""));
+        assert!(emits_diagnostic_alert(&LogLevel::Warning, ""));
+        assert!(emits_diagnostic_alert(&LogLevel::Error, ""));
     }
 }
 

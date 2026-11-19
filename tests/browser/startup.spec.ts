@@ -55,7 +55,7 @@ test("slow startup offers retry and still finishes when loading resumes", async 
   await expect(page.locator(".startup-recovery")).toBeHidden();
 });
 
-test("a fresh launch without a hash opens Files instead of the last restored tab", async ({
+test("a fresh launch without a hash opens the default Pending page instead of the last restored tab", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -63,8 +63,10 @@ test("a fresh launch without a hash opens Files instead of the last restored tab
     localStorage.setItem("p4deck.leftOpen", "false");
   });
   await page.goto("/");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
-  await expect(page).toHaveURL(/#\/files$/);
+  // UI-11-1: an empty session opens Pending only; there is no longer a
+  // multi-page default layout with Files first.
+  await expect(page.locator(".pending-page")).toBeVisible();
+  await expect(page).toHaveURL(/#\/pending$/);
 });
 
 test("retains navigation clicked before the tab workspace finishes loading", async ({
@@ -85,7 +87,7 @@ test("retains navigation clicked before the tab workspace finishes loading", asy
   try {
     await page.goto("/#/files", { waitUntil: "commit" });
     await page
-      .getByRole("navigation", { name: "Activity bar" })
+      .locator(".activity-bar")
       .getByRole("button", { name: /^Pending/ })
       .click();
   } finally {

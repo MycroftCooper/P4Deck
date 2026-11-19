@@ -9,7 +9,7 @@ import {
 } from "../../features/actions/localDeleteTask";
 import type { PendingSnapshot } from "../../features/changelists/pendingCache";
 import { useCustomSubmit } from "../../features/companySubmit/useCustomSubmit";
-import { historyDiffTarget } from "./commandPolicy";
+import { fileComparePair, historyDiffTarget } from "./commandPolicy";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { queryAllPendingChanges } from "../../features/changelists/pendingQueries";
 import {
@@ -168,6 +168,10 @@ interface Props {
   onNavigate(node: WorkspaceNode): void;
   onFocus(target: CommandTarget): void;
   onHistoryDiff?(path: string, left: number, right: number): void;
+  onCompareFiles?(
+    left: { path: string; revision: number },
+    right: { path: string; revision: number },
+  ): void;
   onReview(page: FilePageId, node: WorkspaceNode): void;
 }
 export function CommandBar({
@@ -182,6 +186,7 @@ export function CommandBar({
   onFocus,
   onReview,
   onHistoryDiff,
+  onCompareFiles,
   registerCommand,
   onBusyChange,
   onOpenOperations,
@@ -426,6 +431,15 @@ export function CommandBar({
       const pair = historyDiffTarget(target);
       if (pair) onHistoryDiff?.(pair.path, pair.left, pair.right);
       return;
+    }
+    if (id === "diff" && target.type === "file") {
+      // Two selected files compare against each other; one file keeps the
+      // working-copy-versus-base comparison the review page already opens.
+      const pair = fileComparePair(target);
+      if (pair) {
+        onCompareFiles?.(pair.left, pair.right);
+        return;
+      }
     }
     if ((id === "moveFiles" || id === "shelve") && target.type === "file") {
       dialogs.open({

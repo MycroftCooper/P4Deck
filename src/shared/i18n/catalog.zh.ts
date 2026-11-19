@@ -169,7 +169,6 @@ export const zh = {
   "contextMenu.move.to.cl": "移到 CL",
   "contextMenu.revert.unchanged.files": "还原未修改文件",
   "contextMenu.resolve.conflicts": "解决冲突",
-  "contextMenu.change.filetype": "更改文件类型",
   "contextMenu.lock.file": "锁定文件",
   "contextMenu.unlock.file": "解锁文件",
   "contextMenu.rename.move": "重命名/移动",
@@ -561,7 +560,6 @@ export const zh = {
   "tools.unreadErrors": "{count} 个未查看的新错误",
   "contextMenu.workflowNotConnected": "后续功能：操作流程尚未接通",
   "contextMenu.unavailableForTarget": "当前对象或页面尚不支持此操作",
-  "contextMenu.moreActionsPending": "更多操作（待接入）",
   "contextMenu.sortingNotConnected": "{column}：排序尚未接通",
   "settings.backup.omittedKeys": "；已排除 {count} 个临时/敏感键",
   "settings.backup.verified":
@@ -673,6 +671,10 @@ export const zh = {
   "shell.reload.app": "重新加载应用",
   "shell.checking.folder": "正在检查目录",
   "shell.select.full.text": "选择完整文本",
+  "shell.full.text.readonly": "完整文本（只读）",
+  "shell.full.text.hint":
+    "Ctrl/Cmd+C 复制 · Escape 关闭。包含虚拟列表未渲染的内容。",
+  "browse.diff.content": "差异内容",
   "shell.full.text": "完整文本",
   "workspaces.unable.workspaces.retry":
     "无法加载 Workspace，请刷新重试或在连接设置中检查登录状态。",
@@ -1492,6 +1494,8 @@ export const zh = {
   "shell.select.a.nonempty.numbered.pending.cl":
     "请选择非空、已编号的待提交 CL（提交整个 CL）",
   "shell.select.a.file.or.folder.first": "请先选择文件或目录",
+  "shell.compare.needs.two.deposited.files":
+    "比较需要恰好两个已入库文件（各自有 Depot 路径和修订号）",
   "shell.select.a.single.target.for.this": "此操作需要仅选择一个目标",
   "shell.target.path.is.unknown": "目标路径尚未确定",
   "shell.lock.explicit.files": "锁操作仅支持显式文件，不递归目录",
@@ -1611,6 +1615,13 @@ export const zh = {
   "search.absolutePath": "本地路径",
   "search.depotPath": "Depot 路径",
   "search.streamPath": "Stream 路径",
+  "search.partial.failed": "{count} 个类别失败，当前结果不完整。",
+  "search.partial.incomplete":
+    "当前结果不完整；部分类别达到扫描上限或后端只返回了部分数据。",
+  "search.job": "Job",
+  "search.jobId": "Job ID",
+  "search.stream": "Stream",
+  "search.shelf": "Shelf",
   "search.name": "名称",
   "search.owner": "所有者",
   "search.type": "类型",
@@ -2724,6 +2735,8 @@ export const zh = {
   "search.loading": "加载中…",
   "search.loading.more.results": "正在加载更多结果。",
   "search.matched": "匹配：",
+  "search.menu.change.description.missing":
+    "此结果没有可复制的 CL 描述，请打开 CL 详情后复制。",
   "search.no.destination.page": " · 暂无可用详情页",
   "search.no.job.details.page.exists": "尚无 Job 详情页，无法导航。",
   "search.no.matches.in.this.category": "此类别没有匹配项。",
@@ -2985,6 +2998,9 @@ export const zh = {
   "shell.completed": "操作完成",
   "shell.connecting": "正在连接",
   "shell.connection": "连接",
+  "shell.server": "服务器",
+  "shell.server.busy": "繁忙（并发上限）",
+  "shell.server.busy.note": " 服务器繁忙时只读请求会自动重试。",
   "shell.connection.changed.select.the.target": "连接已改变，请重新选择目标",
   "shell.connection.failed": "连接失败",
   "shell.connection.from.manual.check": "；连接来自手动检查",
@@ -3067,6 +3083,7 @@ export const zh = {
   "shell.updated": "更新于",
   "shell.waiting.for.system.dialog": "等待系统窗口",
   "shell.window.action.failed": "窗控操作失败",
+  "shell.window.controls": "窗口控制",
   "swarm.configure.swarm": "配置 Swarm…",
   "swarm.open.in.swarm": "在 Swarm 中打开",
   "swarm.swarm.was.not.opened.safely":

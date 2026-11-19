@@ -418,7 +418,9 @@ it("publishes at most two revisions to the toolbar and ignores hidden History ta
     revisions: [2, 1],
   });
   expect(host.querySelector(".graph-node-diff, .workspace-details")).toBeNull();
-  expect(button("Compare two selected revisions")).toBeUndefined();
+  // Two selected revisions now expose the comparison on the page itself, not only
+  // in the row context menu.
+  expect(button("Compare selected revisions")).toBeTruthy();
   expect(backend.getDiff).not.toHaveBeenCalled();
   await mount(false);
   focus.mockClear();

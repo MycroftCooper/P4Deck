@@ -7,7 +7,7 @@ test("empty CL deletes with one click while nonempty CL stays protected", async 
     localStorage.setItem("p4deck.locale", "en-US"),
   );
   await page.goto("/#/files");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async () => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
@@ -63,7 +63,7 @@ test("empty CL deletes with one click while nonempty CL stays protected", async 
     };
   });
   await page
-    .getByRole("navigation", { name: "Activity bar" })
+    .locator(".activity-bar")
     .getByRole("button", { name: /^Pending/ })
     .click();
   const empty = page.locator('[data-pending-change="223"]');

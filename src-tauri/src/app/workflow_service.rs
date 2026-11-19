@@ -2,6 +2,7 @@ use crate::{
     app::{
         confirmation::{ConfirmationStore, ConfirmationTicket, IssuedConfirmation},
         external_merge, manual_merge,
+        operation_id::{resolve_operation_id, resolve_operation_prefix},
         status_cache::{InvalidationReason, StatusCache, StatusQueryKind},
     },
     domain::*,
@@ -618,6 +619,19 @@ impl WorkflowService {
                 "The token belongs to another workflow.",
             ));
         };
+        // An id the caller supplied but we cannot use is refused instead of
+        // replaced: the frontend cancels `operationId` unchanged, so a coin-flip
+        // id would make `cancelOperation` miss without reporting anything.
+        let root_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected_move(rejected(
+                    &record.target,
+                    WorkflowFailureCode::PreflightBlocked,
+                    error.to_string(),
+                ));
+            }
+        };
         let (context, generation) = self.contexts.snapshot();
         if target(
             "move",
@@ -662,7 +676,6 @@ impl WorkflowService {
                 "Opened files or target changelist changed after preflight.",
             ));
         }
-        let root_id = valid_operation_id(confirmation.operation_id);
         let mut files = Vec::new();
         let mut cancelled = false;
         for (index, candidate) in candidates.iter().enumerate() {
@@ -863,6 +876,16 @@ impl WorkflowService {
                 "The token belongs to another workflow.",
             );
         };
+        let operation_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    &record.target,
+                    WorkflowFailureCode::PreflightBlocked,
+                    error.to_string(),
+                );
+            }
+        };
         let (context, generation) = self.contexts.snapshot();
         if target(
             "shelf",
@@ -927,7 +950,6 @@ impl WorkflowService {
                 "The connection changed during confirmation.",
             );
         }
-        let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
             .execute_shelf(&context, &request, operation_id.clone(), guard, app)
@@ -1073,6 +1095,16 @@ impl WorkflowService {
                 "The token belongs to another workflow.",
             );
         };
+        let operation_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    &record.target,
+                    WorkflowFailureCode::PreflightBlocked,
+                    error.to_string(),
+                );
+            }
+        };
         let (context, generation) = self.contexts.snapshot();
         if context.server != record.target.server
             || context.user != record.target.user
@@ -1145,7 +1177,6 @@ impl WorkflowService {
                 "The active connection changed during Unshelve confirmation.",
             );
         }
-        let operation_id = valid_operation_id(confirmation.operation_id);
         let execution = self
             .repository
             .execute_unshelve(
@@ -1205,15 +1236,6 @@ impl WorkflowService {
     ) -> ResolvePreflight {
         request.depot_paths = normalized_paths(request.depot_paths);
         let force = request.force;
-        // The runner cancels an operation and every child named `{id}:...`, so
-        // the caller's id roots the inspection commands as well. The group keeps
-        // the preflight cancellable before it starts and lets a cancel that
-        // lands mid-inspection reject the (partial) result instead of evaluating
-        // it; a superseded preflight must never look like a real review.
-        let operation_id =
-            safe_operation_prefix(request.operation_id.as_deref(), "resolve-preflight");
-        let operation_prefix = format!("{operation_id}:resolve");
-        let operation = self.repository.begin_operation_group(operation_id);
         let (context, generation) = self.contexts.snapshot();
         let target = target(
             "resolve",
@@ -1223,6 +1245,41 @@ impl WorkflowService {
             None,
             request.depot_paths.clone(),
         );
+        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
+        // The runner cancels an operation and every child named `{id}:...`, so
+        // the caller's id roots the inspection commands as well. The group keeps
+        // the preflight cancellable before it starts and lets a cancel that
+        // lands mid-inspection reject the (partial) result instead of evaluating
+        // it; a superseded preflight must never look like a real review.
+        let operation_id =
+            match resolve_operation_prefix(request.operation_id.as_deref(), "resolve-preflight") {
+                Ok(operation_id) => operation_id,
+                // A supplied-but-unusable id is refused before any command runs:
+                // the frontend cancels the id it sent, so a generated one would
+                // make `cancelOperation` miss silently.
+                Err(error) => {
+                    return ResolvePreflight {
+                        ready: false,
+                        conflicts: Vec::new(),
+                        blockers: vec![issue(
+                            WorkflowIssueCode::InvalidTarget,
+                            WorkflowIssueCertainty::Confirmed,
+                            error.to_string(),
+                            request.depot_paths.clone(),
+                        )],
+                        warnings: Vec::new(),
+                        target,
+                        content_digest: content_digest(&request.depot_paths),
+                        token: None,
+                        expires_at,
+                        ttl_ms: self.ttl_ms,
+                        operation_ids: Vec::new(),
+                        log_reference: None,
+                    };
+                }
+            };
+        let operation_prefix = format!("{operation_id}:resolve");
+        let operation = self.repository.begin_operation_group(operation_id);
         let inspection = if operation.ensure_active().is_err() {
             Err("operation was cancelled".to_string())
         } else {
@@ -1242,7 +1299,6 @@ impl WorkflowService {
             .map(|value| evaluate_resolve(&request.depot_paths, value, force))
             .unwrap_or_else(|_| failed_resolve_evaluation(&request.depot_paths));
         let ready = evaluation.blockers.is_empty();
-        let expires_at = now_ms().saturating_add(self.ttl_ms as i64);
         let token = ready.then(|| {
             self.tickets.issue_review(IssuedConfirmation::new(
                 target.clone(),
@@ -1280,7 +1336,8 @@ impl WorkflowService {
         if paths.len() != 1 {
             return Err("Manual merge opens exactly one explicit depot file".into());
         }
-        let operation_id = valid_operation_id(request.operation_id);
+        let operation_id = resolve_operation_id(request.operation_id.as_deref())
+            .map_err(|error| error.to_string())?;
         let operation = self.repository.begin_operation_group(operation_id.clone());
         let (context, generation) = self.contexts.snapshot();
         let active_profile_id = self.contexts.active_profile_id();
@@ -1667,7 +1724,8 @@ impl WorkflowService {
         }
         let mut session_record = self.manual_session(&record.target.session_id)?;
         self.ensure_manual_target_current(&session_record)?;
-        let operation_id = valid_operation_id(confirmation.operation_id);
+        let operation_id = resolve_operation_id(confirmation.operation_id.as_deref())
+            .map_err(|error| error.to_string())?;
         let operation = self.repository.begin_operation_group(operation_id.clone());
         let (context, _) = self.contexts.snapshot();
         let guard = self
@@ -1816,7 +1874,16 @@ impl WorkflowService {
                 "The connection, profile, or workspace changed after save.",
             );
         }
-        let operation_id = valid_operation_id(confirmation.operation_id);
+        let operation_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    &session.session.target,
+                    WorkflowFailureCode::PreflightBlocked,
+                    error.to_string(),
+                );
+            }
+        };
         let operation = self.repository.begin_operation_group(operation_id.clone());
         let (context, _) = self.contexts.snapshot();
         let guard = self.repository.lock_mutations(&context.server).await;
@@ -2038,6 +2105,16 @@ impl WorkflowService {
                 "The token belongs to another workflow.",
             );
         };
+        let base_id = match resolve_operation_id(confirmation.operation_id.as_deref()) {
+            Ok(operation_id) => operation_id,
+            Err(error) => {
+                return rejected(
+                    &record.target,
+                    WorkflowFailureCode::PreflightBlocked,
+                    error.to_string(),
+                );
+            }
+        };
         let selections = confirmation.resolutions;
         let selected_paths = selections
             .iter()
@@ -2102,7 +2179,6 @@ impl WorkflowService {
                 "Conflict content changed after preflight.",
             );
         }
-        let base_id = valid_operation_id(confirmation.operation_id);
         let mut operation_ids = Vec::new();
         let mut files = Vec::new();
         for (index, selection) in selections.iter().enumerate() {
@@ -3234,22 +3310,6 @@ fn now_ms() -> i64 {
     // One clock for every confirmation family (and every service that shares
     // the confirmation skeleton); the local copy used to be a second one.
     crate::app::confirmation::now_ms()
-}
-fn valid_operation_id(value: Option<String>) -> String {
-    value
-        .filter(|value| !value.trim().is_empty() && value.len() <= 200)
-        .unwrap_or_else(|| Uuid::new_v4().to_string())
-}
-/// Callers own the runner prefix (and therefore cancellation); a malformed or
-/// missing id falls back to a fresh one.
-fn safe_operation_prefix(value: Option<&str>, fallback: &str) -> String {
-    value
-        .filter(|value| valid_operation_prefix(value))
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("{fallback}-{}", Uuid::new_v4()))
-}
-fn valid_operation_prefix(value: &str) -> bool {
-    !value.trim().is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 fn preview_mentions_resolve(lines: &[String], path: &str) -> bool {
     lines.iter().any(|line| {
@@ -4570,6 +4630,38 @@ exit 9
             operation_id: Some("resolve-p4v".into()),
             resolutions,
         }
+    }
+
+    #[tokio::test]
+    async fn resolve_preflight_rejects_an_invalid_caller_operation_id_without_replacing_it() {
+        let harness = resolve_harness("invalid-operation-id");
+        let invalid = "not a valid/id";
+        let preflight = harness
+            .service
+            .preflight_resolve(
+                ResolvePreflightRequest {
+                    depot_paths: vec!["//depot/a".into()],
+                    force: false,
+                    operation_id: Some(invalid.into()),
+                },
+                None,
+            )
+            .await;
+
+        assert!(!preflight.ready);
+        assert!(preflight.token.is_none());
+        // The old behaviour minted a fresh UUID here and reported it as if the
+        // caller's id had been honoured; the caller's id must never be echoed or
+        // silently swapped.
+        assert!(preflight.operation_ids.is_empty());
+        assert!(preflight.blockers.iter().any(|issue| {
+            issue.code == WorkflowIssueCode::InvalidTarget
+                && issue.message.contains("invalidOperationId")
+        }));
+        assert!(
+            resolve_calls(&harness.directory).is_empty(),
+            "an invalid operation id must be refused before any p4 command runs"
+        );
     }
 
     #[tokio::test]

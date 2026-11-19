@@ -27,6 +27,8 @@ export const tauriBackend: Backend = {
     >("custom_submit_status"),
   companySubmitConnectionSnapshot: () =>
     invoke("company_submit_connection_snapshot"),
+  confirmRevertAction: (request, connection) =>
+    invoke("confirm_revert_action", { request, connection }),
   preflightWorkspaceMutation: (request) =>
     invoke("preflight_workspace_mutation", { request }),
   confirmWorkspaceMutation: (token, operationId) =>

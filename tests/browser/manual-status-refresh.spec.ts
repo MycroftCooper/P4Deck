@@ -9,7 +9,7 @@ test("toolbar Refresh forces a fresh workspace status read even without a select
     localStorage.setItem("p4deck.ui", JSON.stringify({ autoRefresh: false }));
   });
   await page.goto("/#/files");
-  await expect(page.locator(".file-workbench h1")).toBeVisible();
+  await expect(page.locator(".file-workbench .file-table")).toBeVisible();
   await page.evaluate(async () => {
     const path = "/src/infrastructure/backend/index.ts";
     const { backend } = await import(path);
@@ -49,7 +49,13 @@ test("toolbar Refresh forces a fresh workspace status read even without a select
   await page.evaluate(() => {
     for (const release of (window as any).manualStatusReads.releases) release();
   });
-  await expect(
-    page.getByRole("button", { name: "Operation completed, view operations" }),
-  ).toBeVisible();
+  // The footer's operations entry is the P4 task panel now. Finished operations
+  // leave no row behind, so a settled manual status read shows the idle state
+  // both on the trigger and inside the task list it opens.
+  const operations = page.locator(".p4-status");
+  await expect(operations).toHaveText(/P4 idle/);
+  await operations.click();
+  const tasks = page.getByRole("dialog", { name: "P4 tasks" });
+  await expect(tasks).toBeVisible();
+  await expect(tasks.locator(".task-idle")).toHaveText("P4 idle");
 });

@@ -24,19 +24,17 @@ test("sole current connection can be deleted after confirmation and clears data 
   await confirm.getByRole("button", { name: "确认删除", exact: true }).click();
   await expect(confirm).toBeHidden();
   await expect(page.locator(".profile-list-item")).toHaveCount(0);
+  // Nothing is left to activate, so the app falls back to the connection setup
+  // guide instead of keeping stale data views mounted.
+  const gate = page.getByRole("dialog", { name: "请先配置 P4" });
+  await expect(gate).toBeVisible();
+  await expect(page.locator(".connection-setup")).toBeVisible();
+  await expect(page.locator(".main-stage")).toHaveCount(0);
+  await expect(page.locator("[data-pending-change]")).toHaveCount(0);
+  await gate.getByRole("button", { name: "去配置 P4", exact: true }).click();
   await expect(page.locator(".profile-list-empty")).toContainText(
     "尚无已保存连接",
   );
-  await expect(page.locator(".connection-client")).toHaveText("未连接");
-  await page
-    .getByRole("navigation", { name: "活动栏" })
-    .getByRole("button", { name: /^Pending/ })
-    .click();
-  await expect(page.locator(".main-stage")).toContainText(
-    "未连接，请在设置中添加或选择连接",
-  );
-  await expect(page.locator("[data-pending-change]")).toHaveCount(0);
-  await page.getByRole("button", { name: "连接设置", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "新建", exact: true }).first(),
   ).toBeEnabled();

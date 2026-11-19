@@ -1,5 +1,4 @@
 import { hasResourceConflict } from "./resourceOverlap";
-import { invoke } from "@tauri-apps/api/core";
 import { backend } from "../../infrastructure/backend";
 import {
   recordFrontendOperationLog,
@@ -146,7 +145,7 @@ export async function localUnchangedPaths(
 export const revertPort: RevertPort = {
   connection: () => backend.companySubmitConnectionSnapshot(),
   execute: (request, connection) =>
-    invoke("confirm_revert_action", { request, connection }),
+    backend.confirmRevertAction(request, connection),
   lookup: lookupWorkflowAction,
   report: (event) => {
     void recordFrontendOperationLog(event);

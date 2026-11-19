@@ -1,4 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+/**
+ * The pinned root row is a `treeitem` inside its own single-node `role="tree"`
+ * wrapper (`.tree-root-group`), so `.resource-explorer` scoped treeitems also
+ * match that root. Folder-content assertions use the row tree (`.tree-list`).
+ */
+const treeRows = (sidebar: Locator) =>
+  sidebar.locator(".tree-list").getByRole("treeitem");
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 844 });
@@ -14,22 +22,23 @@ test("Depot sidebar renders its queried children and filters them", async ({
 }) => {
   const sidebar = page.locator(".resource-explorer");
   await sidebar.getByRole("button", { name: "Depot", exact: true }).click();
-  await expect(sidebar.getByRole("treeitem").first()).toBeVisible();
-  await expect(sidebar.getByRole("treeitem").first()).toContainText(/./);
+  const rows = treeRows(sidebar);
+  await expect(rows.first()).toBeVisible();
+  await expect(rows.first()).toContainText(/./);
   await sidebar
     .getByRole("textbox", { name: "Filter resource files" })
     .fill("no-such-file-123456789");
   await expect(sidebar.getByRole("status")).toHaveText(
     "No matches in expanded folders",
   );
-  await expect(sidebar.getByRole("treeitem")).toHaveCount(0);
+  await expect(rows).toHaveCount(0);
 });
 
 test("startup automatically verifies the active workspace without opening settings", async ({
   page,
 }) => {
   const sidebar = page.locator(".resource-explorer");
-  await expect(sidebar.getByRole("treeitem").first()).toBeVisible();
+  await expect(treeRows(sidebar).first()).toBeVisible();
   await expect(
     sidebar.getByRole("button", { name: "Connection settings" }),
   ).toHaveCount(0);
@@ -63,22 +72,17 @@ test("verified workspace shows loading, then files, and survives collapse and re
   await menu.getByLabel("Search workspaces").fill("atlas-dev");
   await menu.locator(".workspace-switcher-item").click();
   const sidebar = page.locator(".resource-explorer");
+  const rows = treeRows(sidebar);
   await expect(sidebar.getByRole("status")).toHaveText("Loading files…");
-  await expect(sidebar.getByRole("treeitem").first()).toBeVisible();
-  const name = await sidebar
-    .getByRole("treeitem")
-    .first()
-    .getAttribute("aria-label");
+  await expect(rows.first()).toBeVisible();
+  const name = await rows.first().getAttribute("aria-label");
   await sidebar
     .getByRole("button", { name: "Collapse resource sidebar" })
     .click();
   await sidebar
     .getByRole("button", { name: "Expand resource sidebar" })
     .click();
-  await expect(sidebar.getByRole("treeitem").first()).toHaveAttribute(
-    "aria-label",
-    name!,
-  );
+  await expect(rows.first()).toHaveAttribute("aria-label", name!);
 });
 
 test("Depot errors can retry and empty directories display an explicit empty state", async ({

@@ -61,8 +61,8 @@ function TextDialog({
       aria-label={t("shell.select.full.text")}
     >
       <header>
-        完整文本（只读） / Full text (read-only)
-        <button onClick={close}>关闭 / Close</button>
+        {t("shell.full.text.readonly")}
+        <button onClick={close}>{t("common.close")}</button>
       </header>
       <textarea
         ref={input}
@@ -70,7 +70,7 @@ function TextDialog({
         value={text}
         aria-label={t("shell.full.text")}
       />
-      <p>Ctrl/Cmd+C 复制 · Escape 关闭。包含虚拟列表未渲染的内容。</p>
+      <p>{t("shell.full.text.hint")}</p>
     </dialog>,
     owner.body,
   );

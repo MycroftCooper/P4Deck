@@ -8,16 +8,63 @@ import type {
   GlobalSearchQuery,
   GlobalSearchResult,
   GlobalSearchTarget,
+  RuntimeInfo,
 } from "../../shared/contracts";
 import { GLOBAL_SEARCH_KINDS } from "./searchModel";
 import { SearchPage } from "./SearchPage";
-import { setLocale } from "../../shared/i18n";
+import { messages, setLocale } from "../../shared/i18n";
+import { ContextMenuProvider } from "../../app/context-menu/ContextMenu";
+import {
+  MenuEnvironment,
+  type MenuEnvironmentValue,
+} from "../../app/context-menu/environment";
+import { CommandExecutionContext } from "../../app/shell/CommandContext";
+import { defaultUi } from "../settings/preferences";
 
 const backend = vi.hoisted(() => ({
   globalSearch: vi.fn(),
   cancelOperation: vi.fn(async () => undefined),
 }));
 vi.mock("../../infrastructure/backend", () => ({ backend }));
+
+const runtime: RuntimeInfo = {
+  mode: "tauri",
+  p4Version: "P4/TEST",
+  contextGeneration: 1,
+  context: {
+    server: "fixture:1666",
+    user: "tester",
+    client: "workspace",
+    cwd: "C:\\workspace",
+  },
+  connection: {
+    state: "connected",
+    message: "connected",
+    recovery: "none",
+    server: "fixture:1666",
+  },
+};
+
+/** The page menus need the shared menu environment and command channel. */
+const environment: MenuEnvironmentValue = {
+  runtime,
+  connectionKey: "fixture",
+  commandBusy: false,
+  openPage: vi.fn(),
+  searchInDirectory: vi.fn(),
+  navigate: vi.fn(),
+  openFilePage: vi.fn(),
+  preferences: {
+    locale: "en-US",
+    setLocale: vi.fn(),
+    theme: "light",
+    setTheme: vi.fn(),
+    ui: defaultUi,
+    setUi: vi.fn(),
+    t: messages["en-US"],
+    zh: false,
+  },
+};
 
 const TARGETS: Record<GlobalSearchKind, GlobalSearchTarget> = {
   submittedChange: { type: "submittedChange", changeId: 101 },
@@ -103,7 +150,13 @@ let navigate: ReturnType<typeof vi.fn>;
 async function render(mode: "mock" | "tauri" = "tauri", zh = false) {
   await act(async () =>
     root.render(
-      <SearchPage zh={zh} runtimeMode={mode} onNavigate={navigate} />,
+      <ContextMenuProvider scope="search-page" zh={zh}>
+        <MenuEnvironment.Provider value={environment}>
+          <CommandExecutionContext.Provider value={() => undefined}>
+            <SearchPage zh={zh} runtimeMode={mode} onNavigate={navigate} />
+          </CommandExecutionContext.Provider>
+        </MenuEnvironment.Provider>
+      </ContextMenuProvider>,
     ),
   );
 }

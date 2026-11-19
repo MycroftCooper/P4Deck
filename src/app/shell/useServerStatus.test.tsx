@@ -104,3 +104,12 @@ it("browser/mock mode performs zero host calls", async () => {
   expect(api.invoke).not.toHaveBeenCalled();
   expect(api.listen).not.toHaveBeenCalled();
 });
+function BusyView() {
+  const status = useServerStatus(true, "busy", hint);
+  return <span>{String(status.view?.busy)}</span>;
+}
+it("carries the server busy flag into the passive view", async () => {
+  api.invoke.mockResolvedValue({ ...snapshot, busy: true });
+  await h.render(<BusyView />);
+  expect(document.body.textContent).toContain("true");
+});
