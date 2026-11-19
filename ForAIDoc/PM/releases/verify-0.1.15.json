@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-19T07:17:38.191Z",
+  "anonymous": true,
+  "repo": "MycroftCooper/P4Deck",
+  "tag": "v0.1.15",
+  "version": "0.1.15",
+  "release": {
+    "id": null,
+    "htmlUrl": "https://github.com/MycroftCooper/P4Deck/releases/tag/v0.1.15",
+    "publishedAt": null,
+    "draft": null,
+    "prerelease": null,
+    "assets": []
+  },
+  "latestJson": {
+    "url": "https://github.com/MycroftCooper/P4Deck/releases/latest/download/latest.json",
+    "resolvedUrl": "https://release-assets.githubusercontent.com/github-production-release-asset/1439736145/7d4874d2-2ae7-47fc-94d3-359398f71528",
+    "version": "0.1.15",
+    "pubDate": "2026-11-19T07:17:16.108Z",
+    "notesHead": "新功能：",
+    "platformUrl": "https://github.com/MycroftCooper/P4Deck/releases/download/v0.1.15/P4Deck_0.1.15_x64-setup.exe",
+    "sha256": "0661b9e8f631baea98ced4345e8da081a57c745ccdb4ab7e74f6a66dcebf3fe7"
+  },
+  "installer": {
+    "name": "P4Deck_0.1.15_x64-setup.exe",
+    "sizeBytes": 10472043,
+    "sha256": "d6f1548b4adbf71b8a809c89b4b18e65c94fbeb1eb3cc3acac8d8f4c7da67c67",
+    "signatureKeyId": "8acd0f77614db988",
+    "signedVersion": "0.1.15"
+  },
+  "checks": [
+    {
+      "name": "GitHub API releases/latest responds 200",
+      "status": "skipped",
+      "detail": "HTTP 403 (anonymous rate limit); release record checks skipped, downloads still verified"
+    },
+    {
+      "name": "public latest.json comes from the release asset host",
+      "status": "ok",
+      "detail": "https://release-assets.githubusercontent.com/github-production-release-asset/1439736145/7d4874d2-2ae7-47fc-94d3-359398f71528"
+    },
+    {
+      "name": "public latest.json is byte-identical to the local manifest",
+      "status": "ok",
+      "detail": "0661b9e8f631baea98ced4345e8da081a57c745ccdb4ab7e74f6a66dcebf3fe7 vs 0661b9e8f631baea98ced4345e8da081a57c745ccdb4ab7e74f6a66dcebf3fe7"
+    },
+    {
+      "name": "public latest.json version is 0.1.15",
+      "status": "ok",
+      "detail": "0.1.15"
+    },
+    {
+      "name": "public latest.json has an ISO pub_date",
+      "status": "ok",
+      "detail": "2026-11-19T07:17:16.108Z"
+    },
+    {
+      "name": "public latest.json notes are not empty",
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "name": "public latest.json url points at the release installer",
+      "status": "ok",
+      "detail": "https://github.com/MycroftCooper/P4Deck/releases/download/v0.1.15/P4Deck_0.1.15_x64-setup.exe"
+    },
+    {
+      "name": "public latest.json signature equals the served .sig asset",
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "name": "public installer download is byte-identical to the built exe",
+      "status": "ok",
+      "detail": "d6f1548b4adbf71b8a809c89b4b18e65c94fbeb1eb3cc3acac8d8f4c7da67c67 vs d6f1548b4adbf71b8a809c89b4b18e65c94fbeb1eb3cc3acac8d8f4c7da67c67"
+    },
+    {
+      "name": "downloaded installer verifies against the shipped pubkey",
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "name": "signature key id matches the configured pubkey",
+      "status": "ok",
+      "detail": "8acd0f77614db988 vs 8acd0f77614db988"
+    },
+    {
+      "name": "signature trusted comment carries version:0.1.15",
+      "status": "ok",
+      "detail": "timestamp:1795072636\tfile:P4Deck_0.1.15_x64-setup.exe\tversion:0.1.15"
+    },
+    {
+      "name": "the shipped config requires signed versions",
+      "status": "ok",
+      "detail": ""
+    },
+    {
+      "name": "Windows install mode stayed passive",
+      "status": "ok",
+      "detail": "passive"
+    },
+    {
+      "name": "API installer size matches the download",
+      "status": "skipped",
+      "detail": ""
+    },
+    {
+      "name": "API latest.json size matches the download",
+      "status": "skipped",
+      "detail": ""
+    }
+  ],
+  "passed": 13,
+  "skipped": 3,
+  "failed": 0
+}
